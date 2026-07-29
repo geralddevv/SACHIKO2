@@ -1,0 +1,354 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- ================= TABULATOR CSS ================= -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    #master-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    /* Hide scrollbars in Tabulator's custom list dropdown */
+    .tabulator-edit-list {
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+    .tabulator-edit-list::-webkit-scrollbar {
+      display: none !important;
+    }
+  </style>
+  <div class="indi-head">
+    <h1>Clients</h1>
+
+    <style>
+      .header-action-btn {
+        background-color: #f0f0f0;
+        color: #044a78;
+        padding: 2px 14px; /* Matches Download button padding exactly */
+        font-size: 14px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease-in-out;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .header-action-btn:hover {
+        background-color: #e4e4e4;
+      }
+    </style>
+
+    <div style="display: flex; gap: 10px; align-items: center">
+      <button class="header-action-btn" onclick="window.location.href = '/sachiko/form/client?tab=user'">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> User
+      </button>
+      <button class="header-action-btn" onclick="window.location.href = '/sachiko/form/client?tab=client'">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Client
+      </button>
+
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span> <i class="fa-solid fa-file-arrow-down"></i> Download </span>
+          <i class="fas fa-chevron-down"></i>
+        </button>
+
+        <div class="download-selector__menu">
+          <div class="download-selector__option" id="download-pdf"><i class="fas fa-file-pdf"></i> PDF</div>
+          <div class="download-selector__option" id="download-xlsx"><i class="fas fa-file-excel"></i> Excel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table"></div>
+</div>
+
+<!-- ================= CLIENT DETAILS POPUP ================= -->
+<style>
+  .client-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+
+  .client-modal {
+    background: #f8f9fa;
+    border: 1px solid #044a78;
+    border-radius: 8px;
+    width: 85%;
+    max-width: 820px;
+    overflow: hidden;
+  }
+
+  .client-modal-header {
+    background: #044a78;
+    color: white;
+    padding: 6px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .client-modal-title {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .client-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .client-edit-btn {
+    color: #044a78;
+    background: #fff;
+    padding: 0px 10px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: opacity 0.15s ease;
+  }
+
+  .client-edit-btn:hover {
+    opacity: 0.85;
+  }
+
+  .client-close {
+    cursor: pointer;
+    font-size: 1rem;
+  }
+
+  .client-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .client-field {
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(26, 26, 46, 0.25);
+    border-right: 1px solid rgba(26, 26, 46, 0.25);
+  }
+
+  .client-field:nth-child(2n) {
+    border-right: none;
+  }
+
+  .client-label {
+    font-size: 11px;
+    color: #6c757d;
+  }
+
+  .client-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: #044a78;
+  }
+
+  @media (max-width: 700px) {
+    .client-grid {
+      grid-template-columns: 1fr;
+    }
+    .client-field {
+      border-right: none;
+    }
+  }
+</style>
+
+<div class="client-modal-backdrop" id="clientModal">
+  <div class="client-modal">
+    <div class="client-modal-header">
+      <div class="client-modal-title" id="clientModalTitle"></div>
+
+      <div class="client-modal-actions">
+        <a id="editClientBtn" class="client-edit-btn">Edit</a>
+        <span class="client-close" onclick="closeClientModal()">✕</span>
+      </div>
+    </div>
+
+    <div class="client-grid" id="clientModalBody"></div>
+  </div>
+</div>
+
+<!-- ================= SCRIPTS ================= -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script>
+  /* ===== Dropdown ===== */
+  const downloadSelector = document.getElementById("downloadSelector");
+  const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
+
+  triggerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    downloadSelector.classList.toggle("download-selector--active");
+  });
+
+  document.addEventListener("click", () => {
+    downloadSelector.classList.remove("download-selector--active");
+  });
+
+  /* ===== Table ===== */
+  const tableData = <%- safeJson(jsonData) %>;
+
+  function normalizeStatus(value) {
+    return String(value ?? "").trim().toUpperCase();
+  }
+
+  const withTextFilter = (column, placeholder = "Search") => ({
+    headerFilter: "input",
+    headerFilterPlaceholder: placeholder,
+    minWidth: 100,
+    ...column,
+  });
+
+  const withSelectFilter = (column, values) => ({
+    headerFilter: "list",
+    headerFilterParams: {
+      values: values,
+      clearable: true,
+    },
+    ...column,
+  });
+
+  const table = new Tabulator("#master-table", {
+    data: tableData,
+    height: "100%",
+    // layout: "fitColumns",
+    initialSort: [{ column: "clientName", dir: "asc" }],
+
+      columns: [
+      withTextFilter({
+        title: "Client Name",
+        field: "clientName",
+        minWidth: 220,
+
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const hasUsers = Array.isArray(row.users) && row.users.length > 0;
+          cell.getElement().classList.add("client-name-cell");
+          if (!hasUsers) {
+            return `<span style="color:#dc2626;font-weight:600;text-decoration:underline;text-decoration-color:#dc2626;">${cell.getValue()}</span>`;
+          }
+          return cell.getValue();
+        },
+
+        cellClick: (e, cell) => {
+          const row = cell.getRow().getData();
+          window.location.href = `/sachiko/client/profile/${row._id}`;
+        },
+      }),
+      withTextFilter({
+        title: "Users",
+        field: "userCount",
+        width: 90,
+        hozAlign: "center",
+        headerHozAlign: "center",
+        sorter: "number",
+        formatter: (cell) => {
+          const value = Number(cell.getValue() || 0);
+          return `<span style="font-weight:600;color:#044a78">${value}</span>`;
+        },
+      }),
+      withSelectFilter({
+        title: "Type",
+        field: "clientType",
+        headerSort: true,
+        width: 100,
+      }, { "": "All", "DEALER": "DEALER", "CLIENT": "CLIENT" }),
+      withTextFilter({ title: "Verticals", field: "verticals" }),
+      withTextFilter({ title: "HO Location", field: "hoLocation" }),
+      withTextFilter({ title: "Account Head", field: "accountHead" }),
+      withSelectFilter({
+        title: "Status",
+        field: "clientStatus",
+        headerSort: true,
+        formatter: (cell) => {
+          const v = cell.getValue();
+          const status = normalizeStatus(v);
+          const color = status === "ACTIVE" ? "#28a745" : "#dc3545";
+          return `<span style="font-weight:600;color:${color}">${v || "-"}</span>`;
+        },
+      }, {
+        "": "All",
+        "ACTIVE": "ACTIVE",
+        "INACTIVE": "INACTIVE",
+        "FOLLOW UP": "FOLLOW UP",
+        "BLACKLISTED": "BLACKLISTED",
+        "ADVANCED": "ADVANCED",
+        "OTHERS": "OTHERS"
+      }),
+      withTextFilter({
+        title: "Purchases",
+        field: "purchaseCount",
+        width: 100,
+        hozAlign: "center",
+        headerHozAlign: "center",
+        sorter: "number",
+        formatter: (cell) => {
+          const value = Number(cell.getValue() || 0);
+          if (!value) return "";
+          return `<span style="font-weight:600;color:#044a78;text-decoration:underline;cursor:pointer;">${value}</span>`;
+        },
+        cellClick: (e, cell) => {
+          const row = cell.getRow().getData();
+          window.location.href = `/sachiko/client/orders/${row._id}`;
+        },
+      }),
+    ],
+  });
+
+  /* ===== POPUP LOGIC ===== */
+  async function openClientModal(id) {
+    const res = await fetch(`/sachiko/client/api/${id}`);
+    const client = await res.json();
+
+    document.getElementById("clientModalTitle").innerText = client.clientName;
+    document.getElementById("editClientBtn").href =
+      `/sachiko/client/edit/${client._id}`;
+
+    const fields = [
+      ["Client ID", client.clientId],
+      ["Type", client.clientType],
+      ["Verticals", client.verticals],
+      ["Status", client.clientStatus],
+      ["HO Location", client.hoLocation],
+      ["Account Head", client.accountHead],
+      ["GST", client.clientGst],
+      ["PAN", client.clientPan],
+      ["MSME", client.clientMsme],
+      ["Gumasta", client.clientGumasta],
+      ["Vendor Code", client.vendorCode],
+    ];
+
+    const body = document.getElementById("clientModalBody");
+    body.innerHTML = "";
+
+    fields.forEach(([label, value]) => {
+      body.innerHTML += `
+        <div class="client-field">
+          <div class="client-label">${label}</div>
+          <div class="client-value">${value || "-"}</div>
+        </div>
+      `;
+    });
+
+    document.getElementById("clientModal").style.display = "flex";
+  }
+
+  function closeClientModal() {
+    document.getElementById("clientModal").style.display = "none";
+  }
+</script>

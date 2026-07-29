@@ -1,0 +1,772 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- ================= TABULATOR CSS ================= -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<style>
+  .loan-highlight {
+    padding: 0.25rem 0.6rem;
+    border-radius: 0.35rem;
+    font-weight: 600;
+    font-size: 1.15rem;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    background-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .loan-highlight.active {
+    background-color: rgba(255, 255, 255, 0.16);
+  }
+
+  .loan-highlight.expense {
+    background-color: rgba(220, 53, 69, 0.22);
+    border-color: rgba(255, 255, 255, 0.65);
+  }
+
+  .view-txn-btn, .view-current-btn {
+    transition: all 0.2s ease-in-out;
+  }
+
+  .view-txn-btn:hover {
+    background-color: #033658 !important;
+    border-color: #033658 !important;
+  }
+
+  .view-current-btn:hover {
+    background-color: #f1f5f9 !important;
+  }
+
+  #pc-create-dialog .choices__list--dropdown {
+    z-index: 99999;
+  }
+
+  #pc-create-dialog .choices {
+    margin-bottom: 0;
+  }
+
+  #pc-create-dialog .choices__inner {
+    min-height: 42px !important;
+    height: 42px;
+    padding: 0 10px !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
+    display: flex !important;
+    align-items: center !important;
+    font-size: 14px;
+  }
+
+  #pc-create-dialog .choices__list--single {
+    padding: 0;
+  }
+
+  #pc-create-dialog select.pc-native-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23333' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 12px 8px;
+    cursor: pointer;
+  }
+</style>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <div class="indi-head">
+    <span style="display: flex; align-items: center; gap: 10px">
+      <h1 id="pettyCashHeading">
+        Petty Cash
+        <span id="pettyCashTotal" class="loan-highlight active" style="margin-left: 8px;">
+          Current Balance: <%= new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(totalPettyCash || 0)) %>
+        </span>
+        <span id="pettyCashExpense" class="loan-highlight expense" style="margin-left: 8px;">
+          Curr Mon Expense: <%= new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(currentMonthExpense || 0)) %>
+        </span>
+      </h1>
+    </span>
+
+    <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+      <button
+        type="button"
+        onclick="openCreateDialog()"
+        class="header-action-btn"
+        style="
+          height: 30px;
+          padding: 0 14px;
+          background: #f0f0f0;
+          color: #044a78;
+          border-radius: 6px;
+          border: none;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: all 0.2s;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        "
+      >
+        <i class="fa-solid fa-plus"></i>
+        <span>Add Petty Cash</span>
+      </button>
+
+      <a
+        href="/sachiko/pettycash/logs/all/view"
+        id="view-all-logs-btn"
+        style="
+          height: 30px;
+          padding: 0 14px;
+          background: #044a78;
+          color: white;
+          border-radius: 6px;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: opacity 0.2s;
+        "
+        onmouseover="this.style.opacity = '0.85'"
+        onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span>View Logs</span>
+      </a>
+
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger" style="height: 30px; display: flex; align-items: center; padding: 0 12px; border: 1.5px solid #e2e8f0; border-radius: 6px; background: #fff; font-size: 14px; font-weight: 500; cursor: pointer;">
+          <span> <i class="fa-solid fa-file-arrow-down"></i> Download </span>
+          <i class="fas fa-chevron-down" style="font-size: 12px; margin-left: 6px;"></i>
+        </button>
+
+        <div class="download-selector__menu">
+          <div class="download-selector__option" id="download-pdf">
+            <i class="fas fa-file-pdf"></i> PDF
+          </div>
+          <div class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel"></i> Excel
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table"></div>
+</div>
+
+<!-- ===== ADD PETTY CASH DIALOG ===== -->
+<div
+  id="pc-create-dialog"
+  style="display:none; position:fixed; inset:0; background:rgba(17,24,39,0.55); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(1px);"
+>
+  <div style="background:#fff; width:560px; max-width:94vw; border-radius:14px; padding:20px 22px; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <form
+      id="pc-create-form"
+      method="post"
+      action="/sachiko/pettycash/create"
+      style="display:block; width:auto; border:none; grid-template-columns:none; gap:0; padding:0;"
+    >
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <h3 style="margin:0; color:#0f172a; font-size:18px;">
+          <i class="fa-solid fa-plus" style="margin-right:6px; color:#2563eb;"></i>Add Petty Cash
+        </h3>
+        <button type="button" onclick="closeCreateDialog()" title="Close" style="border:none; background:transparent; color:#6b7280; font-size:18px; cursor:pointer;">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div style="font-size:12px; color:#64748b; margin-bottom:12px;">Record a new petty cash transaction. Balances will auto-recalculate.</div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <label style="font-size:12px; color:#6b7280; font-weight:600;">Location</label>
+          <select name="location" id="pc-create-location" required class="pc-native-select" style="width:100%; height:42px; padding:10px 30px 10px 12px; border:1px solid #cbd5e1; border-radius:8px; background-color:#ffffff; color:#0f172a; font-size:14px; line-height:20px;">
+            <option value="" disabled selected hidden>Select Location</option>
+            <% locationOptions.forEach(loc => { %>
+              <option value="<%= loc %>"><%= loc %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px; color:#6b7280; font-weight:600;">Type</label>
+          <select name="type" id="pc-create-type" class="pc-native-select" style="width:100%; height:42px; padding:10px 30px 10px 12px; border:1px solid #cbd5e1; border-radius:8px; background-color:#ffffff; color:#0f172a; font-size:14px; line-height:20px;">
+            <option value="PAID" selected>PAID</option>
+            <option value="RECEIVED">RECEIVED</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px; color:#6b7280; font-weight:600;">Amount</label>
+        <div style="display:flex; align-items:center; gap:8px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; background:#ffffff; height:42px;">
+          <span style="color:#044A78; font-weight:600;">₹</span>
+          <input type="number" name="amount" id="pc-create-amount" min="1" required style="width:100%; padding:10px 0; border:none; background:transparent; outline:none; color:#0f172a; font-size:14px; line-height:20px;" />
+        </div>
+      </div>
+
+      <div id="pc-create-from-wrap" style="margin-bottom:12px;">
+        <label style="font-size:12px; color:#6b7280; font-weight:600;">From</label>
+        <input type="text" name="from" id="pc-create-from" placeholder="Sender / source" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+      </div>
+      <div id="pc-create-to-wrap" style="margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label style="font-size:12px; color:#6b7280; font-weight:600; margin:0;">To</label>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <label style="display:flex; align-items:center; gap:6px; margin:0; cursor:pointer; color:#044A78; font-size:12px; font-weight:600;">
+              <input type="radio" name="pc-create-to-type" value="external" checked style="width:14px; height:14px; margin:0; accent-color:#044A78;"> External
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; margin:0; cursor:pointer; color:#044A78; font-size:12px; font-weight:600;">
+              <input type="radio" name="pc-create-to-type" value="internal" style="width:14px; height:14px; margin:0; accent-color:#044A78;"> Internal
+            </label>
+          </div>
+        </div>
+        <input type="text" name="to" id="pc-create-to" placeholder="Vendor / Expense / Person" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+        <select id="pc-create-to-select" style="display:none; width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;">
+          <option value="" disabled selected hidden>Select Employee</option>
+          <% employees.forEach(emp => { %>
+            <option value="<%= emp.empName %>"><%= emp.empName %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px; color:#6b7280; font-weight:600;">Reason</label>
+        <input type="text" name="reason" id="pc-create-reason" placeholder="Optional note" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px; color:#6b7280; font-weight:600;">Entry Date</label>
+        <input type="date" name="entryDate" id="pc-create-date" required style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" onclick="closeCreateDialog()" style="padding:9px 16px; border:1px solid #e2e8f0; background:white; color:#334155; border-radius:8px; cursor:pointer;">Cancel</button>
+        <button type="submit" style="padding:9px 16px; border:none; background:#044A78; color:white; border-radius:8px; cursor:pointer;">Save Entry</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===== EDIT LOG DIALOG ===== -->
+<div
+  id="pc-edit-dialog"
+  style="display:none; position:fixed; inset:0; background:rgba(17,24,39,0.55); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(1px);"
+>
+  <div style="background:#fff; width:560px; max-width:94vw; border-radius:14px; padding:20px 22px; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+      <h3 style="margin:0; color:#0f172a; font-size:18px;">
+        <i class="fa-solid fa-pen-to-square" style="margin-right:6px; color:#2563eb;"></i>Edit Petty Cash Log
+      </h3>
+      <button type="button" onclick="closeEditDialog()" title="Close" style="border:none; background:transparent; color:#6b7280; font-size:18px; cursor:pointer;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div style="font-size:12px; color:#64748b; margin-bottom:12px;">Update the amount and details. Balances will auto-recalculate.</div>
+    <input type="hidden" id="pc-edit-id" />
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+      <div>
+        <label style="font-size:12px; color:#6b7280; font-weight:600;">Type</label>
+        <select id="pc-edit-type" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;">
+          <option value="RECEIVED">RECEIVED</option>
+          <option value="PAID">PAID</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:12px; color:#6b7280; font-weight:600;">Amount</label>
+        <div style="display:flex; align-items:center; gap:8px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; background:#ffffff; height:42px;">
+          <span style="color:#044A78; font-weight:600;">₹</span>
+          <input type="number" id="pc-edit-amount" min="1" style="width:100%; padding:10px 0; border:none; background:transparent; outline:none; color:#0f172a; font-size:14px; line-height:20px;" />
+        </div>
+      </div>
+    </div>
+
+    <div id="pc-edit-from-wrap" style="margin-bottom:12px;">
+      <label style="font-size:12px; color:#6b7280; font-weight:600;">From</label>
+      <input type="text" id="pc-edit-from" placeholder="Sender / source" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+    </div>
+    <div id="pc-edit-to-wrap" style="margin-bottom:12px;">
+      <label style="font-size:12px; color:#6b7280; font-weight:600;">To</label>
+      <input type="text" id="pc-edit-to" placeholder="Receiver / payee" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px; color:#6b7280; font-weight:600;">Reason</label>
+      <input type="text" id="pc-edit-reason" placeholder="Optional note" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px; color:#6b7280; font-weight:600;">Entry Date</label>
+      <input type="date" id="pc-edit-date" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button type="button" onclick="closeEditDialog()" style="padding:9px 16px; border:1px solid #e2e8f0; background:white; color:#334155; border-radius:8px; cursor:pointer;">Cancel</button>
+      <button type="button" onclick="submitEditLog()" style="padding:9px 16px; border:none; background:#044A78; color:white; border-radius:8px; cursor:pointer;">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DELETE LOG DIALOG ===== -->
+<div
+  id="pc-delete-dialog"
+  style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;"
+>
+  <div style="background:#fff; width:460px; max-width:92vw; border-radius:10px; padding:18px 20px;">
+    <h3 style="margin:0 0 10px; color:#b91c1c; font-size:17px;">
+      <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i>Delete Log
+    </h3>
+    <p style="margin:0 0 14px; color:#374151;">Are you sure you want to delete this petty cash log?</p>
+    <input type="hidden" id="pc-delete-id" />
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button type="button" onclick="closeDeleteDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer;">Cancel</button>
+      <button type="button" onclick="submitDeleteLog()" style="padding:8px 16px; border:none; background:#ef4444; color:white; border-radius:6px; cursor:pointer;">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SCRIPTS ================= -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<script>
+  const tableData = <%- safeJson(jsonData) %>;
+  const snapshotData = [...tableData];
+  const totalPettyCash = <%- safeJson(Number(totalPettyCash || 0)) %>;
+  const allLogs = <%- safeJson(allLogs || []) %>;
+  const currentMonthExpense = <%- safeJson(Number(currentMonthExpense || 0)) %>;
+  let currentLocation = null;
+  let currentViewMode = "ALL";
+  const pettyCashHeadingEl = document.getElementById("pettyCashHeading");
+
+  function formatINRCurrency(value) {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(Number(value) || 0);
+  }
+
+  function setSnapshotHeading() {
+    pettyCashHeadingEl.innerHTML = `Petty Cash <span id="pettyCashTotal" class="loan-highlight active" style="margin-left: 8px;">Current Balance: ${formatINRCurrency(totalPettyCash)}</span><span id="pettyCashExpense" class="loan-highlight expense" style="margin-left: 8px;">Curr Mon Expense: ${formatINRCurrency(currentMonthExpense)}</span>`;
+  }
+
+  function getLogDate(log) {
+    const raw = String(log?.entryDate || log?.createdAt || "").trim();
+    if (!raw) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [y, m, d] = raw.split("-").map(Number);
+      return new Date(y, m - 1, d);
+    }
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  function getCurrentMonthExpense(history) {
+    const now = new Date();
+    const month = now.getMonth();
+    const year = now.getFullYear();
+    return (history || []).reduce((sum, log) => {
+      const d = getLogDate(log);
+      if (!d) return sum;
+      if (d.getMonth() !== month || d.getFullYear() !== year) return sum;
+      if (String(log.type || "").toUpperCase() !== "OUTWARD") return sum;
+      return sum + (Number(log.amount) || 0);
+    }, 0);
+  }
+
+  function getCurrentMonthExpenseByLocation(logs) {
+    const now = new Date();
+    const month = now.getMonth();
+    const year = now.getFullYear();
+    const expenseByLocation = new Map();
+
+    (logs || []).forEach((log) => {
+      const d = getLogDate(log);
+      if (!d || d.getMonth() !== month || d.getFullYear() !== year) return;
+      if (String(log.type || "").toUpperCase() !== "OUTWARD") return;
+
+      const location = String(log.location || "").trim();
+      if (!location) return;
+
+      expenseByLocation.set(location, (expenseByLocation.get(location) || 0) + (Number(log.amount) || 0));
+    });
+
+    return expenseByLocation;
+  }
+
+  function getCurrentMonthLabel() {
+    return new Intl.DateTimeFormat("en-IN", { month: "short" }).format(new Date());
+  }
+
+  function setTransactionHeading(location, history) {
+    const expense = getCurrentMonthExpense(history);
+    const month = getCurrentMonthLabel();
+    const modeLabel = currentViewMode === "CURRENT" ? "(Current Month)" : "(All Transactions)";
+    pettyCashHeadingEl.innerHTML = `Petty Cash - ${location} <span style="font-size: 1.1rem; color: #64748b; font-weight: 600; margin-left: 6px;">${modeLabel}</span> <span class="loan-highlight expense" style="margin-left: 8px;">${month} - ${formatINRCurrency(expense)}</span>`;
+  }
+
+  function formatDateTime(value) {
+      if (!value) return "-";
+
+      const d = new Date(value);
+      return d.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+    }
+
+  function formatDateOnly(value) {
+    if (!value) return "-";
+
+    const raw = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [y, m, d] = raw.split("-").map(Number);
+      const date = new Date(Date.UTC(y, m - 1, d));
+      return new Intl.DateTimeFormat("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(date);
+    }
+
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return raw;
+
+    return d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  const currentMonthExpenseMap = getCurrentMonthExpenseByLocation(allLogs);
+
+
+  /* ===== SNAPSHOT COLUMNS (LIKE LOAN) ===== */
+  const baseColumns = [
+    { title: "Location", field: "location", headerSort: false },
+    {
+      title: "Current Balance",
+      field: "balance",
+      formatter: (c) => formatINRCurrency(c.getValue())
+    },
+    {
+      title: "Current Month Expense",
+      field: "monthExpense",
+      formatter: (c) => formatINRCurrency(c.getValue())
+    },
+    { title: "Status", field: "status" },
+    {
+      title: "Last Updated",
+      field: "updatedAt",
+      formatter: cell => formatDateTime(cell.getValue()),
+    },
+    {
+      title: "Action",
+      headerSort: false,
+      hozAlign: "center",
+      formatter: (cell) => {
+        const { location } = cell.getRow().getData();
+        return `
+          <div style="display:flex; gap:6px; justify-content:center; align-items:center; height:100%;">
+            <a href="/sachiko/pettycash/logs/${encodeURIComponent(location)}/view" 
+               class="view-txn-btn" 
+               title="View All" 
+               style="height:22px; padding:0 10px; border:1px solid #044A78; background:#044A78; color:#fff; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600; line-height:22px; text-decoration:none; display:inline-block;">
+               View Transaction
+            </a>
+            <a href="/sachiko/pettycash/logs/${encodeURIComponent(location)}/view?mode=CURRENT" 
+               class="view-current-btn" 
+               title="Current Month" 
+               style="height:22px; padding:0 10px; border:1px solid #044A78; background:#fff; color:#044A78; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600; line-height:22px; text-decoration:none; display:inline-block;">
+               Current
+            </a>
+          </div>`;
+      }
+    },
+  ];
+
+  const table = new Tabulator("#master-table", {
+    data: snapshotData.map((row) => ({
+      ...row,
+      monthExpense: currentMonthExpenseMap.get(String(row.location || "").trim()) || 0,
+    })),
+    // layout: "fitColumns",
+    columnMinWidth: 0,
+    pagination: "local",
+    paginationSize: 30,
+    columns: baseColumns,
+  });
+  setSnapshotHeading();
+
+  /* ===== DOWNLOAD ===== */
+  const selector = document.getElementById("downloadSelector");
+  selector.querySelector(".download-selector__trigger").onclick = () =>
+    selector.classList.toggle("download-selector--active");
+
+  document.getElementById("download-pdf").onclick = () =>
+    table.download("pdf", "pettycash.pdf");
+
+  document.getElementById("download-xlsx").onclick = () =>
+    table.download("xlsx", "pettycash.xlsx");
+
+
+</script>
+<script>
+  const editDialog = document.getElementById("pc-edit-dialog");
+  const deleteDialog = document.getElementById("pc-delete-dialog");
+
+  function syncEditFields() {
+    const type = document.getElementById("pc-edit-type").value;
+    const fromWrap = document.getElementById("pc-edit-from-wrap");
+    const toWrap = document.getElementById("pc-edit-to-wrap");
+
+    if (type === "PAID") {
+      fromWrap.style.display = "none";
+      toWrap.style.display = "block";
+    } else {
+      toWrap.style.display = "none";
+      fromWrap.style.display = "block";
+    }
+  }
+
+  document.getElementById("pc-edit-type").addEventListener("change", syncEditFields);
+
+  function openEditDialog(row) {
+    document.getElementById("pc-edit-id").value = row._id;
+    document.getElementById("pc-edit-amount").value = row.amount;
+    document.getElementById("pc-edit-reason").value = row.reason || "";
+    document.getElementById("pc-edit-type").value = row.type === "INWARD" ? "RECEIVED" : "PAID";
+    document.getElementById("pc-edit-from").value = row.from || "";
+    document.getElementById("pc-edit-to").value = row.to || "";
+    const dateValue = row.entryDate || row.createdAt || "";
+    document.getElementById("pc-edit-date").value = dateValue ? String(dateValue).slice(0, 10) : "";
+    syncEditFields();
+    editDialog.style.display = "flex";
+  }
+
+  function closeEditDialog() {
+    editDialog.style.display = "none";
+  }
+
+  function openDeleteDialog(row) {
+    document.getElementById("pc-delete-id").value = row._id;
+    deleteDialog.style.display = "flex";
+  }
+
+  function closeDeleteDialog() {
+    deleteDialog.style.display = "none";
+  }
+
+  function updateSnapshotBalance(location, balance) {
+    const idx = snapshotData.findIndex((s) => s.location === location);
+    if (idx !== -1) {
+      snapshotData[idx].balance = balance;
+      snapshotData[idx].status = balance > 0 ? "ACTIVE" : "EMPTY";
+      snapshotData[idx].updatedAt = new Date().toISOString();
+    }
+  }
+
+  async function refreshLogs() {
+    if (!currentLocation) return;
+    const res = await fetch(`/sachiko/pettycash/logs/${currentLocation}`);
+    let { history } = await res.json();
+
+    if (currentViewMode === "CURRENT") {
+      const now = new Date();
+      const month = now.getMonth();
+      const year = now.getFullYear();
+      history = (history || []).filter(log => {
+        const d = getLogDate(log);
+        return d && d.getMonth() === month && d.getFullYear() === year;
+      });
+    }
+
+    table.replaceData(history);
+    setTransactionHeading(currentLocation, history);
+  }
+
+  async function submitEditLog() {
+    const id = document.getElementById("pc-edit-id").value;
+    const typeUi = document.getElementById("pc-edit-type").value;
+    const amount = Number(document.getElementById("pc-edit-amount").value);
+    const from = document.getElementById("pc-edit-from").value.trim();
+    const to = document.getElementById("pc-edit-to").value.trim();
+    const reason = document.getElementById("pc-edit-reason").value.trim();
+    const entryDate = document.getElementById("pc-edit-date").value;
+
+    if (!id || !amount || amount <= 0) {
+      alert("Please enter a valid amount.");
+      return;
+    }
+
+    if (typeUi === "RECEIVED" && !from) {
+      alert("From is required.");
+      return;
+    }
+
+    if (typeUi === "PAID" && !to) {
+      alert("To is required.");
+      return;
+    }
+
+    if (!entryDate) {
+      alert("Please select an entry date.");
+      return;
+    }
+
+    const payload = {
+      amount,
+      type: typeUi === "RECEIVED" ? "INWARD" : "OUTWARD",
+      from,
+      to,
+      reason,
+      entryDate,
+    };
+
+    try {
+      const res = await fetch(`/sachiko/pettycash/logs/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || "Failed to update log");
+        return;
+      }
+
+      updateSnapshotBalance(currentLocation, data.balance);
+      await refreshLogs();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update log");
+    }
+
+    closeEditDialog();
+  }
+
+  async function submitDeleteLog() {
+    const id = document.getElementById("pc-delete-id").value;
+    if (!id) return;
+
+    try {
+      const res = await fetch(`/sachiko/pettycash/logs/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || "Failed to delete log");
+        return;
+      }
+
+      updateSnapshotBalance(currentLocation, data.balance);
+      await refreshLogs();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete log");
+    }
+
+    closeDeleteDialog();
+  }
+</script>
+
+<script>
+  const createDialog = document.getElementById("pc-create-dialog");
+  const pcCreateType = document.getElementById("pc-create-type");
+  const pcCreateFromWrap = document.getElementById("pc-create-from-wrap");
+  const pcCreateToWrap = document.getElementById("pc-create-to-wrap");
+  const pcCreateFrom = document.getElementById("pc-create-from");
+  const pcCreateTo = document.getElementById("pc-create-to");
+  const pcCreateToSelect = document.getElementById("pc-create-to-select");
+  const pcCreateToTypeRadios = document.getElementsByName("pc-create-to-type");
+
+  let pcCreateToChoices = null;
+
+  function syncCreateToType() {
+    const isInternal = Array.from(pcCreateToTypeRadios).find((r) => r.checked)?.value === "internal";
+    const choicesContainer = pcCreateToChoices ? pcCreateToChoices.containerOuter.element : null;
+
+    if (isInternal) {
+      pcCreateTo.style.display = "none";
+      pcCreateTo.required = false;
+      pcCreateTo.disabled = true;
+      pcCreateTo.name = "";
+
+      if (choicesContainer) choicesContainer.style.display = "block";
+      pcCreateToSelect.required = true;
+      pcCreateToSelect.disabled = false;
+      pcCreateToSelect.name = "to";
+    } else {
+      if (choicesContainer) choicesContainer.style.display = "none";
+      pcCreateToSelect.required = false;
+      pcCreateToSelect.disabled = true;
+      pcCreateToSelect.name = "";
+
+      pcCreateTo.style.display = "block";
+      pcCreateTo.required = true;
+      pcCreateTo.disabled = false;
+      pcCreateTo.name = "to";
+    }
+  }
+
+  pcCreateToTypeRadios.forEach((radio) => radio.addEventListener("change", syncCreateToType));
+
+  function syncCreateFields() {
+    if (pcCreateType.value === "PAID") {
+      pcCreateFromWrap.style.display = "none";
+      pcCreateFrom.required = false;
+
+      pcCreateToWrap.style.display = "block";
+      syncCreateToType();
+    } else {
+      pcCreateToWrap.style.display = "none";
+      pcCreateTo.required = false;
+      pcCreateToSelect.required = false;
+
+      pcCreateFromWrap.style.display = "block";
+      pcCreateFrom.required = true;
+    }
+  }
+
+  pcCreateType.addEventListener("change", syncCreateFields);
+
+  function openCreateDialog() {
+    document.getElementById("pc-create-form").reset();
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    document.getElementById("pc-create-date").value = `${yyyy}-${mm}-${dd}`;
+
+    if (pcCreateToChoices) {
+      pcCreateToChoices.destroy();
+      pcCreateToChoices = null;
+    }
+    pcCreateToChoices = new Choices(pcCreateToSelect, {
+      searchEnabled: true,
+      itemSelectText: "",
+      shouldSort: false,
+      placeholder: true,
+      placeholderValue: "Select Employee",
+    });
+
+    syncCreateFields();
+    createDialog.style.display = "flex";
+  }
+
+  function closeCreateDialog() {
+    createDialog.style.display = "none";
+  }
+</script>
+
+

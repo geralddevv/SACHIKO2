@@ -1,0 +1,286 @@
+<% layout('/layout/boilerplate') -%>
+
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .order-highlight {
+      padding: 0.3rem 0.85rem;
+      border-radius: 0.35rem;
+      font-weight: 600;
+      font-size: 1.15rem;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      background-color: rgba(255, 255, 255, 0.12);
+      margin-left: 8px;
+      display: inline-block;
+    }
+    .order-highlight.active {
+      background-color: rgba(255, 255, 255, 0.18);
+    }
+    #stock-summary-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      border: 1px solid rgba(4, 74, 120, 0.14);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f8f9fa;
+    }
+
+    #stock-summary-table .tabulator {
+      border-radius: inherit;
+      overflow: hidden;
+    }
+
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 2px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .header-action-btn:hover {
+      background-color: #e4e4e4;
+    }
+
+    .metric-positive {
+      font-weight: 700;
+      color: #065f46;
+    }
+
+    .metric-warning {
+      font-weight: 700;
+      color: #b45309;
+    }
+
+    .metric-negative {
+      font-weight: 700;
+      color: #b91c1c;
+    }
+
+    .product-link {
+      color: #044a78;
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .stock-action-group {
+      display: inline-flex;
+      gap: 6px;
+      justify-content: center;
+      align-items: center;
+      white-space: nowrap;
+    }
+
+    .stock-action-btn {
+      border: none;
+      border-radius: 4px;
+      color: #ffffff;
+      cursor: pointer;
+      padding: 2px 7px;
+      font-size: 12px;
+    }
+  </style>
+
+  <div class="indi-head">
+    <h1>
+      Stock View
+      <span class="order-highlight active">Total: <%= summary.totalQuantity %></span>
+      <span class="order-highlight active" style="background-color: rgba(4, 74, 120, 0.4);">POS: <%= summary.posQty %></span>
+      <span class="order-highlight active" style="background-color: rgba(4, 74, 120, 0.4);">Tafeta: <%= summary.tafetaQty %></span>
+      <span class="order-highlight active" style="background-color: rgba(4, 74, 120, 0.4);">Tape: <%= summary.tapeQty %></span>
+      <span class="order-highlight active" style="background-color: rgba(4, 74, 120, 0.4);">TTR: <%= summary.ttrQty %></span>
+      <span class="order-highlight active" style="background-color: rgba(4, 74, 120, 0.4);">Paper: <%= summary.paperQty %></span>
+    </h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span>
+            <i class="fa-solid fa-file-arrow-down"></i>
+            <span class="download-typo">Download</span>
+          </span>
+          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+        </button>
+        <div class="download-selector__menu">
+          <span class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel download-selector__option-icon"></i>
+            <span>Excel</span>
+          </span>
+          <span class="download-selector__option" id="download-csv">
+            <i class="fas fa-file-csv download-selector__option-icon"></i>
+            <span>CSV</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="stock-summary-table"></div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<script>
+  const tableData = <%- safeJson(jsonData) %>;
+  const locationValues = Array.from(
+    new Set(tableData.map((row) => String(row.location || "").trim()).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b));
+  const locationFilterValues = { "": "All" };
+  locationValues.forEach((location) => {
+    locationFilterValues[location] = location;
+  });
+
+  const downloadSelector = document.getElementById("downloadSelector");
+  const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
+
+  triggerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    downloadSelector.classList.toggle("download-selector--active");
+  });
+
+  document.addEventListener("click", () => {
+    downloadSelector.classList.remove("download-selector--active");
+  });
+
+  const qtyFormatter = (cell) => {
+    const value = Number(cell.getValue() || 0);
+    const className = value < 0 ? "metric-negative" : value > 0 ? "metric-positive" : "metric-warning";
+    return `<span class="${className}">${value}</span>`;
+  };
+
+  const balanceFormatter = (cell) => {
+    const value = Number(cell.getValue() || 0);
+    let className = "metric-warning";
+    if (value > 0) className = "metric-positive";
+    if (value < 0) className = "metric-negative";
+    return `<span class="${className}">${value}</span>`;
+  };
+
+  const table = new Tabulator("#stock-summary-table", {
+    data: tableData,
+    height: "100%",
+    // layout: "fitColumns",
+    initialSort: [
+      { column: "itemType", dir: "asc" },
+      { column: "productId", dir: "asc" },
+      { column: "location", dir: "asc" },
+    ],
+    placeholder: "No stock summary available",
+    columns: [
+      {
+        title: "",
+        hozAlign: "center",
+        headerHozAlign: "center",
+        width: 62,
+        minWidth: 62,
+        widthGrow: 0,
+        widthShrink: 0,
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return `
+            <div class="stock-action-group">
+              <button
+                class="stock-action-btn"
+                type="button"
+                onclick="window.location.href='${row.profileUrl}'"
+                style="padding:2px 10px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
+                title="View Profile">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+            </div>`;
+        },
+      },
+      {
+        title: "Item Type",
+        field: "itemType",
+        width: 120,
+        headerFilter: "select",
+        headerFilterParams: {
+          values: { "": "All", Tape: "Tape", "POS Roll": "POS Roll", Tafeta: "Tafeta", TTR: "TTR", Paper: "Paper" },
+          clearable: true,
+        },
+      },
+      {
+        title: "Item Details",
+        field: "specification",
+        minWidth: 250,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return `<span class="product-link" onclick="window.location.href='${row.profileUrl}'">${cell.getValue()}</span>`;
+        },
+      },
+      {
+        title: "Location",
+        field: "location",
+        minWidth: 130,
+        headerFilter: "select",
+        headerFilterParams: {
+          values: locationFilterValues,
+          clearable: true,
+        },
+      },
+      {
+        title: "Product ID",
+        field: "productId",
+        minWidth: 170,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+      },
+      {
+        title: "Total",
+        field: "quantity",
+        hozAlign: "center",
+        headerHozAlign: "center",
+        width: 100,
+        sorter: "number",
+        formatter: qtyFormatter,
+      },
+      {
+        title: "Booked",
+        field: "booked",
+        hozAlign: "center",
+        headerHozAlign: "center",
+        width: 100,
+        sorter: "number",
+        formatter: qtyFormatter,
+      },
+      {
+        title: "Available",
+        field: "balance",
+        hozAlign: "center",
+        headerHozAlign: "center",
+        width: 100,
+        sorter: "number",
+        formatter: balanceFormatter,
+      },
+    ],
+  });
+
+  document.getElementById("download-xlsx").addEventListener("click", () => {
+    table.download("xlsx", "stock-view.xlsx", {
+      sheetName: "Stock View",
+    });
+    downloadSelector.classList.remove("download-selector--active");
+  });
+
+  document.getElementById("download-csv").addEventListener("click", () => {
+    table.download("csv", "stock-view.csv");
+    downloadSelector.classList.remove("download-selector--active");
+  });
+</script>

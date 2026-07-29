@@ -1,0 +1,692 @@
+<% layout('/layout/boilerplate') %>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<style>
+  .order-highlight {
+    padding: 0.3rem 0.85rem;
+    border-radius: 0.35rem;
+    font-weight: 600;
+    font-size: 1.15rem;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    background-color: rgba(255, 255, 255, 0.12);
+    margin-left: 8px;
+    display: inline-block;
+  }
+
+  @keyframes detailsPopIn {
+    0% {
+      transform: scale(0.96);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .tape-details-card {
+    position: relative;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 18px 42px rgba(4, 74, 120, 0.14);
+    border: none;
+    overflow: hidden;
+  }
+
+  .details-scroll-area {
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    padding-bottom: 20px;
+  }
+
+  .tape-details-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 26px 26px 24px;
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.16), transparent 34%),
+      linear-gradient(135deg, #044a78 0%, #03365a 100%);
+    color: #fff;
+  }
+
+  .tape-details-header h1 {
+    margin: 0;
+    font-size: 27px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    line-height: 1.15;
+  }
+
+  .header-subtitle {
+    margin-top: 10px;
+    font-size: 14px;
+    opacity: 0.92;
+    line-height: 1.5;
+  }
+
+  .header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .header-action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.2px;
+    backdrop-filter: blur(8px);
+    transition: background 0.18s ease;
+  }
+
+  .tape-details-body {
+    padding: 20px 26px;
+  }
+
+  .section-title {
+    margin: 0 0 14px;
+    color: #044a78;
+    font-size: 17px;
+    font-weight: 700;
+  }
+
+  .diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #e6eaf2;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .diff-table th,
+  .diff-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e6eaf2;
+    text-align: left;
+    font-size: 13px;
+    vertical-align: top;
+  }
+
+  .diff-table th {
+    background: #f4f7ff;
+    color: #044a78;
+    font-weight: 700;
+  }
+  .diff-table .key-col {
+    width: 32%;
+    color: #5a6586;
+    font-weight: 600;
+  }
+  .diff-table .resolved {
+    font-weight: 700;
+    color: #1f2a44;
+  }
+
+  .btn-action {
+    height: 24px;
+    padding: 2px 10px;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: opacity 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+  }
+  .btn-action:hover {
+    opacity: 0.85;
+  }
+
+  @keyframes popIn {
+    0% {
+      transform: scale(0.9);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+</style>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <div class="indi-head">
+    <h1>Pending Purchase Orders</h1>
+    <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+      <div style="position: relative; display: inline-block">
+        <select
+          id="item-filter"
+          style="
+            appearance: none;
+            -webkit-appearance: none;
+            padding: 3px 30px 2px 14px;
+            background: #ffffff;
+            color: #3e3e3e;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            outline: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease-in-out;
+            min-width: 140px;
+          "
+        >
+          <option value="">All Items</option>
+          <option value="Tape">Tape</option>
+          <option value="Tafeta">Tafeta</option>
+          <option value="PosRoll">POS Roll</option>
+          <option value="Ttr">TTR</option>
+        </select>
+      </div>
+
+      <a
+        href="/sachiko/purchase/order/logs"
+        style="
+          padding: 6px 14px;
+          background: #044a78;
+          color: white;
+          border-radius: 6px;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: opacity 0.2s;
+        "
+        onmouseover="this.style.opacity = '0.85'"
+        onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span>View Logs</span>
+      </a>
+
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span>
+            <i class="fa-solid fa-file-arrow-down"></i>
+            <span class="download-typo">Download</span>
+          </span>
+          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+        </button>
+        <div class="download-selector__menu" id="downloads">
+          <span class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel download-selector__option-icon"></i>
+            <span>Excel</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="master-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<div
+  id="custom-confirm-dialog"
+  style="
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    opacity: 1;
+    transition: opacity 0.3s;
+  "
+>
+  <div
+    style="
+      background: white;
+      border-radius: 8px;
+      width: 440px;
+      max-width: 90%;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      animation: popIn 0.2s ease-out;
+    "
+  >
+    <div style="padding: 25px 20px; text-align: center">
+      <p id="custom-dialog-message" style="margin: 0; color: #333; font-size: 16px; line-height: 1.5">Are you sure?</p>
+      <!-- Cancel Reason Textarea -->
+      <div id="cancel-reason-wrap" style="display: none; margin-top: 15px; text-align: left">
+        <label
+          for="cancel-reason-input"
+          style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px; display: block"
+          >Reason for Cancellation <span style="color: #ef4444">*</span></label
+        >
+        <textarea
+          id="cancel-reason-input"
+          rows="3"
+          placeholder="Enter reason for cancellation..."
+          style="
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            resize: none;
+            font-family: inherit;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+          "
+        ></textarea>
+      </div>
+    </div>
+    <div
+      style="
+        padding: 15px 20px;
+        background: #f9fafb;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        border-top: 1px solid #e5e7eb;
+      "
+    >
+      <button
+        id="custom-dialog-no"
+        onclick="closeCustomDialog()"
+        style="
+          padding: 8px 16px;
+          border: 1px solid #d1d5db;
+          background: white;
+          color: #374151;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.2s;
+        "
+      >
+        Go Back
+      </button>
+      <button
+        id="custom-dialog-yes"
+        style="
+          padding: 8px 16px;
+          border: none;
+          background: #ef4444;
+          color: white;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.2s;
+        "
+      >
+        Yes, Cancel PO
+      </button>
+    </div>
+  </div>
+</div>
+
+<div
+  id="pending-order-details-dialog"
+  style="
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.54);
+    z-index: 10000;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    backdrop-filter: blur(6px);
+  "
+>
+  <div id="pending-order-details-body" style="width: min(1180px, 100%); animation: detailsPopIn 0.2s ease-out"></div>
+</div>
+
+<style>
+  @keyframes popIn {
+    0% {
+      transform: scale(0.9);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  #custom-dialog-no:hover {
+    background: #f3f4f6;
+  }
+  #custom-dialog-yes:hover {
+    opacity: 0.9;
+  }
+  #cancel-reason-input:focus {
+    outline: none;
+    border-color: #044a78;
+    box-shadow: 0 0 0 2px rgba(26, 26, 46, 0.1);
+  }
+</style>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script id="order-data" type="application/json">
+  <%- safeJson(orders || []) %>
+</script>
+
+<script>
+  const orderData = JSON.parse(document.getElementById("order-data").textContent);
+
+  function getItemName(row) {
+    const item = row.itemId;
+    if (!item) return "N/A";
+    if (row.onModel === "Tape") {
+      return `${item.tapePaperCode || ""} ${item.tapeGsm || ""}gsm`.trim() || item.tapeProductId;
+    }
+    if (row.onModel === "PosRoll") {
+      return `${item.posPaperCode || ""} ${item.posGsm || ""}gsm`.trim() || item.posProductId;
+    }
+    if (row.onModel === "Tafeta") {
+      return `${item.tafetaMaterialCode || ""} ${item.tafetaGsm || ""}gsm`.trim() || item.tafetaProductId;
+    }
+    if (row.onModel === "Ttr") {
+      return `${item.ttrType || ""} ${item.ttrWidth || ""}x${item.ttrMtrs || ""}`.trim() || item.ttrProductId;
+    }
+    return "Unknown Item";
+  }
+
+  /* Dialog handlers */
+  window.viewPendingPO = function (orderId) {
+    const order = orderData.find((row) => String(row._id) === String(orderId));
+    if (!order) return;
+
+    const itemName = getItemName(order);
+    const vendor = order.vendorDisplayName || order.vendorUserId?.vendorName || "Vendor not binded";
+    const coordinator = order.coordinatorDisplayName || order.vendorUserId?.userName || "Coordinator not binded";
+    const poNumber = order.poNumber || "N/A";
+    const remarks = order.remarks || "N/A";
+    const quantity = Number(order.quantity) || 0;
+    const received = Number(order.receivedQuantity) || 0;
+    const remaining = Math.max(quantity - received, 0);
+
+    const body = document.getElementById("pending-order-details-body");
+    body.innerHTML = `
+      <div class="tape-details-card">
+        <div class="details-scroll-area">
+          <div class="tape-details-header">
+            <div class="header-copy">
+              <h1>${itemName}</h1>
+              <div class="header-subtitle">${vendor} | ${coordinator}</div>
+            </div>
+            <div class="header-actions">
+              <span class="header-action-link" style="pointer-events: none;">
+                <i class="fa-solid fa-file-invoice"></i> PO: ${poNumber}
+              </span>
+              <button onclick="closeOrderDetailsDialog()" class="header-action-link" style="border: none; cursor: pointer;">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="tape-details-body">
+            <h3 class="section-title">Purchase Details</h3>
+            <table class="diff-table">
+              <tbody>
+                <tr><td class="key-col">Vendor</td><td class="resolved">${vendor}</td></tr>
+                <tr><td class="key-col">Coordinator</td><td class="resolved">${coordinator}</td></tr>
+                <tr><td class="key-col">Item Type</td><td class="resolved">${order.onModel}</td></tr>
+                <tr><td class="key-col">PO Number</td><td class="resolved">${poNumber}</td></tr>
+                <tr><td class="key-col">Quantity</td><td class="resolved">${quantity}</td></tr>
+                <tr><td class="key-col">Received</td><td class="resolved">${received}</td></tr>
+                <tr><td class="key-col">Remaining</td><td class="resolved">${remaining}</td></tr>
+                <tr><td class="key-col">Estimated Delivery</td><td class="resolved">${new Date(order.estimatedDate).toLocaleDateString("en-IN")}</td></tr>
+                <tr><td class="key-col">Remarks</td><td class="resolved">${remarks}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById("pending-order-details-dialog").style.display = "flex";
+  };
+
+  window.closeOrderDetailsDialog = () =>
+    (document.getElementById("pending-order-details-dialog").style.display = "none");
+
+  window.requestCancelPO = function (orderId) {
+    const dialog = document.getElementById("custom-confirm-dialog");
+    const yesBtn = document.getElementById("custom-dialog-yes");
+    const msg = document.getElementById("custom-dialog-message");
+    const reasonWrap = document.getElementById("cancel-reason-wrap");
+
+    msg.textContent = "Are you sure you want to CANCEL this Purchase Order?";
+    yesBtn.style.background = "#ef4444";
+    yesBtn.textContent = "Yes, Cancel PO";
+    reasonWrap.style.display = "block";
+
+    dialog.style.display = "flex";
+
+    yesBtn.onclick = () => {
+      const reason = document.getElementById("cancel-reason-input").value.trim();
+      if (!reason) {
+        alert("Please provide a reason for cancellation.");
+        return;
+      }
+      submitStatusUpdate(orderId, "CANCELLED", reason);
+    };
+  };
+
+  window.requestReceivePO = function (orderId) {
+    window.location.href = `/sachiko/purchase/receive?orderId=${orderId}`;
+  };
+
+  function submitStatusUpdate(orderId, status, reason = "") {
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/sachiko/inventory/purchase/status";
+
+    const inputs = {
+      orderId,
+      status,
+      remarks: reason,
+      _csrf: "<%= csrfToken %>",
+    };
+
+    for (const [name, value] of Object.entries(inputs)) {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    }
+
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  window.closeCustomDialog = () => (document.getElementById("custom-confirm-dialog").style.display = "none");
+
+  const table = new Tabulator("#master-table", {
+    data: orderData,
+    // layout: "fitColumns",
+    placeholder: "No pending purchase orders found",
+    initialSort: [{ column: "createdAt", dir: "asc" }],
+    columns: [
+      {
+        title: "Actions",
+        hozAlign: "center",
+        headerSort: false,
+        // width: 180,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          // Adjust URLs for Edit and Confirm as needed
+          const editUrl = `/sachiko/inventory/purchase/order?orderId=${row._id}`;
+
+          return `
+            <div style="display:flex; gap:6px; justify-content:center; align-items:center;">
+              <button onclick="viewPendingPO('${row._id}')" class="btn-action" style="background:#111827;" title="View Details">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+              <button onclick="requestReceivePO('${row._id}')" class="btn-action" style="background:#10b981;" title="Mark Received">
+                <i class="fa-solid fa-check-double"></i>
+              </button>
+              <button onclick="requestCancelPO('${row._id}')" class="btn-action" style="background:#ef4444;" title="Cancel PO">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+              <a href="${editUrl}" class="btn-action" style="background:#3b82f6; text-decoration:none;" title="Edit PO">
+                <i class="fa-solid fa-pencil"></i>
+              </a>
+            </div>
+          `;
+        },
+      },
+      {
+        title: "Date",
+        field: "createdAt",
+        // width: 105,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Filter date...",
+        formatter: (cell) => new Date(cell.getValue()).toLocaleDateString("en-IN"),
+      },
+      {
+        title: "PO Number",
+        field: "poNumber",
+        // width: 150,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Filter PO...",
+      },
+      {
+        title: "Vendor",
+        field: "vendorDisplayName",
+        // width: 200,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Filter vendor...",
+        formatter: (cell) =>
+          `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "Vendor not binded"}</span>`,
+      },
+      {
+        title: "Coordinator",
+        field: "coordinatorDisplayName",
+        // width: 150,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Filter name...",
+        formatter: (cell) =>
+          `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "Coordinator not binded"}</span>`,
+      },
+      {
+        title: "Item Type",
+        field: "onModel",
+        // width: 120,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Filter type...",
+        formatter: (cell) => {
+          const val = cell.getValue();
+          if (val === "PosRoll") return "POS Roll";
+          return val;
+        },
+      },
+      {
+        title: "Item Details",
+        field: "itemId",
+        // width: 250,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Filter specs...",
+        headerFilterFunc: (headerValue, rowValue, rowData) => {
+          const name = getItemName(rowData);
+          return String(name).toLowerCase().includes(String(headerValue).toLowerCase());
+        },
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return `<span style="color:#044A78; font-weight:600;">${getItemName(row)}</span>`;
+        },
+      },
+      {
+        title: "Qty",
+        field: "quantity",
+        hozAlign: "center",
+        // width: 80,
+        headerFilter: "input",
+        headerFilterPlaceholder: "#",
+      },
+      {
+        title: "Inwarded",
+        field: "receivedQuantity",
+        hozAlign: "center",
+        // width: 80,
+        headerFilter: "input",
+        headerFilterPlaceholder: "#",
+      },
+      {
+        title: "Bal",
+        hozAlign: "center",
+        // width: 80,
+        headerFilter: "input",
+        headerFilterPlaceholder: "#",
+        headerFilterFunc: (headerValue, rowValue, rowData) => {
+          const bal = (rowData.quantity || 0) - (rowData.receivedQuantity || 0);
+          return String(bal).includes(String(headerValue));
+        },
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const quantity = row.quantity || 0;
+          const received = row.receivedQuantity || 0;
+          const remaining = Math.max(quantity - received, 0);
+          return `<span style="font-weight:700; color:#044A78;">${remaining}</span>`;
+        },
+      },
+      {
+        title: "Est. Delivery",
+        field: "estimatedDate",
+        // width: 130,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Filter date...",
+        formatter: (cell) => new Date(cell.getValue()).toLocaleDateString("en-IN"),
+      },
+      {
+        title: "Remarks",
+        field: "remarks",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Filter remarks...",
+      },
+    ],
+  });
+
+  document.getElementById("item-filter").addEventListener("change", function (e) {
+    const val = e.target.value;
+    if (val === "") {
+      table.clearFilter();
+    } else {
+      table.setFilter("onModel", "=", val);
+    }
+  });
+
+  document.getElementById("download-xlsx").addEventListener("click", () => {
+    table.download("xlsx", "pending_purchase_orders.xlsx", { sheetName: "PendingPO" });
+  });
+
+  // Dropdown toggle
+  const selector = document.getElementById("downloadSelector");
+  const trigger = selector.querySelector(".download-selector__trigger");
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    selector.classList.toggle("download-selector--active");
+  });
+  document.addEventListener("click", () => selector.classList.remove("download-selector--active"));
+</script>

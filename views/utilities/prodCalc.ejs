@@ -1,0 +1,184 @@
+<% layout('/layout/boilerplate') -%>
+
+  <!-- The main content -->
+  <div class="main-content">
+    <form action="/sachiko/form/ratecalculator" class="needs-validation" method="post" novalidate>
+      <div class="span-full form-heading">
+        <h1>Production Planning & Calculation</h1>
+      </div>
+
+      <div class="span-full form-subheading">
+        <h1>Sales Values</h1>
+      </div>
+
+      <div class="span-four">
+        <label for="block-date">Date</label>
+        <input type="date" id="block-date" class="form-control" name="blockDate" required />
+      </div>          
+
+      <div class="span-seven">
+        <div class="clientName-label"><label for="company-name">Client Name</label><span class="asterisk" style="font-size: 14px;"></span></div>
+        <select name="companyName" id="company-name" class="form-control select-tag" required>
+          <option value="" selected disabled hidden>Select</option>
+          <% for (let client of clients) { %>
+            <option value="<%= client %>"><%= client %></option>
+          <% } %>
+        </select>
+      </div>
+
+      <div class="span-six">
+        <label for="company-name">User Name</label>
+        <select name="userName" id="user-name" class="form-control select-tag" required>
+          <option value="" selected disabled hidden>Select</option>
+          <% for (let client of clients) { %>
+            <option value="<%= client %>"><%= client %></option>
+          <% } %>
+        </select>
+      </div>
+
+      <div class="span-three">
+        <label for="label-width">Width</label>
+        <input type="number" step="any" id="label-width" class="form-control input-tag" name="labelWidth" placeholder="Enter width" required />
+      </div>
+
+      <div class="span-three">
+        <label for="label-height">Height</label>
+        <input type="number" step="any" id="label-height" class="form-control input-tag" name="labelHeight" placeholder="Enter height" required />
+      </div>
+
+      <div class="span-three">
+        <label for="job-ups">Job ups</label>
+        <input type="number" oninput="limitToTwoChars(this)" id="job-ups" class="form-control input-tag" name="jobUps" placeholder="Enter job ups" required />
+      </div>
+
+      <div class="span-four">
+        <label for="rate-per-1k">Rate Per K</label>
+        <input type="number" step="any" id="rate-per-1k" class="form-control input-tag" name="perOneK" placeholder="Enter Rate Per 1000" required />
+      </div>
+
+      <div class="span-four">
+        <label for="paper-type">Paper type</label>
+        <input list="paper_type_options" id="paper-type" class="form-control input-tag" name="paperType" placeholder="Enter paper type" required />
+        <datalist id="paper_type_options">
+          <option value="Avery"></option>
+          <option value="Chromo"></option>
+          <option value="PVC / PP"></option>
+          <option value="D.T"></option>
+        </datalist>
+      </div>
+
+      <div class="span-three">
+        <label for="printed">Printed</label>
+        <select name="printed" id="printed" class="form-control select-tag" required>
+          <option value="" selected disabled hidden>Select</option>
+          <option value="Plain">Plain</option>
+          <option value="Printed">Printed</option>
+        </select>
+      </div>
+
+      <div class="span-four">
+        <label for="job-name">Job Name</label>
+        <input type="text" id="job-name" class="form-control input-tag" name="jobName" placeholder="Enter Job Name" required />
+      </div>
+
+      <div class="span-five">
+        <label for="order-quantity">Order quantity</label>
+        <input type="number" step="any" id="order-quantity" class="form-control input-tag" name="orderQuantity" placeholder="Enter order quantity" required />
+      </div>
+
+      <div class="span-four">
+        <label for="prod-sale-area">Sales Area</label>
+        <input type="number" step="any" id="prod-sale-area" class="form-control auto-calc input-tag" name="prodSaleArea" placeholder="Sales area" required />
+      </div>           
+
+      <div class="span-four">
+        <label for="prod-sales-rate">Sales rate</label>
+        <input type="number" step="any" id="prod-sales-rate" class="form-control auto-calc input-tag" name="prodSalesRate" placeholder="Sales rate" required />
+      </div>    
+      
+      <div class="span-four">
+        <label for="prod-order-value">Order value</label>
+        <input type="number" step="any" id="prod-order-value" class="form-control auto-calc input-tag" name="prodOrderValue" placeholder="Order value" required />
+      </div>
+      
+      <div class="span-four">
+        <label for="prod-cost-percentage">Cost (%)</label>
+        <input list="cost-list" id="prod-cost-percentage" class="form-control input-tag" name="cost" placeholder="Cost %" required />
+        <datalist id="cost-list">
+          <option value="1.45"></option>
+          <option value="1.55"></option>
+        </datalist>
+      </div>          
+
+      <div class="span-full form-subheading">
+        <h1>Production Values</h1>
+      </div>
+
+      <div class="span-seven">
+        <label for="prod-die-across">Die Across</label>
+        <input type="number" step="any" id="prod-die-across" class="form-control auto-calc input-tag" name="prodDieAcross" placeholder="Enter die across" required />
+      </div>
+
+      <div class="span-six">
+        <label for="prod-die-no">Die Number</label>
+        <input type="number" step="any" id="prod-die-no" class="form-control auto-calc input-tag" name="prodDieno" placeholder="Enter die no" required />
+      </div>
+
+      <div class="span-six">
+        <label for="prod-paper-size">Paper size</label>
+        <input type="number" step="any" id="prod-paper-size" class="form-control auto-calc input-tag" name="prodPaperSize" placeholder="Enter paper size" required />
+      </div>
+
+      <div class="span-six">
+        <label for="prod-paper-code">Paper Code</label>
+        <input type="number" step="any" id="prod-paper-code" class="form-control auto-calc input-tag" name="prodPaperCode" placeholder="Enter paper code" required />
+      </div>
+
+      <div class="span-seven">
+        <label for="prod-m-rate">Current Material Rate</label>
+        <input type="number" step="any" id="prod-m-rate" class="form-control auto-calc input-tag" name="prodMRate" placeholder="Enter M rate" required />
+      </div>
+      
+      <div class="btn-grp span-full">
+        <button id="calc-btn" type="button">Calculate</button>
+      </div>          
+
+      <div class="span-full form-subheading">
+        <h1>Calculated Values</h1>
+      </div>          
+      
+      <div class="span-six">
+        <label for="prod-area">Production Area</label>
+        <input type="number" step="any" id="prod-area" class="form-control auto-calc input-tag" name="prodArea" placeholder="Production area" required />
+      </div>
+      
+      <div class="span-five">
+        <label for="prod-rate">Production rate</label>
+        <input type="number" step="any" id="prod-rate" class="form-control auto-calc input-tag" name="productionRate" placeholder="Production rate" required />
+      </div>
+
+      <div class="span-five">
+        <label for="prod-tot-sqr-m">Total sq mtrs</label>
+        <input type="number" step="any" id="prod-tot-sqr-m" class="form-control auto-calc input-tag" name="prodSqMeter" placeholder="Total square meters" required />
+      </div>
+
+      <div class="span-five">
+        <label for="prod-m-cost">M cost</label>
+        <input type="number" step="any" id="prod-m-cost" class="form-control auto-calc input-tag" name="prodMCost" placeholder="M cost" required />
+      </div>
+
+      <div class="span-five">
+        <label for="prod-margin">Margin</label>
+        <input type="number" step="any" id="prod-margin" class="form-control auto-calc input-tag" name="prodMargin" placeholder="Margin" required />
+      </div>             
+
+      <div class="span-six">
+        <label for="prod-actual-percentage">Actual (%)</label>
+        <input type="text" id="prod-actual-percentage" class="form-control input-tag" name="prodActual" placeholder="Actual %" required />
+      </div>              
+
+      <div class="btn-grp span-full">
+        <button class="submit-btn" type="submit">Submit Order Details</button>
+      </div>
+    </form>
+  </div>

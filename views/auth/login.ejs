@@ -1,0 +1,186 @@
+<% layout('/layout/auth') -%>
+<%
+  // selfBrand / login URLs come from res.locals (set per app in server.js).
+  const self = (typeof selfBrand !== 'undefined' && selfBrand === 'fairdesk') ? 'fairdesk' : 'sachiko';
+  const urlFor = {
+    fairdesk: (typeof fairtechLoginUrl !== 'undefined' ? fairtechLoginUrl : '/fairtech/login'),
+    sachiko:  (typeof sachikoLoginUrl  !== 'undefined' ? sachikoLoginUrl  : '/sachiko/login'),
+  };
+  const brandMeta = {
+    fairdesk: { logo: '/assets/fairfavicon.png',    name: 'Fairtech Systems',  subtitle: 'Secure access for Fairtech Systems' },
+    sachiko:  { logo: '/assets/sachikofavicon.png', name: 'Sachiko Packaging', subtitle: 'Secure access for Sachiko Packaging' },
+  };
+  const meta = brandMeta[self];
+-%>
+
+<section class="login-shell" id="loginShell" data-brand="<%= self %>">
+  <div class="login-accent" id="loginAccent"></div>
+  <div class="login-card">
+
+    <div class="login-header">
+      <div class="login-mark">
+        <img id="loginLogo" src="<%= meta.logo %>" alt="<%= meta.name %>" />
+      </div>
+      <div>
+        <h2 id="loginBrandName"><%= meta.name %></h2>
+        <p id="loginBrandSubtitle"><%= meta.subtitle %></p>
+      </div>
+    </div>
+
+    <div class="brand-switcher">
+      <button class="brand-option <%= self === 'fairdesk' ? 'active' : '' %>" data-brand="fairdesk" data-href="<%= urlFor.fairdesk %>" type="button">
+        <img src="/assets/fairfavicon.png" alt="Fairtech Systems" width="18" height="18" />
+        <span>Fairtech Systems</span>
+      </button>
+      <button class="brand-option <%= self === 'sachiko' ? 'active' : '' %>" data-brand="sachiko" data-href="<%= urlFor.sachiko %>" type="button">
+        <img src="/assets/sachikofavicon.png" alt="Sachiko Packaging" width="18" height="18" />
+        <span>Sachiko Packaging</span>
+      </button>
+    </div>
+
+  <% if (typeof error !== 'undefined' && error.length) { %>
+    <div class="login-alert">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span><%= error[0] %></span>
+    </div>
+  <% } %>
+
+    <form class="login-form" action="<%= urlFor[self] %>" method="post" autocomplete="off">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="brand" id="brandInput" value="<%= self %>" />
+      <label for="login-profile-code">Profile Code</label>
+      <input
+        id="login-profile-code"
+        name="profileCode"
+        type="text"
+        class="form-control"
+        placeholder="Enter your profile code"
+        value="<%= typeof profileCode !== 'undefined' ? profileCode : '' %>"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        readonly
+        required
+      />
+      <label for="login-password">Password</label>
+      <div class="password-field">
+        <input
+          id="login-password"
+          name="password"
+          type="password"
+          class="form-control"
+          placeholder="Enter your password"
+          value="<%= typeof password !== 'undefined' ? password : '' %>"
+          autocomplete="new-password"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          readonly
+          required
+        />
+        <button class="password-toggle" type="button" id="togglePassword" aria-label="Show password">
+          <i class="fa-regular fa-eye" aria-hidden="true"></i>
+        </button>
+      </div>
+      <button class="btn btn-primary w-100 login-submit" type="submit">
+        Sign in
+        <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </form>
+
+    <p class="login-help">
+      Need access? Contact your system administrator.
+    </p>
+  </div>
+</section>
+
+<script>
+  (function () {
+    // Block browser/password-manager autofill on page load.
+    // Fields are rendered with `readonly`, which autofill skips; we clear it
+    // the instant the user actually interacts with the field.
+    const guarded = document.querySelectorAll('.login-form input[readonly]');
+    guarded.forEach((el) => {
+      const unlock = () => el.removeAttribute("readonly");
+      el.addEventListener("focus", unlock, { once: true });
+      el.addEventListener("pointerdown", unlock, { once: true });
+    });
+
+    // Suppress Chrome's "Save password?" prompt. Just before the form
+    // navigates, replace the password field with a plain hidden input that
+    // carries the same value. With no enabled `type="password"` control left
+    // in the form, the browser's password manager has no credential to offer
+    // to save. The value still reaches the server under `name="password"`.
+    const form = document.querySelector(".login-form");
+    if (form) {
+      form.addEventListener("submit", () => {
+        const pw = document.getElementById("login-password");
+        if (!pw) return;
+        const hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = pw.name || "password";
+        hidden.value = pw.value;
+        pw.removeAttribute("name");
+        pw.disabled = true;
+        form.appendChild(hidden);
+      });
+    }
+  })();
+
+  (function () {
+    const toggle = document.getElementById("togglePassword");
+    const input = document.getElementById("login-password");
+    if (!toggle || !input) return;
+
+    toggle.addEventListener("click", () => {
+      const isPassword = input.type === "password";
+      input.type = isPassword ? "text" : "password";
+      toggle.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
+      toggle.innerHTML = isPassword
+        ? '<i class="fa-regular fa-eye-slash" aria-hidden="true"></i>'
+        : '<i class="fa-regular fa-eye" aria-hidden="true"></i>';
+    });
+  })();
+
+  (function () {
+    // The company toggle switches portals. The active company is served by
+    // THIS app; choosing the other company navigates to its own server, where
+    // it authenticates against its own database with a valid CSRF token.
+    const selfBrand = document.getElementById('loginShell').dataset.brand;
+    document.querySelectorAll('.brand-option').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.brand === selfBrand) return; // already here
+        const target = btn.dataset.href;
+        if (target) window.location.href = target;
+      });
+    });
+  })();
+
+  (function () {
+    const profileCode = document.getElementById('login-profile-code');
+    const password = document.getElementById('login-password');
+    if (!profileCode || !password) return;
+
+    const hasError = <%= (typeof error !== 'undefined' && error.length) ? 'true' : 'false' %>;
+
+    if (hasError) {
+      // After a failed attempt the fields are pre-filled. Put the cursor on
+      // the password (the field most likely needing correction) and select it,
+      // so the user can retype and submit with Enter instead of being bounced
+      // back to the profile code field.
+      password.removeAttribute('readonly');
+      password.focus();
+      password.select();
+    } else {
+      profileCode.focus();
+    }
+
+    profileCode.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        password.focus();
+      }
+    });
+  })();
+</script>

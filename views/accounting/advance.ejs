@@ -1,0 +1,297 @@
+<% layout('/layout/boilerplate') -%>
+
+<style>
+.advance-toast {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  background: #ff4d4f;
+  color: #fff;
+  padding: 14px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
+  transition: all 0.3s ease;
+  z-index: 9999;
+}
+
+.advance-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+</style>
+
+
+<div class="main-content">
+  <form class="rottary-content" method="post" action="/sachiko/advance/create">
+
+    <div class="span-full form-heading">
+      <h1>Employee Advance</h1>
+    </div>
+
+    <!-- ================= EMPLOYEE ID ================= -->
+    <div class="span-penta">
+      <label>Employee ID</label>
+      <input
+        type="text"
+        id="emp-id"
+        class="form-control input-tag"
+        placeholder="Auto from employee"
+        readonly
+      />
+    </div>
+
+    <!-- ================= EMPLOYEE ================= -->
+    <div class="span-hexa">
+      <label>Employee Name</label>
+      <select
+        id="employee-name"
+        name="employeeId"
+        class="form-control select-tag"
+        required
+      >
+        <option value="" disabled selected hidden>Select Employee</option>
+        <% employees.forEach(emp => { %>
+          <option value="<%= emp._id %>">
+            <%= emp.empName %>
+          </option>
+        <% }) %>
+      </select>
+    </div>
+
+    <!-- ================= CURRENT ADVANCE BALANCE ================= -->
+    <div class="span-penta">
+      <label>Current Advance Balance</label>
+      <input
+        type="number"
+        id="advance-balance"
+        class="form-control input-tag"
+        value="0"
+        readonly
+      />
+    </div>
+
+    <div class="span-full form-subheading"></div>
+
+    <!-- ================= DATE ================= -->
+    <div class="span-six">
+      <label>Date</label>
+      <input
+        type="date"
+        name="advanceDate"
+        class="form-control input-tag"
+        required
+      />
+    </div>
+
+    <!-- ================= ADVANCE AMOUNT ================= -->
+    <div class="span-penta">
+      <label>Advance Amount</label>
+      <input
+        type="number"
+        name="advanceAmount"
+        class="form-control input-tag"
+        placeholder="Enter Advance Amount"
+        required
+      />
+    </div>
+
+    <!-- ================= REASON ================= -->
+    <div class="span-half">
+      <label>Reason</label>
+      <input
+        name="reason"
+        class="form-control input-tag"
+        placeholder="Optional"
+      />
+    </div>
+
+    <div class="span-full btn-grp">
+      <button class="submit-btn" type="submit">
+        Save Advance
+      </button>
+    </div>
+
+  </form>
+</div>
+
+<!-- ================= ADVANCE TOAST ================= -->
+<div id="advance-toast" class="advance-toast">
+  Advance cannot exceed 100% of basic salary.
+</div>
+
+<!-- ================= CHOICES JS ================= -->
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  const employeeChoices = new Choices("#employee-name", {
+    searchEnabled: true,
+    itemSelectText: "",
+    shouldSort: false,
+  });
+
+  const employeeSelect = document.getElementById("employee-name");
+  const empIdInput = document.getElementById("emp-id");
+  const advanceBalanceInput = document.getElementById("advance-balance");
+
+  async function fetchEmployee(empId) {
+    const res = await fetch(`/sachiko/payroll/employee/${empId}`);
+    if (!res.ok) throw new Error("Employee fetch failed");
+    return await res.json();
+  }
+
+  async function fetchAdvance(empId) {
+    const res = await fetch(`/sachiko/payroll/advance/${empId}`);
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  employeeSelect.addEventListener("change", async (e) => {
+    const empId = e.target.value;
+
+    empIdInput.value = "";
+    advanceBalanceInput.value = 0;
+
+    if (!empId) return;
+
+    try {
+      const emp = await fetchEmployee(empId);
+      empIdInput.value = emp.empId || "";
+
+      const advance = await fetchAdvance(empId);
+      advanceBalanceInput.value = advance?.currentBalance ?? 0;
+
+    } catch (err) {
+      console.error(err);
+      empIdInput.value = "";
+      advanceBalanceInput.value = 0;
+    }
+  });
+
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  const employeeChoices = new Choices("#employee-name", {
+    searchEnabled: true,
+    itemSelectText: "",
+    shouldSort: false,
+  });
+
+  const employeeSelect = document.getElementById("employee-name");
+  const empIdInput = document.getElementById("emp-id");
+  const advanceBalanceInput = document.getElementById("advance-balance");
+  const advanceAmountInput = document.querySelector('[name="advanceAmount"]');
+  const advanceDateInput = document.querySelector('[name="advanceDate"]');
+  const form = document.querySelector("form");
+
+  const toast = document.getElementById("advance-toast");
+
+  let maxAdvanceAllowed = 0;
+  let currentAdvanceBalance = 0;
+
+  if (advanceDateInput && !advanceDateInput.value) {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    advanceDateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  function showToast(message) {
+    toast.textContent = message;
+    toast.classList.add("show");
+
+    setTimeout(() => {
+      toast.classList.remove("show");
+    }, 3000);
+  }
+
+  async function fetchEmployee(empId) {
+    const res = await fetch(`/sachiko/payroll/employee/${empId}`);
+    if (!res.ok) throw new Error("Employee fetch failed");
+    return await res.json();
+  }
+
+  async function fetchAdvance(empId) {
+    const res = await fetch(`/sachiko/payroll/advance/${empId}`);
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  employeeSelect.addEventListener("change", async (e) => {
+    const empId = e.target.value;
+
+    empIdInput.value = "";
+    advanceBalanceInput.value = 0;
+    advanceAmountInput.value = "";
+
+    if (!empId) return;
+
+    try {
+      const emp = await fetchEmployee(empId);
+      empIdInput.value = emp.empId || "";
+
+      const advance = await fetchAdvance(empId);
+      currentAdvanceBalance = Number(advance?.currentBalance || 0);
+      advanceBalanceInput.value = currentAdvanceBalance;
+
+      maxAdvanceAllowed = Number(emp.basicSalary || 0) * 1;
+
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
+  advanceAmountInput.addEventListener("input", () => {
+    const entered = Number(advanceAmountInput.value || 0);
+
+    if (currentAdvanceBalance + entered > maxAdvanceAllowed) {
+      showToast(
+        `Advance limit exceeded. Max allowed: ₹${maxAdvanceAllowed}`
+      );
+    }
+  });
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const entered = Number(advanceAmountInput.value || 0);
+
+    if (currentAdvanceBalance + entered > maxAdvanceAllowed) {
+      showToast(`Advance limit exceeded. Max allowed: Rs ${maxAdvanceAllowed}`);
+      return;
+    }
+
+    fetch(form.action, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      },
+      body: new URLSearchParams(new FormData(form)),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.message || "Failed to save advance");
+        }
+
+        window.location.href = data.redirect || "/sachiko/advance/view";
+      })
+      .catch((err) => {
+        console.error(err);
+        showToast(err.message || "Failed to save advance");
+      });
+  });
+});
+</script>
+
+

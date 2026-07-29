@@ -1,0 +1,851 @@
+<% layout('/layout/boilerplate') -%>
+
+<style>
+  :root {
+    --primary: #044a78;
+    --secondary: #2c3e50;
+    --accent: #3498db;
+    --bg-light: #f8fafc;
+    --border: #e2e8f0;
+  }
+
+  .client-profile-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  /* Header Section */
+  .profile-header-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .header-top {
+    background: var(--primary);
+    color: white;
+    padding: 15px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-info h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .header-badges {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+  }
+
+  .badge {
+    padding: 4px 12px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .badge-type { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); }
+  .badge-user { background: #3498db; color: white; }
+
+  .header-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .action-btn-header {
+    color: var(--primary);
+    background: white;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    transition: background 0.2s;
+    border: none;
+    cursor: pointer;
+  }
+
+  .action-btn-header:hover { background: #f1f5f9; }
+  .action-btn-header.danger { color: #e74c3c; }
+
+  /* Custom Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #044A78;
+    border-radius: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+  }
+
+  /* Info Grid */
+  .info-section {
+    padding: 20px 25px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 40px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    background: #fcfcfc;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .info-section.no-scroll {
+    overflow-x: visible;
+    gap: 20px;
+  }
+
+  .locations-scroll-wrapper {
+    display: flex;
+    gap: 20px;
+    padding: 10px 0;
+    overflow-x: auto;
+    flex-grow: 1;
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .info-label {
+    font-size: 11px;
+    color: #64748b;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.025em;
+  }
+
+  .info-value {
+    font-size: 15px;
+    color: #1e293b;
+    font-weight: 500;
+  }
+
+  /* Section Cards */
+  .section-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .section-header {
+    background: #f1f5f9;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .section-header h2 {
+    margin: 0;
+    font-size: 21px;
+    color: var(--primary);
+    font-weight: 800;
+  }
+
+  .item-rows-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+  }
+
+  .item-category-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .item-category-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #f1f5f9;
+  }
+
+  .item-type-label {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--secondary);
+  }
+
+  .item-count-badge {
+    background: #f1f5f9;
+    color: #64748b;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .inner-spec-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+    table-layout: fixed;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .inner-spec-table th {
+    text-align: center !important;
+    color: #475569;
+    font-weight: 800;
+    padding: 10px 12px !important;
+    border-bottom: 1px solid #cbd5e1;
+    border-right: 1px solid #cbd5e1;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+  }
+
+  .inner-spec-table td {
+    padding: 10px 12px !important;
+    border-bottom: 1px solid #cbd5e1;
+    border-right: 1px solid #cbd5e1;
+    color: #334155;
+    vertical-align: middle;
+    word-wrap: break-word;
+    text-align: center !important;
+  }
+
+  .inner-spec-table th:last-child,
+  .inner-spec-table td:last-child {
+    border-right: none;
+  }
+
+  .inner-spec-table th:first-child,
+  .inner-spec-table td:first-child {
+    text-align: left !important;
+  }
+
+  .inner-spec-table tr:hover td {
+    background-color: #f8fafc;
+  }
+
+  .inner-spec-table tr:last-child td { border-bottom: none; }
+
+  .item-name-cell {
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  .location-group {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .location-group-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #f8fafc;
+  }
+
+  .location-group-name {
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--primary);
+  }
+
+  .location-group-count {
+    background: #e2e8f0;
+    color: #475569;
+    padding: 1px 8px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-left: auto;
+  }
+
+  .location-group-body {
+    padding: 12px 14px 0;
+  }
+
+  @media (max-width: 768px) {
+    .info-section { flex-wrap: wrap; gap: 20px; }
+  }
+</style>
+
+<%
+  // Mirrors utils/locations.js normalizeLocationName — a client's stored
+  // location can carry a stray trailing comma/dot while item bindings are
+  // always saved comma-stripped, so comparisons must normalize both sides.
+  const normalizeLocationNamePage = (value) =>
+    String(value || "").trim().toUpperCase().replace(/\s+/g, " ").replace(/^[.,]+|[.,]+$/g, "");
+  const sameLocPage = (a, b) => normalizeLocationNamePage(a) === normalizeLocationNamePage(b);
+  const requestedLoc = typeof filterLocation !== "undefined" ? String(filterLocation || "").trim() : "";
+  const matchedLocEntry = requestedLoc && Array.isArray(userData.locationDetails)
+    ? userData.locationDetails.find((l) => sameLocPage(l.userLocation, requestedLoc))
+    : null;
+  const isFiltered = Boolean(requestedLoc);
+  const activeLoc = matchedLocEntry ? matchedLocEntry.userLocation : requestedLoc;
+  const pageLocs = isFiltered
+    ? [activeLoc]
+    : (Array.isArray(userData.locationDetails) && userData.locationDetails.length > 0
+        ? userData.locationDetails.map((l) => l.userLocation).filter(Boolean)
+        : [userData.userLocation].filter(Boolean));
+%>
+
+<div class="client-profile-container">
+  <!-- Header Card -->
+  <div class="profile-header-card">
+    <div class="header-top">
+      <div class="header-info">
+        <h1><%= userData.clientName %></h1>
+        <div class="header-badges">
+          <span class="badge badge-type"><%= userData.clientType %></span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="action-btn-header" onclick="window.location.href='/sachiko/form/client?tab=user&clientName=<%= encodeURIComponent(userData.clientName) %>'">
+          <i class="fa-solid fa-user-plus"></i> Add User
+        </button>
+        <a href="/sachiko/form/edit/user/<%= userData._id %>" class="action-btn-header">
+          <i class="fa-solid fa-pen"></i> Edit User
+        </a>
+        <button class="action-btn-header danger" onclick="confirmDeleteUser()">
+          <i class="fa-solid fa-trash"></i> Delete
+        </button>
+      </div>
+    </div>
+
+    <!-- Contact & Location Info -->
+    <div class="info-section custom-scrollbar">
+      <div class="info-item">
+        <span class="info-label">Client ID</span>
+        <span class="info-value"><%= userData.clientId %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">User Name</span>
+        <span class="info-value"><%= userData.userName %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">H/O Location</span>
+        <span class="info-value"><%= userData.hoLocation %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Account Head</span>
+        <span class="info-value"><%= userData.accountHead %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Contact</span>
+        <span class="info-value"><%= userData.userContact %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Email</span>
+        <span class="info-value"><%= userData.userEmail %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">User Location</span>
+        <span class="info-value"><%=
+          isFiltered
+            ? activeLoc
+            : (Array.isArray(userData.locationDetails) && userData.locationDetails.length > 0
+                ? userData.locationDetails.map(loc => loc.userLocation || loc.location).filter(Boolean).join(', ')
+                : userData.userLocation)
+        %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Department</span>
+        <span class="info-value"><%= userData.userDepartment %></span>
+      </div>
+    </div>
+
+    <!-- Additional Locations Info (only when the user has more than one location and we're not scoped to one) -->
+    <% if (!isFiltered && Array.isArray(userData.locationDetails) && userData.locationDetails.length > 1) { %>
+      <div class="info-section no-scroll" style="border-top: none; flex-direction: column; align-items: flex-start; gap: 10px;">
+        <div class="info-item">
+          <span class="info-label">Other Registered Locations</span>
+        </div>
+        <div class="locations-scroll-wrapper custom-scrollbar" style="width: 100%;">
+          <% userData.locationDetails.forEach((loc, index) => { %>
+            <% const locSelf = loc.selfDispatch || loc.SelfDispatch || ''; %>
+            <div style="background: white; border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; font-size: 13px; flex-shrink: 0; margin-bottom: 5px; min-width: 220px;">
+              <strong style="color: var(--primary);"><%= loc.userLocation || loc.location || 'N/A' %></strong>
+              <div style="color: #64748b; font-size: 11px; overflow: hidden; text-overflow: ellipsis;"><%= loc.dispatchAddress || 'N/A' %></div>
+              <div style="margin-top: 6px; border-top: 1px dashed var(--border); padding-top: 6px; font-size: 11px; color: #334155;">
+                <% if (locSelf) { %>
+                  <span style="font-weight: 600; color: var(--primary);">Self Dispatch</span>
+                <% } else { %>
+                  <div><strong>Transport:</strong> <%= loc.transportName || '-' %><%= loc.transportContact ? ' (' + loc.transportContact + ')' : '' %></div>
+                  <div><strong>Drop:</strong> <%= loc.dropLocation || '-' %> &nbsp; <strong>Mode:</strong> <%= loc.deliveryMode || '-' %></div>
+                  <div><strong>Delivery:</strong> <%= loc.deliveryLocation || '-' %> &nbsp; <strong>Payment:</strong> <%= loc.clientPayment || '-' %></div>
+                <% } %>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+
+    <%
+      // Scope dispatch details to the matched location entry when filtered,
+      // falling back to the top-level mirror (primary location) otherwise.
+      const dispatch = matchedLocEntry
+        ? {
+            selfDispatch: matchedLocEntry.selfDispatch || matchedLocEntry.SelfDispatch || "",
+            dispatchAddress: matchedLocEntry.dispatchAddress,
+            transportName: matchedLocEntry.transportName,
+            transportContact: matchedLocEntry.transportContact,
+            dropLocation: matchedLocEntry.dropLocation,
+            deliveryMode: matchedLocEntry.deliveryMode,
+            deliveryLocation: matchedLocEntry.deliveryLocation,
+            clientPayment: matchedLocEntry.clientPayment,
+          }
+        : {
+            selfDispatch: userData.SelfDispatch,
+            dispatchAddress: userData.dispatchAddress,
+            transportName: userData.transportName,
+            transportContact: userData.transportContact,
+            dropLocation: userData.dropLocation,
+            deliveryMode: userData.deliveryMode,
+            deliveryLocation: userData.deliveryLocation,
+            clientPayment: userData.clientPayment,
+          };
+    %>
+
+    <!-- Dispatch Info -->
+    <div class="info-section custom-scrollbar" style="background: white;">
+      <div class="info-item">
+        <span class="info-label">Dispatch Type</span>
+        <span class="info-value"><%= dispatch.selfDispatch ? 'Self Dispatch' : 'Transport' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Dispatch Address</span>
+        <span class="info-value" style="white-space: nowrap;"><%= dispatch.dispatchAddress %></span>
+      </div>
+      <% if (!dispatch.selfDispatch) { %>
+        <div class="info-item">
+          <span class="info-label">Transport</span>
+          <span class="info-value"><%= dispatch.transportName || '-' %></span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Transport Contact</span>
+          <span class="info-value"><%= dispatch.transportContact || '-' %></span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Drop Location</span>
+          <span class="info-value"><%= dispatch.dropLocation || '-' %></span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Delivery Mode</span>
+          <span class="info-value"><%= dispatch.deliveryMode || '-' %></span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Payment</span>
+          <span class="info-value"><%= dispatch.clientPayment || '-' %></span>
+        </div>
+      <% } %>
+    </div>
+
+  </div>
+
+  <%
+    const inPageLocs = (loc) => pageLocs.some((pl) => sameLocPage(pl, loc));
+    const grandTotal =
+      (labels || []).filter((i) => inPageLocs(i.location)).length +
+      (colorLabels || []).filter((i) => inPageLocs(i.location)).length +
+      (ttrs || []).filter((i) => inPageLocs(i.location)).length +
+      (tapes || []).filter((i) => inPageLocs(i.location)).length +
+      (posRolls || []).filter((i) => inPageLocs(i.location)).length +
+      (tafetas || []).filter((i) => inPageLocs(i.location)).length;
+  %>
+
+  <!-- Item Details Card -->
+  <div class="section-card">
+    <div class="section-header">
+      <h2>Item Specifications</h2>
+      <div style="display: flex; gap: 8px;">
+        <span class="badge" style="background: #f1f5f9; color: #64748b; font-size: 11px;">Total Items: <%= grandTotal %></span>
+      </div>
+    </div>
+
+    <div class="item-rows-container">
+      <% pageLocs.forEach(loc => {
+        const locLabels = (labels || []).filter(i => sameLocPage(i.location, loc));
+        const locColorLabels = (colorLabels || []).filter(i => sameLocPage(i.location, loc));
+        const locTtrs = (ttrs || []).filter(i => sameLocPage(i.location, loc));
+        const locTapes = (tapes || []).filter(i => sameLocPage(i.location, loc));
+        const locPosRolls = (posRolls || []).filter(i => sameLocPage(i.location, loc));
+        const locTafetas = (tafetas || []).filter(i => sameLocPage(i.location, loc));
+        const locTotal = locLabels.length + locColorLabels.length + locTtrs.length + locTapes.length + locPosRolls.length + locTafetas.length;
+      %>
+        <div class="location-group">
+          <div class="location-group-header">
+            <span class="location-group-name"><%= loc %></span>
+            <span class="location-group-count"><%= locTotal %></span>
+          </div>
+          <div class="location-group-body">
+            <!-- Labels -->
+            <% if (locLabels.length > 0) { %>
+              <div class="item-category-group">
+                <div class="item-category-header">
+                  <span class="item-type-label">Plain Labels</span>
+                  <span class="item-count-badge"><%= locLabels.length %></span>
+                </div>
+                <table class="inner-spec-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 8%;">Family</th>
+                      <th>Width</th>
+                      <th>Height</th>
+                      <th>Rate per K</th>
+                      <th>Gap</th>
+                      <th>Ups</th>
+                      <th>Core</th>
+                      <th>Instructions</th>
+                      <th>Odr</th>
+                      <th>Freq</th>
+                      <th>Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% locLabels.forEach(i => { %>
+                      <tr>
+                        <td class="item-name-cell"><%= i.labelFamily || '-' %></td>
+                        <td><%= i.labelWidth || '-' %></td>
+                        <td><%= i.labelHeight || '-' %></td>
+                        <td style="font-weight:600;">₹<%= i.ratePerK %></td>
+                        <td><%= i.labelGap || '-' %></td>
+                        <td><%= i.labelUps || '-' %></td>
+                        <td><%= i.labelCore || '-' %></td>
+                        <td><%= i.instructions || '-' %></td>
+                        <td><%= i.OrderQty || '-' %></td>
+                        <td><%= i.repOrderFq || '-' %></td>
+                        <td><%= i.creditTerm || '-' %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+
+            <!-- Color Labels -->
+            <% if (locColorLabels.length > 0) { %>
+              <div class="item-category-group">
+                <div class="item-category-header">
+                  <span class="item-type-label">Color Labels</span>
+                  <span class="item-count-badge"><%= locColorLabels.length %></span>
+                </div>
+                <table class="inner-spec-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 14%;">Item</th>
+                      <th>Job Name</th>
+                      <th>Family</th>
+                      <th>Size</th>
+                      <th>Gap</th>
+                      <th>Ups</th>
+                      <th>Core</th>
+                      <th>Min</th>
+                      <th>Odr</th>
+                      <th>Freq</th>
+                      <th>Credit</th>
+                      <th>Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% locColorLabels.forEach(i => { %>
+                      <tr>
+                        <td class="item-name-cell"><%= i.productId %></td>
+                        <td><%= i.jobName || '-' %></td>
+                        <td><%= i.labelFamily || '-' %></td>
+                        <td><%= i.labelWidth %>x<%= i.labelHeight %></td>
+                        <td><%= i.labelGap || '-' %></td>
+                        <td><%= i.labelUps || '-' %></td>
+                        <td><%= i.labelCore || '-' %></td>
+                        <td><%= i.minOrderQty || '-' %></td>
+                        <td><%= i.OrderQty || '-' %></td>
+                        <td><%= i.repOrderFq || '-' %></td>
+                        <td><%= i.creditTerm || '-' %></td>
+                        <td style="font-weight:600;">₹<%= i.ratePerK %>/K</td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+
+            <!-- TTR -->
+            <% if (locTtrs.length > 0) { %>
+              <div class="item-category-group">
+                <div class="item-category-header">
+                  <span class="item-type-label">TTR</span>
+                  <span class="item-count-badge"><%= locTtrs.length %></span>
+                </div>
+                <table class="inner-spec-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 14%;">Item</th>
+                      <th style="width: 12%;">Type</th>
+                      <th>Color</th>
+                      <th>Width</th>
+                      <th>Mtrs</th>
+                      <th>InkFace</th>
+                      <th>Core</th>
+                      <th>Min</th>
+                      <th>Odr</th>
+                      <th>Freq</th>
+                      <th>Credit</th>
+                      <th>Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% locTtrs.forEach(i => { %>
+                      <tr>
+                        <td class="item-name-cell"><%= i.ttrClientMaterialCode %></td>
+                        <td><%= i.clientTtrType || (i.ttrId ? i.ttrId.ttrType : '-') %></td>
+                        <td><%= i.ttrId ? i.ttrId.ttrColor : '-' %></td>
+                        <td><%= i.ttrId ? i.ttrId.ttrWidth : '-' %></td>
+                        <td><%= i.ttrMtrsDel %></td>
+                        <td><%= i.ttrId ? i.ttrId.ttrInkFace : '-' %></td>
+                        <td><%= i.ttrId ? i.ttrId.ttrCoreId : '-' %></td>
+                        <td><%= i.ttrMinQty %></td>
+                        <td><%= i.ttrOdrQty || '-' %></td>
+                        <td><%= i.ttrOdrFreq || '-' %></td>
+                        <td><%= i.ttrCreditTerm || '-' %></td>
+                        <td style="font-weight:600;">₹<%= i.ttrRatePerRoll %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+
+            <!-- Tape -->
+            <% if (locTapes.length > 0) { %>
+              <div class="item-category-group">
+                <div class="item-category-header">
+                  <span class="item-type-label">Tape</span>
+                  <span class="item-count-badge"><%= locTapes.length %></span>
+                </div>
+                <table class="inner-spec-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 17%;">Item</th>
+                      <th>GSM</th>
+                      <th>Type</th>
+                      <th>Width</th>
+                      <th>Mtrs</th>
+                      <th>Finish</th>
+                      <th>Core</th>
+                      <th>Min</th>
+                      <th>Odr</th>
+                      <th>Freq</th>
+                      <th>Credit</th>
+                      <th>Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% locTapes.forEach(i => { %>
+                      <tr>
+                        <td class="item-name-cell"><%= i.tapeClientPaperCode %></td>
+                        <td><%= i.clientTapeGsm || (i.tapeId ? i.tapeId.tapeGsm : '-') %></td>
+                        <td><%= i.tapeId ? i.tapeId.tapePaperType : '-' %></td>
+                        <td><%= i.tapeId ? i.tapeId.tapeWidth : '-' %></td>
+                        <td><%= i.tapeMtrsDel %></td>
+                        <td><%= i.tapeId ? i.tapeId.tapeFinish : '-' %></td>
+                        <td><%= i.tapeId ? i.tapeId.tapeCoreId : '-' %></td>
+                        <td><%= i.tapeMinQty %></td>
+                        <td><%= i.tapeOdrQty || '-' %></td>
+                        <td><%= i.tapeOdrFreq || '-' %></td>
+                        <td><%= i.tapeCreditTerm || '-' %></td>
+                        <td style="font-weight:600;">₹<%= i.tapeRatePerRoll %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+
+            <!-- POS Rolls -->
+            <% if (locPosRolls.length > 0) { %>
+              <div class="item-category-group">
+                <div class="item-category-header">
+                  <span class="item-type-label">POS Rolls</span>
+                  <span class="item-count-badge"><%= locPosRolls.length %></span>
+                </div>
+                <table class="inner-spec-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 17%;">Item</th>
+                      <th>GSM</th>
+                      <th>Type</th>
+                      <th>Color</th>
+                      <th>Width</th>
+                      <th>Mtrs</th>
+                      <th>Core</th>
+                      <th>Min</th>
+                      <th>Odr</th>
+                      <th>Freq</th>
+                      <th>Credit</th>
+                      <th>Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% locPosRolls.forEach(i => { %>
+                      <tr>
+                        <td class="item-name-cell"><%= i.posClientPaperCode %></td>
+                        <td><%= i.clientPosGsm || (i.posRollId ? i.posRollId.posGsm : '-') %></td>
+                        <td><%= i.posRollId ? i.posRollId.posPaperType : '-' %></td>
+                        <td><%= i.posRollId ? i.posRollId.posColor : '-' %></td>
+                        <td><%= i.posRollId ? i.posRollId.posWidth : '-' %></td>
+                        <td><%= i.posMtrsDel %></td>
+                        <td><%= i.posRollId ? i.posRollId.posCoreId : '-' %></td>
+                        <td><%= i.posMinQty %></td>
+                        <td><%= i.posOdrQty || '-' %></td>
+                        <td><%= i.posOdrFreq || '-' %></td>
+                        <td><%= i.posCreditTerm || '-' %></td>
+                        <td style="font-weight:600;">₹<%= i.posRatePerRoll %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+
+            <!-- Tafeta -->
+            <% if (locTafetas.length > 0) { %>
+              <div class="item-category-group">
+                <div class="item-category-header">
+                  <span class="item-type-label">Tafeta</span>
+                  <span class="item-count-badge"><%= locTafetas.length %></span>
+                </div>
+                <table class="inner-spec-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 17%;">Item</th>
+                      <th>Type</th>
+                      <th>GSM</th>
+                      <th>Color</th>
+                      <th>Width</th>
+                      <th>Mtrs</th>
+                      <th>Core</th>
+                      <th>Min</th>
+                      <th>Odr</th>
+                      <th>Freq</th>
+                      <th>Credit</th>
+                      <th>Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% locTafetas.forEach(i => { %>
+                      <tr>
+                        <td class="item-name-cell"><%= i.tafetaClientMaterialCode %></td>
+                        <td><%= i.tafetaClientMaterialType || (i.tafetaId ? i.tafetaId.tafetaMaterialType : '-') %></td>
+                        <td><%= i.clientTafetaGsm || (i.tafetaId ? i.tafetaId.tafetaGsm : '-') %></td>
+                        <td><%= i.tafetaId ? i.tafetaId.tafetaColor : '-' %></td>
+                        <td><%= i.tafetaId ? i.tafetaId.tafetaWidth : '-' %></td>
+                        <td><%= i.tafetaMtrsDel %></td>
+                        <td><%= i.tafetaId ? i.tafetaId.tafetaCoreId : '-' %></td>
+                        <td><%= i.tafetaMinQty || '-' %></td>
+                        <td><%= i.tafetaOdrQty || '-' %></td>
+                        <td><%= i.tafetaOdrFreq || '-' %></td>
+                        <td><%= i.tafetaCreditTerm || '-' %></td>
+                        <td style="font-weight:600;">₹<%= i.tafetaRatePerRoll %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+
+            <% if (locTotal === 0) { %>
+              <div style="padding: 15px; color: #94a3b8; font-style: italic; font-size: 13px;">
+                No items associated with this user at this location.
+              </div>
+            <% } %>
+          </div>
+        </div>
+      <% }) %>
+
+      <% if (pageLocs.length === 0) { %>
+        <div style="padding: 40px; text-align: center; color: #94a3b8;">
+          <i class="fa-solid fa-box-open" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+          No items associated with this user.
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<form id="deleteUserForm" method="POST" action="/sachiko/client/details/<%= userData._id %>/delete" style="display:none;">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+</form>
+
+<div class="logout-modal" id="deleteUserModal" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteUserTitle">
+    <h2 class="logout-title" id="deleteUserTitle">Delete user?</h2>
+    <p class="logout-text">This will permanently delete this user and remove it from the client.</p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" id="deleteUserCancel">Cancel</button>
+      <button class="logout-btn primary" type="button" id="deleteUserConfirm">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const deleteUserModal = document.getElementById("deleteUserModal");
+  const deleteUserCancel = document.getElementById("deleteUserCancel");
+  const deleteUserConfirm = document.getElementById("deleteUserConfirm");
+
+  function confirmDeleteUser() {
+    deleteUserModal.style.display = "flex";
+    deleteUserModal.classList.add("show");
+    deleteUserModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeDeleteUserModal() {
+    deleteUserModal.classList.remove("show");
+    deleteUserModal.setAttribute("aria-hidden", "true");
+    deleteUserModal.style.display = "none";
+  }
+
+  deleteUserCancel.addEventListener("click", closeDeleteUserModal);
+  deleteUserModal.addEventListener("click", (e) => {
+    if (e.target === deleteUserModal) closeDeleteUserModal();
+  });
+  deleteUserConfirm.addEventListener("click", () => {
+    closeDeleteUserModal();
+    document.getElementById("deleteUserForm").submit();
+  });
+</script>
+

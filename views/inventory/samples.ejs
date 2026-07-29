@@ -1,0 +1,658 @@
+<% layout('/layout/boilerplate') -%>
+
+<link rel="stylesheet" href="/css/tabOpt.css" />
+<style>
+  .sample-form {
+    display: grid;
+    grid-template-columns: repeat(32, 1fr);
+    gap: 1.25rem;
+  }
+
+  .sample-form[hidden] {
+    display: none !important;
+  }
+
+  .sample-form textarea {
+    border: 1px solid #044a78;
+    resize: none;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--primary-color);
+    border-radius: 4px;
+  }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
+  <div>
+    <div class="span-full form-subheading gap" style="margin-bottom: 1rem">
+      <div class="client-switch sample-tab active" data-tab="vendor">
+        <h1>Vendor Sample</h1>
+      </div>
+      <div class="user-switch sample-tab" data-tab="client">
+        <h1>Client Sample</h1>
+      </div>
+    </div>
+
+    <form
+      id="vendor-sample-form"
+      class="sample-form span-full needs-validation"
+      action="/sachiko/form/samples"
+      method="post"
+      autocomplete="off"
+      novalidate
+    >
+      <input type="hidden" name="sampleCategory" value="vendor" />
+
+      <!-- Material checkbox strip -->
+      <div class="span-full">
+        <div
+          class="custom-scrollbar"
+          style="
+            display: flex;
+            flex-wrap: nowrap;
+            align-items: center;
+            justify-content: space-around;
+            width: 100%;
+            white-space: nowrap;
+            overflow-x: auto;
+            padding: 8px 14px;
+            background: #e9f0f6;
+            border-radius: 8px;
+            column-gap: 24px;
+          "
+        >
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="Face paper" style="width: 16px; height: 16px" />
+            Face paper
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="Adhesive" style="width: 16px; height: 16px" />
+            Adhesive
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="Release paper" style="width: 16px; height: 16px" />
+            Release paper
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="SL (paper)" style="width: 16px; height: 16px" />
+            SL (paper)
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="TTR" style="width: 16px; height: 16px" />
+            TTR
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="POS Roll" style="width: 16px; height: 16px" />
+            POS Roll
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="Taffeta" style="width: 16px; height: 16px" />
+            Taffeta
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="Others" style="width: 16px; height: 16px" />
+            Others
+          </label>
+        </div>
+      </div>
+
+      <div class="span-full form-subheading">
+        <h1>Vendor Sample Details</h1>
+      </div>
+
+      <div class="span-four">
+        <label for="vendor-sample-code">Sample Code</label>
+        <input
+          type="text"
+          id="vendor-sample-code"
+          class="form-control input-tag"
+          name="sampleCode"
+          placeholder="Enter Sample Code"
+          required
+        />
+      </div>
+
+      <div class="span-four">
+        <label for="vendor-sample-date">Date</label>
+        <input
+          type="date"
+          id="vendor-sample-date"
+          class="form-control input-tag sample-date"
+          name="sampleDate"
+          required
+        />
+      </div>
+
+      <div class="span-four">
+        <label for="vendor-name">Vendor Name</label>
+        <input
+          type="text"
+          id="vendor-name"
+          class="form-control input-tag"
+          name="vendorName"
+          placeholder="Enter Vendor"
+          required
+        />
+      </div>
+
+      <div class="span-five">
+        <label for="vendor-code">Vendor Item Code</label>
+        <input
+          type="text"
+          id="vendor-code"
+          class="form-control input-tag"
+          name="vendorItemCode"
+          placeholder="Enter Vendor Item Code"
+          required
+        />
+      </div>
+
+      <div class="span-three">
+        <label for="vendor-sample-ttr-type">Type</label>
+        <!-- <input type="text" id="ttr-type" class="form-control" name="ttrType" placeholder="Enter type" required /> -->
+        <select name="vendorSampleTtrType" id="vendor-sample-ttr-type" class="form-control select-tag" required>
+          <option value="" selected disabled hidden>Select</option>
+          <option value="WAX">WAX</option>
+          <option value="WAX PREMIUM">WAX PREMIUM</option>
+          <option value="WAX COLOR">WAX COLOR</option>
+          <option value="WAX RESIN">WAX RESIN</option>
+          <option value="WAX RESIN PREMIUM">WAX RESIN PREMIUM</option>
+          <option value="WAX RESIN COLOR">WAX RESIN COLOR</option>
+          <option value="RESIN">RESIN</option>
+          <option value="RESIN COLOR">RESIN COLOR</option>
+          <option value="SCRATCH PROOF">SCRATCH PROOF</option>
+          <option value="WASHCARE">WASHCARE</option>
+          <option value="TTO">TTO</option>
+        </select>
+      </div>
+
+      <div class="span-three">
+        <label for="vendor-sample-size">Size</label>
+        <input
+          type="text"
+          id="vendor-sample-size"
+          class="form-control input-tag"
+          name="sampleSize"
+          placeholder="Enter Block"
+          required
+        />
+      </div>
+
+      <div class="span-three">
+        <label for="vendor-sample-mtrs">MTRS</label>
+        <input
+          type="text"
+          id="vendor-sample-mtrs"
+          class="form-control input-tag"
+          name="sampleMtrs"
+          placeholder="Enter Width"
+          required
+        />
+      </div>
+
+      <div class="span-three">
+        <label for="vendor-job-no">Job No.</label>
+        <input
+          type="text"
+          id="vendor-job-no"
+          class="form-control input-tag"
+          name="jobNo"
+          placeholder="Enter Job No."
+          required
+        />
+      </div>
+
+      <div class="span-three">
+        <label for="vendor-purchase-rate">P Rate</label>
+        <input
+          type="number"
+          step="any"
+          id="vendor-purchase-rate"
+          class="form-control input-tag"
+          name="purchaseRate"
+          placeholder="Enter Purchase Rate"
+          required
+        />
+      </div>
+
+      <div class="span-full form-subheading"></div>
+
+      <div class="span-six">
+        <label for="vendor-client">Client</label>
+        <input
+          type="text"
+          id="vendor-client"
+          class="form-control input-tag"
+          name="clientName"
+          placeholder="Enter Client"
+          required
+        />
+      </div>
+
+      <div class="span-seven">
+        <label for="vendor-sales-person">Sales Person</label>
+        <input
+          type="text"
+          id="vendor-sales-person"
+          class="form-control input-tag"
+          name="salesPerson"
+          placeholder="Enter Sales Person"
+          required
+        />
+      </div>
+
+      <div class="span-seven">
+        <label for="vendor-application">Application</label>
+        <input
+          type="text"
+          id="vendor-application"
+          class="form-control input-tag"
+          name="application"
+          placeholder="Enter Application"
+          required
+        />
+      </div>
+
+      <div class="span-hexa">
+        <label for="vendor-remark">Remark</label>
+        <input
+          type="text"
+          id="vendor-remark"
+          class="form-control input-tag"
+          name="remark"
+          placeholder="Enter Remark"
+          required
+        />
+      </div>
+
+      <div class="span-full btn-grp">
+        <button id="vendor-sample-submit-btn" class="submit-btn" type="submit">Save Vendor Sample</button>
+      </div>
+    </form>
+
+    <form
+      id="client-sample-form"
+      class="sample-form span-full needs-validation"
+      action="/sachiko/form/samples"
+      method="post"
+      autocomplete="off"
+      novalidate
+      hidden
+    >
+      <input type="hidden" name="sampleCategory" value="client" />
+
+      <!-- Material checkbox strip -->
+      <div class="span-full">
+        <div
+          class="custom-scrollbar"
+          style="
+            display: flex;
+            flex-wrap: nowrap;
+            align-items: center;
+            justify-content: space-around;
+            width: 100%;
+            white-space: nowrap;
+            overflow-x: auto;
+            padding: 8px 14px;
+            background: #e9f0f6;
+            border-radius: 8px;
+            column-gap: 24px;
+          "
+        >
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="Label" style="width: 16px; height: 16px" />
+            Label
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="TTR" style="width: 16px; height: 16px" />
+            TTR
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="Tape" style="width: 16px; height: 16px" />
+            Tape
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="POS roll" style="width: 16px; height: 16px" />
+            POS roll
+          </label>
+          <label
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin: 0;
+              padding: 4px 8px;
+              background: transparent;
+            "
+          >
+            <input type="radio" name="sampleMaterial" value="Taffeta" style="width: 16px; height: 16px" />
+            Taffeta
+          </label>
+        </div>
+      </div>
+
+      <div class="span-full form-subheading">
+        <h1>Client Sample Details</h1>
+      </div>
+
+      <div class="span-six">
+        <label for="client-sample-code">Sample Code</label>
+        <input
+          type="text"
+          id="client-sample-code"
+          class="form-control input-tag"
+          name="sampleCode"
+          placeholder="Enter Sample Code"
+          required
+        />
+      </div>
+
+      <div class="span-five">
+        <label for="client-sample-date">Date</label>
+        <input
+          type="date"
+          id="client-sample-date"
+          class="form-control input-tag sample-date"
+          name="sampleDate"
+          required
+        />
+      </div>
+
+      <div class="span-five">
+        <label for="client-sample-type">Type</label>
+        <input
+          type="text"
+          id="client-sample-type"
+          class="form-control input-tag"
+          name="sampleType"
+          placeholder="Enter Type"
+          required
+        />
+      </div>
+
+      <div class="span-five">
+        <label for="client-sample-block">Block</label>
+        <input
+          type="text"
+          id="client-sample-block"
+          class="form-control input-tag"
+          name="sampleBlock"
+          placeholder="Enter Block"
+          required
+        />
+      </div>
+
+      <div class="span-five">
+        <label for="client-sample-width">Width</label>
+        <input
+          type="text"
+          id="client-sample-width"
+          class="form-control input-tag"
+          name="sampleWidth"
+          placeholder="Enter Width"
+          required
+        />
+      </div>
+
+      <div class="span-six">
+        <label for="client-sample-height">Height</label>
+        <input
+          type="text"
+          id="client-sample-height"
+          class="form-control input-tag"
+          name="sampleHeight"
+          placeholder="Enter Height"
+          required
+        />
+      </div>
+
+      <div class="span-full form-subheading"></div>
+
+      <div class="span-five">
+        <label for="client-job-no">Job No.</label>
+        <input
+          type="text"
+          id="client-job-no"
+          class="form-control input-tag"
+          name="jobNo"
+          placeholder="Enter Job No."
+          required
+        />
+      </div>
+
+      <div class="span-six">
+        <label for="fairtech-name">Fairtech</label>
+        <input
+          type="text"
+          id="fairtech-name"
+          class="form-control input-tag"
+          name="fairtechName"
+          placeholder="Enter Fairtech"
+          required
+        />
+      </div>
+
+      <div class="span-six">
+        <label for="fairtech-code">Fairtech Code</label>
+        <input
+          type="text"
+          id="fairtech-code"
+          class="form-control input-tag"
+          name="fairtechCode"
+          placeholder="Enter Fairtech Code"
+          required
+        />
+      </div>
+
+      <div class="span-five">
+        <label for="client-purchase-rate">Purchase Rate</label>
+        <input
+          type="number"
+          step="any"
+          id="client-purchase-rate"
+          class="form-control input-tag"
+          name="purchaseRate"
+          placeholder="Enter Purchase Rate"
+          required
+        />
+      </div>
+
+      <div class="span-five">
+        <label for="client-deckle">Deckle (mm)</label>
+        <input
+          type="number"
+          step="any"
+          id="client-deckle"
+          class="form-control input-tag"
+          name="deckleMm"
+          placeholder="Enter Deckle in MM"
+          required
+        />
+      </div>
+
+      <div class="span-five">
+        <label for="client-moq">MOQ (Sq.mtrs)</label>
+        <input
+          type="number"
+          step="any"
+          id="client-moq"
+          class="form-control input-tag"
+          name="moqSqMtrs"
+          placeholder="Enter MOQ"
+          required
+        />
+      </div>
+
+      <div class="span-full form-subheading"></div>
+
+      <div class="span-six">
+        <label for="client-name-field">Client</label>
+        <input
+          type="text"
+          id="client-name-field"
+          class="form-control input-tag"
+          name="clientName"
+          placeholder="Enter Client"
+          required
+        />
+      </div>
+
+      <div class="span-seven">
+        <label for="client-sales-person">Sales Person</label>
+        <input
+          type="text"
+          id="client-sales-person"
+          class="form-control input-tag"
+          name="salesPerson"
+          placeholder="Enter Sales Person"
+          required
+        />
+      </div>
+
+      <div class="span-seven">
+        <label for="client-application">Application</label>
+        <input
+          type="text"
+          id="client-application"
+          class="form-control input-tag"
+          name="application"
+          placeholder="Enter Application"
+          required
+        />
+      </div>
+
+      <div class="span-hexa">
+        <label for="client-remark">Remark</label>
+        <input
+          type="text"
+          id="client-remark"
+          class="form-control input-tag"
+          name="remark"
+          placeholder="Enter Remark"
+          required
+        />
+      </div>
+
+      <div class="span-full btn-grp">
+        <button id="client-sample-submit-btn" class="submit-btn" type="submit">Save Client Sample</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/samplesForm.js"></script>

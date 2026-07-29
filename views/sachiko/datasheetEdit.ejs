@@ -1,0 +1,187 @@
+<% layout('/layout/boilerplate') %>
+
+<style>
+  .choices[data-type*="select-one"]::after {
+    display: block !important;
+    content: "" !important;
+    width: 12px !important;
+    height: 8px !important;
+    border-style: none !important;
+    border-width: 0 !important;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23044a78' stroke-width='2' fill='none'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-size: contain !important;
+    position: absolute !important;
+    right: 11.5px !important;
+    top: 50% !important;
+    margin-top: 0 !important;
+    transform: translateY(-50%) !important;
+  }
+  .choices[data-type*="select-one"].is-open::after {
+    transform: translateY(-50%) rotate(180deg) !important;
+  }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
+  <form
+    action="/sachiko/datasheet/edit/<%= ds._id %>?_csrf=<%= encodeURIComponent(csrfToken) %>"
+    method="POST"
+    enctype="multipart/form-data"
+    class="needs-validation"
+    autocomplete="off"
+    novalidate
+  >
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+    <div class="span-full form-heading">
+      <h1>Edit Datasheet <span style="font-size:1rem; font-weight:500; color:#64748b;"><%= ds.datasheetId %></span></h1>
+    </div>
+
+    <!-- Product Code -->
+    <div style="grid-column: span 10; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Product</h1>
+      </div>
+      <div style="display: flex; gap: 1rem">
+        <div class="span-six">
+          <label for="productCode">Product Code</label>
+          <input
+            type="text"
+            id="productCode"
+            name="productCode"
+            class="form-control"
+            placeholder="Enter product code"
+            value="<%= ds.productCode || '' %>"
+            required
+          />
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+            <label for="wordFile" style="margin:0;">Word File</label>
+            <% if (ds.wordFile) { %>
+            <a href="/sachiko/datasheet/file/<%= ds.wordFile %>" title="<%= ds.wordFileOriginalName || ds.wordFile %>"
+              style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#044a78;text-decoration:none;padding:2px 8px;border:1px solid #044a78;border-radius:4px;background:#f0f7ff;line-height:1.6;">
+              <i class="fa-solid fa-file-word"></i> Show current file
+            </a>
+            <% } %>
+          </div>
+          <input type="file" id="wordFile" name="wordFile" class="form-control" accept=".doc,.docx" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Facestock -->
+    <div style="grid-column: span 22; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Facestock</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem">
+        <div class="span-six" style="grid-column: auto">
+          <label for="facestockFamily">Family</label>
+          <select id="facestockFamily" name="facestockFamily" class="form-control select-tag">
+            <option value="" <%= !ds.facestock?.facestockFamily ? 'selected' : '' %>>— None —</option>
+            <option value="CHROMO"   <%= ds.facestock?.facestockFamily === 'CHROMO'   ? 'selected' : '' %>>CHROMO</option>
+            <option value="DT"       <%= ds.facestock?.facestockFamily === 'DT'       ? 'selected' : '' %>>DT</option>
+            <option value="MAPLITO"  <%= ds.facestock?.facestockFamily === 'MAPLITO'  ? 'selected' : '' %>>MAPLITO</option>
+            <option value="PP"       <%= ds.facestock?.facestockFamily === 'PP'       ? 'selected' : '' %>>PP</option>
+          </select>
+        </div>
+        <div class="span-six" style="grid-column: auto">
+          <label for="facestockType">Type</label>
+          <select id="facestockType" name="facestockType" class="form-control select-tag" required>
+            <option value="" disabled <%= !ds.facestock?.facestockType ? 'selected' : '' %> hidden>Select type</option>
+            <option value="CLEAR"      <%= ds.facestock?.facestockType === 'CLEAR'      ? 'selected' : '' %>>CLEAR</option>
+            <option value="GLOSSY"     <%= ds.facestock?.facestockType === 'GLOSSY'     ? 'selected' : '' %>>GLOSSY</option>
+            <option value="MATT"       <%= ds.facestock?.facestockType === 'MATT'       ? 'selected' : '' %>>MATT</option>
+            <option value="SEMI GLOSSY"<%= ds.facestock?.facestockType === 'SEMI GLOSSY'? 'selected' : '' %>>SEMI GLOSSY</option>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label for="facestockGsm">GSM</label>
+          <input type="number" id="facestockGsm" name="facestockGsm" class="form-control"
+            placeholder="Enter GSM" min="0" step="any"
+            value="<%= ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm : '' %>" />
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label for="facestockMicron">Micron</label>
+          <input type="number" id="facestockMicron" name="facestockMicron" class="form-control"
+            placeholder="Enter Micron" min="0" step="any"
+            value="<%= ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron : '' %>" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Adhesive -->
+    <div style="grid-column: span 12; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Adhesive</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem">
+        <div class="span-seven" style="grid-column: auto">
+          <label for="adhesiveType">Type</label>
+          <select id="adhesiveType" name="adhesiveType" class="form-control select-tag" required>
+            <option value="" disabled <%= !ds.adhesive?.adhesiveType ? 'selected' : '' %> hidden>Select type</option>
+            <option value="ACRYLIC"    <%= ds.adhesive?.adhesiveType === 'ACRYLIC'    ? 'selected' : '' %>>ACRYLIC</option>
+            <option value="HOTMELT"    <%= ds.adhesive?.adhesiveType === 'HOTMELT'    ? 'selected' : '' %>>HOTMELT</option>
+            <option value="HT"         <%= ds.adhesive?.adhesiveType === 'HT'         ? 'selected' : '' %>>HT</option>
+            <option value="STAIN FREE" <%= ds.adhesive?.adhesiveType === 'STAIN FREE' ? 'selected' : '' %>>STAIN FREE</option>
+            <option value="WATERBASE"  <%= ds.adhesive?.adhesiveType === 'WATERBASE'  ? 'selected' : '' %>>WATERBASE</option>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label for="adhesiveGsm">GSM</label>
+          <input type="number" id="adhesiveGsm" name="adhesiveGsm" class="form-control"
+            placeholder="Enter GSM" min="0" step="any"
+            value="<%= ds.adhesive?.adhesiveGsm != null ? ds.adhesive.adhesiveGsm : '' %>" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Release Liner -->
+    <div style="grid-column: span 20; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Release Liner</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem">
+        <div class="span-seven" style="grid-column: auto">
+          <label for="releaseLinerType">Type</label>
+          <select id="releaseLinerType" name="releaseLinerType" class="form-control select-tag" required>
+            <option value="" disabled <%= !ds.releaseLiner?.releaseLinerType ? 'selected' : '' %> hidden>Select type</option>
+            <option value="CCK"      <%= ds.releaseLiner?.releaseLinerType === 'CCK'      ? 'selected' : '' %>>CCK</option>
+            <option value="GLASSINE" <%= ds.releaseLiner?.releaseLinerType === 'GLASSINE' ? 'selected' : '' %>>GLASSINE</option>
+            <option value="SCK"      <%= ds.releaseLiner?.releaseLinerType === 'SCK'      ? 'selected' : '' %>>SCK</option>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label for="releaseLinerColor">Color</label>
+          <select id="releaseLinerColor" name="releaseLinerColor" class="form-control select-tag">
+            <option value="WHITE"  <%= (ds.releaseLiner?.releaseLinerColor || 'WHITE') === 'WHITE'  ? 'selected' : '' %>>WHITE</option>
+            <option value="YELLOW" <%= ds.releaseLiner?.releaseLinerColor === 'YELLOW' ? 'selected' : '' %>>YELLOW</option>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label for="releaseLinerGsm">GSM</label>
+          <input type="number" id="releaseLinerGsm" name="releaseLinerGsm" class="form-control"
+            placeholder="Enter GSM" min="0" step="any"
+            value="<%= ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm : '' %>" />
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-grp span-full" style="display:flex;flex-direction:row;gap:10px;">
+      <a href="/sachiko/datasheet/view" style="width:50%;color:white;background-color:#044a78;font-size:1.25rem;font-weight:500;padding:0.5rem 1.5rem;border:2px solid #044a78;border-radius:0.5rem;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.3s ease-in-out;">Cancel</a>
+      <button type="submit">Update Datasheet</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    ["facestockFamily", "facestockType", "adhesiveType", "releaseLinerType", "releaseLinerColor"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) new Choices(el, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+    });
+
+
+  });
+</script>

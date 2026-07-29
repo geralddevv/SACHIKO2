@@ -1,0 +1,644 @@
+<% layout('/layout/boilerplate') -%>
+
+<style>
+  :root {
+    --primary: #044a78;
+    --secondary: #2c3e50;
+    --accent: #3498db;
+    --bg-light: #f8fafc;
+    --border: #e2e8f0;
+  }
+
+  .client-profile-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  /* Header Section */
+  .profile-header-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .header-top {
+    background: var(--primary);
+    color: white;
+    padding: 15px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-info h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .header-badges {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+  }
+
+  .badge {
+    padding: 4px 12px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .badge-type { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); }
+  .badge-user { background: #3498db; color: white; }
+
+  .header-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .action-btn-header {
+    color: var(--primary);
+    background: white;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    transition: background 0.2s;
+    border: none;
+    cursor: pointer;
+  }
+
+  .action-btn-header:hover { background: #f1f5f9; }
+  .action-btn-header.danger { color: #e74c3c; }
+
+  /* Custom Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #044A78;
+    border-radius: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+  }
+
+  /* Info Grid */
+  .info-section {
+    padding: 20px 25px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 40px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    background: #fcfcfc;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .info-section.no-scroll {
+    overflow-x: visible;
+    gap: 20px;
+  }
+
+  .locations-scroll-wrapper {
+    display: flex;
+    gap: 20px;
+    padding: 10px 0;
+    overflow-x: auto;
+    flex-grow: 1;
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .info-label {
+    font-size: 11px;
+    color: #64748b;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.025em;
+  }
+
+  .info-value {
+    font-size: 15px;
+    color: #1e293b;
+    font-weight: 500;
+  }
+
+  /* Section Cards */
+  .section-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .section-header {
+    background: #f1f5f9;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .section-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .item-rows-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+  }
+
+  .item-category-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .item-category-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #f1f5f9;
+  }
+
+  .item-type-label {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--secondary);
+  }
+
+  .item-count-badge {
+    background: #f1f5f9;
+    color: #64748b;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .inner-spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    table-layout: fixed;
+  }
+
+  .inner-spec-table th {
+    text-align: center;
+    color: #94a3b8;
+    font-weight: 700;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    background: #f8fafc;
+  }
+
+  .inner-spec-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f8fafc;
+    color: #334155;
+    vertical-align: middle;
+    word-wrap: break-word;
+    text-align: center;
+  }
+
+  .inner-spec-table th:first-child,
+  .inner-spec-table td:first-child {
+    text-align: left;
+  }
+
+  .inner-spec-table tr:hover td {
+    background-color: #f8fafc;
+  }
+
+  .item-name-cell {
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  @media (max-width: 768px) {
+    .info-section { flex-wrap: wrap; gap: 20px; }
+  }
+</style>
+
+<div class="client-profile-container">
+  <!-- Header Card -->
+  <div class="profile-header-card">
+    <div class="header-top">
+      <div class="header-info">
+        <h1><%= vendorUser.vendorName %></h1>
+        <div class="header-badges">
+          <span class="badge badge-type">Vendor</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="action-btn-header" onclick="window.location.href='/sachiko/form/vendor'">
+          <i class="fa-solid fa-building"></i> Add Vendor
+        </button>
+        <button class="action-btn-header" onclick="window.location.href='/sachiko/form/vendor?tab=user&vendorName=<%= encodeURIComponent(vendorUser.vendorName) %>'">
+          <i class="fa-solid fa-user-plus"></i> Add Coordinator
+        </button>
+        <a href="/sachiko/form/edit/vendor-user/<%= vendorUser._id %>" class="action-btn-header">
+          <i class="fa-solid fa-pen"></i> Edit Coordinator
+        </a>
+        <button class="action-btn-header danger" onclick="confirmDeleteCoordinator()">
+          <i class="fa-solid fa-trash"></i> Delete
+        </button>
+      </div>
+    </div>
+
+    <!-- Contact & Location Info -->
+    <div class="info-section custom-scrollbar">
+      <div class="info-item">
+        <span class="info-label">Vendor ID</span>
+        <span class="info-value"><%= vendorUser.vendorId %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Coordinator Name</span>
+        <span class="info-value"><%= vendorUser.userName %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">H/O Location</span>
+        <span class="info-value"><%= vendorUser.hoLocation || 'N/A' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Warehouse</span>
+        <span class="info-value"><%= vendorUser.warehouseLocation || 'N/A' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Contact</span>
+        <span class="info-value"><%= vendorUser.userContact || 'N/A' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Email</span>
+        <span class="info-value"><%= vendorUser.userEmail || 'N/A' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">User Location</span>
+        <span class="info-value"><%= vendorUser.userLocation || 'N/A' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Department</span>
+        <span class="info-value"><%= vendorUser.userDepartment || 'N/A' %></span>
+      </div>
+    </div>
+
+    <!-- Dispatch Info -->
+    <div class="info-section custom-scrollbar" style="background: white;">
+      <div class="info-item">
+        <span class="info-label">Dispatch Type</span>
+        <span class="info-value"><%= vendorUser.SelfDispatch ? 'Self Dispatch' : 'Transport' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Dispatch Address</span>
+        <span class="info-value" style="white-space: nowrap;"><%= vendorUser.dispatchAddress || 'N/A' %></span>
+      </div>
+      <% if (!vendorUser.SelfDispatch) { %>
+        <div class="info-item">
+          <span class="info-label">Transport</span>
+          <span class="info-value"><%= vendorUser.transportName || '-' %></span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Transport Contact</span>
+          <span class="info-value"><%= vendorUser.transportContact || '-' %></span>
+        </div>
+      <% } %>
+      <div class="info-item">
+        <span class="info-label">GST</span>
+        <span class="info-value"><%= vendorUser.vendorGst || (vendor ? vendor.vendorGst : 'N/A') %></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Item Details Card -->
+  <div class="section-card">
+    <div class="section-header">
+      <h2>Item Specifications</h2>
+      <div style="display: flex; gap: 8px;">
+        <span class="badge" style="background: #f1f5f9; color: #64748b; font-size: 11px;">Total Items: <%= (labels.length + ttrs.length + tapes.length + posRolls.length + tafetas.length) %></span>
+      </div>
+    </div>
+
+    <div class="item-rows-container">
+      <!-- Labels -->
+      <% if (labels && labels.length > 0) { %>
+        <div class="item-category-group">
+          <div class="item-category-header">
+            <span class="item-type-label">Labels</span>
+            <span class="item-count-badge"><%= labels.length %></span>
+          </div>
+          <table class="inner-spec-table">
+            <thead>
+              <tr>
+                <th style="width: 15%;">Item</th>
+                <th>GSM</th>
+                <th>Mtrs</th>
+                <th>Min</th>
+                <th>Odr</th>
+                <th>Freq</th>
+                <th>Credit</th>
+                <th>Rate</th>
+                <th>Paper</th>
+                <th>Size</th>
+                <th>Extras</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% labels.forEach(i => { %>
+                <tr>
+                  <td class="item-name-cell"><%= i.jobName || i.productId %></td>
+                  <td><%= i.paperGsm || '-' %></td>
+                  <td><%= i.labelsDel || '-' %></td>
+                  <td><%= i.labelMinQty || '-' %></td>
+                  <td><%= i.OrderQty || '-' %></td>
+                  <td><%= i.repOrderFq || '-' %></td>
+                  <td><%= i.creditTerm || '-' %></td>
+                  <td style="font-weight:600;">₹<%= i.ratePerK %>/K</td>
+                  <td><%= i.paperType %></td>
+                  <td><%= i.labelWidth %>x<%= i.labelHeight %></td>
+                  <td style="font-size: 10px; color: #94a3b8;">
+                    L:<%= i.lamination || '-' %> G:<%= i.gumming || '-' %> W:<%= i.winding || '-' %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+
+      <!-- TTR -->
+      <% if (ttrs && ttrs.length > 0) { %>
+        <div class="item-category-group">
+          <div class="item-category-header">
+            <span class="item-type-label">TTR</span>
+            <span class="item-count-badge"><%= ttrs.length %></span>
+          </div>
+          <table class="inner-spec-table">
+            <thead>
+              <tr>
+                <th style="width: 12%;">Item</th>
+                <th style="width: 12%;">Type</th>
+                <th>Color</th>
+                <th>Width</th>
+                <th>Mtrs</th>
+                <th>InkFace</th>
+                <th>Core</th>
+                <th>Min</th>
+                <th>Odr</th>
+                <th>Freq</th>
+                <th>Credit</th>
+                <th>Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% ttrs.forEach(i => { %>
+                <tr>
+                  <td class="item-name-cell"><%= i.vendorTtrMaterialCode %></td>
+                  <td><%= i.vendorTtrType || (i.ttrId ? i.ttrId.ttrType : '-') %></td>
+                  <td><%= i.vendorTtrColor || (i.ttrId ? i.ttrId.ttrColor : '-') %></td>
+                  <td><%= i.ttrId ? i.ttrId.ttrWidth : '-' %></td>
+                  <td><%= i.ttrMtrsDel %></td>
+                  <td><%= i.ttrId ? i.ttrId.ttrInkFace : '-' %></td>
+                  <td><%= i.ttrId ? i.ttrId.ttrCoreId : '-' %></td>
+                  <td><%= i.ttrMinQty %></td>
+                  <td><%= i.ttrOdrQty || '-' %></td>
+                  <td><%= i.ttrOdrFreq || '-' %></td>
+                  <td><%= i.ttrCreditTerm || '-' %></td>
+                  <td style="font-weight:600;">₹<%= i.ttrRatePerRoll %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+
+      <!-- Tape -->
+      <% if (tapes && tapes.length > 0) { %>
+        <div class="item-category-group">
+          <div class="item-category-header">
+            <span class="item-type-label">Tape</span>
+            <span class="item-count-badge"><%= tapes.length %></span>
+          </div>
+          <table class="inner-spec-table">
+            <thead>
+              <tr>
+                <th style="width: 15%;">Item</th>
+                <th>GSM</th>
+                <th>Type</th>
+                <th>Width</th>
+                <th>Mtrs</th>
+                <th>Finish</th>
+                <th>Core</th>
+                <th>Min</th>
+                <th>Odr</th>
+                <th>Freq</th>
+                <th>Credit</th>
+                <th>Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% tapes.forEach(i => { %>
+                <tr>
+                  <td class="item-name-cell"><%= i.vendorTapePaperCode %></td>
+                  <td><%= i.vendorTapeGsm || (i.tapeId ? i.tapeId.tapeGsm : '-') %></td>
+                  <td><%= i.vendorTapePaperType || (i.tapeId ? i.tapeId.tapePaperType : '-') %></td>
+                  <td><%= i.tapeId ? i.tapeId.tapeWidth : '-' %></td>
+                  <td><%= i.tapeMtrsDel %></td>
+                  <td><%= i.tapeId ? i.tapeId.tapeFinish : '-' %></td>
+                  <td><%= i.tapeId ? i.tapeId.tapeCoreId : '-' %></td>
+                  <td><%= i.tapeMinQty %></td>
+                  <td><%= i.tapeOdrQty || '-' %></td>
+                  <td><%= i.tapeOdrFreq || '-' %></td>
+                  <td><%= i.tapeCreditTerm || '-' %></td>
+                  <td style="font-weight:600;">₹<%= i.tapeRatePerRoll %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+
+      <!-- POS Rolls -->
+      <% if (posRolls && posRolls.length > 0) { %>
+        <div class="item-category-group">
+          <div class="item-category-header">
+            <span class="item-type-label">POS Rolls</span>
+            <span class="item-count-badge"><%= posRolls.length %></span>
+          </div>
+          <table class="inner-spec-table">
+            <thead>
+              <tr>
+                <th style="width: 15%;">Item</th>
+                <th>GSM</th>
+                <th>Type</th>
+                <th>Color</th>
+                <th>Width</th>
+                <th>Mtrs</th>
+                <th>Core</th>
+                <th>Min</th>
+                <th>Odr</th>
+                <th>Freq</th>
+                <th>Credit</th>
+                <th>Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% posRolls.forEach(i => { %>
+                <tr>
+                  <td class="item-name-cell"><%= i.vendorPosPaperCode %></td>
+                  <td><%= i.vendorPosGsm || (i.posRollId ? i.posRollId.posGsm : '-') %></td>
+                  <td><%= i.vendorPosPaperType || (i.posRollId ? i.posRollId.posPaperType : '-') %></td>
+                  <td><%= i.posRollId ? i.posRollId.posColor : '-' %></td>
+                  <td><%= i.posRollId ? i.posRollId.posWidth : '-' %></td>
+                  <td><%= i.posMtrsDel %></td>
+                  <td><%= i.posRollId ? i.posRollId.posCoreId : '-' %></td>
+                  <td><%= i.posMinQty %></td>
+                  <td><%= i.posOdrQty || '-' %></td>
+                  <td><%= i.posOdrFreq || '-' %></td>
+                  <td><%= i.posCreditTerm || '-' %></td>
+                  <td style="font-weight:600;">₹<%= i.posRatePerRoll %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+
+      <!-- Tafeta -->
+      <% if (tafetas && tafetas.length > 0) { %>
+        <div class="item-category-group">
+          <div class="item-category-header">
+            <span class="item-type-label">Tafeta</span>
+            <span class="item-count-badge"><%= tafetas.length %></span>
+          </div>
+          <table class="inner-spec-table">
+            <thead>
+              <tr>
+                <th style="width: 15%;">Item</th>
+                <th>Type</th>
+                <th>GSM</th>
+                <th>Color</th>
+                <th>Width</th>
+                <th>Mtrs</th>
+                <th>Core</th>
+                <th>Min</th>
+                <th>Odr</th>
+                <th>Freq</th>
+                <th>Credit</th>
+                <th>Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% tafetas.forEach(i => { %>
+                <tr>
+                  <td class="item-name-cell"><%= i.vendorTafetaMaterialCode %></td>
+                  <td><%= i.vendorTafetaMaterialType || (i.tafetaId ? i.tafetaId.tafetaMaterialType : '-') %></td>
+                  <td><%= i.vendorTafetaGsm || (i.tafetaId ? i.tafetaId.tafetaGsm : '-') %></td>
+                  <td><%= i.tafetaId ? i.tafetaId.tafetaColor : '-' %></td>
+                  <td><%= i.tafetaId ? i.tafetaId.tafetaWidth : '-' %></td>
+                  <td><%= i.tafetaMtrsDel %></td>
+                  <td><%= i.tafetaId ? i.tafetaId.tafetaCoreId : '-' %></td>
+                  <td><%= i.tafetaMinQty || '-' %></td>
+                  <td><%= i.tafetaOdrQty || '-' %></td>
+                  <td><%= i.tafetaOdrFreq || '-' %></td>
+                  <td><%= i.tafetaCreditTerm || '-' %></td>
+                  <td style="font-weight:600;">₹<%= i.tafetaRatePerRoll %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+
+      <% if (
+        (labels || []).length === 0 &&
+        (ttrs || []).length === 0 &&
+        (tapes || []).length === 0 &&
+        (posRolls || []).length === 0 &&
+        (tafetas || []).length === 0
+      ) { %>
+        <div style="padding: 40px; text-align: center; color: #94a3b8;">
+          <i class="fa-solid fa-box-open" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+          No items associated with this coordinator.
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<form id="deleteCoordinatorForm" method="POST" action="/sachiko/vendor/coordinator/details/<%= vendorUser._id %>/delete" style="display:none;">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+</form>
+
+<div class="logout-modal" id="deleteCoordinatorModal" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteCoordinatorTitle">
+    <h2 class="logout-title" id="deleteCoordinatorTitle">Delete coordinator?</h2>
+    <p class="logout-text">This will permanently delete this coordinator and remove it from the vendor.</p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" id="deleteCoordinatorCancel">Cancel</button>
+      <button class="logout-btn primary" type="button" id="deleteCoordinatorConfirm">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const deleteCoordinatorModal = document.getElementById("deleteCoordinatorModal");
+  const deleteCoordinatorCancel = document.getElementById("deleteCoordinatorCancel");
+  const deleteCoordinatorConfirm = document.getElementById("deleteCoordinatorConfirm");
+
+  function confirmDeleteCoordinator() {
+    deleteCoordinatorModal.style.display = "flex";
+    deleteCoordinatorModal.classList.add("show");
+    deleteCoordinatorModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeDeleteCoordinatorModal() {
+    deleteCoordinatorModal.classList.remove("show");
+    deleteCoordinatorModal.setAttribute("aria-hidden", "true");
+    deleteCoordinatorModal.style.display = "none";
+  }
+
+  deleteCoordinatorCancel.addEventListener("click", closeDeleteCoordinatorModal);
+  deleteCoordinatorModal.addEventListener("click", (e) => {
+    if (e.target === deleteCoordinatorModal) closeDeleteCoordinatorModal();
+  });
+  deleteCoordinatorConfirm.addEventListener("click", () => {
+    closeDeleteCoordinatorModal();
+    document.getElementById("deleteCoordinatorForm").submit();
+  });
+</script>

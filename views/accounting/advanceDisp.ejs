@@ -1,0 +1,381 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- ================= TABULATOR CSS ================= -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<style>
+  .loan-highlight {
+    padding: 0.25rem 0.6rem;
+    border-radius: 0.35rem;
+    font-weight: 600;
+    font-size: 1.15rem;
+
+    /* IMPORTANT FIX */
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    background-color: rgba(255, 255, 255, 0.12);
+  }
+
+  /* status variations — still subtle */
+  .loan-highlight.active {
+    background-color: rgba(255, 255, 255, 0.16);
+  }
+
+  .loan-highlight.closed {
+    background-color: rgba(40, 167, 69, 0.25);
+    border-color: rgba(40, 167, 69, 0.8);
+  }
+
+  .loan-highlight.overdue {
+    background-color: rgba(220, 53, 69, 0.25);
+    border-color: rgba(220, 53, 69, 0.8);
+  }
+
+  .no-underline .emp-link {
+    text-decoration: none !important;
+  }
+  #master-table {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+</style>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <div class="indi-head">
+    <span style="display: flex; align-items: center; gap: 10px">
+      <h1 id="advanceHeading">Advance</h1>
+    </span>
+
+    <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+      <a
+        href="/sachiko/advance/create"
+        class="header-action-btn"
+        style="
+          height: 30px;
+          padding: 0 14px;
+          background: #f0f0f0;
+          color: #044a78;
+          border-radius: 6px;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: all 0.2s;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        "
+      >
+        <i class="fa-solid fa-plus"></i>
+        <span>Add Advance</span>
+      </a>
+
+      <a
+        href="/sachiko/advance/logs"
+        style="
+          height: 30px;
+          padding: 0 14px;
+          background: #044a78;
+          color: white;
+          border-radius: 6px;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: opacity 0.2s;
+        "
+        onmouseover="this.style.opacity = '0.85'"
+        onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span>View Logs</span>
+      </a>
+
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger" style="height: 30px; display: flex; align-items: center; padding: 0 12px; border: 1.5px solid #e2e8f0; border-radius: 6px; background: #fff; font-size: 14px; font-weight: 500; cursor: pointer;">
+          <span> <i class="fa-solid fa-file-arrow-down"></i> Download </span>
+          <i class="fas fa-chevron-down" style="font-size: 12px; margin-left: 6px;"></i>
+        </button>
+
+        <div class="download-selector__menu">
+          <div class="download-selector__option" id="download-pdf"><i class="fas fa-file-pdf"></i> PDF</div>
+          <div class="download-selector__option" id="download-xlsx"><i class="fas fa-file-excel"></i> Excel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table"></div>
+</div>
+
+<div
+  id="advance-edit-dialog"
+  style="display:none; position:fixed; inset:0; background:rgba(17,24,39,0.55); z-index:9999; align-items:center; justify-content:center;"
+>
+  <div style="background:#fff; width:460px; max-width:92vw; border-radius:14px; padding:20px 22px; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+      <h3 style="margin:0; color:#0f172a; font-size:18px;">
+        <i class="fa-solid fa-pen-to-square" style="margin-right:6px; color:#2563eb;"></i>Edit Advance Entry
+      </h3>
+      <button type="button" onclick="closeAdvanceEditDialog()" style="border:none; background:transparent; color:#6b7280; font-size:18px; cursor:pointer;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <input type="hidden" id="advance-edit-id" />
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px; color:#6b7280; font-weight:600;">Amount</label>
+      <input type="number" id="advance-edit-amount" min="1" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px;" />
+    </div>
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button type="button" onclick="closeAdvanceEditDialog()" style="padding:9px 16px; border:1px solid #e2e8f0; background:white; color:#334155; border-radius:8px; cursor:pointer;">Cancel</button>
+      <button type="button" onclick="submitAdvanceEdit()" style="padding:9px 16px; border:none; background:#044A78; color:white; border-radius:8px; cursor:pointer;">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<div
+  id="advance-delete-dialog"
+  style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;"
+>
+  <div style="background:#fff; width:430px; max-width:92vw; border-radius:10px; padding:18px 20px;">
+    <h3 style="margin:0 0 10px; color:#b91c1c; font-size:17px;">
+      <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i>Delete Advance Entry
+    </h3>
+    <p style="margin:0 0 14px; color:#374151;">Are you sure you want to delete this manual advance entry?</p>
+    <input type="hidden" id="advance-delete-id" />
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button type="button" onclick="closeAdvanceDeleteDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer;">Cancel</button>
+      <button type="button" onclick="submitAdvanceDelete()" style="padding:8px 16px; border:none; background:#ef4444; color:white; border-radius:6px; cursor:pointer;">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SCRIPTS ================= -->
+
+<!-- Tabulator -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+<!-- PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js"></script>
+
+<!-- Excel -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script>
+  /* ===== Dropdown ===== */
+  const downloadSelector = document.getElementById("downloadSelector");
+  const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
+
+  triggerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    downloadSelector.classList.toggle("download-selector--active");
+  });
+
+  document.addEventListener("click", () => {
+    downloadSelector.classList.remove("download-selector--active");
+  });
+
+  downloadSelector
+    .querySelector(".download-selector__menu")
+    .addEventListener("click", (e) => e.stopPropagation());
+
+  /* ===== Table ===== */
+  const tableData = <%- safeJson(jsonData) %>;
+  const snapshotData = [...tableData];
+  let currentEmployeeId = null;
+  const advanceHeadingEl = document.getElementById("advanceHeading");
+  function formatINRCurrency(value) {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(Number(value) || 0);
+  }
+
+  function getTotalAdvanceOutstanding() {
+    return (snapshotData || []).reduce((sum, row) => sum + (Number(row.currentBalance) || 0), 0);
+  }
+
+  function setAdvanceSnapshotHeading() {
+    const total = getTotalAdvanceOutstanding();
+    advanceHeadingEl.innerHTML = `Advance <span class="loan-highlight active" style="margin-left: 8px;">Total: ${formatINRCurrency(total)}</span>`;
+  }
+
+  const withTextFilter = (column, placeholder = "Search") => ({
+    headerFilter: "input",
+    headerFilterPlaceholder: placeholder,
+    ...column,
+  });
+
+  const baseColumns = [
+    withTextFilter({ title: "Employee ID", field: "empId", minWidth: 120 }),
+    withTextFilter({
+      title: "Employee Name",
+      field: "employeeName",
+      minWidth: 180,
+      formatter: function (cell) {
+        const data = cell.getRow().getData();
+        return `<a href="/sachiko/advance/employee/${data.employeeId}/view-logs"
+                   style="color: #044a78; font-weight: 600; text-decoration: underline;"
+                   title="View History">
+                   ${data.employeeName}
+                </a>`;
+      }
+    }),
+    withTextFilter({
+      title: "Current Balance",
+      field: "currentBalance",
+      minWidth: 150,
+      formatter: (c) => formatINRCurrency(c.getValue()),
+    }),
+    withTextFilter({ title: "Status", field: "status", minWidth: 100 }),
+    withTextFilter({ title: "Last Updated", field: "updatedAt", minWidth: 140 }),
+  ];
+
+  const table = new Tabulator("#master-table", {
+    data: tableData,
+    height: "100%",
+    // layout: "fitColumns",
+    movableColumns: true,
+    columns: baseColumns,
+  });
+
+
+  /*
+  document
+    .getElementById("backToSnapshot")
+    .addEventListener("click", () => {
+      table.setColumns(baseColumns);
+      table.replaceData(snapshotData);
+      document.body.classList.remove("no-underline");
+
+      setAdvanceSnapshotHeading();
+      document.getElementById("backToSnapshot").style.display = "none";
+      currentEmployeeId = null;
+  });
+  */
+
+  /* ===== Downloads ===== */
+  document.getElementById("download-pdf").addEventListener("click", () => {
+    table.download("pdf", "advance-data.pdf", {
+      orientation: "landscape",
+      title: "Advance Data",
+    });
+    downloadSelector.classList.remove("download-selector--active");
+  });
+
+  document.getElementById("download-xlsx").addEventListener("click", () => {
+    table.download("xlsx", "advance-data.xlsx", {
+      sheetName: "Advances",
+    });
+    downloadSelector.classList.remove("download-selector--active");
+  });
+
+  const advanceEditDialog = document.getElementById("advance-edit-dialog");
+  const advanceDeleteDialog = document.getElementById("advance-delete-dialog");
+
+  function openAdvanceEditDialog(row) {
+    document.getElementById("advance-edit-id").value = row._id;
+    document.getElementById("advance-edit-amount").value = row.amount;
+    advanceEditDialog.style.display = "flex";
+  }
+
+  function closeAdvanceEditDialog() {
+    advanceEditDialog.style.display = "none";
+  }
+
+  function openAdvanceDeleteDialog(row) {
+    document.getElementById("advance-delete-id").value = row._id;
+    advanceDeleteDialog.style.display = "flex";
+  }
+
+  function closeAdvanceDeleteDialog() {
+    advanceDeleteDialog.style.display = "none";
+  }
+
+  function updateAdvanceSnapshot(summary) {
+    const row = snapshotData.find((item) => String(item.employeeId) === String(currentEmployeeId));
+    if (!row) return;
+    row.currentBalance = summary.currentBalance;
+    row.status = summary.status;
+    row.updatedAt = new Date(summary.updatedAt || Date.now()).toLocaleDateString();
+  }
+
+  async function refreshAdvanceLogs() {
+    if (!currentEmployeeId) return;
+
+    const res = await fetch(`/sachiko/advance/employee/${currentEmployeeId}/logs`);
+    const data = await res.json();
+    table.replaceData(data.history || []);
+
+    const summary = data.summary || { currentBalance: 0, status: "CLOSED" };
+    const statusClass = summary.status.toLowerCase();
+    advanceHeadingEl.innerHTML =
+      `Advance - Outstanding:
+       <span class="loan-highlight ${statusClass}">
+         ${formatINRCurrency(summary.currentBalance)} (${summary.status})
+       </span>`;
+  }
+
+  async function submitAdvanceEdit() {
+    const id = document.getElementById("advance-edit-id").value;
+    const amount = Number(document.getElementById("advance-edit-amount").value);
+
+    if (!id || amount <= 0) {
+      alert("Please enter a valid amount.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/sachiko/advance/logs/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || "Failed to update advance entry.");
+        return;
+      }
+
+      updateAdvanceSnapshot(data.summary);
+      await refreshAdvanceLogs();
+      closeAdvanceEditDialog();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update advance entry.");
+    }
+  }
+
+  async function submitAdvanceDelete() {
+    const id = document.getElementById("advance-delete-id").value;
+    if (!id) return;
+
+    try {
+      const res = await fetch(`/sachiko/advance/logs/${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || "Failed to delete advance entry.");
+        return;
+      }
+
+      updateAdvanceSnapshot(data.summary);
+      await refreshAdvanceLogs();
+      closeAdvanceDeleteDialog();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete advance entry.");
+    }
+  }
+
+  setAdvanceSnapshotHeading();
+</script>

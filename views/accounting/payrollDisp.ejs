@@ -1,0 +1,599 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- ================= TABULATOR CSS ================= -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<style>
+  .no-underline .emp-link {
+    text-decoration: none !important;
+  }
+  #master-table {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  
+  /* Ensure consistent button sizing */
+  .header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .download-selector__trigger {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    background: #ffffff;
+    color: #475569;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .download-selector__trigger:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+  }
+
+  .header-action-btn {
+    height: 30px;
+    padding: 0 16px;
+    background: #044a78;
+    color: white;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    border: none;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .header-action-btn:hover {
+    background: #03365a;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px -2px rgba(4, 74, 120, 0.2);
+    color: white;
+  }
+</style>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <div class="indi-head" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <button
+        id="backToSnapshot"
+        style="
+          display: none;
+          background-color: #f1f5f9;
+          padding: 8px 12px;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          font-weight: 500;
+          cursor: pointer;
+        "
+      >
+        <i class="fa-solid fa-arrow-left" style="color: #475569"></i>
+      </button>
+      <h1 style="margin: 0;">Payroll</h1>
+    </div>
+
+    <div class="header-actions">
+      <!-- Month Filter -->
+      <div style="position:relative;">
+        <select
+          id="month-filter"
+          style="height:34px; min-width:150px; padding:4px 32px 4px 12px; border:1px solid #e2e8f0; border-radius:8px; background:#ffffff; color:#044A78; font-size:13px; font-weight:600; appearance:none; -webkit-appearance:none; cursor:pointer;"
+        >
+          <option value="">All Months</option>
+        </select>
+        <i class="fa-solid fa-calendar-days" style="position:absolute; right:11px; top:50%; transform:translateY(-50%); color:#044A78; font-size:11px; pointer-events:none;"></i>
+      </div>
+
+      <a href="/sachiko/payroll/create" class="header-action-btn">
+        <i class="fa-solid fa-plus"></i>
+        <span>Manage Payroll</span>
+      </a>
+
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <i class="fa-solid fa-file-arrow-down"></i>
+          <span>Download</span>
+          <i class="fas fa-chevron-down" style="font-size: 12px; opacity: 0.7;"></i>
+        </button>
+
+        <div class="download-selector__menu">
+          <div class="download-selector__option" id="download-pdf">
+            <i class="fas fa-file-pdf"></i> PDF
+          </div>
+          <div class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel"></i> Excel
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table"></div>
+</div>
+
+<!-- ===== VIEW PAYROLL DIALOG ===== -->
+<div
+  id="pr-view-dialog"
+  style="display:none; position:fixed; inset:0; background:rgba(17,24,39,0.55); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(1px);"
+>
+  <div style="background:#fff; width:520px; max-width:94vw; border-radius:14px; padding:0; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-radius:14px 14px 0 0; background:#044A78;">
+      <h3 style="margin:0; color:#fff; font-size:17px;">
+        <i class="fa-solid fa-file-invoice-dollar" style="margin-right:8px;"></i>Payroll Details
+      </h3>
+      <button type="button" onclick="closePayrollViewDialog()" title="Close" style="border:none; background:transparent; color:#fff; font-size:18px; cursor:pointer;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div id="pr-view-body" style="padding:20px 22px; border-radius:0 0 14px 14px; max-height:70vh; overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- ===== EDIT PAYROLL DIALOG ===== -->
+<div
+  id="pr-edit-dialog"
+  style="display:none; position:fixed; inset:0; background:rgba(17,24,39,0.55); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(1px);"
+>
+  <div style="background:#fff; width:560px; max-width:94vw; border-radius:14px; padding:0; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-radius:14px 14px 0 0; background:#fff; border-bottom:1px solid #e2e8f0;">
+      <h3 style="margin:0; color:#0f172a; font-size:18px;">
+        <i class="fa-solid fa-pen-to-square" style="margin-right:6px; color:#2563eb;"></i>Edit Payroll Record
+      </h3>
+      <button type="button" onclick="closePayrollEditDialog()" title="Close" style="border:none; background:transparent; color:#6b7280; font-size:18px; cursor:pointer;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div style="padding:20px 22px; border-radius:0 0 14px 14px;">
+      <div style="font-size:12px; color:#64748b; margin-bottom:14px;">
+        Loan EMI and Advance amounts already deducted for this run are not affected by this edit. Only present/absent days, OT hours, incentive, allowances, advance and total deduction are recalculated into Gross &amp; Net Salary.
+      </div>
+      <input type="hidden" id="pr-edit-id" />
+
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <label style="font-size:12px; color:#6b7280; font-weight:600;">Present Days</label>
+          <input type="number" id="pr-edit-present" style="width:100%; height:40px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;" />
+        </div>
+        <div>
+          <label style="font-size:12px; color:#6b7280; font-weight:600;">Absent Days</label>
+          <input type="number" id="pr-edit-absent" style="width:100%; height:40px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;" />
+        </div>
+        <div>
+          <label style="font-size:12px; color:#6b7280; font-weight:600;">OT Hours</label>
+          <input type="number" id="pr-edit-othours" style="width:100%; height:40px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;" />
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <label style="font-size:12px; color:#6b7280; font-weight:600;">Incentive</label>
+          <input type="number" id="pr-edit-incentive" style="width:100%; height:40px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;" />
+        </div>
+        <div>
+          <label style="font-size:12px; color:#6b7280; font-weight:600;">Allowances Total</label>
+          <input type="number" id="pr-edit-additions" style="width:100%; height:40px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;" />
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div>
+          <label style="font-size:12px; color:#6b7280; font-weight:600;">Advance</label>
+          <input type="number" id="pr-edit-advance" style="width:100%; height:40px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;" />
+        </div>
+        <div>
+          <label style="font-size:12px; color:#6b7280; font-weight:600;">Total Deduction</label>
+          <input type="number" id="pr-edit-deduction" style="width:100%; height:40px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;" />
+        </div>
+      </div>
+
+      <div style="display:flex; gap:14px; padding:12px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:16px;">
+        <div style="flex:1;">
+          <div style="font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase;">Gross Salary</div>
+          <div id="pr-edit-gross-preview" style="font-size:18px; font-weight:700; color:#044A78;">₹0</div>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase;">Net Salary</div>
+          <div id="pr-edit-takeaway-preview" style="font-size:18px; font-weight:700; color:#16a34a;">₹0</div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px; padding-bottom:20px;">
+        <button type="button" onclick="closePayrollEditDialog()" style="padding:9px 16px; border:1px solid #e2e8f0; background:white; color:#334155; border-radius:8px; cursor:pointer;">Cancel</button>
+        <button type="button" onclick="submitPayrollEdit()" style="padding:9px 16px; border:none; background:#044A78; color:white; border-radius:8px; cursor:pointer;">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DELETE PAYROLL DIALOG ===== -->
+<div
+  id="pr-delete-dialog"
+  style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;"
+>
+  <div style="background:#fff; width:460px; max-width:92vw; border-radius:10px; padding:18px 20px;">
+    <h3 style="margin:0 0 10px; color:#b91c1c; font-size:17px;">
+      <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i>Delete Payroll Record
+    </h3>
+    <p style="margin:0 0 14px; color:#374151;">
+      Are you sure you want to delete this payroll record? Any Loan EMI or Advance amount deducted for this run will be added back to the employee's balance.
+    </p>
+    <input type="hidden" id="pr-delete-id" />
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button type="button" onclick="closePayrollDeleteDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer;">Cancel</button>
+      <button type="button" onclick="submitPayrollDelete()" style="padding:8px 16px; border:none; background:#ef4444; color:white; border-radius:6px; cursor:pointer;">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SCRIPTS ================= -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script>
+    /* ================= DOWNLOAD DROPDOWN ================= */
+    const downloadSelector = document.getElementById("downloadSelector");
+    const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
+
+    triggerBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      downloadSelector.classList.toggle("download-selector--active");
+    });
+
+    document.addEventListener("click", () => {
+      downloadSelector.classList.remove("download-selector--active");
+    });
+
+    downloadSelector
+      .querySelector(".download-selector__menu")
+      .addEventListener("click", (e) => e.stopPropagation());
+
+    /* ================= TABLE ================= */
+    const tableData = <%- safeJson(jsonData) %>;
+    const snapshotData = [...tableData];
+    const currentMonth = <%- safeJson(currentMonth) %>;
+    const currentYear = <%- safeJson(currentYear) %>;
+
+    function formatINRCurrency(value) {
+      return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(Number(value) || 0);
+    }
+
+    function getMonthKey(row) {
+      return row?.month && row?.year ? `${row.year}-${String(row.month).padStart(2, "0")}` : "";
+    }
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    function formatMonthLabel(monthKey) {
+      const [year, month] = String(monthKey || "").split("-").map(Number);
+      if (!year || !month) return monthKey;
+      return `${monthNames[month - 1]} ${year}`;
+    }
+
+    const withTextFilter = (column, placeholder = "Search") => ({
+      headerFilter: "input",
+      headerFilterPlaceholder: placeholder,
+      minWidth: 100,
+      ...column,
+    });
+
+    /* ================= MONTH FILTER ================= */
+    const monthFilter = document.getElementById("month-filter");
+    const monthKeys = [...new Set(snapshotData.map(getMonthKey).filter(Boolean))].sort().reverse();
+
+    monthKeys.forEach((monthKey) => {
+      const option = document.createElement("option");
+      option.value = monthKey;
+      option.textContent = formatMonthLabel(monthKey);
+      monthFilter.appendChild(option);
+    });
+
+    function getFilteredSnapshot() {
+      const selected = monthFilter.value;
+      return selected ? snapshotData.filter((row) => getMonthKey(row) === selected) : snapshotData;
+    }
+
+    // Handle URL parameter for month, defaulting to the current month
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramMonth = urlParams.get("month");
+    const defaultMonthKey = `${currentYear}-${String(currentMonth).padStart(2, "0")}`;
+    if (paramMonth) {
+      monthFilter.value = paramMonth;
+    } else if (monthKeys.includes(defaultMonthKey)) {
+      monthFilter.value = defaultMonthKey;
+    }
+
+    function updateUrlParam(key, value) {
+      const url = new URL(window.location.href);
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+      window.history.replaceState({}, "", url);
+    }
+
+    const table = new Tabulator("#master-table", {
+      data: getFilteredSnapshot(),
+      height: "100%",
+      initialSort: [{ column: "employeeName", dir: "asc" }],
+      movableColumns: true,
+      columns: [
+        {
+          title: "Actions",
+          hozAlign: "center",
+          headerSort: false,
+          width: 130,
+          formatter: (cell) => {
+            const row = cell.getRow().getData();
+            if (!row._id) return "";
+            return `
+              <div style="display:flex; gap:6px; justify-content:center; align-items:center;">
+                <button
+                  class="pr-log-view"
+                  style="height:24px; padding:2px 10px; background:#111827; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;"
+                  title="View Details">
+                  <i class="fa-solid fa-eye"></i>
+                </button>
+                <button
+                  class="pr-log-edit"
+                  style="height:24px; padding:2px 10px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;"
+                  title="Edit">
+                  <i class="fa-solid fa-pencil"></i>
+                </button>
+                <button
+                  class="pr-log-delete"
+                  style="height:24px; padding:2px 10px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;"
+                  title="Delete">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            `;
+          },
+          cellClick: (e, cell) => {
+            const row = cell.getRow().getData();
+            if (!row._id) return;
+            if (e.target.closest(".pr-log-view")) openPayrollViewDialog(row);
+            else if (e.target.closest(".pr-log-edit")) openPayrollEditDialog(row);
+            else if (e.target.closest(".pr-log-delete")) openPayrollDeleteDialog(row);
+          },
+        },
+        {
+          title: "Employee Name",
+          field: "employeeName",
+          minWidth: 180,
+          headerFilter: "input",
+          headerFilterPlaceholder: "Search",
+          formatter: function (cell) {
+            const data = cell.getRow().getData();
+            return `
+              <span
+                class="emp-link"
+                data-id="${data.employeeId}"
+                title="${data.employeeName}"
+                style="cursor:pointer;font-weight:600;text-decoration:underline;"
+              >
+                ${data.employeeName}
+              </span>
+            `;
+          }
+        },
+        { title: "Employee ID", field: "empId", minWidth: 140, headerFilter: "input", headerFilterPlaceholder: "Search" },
+        {
+          title: "Month",
+          field: "month",
+          minWidth: 100,
+          headerFilter: "input",
+          headerFilterPlaceholder: "Search",
+          formatter: function (cell) {
+            const value = cell.getValue();
+            return monthNames[value - 1] || value;
+          }
+        },
+        { title: "Year", field: "year", minWidth: 80, headerFilter: "input", headerFilterPlaceholder: "Search" },
+        { title: "Present", field: "presentDays", minWidth: 80, headerFilter: "input", headerFilterPlaceholder: "Search" },
+        { title: "Absent", field: "absentDays", minWidth: 80, headerFilter: "input", headerFilterPlaceholder: "Search" },
+        { title: "OT hrs", field: "otHours", minWidth: 80, headerFilter: "input", headerFilterPlaceholder: "Search" },
+        {
+          title: "Salary",
+          field: "basicSalary",
+          minWidth: 110,
+          headerFilter: "input",
+          headerFilterPlaceholder: "Search",
+          formatter: (c) => formatINRCurrency(c.getValue()),
+        },
+        {
+          title: "Net Salary",
+          field: "takeAway",
+          minWidth: 120,
+          headerFilter: "input",
+          headerFilterPlaceholder: "Search",
+          formatter: (c) => formatINRCurrency(c.getValue()),
+        },
+      ]
+    });
+
+    monthFilter.addEventListener("change", () => {
+      updateUrlParam("month", monthFilter.value);
+      document.body.classList.remove("no-underline");
+      document.getElementById("backToSnapshot").style.display = "none";
+      table.replaceData(getFilteredSnapshot());
+    });
+
+    document.addEventListener("click", async (e) => {
+      if (!e.target.classList.contains("emp-link")) return;
+      document.body.classList.add("no-underline");
+      const employeeId = e.target.dataset.id;
+      const res = await fetch(`/sachiko/payroll/employee/${employeeId}/payrolls`);
+      const { history } = await res.json();
+      if (!history || !history.length) return;
+      table.replaceData(history);
+      document.getElementById("backToSnapshot").style.display = "inline-flex";
+    });
+
+    document.getElementById("backToSnapshot").addEventListener("click", () => {
+      table.replaceData(getFilteredSnapshot());
+      document.body.classList.remove("no-underline");
+      document.getElementById("backToSnapshot").style.display = "none";
+    });
+
+    document.getElementById("download-pdf").addEventListener("click", () => {
+      table.download("pdf", "payroll.pdf", { orientation: "landscape", title: "Payroll Data" });
+      downloadSelector.classList.remove("download-selector--active");
+    });
+
+    document.getElementById("download-xlsx").addEventListener("click", () => {
+      table.download("xlsx", "payroll.xlsx", { sheetName: "Payroll" });
+      downloadSelector.classList.remove("download-selector--active");
+    });
+
+    /* ================= VIEW / EDIT / DELETE DIALOGS ================= */
+    const viewDialog = document.getElementById("pr-view-dialog");
+    const viewBody = document.getElementById("pr-view-body");
+    const editDialog = document.getElementById("pr-edit-dialog");
+    const deleteDialog = document.getElementById("pr-delete-dialog");
+
+    function detailRow(label, value) {
+      return `
+        <div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid #f1f5f9;">
+          <span style="color:#64748b; font-size:13px;">${label}</span>
+          <span style="color:#0f172a; font-weight:600; font-size:13px;">${value}</span>
+        </div>
+      `;
+    }
+
+    function openPayrollViewDialog(row) {
+      const monthLabel = monthNames[row.month - 1] || row.month;
+      viewBody.innerHTML = [
+        detailRow("Employee", `${row.employeeName} (${row.empId})`),
+        detailRow("Month / Year", `${monthLabel} ${row.year}`),
+        detailRow("Present Days", row.presentDays ?? "-"),
+        detailRow("Absent Days", row.absentDays ?? "-"),
+        detailRow("OT Hours", row.otHours ?? "-"),
+        detailRow("Base Salary", formatINRCurrency(row.basicSalary)),
+        detailRow("Allowances Total", formatINRCurrency(row.totalAdditions)),
+        detailRow("Incentive", formatINRCurrency(row.incentive)),
+        detailRow("Advance Deducted", formatINRCurrency(row.advance)),
+        detailRow("Total Deduction", formatINRCurrency(row.totalDeduction)),
+        detailRow("Gross Salary", formatINRCurrency(row.grossSalary)),
+        detailRow("Net Salary", formatINRCurrency(row.takeAway)),
+        detailRow("Source", row.source || "-"),
+      ].join("");
+      viewDialog.style.display = "flex";
+    }
+
+    function closePayrollViewDialog() {
+      viewDialog.style.display = "none";
+    }
+
+    let editBaseSalary = 0;
+
+    function calculatePayrollEditPreview() {
+      const baseSalary = Number(editBaseSalary || 0);
+      const incentive = Number(document.getElementById("pr-edit-incentive").value || 0);
+      const additions = Number(document.getElementById("pr-edit-additions").value || 0);
+      const deduction = Number(document.getElementById("pr-edit-deduction").value || 0);
+
+      const gross = baseSalary + additions + incentive;
+      const takeAway = Math.max(gross - deduction, 0);
+
+      document.getElementById("pr-edit-gross-preview").textContent = formatINRCurrency(gross);
+      document.getElementById("pr-edit-takeaway-preview").textContent = formatINRCurrency(takeAway);
+    }
+
+    function openPayrollEditDialog(row) {
+      editBaseSalary = Number(row.basicSalary || 0);
+      document.getElementById("pr-edit-id").value = row._id;
+      document.getElementById("pr-edit-present").value = row.presentDays ?? 0;
+      document.getElementById("pr-edit-absent").value = row.absentDays ?? 0;
+      document.getElementById("pr-edit-othours").value = row.otHours ?? 0;
+      document.getElementById("pr-edit-incentive").value = row.incentive ?? 0;
+      document.getElementById("pr-edit-additions").value = row.totalAdditions ?? 0;
+      document.getElementById("pr-edit-advance").value = row.advance ?? 0;
+      document.getElementById("pr-edit-deduction").value = row.totalDeduction ?? 0;
+      calculatePayrollEditPreview();
+      editDialog.style.display = "flex";
+    }
+
+    function closePayrollEditDialog() {
+      editDialog.style.display = "none";
+    }
+
+    ["pr-edit-incentive", "pr-edit-additions", "pr-edit-deduction"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", calculatePayrollEditPreview);
+    });
+
+    async function submitPayrollEdit() {
+      const id = document.getElementById("pr-edit-id").value;
+      const payload = {
+        presentDays: Number(document.getElementById("pr-edit-present").value || 0),
+        absentDays: Number(document.getElementById("pr-edit-absent").value || 0),
+        otHours: Number(document.getElementById("pr-edit-othours").value || 0),
+        incentive: Number(document.getElementById("pr-edit-incentive").value || 0),
+        totalAdditions: Number(document.getElementById("pr-edit-additions").value || 0),
+        advance: Number(document.getElementById("pr-edit-advance").value || 0),
+        totalDeduction: Number(document.getElementById("pr-edit-deduction").value || 0),
+      };
+
+      try {
+        const res = await fetch(`/sachiko/payroll/logs/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert("Error: " + (err.message || "Failed to update payroll record"));
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Failed to update payroll record");
+      }
+    }
+
+    function openPayrollDeleteDialog(row) {
+      document.getElementById("pr-delete-id").value = row._id;
+      deleteDialog.style.display = "flex";
+    }
+
+    function closePayrollDeleteDialog() {
+      deleteDialog.style.display = "none";
+    }
+
+    async function submitPayrollDelete() {
+      const id = document.getElementById("pr-delete-id").value;
+      try {
+        const res = await fetch(`/sachiko/payroll/logs/${id}`, { method: "DELETE" });
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert("Error: " + (err.message || "Failed to delete payroll record"));
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Failed to delete payroll record");
+      }
+    }
+</script>

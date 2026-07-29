@@ -1,0 +1,275 @@
+<% layout('/layout/boilerplate') -%>
+
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    #master-table { width: 100%; flex: 1 1 auto; min-height: 0; }
+    .tabulator-edit-list { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+    .tabulator-edit-list::-webkit-scrollbar { display: none !important; }
+    .header-action-btn {
+      background-color: #f0f0f0; color: #044a78;
+      padding: 2px 14px; font-size: 14px; font-weight: 500;
+      border: none; cursor: pointer; border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,.1);
+      transition: all 0.2s ease-in-out;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .header-action-btn:hover { background-color: #e4e4e4; }
+  </style>
+
+  <div class="indi-head">
+    <h1>Datasheet View</h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <button class="header-action-btn" onclick="window.location.href='/sachiko/datasheet/form'">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> New
+      </button>
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span><i class="fa-solid fa-file-arrow-down"></i> Download</span>
+          <i class="fas fa-chevron-down"></i>
+        </button>
+        <div class="download-selector__menu">
+          <div class="download-selector__option" id="download-pdf"><i class="fas fa-file-pdf"></i> PDF</div>
+          <div class="download-selector__option" id="download-xlsx"><i class="fas fa-file-excel"></i> Excel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table"></div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script>
+  /* ── Download dropdown ── */
+  const downloadSelector = document.getElementById("downloadSelector");
+  const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
+  triggerBtn.addEventListener("click", (e) => { e.stopPropagation(); downloadSelector.classList.toggle("download-selector--active"); });
+  document.addEventListener("click", () => downloadSelector.classList.remove("download-selector--active"));
+
+  /* ── Flatten nested datasheet docs for Tabulator ── */
+  const raw = <%- safeJson(jsonData) %>;
+
+  const tableData = raw.map(ds => {
+    const fsGsm    = ds.facestock?.facestockGsm    != null ? ds.facestock.facestockGsm    + " GSM ± 5%" : "-";
+    const fsMicron = ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC ± 5%" : "-";
+    const adGsm    = ds.adhesive?.adhesiveGsm      != null ? ds.adhesive.adhesiveGsm      + " GSM ± 5%" : "-";
+    const rlGsm    = ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM ± 5%" : "-";
+
+    const fsFamily = ds.facestock?.facestockFamily  || "";
+    const fsType   = ds.facestock?.facestockType    || "";
+    const adType   = ds.adhesive?.adhesiveType      || "";
+    const rlType   = ds.releaseLiner?.releaseLinerType  || "";
+    const rlColor  = ds.releaseLiner?.releaseLinerColor || "";
+    const wordFile = ds.wordFile || "";
+
+    const micPart = ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : "";
+    const product = [fsType, micPart, adType, rlType].filter(Boolean).join(" / ");
+
+    return {
+      _id: String(ds._id),
+      datasheetId: ds.datasheetId || "",
+      productCode: ds.productCode,
+      wordFileOriginalName: ds.wordFileOriginalName || "",
+      product,
+      fsFamily,
+      fsType,
+      fsGsm,
+      fsMicron,
+      adType,
+      adGsm,
+      rlType,
+      rlColor,
+      rlGsm,
+      wordFile,
+    };
+  });
+
+  const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, hozAlign: "center", headerHozAlign: "center", ...col });
+  const withSelectFilter = (col, values) => ({ headerFilter: "list", headerFilterParams: { values, clearable: true }, hozAlign: "center", headerHozAlign: "center", ...col });
+
+  const table = new Tabulator("#master-table", {
+    data: tableData,
+    height: "100%",
+    initialSort: [{ column: "productCode", dir: "asc" }],
+    placeholder: "No datasheets found",
+    columns: [
+      {
+        title: "Actions",
+        hozAlign: "center",
+        headerSort: false,
+        width: 110,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return `
+            <div style="display:flex;gap:5px;justify-content:center;align-items:center;white-space:nowrap;">
+              <button onclick="viewDatasheet('${row._id}')"
+                style="height:24px;padding:2px 9px;background:#111827;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:3px;font-weight:600;"
+                onmouseover="this.style.background='#374151'" onmouseout="this.style.background='#111827'"
+                title="View">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+              <a href="/sachiko/datasheet/edit/${row._id}"
+                style="height:24px;padding:2px 9px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:3px;font-weight:600;text-decoration:none;"
+                onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'"
+                title="Edit">
+                <i class="fa-solid fa-pencil"></i>
+              </a>
+              <button onclick="deleteDatasheet('${row._id}','${row.productCode}')"
+                style="height:24px;padding:2px 9px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:3px;font-weight:600;"
+                onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'"
+                title="Delete">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>`;
+        },
+      },
+      withTextFilter({ title: "Product Code", field: "productCode", width: 150, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
+      withTextFilter({ title: "Product",      field: "product",     minWidth: 220, formatter: (cell) => `<span style="font-weight:600;color:#03365a;">${cell.getValue()}</span>` }),
+      withSelectFilter({ title: "FS Family",  field: "fsFamily",  minWidth: 120 },
+        (() => { const d = [...new Set(tableData.map(r => r.fsFamily))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
+      withSelectFilter({ title: "FS Type",    field: "fsType",    minWidth: 120 },
+        (() => { const d = [...new Set(tableData.map(r => r.fsType))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
+      withTextFilter({ title: "FS GSM",       field: "fsGsm",     minWidth: 130 }),
+      withTextFilter({ title: "FS Micron",    field: "fsMicron",  minWidth: 130 }),
+      withSelectFilter({ title: "AD Type",    field: "adType",    minWidth: 130 },
+        (() => { const d = [...new Set(tableData.map(r => r.adType))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
+      withTextFilter({ title: "AD GSM",       field: "adGsm",     minWidth: 130 }),
+      withSelectFilter({ title: "RL Type",    field: "rlType",    minWidth: 120 },
+        (() => { const d = [...new Set(tableData.map(r => r.rlType))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
+      withSelectFilter({ title: "RL Color",   field: "rlColor",   minWidth: 110 },
+        (() => { const d = [...new Set(tableData.map(r => r.rlColor))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
+      withTextFilter({ title: "RL GSM",       field: "rlGsm",     minWidth: 130 }),
+      { title: "Word File", field: "wordFile", minWidth: 110, headerFilter: false, hozAlign: "center", headerHozAlign: "center",
+        formatter: (cell) => {
+          const v = cell.getValue();
+          return v ? `<a href="/sachiko/datasheet/file/${v}" style="color:#044a78;font-weight:600;text-decoration:none;" title="Download file"><i class="fa-solid fa-file-word" style="margin-right:4px;"></i>Download</a>` : `<span style="color:#aaa;">—</span>`;
+        }
+      },
+    ],
+  });
+
+  document.getElementById("download-pdf").addEventListener("click", () =>
+    table.download("pdf", "sachiko-datasheets.pdf", { orientation: "landscape", title: "Sachiko Datasheets", autoTable: { styles: { fillColor: [4, 74, 120] } } }));
+  document.getElementById("download-xlsx").addEventListener("click", () =>
+    table.download("xlsx", "sachiko-datasheets.xlsx", { sheetName: "Datasheets" }));
+
+  /* ── View Modal ── */
+  function esc(v) {
+    return String(v ?? "—").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  window.viewDatasheet = function(id) {
+    const ds = raw.find(d => String(d._id) === id);
+    if (!ds) return;
+    const modal = document.getElementById("ds-view-modal");
+    document.getElementById("ds-view-body").innerHTML = `
+      <div style="background:linear-gradient(135deg,#044a78 0%,#03365a 100%);padding:22px 24px 20px;color:#fff;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div>
+          <h2 style="margin:0;font-size:20px;font-weight:700;">${esc(ds.productCode)}</h2>
+          <p style="margin:6px 0 0;font-size:13px;opacity:0.85;">${esc(ds.datasheetId)}</p>
+        </div>
+        <button onclick="document.getElementById('ds-view-modal').style.display='none'"
+          style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:700;">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div style="padding:20px 24px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;max-height:calc(90vh - 120px);">
+        ${[
+          { label: "Facestock Family",  value: ds.facestock?.facestockFamily },
+          { label: "Facestock Type",    value: ds.facestock?.facestockType },
+          { label: "Facestock GSM",     value: ds.facestock?.facestockGsm    != null ? ds.facestock.facestockGsm + " GSM" : null },
+          { label: "Facestock Micron",  value: ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : null },
+          { label: "Adhesive Type",     value: ds.adhesive?.adhesiveType },
+          { label: "Adhesive GSM",      value: ds.adhesive?.adhesiveGsm      != null ? ds.adhesive.adhesiveGsm + " GSM" : null },
+          { label: "Release Liner Type",  value: ds.releaseLiner?.releaseLinerType },
+          { label: "Release Liner Color", value: ds.releaseLiner?.releaseLinerColor },
+          { label: "Release Liner GSM",   value: ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null },
+        ].map(r => `
+          <div style="display:flex;justify-content:space-between;border-bottom:1px solid #f1f5f9;padding-bottom:10px;">
+            <span style="font-size:13px;color:#64748b;font-weight:600;">${r.label}</span>
+            <span style="font-size:13px;color:#03365a;font-weight:700;">${esc(r.value)}</span>
+          </div>`).join("")}
+        ${ds.wordFile ? `
+          <a href="/sachiko/datasheet/file/${esc(ds.wordFile)}"
+            style="display:inline-flex;align-items:center;gap:6px;margin-top:4px;color:#044a78;font-weight:600;text-decoration:none;font-size:13px;">
+            <i class="fa-solid fa-file-word"></i> ${esc(ds.wordFileOriginalName || ds.wordFile)}
+          </a>` : ""}
+      </div>`;
+    modal.style.display = "flex";
+  };
+
+  document.getElementById("ds-view-modal").addEventListener("click", function(e) {
+    if (e.target === this) this.style.display = "none";
+  });
+
+  /* ── Delete ── */
+  window.deleteDatasheet = function(id, code) {
+    const dialog = document.getElementById("ds-delete-dialog");
+    document.getElementById("ds-delete-msg").textContent = `Delete datasheet "${code}"? This cannot be undone.`;
+    dialog.style.display = "flex";
+    document.getElementById("ds-delete-confirm").onclick = async () => {
+      dialog.style.display = "none";
+      try {
+        const resp = await fetch(`/sachiko/datasheet/${id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (data.success) {
+          table.deleteRow(table.getRows().find(r => r.getData()._id === id));
+          if (typeof showToast === "function") showToast("Datasheet deleted", "success");
+        } else {
+          if (typeof showToast === "function") showToast(data.message || "Delete failed", "error");
+        }
+      } catch {
+        if (typeof showToast === "function") showToast("Delete failed", "error");
+      }
+    };
+    document.getElementById("ds-delete-cancel").onclick = () => { dialog.style.display = "none"; };
+  };
+</script>
+
+<!-- View Modal -->
+<div id="ds-view-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:10000;justify-content:center;align-items:center;padding:24px;backdrop-filter:blur(4px);">
+  <div id="ds-view-body" style="background:#fff;border-radius:14px;overflow:hidden;width:min(480px,95vw);box-shadow:0 20px 50px rgba(4,74,120,0.2);animation:dsPopIn 0.2s ease-out;"></div>
+</div>
+
+<!-- Delete Confirm Dialog -->
+<div id="ds-delete-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;justify-content:center;align-items:center;">
+  <div style="background:#fff;border-radius:10px;width:min(420px,92vw);overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.2);animation:dsPopIn 0.18s ease-out;">
+    <div style="padding:22px 20px;">
+      <p id="ds-delete-msg" style="margin:0;font-size:15px;color:#1e293b;line-height:1.5;"></p>
+    </div>
+    <div style="padding:12px 20px 16px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #f1f5f9;">
+      <button id="ds-delete-cancel" style="padding:8px 16px;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:6px;cursor:pointer;font-weight:500;">Cancel</button>
+      <button id="ds-delete-confirm" style="padding:8px 16px;border:none;background:#ef4444;color:#fff;border-radius:6px;cursor:pointer;font-weight:600;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes dsPopIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+</style>
+
+<% if (notification && notification.length) { %>
+<script>
+  const dsFlash = <%- safeJson(notification[0]) %>;
+  const dsFlashType = /failed|not found|error/i.test(String(dsFlash)) ? "error" : "success";
+  const showDsFlash = () => {
+    if (typeof hideStaticToast === "function") hideStaticToast();
+    if (typeof showToast === "function") showToast(dsFlash, dsFlashType);
+  };
+  document.readyState === "loading"
+    ? document.addEventListener("DOMContentLoaded", showDsFlash, { once: true })
+    : showDsFlash();
+</script>
+<% } %>

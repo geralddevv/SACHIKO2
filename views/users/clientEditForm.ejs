@@ -1,0 +1,212 @@
+<% layout('/layout/boilerplate') -%>
+
+<%
+  const currentAccountHead = String(client.accountHead || "").trim();
+  const normalizedCurrentAccountHead = currentAccountHead.toLowerCase();
+  const accountHeadMatch = (employees || []).find((employee) => String(employee.empName || "").trim().toLowerCase() === normalizedCurrentAccountHead);
+%>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
+  <form class="client-content span-full needs-validation" action="/sachiko/client/edit/<%= client._id %>" method="post" autocomplete="off" novalidate style="gap: 10px;">
+    <div class="span-full form-heading">
+      <h1>Edit Client</h1>
+    </div>
+
+    <div class="span-four">
+      <label>Client Id</label>
+      <input type="text" class="form-control input-tag" value="<%= client.clientId %>" readonly />
+    </div>
+
+    <div class="span-seven">
+      <label>Client Name</label>
+      <input type="text" class="form-control input-tag" name="clientName" value="<%= client.clientName %>" required />
+    </div>
+
+    <div class="span-five">
+      <label>Client Type</label>
+      <select name="clientType" class="form-control select-tag" required>
+        <option value="DEALER" <%= client.clientType === 'DEALER' ? 'selected' : '' %>>DEALER</option>
+        <option value="CLIENT" <%= client.clientType === 'CLIENT' ? 'selected' : '' %>>CLIENT</option>
+      </select>
+    </div>
+
+    <div class="span-five">
+      <label>Client Status</label>
+      <select name="clientStatus" class="form-control select-tag" required>
+        <option value="ACTIVE" <%= client.clientStatus === 'ACTIVE' ? 'selected' : '' %>>ACTIVE</option>
+        <option value="INACTIVE" <%= client.clientStatus === 'INACTIVE' ? 'selected' : '' %>>INACTIVE</option>
+        <option value="FOLLOW UP" <%= client.clientStatus === 'FOLLOW UP' ? 'selected' : '' %>>FOLLOW UP</option>
+        <option value="BLACKLISTED" <%= client.clientStatus === 'BLACKLISTED' ? 'selected' : '' %>>BLACKLISTED</option>
+        <option value="ADVANCED" <%= client.clientStatus === 'ADVANCED' ? 'selected' : '' %>>ADVANCED</option>
+        <option value="OTHERS" <%= client.clientStatus === 'OTHERS' ? 'selected' : '' %>>OTHERS</option>
+      </select>
+    </div>
+
+    <div class="span-five">
+      <label>H/O Location</label>
+      <input type="text" class="form-control input-tag" name="hoLocation" value="<%= client.hoLocation %>" required />
+    </div>
+
+    <div class="span-six">
+      <label>Account Head</label>
+      <select name="accountHead" id="account-head" class="form-control select-tag" data-current-account-head="<%= currentAccountHead %>" required>
+        <option value="" disabled hidden <%= !currentAccountHead ? 'selected' : '' %>>Select</option>
+        <% if (currentAccountHead && !accountHeadMatch) { %>
+          <option value="<%= currentAccountHead %>" selected><%= currentAccountHead %></option>
+        <% } %>
+        <% (employees || []).forEach((employee) => { %>
+          <option value="<%= employee.empName %>" <%= normalizedCurrentAccountHead === String(employee.empName || "").trim().toLowerCase() ? 'selected' : '' %>><%= employee.empName %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="client-verticals">Verticals</label>
+      <input type="text" id="client-verticals" class="form-control" name="verticals" value="<%= client.verticals || '' %>" />
+    </div>    
+
+    <div class="span-six">
+      <label for="client-vendor-code">Vendor Code</label>
+      <input type="text" id="client-vendor-code" class="form-control" name="vendorCode" value="<%= client.vendorCode || '' %>" />
+    </div>
+
+    <div class="span-five">
+      <label for="client-gst">GST</label>
+      <input type="text" maxlength="15" id="client-gst" class="form-control" name="clientGst" value="<%= client.clientGst %>" oninput="this.value = this.value.toUpperCase()" required />
+    </div>
+
+    <div class="span-five">
+      <label>MSME</label>
+      <input type="text" class="form-control" name="clientMsme" value="<%= client.clientMsme %>" required />
+    </div>
+
+    <div class="span-five">
+      <label>Gumasta</label>
+      <input type="text" class="form-control" name="clientGumasta" value="<%= client.clientGumasta %>" required />
+    </div>
+
+    <div class="span-five">
+      <label for="client-pan">PAN</label>
+      <input type="text" maxlength="10" id="client-pan" class="form-control" name="clientPan" value="<%= client.clientPan %>" oninput="this.value = this.value.toUpperCase()" required />
+    </div>
+
+    <div class="span-full btn-grp" style="flex-direction: row-reverse;">
+      <button class="submit-btn" type="submit">
+        Update Client Details
+      </button>
+      <button type="button" id="cancelBtn">
+          Cancel Edit
+      </button>      
+    </div>
+
+  </form>
+</div>
+
+<script src="/js/choices.min.js"></script>
+<script>
+  document.getElementById("cancelBtn").addEventListener("click", () => {
+    window.location.href = "/sachiko/client/view";
+  });
+
+  function resolveSelectValue(selectEl, rawValue) {
+    const target = String(rawValue || "").trim();
+    if (!target || !selectEl?.options) return target;
+
+    const targetLower = target.toLowerCase();
+    for (const option of Array.from(selectEl.options)) {
+      const optionValue = String(option.value || "").trim();
+      const optionLabel = String(option.textContent || "").trim();
+
+      if (optionValue.toLowerCase() === targetLower || optionLabel.toLowerCase() === targetLower) {
+        return option.value;
+      }
+    }
+
+    return target;
+  }
+
+  function initAccountHeadChoices() {
+    const accountHeadSelect = document.getElementById("account-head");
+    if (!accountHeadSelect || !window.Choices) return;
+
+    const currentAccountHead = String(accountHeadSelect.dataset.currentAccountHead || "").trim();
+    const resolvedAccountHead = resolveSelectValue(accountHeadSelect, currentAccountHead);
+
+    const accountHeadChoices = new Choices(accountHeadSelect, {
+      searchEnabled: true,
+      itemSelectText: "",
+      shouldSort: false,
+      callbackOnInit() {
+        if (resolvedAccountHead) {
+          this.setChoiceByValue(resolvedAccountHead);
+        }
+      },
+    });
+
+    if (resolvedAccountHead) {
+      accountHeadSelect.value = resolvedAccountHead;
+      accountHeadChoices.setChoiceByValue(resolvedAccountHead);
+    }
+  }
+
+  function initGstPanSync() {
+    const gstInput = document.getElementById("client-gst");
+    const panInput = document.getElementById("client-pan");
+
+    const syncPan = (gst) => {
+      if (gst.length >= 12) {
+        const pan = gst.substring(2, 12);
+        if (panInput) {
+          panInput.value = pan;
+          panInput.dispatchEvent(new Event("input"));
+        }
+      } else if (panInput) {
+        panInput.value = "";
+        panInput.dispatchEvent(new Event("input"));
+      }
+    };
+
+    if (gstInput) {
+      // Auto-fill PAN on load if GST exists but PAN is missing
+      if (gstInput.value && panInput && !panInput.value) {
+        syncPan(gstInput.value.toUpperCase());
+      }
+
+      gstInput.addEventListener("input", function () {
+        const gst = this.value.toUpperCase();
+        this.value = gst;
+        syncPan(gst);
+
+        const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+        if (gst.length > 0 && !gstRegex.test(gst)) {
+          this.setCustomValidity("Invalid GST format (e.g., 22AAAAA0000A1Z5)");
+        } else {
+          this.setCustomValidity("");
+        }
+      });
+    }
+
+    if (panInput) {
+      panInput.addEventListener("input", function () {
+        const pan = this.value.toUpperCase();
+        this.value = pan;
+        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+        if (pan.length > 0 && !panRegex.test(pan)) {
+          this.setCustomValidity("Invalid PAN format (e.g., ABCDE1234F)");
+        } else {
+          this.setCustomValidity("");
+        }
+      });
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      initAccountHeadChoices();
+      initGstPanSync();
+    });
+  } else {
+    initAccountHeadChoices();
+    initGstPanSync();
+  }
+</script>

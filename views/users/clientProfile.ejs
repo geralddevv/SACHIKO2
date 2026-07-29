@@ -1,0 +1,699 @@
+<% layout('/layout/boilerplate') -%>
+
+<style>
+  :root {
+    --primary: #044a78;
+    --secondary: #2c3e50;
+    --accent: #3498db;
+    --bg-light: #f8fafc;
+    --border: #e2e8f0;
+  }
+
+  .client-profile-container {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  /* Header Section */
+  .profile-header-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .header-top {
+    background: var(--primary);
+    color: white;
+    padding: 15px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-info h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  .header-badges {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+  }
+
+  .badge {
+    padding: 4px 12px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .badge-type { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); }
+  .badge-status { background: #2ecc71; color: white; }
+  .status-inactive { background: #e74c3c; }
+
+  .edit-btn {
+    color: var(--primary);
+    background: white;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 16px;
+    border-radius: 6px;
+    transition: background 0.2s;
+  }
+
+  .edit-btn:hover { background: #f1f5f9; }
+
+  /* Info Grid */
+  .info-section {
+    padding: 20px 25px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 40px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    background: #fcfcfc;
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .info-label {
+    font-size: 11px;
+    color: #64748b;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.025em;
+  }
+
+  .info-value {
+    font-size: 15px;
+    color: #1e293b;
+    font-weight: 500;
+  }
+
+  /* Users Section */
+  .section-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .section-header {
+    background: #f1f5f9;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .section-header h2 {
+    margin: 0;
+    font-size: 21px;
+    color: var(--primary);
+    font-weight: 800;
+  }
+
+  .user-list-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .user-list-table th {
+    background: #f8fafc;
+    text-align: left;
+    padding: 12px 15px;
+    font-size: 13px;
+    color: #64748b;
+    font-weight: 600;
+    border-bottom: 1px solid #cbd5e1;
+    border-right: 1px solid #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .user-list-table td {
+    padding: 12px 15px;
+    font-size: 14px;
+    color: #334155;
+    border-bottom: 1px solid #cbd5e1;
+    border-right: 1px solid #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .user-list-table th:last-child,
+  .user-list-table td:last-child {
+    border-right: none;
+  }
+
+  .user-list-table th:first-child,
+  .user-list-table td:first-child {
+    width: 50px;
+    text-align: center;
+    padding: 12px 0;
+  }
+
+  .user-row {
+    transition: background 0.2s;
+    cursor: pointer;
+  }
+
+  .user-row:hover { background: #f8fafc; }
+
+  .toggle-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+    background: var(--primary);
+    color: white;
+    border-radius: 6px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+  }
+
+  .expanded .toggle-icon {
+    transform: rotate(90deg);
+  }
+
+  .user-details-row td {
+    padding: 0 !important;
+    text-align: left !important;
+  }
+
+  .details-container {
+    padding: 0 20px 0px 20px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: max-height 160ms ease, opacity 160ms ease, transform 160ms ease;
+  }
+
+  .expanded + .user-details-row .details-container {
+    max-height: 1000px; /* large enough to reveal content */
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .item-rows-container {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .item-category-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .item-category-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #f1f5f9;
+  }
+
+  .item-type-label {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--secondary);
+  }
+
+  .item-count-badge {
+    background: #f1f5f9;
+    color: #64748b;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .inner-spec-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+    table-layout: fixed;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .inner-spec-table th {
+    text-align: center !important;
+    color: #475569;
+    font-weight: 800;
+    padding: 10px 12px !important;
+    border-bottom: 1px solid #cbd5e1;
+    border-right: 1px solid #cbd5e1;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+  }
+
+  .inner-spec-table td {
+    padding: 10px 12px !important;
+    border-bottom: 1px solid #cbd5e1;
+    border-right: 1px solid #cbd5e1;
+    color: #334155;
+    vertical-align: middle;
+    word-wrap: break-word;
+    text-align: center !important;
+  }
+
+  .inner-spec-table th:last-child,
+  .inner-spec-table td:last-child {
+    border-right: none;
+  }
+
+  .inner-spec-table th:first-child,
+  .inner-spec-table td:first-child {
+    text-align: left !important;
+  }
+
+  .inner-spec-table tr:hover td {
+    background-color: #f8fafc;
+  }
+
+  .inner-spec-table tr:last-child td { border-bottom: none; }
+
+  .item-name-cell {
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  .user-link {
+    color: var(--primary);
+    text-decoration: underline;
+    font-weight: 600;
+  }
+
+  .empty-state {
+    padding: 40px;
+    text-align: center;
+    color: #94a3b8;
+  }
+
+  @media (max-width: 768px) {
+    .info-section { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
+<div class="client-profile-container">
+  <!-- Header Card -->
+  <div class="profile-header-card">
+    <div class="header-top">
+      <div class="header-info">
+        <h1><%= client.clientName %></h1>
+        <div class="header-badges">
+          <span class="badge badge-type"><%= client.clientType %></span>
+          <span class="badge badge-status <%= client.clientStatus !== 'ACTIVE' ? 'status-inactive' : '' %>">
+            <%= client.clientStatus %>
+          </span>
+        </div>
+      </div>
+      <a href="/sachiko/client/edit/<%= client._id %>" class="edit-btn">
+        <i class="fa-solid fa-pen"></i> Edit Client Master
+      </a>
+    </div>
+
+    <div class="info-section">
+      <div class="info-item">
+        <span class="info-label">Client ID</span>
+        <span class="info-value"><%= client.clientId %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">H/O Location</span>
+        <span class="info-value"><%= client.hoLocation %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Account Head</span>
+        <span class="info-value"><%= client.accountHead %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">GST Number</span>
+        <span class="info-value"><%= client.clientGst || '-' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">PAN Number</span>
+        <span class="info-value"><%= client.clientPan || '-' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">MSME ID</span>
+        <span class="info-value"><%= client.clientMsme || '-' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Gumasta ID</span>
+        <span class="info-value"><%= client.clientGumasta || '-' %></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Associated Users Card -->
+  <div class="section-card">
+    <div class="section-header">
+      <h2>Associated Users / Locations</h2>
+      <button class="header-action-btn" onclick="window.location.href='/sachiko/form/client?tab=user&clientName=<%= encodeURIComponent(client.clientName) %>'" style="background: var(--primary); color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+        <i class="fa-solid fa-plus"></i> Add User
+      </button>
+    </div>
+
+    <div class="table-container">
+      <% if (client.users && client.users.length > 0) { %>
+        <table class="user-list-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;"></th>
+              <th style="width: 20%;">Username</th>
+              <th style="width: 15%;">Location</th>
+              <th style="width: 15%;">Department</th>
+              <th style="width: 15%;">Contact</th>
+              <th>Email</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% client.users.forEach(user => {
+              const userLocs = (user.locationDetails && user.locationDetails.length > 0)
+                ? user.locationDetails
+                : [{ userLocation: user.userLocation }];
+              const sameLoc = (itemLoc, name) => String(itemLoc || '').trim().toUpperCase() === String(name || '').trim().toUpperCase();
+            %>
+              <% userLocs.forEach(loc => {
+                const locLabel = (user.label || []).filter(i => sameLoc(i.location, loc.userLocation));
+                const locTtr = (user.ttr || []).filter(i => sameLoc(i.location, loc.userLocation));
+                const locTape = (user.tape || []).filter(i => sameLoc(i.location, loc.userLocation));
+                const locPosRoll = (user.posRoll || []).filter(i => sameLoc(i.location, loc.userLocation));
+                const locTafeta = (user.tafeta || []).filter(i => sameLoc(i.location, loc.userLocation));
+              %>
+              <tr class="user-row expanded" onclick="toggleUserExpand(this)">
+                <td><i class="fa-solid fa-chevron-right toggle-icon"></i></td>
+                <td><a href="/sachiko/client/details/<%= user._id %>?location=<%= encodeURIComponent(loc.userLocation || '') %>" class="user-link" onclick="event.stopPropagation()"><%= user.userName %></a></td>
+                <td><%= loc.userLocation %></td>
+                <td><%= user.userDepartment %></td>
+                <td><%= user.userContact %></td>
+                <td><%= user.userEmail %></td>
+              </tr>
+              <tr class="user-details-row">
+                <td colspan="6">
+                  <div class="details-container">
+                    <div style="font-size: 16px; font-weight: 700; color: var(--primary); margin-top: 10px; border-bottom: 2px solid var(--border); padding-bottom: 5px;">
+                      <i class="fa-solid fa-cart-shopping"></i> Item Details
+                    </div>
+
+                    <div class="item-rows-container">
+                      <!-- Labels -->
+                      <% if (locLabel.length > 0) { %>
+                        <div class="item-category-group">
+                          <div class="item-category-header">
+                            <span class="item-type-label">Labels</span>
+                            <span class="item-count-badge"><%= locLabel.length %></span>
+                          </div>
+                          <table class="inner-spec-table">
+                            <thead>
+                              <tr>
+                                <th style="width: 15%;">Item</th>
+                                <th>GSM</th>
+                                <th>Labels Del</th>
+                                <th>Min</th>
+                                <th>Odr</th>
+                                <th>Freq</th>
+                                <th>Credit</th>
+                                <th>Rate</th>
+                                <th>Paper</th>
+                                <th>Size</th>
+                                <th>Extras</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <% locLabel.forEach(i => { %>
+                                <tr>
+                                  <td class="item-name-cell"><%= i.jobName || i.productId %></td>
+                                  <td><%= i.paperGsm || '-' %></td>
+                                  <td><%= i.labelsDel || '-' %></td>
+                                  <td><%= i.labelMinQty || '-' %></td>
+                                  <td><%= i.OrderQty || '-' %></td>
+                                  <td><%= i.repOrderFq || '-' %></td>
+                                  <td><%= i.creditTerm || '-' %></td>
+                                  <td style="font-weight:600;">₹<%= i.ratePerK %>/K</td>
+                                  <td><%= i.paperType %></td>
+                                  <td><%= i.labelWidth %>x<%= i.labelHeight %></td>
+                                  <td style="font-size: 10px; color: #94a3b8;">
+                                    L:<%= i.lamination || '-' %> G:<%= i.gumming || '-' %> W:<%= i.winding || '-' %>
+                                  </td>
+                                </tr>
+                              <% }) %>
+                            </tbody>
+                          </table>
+                        </div>
+                      <% } %>
+
+                      <!-- TTR -->
+                      <% if (locTtr.length > 0) { %>
+                        <div class="item-category-group">
+                          <div class="item-category-header">
+                            <span class="item-type-label">TTR</span>
+                            <span class="item-count-badge"><%= locTtr.length %></span>
+                          </div>
+                          <table class="inner-spec-table">
+                            <thead>
+                              <tr>
+                                <th style="width: 12%;">Item</th>
+                                <th style="width: 12%;">Type</th>
+                                <th>Color</th>
+                                <th>Width</th>
+                                <th>Mtrs</th>
+                                <th>InkFace</th>
+                                <th>Core</th>
+                                <th>Min</th>
+                                <th>Odr</th>
+                                <th>Freq</th>
+                                <th>Credit</th>
+                                <th>Rate</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <% locTtr.forEach(i => { %>
+                                <tr>
+                                  <td class="item-name-cell"><%= i.ttrClientMaterialCode %></td>
+                                  <td><%= i.clientTtrType || (i.ttrId ? i.ttrId.ttrType : '-') %></td>
+                                  <td><%= i.ttrId ? i.ttrId.ttrColor : '-' %></td>
+                                  <td><%= i.ttrId ? i.ttrId.ttrWidth : '-' %></td>
+                                  <td><%= i.ttrMtrsDel %></td>
+                                  <td><%= i.ttrId ? i.ttrId.ttrInkFace : '-' %></td>
+                                  <td><%= i.ttrId ? i.ttrId.ttrCoreId : '-' %></td>
+                                  <td><%= i.ttrMinQty %></td>
+                                  <td><%= i.ttrOdrQty || '-' %></td>
+                                  <td><%= i.ttrOdrFreq || '-' %></td>
+                                  <td><%= i.ttrCreditTerm || '-' %></td>
+                                  <td style="font-weight:600;">₹<%= i.ttrRatePerRoll %></td>
+                                </tr>
+                              <% }) %>
+                            </tbody>
+                          </table>
+                        </div>
+                      <% } %>
+
+                      <!-- Tape -->
+                      <% if (locTape.length > 0) { %>
+                        <div class="item-category-group">
+                          <div class="item-category-header">
+                            <span class="item-type-label">Tape</span>
+                            <span class="item-count-badge"><%= locTape.length %></span>
+                          </div>
+                          <table class="inner-spec-table">
+                            <thead>
+                              <tr>
+                                <th style="width: 15%;">Item</th>
+                                <th>GSM</th>
+                                <th>Type</th>
+                                <th>Width</th>
+                                <th>Mtrs</th>
+                                <th>Finish</th>
+                                <th>Core</th>
+                                <th>Min</th>
+                                <th>Odr</th>
+                                <th>Freq</th>
+                                <th>Credit</th>
+                                <th>Rate</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <% locTape.forEach(i => { %>
+                                <tr>
+                                  <td class="item-name-cell"><%= i.tapeClientPaperCode %></td>
+                                  <td><%= i.clientTapeGsm || (i.tapeId ? i.tapeId.tapeGsm : '-') %></td>
+                                  <td><%= i.tapeId ? i.tapeId.tapePaperType : '-' %></td>
+                                  <td><%= i.tapeId ? i.tapeId.tapeWidth : '-' %></td>
+                                  <td><%= i.tapeMtrsDel %></td>
+                                  <td><%= i.tapeId ? i.tapeId.tapeFinish : '-' %></td>
+                                  <td><%= i.tapeId ? i.tapeId.tapeCoreId : '-' %></td>
+                                  <td><%= i.tapeMinQty %></td>
+                                  <td><%= i.tapeOdrQty || '-' %></td>
+                                  <td><%= i.tapeOdrFreq || '-' %></td>
+                                  <td><%= i.tapeCreditTerm || '-' %></td>
+                                  <td style="font-weight:600;">₹<%= i.tapeRatePerRoll %></td>
+                                </tr>
+                              <% }) %>
+                            </tbody>
+                          </table>
+                        </div>
+                      <% } %>
+
+                      <!-- POS Rolls -->
+                      <% if (locPosRoll.length > 0) { %>
+                        <div class="item-category-group">
+                          <div class="item-category-header">
+                            <span class="item-type-label">POS Rolls</span>
+                            <span class="item-count-badge"><%= locPosRoll.length %></span>
+                          </div>
+                          <table class="inner-spec-table">
+                            <thead>
+                              <tr>
+                                <th style="width: 15%;">Item</th>
+                                <th>GSM</th>
+                                <th>Type</th>
+                                <th>Color</th>
+                                <th>Width</th>
+                                <th>Mtrs</th>
+                                <th>Core</th>
+                                <th>Min</th>
+                                <th>Odr</th>
+                                <th>Freq</th>
+                                <th>Credit</th>
+                                <th>Rate</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <% locPosRoll.forEach(i => { %>
+                                <tr>
+                                  <td class="item-name-cell"><%= i.posClientPaperCode %></td>
+                                  <td><%= i.clientPosGsm || (i.posRollId ? i.posRollId.posGsm : '-') %></td>
+                                  <td><%= i.posRollId ? i.posRollId.posPaperType : '-' %></td>
+                                  <td><%= i.posRollId ? i.posRollId.posColor : '-' %></td>
+                                  <td><%= i.posRollId ? i.posRollId.posWidth : '-' %></td>
+                                  <td><%= i.posMtrsDel %></td>
+                                  <td><%= i.posRollId ? i.posRollId.posCoreId : '-' %></td>
+                                  <td><%= i.posMinQty %></td>
+                                  <td><%= i.posOdrQty || '-' %></td>
+                                  <td><%= i.posOdrFreq || '-' %></td>
+                                  <td><%= i.posCreditTerm || '-' %></td>
+                                  <td style="font-weight:600;">₹<%= i.posRatePerRoll %></td>
+                                </tr>
+                              <% }) %>
+                            </tbody>
+                          </table>
+                        </div>
+                      <% } %>
+
+                      <!-- Tafeta -->
+                      <% if (locTafeta.length > 0) { %>
+                        <div class="item-category-group">
+                          <div class="item-category-header">
+                            <span class="item-type-label">Tafeta</span>
+                            <span class="item-count-badge"><%= locTafeta.length %></span>
+                          </div>
+                          <table class="inner-spec-table">
+                            <thead>
+                              <tr>
+                                <th style="width: 15%;">Item</th>
+                                <th>Type</th>
+                                <th>GSM</th>
+                                <th>Color</th>
+                                <th>Width</th>
+                                <th>Mtrs</th>
+                                <th>Core</th>
+                                <th>Min</th>
+                                <th>Odr</th>
+                                <th>Freq</th>
+                                <th>Credit</th>
+                                <th>Rate</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <% locTafeta.forEach(i => { %>
+                                <tr>
+                                  <td class="item-name-cell"><%= i.tafetaClientMaterialCode %></td>
+                                  <td><%= i.tafetaClientMaterialType || (i.tafetaId ? i.tafetaId.tafetaMaterialType : '-') %></td>
+                                  <td><%= i.clientTafetaGsm || (i.tafetaId ? i.tafetaId.tafetaGsm : '-') %></td>
+                                  <td><%= i.tafetaId ? i.tafetaId.tafetaColor : '-' %></td>
+                                  <td><%= i.tafetaId ? i.tafetaId.tafetaWidth : '-' %></td>
+                                  <td><%= i.tafetaMtrsDel %></td>
+                                  <td><%= i.tafetaId ? i.tafetaId.tafetaCoreId : '-' %></td>
+                                  <td><%= i.tafetaMinQty || '-' %></td>
+                                  <td><%= i.tafetaOdrQty || '-' %></td>
+                                  <td><%= i.tafetaOdrFreq || '-' %></td>
+                                  <td><%= i.tafetaCreditTerm || '-' %></td>
+                                  <td style="font-weight:600;">₹<%= i.tafetaRatePerRoll %></td>
+                                </tr>
+                              <% }) %>
+                            </tbody>
+                          </table>
+                        </div>
+                      <% } %>
+
+                      <% if (
+                        locLabel.length === 0 &&
+                        locTtr.length === 0 &&
+                        locTape.length === 0 &&
+                        locPosRoll.length === 0 &&
+                        locTafeta.length === 0
+                      ) { %>
+                        <div style="padding: 15px; color: #94a3b8; font-style: italic; font-size: 13px;">
+                          No items associated with this user at this location.
+                        </div>
+                      <% } %>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              <% }) %>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } else { %>
+        <div class="empty-state">
+          <i class="fa-solid fa-users-slash" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
+          No users associated with this client yet.
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleUserExpand(row) {
+    row.classList.toggle('expanded');
+    const detailsRow = row.nextElementSibling;
+    const container = detailsRow.querySelector('.details-container');
+    
+    // Simple display toggle via CSS class handled in style section
+  }
+</script>

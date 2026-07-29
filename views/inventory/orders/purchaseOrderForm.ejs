@@ -1,0 +1,455 @@
+<% layout('/layout/boilerplate') -%>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
+  <form id="purchase-order-form" action="/sachiko/purchase/order" method="post" class="needs-validation" autocomplete="off" novalidate>
+    <input type="hidden" name="orderId" value="<%= typeof orderToEdit !== 'undefined' && orderToEdit ? orderToEdit._id : '' %>" />
+    <input type="hidden" name="submissionToken" value="<%= typeof submissionToken !== 'undefined' && submissionToken ? submissionToken : '' %>" />
+    
+    <div class="span-full form-heading">
+      <h1><%= typeof orderToEdit !== 'undefined' && orderToEdit ? 'Edit Purchase Order' : 'Purchase Order' %></h1>
+    </div>
+
+    <%
+      const initialLocations = Array.isArray(locations) ? locations : [];
+      const initialStock = typeof stockInfo !== 'undefined' && stockInfo ? stockInfo : null;
+      const initialTotal = initialStock ? (initialStock.totalStock ?? '-') : '-';
+      const initialBooked = initialStock ? (initialStock.booked ?? '-') : '-';
+      const initialBalance = initialStock ? (initialStock.balance ?? '-') : '-';
+      const initialLocationRows = initialLocations.map((locName) => {
+        const normalizedLoc = String(locName || "").trim();
+        const locKey = normalizedLoc.toUpperCase();
+        const locStock = initialStock && Array.isArray(initialStock.locations)
+          ? initialStock.locations.find((entry) => String(entry?.location || "").trim().toUpperCase() === locKey)
+          : null;
+        const locQty = locStock ? (locStock.qty ?? 0) : '-';
+        const locBooked = locStock ? (locStock.booked ?? 0) : '-';
+        const locBalance = locStock ? (locStock.balance ?? 0) : '-';
+        return `
+          <label class="location-option${normalizedLoc === 'ALL' ? ' selected' : ''}" data-location="${normalizedLoc}" data-qty="${locQty}" data-booked="${locBooked}" data-balance="${locBalance}">
+            <input type="radio" name="locationRadio" class="location-radio" value="${normalizedLoc}" data-qty="${locQty}" data-booked="${locBooked}" data-balance="${locBalance}"${normalizedLoc === 'ALL' ? ' checked' : ''} disabled />
+            <span class="location-label">${normalizedLoc}:</span>
+            <span class="location-qty">${locQty}</span>
+          </label>`;
+      }).join("");
+    %>
+
+    <!-- Stock Status Bar (Informational only for PO) -->
+    <div id="stock-display" class="span-full" style="display: flex; padding: 10px 15px; background: #fff; border: 1px solid #044A78; border-radius: 0.5rem; transition: all 0.3s ease; overflow-x: auto; overflow-y: hidden;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 22px; flex-wrap: nowrap; width: max-content; min-width: 100%;">
+        <div style="display: flex; flex-wrap: nowrap; align-items: center; white-space: nowrap;">
+           <div style="font-weight: 700; color: #044A78; font-size: 14px; margin-right: 15px; border-right: 1px solid #044A78; padding-right: 15px;">OUR STOCK:</div>
+          <label class="location-option selected" data-location="ALL" data-qty="<%= initialTotal %>" data-booked="<%= initialBooked %>" data-balance="<%= initialBalance %>">
+            <input type="radio" name="locationRadio" class="location-radio" value="ALL" data-qty="<%= initialTotal %>" data-booked="<%= initialBooked %>" data-balance="<%= initialBalance %>" checked disabled />
+            <span class="location-label">ALL:</span>
+            <span class="location-qty"><%= initialTotal %></span>
+          </label>
+          <%- initialLocationRows %>
+        </div>
+        <div id="stock-stats" style="display: flex; gap: 14px; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
+          <div style="font-weight: 700; color: #044A78; font-size: 16px;">
+            <i class="fa-solid fa-box-open"></i> Total: <span id="stat-total"><%= initialTotal %></span>
+          </div>
+          <div style="font-weight: 700; color: #d97706; font-size: 16px;">
+            <i class="fa-regular fa-clock"></i> Booked: <span id="stat-booked"><%= initialBooked %></span>
+          </div>
+          <div style="font-weight: 700; color: #059669; font-size: 16px;">
+            <i class="fa-solid fa-scale-balanced"></i> Balance: <span id="stat-balance"><%= initialBalance %></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= PURCHASE DETAILS ================= -->
+    <div class="span-full form-subheading">
+      <h1>Purchase Details</h1>
+    </div>
+
+    <div class="span-seven">
+      <label for="item-type">Item Type</label>
+      <select name="itemType" id="item-type" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Item Type</option>
+        <option value="TAPE">Tape</option>
+        <option value="POS_ROLL">POS Roll</option>
+        <option value="TAFETA">Tafeta</option>
+        <option value="TTR">TTR</option>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="vendor-name">Vendor Name</label>
+      <select name="vendorName" id="vendor-name" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Vendor</option>
+        <% vendors?.forEach(v => { %>
+          <option value="<%= v %>"><%= v %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="coordinator-name">Coordinator</label>
+      <select name="vendorUserId" id="coordinator-name" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Coordinator</option>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="vendor-location">Warehouse/HO Loc</label>
+      <select id="vendor-location" name="userLocation" class="form-control select-tag">
+        <option value="" disabled selected hidden>Select Location</option>
+      </select>
+    </div>
+
+    <div class="span-seven">
+      <label for="item-select">Select Item (Bound)</label>
+      <select name="itemId" id="item-select" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Item</option>
+      </select>
+    </div>
+
+    <div id="selected-item-details" class="span-full" style="padding:6px 8px;background:#fff;border:1px solid #044A78;border-radius:4px;display:none;"></div>
+
+    <!-- ================= QUANTITY & DATE ================= -->
+    <div class="span-full form-subheading">
+      <h1>Order Info</h1>
+    </div>
+
+    <div class="span-five">
+      <label for="quantity">Order Quantity</label>
+      <input type="number" id="quantity" name="quantity" class="form-control" min="1" placeholder="Enter quantity" required />
+    </div>
+
+    <div class="span-five">
+      <label for="po-number">PO Number</label>
+      <input type="text" id="po-number" name="poNumber" class="form-control" placeholder="Enter PO number" required />
+    </div>    
+
+    <div class="span-four">
+      <label for="item-rate">Vendor Rate</label>
+      <input type="text" id="item-rate" class="form-control" placeholder="Rate" readonly />
+    </div>
+
+    <div class="span-six">
+      <label for="estimated-date">Est Arrival Date</label>
+      <input type="date" id="estimated-date" name="estimatedDate" class="form-control" required />
+    </div>
+
+    <div class="span-half" style="grid-column: span 8;">
+      <label for="remarks">Remarks (Optional)</label>
+      <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Any special instructions..." />
+    </div>
+
+    <!-- ================= SUBMIT ================= -->
+    <div class="span-full btn-grp">
+      <button type="submit">
+          <i class="fa-solid fa-check"></i> <%= typeof orderToEdit !== 'undefined' && orderToEdit ? 'Update PO' : 'Create PO' %>
+      </button>
+    </div>
+  </form>
+</div>
+
+<style>
+  .location-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 5px;
+    padding: 5px 8px;
+    border-radius: 0.4rem;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+    user-select: none;
+    opacity: 0.8;
+  }
+  .location-option.selected {
+    border-color: #044A78;
+    background: #eef0ff;
+    opacity: 1;
+  }
+  .location-radio {
+    accent-color: #044A78;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+  }
+  .location-label {
+    color: #044A78;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .location-qty {
+    font-weight: 700;
+    color: #044A78;
+    font-size: 15px;
+  }
+</style>
+
+<script type="application/json" id="order-to-edit-data">
+  <%- typeof orderToEdit !== 'undefined' && orderToEdit ? JSON.stringify(orderToEdit) : 'null' %>
+</script>
+
+<script>
+  const orderToEdit = JSON.parse(document.getElementById('order-to-edit-data')?.textContent || 'null');
+
+  const vendorSelect = document.getElementById("vendor-name");
+  const coordinatorSelect = document.getElementById("coordinator-name");
+  const itemTypeSelect = document.getElementById("item-type");
+  const itemSelect = document.getElementById("item-select");
+  const locationSelect = document.getElementById("vendor-location");
+  const poNumberInput = document.getElementById("po-number");
+  const rateDisplayInput = document.getElementById("item-rate");
+  const quantityInput = document.getElementById("quantity");
+  const estimatedDateInput = document.getElementById("estimated-date");
+  const remarksInput = document.getElementById("remarks");
+
+  let vendorChoices, coordinatorChoices, locationChoices, itemTypeChoices, itemChoices;
+
+  window.addEventListener("DOMContentLoaded", () => {
+    // Initialize Choices
+    itemTypeChoices = new Choices(itemTypeSelect, { searchEnabled: false, itemSelectText: "", shouldSort: false });
+    vendorChoices = new Choices(vendorSelect, { searchEnabled: true, itemSelectText: "" });
+    coordinatorChoices = new Choices(coordinatorSelect, { searchEnabled: true, itemSelectText: "" });
+    locationChoices = new Choices(locationSelect, { searchEnabled: true, itemSelectText: "" });
+    itemChoices = new Choices(itemSelect, { searchEnabled: true, itemSelectText: "" });
+
+    // Event Listeners using 'change' which Choices correctly bubbles to the underlying element
+    itemTypeSelect.addEventListener("change", (e) => {
+      const type = itemTypeChoices.getValue(true);
+      if (!type) return;
+      loadVendors(type);
+      // Clear dependent fields
+      coordinatorChoices.clearStore();
+      coordinatorChoices.setChoices([{ value: "", label: "Select Coordinator", disabled: true, selected: true }], "value", "label", true);
+      locationChoices.clearStore();
+      locationChoices.setChoices([{ value: "", label: "Select Location", disabled: true, selected: true }], "value", "label", true);
+      itemChoices.clearStore();
+      itemChoices.setChoices([{ value: "", label: "Select Item", disabled: true, selected: true }], "value", "label", true);
+    });
+
+    vendorSelect.addEventListener("change", (e) => {
+      const vendorName = vendorChoices.getValue(true);
+      if (!vendorName) return;
+      loadCoordinators(vendorName);
+      // Clear dependent fields
+      locationChoices.clearStore();
+      locationChoices.setChoices([{ value: "", label: "Select Location", disabled: true, selected: true }], "value", "label", true);
+      itemChoices.clearStore();
+      itemChoices.setChoices([{ value: "", label: "Select Item", disabled: true, selected: true }], "value", "label", true);
+    });
+
+    coordinatorSelect.addEventListener("change", (e) => {
+       const selected = coordinatorChoices.getValue();
+       if (selected && selected.customProperties) {
+         setCoordinatorLocations(selected.customProperties);
+         loadItems(itemTypeChoices.getValue(true), selected.value);
+       }
+    });
+
+    itemSelect.addEventListener("change", (e) => {
+      const selected = itemChoices.getValue();
+      if (selected && selected.customProperties) {
+        updateStockDisplay(selected.customProperties.stock);
+        updateRateDisplay(selected.customProperties.rate);
+        showItemDetails(selected.customProperties.details);
+      }
+    });
+
+    if (orderToEdit) {
+       initEditMode();
+    }
+  });
+
+  async function loadVendors(itemType) {
+    vendorChoices.clearStore();
+    vendorChoices.setChoices([{ value: "", label: "Loading vendors...", disabled: true, selected: true }], "value", "label", true);
+    
+    try {
+      const res = await fetch(`/sachiko/purchase/vendors/${itemType}`);
+      const data = await res.json();
+      vendorChoices.clearStore();
+      vendorChoices.setChoices(
+        [{ value: "", label: "Select Vendor", disabled: true, selected: true }, 
+         ...data.map(v => ({ value: v, label: v }))],
+        "value", "label", true
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function loadCoordinators(vendorName) {
+    coordinatorChoices.clearStore();
+    coordinatorChoices.setChoices([{ value: "", label: "Loading coordinators...", disabled: true, selected: true }], "value", "label", true);
+    
+    try {
+      const res = await fetch(`/sachiko/purchase/coordinators/${encodeURIComponent(vendorName)}`);
+      const data = await res.json();
+      coordinatorChoices.clearStore();
+      coordinatorChoices.setChoices(
+        [{ value: "", label: "Select Coordinator", disabled: true, selected: true },
+         ...data.map(c => ({ 
+           value: c._id, 
+           label: c.userName,
+           customProperties: { 
+             locationDetails: c.locationDetails || [],
+             hoLocation: c.hoLocation || "",
+             warehouseLocation: c.warehouseLocation || ""
+           }
+         }))],
+        "value", "label", true
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function setCoordinatorLocations(props) {
+    locationChoices.clearStore();
+    const locDetails = props.locationDetails || [];
+    const ho = props.hoLocation;
+    const wh = props.warehouseLocation;
+
+    const options = [];
+    if (ho) options.push({ value: ho, label: `HO: ${ho}` });
+    if (wh) options.push({ value: wh, label: `WH: ${wh}` });
+    
+    locDetails.forEach(loc => {
+       if (loc.userLocation && loc.userLocation !== ho && loc.userLocation !== wh) {
+          options.push({ value: loc.userLocation, label: loc.userLocation });
+       }
+    });
+
+    if (options.length === 0) {
+       locationChoices.setChoices([{ value: "", label: "No locations found", disabled: true, selected: true }], "value", "label", true);
+       return;
+    }
+
+    locationChoices.setChoices(
+      options.map((opt, i) => ({ ...opt, selected: options.length === 1 || i === 0 })),
+      "value", "label", true
+    );
+  }
+
+  async function loadItems(type, vendorUserId) {
+    itemChoices.clearStore();
+    
+    if (!type || !vendorUserId) {
+       itemChoices.setChoices([{ value: "", label: "Select Item", disabled: true, selected: true }], "value", "label", true);
+       return;
+    }
+
+    itemChoices.setChoices([{ value: "", label: "Loading items...", disabled: true, selected: true }], "value", "label", true);
+    
+    try {
+      const res = await fetch(`/sachiko/purchase/items/${type}/${vendorUserId}`);
+      const data = await res.json();
+      itemChoices.clearStore();
+      itemChoices.setChoices(
+        [{ value: "", label: "Select Item", disabled: true, selected: true },
+         ...data.map(i => ({ 
+           value: i._id, 
+           label: i.displayName,
+           customProperties: { 
+             stock: i.stock, 
+             rate: i.rate,
+             details: i.details
+           }
+         }))],
+        "value", "label", true
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function updateStockDisplay(stock) {
+    if (!stock) return;
+    document.getElementById("stat-total").textContent = stock.totalStock ?? 0;
+    document.getElementById("stat-booked").textContent = stock.booked ?? 0;
+    document.getElementById("stat-balance").textContent = stock.balance ?? 0;
+
+    // Update individual location rows
+    const container = document.querySelector("#stock-display .white-space\\:nowrap");
+    // Find radio markers and update labels
+    const radios = container.querySelectorAll('.location-option');
+    radios.forEach(row => {
+       const loc = row.dataset.location;
+       if (loc === "ALL") {
+          row.querySelector('.location-qty').textContent = stock.totalStock ?? 0;
+       } else {
+          const locStock = (stock.locations || []).find(l => l.location === loc);
+          row.querySelector('.location-qty').textContent = locStock ? locStock.qty : 0;
+       }
+    });
+  }
+
+  function updateRateDisplay(rate) {
+    rateDisplayInput.value = rate || "";
+  }
+
+  function showItemDetails(details) {
+    const el = document.getElementById("selected-item-details");
+    if (!details) {
+       el.style.display = "none";
+       return;
+    }
+    el.style.display = "block";
+    let html = `<div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; font-size:12px;">`;
+    
+    const type = details.type;
+    if (type === "TAPE") {
+       html += `<div><strong>Tape:</strong> ${details.tapePaperCode} ${details.tapeGsm}gsm</div>`;
+       html += `<div><strong>Finish:</strong> ${details.tapeFinish}</div>`;
+       html += `<div><strong>Size:</strong> ${details.tapeWidth}x${details.tapeMtrs}</div>`;
+       html += `<div><strong>Vendor Ref:</strong> ${details.vendorPaperCode} / ${details.vendorGsm}gsm</div>`;
+    } else if (type === "POS_ROLL") {
+       html += `<div><strong>POS:</strong> ${details.posPaperCode} ${details.posGsm}gsm</div>`;
+       html += `<div><strong>Size:</strong> ${details.posWidth}x${details.posMtrs}</div>`;
+       html += `<div><strong>Vendor Ref:</strong> ${details.vendorPaperCode} / ${details.vendorGsm}gsm</div>`;
+    } else if (type === "TAFETA") {
+       html += `<div><strong>Taffeta:</strong> ${details.tafetaMaterialCode} ${details.tafetaGsm}gsm</div>`;
+       html += `<div><strong>Size:</strong> ${details.tafetaWidth}x${details.tafetaMtrs}</div>`;
+       html += `<div><strong>Vendor Ref:</strong> ${details.vendorPaperCode}</div>`;
+    } else if (type === "TTR") {
+       html += `<div><strong>TTR Type:</strong> ${details.ttrType}</div>`;
+       html += `<div><strong>Size:</strong> ${details.ttrWidth}x${details.ttrMtrs}</div>`;
+       html += `<div><strong>Color:</strong> ${details.ttrColor}</div>`;
+       html += `<div><strong>Vendor Ref:</strong> ${details.vendorPaperCode}</div>`;
+    }
+    html += `</div>`;
+    el.innerHTML = html;
+  }
+
+  async function initEditMode() {
+    // This part is complex due to nested async loads. 
+    // Usually handled by setting values and dispatching events or calling functions sequentially.
+    const itype = orderToEdit.onModel.toUpperCase() === "POSROLL" ? "POS_ROLL" : orderToEdit.onModel.toUpperCase();
+    itemTypeChoices.setChoiceByValue(itype);
+    
+    await loadVendors(itype);
+    const vendorName = orderToEdit.vendorUserId?.vendorName || "";
+    vendorChoices.setChoiceByValue(vendorName);
+    
+    await loadCoordinators(vendorName);
+    coordinatorChoices.setChoiceByValue(orderToEdit.vendorUserId?._id);
+    setCoordinatorLocations(orderToEdit.vendorUserId?.locationDetails || []);
+    locationChoices.setChoiceByValue(orderToEdit.userLocation);
+
+    await loadItems(itype, orderToEdit.vendorUserId?._id);
+    itemChoices.setChoiceByValue(orderToEdit.itemId?._id);
+    
+    // Trigger display updates manually for selected item
+    const selectedItem = itemChoices.getValue();
+    if (selectedItem?.customProperties) {
+       updateStockDisplay(selectedItem.customProperties.stock);
+       updateRateDisplay(selectedItem.customProperties.rate);
+       showItemDetails(selectedItem.customProperties.details);
+    }
+    
+    quantityInput.value = orderToEdit.quantity;
+    poNumberInput.value = orderToEdit.poNumber;
+    if (orderToEdit.estimatedDate) {
+       estimatedDateInput.value = new Date(orderToEdit.estimatedDate).toISOString().split('T')[0];
+    }
+    remarksInput.value = orderToEdit.remarks || "";
+  }
+</script>

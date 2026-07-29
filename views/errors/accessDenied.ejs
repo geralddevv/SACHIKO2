@@ -1,0 +1,35 @@
+<% layout('/layout/auth') -%>
+
+<section class="login-shell">
+  <div class="login-accent" style="background: linear-gradient(90deg, rgba(220, 53, 69, 0.85), rgba(220, 53, 69, 0.15)); box-shadow: 0 8px 20px rgba(220, 53, 69, 0.2);"></div>
+  <div class="login-card" style="text-align: center;">
+    <div style="width: 72px; height: 72px; border-radius: 50%; background: rgba(220, 53, 69, 0.1); display: grid; place-items: center; margin: 0 auto 1.25rem;">
+      <i class="fa-solid fa-lock" style="font-size: 28px; color: #dc3545;"></i>
+    </div>
+
+    <h2 style="margin: 0 0 0.5rem; color: #1b2430; font-size: 1.5rem;">Access Denied</h2>
+    <p style="margin: 0 0 0.25rem; color: #5b6b7a; font-size: 0.98rem;">
+      You don't have permission to view this page.
+    </p>
+    <% if (typeof roleLabel !== "undefined" && roleLabel) { %>
+    <p style="margin: 0 0 1.5rem; color: #8a97a3; font-size: 0.85rem;">
+      Your current role (<strong><%= roleLabel %></strong>) doesn't include access to this section.
+    </p>
+    <% } else { %>
+    <div style="margin-bottom: 1.5rem;"></div>
+    <% } %>
+
+    <a
+      href="<%= typeof homeUrl !== 'undefined' ? homeUrl : '/sachiko/welcome' %>"
+      class="login-submit"
+      style="display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: #044a78; color: #ffffff; text-decoration: none; padding: 0.7rem 1.4rem; border-radius: 10px; font-weight: 600;"
+    >
+      <i class="fa-solid fa-house"></i>
+      <span><%= typeof homeLabel !== "undefined" ? homeLabel : "Back to Dashboard" %></span>
+    </a>
+
+    <p class="login-help">
+      If you believe this is a mistake, contact your administrator.
+    </p>
+  </div>
+</section>

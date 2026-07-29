@@ -1,0 +1,312 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+</head>
+
+<body>
+  <style>
+    #master-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+  </style>
+  <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+    <div class="indi-head">
+      <h1>
+        Labels
+        <% if (typeof clientName !== "undefined" && (clientName || userName)) { %>
+          - <%= clientName || "" %><%= clientName && userName ? " / " : "" %><%= userName || "" %>
+        <% } %>
+      </h1>
+      <div class="download-btns">
+        <div class="download-selector" id="downloadSelector">
+          <button class="download-selector__trigger">
+            <span>
+              <i class="fa-solid fa-file-arrow-down"></i>
+              <span class="download-typo">Download</span>
+            </span>
+            <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+          </button>
+          <div class="download-selector__menu" id="downloads">
+            <span class="download-selector__option" id="download-pdf">
+              <i class="fas fa-file-pdf download-selector__option-icon"></i>
+              <span>PDF</span>
+            </span>
+            <span class="download-selector__option" id="download-xlsx">
+              <i class="fas fa-file-excel download-selector__option-icon"></i>
+              <span>Excel</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-spinner"><div class="spinner-circle"></div></div>
+    <div id="master-table" class="tabulator tabulator-modern"></div>
+  </div>
+
+  <!-- Tabulator JS -->
+  <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+  <form id="deleteBindingForm" method="POST" style="display:none;"></form>
+
+  <div class="logout-modal" id="statusBindingModal" aria-hidden="true">
+    <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="statusBindingTitle">
+      <h2 class="logout-title" id="statusBindingTitle">Change binding status?</h2>
+      <p class="logout-text" id="statusBindingText">This will change the binding status.</p>
+      <div class="logout-actions">
+        <button class="logout-btn" type="button" id="statusBindingCancel">Cancel</button>
+        <button class="logout-btn primary" type="button" id="statusBindingConfirm">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="logout-modal" id="deleteBindingModal" aria-hidden="true">
+    <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteBindingTitle">
+      <h2 class="logout-title" id="deleteBindingTitle">Remove binding?</h2>
+      <p class="logout-text">This will permanently remove this client label binding.</p>
+      <div class="logout-actions">
+        <button class="logout-btn" type="button" id="deleteBindingCancel">Cancel</button>
+        <button class="logout-btn primary" type="button" id="deleteBindingConfirm">Remove</button>
+      </div>
+    </div>
+  </div>
+
+  <script id="table-data" type="application/json"><%- safeJson(jsonData) %></script>
+  <script>
+    const tableData = JSON.parse(document.getElementById('table-data').textContent);
+    const hideExtraColumns = <%= typeof hideExtraColumns !== 'undefined' ? hideExtraColumns : false %>;
+
+    const withTextFilter = (column) => ({
+      headerFilter: "input",
+      headerFilterPlaceholder: "Search",
+      ...column,
+    });
+
+    const fixedFieldColumns = [
+      { title: "Status", field: "status", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "Search", formatter: function (cell) {
+        const val = cell.getValue() || "ACTIVE";
+        const isActive = val === "ACTIVE";
+        const bg = isActive ? "#28a745" : "#dc3545";
+        return `<span style="background:${bg};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${val}</span>`;
+      }, width: 84, minWidth: 84, widthGrow: 0, widthShrink: 0 },
+      { title: "Order", hozAlign: "center", formatter: (cell) => {
+        const row = cell.getRow().getData();
+        const clientName = row.clientName || "";
+        const userId = row.userId || "";
+        return `
+          <button
+            onclick="window.location.href='/sachiko/sales/order?type=LABEL&client=${encodeURIComponent(clientName)}&user=${userId}&item=${row._id}'"
+            style="padding:2px 10px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">
+            <i class="fa-solid fa-cart-plus"></i>
+          </button>
+        `;
+      }, width: 74, minWidth: 74, widthGrow: 0, widthShrink: 0 },
+      { title: "Product ID", field: "productId", minWidth: 120, widthGrow: 2, headerFilter: "input", headerFilterPlaceholder: "Search" },
+      { title: "Client Name", field: "clientName", minWidth: 120, widthGrow: 2, headerFilter: "input", headerFilterPlaceholder: "Search" },
+      { title: "User Name", field: "userName", minWidth: 110, widthGrow: 2, headerFilter: "input", headerFilterPlaceholder: "Search" },
+      { title: "User Contact", field: "userContact", minWidth: 110, widthGrow: 1, headerFilter: "input", headerFilterPlaceholder: "Search" },
+      { title: "Location", field: "location", minWidth: 120, widthGrow: 1, headerFilter: "input", headerFilterPlaceholder: "Search" },
+      { title: "Job Type", field: "jobType", minWidth: 100, widthGrow: 1, headerFilter: "input", headerFilterPlaceholder: "Search" },
+      { title: "Job Name", field: "jobName", minWidth: 110, widthGrow: 1, headerFilter: "input", headerFilterPlaceholder: "Search" },
+      withTextFilter({ title: "Family", field: "labelFamily", minWidth: 90, widthGrow: 1 }),
+      withTextFilter({ title: "Width", field: "labelWidth", minWidth: 80, widthGrow: 1 }),
+      withTextFilter({ title: "Height", field: "labelHeight", minWidth: 80, widthGrow: 1 }),
+      withTextFilter({ title: "Gap", field: "labelGap", minWidth: 70, widthGrow: 1 }),
+      withTextFilter({ title: "Ups", field: "labelUps", minWidth: 70, widthGrow: 1 }),
+      withTextFilter({ title: "Core", field: "labelCore", minWidth: 70, widthGrow: 1 }),
+      withTextFilter({ title: "SKU Code", field: "clientSkuCode", minWidth: 100, widthGrow: 1 }),
+      withTextFilter({ title: "Instructions", field: "clientInstructions", minWidth: 110, widthGrow: 1 }),
+      withTextFilter({ title: "Per Roll Qty", field: "perRollQty", minWidth: 100, widthGrow: 1 }),
+      withTextFilter({ title: "Rate Per 1K", field: "ratePerK", minWidth: 95, widthGrow: 1 }),
+      withTextFilter({ title: "Rate Per Label", field: "ratePerLabel", minWidth: 105, widthGrow: 1 }),
+      withTextFilter({ title: "Rate Per Roll", field: "perRoll", minWidth: 100, widthGrow: 1 }),
+      withTextFilter({ title: "Sale Cost", field: "saleCost", minWidth: 90, widthGrow: 1 }),
+      withTextFilter({ title: "Min Order Qty", field: "minOrderQty", minWidth: 120, widthGrow: 1, formatter: (cell) => {
+        const v = cell.getValue();
+        if (v === null || v === undefined || String(v).trim() === "") return "-";
+        const unit = cell.getRow().getData().moqUnit === "ROLLS" ? "rolls" : "labels";
+        return `${v} ${unit}`;
+      } }),
+      withTextFilter({ title: "Order Qty", field: "OrderQty", minWidth: 90, widthGrow: 1 }),
+      withTextFilter({ title: "Odr Freq", field: "repOrderFq", minWidth: 90, widthGrow: 1 }),
+      withTextFilter({ title: "Credit Term", field: "creditTerm", minWidth: 95, widthGrow: 1 }),
+      { title: "Billing Type", field: "billingType", minWidth: 100, widthGrow: 1, headerFilter: "input", headerFilterPlaceholder: "Search", formatter: (cell) => {
+        const v = cell.getValue();
+        return v === "ROLLS" ? "Rolls" : v === "LABELS" ? "Labels (qty)" : "-";
+      } },
+    ];
+
+    const columns = [];
+    if (!hideExtraColumns) {
+      columns.push({
+        title: "Actions",
+        hozAlign: "center",
+        headerHozAlign: "center",
+        width: 162,
+        minWidth: 162,
+        widthGrow: 0,
+        widthShrink: 0,
+        formatter: function (cell) {
+          const row = cell.getRow().getData();
+          const bindingId = row._id;
+          if (!bindingId) return `<span style="color:#999">N/A</span>`;
+          const status = (row.status || "ACTIVE") === "INACTIVE" ? "INACTIVE" : "ACTIVE";
+          return `
+            <div style="display:flex;align-items:center;justify-content:center;gap:5px;">
+              <button
+                onclick="window.location.href='/sachiko/labels/compare/${bindingId}'"
+                style="padding:2px 6px;min-width:28px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
+                title="View Binding">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+              <button
+                onclick="window.location.href='/sachiko/labels-binding/edit/${bindingId}'"
+                style="padding:2px 6px;min-width:28px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
+                title="Edit Binding">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button
+                onclick="promptToggleStatus('${bindingId}', '${status}')"
+                style="padding:2px 6px;min-width:28px;background:${status === 'ACTIVE' ? '#28a745' : '#6c757d'};color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
+                title="${status === 'ACTIVE' ? 'Set Inactive' : 'Set Active'}">
+                <i class="fa-solid ${status === 'ACTIVE' ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
+              </button>
+              <button
+                onclick="promptDeleteBinding('${bindingId}')"
+                style="padding:2px 6px;min-width:28px;background:#d9534f;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
+                title="Remove Binding">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+          `;
+        },
+      });
+    }
+    columns.push(...fixedFieldColumns);
+
+    const table = new Tabulator("#master-table", {
+      data: tableData,
+      height: "100%",
+      responsiveLayout: false,
+      movableColumns: true,
+      placeholder: "No data to display",
+      columns: columns
+    });
+
+    let bindingToDelete = "";
+    const deleteModal = document.getElementById("deleteBindingModal");
+    const deleteForm = document.getElementById("deleteBindingForm");
+    const deleteConfirmBtn = document.getElementById("deleteBindingConfirm");
+    const deleteCancelBtn = document.getElementById("deleteBindingCancel");
+    const getCsrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+
+    window.promptDeleteBinding = function (bindingId) {
+      bindingToDelete = String(bindingId || "");
+      deleteModal.classList.add("show");
+      deleteModal.setAttribute("aria-hidden", "false");
+    };
+
+    function closeDeleteModal() {
+      deleteModal.classList.remove("show");
+      deleteModal.setAttribute("aria-hidden", "true");
+      bindingToDelete = "";
+    }
+
+    deleteCancelBtn.addEventListener("click", closeDeleteModal);
+    deleteModal.addEventListener("click", (e) => {
+      if (e.target === deleteModal) closeDeleteModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (!deleteModal.classList.contains("show")) return;
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      deleteConfirmBtn.click();
+    });
+    deleteConfirmBtn.addEventListener("click", () => {
+      if (!bindingToDelete) return closeDeleteModal();
+      let csrfInput = deleteForm.querySelector('input[name="_csrf"]');
+      if (!csrfInput) {
+        csrfInput = document.createElement("input");
+        csrfInput.type = "hidden";
+        csrfInput.name = "_csrf";
+        deleteForm.appendChild(csrfInput);
+      }
+      csrfInput.value = getCsrfToken();
+      deleteForm.action = `/sachiko/labels-binding/delete/${bindingToDelete}`;
+      deleteForm.submit();
+    });
+
+    // Change status (confirm dialog)
+    let statusBindingId = "";
+    let statusTarget = "INACTIVE";
+    const statusModal = document.getElementById("statusBindingModal");
+    const statusText = document.getElementById("statusBindingText");
+    const statusConfirmBtn = document.getElementById("statusBindingConfirm");
+    const statusCancelBtn = document.getElementById("statusBindingCancel");
+
+    window.promptToggleStatus = function (bindingId, currentStatus) {
+      statusBindingId = String(bindingId || "");
+      const current = (currentStatus || "ACTIVE") === "INACTIVE" ? "INACTIVE" : "ACTIVE";
+      statusTarget = current === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+      statusText.textContent = `This will mark the binding as ${statusTarget}.`;
+      statusModal.classList.add("show");
+      statusModal.setAttribute("aria-hidden", "false");
+    };
+
+    function closeStatusModal() {
+      statusModal.classList.remove("show");
+      statusModal.setAttribute("aria-hidden", "true");
+      statusBindingId = "";
+    }
+
+    statusCancelBtn.addEventListener("click", closeStatusModal);
+    statusModal.addEventListener("click", (e) => { if (e.target === statusModal) closeStatusModal(); });
+
+    statusConfirmBtn.addEventListener("click", async () => {
+      if (!statusBindingId) return closeStatusModal();
+      statusConfirmBtn.disabled = true;
+      const endpoint = statusTarget === "ACTIVE" ? "set-active" : "set-inactive";
+      try {
+        const res = await fetch(`/sachiko/labels-binding/${endpoint}/${statusBindingId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-csrf-token": getCsrfToken() },
+        });
+        if (res.ok) { closeStatusModal(); window.location.reload(); }
+      } finally {
+        statusConfirmBtn.disabled = false;
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (!statusModal.classList.contains("show")) return;
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      statusConfirmBtn.click();
+    });
+
+    // Download dropdown
+    const selector = document.getElementById("downloadSelector");
+    const trigger = selector.querySelector(".download-selector__trigger");
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selector.classList.toggle("download-selector--active");
+    });
+    document.addEventListener("click", () => {
+      selector.classList.remove("download-selector--active");
+    });
+    document.getElementById("download-pdf").addEventListener("click", () => {
+      table.download("pdf", "labels.pdf", { orientation: "landscape", title: "Labels Data" });
+      selector.classList.remove("download-selector--active");
+    });
+    document.getElementById("download-xlsx").addEventListener("click", () => {
+      table.download("xlsx", "labels.xlsx", { sheetName: "Labels" });
+      selector.classList.remove("download-selector--active");
+    });
+  </script>
+</body>

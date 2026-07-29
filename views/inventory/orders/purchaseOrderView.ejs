@@ -1,0 +1,246 @@
+<% layout('/layout/boilerplate') %>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 2px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .header-action-btn:hover {
+      background-color: #e4e4e4;
+    }
+
+    .status-badge {
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-confirmed { background: #dcfce7; color: #166534; }
+    .status-received { background: #dbeafe; color: #1e40af; }
+    .status-partially_received { background: #ffedd5; color: #9a3412; }
+    .status-cancelled { background: #fee2e2; color: #991b1b; }
+
+    #master-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+  </style>
+
+  <div class="indi-head">
+    <h1>All Purchase Orders</h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <button class="header-action-btn" onclick="window.location.href = '/sachiko/inventory/reorder'">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Create PO
+      </button>
+
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span>
+            <i class="fa-solid fa-file-arrow-down"></i>
+            <span class="download-typo">Download</span>
+          </span>
+          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+        </button>
+        <div class="download-selector__menu" id="downloads">
+          <span class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel download-selector__option-icon"></i>
+            <span>Excel</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script id="order-data" type="application/json">
+  <%- safeJson(orders || []) %>
+</script>
+
+<script>
+  const orderData = JSON.parse(document.getElementById("order-data").textContent);
+  
+  const downloadSelector = document.getElementById("downloadSelector");
+  const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
+
+  triggerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    selector.classList.toggle("download-selector--active");
+  });
+
+  document.addEventListener("click", () => {
+    selector.classList.remove("download-selector--active");
+  });
+
+  function getItemName(row) {
+    const item = row.itemId;
+    if (!item) return "N/A";
+    if (row.onModel === "Tape") {
+      return `${item.tapePaperCode || ""} ${item.tapeGsm || ""}gsm`.trim() || item.tapeProductId;
+    }
+    if (row.onModel === "PosRoll") {
+      return `${item.posPaperCode || ""} ${item.posGsm || ""}gsm`.trim() || item.posProductId;
+    }
+    if (row.onModel === "Tafeta") {
+      return `${item.tafetaMaterialCode || ""} ${item.tafetaGsm || ""}gsm`.trim() || item.tafetaProductId;
+    }
+    if (row.onModel === "Ttr") {
+      return `${item.ttrType || ""} ${item.ttrWidth || ""}x${item.ttrMtrs || ""}`.trim() || item.ttrProductId;
+    }
+    return "Unknown Item";
+  }
+
+  const withTextFilter = (column, placeholder = "Search") => ({
+    headerFilter: "input",
+    headerFilterPlaceholder: placeholder,
+    ...column,
+  });
+
+  const withSelectFilter = (column, values) => ({
+    headerFilter: "list",
+    headerFilterParams: {
+      values: values,
+      clearable: true,
+      autocomplete: true,
+    },
+    ...column,
+  });
+
+  const table = new Tabulator("#master-table", {
+    data: orderData,
+    height: "100%",
+    virtualDom: true,
+    placeholder: "No purchase orders found",
+    initialSort: [{ column: "createdAt", dir: "desc" }],
+    columns: [
+      withTextFilter({
+        title: "Date",
+        field: "createdAt",
+        width: 110,
+        formatter: (cell) => new Date(cell.getValue()).toLocaleDateString("en-IN"),
+      }),
+      withTextFilter({
+        title: "PO Number",
+        field: "poNumber",
+        width: 140,
+        formatter: (cell) => `<span style="font-weight:700; color:#044A78;">${cell.getValue()}</span>`,
+      }),
+      withSelectFilter({
+        title: "Status",
+        field: "status",
+        width: 140,
+        formatter: (cell) => {
+          const val = cell.getValue();
+          const cls = `status-${String(val).toLowerCase()}`;
+          return `<span class="status-badge ${cls}">${val}</span>`;
+        },
+      }, {
+        "": "All",
+        "PENDING": "PENDING",
+        "CONFIRMED": "CONFIRMED",
+        "RECEIVED": "RECEIVED",
+        "PARTIALLY_RECEIVED": "PARTIALLY_RECEIVED",
+        "CANCELLED": "CANCELLED"
+      }),
+      withTextFilter({
+        title: "Vendor",
+        field: "vendorDisplayName",
+        widthGrow: 2,
+        formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue()}</span>`,
+      }),
+      withTextFilter({
+        title: "Coordinator",
+        field: "coordinatorDisplayName",
+        widthGrow: 1.5,
+      }),
+      withSelectFilter({
+        title: "Item Type",
+        field: "onModel",
+        width: 120,
+        formatter: (cell) => cell.getValue() === "PosRoll" ? "POS Roll" : cell.getValue(),
+      }, {
+        "": "All",
+        "Tape": "Tape",
+        "Ttr": "TTR",
+        "PosRoll": "POS Roll",
+        "Tafeta": "Tafeta"
+      }),
+      withTextFilter({
+        title: "Item Details",
+        field: "itemId",
+        widthGrow: 2.5,
+        headerFilterFunc: (headerValue, rowValue, rowData) => {
+          const name = getItemName(rowData);
+          return String(name).toLowerCase().includes(String(headerValue).toLowerCase());
+        },
+        formatter: (cell) => `<span style="color:#044A78; font-weight:600;">${getItemName(cell.getRow().getData())}</span>`,
+      }),
+      {
+        title: "Qty",
+        field: "quantity",
+        hozAlign: "center",
+        width: 80,
+      },
+      {
+        title: "Recd",
+        field: "receivedQuantity",
+        hozAlign: "center",
+        width: 80,
+      },
+      {
+        title: "Bal",
+        hozAlign: "center",
+        width: 80,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const bal = Math.max((row.quantity || 0) - (row.receivedQuantity || 0), 0);
+          return `<span style="font-weight:700; color:${bal > 0 ? '#b91c1c' : '#166534'};">${bal}</span>`;
+        },
+      },
+      withTextFilter({
+        title: "Est. Delv",
+        field: "estimatedDate",
+        width: 110,
+        formatter: (cell) => cell.getValue() ? new Date(cell.getValue()).toLocaleDateString("en-IN") : "-",
+      }),
+    ],
+  });
+
+  document.getElementById("download-xlsx").addEventListener("click", () => {
+    table.download("xlsx", "purchase_orders.xlsx", { sheetName: "AllPO" });
+  });
+
+  const selector = document.getElementById("downloadSelector");
+  const trigger = selector.querySelector(".download-selector__trigger");
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    selector.classList.toggle("download-selector--active");
+  });
+  document.addEventListener("click", () => selector.classList.remove("download-selector--active"));
+</script>

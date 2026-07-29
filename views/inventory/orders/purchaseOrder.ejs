@@ -1,0 +1,981 @@
+<% layout('/layout/boilerplate') -%>
+
+<style>
+  /* ── Cart table ─────────────────────────────────────────── */
+  .cart-header-row {
+    display: flex !important;
+    align-items: center;
+    gap: 12px;
+    background: #044a78;
+    color: white;
+    padding: 10px 14px;
+    border-radius: 8px 8px 0 0;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    width: 100% !important;
+    margin: 0 !important;
+    box-sizing: border-box;
+  }
+  .cart-item-row {
+    display: flex !important;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    width: 100% !important;
+    margin: 0 !important;
+    box-sizing: border-box;
+    transition: background .15s;
+  }
+  .cart-item-row:last-child { border-bottom: none; }
+  .cart-item-row:hover { background: rgba(4,74,120,.04); }
+
+  .cc-info     { flex: 1; min-width: 0; }
+  .cc-type     { width: 80px; flex-shrink: 0; text-align: center; }
+  .cc-shortage { width: 80px; flex-shrink: 0; text-align: center; }
+  .cc-rate     { width: 90px; flex-shrink: 0; text-align: center; }
+  .cc-loc      { flex: 0.8; min-width: 0; }
+  .cc-qty      { width: 100px; flex-shrink: 0; }
+  .cc-remove   { width: 50px; flex-shrink: 0; text-align: center; }
+
+  /* Choices overrides inside form rows */
+  .choices { margin-bottom: 0 !important; font-size: 13px !important; }
+  .choices__inner {
+    min-height: 36px !important;
+    padding: 4px 8px !important;
+    background: #fff !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 6px !important;
+    display: flex;
+    align-items: center;
+  }
+
+  /* "Add to Order" btn pulse when item ready */
+  @keyframes pulseBorder {
+    0%,100% { box-shadow: 0 0 0 0 rgba(5,150,105,.4); }
+    50%      { box-shadow: 0 0 0 6px rgba(5,150,105,0); }
+  }
+  .add-btn-ready { animation: pulseBorder 1.8s infinite; }
+
+  .location-option {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-right: 5px; padding: 5px 8px; border-radius: .4rem;
+    border: 2px solid transparent; transition: all .2s;
+    user-select: none; opacity: .85;
+  }
+  .location-option.selected { border-color: #044A78; background: #eef0ff; opacity: 1; }
+  .location-label { color: #044A78; font-size: 14px; font-weight: 500; }
+  .location-qty   { font-weight: 700; color: #044A78; font-size: 15px; }
+
+  @media (max-width: 1100px) {
+    .cart-header-row { display: none; }
+    .cart-item-row {
+      flex-direction: column; align-items: stretch;
+      border: 1px solid #e5e7eb; border-radius: 8px;
+      margin-bottom: 10px; gap: 8px;
+    }
+  }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
+
+  <%# ===================== EDIT MODE (single item) ===================== %>
+  <% if (typeof orderToEdit !== 'undefined' && orderToEdit) { %>
+
+  <form id="purchase-order-form" action="/sachiko/inventory/purchase/order" method="post" class="needs-validation" autocomplete="off" novalidate>
+    <input type="hidden" name="_csrf"    value="<%= csrfToken %>" />
+    <input type="hidden" name="orderId"  value="<%= orderToEdit._id %>" />
+
+    <div class="span-full form-heading">
+      <h1>Edit Purchase Order</h1>
+    </div>
+
+    <!-- Stock Bar -->
+    <div id="stock-display" class="span-full" style="display:flex; padding:10px 15px; background:#fff; border:1px solid #044A78; border-radius:.5rem; overflow-x:auto; overflow-y:hidden;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:22px; flex-wrap:nowrap; width:max-content; min-width:100%;">
+        <div style="display:flex; flex-wrap:nowrap; align-items:center; white-space:nowrap;">
+          <div style="font-weight:700; color:#044A78; font-size:14px; margin-right:15px; border-right:1px solid #cdd6e0; padding-right:15px;"><i class="fa-solid fa-warehouse"></i> OUR STOCK:</div>
+          <span id="stock-placeholder" style="font-size:13px; color:#9ca3af; font-style:italic;">Select an item to see stock levels</span>
+          <div id="stock-locations" style="display:flex; flex-wrap:nowrap; align-items:center;"></div>
+        </div>
+        <div id="stock-stats" style="display:flex; gap:14px; align-items:center; flex-wrap:nowrap; white-space:nowrap;">
+          <div style="font-weight:700; color:#044A78; font-size:16px;"><i class="fa-solid fa-box-open"></i> Total: <span id="stat-total">—</span></div>
+          <div style="font-weight:700; color:#d97706; font-size:16px;"><i class="fa-regular fa-clock"></i> Booked: <span id="stat-booked">—</span></div>
+          <div style="font-weight:700; color:#059669; font-size:16px;"><i class="fa-solid fa-scale-balanced"></i> Balance: <span id="stat-balance">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Purchase Details -->
+    <div class="span-full form-subheading"><h1>Purchase Details</h1></div>
+
+    <div class="span-seven">
+      <label for="vendor-name">Vendor Name</label>
+      <select name="vendorName" id="vendor-name" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Vendor</option>
+        <% vendors?.forEach(v => { %><option value="<%= v.vendorId %>"><%= v.vendorName %></option><% }) %>
+      </select>
+    </div>
+    <div class="span-six">
+      <label for="coordinator-name">Coordinator</label>
+      <select name="vendorUserId" id="coordinator-name" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Coordinator</option>
+      </select>
+    </div>
+    <div class="span-six">
+      <label for="vendor-location">Location</label>
+      <select id="vendor-location" name="userLocation" class="form-control select-tag">
+        <option value="" disabled selected hidden>Select Location</option>
+      </select>
+    </div>
+    <div class="span-six">
+      <label for="vendor-contact">Contact</label>
+      <input type="text" id="vendor-contact" class="form-control" placeholder="Coordinator contact" readonly />
+    </div>
+    <div class="span-seven">
+      <label for="item-type">Item Type</label>
+      <select name="itemType" id="item-type" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Item Type</option>
+        <option value="Tape">Tape</option>
+        <option value="PosRoll">POS Roll</option>
+        <option value="Tafeta">Tafeta</option>
+        <option value="Ttr">TTR</option>
+      </select>
+    </div>
+    <div class="span-seven">
+      <label for="item-select">Select Item</label>
+      <select name="itemId" id="item-select" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Item</option>
+      </select>
+      <input type="hidden" name="vendorBindingId" id="vendor-binding-id" value="" />
+    </div>
+
+    <div id="selected-item-details" class="span-full" style="padding:8px 12px; background:#fff; border:1px solid #044A78; border-radius:4px; display:none;"></div>
+    <div id="reorder-banner" class="span-full" style="display:none; padding:10px 15px; background:#fef2f2; border:1px solid #fecaca; border-radius:.5rem; color:#991b1b;">
+      <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i>
+      <span id="reorder-banner-text"></span>
+    </div>
+
+    <div class="span-full form-subheading"><h1>Order Info</h1></div>
+    <div class="span-five">
+      <label for="quantity">Purchase Quantity</label>
+      <input type="number" id="quantity" name="quantity" class="form-control" min="1" placeholder="Enter quantity" required />
+    </div>
+    <div class="span-five">
+      <label for="po-number">PO Number</label>
+      <input type="text" id="po-number" name="poNumber" class="form-control" placeholder="Enter PO number" required />
+    </div>
+    <div class="span-four">
+      <label for="item-rate">Vendor Rate</label>
+      <input type="text" id="item-rate" class="form-control" placeholder="Rate" readonly />
+    </div>
+    <div class="span-six">
+      <label for="estimated-date">Est Arrival Date</label>
+      <input type="date" id="estimated-date" name="estimatedDate" class="form-control" required />
+    </div>
+    <div class="span-half" style="grid-column:span 8;">
+      <label for="remarks">Remarks (Optional)</label>
+      <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Any special instructions..." />
+    </div>
+    <div class="span-full btn-grp">
+      <button type="submit" id="po-submit-btn"><i class="fa-solid fa-check"></i> Update PO</button>
+    </div>
+  </form>
+
+  <% } else { %>
+  <%# ===================== CREATE MODE (multi-item cart) ===================== %>
+
+  <form id="multi-po-form" action="/sachiko/inventory/purchase/order-multi" method="post" style="border:none; padding:0; gap:10px; background:transparent;" autocomplete="off">
+    <input type="hidden" name="_csrf"  value="<%= csrfToken %>" />
+    <input type="hidden" name="items"  id="f-items" />
+
+    <div class="span-full form-heading" style="border-radius:10px; box-shadow:0 4px 6px rgba(0,0,0,.05);">
+      <h1>Purchase Order</h1>
+    </div>
+
+    <!-- Hidden elements for script compatibility -->
+    <div id="stock-display" style="display:none;"></div>
+    <div id="reorder-banner" style="display:none;"></div>
+    <div style="display:none;"><select id="item-select"></select><input type="text" id="item-rate"><input type="hidden" id="vendor-binding-id"></div>
+
+    <!-- ── Selector Panel (Standardized Styling) ──────────────────── -->
+    <div class="span-full form-subheading"><h1>Order Details</h1></div>
+
+    <div class="span-seven">
+      <label for="vendor-name">Vendor</label>
+      <select id="vendor-name" class="form-control select-tag">
+        <option value="" disabled selected hidden>Select Vendor</option>
+        <% vendors?.forEach(v => { %><option value="<%= v.vendorId %>"><%= v.vendorName %></option><% }) %>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="coordinator-name">Coordinator</label>
+      <select id="coordinator-name" class="form-control select-tag">
+        <option value="" disabled selected hidden>Select Coordinator</option>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="vendor-location">Location</label>
+      <select id="vendor-location" class="form-control select-tag">
+        <option value="" disabled selected hidden>Select Location</option>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="item-type">Item Type</label>
+      <select id="item-type" class="form-control select-tag">
+        <option value="" disabled selected hidden>Select Type</option>
+        <option value="Tape">Tape</option>
+        <option value="PosRoll">POS Roll</option>
+        <option value="Tafeta">Tafeta</option>
+        <option value="Ttr">TTR</option>
+      </select>
+    </div>
+
+    <div class="span-seven">
+      <label for="vendor-contact">Contact</label>
+      <input type="text" id="vendor-contact" class="form-control" placeholder="—" readonly />
+    </div>
+
+
+    <!-- ── Cart Summary badges ───────────────────────────────────────── -->
+    <div class="span-full" style="display:flex; gap:12px; flex-wrap:wrap; padding:0; border:none; flex-direction:row; margin-top:5px;">
+      <div style="display:flex; align-items:center; gap:12px; background:#f0f7ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px 20px; flex:1; min-width:180px;">
+        <i class="fa-solid fa-boxes-stacked" style="color:#044a78; font-size:22px;"></i>
+        <div>
+          <div style="font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:.05em;">Items in Queue</div>
+          <div id="queue-count" style="font-size:22px; font-weight:800; color:#044a78;">0</div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:12px 20px; flex:1; min-width:180px;">
+        <i class="fa-solid fa-triangle-exclamation" style="color:#dc2626; font-size:22px;"></i>
+        <div>
+          <div style="font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:.05em;">Total Shortage</div>
+          <div id="shortage-sum" style="font-size:22px; font-weight:800; color:#dc2626;">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Cart Panel ────────────────────────────────────────────────── -->
+    <div id="cart-container" class="span-full" style="background:white; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,.08); overflow:hidden; margin-top:5px; padding:0 !important; width:100% !important;">
+      <!-- Column Headers -->
+      <div class="cart-header-row">
+        <div class="cc-info">Item</div>
+        <div class="cc-type">Type</div>
+        <div class="cc-shortage">Shortage</div>
+        <div class="cc-rate">Rate</div>
+        <div class="cc-loc">Location</div>
+        <div class="cc-qty">Qty</div>
+        <div class="cc-remove"></div>
+      </div>
+      <!-- Empty state -->
+      <div id="cart-empty" style="padding:40px 15px; text-align:center; color:#9ca3af; font-size:14px; font-weight:600; background:#fafafa; width:100%; box-sizing:border-box;">
+        <i class="fa-solid fa-cart-shopping" style="font-size:24px; margin-bottom:10px; display:block; opacity:.3;"></i>
+        No items added yet — select an item below and click <strong>Add to Order</strong>.
+      </div>
+      <!-- Cart rows injected here -->
+      <div id="cart-rows" style="width:100% !important;"></div>
+    </div>
+
+    <!-- ── Available Items Desk (Reorder Items) ────────────────────── -->
+    <div id="available-items-container" class="span-full" style="display:none; margin-top:5px; flex-direction:column; gap:8px; padding:0 !important; border:none !important; background:transparent !important;">
+      <div style="font-size:11px; font-weight:700; color:#044a78; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2px; padding-left:10px;">
+        <i class="fa-solid fa-boxes-stacked"></i> Reorder Items
+      </div>
+      <div style="background:white; border:1px solid #bfdbfe; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.05); width:100% !important;">
+        <div class="cart-header-row" style="background:#044a78; color:white; border-bottom:1px solid #ffffff; border-radius:0;">
+          <div class="cc-info">Item Details</div>
+          <div class="cc-shortage" style="width:80px;">Shortage</div>
+          <div class="cc-rate" style="width:90px;">Rate</div>
+          <div class="cc-loc" style="flex:0.8;">Stock Info</div>
+          <div class="cc-remove" style="width:50px;"><i class="fa-solid fa-plus"></i></div>
+        </div>
+        <div id="available-items-list" style="width:100% !important;">
+          <div style="padding:25px 15px; text-align:center; color:#9ca3af; font-size:13px; background:#fafafa; width:100%; box-sizing:border-box;">
+            Selecting item type to load reorder items...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Shared PO Info ────────────────────────────────────────────── -->
+    <div class="span-full form-subheading" style="margin-top:5px;">
+      <h1>Purchase Order Info</h1>
+    </div>
+    <div class="span-eight">
+      <label for="po-number">PO Number</label>
+      <input type="text" id="po-number" name="poNumber" class="form-control" placeholder="Enter PO number" required />
+    </div>
+    <div class="span-eight">
+      <label for="estimated-date">Expected Delivery</label>
+      <input type="date" id="estimated-date" name="estimatedDate" class="form-control" required />
+    </div>
+    <div class="span-half">
+      <label for="remarks">Remarks (Optional)</label>
+      <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Specific vendor instructions..." />
+    </div>
+
+    <!-- Submit -->
+    <div class="span-full btn-grp" style="margin-top:8px; display:flex; flex-direction:row; gap:16px; align-items:center; justify-content:center; border:none; padding:0;">
+      <button type="button"
+        onclick="window.location.href='/sachiko/purchase/pending'"
+        style="flex:1; padding:12px 32px; background:#044A78; color:#fff; border-radius:10px; font-weight:700; font-size:15px; border:none; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition:all .2s; box-shadow:0 4px 6px rgba(4,74,120,.15);"
+        onmouseover="this.style.background='#033d63'; this.style.transform='translateY(-1px)';"
+        onmouseout="this.style.background='#044A78'; this.style.transform='none';"
+      >
+        <i class="fa-solid fa-list"></i> Pending Orders
+      </button>
+      <button type="button" id="submit-multi-po" onclick="submitMultiPO()"
+        style="flex:1; background:#044A78; color:white; padding:12px 40px; border-radius:10px; font-weight:700; border:none; cursor:not-allowed; font-size:16px; display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:0 4px 6px rgba(4,74,120,.2); opacity:.5; transition:all .2s;"
+        disabled
+        onmouseover="if(!this.disabled){this.style.background='#033d63'; this.style.transform='translateY(-1px)';}"
+        onmouseout="this.style.background='#044A78'; this.style.transform='none';"
+      >
+        <i class="fa-solid fa-check-double"></i> Create Purchase Orders
+      </button>
+    </div>
+
+  </form>
+  <% } %>
+</div>
+
+<!-- ── Confirm remove modal ─────────────────────────────────────── -->
+<div class="logout-modal" id="confirmModal" aria-hidden="true" style="padding:15px; overflow-y:auto; align-items:center; backdrop-filter:blur(10px);">
+  <div class="logout-dialog" role="dialog" aria-modal="true" style="width:min(480px,95vw); margin:auto; padding:0; border:none; border-radius:16px; overflow:hidden; box-shadow:0 25px 60px -12px rgba(0,0,0,.4); animation:modalScaleIn .3s ease-out;">
+    <div style="background:#044A78; padding:20px 24px; color:white; display:flex; align-items:center; gap:16px;">
+      <i class="fa-solid fa-circle-question" style="font-size:1.8rem; opacity:.9;"></i>
+      <h2 style="margin:0; font-size:1.2rem; font-weight:700;">Remove Item?</h2>
+    </div>
+    <div style="padding:24px; background:#fff;">
+      <p style="margin:0; color:#475569; font-size:15px; font-weight:500; line-height:1.6;">Remove this item from the purchase queue?</p>
+      <div style="display:flex; gap:12px; margin-top:24px;">
+        <button type="button" id="confirmCancel" style="flex:1; border:1.5px solid #e2e8f0; background:#f8fafc; color:#64748b; font-weight:700; padding:12px; border-radius:12px; font-size:14px; cursor:pointer;">Cancel</button>
+        <button type="button" id="confirmDelete" style="flex:1; background:#dc2626; color:#fff; border:none; font-weight:700; padding:12px; border-radius:12px; font-size:14px; cursor:pointer; box-shadow:0 4px 12px rgba(220,38,38,.25);">Remove</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes modalScaleIn {
+    from { opacity:0; transform:scale(.9) translateY(20px); filter:blur(5px); }
+    to   { opacity:1; transform:scale(1) translateY(0); filter:blur(0); }
+  }
+</style>
+
+<!-- ═══════════════════════════ DATA ═══════════════════════════ -->
+<script type="application/json" id="order-to-edit-data">
+  <%- typeof orderToEdit !== 'undefined' && orderToEdit ? JSON.stringify(orderToEdit) : 'null' %>
+</script>
+<script type="application/json" id="vendors-data">
+  <%- JSON.stringify(vendors || []) %>
+</script>
+<script type="application/json" id="prefill-data">
+  <%- typeof prefill !== 'undefined' ? JSON.stringify(prefill) : 'null' %>
+</script>
+
+<!-- ═══════════════════════════ SCRIPT ════════════════════════════ -->
+<script>
+  const orderToEdit = JSON.parse(document.getElementById('order-to-edit-data')?.textContent || 'null');
+  const prefill     = JSON.parse(document.getElementById('prefill-data')?.textContent || 'null');
+
+  /* ── Reorder prefill logic ─────────────────────────────────── */
+  let reorderItemsQueue = []; // [{typeKey, id, shortage}]
+
+  function initReorderItems() {
+    const params = new URLSearchParams(window.location.search);
+    const itemsRaw = params.get('items');
+    if (!itemsRaw) return;
+    
+    const tokens = itemsRaw.split(',').filter(Boolean);
+    tokens.forEach(t => {
+      const parts = t.split(':');
+      if (parts.length >= 2) {
+        reorderItemsQueue.push({
+          typeKey: parts[0],
+          id: parts[1],
+          shortage: parseInt(parts[2]) || 0
+        });
+      }
+    });
+
+    if (reorderItemsQueue.length > 0) {
+      if (window.showToast) window.showToast(`Loaded ${reorderItemsQueue.length} items from reorder list. Select a vendor & location to auto-add.`, false);
+    }
+  }
+
+  function autoAddFromReorder() {
+    if (reorderItemsQueue.length === 0) return;
+    const location = locationSelect?.value;
+    if (!location) return; 
+
+    let addedCount = 0;
+    fetchedAvailableItems.forEach(item => {
+      const match = reorderItemsQueue.find(ri => ri.typeKey === item.details?.type && String(ri.id) === String(item._id));
+      if (match) {
+        const itemCopy = JSON.parse(JSON.stringify(item));
+        if (match.shortage > 0) itemCopy.shortage = match.shortage;
+        
+        // addToCart has duplicate check internally
+        if (!cart.some(c => String(c.itemId) === String(itemCopy._id))) {
+          addToCart(itemCopy);
+          addedCount++;
+        }
+      }
+    });
+    if (addedCount > 0 && window.showToast) window.showToast(`Auto-added ${addedCount} items from reorder list.`, false);
+  }
+
+  /* ── Element refs ───────────────────────────────────────────── */
+  const vendorSelect      = document.getElementById('vendor-name');
+  const coordinatorSelect = document.getElementById('coordinator-name');
+  const locationSelect    = document.getElementById('vendor-location');
+  const contactInput      = document.getElementById('vendor-contact');
+  const itemTypeSelect    = document.getElementById('item-type');
+  const itemSelect        = document.getElementById('item-select');
+  const rateInput         = document.getElementById('item-rate');
+
+  // Edit-mode-only refs
+  const bindingIdInput    = document.getElementById('vendor-binding-id');
+  const quantityInput     = document.getElementById('quantity');
+  const estimatedDateInput= document.getElementById('estimated-date');
+  const remarksInput      = document.getElementById('remarks');
+
+  let vendorChoices, coordinatorChoices, locationChoices; // Choices only used for single item edit mode if needed
+
+  /* ── Cart state (create mode) ───────────────────────────────── */
+  let cart = [];     // [{itemId, itemType, vendorUserId, vendorBindingId, userLocation, quantity, displayName, typeKey, rate, shortage}]
+  let currentItemData = null; // data for the currently selected item in the selector
+
+  function setSelectOptions(selectEl, options, placeholder = 'Select') {
+    if (!selectEl) return;
+    selectEl.innerHTML = `<option value="" disabled selected hidden>${placeholder}</option>`;
+    options.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.customProperties) {
+        Object.keys(opt.customProperties).forEach(k => {
+          o.dataset[k] = typeof opt.customProperties[k] === 'object' ? JSON.stringify(opt.customProperties[k]) : opt.customProperties[k];
+        });
+      }
+      selectEl.appendChild(o);
+    });
+  }
+
+  function resetCoordinators() {
+    setSelectOptions(coordinatorSelect, [], 'Select Coordinator');
+    resetLocations();
+    resetItems();
+  }
+  function resetLocations() {
+    setSelectOptions(locationSelect, [], 'Select Location');
+    if (contactInput) contactInput.value = '';
+  }
+  function resetItems() {
+    // Hidden internal selects (if any) or shared reset logic
+    if (bindingIdInput) bindingIdInput.value = '';
+    if (rateInput) rateInput.value = '';
+    currentItemData = null;
+    clearItemDetails();
+    clearReorderBanner();
+    clearStockDisplay();
+    updateAddButton();
+  }
+
+  /* ── Stock display ──────────────────────────────────────────── */
+  function clearStockDisplay() {
+    const tot = document.getElementById('stat-total');
+    const bkd = document.getElementById('stat-booked');
+    const bal = document.getElementById('stat-balance');
+    const ph  = document.getElementById('stock-placeholder');
+    const lc  = document.getElementById('stock-locations');
+    if (tot) tot.textContent = '—';
+    if (bkd) bkd.textContent = '—';
+    if (bal) bal.textContent = '—';
+    if (ph) ph.style.display = '';
+    if (lc) lc.innerHTML = '';
+  }
+
+  function updateStockDisplay(stock) {
+    if (!stock) { clearStockDisplay(); return; }
+    document.getElementById('stat-total').textContent  = stock.totalStock ?? 0;
+    document.getElementById('stat-booked').textContent = stock.booked ?? 0;
+    document.getElementById('stat-balance').textContent= stock.balance ?? 0;
+    const ph = document.getElementById('stock-placeholder');
+    if (ph) ph.style.display = 'none';
+    const container = document.getElementById('stock-locations');
+    if (!container) return;
+    container.innerHTML = '';
+    (stock.locations || []).forEach(loc => {
+      const el = document.createElement('label');
+      el.className = 'location-option';
+      el.innerHTML = `<span class="location-label">${loc.location}:</span> <span class="location-qty">${loc.qty ?? 0}</span>`;
+      container.appendChild(el);
+    });
+  }
+
+  /* ── Item details (edit mode) ───────────────────────────────── */
+  function clearItemDetails() {
+    const el = document.getElementById('selected-item-details');
+    if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+  }
+  function showItemDetails(details) {
+    const el = document.getElementById('selected-item-details');
+    if (!el || !details) { clearItemDetails(); return; }
+    el.style.display = 'block';
+    const entries = [];
+    const push = (l, v) => { if (v !== null && v !== undefined && String(v).trim()) entries.push([l, v]); };
+    if (details.type === 'Tape')    { push('Product ID', details.productId); push('Paper Code', details.paperCode); push('GSM', details.gsm); push('Width', details.width); push('Meters', details.mtrs); push('Finish', details.finish); push('Vendor Paper Code', details.vendorPaperCode); push('Vendor GSM', details.vendorGsm); push('Min Qty', details.minQty); }
+    else if (details.type === 'PosRoll') { push('Product ID', details.productId); push('Paper Code', details.paperCode); push('GSM', details.gsm); push('Width', details.width); push('Meters', details.mtrs); push('Vendor Paper Code', details.vendorPaperCode); push('Min Qty', details.minQty); }
+    else if (details.type === 'Tafeta')  { push('Product ID', details.productId); push('Material Code', details.materialCode); push('GSM', details.gsm); push('Width', details.width); push('Meters', details.mtrs); push('Vendor Material Code', details.vendorPaperCode); push('Min Qty', details.minQty); }
+    else if (details.type === 'Ttr')     { push('Product ID', details.productId); push('Type', details.ttrType); push('Width', details.width); push('Meters', details.mtrs); push('Color', details.color); push('Ink Face', details.inkFace); push('Min Qty', details.minQty); }
+    el.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:4px 8px;">
+      ${entries.map(([l,v]) => `<div style="display:grid; grid-template-columns:140px 1fr; gap:6px; padding:4px 6px; border-bottom:1px solid #eef2f7;">
+        <div style="font-size:12px; color:#6b7280;">${l}</div>
+        <div style="font-size:12px; color:#111827; font-weight:600;">${v}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  /* ── Reorder banner ─────────────────────────────────────────── */
+  function clearReorderBanner() {
+    const el = document.getElementById('reorder-banner');
+    if (el) el.style.display = 'none';
+    const t = document.getElementById('reorder-banner-text');
+    if (t) t.textContent = '';
+  }
+  function showReorderBanner(shortage, minQty, stock) {
+    const el = document.getElementById('reorder-banner');
+    const t  = document.getElementById('reorder-banner-text');
+    if (!el || !t) return;
+    if (shortage > 0) {
+      t.textContent = `Reorder needed — Stock: ${stock} | Min Required: ${minQty} | Shortage: ${shortage}`;
+      el.style.display = 'block';
+    } else clearReorderBanner();
+  }
+
+  /* ── Add-to-cart button state ───────────────────────────────── */
+  function updateAddButton() {
+    const btn = document.getElementById('add-to-cart-btn');
+    if (!btn) return;
+    if (currentItemData && locationSelect?.value) {
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+      btn.style.cursor = 'pointer';
+      btn.classList.add('add-btn-ready');
+    } else {
+      btn.style.opacity = '.5';
+      btn.style.pointerEvents = 'none';
+      btn.style.cursor = 'pointer';
+      btn.classList.remove('add-btn-ready');
+    }
+  }
+
+  /* ── API Calls ──────────────────────────────────────────────── */
+  async function loadCoordinators(vendorId) {
+    if (!vendorId) { resetCoordinators(); return; }
+    try {
+      const res  = await fetch(`/sachiko/inventory/purchase/coordinators/${encodeURIComponent(vendorId)}`);
+      const data = await res.json();
+      if (!data.length) { setSelectOptions(coordinatorSelect, [], 'No coordinators found'); return; }
+      
+      const options = data.map(c => ({
+        value: String(c._id),
+        label: c.userName?.toUpperCase() || 'UNKNOWN',
+        customProperties: { contact: c.userContact || '—', locations: buildLocationList(c) }
+      }));
+      setSelectOptions(coordinatorSelect, options, 'Select Coordinator');
+      
+      if (options.length === 1) {
+        coordinatorSelect.value = options[0].value;
+        coordinatorSelect.dispatchEvent(new Event('change'));
+      }
+    } catch (err) {
+      console.error('loadCoordinators error:', err);
+      setSelectOptions(coordinatorSelect, [], 'Error loading');
+    }
+  }
+
+  function buildLocationList(coordinator) {
+    const locs = [];
+    if (coordinator.userLocation) locs.push(coordinator.userLocation);
+    if (Array.isArray(coordinator.locationDetails)) {
+      coordinator.locationDetails.forEach(ld => {
+        const l = ld.userLocation || ld.location || ld.dispatchAddress;
+        if (l && !locs.includes(l)) locs.push(l);
+      });
+    }
+    return locs;
+  }
+
+  function applyCoordinatorDetails(sel) {
+    const p = sel.customProperties || {};
+    if (contactInput) contactInput.value = p.contact || '—';
+    const locs = p.locations || [];
+    const options = locs.map(l => ({ value: l, label: l }));
+    setSelectOptions(locationSelect, options, 'Select Location');
+    if (locs.length === 1) {
+      locationSelect.value = locs[0];
+    }
+    // Load items if type exists
+    const type = itemTypeSelect?.value;
+    if (type && sel.value) loadItems(type, sel.value, locationSelect?.value);
+  }
+
+  /* ── Available Items ───────────────────────────────────────── */
+  let fetchedAvailableItems = []; // cache for currently fetched items
+
+  async function loadItems(type, vendorUserId, location) {
+    const listEl = document.getElementById('available-items-list');
+    const container = document.getElementById('available-items-container');
+    if (!type || !vendorUserId) {
+      if (container) container.style.display = 'none';
+      fetchedAvailableItems = [];
+      return;
+    }
+
+    if (!location) {
+      if (container) container.style.display = 'flex';
+      fetchedAvailableItems = [];
+      if (listEl) listEl.innerHTML = '<div style="padding:20px; text-align:center; color:#9ca3af; font-size:13px;">Select a location to see available items.</div>';
+      return;
+    }
+
+    if (container) container.style.display = 'flex';
+    if (listEl) listEl.innerHTML = '<div style="padding:20px; text-align:center; color:#9ca3af; font-size:13px;">Loading items...</div>';
+
+    try {
+      const res  = await fetch(`/sachiko/inventory/purchase/items/${encodeURIComponent(type)}/${encodeURIComponent(vendorUserId)}?location=${encodeURIComponent(location)}`);
+      fetchedAvailableItems = await res.json();
+      renderAvailableItems();
+      autoAddFromReorder();
+    } catch (err) {
+      console.error('loadItems error:', err);
+      if (listEl) listEl.innerHTML = '<div style="padding:20px; text-align:center; color:#dc2626; font-size:13px;">Error loading items.</div>';
+    }
+  }
+
+  function renderAvailableItems() {
+    const listEl = document.getElementById('available-items-list');
+    if (!listEl) return;
+    
+    // Filter out items already in the cart
+    const filtered = fetchedAvailableItems.filter(item => {
+      return !cart.some(c => String(c.itemId) === String(item._id));
+    });
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = `<div style="padding:20px; text-align:center; color:#9ca3af; font-size:13px;">
+        ${fetchedAvailableItems.length > 0 ? 'All items added to order.' : 'No items found for this coordinator and type.'}
+      </div>`;
+      return;
+    }
+
+    listEl.innerHTML = '';
+    let currentGroup = null;
+    filtered.forEach((item, idx) => {
+      const stock = item.stock || { totalStock: 0, booked: 0, balance: 0, pendingPo: 0 };
+      
+      let itemGroup = 'shortage';
+      if ((stock.pendingPo || 0) > 0) itemGroup = 'pending';
+      else if (item.shortage === 0) itemGroup = 'regular';
+
+      if (itemGroup !== currentGroup) {
+        const separator = document.createElement('div');
+        separator.style.cssText = "background: #044a78; padding: 10px 15px; border-top: 1px solid #ffffff; border-bottom: 1px solid #033d63; font-size: 11px; font-weight: 800; color: #ffffff; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 8px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);";
+        
+        if (itemGroup === 'shortage') {
+          separator.innerHTML = `<i class="fa-solid fa-boxes-stacked" style="color: #ffffff; opacity: 0.9;"></i> Reorder Items`;
+        } else if (itemGroup === 'regular') {
+          separator.innerHTML = `<i class="fa-solid fa-list-check" style="color: #ffffff; opacity: 0.9;"></i> Regular Stock Items`;
+        } else if (itemGroup === 'pending') {
+          separator.innerHTML = `<i class="fa-regular fa-clock" style="color: #ffffff; opacity: 0.9;"></i> Pending PO`;
+        }
+        listEl.appendChild(separator);
+      }
+      currentGroup = itemGroup;
+
+      const row = document.createElement('div');
+      row.className = 'cart-item-row';
+      row.style.background = idx % 2 === 0 ? '#fff' : '#f9fafb';
+      
+      row.innerHTML = `
+        <div class="cc-info">
+          <div style="font-size:13px; font-weight:700; color:#1e3a5f;">${escHtml(item.displayName)}</div>
+          <div style="font-size:11px; color:#6b7280; margin-top:2px;">ID: ${escHtml(item.details?.productId || '—')}</div>
+        </div>
+        <div class="cc-shortage">
+          ${item.shortage > 0 
+            ? `<span style="background:#fee2e2; color:#dc2626; border:1px solid #fecaca; border-radius:6px; padding:2px 8px; font-weight:800; font-size:12px;">${item.shortage}</span>` 
+            : `<span style="color:#9ca3af; font-size:12px;">—</span>`}
+        </div>
+        <div class="cc-rate" style="font-size:13px; font-weight:600; color:#374151;">${item.rate > 0 ? item.rate : '—'}</div>
+        <div class="cc-loc">
+          <div>Stock: <strong>${stock.totalStock}</strong> | Bal: <strong style="color:${stock.balance > 0 ? '#059669' : '#dc2626'};">${stock.balance}</strong>
+            ${stock.pendingPo > 0 ? ` | <span style="color:#d97706;">po: <strong>${stock.pendingPo}</strong></span>` : ''}
+          </div>
+          <div style="font-size:10px; color:#9ca3af;">Min Required: ${item.minQty}</div>
+        </div>
+        <div class="cc-remove">
+          <button type="button" 
+            onclick='addToCart(${JSON.stringify(item).replace(/'/g, "&apos;")})'
+            style="background:#059669; color:white; border:none; border-radius:6px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer;"
+          ><i class="fa-solid fa-plus"></i></button>
+        </div>
+      `;
+      listEl.appendChild(row);
+    });
+  }
+
+  /* ── Cart ───────────────────────────────────────────────────── */
+  function addToCart(item) {
+    if (!item) return;
+    const location = locationSelect?.value;
+    if (!location) { alert('Please select a delivery location.'); return; }
+
+    const coordId   = coordinatorChoices?.getValue(true) || coordinatorSelect?.value;
+    
+    // Duplicate check
+    if (cart.some(c => String(c.itemId) === String(item._id))) {
+      return;
+    }
+
+    const typeKey = item.details?.type || itemTypeChoices?.getValue(true) || 'Item';
+
+    const entry = {
+      itemId:          item._id,
+      itemType:        typeKey,
+      displayName:     item.displayName,
+      typeKey:         typeKey,
+      rate:            item.rate || 0,
+      shortage:        item.shortage || 0,
+      minQty:          item.minQty || 0,
+      vendorUserId:    coordId,
+      vendorBindingId: item.bindingId || '',
+      userLocation:    location,
+      quantity:        item.shortage > 0 ? item.shortage : (item.minQty || 1),
+    };
+
+    cart.push(entry);
+    renderCart();
+    renderAvailableItems(); // Re-render to remove from available list
+
+    if (window.showToast) window.showToast(`${item.displayName} added!`, false);
+  }
+
+  function removeFromCart(idx) {
+    cart.splice(idx, 1);
+    renderCart();
+    renderAvailableItems(); // Re-render to restore to available list
+  }
+
+  function renderCart() {
+    const rowsEl  = document.getElementById('cart-rows');
+    const emptyEl = document.getElementById('cart-empty');
+    const submitBtn = document.getElementById('submit-multi-po');
+
+    if (!rowsEl) return;
+    rowsEl.innerHTML = '';
+
+    if (cart.length === 0) {
+      if (emptyEl) emptyEl.style.display = '';
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = '.5'; submitBtn.style.cursor = 'not-allowed'; }
+    } else {
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = '1'; submitBtn.style.cursor = 'pointer'; }
+    }
+
+    // type badge colours
+    const typeColors = { Tape:'#0369a1', PosRoll:'#7c3aed', Tafeta:'#065f46', Ttr:'#92400e' };
+
+    cart.forEach((item, idx) => {
+      const row = document.createElement('div');
+      row.className = 'cart-item-row';
+      row.innerHTML = `
+        <div class="cc-info">
+          <div style="font-size:13px; font-weight:700; color:#1e3a5f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escHtml(item.displayName)}">${escHtml(item.displayName)}</div>
+        </div>
+        <div class="cc-type">
+          <span style="background:${typeColors[item.typeKey]||'#044a78'}; color:white; border-radius:4px; padding:2px 7px; font-size:10px; font-weight:800; text-transform:uppercase;">${escHtml(item.typeKey)}</span>
+        </div>
+        <div class="cc-shortage">
+          ${item.shortage > 0
+            ? `<span style="background:#fee2e2; color:#dc2626; border:1px solid #fecaca; border-radius:6px; padding:3px 8px; font-weight:800; font-size:13px;">${item.shortage}</span>`
+            : `<span style="color:#9ca3af; font-size:13px;">—</span>`}
+        </div>
+        <div class="cc-rate" style="font-size:13px; font-weight:600; color:#374151;">${item.rate > 0 ? item.rate : '—'}</div>
+        <div class="cc-loc" style="font-size:12px; color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escHtml(item.userLocation)}">${escHtml(item.userLocation)}</div>
+        <div class="cc-qty">
+          <input type="number" min="1" value="${item.quantity}"
+            style="width:100%; height:34px; font-size:14px; font-weight:600; border:1.5px solid #d1d5db; padding:0 8px; border-radius:6px; text-align:center;"
+            onchange="updateCartQty(${idx}, this.value)"
+          />
+        </div>
+        <div class="cc-remove">
+          <button type="button" onclick="confirmRemove(${idx})"
+            style="background:#fee2e2; color:#dc2626; border:1px solid #fecaca; border-radius:6px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .2s;"
+          ><i class="fa-solid fa-trash-can"></i></button>
+        </div>
+      `;
+      rowsEl.appendChild(row);
+    });
+
+    // update summary badges
+    document.getElementById('queue-count').textContent = cart.length;
+    document.getElementById('shortage-sum').textContent = cart.reduce((s, i) => s + Number(i.shortage || 0), 0);
+  }
+
+  function updateCartQty(idx, val) {
+    if (cart[idx]) cart[idx].quantity = Math.max(1, parseInt(val) || 1);
+  }
+
+  /* ── Confirm remove modal ───────────────────────────────────── */
+  let pendingRemoveIdx = null;
+  const modal = document.getElementById('confirmModal');
+  document.getElementById('confirmCancel')?.addEventListener('click', () => { modal?.classList.remove('show'); pendingRemoveIdx = null; });
+  document.getElementById('confirmDelete')?.addEventListener('click', () => {
+    if (pendingRemoveIdx !== null) { removeFromCart(pendingRemoveIdx); pendingRemoveIdx = null; }
+    modal?.classList.remove('show');
+  });
+  if (modal) modal.onclick = e => { if (e.target === modal) { modal.classList.remove('show'); pendingRemoveIdx = null; } };
+
+  function confirmRemove(idx) {
+    pendingRemoveIdx = idx;
+    modal?.classList.add('show');
+  }
+
+  /* ── Submit ─────────────────────────────────────────────────── */
+  function submitMultiPO() {
+    if (cart.length === 0) { alert('No items in the purchase queue.'); return; }
+    const poNumber      = document.getElementById('po-number').value.trim();
+    const estimatedDate = document.getElementById('estimated-date').value;
+    if (!poNumber)      { alert('Please enter a PO Number.'); document.getElementById('po-number').focus(); return; }
+    if (!estimatedDate) { alert('Please select Expected Delivery date.'); document.getElementById('estimated-date').focus(); return; }
+
+    // Sync quantities from inputs before serialising
+    document.querySelectorAll('#cart-rows input[type="number"]').forEach((inp, idx) => {
+      if (cart[idx]) cart[idx].quantity = Math.max(1, parseInt(inp.value) || 1);
+    });
+
+    document.getElementById('f-items').value = JSON.stringify(cart);
+    document.getElementById('multi-po-form').submit();
+  }
+
+  /* ── Utility ────────────────────────────────────────────────── */
+  function escHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── DOMContentLoaded ───────────────────────────────────────── */
+  /* ── Initialization ─────────────────────────────────────────── */
+  document.addEventListener('DOMContentLoaded', () => {
+    // Default estimated date +7 days
+    const dateInput = document.getElementById('estimated-date');
+    if (dateInput && !dateInput.value) {
+      const d = new Date(); d.setDate(d.getDate() + 7);
+      dateInput.value = d.toISOString().split('T')[0];
+    }
+
+    // Vendor change
+    if (vendorSelect) vendorSelect.addEventListener('change', function() {
+      const vendorId = this.value;
+      resetCoordinators();
+      resetItems();
+      if (vendorId) loadCoordinators(vendorId);
+    });
+
+    // Coordinator change
+    if (coordinatorSelect) coordinatorSelect.addEventListener('change', function() {
+      const selectedId = this.value;
+      const opt = this.options[this.selectedIndex];
+      if (selectedId && opt.dataset.contact) {
+        applyCoordinatorDetails({ 
+          value: selectedId, 
+          customProperties: { locations: JSON.parse(opt.dataset.locations || '[]'), contact: opt.dataset.contact } 
+        });
+      } else {
+        resetLocations();
+        resetItems();
+      }
+    });
+
+    // Location change → update add button, reload items for this location
+    if (locationSelect) locationSelect.addEventListener('change', () => {
+      updateAddButton();
+      const type   = itemTypeSelect?.value;
+      const userId = coordinatorSelect?.value;
+      if (type && userId) loadItems(type, userId, locationSelect.value);
+      autoAddFromReorder();
+    });
+
+    // Item type change → reload items
+    if (itemTypeSelect) itemTypeSelect.addEventListener('change', function() {
+      resetItems();
+      const type   = this.value;
+      const userId = coordinatorSelect?.value;
+      if (type && userId) loadItems(type, userId, locationSelect?.value);
+    });
+
+    // Edit / prefill
+    if (orderToEdit) initEditMode();
+    else if (prefill) initCreateModeWithPrefill();
+    
+    initReorderItems();
+  });
+
+  /* ── Create mode prefill init ───────────────────────────────── */
+  async function initCreateModeWithPrefill() {
+    if (!prefill) return;
+
+    if (prefill.vendorId) {
+      vendorSelect.value = prefill.vendorId;
+      await loadCoordinators(prefill.vendorId);
+    }
+    
+    if (prefill.vendorUserId) {
+      coordinatorSelect.value = prefill.vendorUserId;
+      // Manually trigger the change logic to load locations and contact
+      const opt = coordinatorSelect.options[coordinatorSelect.selectedIndex];
+      if (opt && opt.dataset.contact) {
+        applyCoordinatorDetails({ 
+          value: coordinatorSelect.value, 
+          customProperties: { locations: JSON.parse(opt.dataset.locations || '[]'), contact: opt.dataset.contact } 
+        });
+      }
+    }
+
+    if (prefill.itemType) {
+      itemTypeSelect.value = prefill.itemType;
+      // Trigger item type change to load available items
+      const userId = coordinatorSelect?.value;
+      if (prefill.itemType && userId) loadItems(prefill.itemType, userId, locationSelect?.value);
+    }
+  }
+
+  /* ── Edit mode init ─────────────────────────────────────────── */
+  async function initEditMode() {
+    const vId = orderToEdit.vendorUserId?.vendorId || '';
+    if (vId) {
+      vendorSelect.value = vId;
+      await loadCoordinators(vId);
+    }
+    const cId = String(orderToEdit.vendorUserId?._id || orderToEdit.vendorUserId || '');
+    if (cId) {
+      coordinatorSelect.value = cId;
+      coordinatorSelect.dispatchEvent(new Event('change'));
+    }
+    if (orderToEdit.userLocation) {
+      setTimeout(() => { if (locationSelect) locationSelect.value = orderToEdit.userLocation; }, 500);
+    }
+    if (orderToEdit.onModel) itemTypeSelect.value = orderToEdit.onModel;
+    if (orderToEdit.quantity) quantityInput.value = orderToEdit.quantity;
+    if (orderToEdit.poNumber) document.getElementById('po-number').value = orderToEdit.poNumber;
+    if (orderToEdit.estimatedDate) estimatedDateInput.value = new Date(orderToEdit.estimatedDate).toISOString().split('T')[0];
+    if (orderToEdit.remarks) remarksInput.value = orderToEdit.remarks || '';
+  }
+</script>

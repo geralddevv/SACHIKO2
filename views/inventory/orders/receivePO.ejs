@@ -1,0 +1,473 @@
+<% layout('/layout/boilerplate') -%>
+
+<div class="main-content">
+  <form id="receive-po-form" action="/sachiko/purchase/receive" method="post" class="needs-validation" autocomplete="off" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="orderId" value="<%= order._id %>" />
+    <input type="hidden" name="location" id="selected-location-input" />
+
+    <%
+      const vendor = order.vendorUserId?.vendorName || 'N/A';
+      const coordinator = order.vendorUserId?.userName || 'N/A';
+      const contact = order.vendorUserId?.userContact || 'N/A';
+      const userLoc = order.vendorUserId?.userLocation || 'N/A';
+      const poNum = order.poNumber || 'N/A';
+      const orderedQty = order.quantity || 0;
+      const receivedSoFar = order.receivedQuantity || 0;
+      const remaining = Math.max(orderedQty - receivedSoFar, 0);
+    %>
+
+    <!-- Page Heading -->
+    <div class="span-full form-heading">
+      <h1>Inward Purchase Order</h1>
+    </div>
+
+    <!-- Location selector bar (mirrors the sales order stock bar) -->
+    <div id="stock-display" class="span-full" style="display: flex; padding: 10px 15px; background: #fff; border: 1px solid #044A78; border-radius: 0.5rem; overflow-x: auto; overflow-y: hidden;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 22px; flex-wrap: nowrap; width: max-content; min-width: 100%;">
+
+        <!-- Location radio buttons -->
+        <div id="location-radios" style="display: flex; flex-wrap: nowrap; align-items: center; white-space: nowrap; gap: 4px;">
+          <% locations.forEach((loc, i) => { %>
+            <label class="location-option<%= i === 0 ? ' selected' : '' %>" data-location="<%= loc %>">
+              <input
+                type="radio"
+                name="locationRadio"
+                class="location-radio"
+                value="<%= loc %>"
+                <%= i === 0 ? 'checked' : '' %> />
+              <span class="location-label"><%= loc %></span>
+            </label>
+          <% }) %>
+          <% if (!locations || locations.length === 0) { %>
+            <span style="color:#ef4444; font-size:13px; font-weight:600;">
+              <i class="fa-solid fa-triangle-exclamation"></i> No locations found. Please add a location first.
+            </span>
+          <% } %>
+        </div>
+
+
+
+      </div>
+    </div>
+
+    <!-- Purchase Info section -->
+      <div class="span-full form-subheading">
+        <h1>Purchase Details</h1>
+      </div>
+
+    <!-- Row 1: Purchase Context -->
+    <div class="span-five">
+      <label>Item Type</label>
+      <input type="text" class="form-control" value="<%= order.onModel === 'PosRoll' ? 'POS Roll' : order.onModel %>" readonly style="background:#f8fafc;" />
+    </div>
+
+    <div class="span-seven">
+      <label>Vendor</label>
+      <input type="text" class="form-control" value="<%= vendor %>" readonly style="background:#f8fafc;" />
+    </div>
+
+    <div class="span-seven">
+      <label>Coordinator</label>
+      <input type="text" class="form-control" value="<%= coordinator %>" readonly style="background:#f8fafc;" />
+    </div>
+
+    <div class="span-six">
+      <label>Coordinator Contact</label>
+      <input type="text" class="form-control" value="<%= contact %>" readonly style="background:#f8fafc;" />
+    </div>
+
+    <div class="span-seven">
+      <label>Coordinator Location</label>
+      <input type="text" class="form-control" value="<%= userLoc %>" readonly style="background:#f8fafc;" />
+    </div>
+
+    <!-- Detailed Specifications section (Compact style) -->
+    <div id="selected-item-details" class="span-full" style="padding: 0; background: #fff; border: 1px solid #044A78; border-radius: 4px; margin: 5px 0; width: 100%; height: auto;">
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); width: 100%;">
+        <% 
+          const specs = [];
+          const d = order.itemId || {};
+          if (order.onModel === "Tape") {
+            specs.push(["Paper Code", d.tapePaperCode]);
+            specs.push(["GSM", d.tapeGsm]);
+            specs.push(["Paper Type", d.tapePaperType]);
+            specs.push(["Width", d.tapeWidth]);
+            specs.push(["Meters", d.tapeMtrs]);
+            specs.push(["Core ID", d.tapeCoreId]);
+            specs.push(["Finish", d.tapeFinish]);
+            specs.push(["Adhesive GSM", d.tapeAdhesiveGsm]);
+          } else if (order.onModel === "Ttr") {
+            specs.push(["TTR Type", d.ttrType]);
+            specs.push(["Color", d.ttrColor]);
+            specs.push(["Material Code", d.ttrMaterialCode]);
+            specs.push(["Width", d.ttrWidth]);
+            specs.push(["Meters", d.ttrMtrs]);
+            specs.push(["Ink Face", d.ttrInkFace]);
+            specs.push(["Core ID", d.ttrCoreId]);
+            specs.push(["Core Length", d.ttrCoreLength]);
+            specs.push(["Notch", d.ttrNotch]);
+            specs.push(["Winding", d.ttrWinding]);
+          } else if (order.onModel === "PosRoll") {
+            specs.push(["Paper Code", d.posPaperCode]);
+            specs.push(["Paper Type", d.posPaperType]);
+            specs.push(["GSM", d.posGsm]);
+            specs.push(["Color", d.posColor]);
+            specs.push(["Width", d.posWidth]);
+            specs.push(["Meters", d.posMtrs]);
+            specs.push(["Core ID", d.posCoreId]);
+          } else if (order.onModel === "Tafeta") {
+            specs.push(["Material Code", d.tafetaMaterialCode]);
+            specs.push(["Material Type", d.tafetaMaterialType]);
+            specs.push(["GSM", d.tafetaGsm]);
+            specs.push(["Color", d.tafetaColor]);
+            specs.push(["Width", d.tafetaWidth]);
+            specs.push(["Meters", d.tafetaMtrs]);
+            specs.push(["Core Length", d.tafetaCoreLength]);
+            specs.push(["Notch", d.tafetaNotch]);
+            specs.push(["Core ID", d.tafetaCoreId]);
+          }
+        %>
+
+        <% specs.forEach(([label, value], i) => { %>
+          <% if (value !== null && value !== undefined && String(value).trim() !== "") { %>
+            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px; padding: 6px 10px; border-bottom: 1px solid #eef2f7; border-right: <%= (i + 1) % 5 === 0 ? 'none' : '1px solid #e5e7eb' %>; line-height: 1.2;">
+              <div style="font-size: 13px; color: #6b7280;"><%= label %>:</div>
+              <div style="font-size: 13px; color: #111827; font-weight: 600;"><%= value %></div>
+            </div>
+          <% } %>
+        <% }) %>
+        
+        <!-- Fill empty cells to maintain grid borders if needed -->
+        <% 
+          const remainder = specs.length % 5;
+          if (remainder !== 0) {
+            for(let j = 0; j < (5 - remainder); j++) { %>
+               <div style="border-bottom: 1px solid #eef2f7; border-right: <%= (remainder + j + 1) % 5 === 0 ? 'none' : '1px solid #e5e7eb' %>;"></div>
+            <% } 
+          }
+        %>
+      </div>
+    </div>
+
+    <div class="span-full form-subheading">
+      <h1>Purchase info</h1>
+    </div>
+
+    <div class="span-six">
+      <label>Ordered Quantity</label>
+      <input type="text" class="form-control" value="<%= orderedQty %>" readonly style="background:#f8fafc;" />
+    </div>
+
+    <div class="span-five">
+      <label>PO Number</label>
+      <input type="text" class="form-control" value="<%= poNum %>" readonly style="background:#f8fafc;" />
+    </div>
+
+    <div class="span-five">
+      <label>Inwarded So Far</label>
+      <input type="text" class="form-control" value="<%= receivedSoFar %>" readonly style="background:#f8fafc;" />
+    </div>
+
+    <div class="span-six">
+      <label>Estimated Delivery</label>
+      <input type="text" class="form-control" value="<%= new Date(order.estimatedDate).toLocaleDateString('en-IN') %>" readonly style="background:#f8fafc;" />
+    </div>
+
+    <!-- PO Remarks -->
+    <div class="span-penta">
+      <label>Original PO Remarks</label>
+      <input type="text" class="form-control" value="<%= order.remarks || 'No remarks provided' %>" readonly style="background:#f8fafc; font-style: italic;" />
+    </div>
+
+    <!-- Partial Inward Indicator -->
+    <% if (receivedSoFar > 0) { 
+        const inwardLocs = [...new Set(logs.map(l => {
+            if (l.location) return l.location;
+            const match = l.remarks?.match(/Inward to\s+(.*?)\s*[.\n]/i);
+            return match ? match[1].trim() : null;
+        }).filter(Boolean))];
+        const locSuffix = inwardLocs.length > 0 ? ` at ${inwardLocs.join(', ')}` : '';
+    %>
+      <div class="span-full" style="padding: 12px 15px; background: #e0f2fe; border: 1px solid #0369a1; border-radius: 0.5rem; color: #0369a1; font-size: 14px; margin-bottom: 15px; display: flex; flex-direction: row; align-items: center; gap: 10px;">
+        <i class="fa-solid fa-circle-info" style="font-size: 18px;"></i>
+        <span><strong>Partial Inward:</strong> Already inwarded <%= receivedSoFar %> of <%= orderedQty %><%= locSuffix %>. Remaining to inward: <strong><%= remaining %></strong>.</span>
+      </div>
+    <% } %>
+
+    <!-- Partial Receipt Logs (Mirrors Sales Order Dispatch Logs) -->
+    <% if (typeof logs !== 'undefined' && logs.length > 0) { %>
+      <div id="logs-wrapper" class="span-full" style="padding: 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 0.5rem; color: #0369a1; font-size: 14px; margin-bottom: 20px;">
+        <% 
+          let runningRemaining = order.quantity; 
+        %>
+        
+        <div style="display: flex; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e0f2fe;">
+            <span><strong>Inward History:</strong> Already inwarded <%= receivedSoFar %> total / <%= remaining %> remaining</span>
+        </div>
+
+        <div class="logs-scroll" style="max-height: 150px; overflow-y: auto; padding-right: 5px; width: 100%;">
+            <% 
+               // Logs are sorted newest first. To calculate running balance correctly for each row, 
+               // we need the full sum for that point in time. 
+               // Actually, simplest is to just show the logs:
+               logs.forEach((log, index) => { 
+            %>
+            <div style="padding: 6px 0; border-bottom: 1px dashed #e0f2fe; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+                <span>
+                    <span style="color: #64748b; font-size: 12px; margin-right: 15px;">
+                        <%= new Date(log.createdAt).toLocaleDateString('en-IN', { month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+                    </span>
+                    <span style="margin-left: 6px;"><strong><%= log.quantity %></strong> inwarded</span>
+                </span>
+                <span style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                    <button type="button" data-log-id="<%= log._id %>" data-log-qty="<%= log.quantity %>" data-log-remarks="<%= log.remarks || '' %>"
+                        onclick="openEditDialog(this.getAttribute('data-log-id'), parseInt(this.getAttribute('data-log-qty')), this.getAttribute('data-log-remarks'))"
+                        style="background: none; border: none; color: #3b82f6; cursor: pointer; padding: 2px 4px; font-size: 13px; border-radius: 4px; transition: background 0.2s;"
+                        onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background='none'"
+                        title="Edit Log">
+                        <i class="fa-solid fa-pencil"></i>
+                    </button>
+                    <button type="button" onclick="confirmDeleteLog('<%= log._id %>')"
+                        style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 2px 4px; font-size: 13px; border-radius: 4px; transition: background 0.2s;"
+                        onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'"
+                        title="Delete Log">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </span>
+            </div>
+            <% }) %>
+        </div>
+      </div>
+      
+      <style>
+        .logs-scroll::-webkit-scrollbar { width: 4px; }
+        .logs-scroll::-webkit-scrollbar-track { background: transparent; }
+        .logs-scroll::-webkit-scrollbar-thumb { background-color: rgba(4, 74, 120, 0.3); border-radius: 6px; }
+      </style>
+    <% } %>
+
+    <!-- Inward Details subheading -->
+    <div class="span-full form-subheading">
+      <h1>Inward Details</h1>
+    </div>
+
+    <!-- Inward Quantity -->
+    <div class="span-half">
+      <label for="received-qty">Inward Quantity <span style="color:#ef4444;">*</span></label>
+      <input
+        type="number"
+        id="received-qty"
+        name="receivedQuantity"
+        class="form-control"
+        value="<%= remaining %>"
+        min="1"
+        max="<%= remaining %>"
+        required />
+    </div>
+
+    <!-- Receiving remarks -->
+    <div class="span-half">
+      <label for="remarks">Remarks (Optional)</label>
+      <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Any notes about received stock..." />
+    </div>
+
+    <!-- Location validation warning -->
+    <div id="location-warning" class="span-full" style="display: none; padding: 8px 15px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 0.5rem; color: #92400e; font-size: 14px; font-weight: 500;">
+      <i class="fa-solid fa-triangle-exclamation" style="margin-right: 6px;"></i>
+      Please select a receiving location from the bar above before submitting.
+    </div>
+
+    <!-- Submit -->
+    <div class="span-full btn-grp">
+      <button type="submit">
+        <i class="fa-solid fa-check-double"></i> Confirm & Inward Stock
+      </button>
+    </div>
+
+  </form>
+</div>
+
+<!-- ================= EDIT LOG DIALOG ================= -->
+<div id="edit-log-dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+  <div style="background:white; border-radius:8px; width:440px; max-width:90%; box-shadow:0 4px 15px rgba(0,0,0,0.2); overflow:hidden;">
+    <div style="padding:20px 20px 0; border-bottom: 1px solid #e5e7eb;">
+      <h3 style="margin:0 0 15px; color:#044A78; font-size:17px;"><i class="fa-solid fa-pencil" style="margin-right:6px;"></i>Edit Inward Log</h3>
+    </div>
+    <div style="padding:20px;">
+      <input type="hidden" id="edit-log-id" />
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Inward Quantity <span style="color:#ef4444">*</span></label>
+        <input type="number" id="edit-log-qty" min="1" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; box-sizing:border-box;" />
+      </div>
+      <div style="margin-bottom:4px;">
+        <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Remarks</label>
+        <input type="text" id="edit-log-remarks" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; box-sizing:border-box;" />
+      </div>
+    </div>
+    <div style="padding:15px 20px; background:#f9fafb; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb;">
+      <button type="button" onclick="closeEditDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer; font-weight:500;">Cancel</button>
+      <button type="button" onclick="submitEditLog()" style="padding:8px 16px; border:none; background:#044A78; color:white; border-radius:6px; cursor:pointer; font-weight:500;">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= DELETE LOG DIALOG ================= -->
+<div id="delete-log-dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+  <div style="background:white; border-radius:8px; width:400px; max-width:90%; box-shadow:0 4px 15px rgba(0,0,0,0.2); overflow:hidden;">
+    <div style="padding:25px 20px; text-align:center;">
+      <i class="fa-solid fa-triangle-exclamation" style="font-size:28px; color:#ef4444; margin-bottom:12px;"></i>
+      <p style="margin:0; color:#333; font-size:16px; line-height:1.5;">Are you sure you want to <strong>delete</strong> this inward log? Stock will be reversed.</p>
+      <input type="hidden" id="delete-log-id" />
+    </div>
+    <div style="padding:15px 20px; background:#f9fafb; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb;">
+      <button type="button" onclick="closeDeleteDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer; font-weight:500;">Go Back</button>
+      <button type="button" onclick="submitDeleteLog()" style="padding:8px 16px; border:none; background:#ef4444; color:white; border-radius:6px; cursor:pointer; font-weight:500;">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .location-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 5px;
+    cursor: pointer;
+    padding: 5px 8px;
+    border-radius: 0.4rem;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+
+  .location-option:hover {
+    background: #f0f0ff;
+  }
+
+  .location-option.selected {
+    border-color: #044A78;
+    background: #eef0ff;
+  }
+
+  .location-radio {
+    accent-color: #044A78;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+
+  .location-label {
+    color: #044A78;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .location-qty {
+    font-weight: 700;
+    color: #044A78;
+    font-size: 15px;
+  }
+</style>
+
+<script>
+  // Sync hidden location input with radio selection
+  function syncLocation() {
+    const selected = document.querySelector('.location-radio:checked');
+    const hiddenInput = document.getElementById('selected-location-input');
+
+    // Update visual selected state
+    document.querySelectorAll('.location-option').forEach(label => {
+      label.classList.toggle('selected', label.querySelector('.location-radio')?.checked);
+    });
+
+    if (selected) {
+      hiddenInput.value = selected.value;
+      document.getElementById('location-warning').style.display = 'none';
+    } else {
+      hiddenInput.value = '';
+    }
+  }
+
+  // Set initial value on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    const radios = document.querySelectorAll('.location-radio');
+    radios.forEach(r => r.addEventListener('change', syncLocation));
+    syncLocation();
+  });
+
+  // Guard: require location before submit
+  document.getElementById('receive-po-form').addEventListener('submit', function (e) {
+    const loc = document.getElementById('selected-location-input').value;
+    if (!loc) {
+      e.preventDefault();
+      document.getElementById('location-warning').style.display = 'flex';
+      document.getElementById('stock-display').scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+
+  /* Log Management Logic */
+  function openEditDialog(logId, qty, remarks) {
+    document.getElementById('edit-log-id').value = logId;
+    document.getElementById('edit-log-qty').value = qty;
+    document.getElementById('edit-log-remarks').value = remarks;
+    document.getElementById('edit-log-dialog').style.display = 'flex';
+  }
+
+  function closeEditDialog() {
+    document.getElementById('edit-log-dialog').style.display = 'none';
+  }
+
+  async function submitEditLog() {
+    const logId = document.getElementById('edit-log-id').value;
+    const qty = document.getElementById('edit-log-qty').value;
+    const remarks = document.getElementById('edit-log-remarks').value;
+
+    try {
+      const resp = await fetch(`/sachiko/purchase/log/${logId}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '<%= csrfToken %>'
+        },
+        body: JSON.stringify({ quantity: qty, remarks: remarks })
+      });
+      const data = await resp.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        alert(data.message || 'Failed to update log');
+      }
+    } catch (err) {
+      alert('Error updating log: ' + err.message);
+    }
+  }
+
+  function confirmDeleteLog(logId) {
+    document.getElementById('delete-log-id').value = logId;
+    document.getElementById('delete-log-dialog').style.display = 'flex';
+  }
+
+  function closeDeleteDialog() {
+    document.getElementById('delete-log-dialog').style.display = 'none';
+  }
+
+  async function submitDeleteLog() {
+    const logId = document.getElementById('delete-log-id').value;
+    try {
+      const resp = await fetch(`/sachiko/purchase/log/${logId}`, {
+        method: 'DELETE',
+        headers: { 'X-CSRF-Token': '<%= csrfToken %>' }
+      });
+      const data = await resp.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        alert(data.message || 'Failed to delete log');
+      }
+    } catch (err) {
+      alert('Error deleting log: ' + err.message);
+    }
+  }
+</script>

@@ -1,0 +1,199 @@
+<% layout('/layout/boilerplate') %>
+
+<style>
+  .choices[data-type*="select-one"]::after {
+    display: block !important;
+    content: "" !important;
+    width: 12px !important;
+    height: 8px !important;
+    border-style: none !important;
+    border-width: 0 !important;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23044a78' stroke-width='2' fill='none'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-size: contain !important;
+    position: absolute !important;
+    right: 11.5px !important;
+    top: 50% !important;
+    margin-top: 0 !important;
+    transform: translateY(-50%) !important;
+  }
+  .choices[data-type*="select-one"].is-open::after {
+    transform: translateY(-50%) rotate(180deg) !important;
+  }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
+  <form
+    action="/sachiko/datasheet/form?_csrf=<%= encodeURIComponent(csrfToken) %>"
+    method="POST"
+    enctype="multipart/form-data"
+    class="needs-validation"
+    autocomplete="off"
+    novalidate
+  >
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+    <div class="span-full form-heading">
+      <h1>Product Datasheet</h1>
+    </div>
+
+    <!-- Product Code -->
+    <div style="grid-column: span 10; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Product</h1>
+      </div>
+      <div style="display: flex; gap: 1rem">
+        <div class="span-six">
+          <label for="productCode">Product Code</label>
+          <input
+            type="text"
+            id="productCode"
+            name="productCode"
+            class="form-control"
+            placeholder="Enter product code"
+            required
+          />
+        </div>
+        <div class="span-seven" style="flex: 1">
+          <label for="wordFile">Attach Word File</label>
+          <input type="file" id="wordFile" name="wordFile" class="form-control" accept=".doc,.docx" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Facestock -->
+    <div style="grid-column: span 22; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Facestock</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem">
+        <div class="span-six" style="grid-column: auto">
+          <label for="facestockFamily">Family</label>
+          <select id="facestockFamily" name="facestockFamily" class="form-control select-tag">
+            <option value="" disabled selected hidden>Select family</option>
+            <option value="CHROMO">CHROMO</option>
+            <option value="DT">DT</option>
+            <option value="MAPLITO">MAPLITO</option>
+            <option value="PP">PP</option>
+          </select>
+        </div>
+        <div class="span-six" style="grid-column: auto">
+          <label for="facestockType">Type</label>
+          <select id="facestockType" name="facestockType" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Select type</option>
+            <option value="CLEAR">CLEAR</option>
+            <option value="GLOSSY">GLOSSY</option>
+            <option value="MATT">MATT</option>
+            <option value="SEMI GLOSSY">SEMI GLOSSY</option>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label for="facestockGsm">GSM</label>
+          <input
+            type="number"
+            id="facestockGsm"
+            name="facestockGsm"
+            class="form-control"
+            placeholder="Enter GSM"
+            min="0"
+            step="any"
+          />
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label for="facestockMicron">Micron</label>
+          <input
+            type="number"
+            id="facestockMicron"
+            name="facestockMicron"
+            class="form-control"
+            placeholder="Enter Micron"
+            min="0"
+            step="any"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Adhesive -->
+    <div style="grid-column: span 12; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Adhesive</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem">
+        <div class="span-seven" style="grid-column: auto">
+          <label for="adhesiveType">Type</label>
+          <select id="adhesiveType" name="adhesiveType" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Select type</option>
+            <option value="ACRYLIC">ACRYLIC</option>
+            <option value="HOTMELT">HOTMELT</option>
+            <option value="HT">HT</option>
+            <option value="STAIN FREE">STAIN FREE</option>
+            <option value="WATERBASE">WATERBASE</option>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label for="adhesiveGsm">GSM</label>
+          <input
+            type="number"
+            id="adhesiveGsm"
+            name="adhesiveGsm"
+            class="form-control"
+            placeholder="Enter GSM"
+            min="0"
+            step="any"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- Release Liner -->
+    <div style="grid-column: span 20; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Release Liner</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem">
+        <div class="span-seven" style="grid-column: auto">
+          <label for="releaseLinerType">Type</label>
+          <select id="releaseLinerType" name="releaseLinerType" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Select type</option>
+            <option value="CCK">CCK</option>
+            <option value="GLASSINE">GLASSINE</option>
+            <option value="SCK">SCK</option>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label for="releaseLinerColor">Color</label>
+          <select id="releaseLinerColor" name="releaseLinerColor" class="form-control select-tag">
+            <option value="WHITE" selected>WHITE</option>
+            <option value="YELLOW">YELLOW</option>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label for="releaseLinerGsm">GSM</label>
+          <input
+            type="number"
+            id="releaseLinerGsm"
+            name="releaseLinerGsm"
+            class="form-control"
+            placeholder="Enter GSM"
+            min="0"
+            step="any"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-grp span-full">
+      <button type="submit">Save Datasheet</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    ["facestockFamily", "facestockType", "adhesiveType", "releaseLinerType", "releaseLinerColor"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) new Choices(el, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+    });
+  });
+</script>

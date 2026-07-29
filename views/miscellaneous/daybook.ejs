@@ -1,0 +1,594 @@
+<% layout('/layout/boilerplate') %>
+
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 2px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .header-action-btn:hover { background-color: #e4e4e4; }
+    #daybook-table { width: 100%; }
+    .row-btn {
+      padding: 3px 8px; border: none; border-radius: 4px;
+      cursor: pointer; font-size: 12px; color: #fff; transition: opacity 0.15s;
+    }
+    .row-btn:hover { opacity: 0.85; }
+    .dialog-header {
+      background: #044A78; padding: 18px 22px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-radius: 14px 14px 0 0;
+    }
+    .dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #fff; }
+    .dialog-close-btn {
+      background: none; border: none; color: #fff; font-size: 20px;
+      cursor: pointer; line-height: 1; padding: 0 2px; opacity: 0.8; transition: opacity 0.15s;
+    }
+    .dialog-close-btn:hover { opacity: 1; }
+    .dialog-body { padding: 24px; background: #fff; border-radius: 0 0 14px 14px; }
+    .dialog-field-label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px; }
+    .dialog-field-group { margin-bottom: 16px; }
+    .dialog-error { color: #ef4444; font-size: 12px; margin-top: 5px; display: none; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .empty-hint { color: #64748b; font-size: 13px; padding: 10px 2px; }
+
+    /* Task picker (Add to Daybook dialog) */
+    .picker-search-wrap { position: relative; margin-bottom: 12px; }
+    .picker-search-wrap i {
+      position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+      color: #94a3b8; font-size: 13px; pointer-events: none;
+    }
+    .picker-search-input {
+      width: 100%; box-sizing: border-box; padding: 16px 20px 16px 44px;
+      border-radius: 10px; border: 1.5px solid #e2e8f0; background: #f8fafc;
+      font-size: 14px; color: #1e293b; transition: border-color 0.15s, background 0.15s;
+    }
+    .picker-search-input:focus {
+      outline: none; border-color: #044a78; background: #fff;
+    }
+    .picker-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px; font-size: 12px; color: #64748b;
+    }
+    .picker-toolbar button {
+      background: none; border: none; color: #044a78; font-weight: 600;
+      font-size: 12px; cursor: pointer; padding: 2px 4px;
+    }
+    .picker-toolbar button:hover { text-decoration: underline; }
+    .picker-list {
+      max-height: 320px; overflow-y: auto; border: 1.5px solid #e2e8f0;
+      border-radius: 10px; background: #fff;
+    }
+    .picker-row {
+      display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+      border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.12s;
+    }
+    .picker-row:last-child { border-bottom: none; }
+    .picker-row:hover { background: #f8fafc; }
+    .picker-row.selected { background: #eff6ff; }
+    .picker-row input[type="checkbox"] {
+      width: 16px; height: 16px; margin: 0; accent-color: #044a78; cursor: pointer;
+      flex: 0 0 16px;
+    }
+    .picker-row-body {
+      min-width: 0; flex: 1 1 auto; width: 100%; overflow: hidden;
+      display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
+    }
+    .picker-row-title-text {
+      font-size: 13.5px; font-weight: 600; color: #1e293b;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 40px; flex: 1 1 auto;
+    }
+    .picker-label-badge {
+      background: #eef2ff; color: #3730a3; padding: 2px 8px; border-radius: 4px;
+      font-size: 10.5px; font-weight: 600; line-height: 1.6; flex-shrink: 0; white-space: nowrap;
+    }
+    .picker-row-meta {
+      font-size: 12px; color: #64748b;
+      display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; overflow: hidden; flex-shrink: 3;
+    }
+    .picker-row-meta span {
+      display: inline-flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 1;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+    .picker-row-meta i { font-size: 11px; color: #94a3b8; width: 12px; flex-shrink: 0; }
+    .picker-empty {
+      padding: 28px 16px; text-align: center; color: #94a3b8; font-size: 13px;
+    }
+    .picker-footer {
+      display: flex; align-items: center; justify-content: space-between; margin-top: 14px;
+    }
+    .picker-selected-count { font-size: 12.5px; color: #475569; font-weight: 600; }
+  </style>
+
+  <div class="indi-head">
+    <h1>
+      Daybook
+      <span id="viewLabel" style="font-weight: 400; font-size: 0.9rem; opacity: 0.85;">&nbsp;— Open</span>
+    </h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <!-- Completed entries stay in the Daybook but live behind this toggle,
+           so the main list only carries what's still to do. -->
+      <button class="header-action-btn" id="viewToggleBtn" onclick="toggleView()">
+        <i class="fa-solid fa-circle-check" style="margin-right: 4px"></i>
+        <span id="viewToggleText">Completed</span>
+        <span id="viewToggleCount" style="margin-left: 4px; opacity: 0.85;"></span>
+      </button>
+      <button class="header-action-btn" onclick="openAddDialog()">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Add Task
+      </button>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="daybook-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- ============ ADD TO DAYBOOK DIALOG ============ -->
+<div class="logout-modal" id="addDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
+    style="width: min(560px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="addDialogTitle">Add Task to Daybook</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <div class="picker-search-wrap">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="pickerSearchInput" class="picker-search-input" placeholder="Search by title, label, employee or client..." autocomplete="off" />
+      </div>
+      <div class="picker-toolbar" id="pickerToolbar">
+        <span id="pickerVisibleCount"></span>
+        <div style="display:flex; gap:14px;">
+          <button type="button" id="pickerSelectAllBtn">Select all</button>
+          <button type="button" id="pickerClearBtn">Clear</button>
+        </div>
+      </div>
+      <div class="picker-list" id="pickerList"></div>
+      <p class="empty-hint" id="noPickableHint" style="display:none;">
+        No open tasks left to add — every task is either already in your Daybook or completed.
+        <a href="/sachiko/tasks">Create a new task</a>.
+      </p>
+      <div id="addDaybookError" class="dialog-error"></div>
+      <div class="picker-footer">
+        <span class="picker-selected-count" id="pickerSelectedCount">0 selected</span>
+        <div class="dialog-actions" style="margin-top: 0;">
+          <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
+          <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Add to Daybook</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REMOVE CONFIRMATION DIALOG ============ -->
+<div class="logout-modal" id="removeDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="removeDialogTitle"
+    style="width: min(400px, 95vw);">
+    <h2 class="logout-title" id="removeDialogTitle">
+      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Remove from Daybook?
+    </h2>
+    <p class="logout-text">
+      Roll <strong id="removeTaskName"></strong> back out of the Daybook? The task itself won't be deleted.
+    </p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" onclick="closeRemoveDialog()">Cancel</button>
+      <button class="logout-btn" type="button" id="removeConfirmBtn" onclick="submitRemove()"
+        style="background: #ef4444; color: #fff; border-color: #ef4444;">Yes, Remove</button>
+    </div>
+  </div>
+</div>
+
+<script id="entries-data" type="application/json"><%- safeJson(entries) %></script>
+<script id="pickable-tasks-data" type="application/json"><%- safeJson(pickableTasks) %></script>
+<script id="completed-tasks-data" type="application/json"><%- safeJson(completedTasks) %></script>
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+  const rawEntries        = JSON.parse(document.getElementById("entries-data").textContent);
+  const rawPickableTasks  = JSON.parse(document.getElementById("pickable-tasks-data").textContent);
+  const rawCompletedTasks = JSON.parse(document.getElementById("completed-tasks-data").textContent);
+
+  const STATUS_LABELS = { PENDING: "Pending", IN_PROGRESS: "In Progress", COMPLETED: "Completed" };
+  const STATUS_COLORS = { PENDING: "#f0ad4e", IN_PROGRESS: "#044a78", COMPLETED: "#28a745" };
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // Normalized, search-ready shape for the "Add to Daybook" picker.
+  const pickerTasks = rawPickableTasks.map(t => {
+    const employeeName = t.assignedToIsOthers ? t.assignedToOthers : (t.assignedTo?.empName || "Unassigned");
+    const clientName   = t.clientIsOthers ? t.clientOthers : (t.client?.clientName || "");
+    let dueDateLabel = "";
+    if (t.dueDate) {
+      const d = new Date(t.dueDate);
+      if (!isNaN(d)) dueDateLabel = d.toLocaleDateString("en-GB");
+    }
+    return {
+      _id: String(t._id),
+      title: t.title || "",
+      label: t.label || "",
+      employeeName,
+      clientName,
+      dueDateLabel,
+      searchText: [t.title, t.label, employeeName, clientName].filter(Boolean).join(" ").toLowerCase(),
+    };
+  });
+
+  // entryId is null for a completed task that was never picked into the
+  // Daybook -- it still belongs in the shared Completed list, it just can't be
+  // rolled back out of a Daybook it was never in.
+  const rowFromTask = (t, entryId) => ({
+    entryId,
+    taskId:       String(t._id),
+    dueDate:      t.dueDate || null,
+    title:        t.title || "",
+    label:        t.label || "",
+    employeeName: t.assignedToIsOthers ? t.assignedToOthers : (t.assignedTo?.empName || "Unassigned"),
+    clientName:   t.clientIsOthers ? t.clientOthers : (t.client?.clientName || "—"),
+    status:       t.status || "PENDING",
+  });
+
+  const tableData = rawEntries.map(e => rowFromTask(e.task || {}, String(e._id)));
+
+  // The Completed list is shared with the Tasks page: every completed task the
+  // user owns, whether or not it was ever picked in. Tasks already picked in
+  // are here via their entry, so only the rest need adding.
+  const entryTaskIds = new Set(tableData.map(r => r.taskId));
+  rawCompletedTasks.forEach(t => {
+    if (!entryTaskIds.has(String(t._id))) tableData.push(rowFromTask(t, null));
+  });
+
+  // Entries persist until rolled back out, so the list is split rather than
+  // dated: what's still to do by default, finished work behind the toggle.
+  // tableData is the single source of truth -- row actions patch it and the
+  // table together, so both lists stay correct without a page reload.
+  const isDone = row => row.status === "COMPLETED";
+  // Open is the Daybook proper (picked, unfinished); Completed is the shared
+  // list, so a reopened task with no entry simply drops off this page.
+  const rowsFor = completed => tableData.filter(r => completed ? isDone(r) : (!isDone(r) && r.entryId));
+  const masterRow = taskId => tableData.find(r => r.taskId === taskId);
+
+  const withTextFilter = col => ({ headerFilter: "input", headerFilterPlaceholder: "Search", ...col });
+
+  // Tabulator's built-in "date" sorter is a luxon wrapper, and luxon isn't
+  // loaded here -- it compares nothing, so clicking the Date header did
+  // nothing. These values are ISO strings straight from Mongo, so compare them
+  // as timestamps; undated rows stay at the bottom whichever way you sort.
+  function dateSorter(a, b, aRow, bRow, column, dir) {
+    const ta = a ? new Date(a).getTime() : NaN;
+    const tb = b ? new Date(b).getTime() : NaN;
+    const aBlank = isNaN(ta), bBlank = isNaN(tb);
+    if (aBlank && bBlank) return 0;
+    if (aBlank) return dir === "asc" ? 1 : -1;
+    if (bBlank) return dir === "asc" ? -1 : 1;
+    return ta - tb;
+  }
+
+  const table = new Tabulator("#daybook-table", {
+    data:             rowsFor(false),
+    height:           "100%",
+    responsiveLayout: false,
+    movableColumns:   true,
+    placeholder:      "Nothing picked into your Daybook yet.",
+    columns: [
+      {
+        title: "Actions", field: "entryId", width: 110, hozAlign: "center", headerSort: false,
+        formatter(cell) {
+          const row  = cell.getRow().getData();
+          const wrap = document.createElement("div");
+          wrap.style.cssText = "display:flex;gap:5px;justify-content:center;";
+
+          const completeBtn = document.createElement("button");
+          completeBtn.className = "row-btn";
+          completeBtn.style.background = row.status === "COMPLETED" ? "#94a3b8" : "#28a745";
+          completeBtn.title = row.status === "COMPLETED" ? "Reopen task" : "Mark complete";
+          completeBtn.innerHTML = row.status === "COMPLETED" ? '<i class="fa-solid fa-rotate-left"></i>' : '<i class="fa-solid fa-check"></i>';
+          completeBtn.addEventListener("click", () => toggleComplete(cell.getRow(), completeBtn));
+
+          // Completed work is a record, not a worklist: undo is the only thing
+          // worth offering. Reopen it and the full set of actions comes back.
+          // It also sidesteps the ragged column a completed task with no
+          // Daybook entry would otherwise leave behind.
+          if (row.status === "COMPLETED") {
+            wrap.appendChild(completeBtn);
+            return wrap;
+          }
+
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "row-btn";
+          removeBtn.style.background = "#d9534f";
+          removeBtn.title = "Remove from Daybook";
+          removeBtn.innerHTML = '<i class="fa-solid fa-arrow-rotate-left"></i>';
+          removeBtn.addEventListener("click", () => openRemoveDialog(cell.getRow()));
+
+          wrap.appendChild(completeBtn);
+          wrap.appendChild(removeBtn);
+          return wrap;
+        },
+      },
+      // Same column order as the Tasks page: Date, Employee, Client, Title,
+      // Label, Status -- the two lists show the same records.
+      {
+        title: "Date", field: "dueDate", width: 130, hozAlign: "center", sorter: dateSorter,
+        formatter: cell => {
+          const row = cell.getRow().getData();
+          const val = cell.getValue();
+          if (!val) return "";
+          const d = new Date(val);
+          if (isNaN(d)) return "";
+          const label = d.toLocaleDateString("en-GB");
+          const isOverdue = row.status !== "COMPLETED" && d < new Date(new Date().toDateString());
+          return isOverdue ? `<span style="color:#dc3545;font-weight:700;">${label}</span>` : label;
+        },
+      },
+      withTextFilter({ title: "Assigned Employee", field: "employeeName", minWidth: 170, sorter: "string" }),
+      withTextFilter({ title: "Company / Client", field: "clientName", minWidth: 170, sorter: "string" }),
+      withTextFilter({ title: "Title", field: "title", minWidth: 200, sorter: "string" }),
+      withTextFilter({
+        title: "Label", field: "label", width: 150, hozAlign: "center", sorter: "string",
+        formatter: cell => {
+          const val = cell.getValue();
+          return val ? `<span style="background:#eef2ff;color:#3730a3;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${val}</span>` : "";
+        },
+      }),
+      {
+        title: "Status", field: "status", width: 130, hozAlign: "center", sorter: "string",
+        headerFilter: "select",
+        headerFilterParams: { values: { "": "All", PENDING: "Pending", IN_PROGRESS: "In Progress", COMPLETED: "Completed" } },
+        formatter: cell => {
+          const val = cell.getValue();
+          const bg = STATUS_COLORS[val] || "#6c757d";
+          return `<span style="background:${bg};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${STATUS_LABELS[val] || val}</span>`;
+        },
+      },
+    ],
+  });
+
+  /* ─── OPEN / COMPLETED VIEW TOGGLE ─── */
+  let showingCompleted = false;
+
+  // Repaints the header only -- called after every row action so the counts
+  // follow along without touching the table itself.
+  function paintToggle() {
+    const otherCount = rowsFor(!showingCompleted).length;
+    const btn = document.getElementById("viewToggleBtn");
+    document.getElementById("viewLabel").innerHTML =
+      "&nbsp;— " + (showingCompleted ? "Completed" : "Open");
+    document.getElementById("viewToggleText").textContent = showingCompleted ? "Open" : "Completed";
+    document.getElementById("viewToggleCount").textContent = `(${otherCount})`;
+    btn.querySelector("i").className =
+      showingCompleted ? "fa-solid fa-list-check" : "fa-solid fa-circle-check";
+    // Only the Open -> Completed jump is worth blocking when there's nothing
+    // there; the way back to Open always stays live.
+    const dead = !showingCompleted && !otherCount;
+    btn.style.opacity = dead ? "0.6" : "";
+    btn.style.cursor  = dead ? "default" : "";
+    btn.title         = dead ? "No completed tasks yet" : "";
+  }
+
+  function renderView() {
+    table.setData(rowsFor(showingCompleted));
+    paintToggle();
+  }
+
+  function toggleView() {
+    if (!showingCompleted && !rowsFor(true).length) return;
+    showingCompleted = !showingCompleted;
+    renderView();
+  }
+
+  // setData/DOM updates wait for the table to exist, otherwise the first
+  // render can land before Tabulator has built itself.
+  table.on("tableBuilt", renderView);
+
+  /* ─────────────────────────────────────────
+     Dialog helpers
+  ───────────────────────────────────────── */
+  function openModal(id)  { const d = document.getElementById(id); d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
+  function closeModal(id) { const d = document.getElementById(id); d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
+  function showError(elId, msg) { const el = document.getElementById(elId); el.textContent = msg; el.style.display = "block"; }
+  function hideError(elId)      { document.getElementById(elId).style.display = "none"; }
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.style.opacity = loading ? "0.7" : "";
+  }
+
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    ["addDialog", "removeDialog"].forEach(id => {
+      if (document.getElementById(id).classList.contains("show")) closeModal(id);
+    });
+  });
+
+  /* ─── ADD (searchable checklist picker) ─── */
+  let selectedTaskIds = new Set();
+
+  function renderPickerList(filterText) {
+    const list = document.getElementById("pickerList");
+    const term = (filterText || "").trim().toLowerCase();
+    const filtered = term ? pickerTasks.filter(t => t.searchText.includes(term)) : pickerTasks;
+
+    document.getElementById("pickerVisibleCount").textContent =
+      pickerTasks.length ? `Showing ${filtered.length} of ${pickerTasks.length}` : "";
+    document.getElementById("pickerToolbar").style.display = pickerTasks.length ? "flex" : "none";
+
+    if (!filtered.length) {
+      list.innerHTML = `<div class="picker-empty">${pickerTasks.length ? "No tasks match your search." : "Nothing to pick from."}</div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.map(t => `
+      <label class="picker-row${selectedTaskIds.has(t._id) ? " selected" : ""}" data-id="${t._id}">
+        <input type="checkbox" ${selectedTaskIds.has(t._id) ? "checked" : ""} />
+        <div class="picker-row-body">
+          <span class="picker-row-title-text">${escapeHtml(t.title)}</span>
+          ${t.label ? `<span class="picker-label-badge">${escapeHtml(t.label)}</span>` : ""}
+          <div class="picker-row-meta">
+            <span><i class="fa-solid fa-user"></i>${escapeHtml(t.employeeName)}</span>
+            ${t.clientName ? `<span><i class="fa-solid fa-building"></i>${escapeHtml(t.clientName)}</span>` : ""}
+            ${t.dueDateLabel ? `<span><i class="fa-solid fa-calendar"></i>${t.dueDateLabel}</span>` : ""}
+          </div>
+        </div>
+      </label>
+    `).join("");
+  }
+
+  function updateSelectedCount() {
+    const n = selectedTaskIds.size;
+    document.getElementById("pickerSelectedCount").textContent = `${n} selected`;
+  }
+
+  document.getElementById("pickerList").addEventListener("change", (e) => {
+    if (e.target.tagName !== "INPUT") return;
+    const row = e.target.closest(".picker-row");
+    const id = row.dataset.id;
+    if (e.target.checked) selectedTaskIds.add(id); else selectedTaskIds.delete(id);
+    row.classList.toggle("selected", e.target.checked);
+    updateSelectedCount();
+  });
+
+  document.getElementById("pickerSearchInput").addEventListener("input", (e) => renderPickerList(e.target.value));
+
+  document.getElementById("pickerSelectAllBtn").addEventListener("click", () => {
+    const term = document.getElementById("pickerSearchInput").value.trim().toLowerCase();
+    const visible = term ? pickerTasks.filter(t => t.searchText.includes(term)) : pickerTasks;
+    visible.forEach(t => selectedTaskIds.add(t._id));
+    renderPickerList(document.getElementById("pickerSearchInput").value);
+    updateSelectedCount();
+  });
+
+  document.getElementById("pickerClearBtn").addEventListener("click", () => {
+    selectedTaskIds.clear();
+    renderPickerList(document.getElementById("pickerSearchInput").value);
+    updateSelectedCount();
+  });
+
+  function openAddDialog() {
+    selectedTaskIds = new Set();
+    document.getElementById("pickerSearchInput").value = "";
+    document.getElementById("noPickableHint").style.display = pickerTasks.length ? "none" : "block";
+    renderPickerList("");
+    updateSelectedCount();
+    hideError("addDaybookError");
+    openModal("addDialog");
+    setTimeout(() => document.getElementById("pickerSearchInput").focus(), 60);
+  }
+  function closeAddDialog() { closeModal("addDialog"); }
+
+  async function submitAdd() {
+    const taskIds = [...selectedTaskIds];
+    if (!taskIds.length) { showError("addDaybookError", "Please select at least one task."); return; }
+    hideError("addDaybookError");
+    setLoading("addSubmitBtn", true);
+    try {
+      const res  = await fetch("/sachiko/daybook", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskIds }),
+      });
+      const data = await res.json();
+      if (data.success) { window.location.href = data.redirect || "/sachiko/daybook"; }
+      else              { showError("addDaybookError", data.message || "Failed to add to Daybook."); }
+    } catch { showError("addDaybookError", "Server error. Please try again."); }
+    finally  { setLoading("addSubmitBtn", false); }
+  }
+
+  /* ─── QUICK COMPLETE / REOPEN (updates the underlying Task) ─── */
+  // Flipping the status always moves the entry to the other list, so the row
+  // leaves the view it was clicked in. Dropping just that row keeps scroll
+  // position, header filters and sort intact -- a reload would lose all three.
+  async function toggleComplete(row, btn) {
+    const t = row.getData();
+    const nextStatus = t.status === "COMPLETED" ? "PENDING" : "COMPLETED";
+    btn.disabled = true;
+    try {
+      const res  = await fetch(`/sachiko/api/tasks/${t.taskId}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        showToast(data.message || "Failed to update task.", "error");
+        return;
+      }
+      const rec = masterRow(t.taskId);
+      if (rec) rec.status = nextStatus;
+      await row.delete();
+      paintToggle();
+      showToast(nextStatus === "COMPLETED" ? "Task marked complete." : "Task reopened.");
+    } catch {
+      showToast("Error updating task.", "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /* ─── REMOVE FROM DAYBOOK ─── */
+  let removeRow = null;
+
+  function openRemoveDialog(row) {
+    removeRow = row;
+    document.getElementById("removeTaskName").textContent = row.getData().title;
+    openModal("removeDialog");
+  }
+  function closeRemoveDialog() { closeModal("removeDialog"); removeRow = null; }
+
+  async function submitRemove() {
+    if (!removeRow) return;
+    const row     = removeRow;
+    const t       = row.getData();
+    const entryId = t.entryId;
+    setLoading("removeConfirmBtn", true);
+    try {
+      const res  = await fetch(`/sachiko/api/daybook/${entryId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!data.success) {
+        closeRemoveDialog();
+        showToast(data.message || "Failed to remove from Daybook.", "error");
+        return;
+      }
+      // Only open rows offer this action, so the task leaves the page outright
+      // -- it isn't picked in any more, and it isn't completed either.
+      const i = tableData.findIndex(r => r.taskId === t.taskId);
+      if (i > -1) tableData.splice(i, 1);
+      await row.delete();
+      paintToggle();
+      // Out of the Daybook means pickable again -- the picker is built from a
+      // server-side list, so without a reload it has to be topped up here.
+      if (t.status !== "COMPLETED" && !pickerTasks.some(p => p._id === t.taskId)) {
+        const due = t.dueDate ? new Date(t.dueDate) : null;
+        const clientName = t.clientName === "—" ? "" : t.clientName;
+        pickerTasks.unshift({
+          _id: t.taskId,
+          title: t.title,
+          label: t.label,
+          employeeName: t.employeeName,
+          clientName,
+          dueDateLabel: due && !isNaN(due) ? due.toLocaleDateString("en-GB") : "",
+          searchText: [t.title, t.label, t.employeeName, clientName].filter(Boolean).join(" ").toLowerCase(),
+        });
+      }
+      closeRemoveDialog();
+      showToast("Removed from Daybook.");
+    } catch { closeRemoveDialog(); showToast("Error removing from Daybook.", "error"); }
+    finally  { setLoading("removeConfirmBtn", false); }
+  }
+</script>

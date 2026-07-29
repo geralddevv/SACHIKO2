@@ -1,0 +1,2164 @@
+<% layout('/layout/boilerplate') -%>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
+  <form id="sales-order-form" action="<%= typeof confirmMode !== 'undefined' && confirmMode ? '/sachiko/sales/order/status' : '/sachiko/sales/order' %>" method="post" class="needs-validation" autocomplete="off" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="orderId" value="<%= typeof orderToEdit !== 'undefined' && orderToEdit ? orderToEdit._id : '' %>" />
+    <input type="hidden" name="submissionToken" value="<%= typeof submissionToken !== 'undefined' && submissionToken ? submissionToken : '' %>" />
+    <% if (typeof confirmMode !== 'undefined' && confirmMode) { %>
+      <input type="hidden" name="status" value="CONFIRMED" />
+    <% } %>
+    <div class="span-full form-heading">
+      <h1><%= typeof confirmMode !== 'undefined' && confirmMode ? 'Dispatch Order' : (typeof orderToEdit !== 'undefined' && orderToEdit ? 'Edit Sales Order' : 'Sales Order') %></h1>
+      <% if (typeof orderToEdit !== 'undefined' && orderToEdit) {
+           const _dispDate = orderToEdit.poDate || orderToEdit.createdAt;
+           const _dispDateStr = _dispDate ? new Date(_dispDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: '2-digit' }) : null;
+      %>
+        <% if (_dispDateStr) { %>
+          <span style="font-size:13px; font-weight:500; color:#6b7280; margin-left:10px;">
+            <%= orderToEdit.poDate ? 'PO Date:' : 'Created:' %> <strong style="color:#044a78;"><%= _dispDateStr %></strong>
+          </span>
+        <% } %>
+      <% } %>
+    </div>
+
+    <%
+      const initialLocations = Array.isArray(locations) ? locations : [];
+      const initialStock = typeof stockInfo !== 'undefined' && stockInfo ? stockInfo : null;
+      const initialTotal = initialStock ? (initialStock.totalStock ?? '-') : '-';
+      const initialBooked = initialStock ? (initialStock.booked ?? '-') : '-';
+      const initialBalance = initialStock ? (initialStock.balance ?? '-') : '-';
+      const initialLocationRows = initialLocations.map((locName) => {
+        const normalizedLoc = String(locName || "").trim();
+        const locKey = normalizedLoc.toUpperCase();
+        const locStock = initialStock && Array.isArray(initialStock.locations)
+          ? initialStock.locations.find((entry) => String(entry?.location || "").trim().toUpperCase() === locKey)
+          : null;
+        const locQty = locStock ? (locStock.qty ?? 0) : '-';
+        const locBooked = locStock ? (locStock.booked ?? 0) : '-';
+        const locBalance = locStock ? (locStock.balance ?? 0) : '-';
+        return `
+          <label class="location-option${normalizedLoc === 'ALL' ? ' selected' : ''}" data-location="${normalizedLoc}" data-qty="${locQty}" data-booked="${locBooked}" data-balance="${locBalance}">
+            <input type="radio" name="locationRadio" class="location-radio" value="${normalizedLoc}" data-qty="${locQty}" data-booked="${locBooked}" data-balance="${locBalance}"${normalizedLoc === 'ALL' ? ' checked' : ''} />
+            <span class="location-label">${normalizedLoc}:</span>
+            <span class="location-qty">${locQty}</span>
+          </label>`;
+      }).join("");
+    %>
+
+    <!-- Stock Status Bar with Location Selection -->
+    <div id="stock-display" class="span-full" style="display: flex; padding: 10px 15px; background: #fff; border: 1px solid #044A78; border-radius: 0.5rem; transition: all 0.3s ease; overflow-x: auto; overflow-y: hidden;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 22px; flex-wrap: nowrap; width: max-content; min-width: 100%;">
+        <div style="display: flex; flex-wrap: nowrap; align-items: center; white-space: nowrap;">
+          <label class="location-option selected" data-location="ALL" data-qty="<%= initialTotal %>" data-booked="<%= initialBooked %>" data-balance="<%= initialBalance %>">
+            <input type="radio" name="locationRadio" class="location-radio" value="ALL" data-qty="<%= initialTotal %>" data-booked="<%= initialBooked %>" data-balance="<%= initialBalance %>" checked />
+            <span class="location-label">ALL:</span>
+            <span class="location-qty"><%= initialTotal %></span>
+          </label>
+          <%- initialLocationRows %>
+        </div>
+        <div id="stock-stats" style="display: flex; gap: 14px; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
+          <div style="font-weight: 700; color: #044A78; font-size: 16px;">
+            <i class="fa-solid fa-box-open"></i> Total: <span id="stat-total"><%= initialTotal %></span>
+          </div>
+          <div style="font-weight: 700; color: #d97706; font-size: 16px;" title="Pending Orders">
+            <i class="fa-regular fa-clock"></i> Booked: <span id="stat-booked"><%= initialBooked %></span>
+          </div>
+          <div style="font-weight: 700; color: #059669; font-size: 16px;" title="Available for new orders">
+            <i class="fa-solid fa-scale-balanced"></i> Balance: <span id="stat-balance"><%= initialBalance %></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <input type="hidden" name="sourceLocation" id="source-location" />
+
+    <!-- ================= ORDER TYPE ================= -->
+    <div class="span-full form-subheading">
+      <h1>Order Details</h1>
+    </div>
+
+    <div class="span-seven">
+      <label for="item-type">Item Type</label>
+      <select name="itemType" id="item-type" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Item Type</option>
+        <option value="TAPE">Tape</option>
+        <option value="POS_ROLL">POS Roll</option>
+        <option value="TAFETA">Tafeta</option>
+        <option value="LABEL">Plain Label</option>
+        <option value="COLOR_LABEL">Color Label</option>
+        <option value="TTR">TTR</option>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="client-name">Client Name</label>
+      <select name="clientName" id="client-name" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Client</option>
+        <% clients?.forEach(client => { %>
+          <option value="<%= client %>"><%= client %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="user-name">User Name</label>
+      <select name="userId" id="user-name" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select User</option>
+      </select>
+      <input type="hidden" name="userName" id="user-name-hidden" />
+    </div>
+
+    <div class="span-six">
+      <label for="user-location">Location</label>
+      <select id="user-location" name="userLocation" class="form-control select-tag">
+        <option value="" disabled selected hidden>Location</option>
+      </select>
+    </div>
+
+    <div class="span-seven">
+      <label for="item-select">Select Item</label>
+      <select name="itemId" id="item-select" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Item</option>
+      </select>
+    </div>
+
+    <div id="selected-item-details" class="span-full" style="padding:0;background:#fff;border:1px solid #044A78;border-radius:4px;display:none;"></div>
+
+    <!-- ================= QUANTITY & DATE ================= -->
+    <div class="span-full form-subheading">
+      <h1>Order Info</h1>
+    </div>
+
+    <div class="span-three">
+      <label for="po-date">PO Date</label>
+      <input type="date" id="po-date" name="poDate" class="form-control" value="<%= new Date().toISOString().split('T')[0] %>" />
+    </div>
+
+    <div class="span-four">
+      <label for="po-number">PO Number</label>
+      <input type="text" id="po-number" name="poNumber" class="form-control" placeholder="Enter PO number" required />
+    </div>
+
+    <div class="span-four">
+      <label for="quantity">Order Quantity <span id="qty-unit-badge" style="display:none;font-size:11px;font-weight:600;color:#044A78;background:#eef0ff;padding:1px 8px;border-radius:20px;margin-left:4px;"></span></label>
+      <input type="text" inputmode="numeric" id="quantity" name="quantity" class="form-control" placeholder="Enter quantity" required />
+    </div>
+
+    <div class="span-three" id="no-of-rolls-div" style="display:none;">
+      <label for="no-of-rolls">No of Rolls</label>
+      <input type="text" id="no-of-rolls" class="form-control" placeholder="-" readonly />
+    </div>
+
+    <div class="span-three">
+      <label for="item-rate">Rate</label>
+      <input type="text" id="item-rate" class="form-control" placeholder="Rate" readonly />
+    </div>
+
+    <div class="span-three">
+      <label for="order-rate">Curr Rate</label>
+      <input type="text" id="order-rate" name="orderRate" class="form-control" placeholder="Enter current rate" inputmode="decimal" />
+    </div>
+
+    <div class="span-five">
+      <label for="estimated-date">Est Delivery Date</label>
+      <input type="date" id="estimated-date" name="estimatedDate" class="form-control" required />
+    </div>
+
+    <div class="span-half" id="remarks-wrap" style="grid-column: span 10;">
+      <label for="remarks">Remarks (Optional)</label>
+      <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Any special instructions..." />
+    </div>
+
+    <!-- Stock Warning -->
+    <div id="stock-warning" class="span-full" style="display: none; padding: 8px 15px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 0.5rem; color: #92400e; font-size: 14px; font-weight: 500;">
+      <i class="fa-solid fa-triangle-exclamation" style="margin-right: 6px;"></i>
+      <span id="stock-warning-text"></span>
+    </div>
+
+    <!-- ================= CONFIRMATION DETAILS (only in confirm mode) ================= -->
+    <% if (typeof confirmMode !== 'undefined' && confirmMode) { %>
+    <div id="confirmation-section" class="span-full form-subheading">
+      <h1>Confirmation Details</h1>
+    </div>
+
+    <div class="span-penta">
+      <label for="confirm-date">Date</label>
+      <input type="date" id="confirm-date" name="confirmDate" class="form-control" required />
+    </div>
+
+    <div class="span-hexa">
+      <label for="invoice-number">Invoice Number</label>
+      <input type="text" id="invoice-number" name="invoiceNumber" class="form-control" placeholder="Enter invoice number" required />
+    </div>
+
+    <div class="span-penta">
+      <label for="confirm-quantity">Quantity</label>
+      <input type="number" id="confirm-quantity" name="confirmQuantity" class="form-control" min="1" required />
+    </div>
+    
+    <div id="logs-wrapper" style="grid-column: 1 / -1;">
+    <% if (typeof logs !== 'undefined' && logs.length > 0) { %>
+      <div class="span-full" style="padding: 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 0.5rem; color: #0369a1; font-size: 14px; margin-top: 10px;">
+        <% 
+          let runningRemaining = orderToEdit.quantity - orderToEdit.dispatchedQuantity;
+        %>
+        
+        <div style="display: flex; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e0f2fe;">
+            <span><strong>Partial Dispatch:</strong> <%= orderToEdit.dispatchedQuantity %> sent / <%= orderToEdit.quantity - orderToEdit.dispatchedQuantity %> remaining</span>
+        </div>
+
+        <div class="logs-scroll" style="max-height: 120px; overflow-y: auto; padding-right: 5px; width: 100%;">
+            <% logs.forEach((log, index) => { %>
+            <div style="padding: 6px 0; border-bottom: 1px dashed #e0f2fe; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+                <span>
+                    <span style="color: #64748b; font-size: 12px; margin-right: 5px;">
+                        <%= new Date(log.performedAt).toLocaleDateString('en-IN', { month: 'short', day: '2-digit', year: 'numeric' }) %>
+                    </span>
+                    <% if (log.invoiceNumber) { %>
+                    <span style="font-family: monospace; background: #e0f2fe; padding: 1px 6px; border-radius: 4px; font-size: 12px;">
+                        <%= log.invoiceNumber %>
+                    </span>
+                    <% } %>
+                <span style="margin-left: 6px;"><strong><%= log.quantity %></strong> sent</span>
+                <span style="color: #64748b;">(Remaining: <%= runningRemaining %>)</span>
+                </span>
+                <span style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                    <button type="button" data-log-id="<%= log._id %>" data-log-qty="<%= log.quantity %>" data-log-invoice="<%= log.invoiceNumber || '' %>" data-log-date="<%= new Date(log.performedAt).toISOString().split('T')[0] %>"
+                        onclick="openEditDialog(this.getAttribute('data-log-id'), parseInt(this.getAttribute('data-log-qty')), this.getAttribute('data-log-invoice'), this.getAttribute('data-log-date'))"
+                        style="background: none; border: none; color: #3b82f6; cursor: pointer; padding: 2px 4px; font-size: 13px; border-radius: 4px; transition: background 0.2s;"
+                        onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background='none'"
+                        title="Edit Log">
+                        <i class="fa-solid fa-pencil"></i>
+                    </button>
+                    <button type="button" onclick="confirmDeleteLog('<%= log._id %>')"
+                        style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 2px 4px; font-size: 13px; border-radius: 4px; transition: background 0.2s;"
+                        onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'"
+                        title="Delete Log">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </span>
+                
+                <% 
+                // For the next iteration (older log), the remaining amount was higher by this dispatched amount
+                runningRemaining += log.quantity; 
+                %>
+            </div>
+            <% }) %>
+        </div>
+      </div>
+      
+      <style>
+        .logs-scroll::-webkit-scrollbar {
+          width: 4px;
+        }
+        .logs-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .logs-scroll::-webkit-scrollbar-thumb {
+          background-color: rgba(26, 26, 46, 0.5);
+          border-radius: 6px;
+        }
+        .logs-scroll::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(26, 26, 46, 0.75);
+        }
+      </style>
+    <% } else if (typeof orderToEdit !== 'undefined' && orderToEdit && orderToEdit.dispatchedQuantity > 0) { %>
+      <div class="span-full" style="padding: 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 0.5rem; color: #0369a1; font-size: 14px; margin-top: 10px;">
+        <i class="fa-solid fa-circle-info" style="margin-right: 5px;"></i>
+        <strong>Partial Dispatch:</strong> <%= orderToEdit.dispatchedQuantity %> sent. Remaining: <%= orderToEdit.quantity - orderToEdit.dispatchedQuantity %>
+      </div>
+    <% } %>
+    </div>
+    <% } %>
+
+<!-- ================= EDIT LOG DIALOG ================= -->
+<div id="edit-log-dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center; transition:opacity 0.3s;">
+  <div style="background:white; border-radius:8px; width:440px; max-width:90%; box-shadow:0 4px 15px rgba(0,0,0,0.2); overflow:hidden; animation:logDialogPopIn 0.2s ease-out;">
+    <div style="padding:20px 20px 0; border-bottom: 1px solid #e5e7eb;">
+      <h3 style="margin:0 0 15px; color:#044A78; font-size:17px;"><i class="fa-solid fa-pencil" style="margin-right:6px;"></i>Edit Dispatch Log</h3>
+    </div>
+    <div style="padding:20px;">
+      <input type="hidden" id="edit-log-id" />
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Quantity <span style="color:#ef4444">*</span></label>
+        <input type="number" id="edit-log-qty" min="1" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; box-sizing:border-box; transition:border-color 0.2s;" />
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Invoice Number</label>
+        <input type="text" id="edit-log-invoice" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; box-sizing:border-box; transition:border-color 0.2s;" />
+      </div>
+      <div style="margin-bottom:4px;">
+        <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Date</label>
+        <input type="date" id="edit-log-date" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; box-sizing:border-box; transition:border-color 0.2s;" />
+      </div>
+    </div>
+    <div style="padding:15px 20px; background:#f9fafb; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb;">
+      <button type="button" onclick="closeEditDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='white'">Cancel</button>
+      <button type="button" onclick="submitEditLog()" style="padding:8px 16px; border:none; background:#044A78; color:white; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= DELETE LOG DIALOG ================= -->
+<div id="delete-log-dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center; transition:opacity 0.3s;">
+  <div style="background:white; border-radius:8px; width:400px; max-width:90%; box-shadow:0 4px 15px rgba(0,0,0,0.2); overflow:hidden; animation:logDialogPopIn 0.2s ease-out;">
+    <div style="padding:25px 20px; text-align:center;">
+      <i class="fa-solid fa-triangle-exclamation" style="font-size:28px; color:#ef4444; margin-bottom:12px;"></i>
+      <p style="margin:0; color:#333; font-size:16px; line-height:1.5;">Are you sure you want to <strong>delete</strong> this dispatch log? Stock will be reversed.</p>
+      <input type="hidden" id="delete-log-id" />
+    </div>
+    <div style="padding:15px 20px; background:#f9fafb; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb;">
+      <button type="button" onclick="closeDeleteDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='white'">Go Back</button>
+      <button type="button" onclick="submitDeleteLog()" style="padding:8px 16px; border:none; background:#ef4444; color:white; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes logDialogPopIn {
+    0% { transform: scale(0.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  #edit-log-qty:focus, #edit-log-invoice:focus, #edit-log-date:focus {
+    outline: none;
+    border-color: #044A78;
+    box-shadow: 0 0 0 2px rgba(26, 26, 46, 0.1);
+  }
+</style>
+
+    <!-- ================= SUBMIT ================= -->
+    <div class="span-full btn-grp" style="flex-direction: row;">
+      <% if (typeof orderToEdit !== 'undefined' && orderToEdit && !(typeof confirmMode !== 'undefined' && confirmMode)) { %>
+        <button type="button" onclick="openCancelOrderDialog()" style="background:#044A78; color:#fff; border:none; border-radius:6px; padding:10px 20px; font-weight:700; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px;" onmouseover="this.style.background='#03365a'" onmouseout="this.style.background='#044A78'">
+          <i class="fa-solid fa-xmark"></i> Cancel Edit Order
+        </button>
+      <% } %>
+      <button type="submit">
+        <% if (typeof confirmMode !== 'undefined' && confirmMode) { %>
+          <i class="fa-solid fa-check-double"></i> Dispatch Order
+        <% } else { %>
+          <i class="fa-solid fa-check"></i> <%= typeof orderToEdit !== 'undefined' && orderToEdit ? 'Update Order' : 'Create Order' %>
+        <% } %>
+      </button>
+    </div>
+  </form>
+</div>
+
+<% if (typeof orderToEdit !== 'undefined' && orderToEdit && !(typeof confirmMode !== 'undefined' && confirmMode)) { %>
+<div id="cancel-order-dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+  <div style="background:#fff; border-radius:10px; width:440px; max-width:90%; box-shadow:0 4px 20px rgba(0,0,0,0.22); overflow:hidden;">
+    <div style="padding:22px 22px 0;">
+      <p style="margin:0; color:#111827; font-size:16px; font-weight:600; line-height:1.5;"><i class="fa-solid fa-triangle-exclamation" style="color:#ef4444; margin-right:6px;"></i>Cancel this order?</p>
+      <p style="margin:8px 0 0; color:#6b7280; font-size:13px;">This cannot be undone.</p>
+      <div style="margin-top:14px;">
+        <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:5px;">Reason for Cancellation <span style="color:#ef4444">*</span></label>
+        <textarea id="cancel-order-reason" rows="3" placeholder="Enter reason..." style="width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; resize:none; font-family:inherit; box-sizing:border-box;"></textarea>
+      </div>
+    </div>
+    <div style="padding:14px 22px 18px; display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+      <button type="button" onclick="closeCancelOrderDialog()" style="padding:9px 18px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:6px; cursor:pointer; font-weight:600; font-size:13px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fff'">Go Back</button>
+      <button type="button" onclick="submitCancelOrder()" style="padding:9px 18px; border:none; background:#ef4444; color:#fff; border-radius:6px; cursor:pointer; font-weight:700; font-size:13px;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Yes, Cancel Order</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openCancelOrderDialog() {
+    document.getElementById("cancel-order-reason").value = "";
+    document.getElementById("cancel-order-reason").style.borderColor = "#d1d5db";
+    document.getElementById("cancel-order-dialog").style.display = "flex";
+    setTimeout(() => document.getElementById("cancel-order-reason").focus(), 30);
+  }
+  function closeCancelOrderDialog() {
+    document.getElementById("cancel-order-dialog").style.display = "none";
+  }
+  function submitCancelOrder() {
+    const reason = document.getElementById("cancel-order-reason").value.trim();
+    if (!reason) {
+      document.getElementById("cancel-order-reason").style.borderColor = "#ef4444";
+      document.getElementById("cancel-order-reason").focus();
+      return;
+    }
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/sachiko/sales/order/status";
+    [["orderId", "<%= orderToEdit._id %>"], ["status", "CANCELLED"], ["cancelReason", reason], ["_csrf", csrf]].forEach(([n, v]) => {
+      const inp = document.createElement("input");
+      inp.type = "hidden"; inp.name = n; inp.value = v;
+      form.appendChild(inp);
+    });
+    document.body.appendChild(form);
+    form.submit();
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeCancelOrderDialog();
+  });
+</script>
+<% } %>
+
+<style>
+  .location-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 5px;
+    cursor: pointer;
+    padding: 5px 8px;
+    border-radius: 0.4rem;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+
+  .location-option:hover {
+    background: #f0f0ff;
+  }
+
+  .location-option.selected {
+    border-color: #044A78;
+    background: #eef0ff;
+  }
+
+  .location-radio {
+    accent-color: #044A78;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    border-radius: 999px;
+  }
+
+  .location-label {
+    color: #044A78;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .location-qty {
+    font-weight: 700;
+    color: #044A78;
+    font-size: 15px;
+  }
+
+  .ap-table-wrap { overflow-x: auto; }
+  .ap-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  .ap-table th, .ap-table td { padding: 5px 10px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; text-align: left; }
+  .ap-table tr > *:last-child { border-right: none; }
+  .ap-table tr:last-child th, .ap-table tr:last-child td { border-bottom: none; }
+  .ap-table th { color: #044a78; font-weight: 700; white-space: nowrap; width: 10%; }
+  .ap-table td { color: #1f2a44; font-weight: 600; word-break: break-word; }
+  .ap-table th.ap-hl, .ap-table td.ap-hl { background: #dbeafe; }
+  .ap-table th.ap-hl { color: #044a78; }
+  .ap-table td.ap-hl { color: #044a78; font-weight: 700; }
+</style>
+
+</script>
+
+<script type="application/json" id="order-to-edit-data">
+  <%- typeof orderToEdit !== 'undefined' && orderToEdit ? JSON.stringify(orderToEdit) : 'null' %>
+</script>
+<script type="application/json" id="stock-info-data">
+  <%- typeof stockInfo !== 'undefined' && stockInfo ? JSON.stringify(stockInfo) : 'null' %>
+</script>
+
+<script>
+  // Safe JSON extraction
+  const orderToEdit = JSON.parse(document.getElementById('order-to-edit-data')?.textContent || 'null');
+  const stockInfo = JSON.parse(document.getElementById('stock-info-data')?.textContent || 'null');
+
+  const confirmModeStr = `<%= typeof confirmMode !== 'undefined' && confirmMode ? 'true' : 'false' %>`;
+  const confirmMode = confirmModeStr === 'true';
+
+  const clientSelect = document.getElementById("client-name");
+  const userSelect = document.getElementById("user-name");
+  const userNameHidden = document.getElementById("user-name-hidden");
+  const itemTypeSelect = document.getElementById("item-type");
+  const itemSelect = document.getElementById("item-select");
+  const sourceLocationInput = document.getElementById("source-location");
+  const locationSelect = document.getElementById("user-location");
+  const poDateInput = document.getElementById("po-date");
+  const poNumberInput = document.getElementById("po-number");
+  const rateDisplayInput = document.getElementById("item-rate");
+  const orderRateInput = document.getElementById("order-rate");
+  const quantityInput = document.getElementById("quantity");
+  const estimatedDateInput = document.getElementById("estimated-date");
+  const remarksInput = document.getElementById("remarks");
+  const confirmQuantityInput = document.getElementById("confirm-quantity");
+  const orderForm = document.getElementById("sales-order-form");
+  const submitButton = orderForm?.querySelector('button[type="submit"]');
+
+  // Order Quantity: show thousands separators (commas) while typing, but keep
+  // the underlying value comma-free so it always saves as a plain number.
+  function parseQty(el) {
+    return parseInt(String(el?.value ?? "").replace(/,/g, ""), 10) || 0;
+  }
+  function formatQtyWithCommas(raw) {
+    const digits = String(raw ?? "").replace(/[^\d]/g, "");
+    return digits ? Number(digits).toLocaleString("en-US") : "";
+  }
+  function applyQtyCommaFormatting() {
+    if (!quantityInput) return;
+    const prev = quantityInput.value;
+    const formatted = formatQtyWithCommas(prev);
+    if (formatted === prev) return;
+    const caret = quantityInput.selectionStart ?? prev.length;
+    const digitsBeforeCaret = prev.slice(0, caret).replace(/[^\d]/g, "").length;
+    quantityInput.value = formatted;
+    if (document.activeElement === quantityInput) {
+      let pos = 0, seen = 0;
+      while (pos < formatted.length && seen < digitsBeforeCaret) {
+        if (/\d/.test(formatted[pos])) seen++;
+        pos++;
+      }
+      quantityInput.setSelectionRange(pos, pos);
+    }
+  }
+  if (quantityInput) {
+    quantityInput.addEventListener("input", applyQtyCommaFormatting);
+    quantityInput.addEventListener("input", renderSelectedItemDetailsTable);
+  }
+
+  if (confirmMode) {
+    const style = document.createElement("style");
+    style.textContent = `
+      .dispatch-location-locked {
+        opacity: 1;
+      }
+      .dispatch-location-locked .location-option {
+        opacity: 0.82;
+        filter: saturate(0.85);
+      }
+      .dispatch-location-locked .location-option.selected {
+        opacity: 1;
+        filter: none;
+      }
+      .dispatch-location-locked .location-option input {
+        cursor: not-allowed;
+      }
+      .dispatch-location-locked .location-option.is-disabled {
+        opacity: 0.7;
+        filter: saturate(0.8);
+      }
+      .dispatch-location-locked .choices__inner,
+      .dispatch-location-locked .choices__input,
+      .dispatch-location-locked .choices__list--single {
+        background: #f3f4f6 !important;
+        color: #6b7280 !important;
+        cursor: not-allowed !important;
+      }
+      .dispatch-location-locked .choices__placeholder {
+        color: #6b7280 !important;
+        opacity: 1 !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function normalizeLocationName(value) {
+    return String(value || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, " ")
+      .replace(/^[.,]+|[.,]+$/g, "");
+  }
+
+  function normalizeLookupText(value) {
+    return String(value || "")
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  function inferSalesOrderType(order) {
+    const model = String(order?.onModel || "").toUpperCase();
+    const bindingModel = String(order?.onBindingModel || "").toUpperCase();
+
+    if (model === "TAPE" || bindingModel.includes("TAPEBINDING")) return "TAPE";
+    if (model === "POSROLL" || bindingModel.includes("POSROLLBINDING")) return "POS_ROLL";
+    if (model === "TAFETA" || bindingModel.includes("TAFETABINDING")) return "TAFETA";
+    if (model === "TTR" || bindingModel.includes("TTRBINDING")) return "TTR";
+    if (model === "COLORLABEL" || bindingModel === "COLORLABEL") return "COLOR_LABEL";
+    if (model === "LABEL" || bindingModel.includes("LABEL")) return "LABEL";
+
+    return "";
+  }
+
+  function getUserLocationEntries(user) {
+    const details = Array.isArray(user?.locationDetails) ? user.locationDetails : [];
+    const entries = details
+      .map((entry) => {
+        const userLocation = normalizeLocationName(entry?.userLocation || entry?.location || "");
+        if (!userLocation) return null;
+        return {
+          value: userLocation,
+          label: userLocation,
+        };
+      })
+      .filter(Boolean);
+
+    if (entries.length > 0) return entries;
+
+    const fallbackLocation = normalizeLocationName(user?.userLocation || "");
+    if (!fallbackLocation) return [];
+
+    return [
+      {
+        value: fallbackLocation,
+        label: fallbackLocation,
+      },
+    ];
+  }
+
+  function resolveSelectValue(selectEl, rawValue) {
+    const target = normalizeLookupText(rawValue);
+    if (!target || !selectEl?.options) return target;
+
+    const targetLower = target.toLowerCase();
+    for (const option of Array.from(selectEl.options)) {
+      const optionValue = normalizeLookupText(option.value);
+      const optionLabel = normalizeLookupText(option.textContent);
+      if (optionValue.toLowerCase() === targetLower || optionLabel.toLowerCase() === targetLower) {
+        return option.value;
+      }
+    }
+
+    return target;
+  }
+
+  function setChoiceValue(choicesInstance, selectEl, rawValue) {
+    if (!choicesInstance) return false;
+    const target = normalizeLookupText(rawValue);
+    if (!target) return false;
+
+    // Try setting by value directly first (best for IDs)
+    try {
+      choicesInstance.setChoiceByValue(target);
+      if (selectEl) selectEl.value = target;
+      if (choicesInstance.getValue(true) === target) return true;
+    } catch (_) {}
+
+    // Fallback to label/value resolution
+    const resolvedValue = resolveSelectValue(selectEl, target);
+    if (resolvedValue) {
+      choicesInstance.setChoiceByValue(resolvedValue);
+      if (selectEl) selectEl.value = resolvedValue;
+      return true;
+    }
+
+    return false;
+  }
+
+  let currentSourceLocation = "";
+  let lockedDispatchLocation = "";
+  let dispatchLocationLocked = false;
+  // True while we set the location dropdown programmatically, so the location
+  // "change" handler doesn't treat it as a user pick and reload the item list.
+  let programmaticLocationUpdate = false;
+  // Same idea for the user dropdown: loadUsers() selects the user itself and then
+  // loads its locations/items, so the user "change" handler must not also fire.
+  let programmaticUserUpdate = false;
+
+  function showDispatchLocationLockedToast() {
+    showToast(
+      "Location cannot be changed during dispatch because stock deduction and the dispatch log must stay tied to the original source location.",
+      "error",
+    );
+  }
+
+  function syncSourceLocation(value) {
+    currentSourceLocation = normalizeLocationName(value);
+    sourceLocationInput.value = currentSourceLocation;
+  }
+
+  function lockDispatchLocation(locationName) {
+    lockedDispatchLocation = normalizeLocationName(locationName);
+    dispatchLocationLocked = !!lockedDispatchLocation;
+    syncSourceLocation(lockedDispatchLocation);
+  }
+
+  function enforceLockedDispatchLocation() {
+    if (!dispatchLocationLocked || !lockedDispatchLocation) return;
+
+    if (locationSelect) {
+      locationSelect.value = lockedDispatchLocation;
+      locationSelect.disabled = true;
+      if (locationChoices?.setChoiceByValue) {
+        locationChoices.setChoiceByValue(lockedDispatchLocation);
+      }
+      if (locationChoices?.disable) {
+        locationChoices.disable();
+      }
+    }
+
+    const stockDisplay = document.getElementById("stock-display");
+    if (!stockDisplay) return;
+    stockDisplay.classList.add("dispatch-location-locked");
+
+    stockDisplay.querySelectorAll('input[name="locationRadio"]').forEach((radio) => {
+      const isLocked = normalizeLocationName(radio.value) === lockedDispatchLocation;
+      radio.checked = isLocked;
+      radio.disabled = !isLocked;
+      const row = radio.closest(".location-option");
+      if (row) {
+        row.classList.toggle("is-locked", isLocked);
+        row.classList.toggle("is-disabled", !isLocked);
+      }
+      if (radio.value === "ALL") {
+        radio.disabled = true;
+        if (row) row.classList.add("is-disabled");
+      }
+    });
+  }
+
+  let clientChoices, userChoices, locationChoices, itemTypeChoices, itemChoices;
+
+
+  // Reset all downstream fields
+  function resetUsers() {
+    userChoices.clearStore();
+    userChoices.setChoices([{ value: "", label: "Select User", disabled: true, selected: true }], "value", "label", true);
+    userNameHidden.value = "";
+    resetLocation();
+    resetItems();
+  }
+  function resetLocation() {
+    locationChoices.clearStore();
+    locationChoices.setChoices([{ value: "", label: "Location", disabled: true, selected: true }], "value", "label", true);
+  }
+  function resetItems() {
+    if (!itemChoices) return;
+    itemChoices.clearStore();
+    itemChoices.setChoices([{ value: "", label: "Select Item", disabled: true, selected: true }], "value", "label", true);
+    updateStockDisplay();
+    syncSourceLocation("");
+    if (rateDisplayInput) rateDisplayInput.value = "";
+    if (orderRateInput) {
+      orderRateInput.value = "";
+      delete orderRateInput.dataset.userEdited;
+      delete orderRateInput.dataset.fromOrder;
+    }
+  }
+
+  // Load clients filtered by item type with an optional target to ensure it exists
+  async function loadClients(itemType, targetToKeep = null) {
+    if (!itemType) return;
+    console.log(`DEBUG: loading clients for ${itemType}, keeping ${targetToKeep || "none"}`);
+    
+    clientChoices.clearStore();
+    clientChoices.setChoices([{ value: "", label: "Loading...", disabled: true, selected: true }], "value", "label", true);
+    resetUsers();
+    
+    try {
+      const res = await fetch(`/sachiko/sales/clients/${itemType}`);
+      const clientNames = await res.json();
+      
+      const finalNames = [...clientNames];
+      if (targetToKeep && !finalNames.some(n => normalizeLookupText(n) === normalizeLookupText(targetToKeep))) {
+         console.log(`DEBUG: Adding ${targetToKeep} to the filtered list.`);
+         finalNames.push(targetToKeep);
+      }
+      finalNames.sort();
+
+      clientChoices.clearStore();
+      clientChoices.setChoices(
+        [{ value: "", label: "Select Client", disabled: true, selected: !targetToKeep },
+         ...finalNames.map(name => ({ 
+           value: name, 
+           label: name, 
+           selected: normalizeLookupText(name) === normalizeLookupText(targetToKeep) 
+         }))],
+        "value", "label", true
+      );
+    } catch (err) {
+      console.error("Failed to load clients:", err);
+      clientChoices.clearStore();
+      clientChoices.setChoices([{ value: "", label: "Error loading clients", disabled: true, selected: true }], "value", "label", true);
+    }
+  }
+
+  // Load users when client changes
+  async function loadUsers(clientName, targetUserId = null, targetItemId = null) {
+    if (!clientName) return;
+    console.log(`DEBUG: loading users for ${clientName}, targetUser=${targetUserId}`);
+
+    userChoices.clearStore();
+    userChoices.setChoices([{ value: "", label: "Loading...", disabled: true, selected: true }], "value", "label", true);
+    resetLocation();
+    resetItems();
+
+    try {
+      const res = await fetch(`/sachiko/form/labels/${encodeURIComponent(clientName)}`);
+      const clientData = await res.json();
+      const users = clientData?.users || [];
+
+      const choicesArray = users.map(user => ({
+        value: String(user._id),
+        label: user.userName,
+        selected: String(user._id) === String(targetUserId) || (users.length === 1 && !targetUserId),
+        customProperties: {
+          name: user.userName,
+          location: user.userLocation || "",
+          locationDetails: Array.isArray(user.locationDetails) ? user.locationDetails : [],
+        }
+      }));
+
+      // Selecting the user below fires a "change"; suppress the handler so it
+      // doesn't launch a second, competing loadItems() alongside ours.
+      programmaticUserUpdate = true;
+      userChoices.clearStore();
+      userChoices.setChoices(
+        [{ value: "", label: "Select User", disabled: true, selected: !targetUserId && users.length !== 1 }, ...choicesArray],
+        "value",
+        "label",
+        true
+      );
+
+      // Explicitly set value to trigger downstream
+      let selectedUser = null;
+      if (targetUserId) {
+        selectedUser = users.find(u => String(u._id) === String(targetUserId));
+      } else if (users.length === 1) {
+        selectedUser = users[0];
+      }
+
+      if (selectedUser) {
+        const uid = String(selectedUser._id);
+        userChoices.setChoiceByValue(uid);
+        if (userSelect) userSelect.value = uid;
+        userNameHidden.value = selectedUser.userName || "";
+        programmaticUserUpdate = false;
+        setLocationFromUser(selectedUser);
+        // Prefill by item → fetch unfiltered ("") so we can find it and adopt its
+        // location; otherwise items wait for a chosen location (null).
+        await loadItems(targetItemId, uid, targetItemId ? "" : null);
+      } else {
+        programmaticUserUpdate = false;
+      }
+    } catch (err) {
+      console.error("Failed to load users:", err);
+      userChoices.clearStore();
+      userChoices.setChoices([{ value: "", label: "Error loading users", disabled: true, selected: true }], "value", "label", true);
+    }
+  }
+
+  // Load items based on type, user and (now) location. Items are scoped to the
+  // selected location; when prefilling by a specific item we don't yet know its
+  // location, so we fetch unfiltered and then set the location from the item.
+  async function loadItems(targetItemId = null, targetUserId = null, targetLocation = null) {
+    const userId = targetUserId || userSelect.value || userChoices?.getValue(true);
+    const itemType = itemTypeSelect.value;
+    if (!userId || !itemType) return;
+
+    const loc = normalizeLocationName(
+      targetLocation != null ? targetLocation : (locationSelect.value || ""),
+    );
+
+    // Normal flow: a location must be chosen before items are shown. (When we're
+    // prefilling a known item, we allow an unfiltered fetch to discover it.)
+    if (!loc && !targetItemId) {
+      itemChoices.clearStore();
+      itemChoices.setChoices([{ value: "", label: "Select a location first", disabled: true, selected: true }], "value", "label", true);
+      updateStockDisplay();
+      return;
+    }
+
+    itemChoices.clearStore();
+    itemChoices.setChoices([{ value: "", label: "Loading...", disabled: true, selected: true }], "value", "label", true);
+
+    try {
+      const itemsUrl = `/sachiko/sales/items/${itemType}/${userId}` + (loc ? `?location=${encodeURIComponent(loc)}` : "");
+      const res = await fetch(itemsUrl);
+      const items = await res.json();
+
+      itemChoices.clearStore();
+      if (items.length === 0) {
+        itemChoices.setChoices([{ value: "", label: "No items found", disabled: true, selected: true }], "value", "label", true);
+        return;
+      }
+      
+      const itemChoicesArray = items.map(item => ({
+        value: item._id,
+        label: item.displayName,
+        selected: String(item._id) === String(targetItemId) || (items.length === 1 && !targetItemId),
+        customProperties: {
+          stock: JSON.stringify(item.stock || { totalStock: 0, locations: [] }),
+          minQty: item.minOrderQty || 0,
+          perRollQty: item.perRollQty || 0,
+          rate: typeof item.rate !== "undefined" ? item.rate : null,
+          details: JSON.stringify(item.details || {})
+        }
+      }));
+
+      itemChoices.setChoices(
+        [{ value: "", label: "Select Item", disabled: true, selected: !targetItemId && items.length !== 1 }, ...itemChoicesArray],
+        "value",
+        "label",
+        true
+      );
+
+      if (targetItemId) {
+        setChoiceValue(itemChoices, itemSelect, targetItemId);
+        // Prefill by item: align the location dropdown with the chosen item's
+        // own location (it may differ from whatever was auto-selected).
+        const selectedItem = items.find((it) => String(it._id) === String(targetItemId));
+        const itemLoc = normalizeLocationName(selectedItem?.location || "");
+        if (itemLoc && itemLoc !== loc) {
+          programmaticLocationUpdate = true;
+          const hasOption = Array.from(locationSelect.options).some(
+            (o) => normalizeLocationName(o.value) === itemLoc,
+          );
+          if (hasOption) {
+            locationSelect.value = itemLoc;
+            locationChoices.setChoiceByValue?.(itemLoc);
+          } else {
+            setLocationField(itemLoc);
+          }
+          syncSourceLocation(itemLoc);
+          programmaticLocationUpdate = false;
+        }
+      } else if (items.length === 1) {
+        setChoiceValue(itemChoices, itemSelect, items[0]._id);
+      }
+
+      // Trigger change event to update stock display
+      updateStockDisplay();
+    } catch (err) {
+      console.error("Failed to load items:", err);
+      itemChoices.clearStore();
+      itemChoices.setChoices([{ value: "", label: "Error loading items", disabled: true, selected: true }], "value", "label", true);
+    }
+  }
+
+  // Labels and Color Labels are always MOQ'd in labels now (the Rolls option
+  // was removed from their binding forms) -- ignore ROLLS stored on older
+  // bindings; every item type just gets the plain "Enter quantity" prompt.
+  function updateQtyUnitBadge(selectedOption) {
+    const badge = document.getElementById("qty-unit-badge");
+    const qtyInput = document.getElementById("quantity");
+    if (badge) badge.style.display = "none";
+    if (qtyInput) qtyInput.placeholder = "Enter quantity";
+  }
+
+  function updateRateDisplay(selectedOption) {
+    if (!rateDisplayInput) return;
+    const rate = selectedOption?.customProperties?.rate;
+    const hasRate = rate === 0 || rate === "0" || (rate !== null && typeof rate !== "undefined" && rate !== "");
+    rateDisplayInput.value = hasRate ? String(rate) : "";
+
+    if (!orderRateInput) return;
+    if (orderRateInput.dataset.userEdited === "true") return;
+    if (orderRateInput.dataset.fromOrder === "true") return;
+    orderRateInput.value = hasRate ? String(rate) : "";
+  }
+
+  // Renders label/value pairs as a real table, 4 pairs (8 cells) per row.
+  // A 3rd tuple element (truthy) highlights that cell (used for the
+  // Per Roll Qty / Per Roll Rate rows).
+  function kvTable(pairs) {
+    const perRow = 4;
+    let rows = "";
+    for (let i = 0; i < pairs.length; i += perRow) {
+      const chunk = pairs.slice(i, i + perRow);
+      while (chunk.length < perRow) chunk.push(["", ""]);
+      rows += "<tr>" + chunk.map(([k, v, hl]) => (k === "" ? "<th></th><td></td>" : `<th${hl ? ' class="ap-hl"' : ""}>${k}</th><td${hl ? ' class="ap-hl"' : ""}>${v}</td>`)).join("") + "</tr>";
+    }
+    return `<table class="ap-table"><tbody>${rows}</tbody></table>`;
+  }
+
+  // Details of the currently selected item (LABEL/COLOR_LABEL carry
+  // perRollQty/perRoll) -- kept around so the details table can be
+  // re-rendered when the quantity changes (No of Rolls depends on it).
+  let currentSelectedDetails = null;
+
+  // No of Rolls (span 3) only shows for LABEL/COLOR_LABEL items; when it's
+  // hidden, Remarks grows from span 7 to span 10 to fill the freed columns
+  // so the row still totals 32 instead of leaving a trailing gap.
+  function syncRemarksWidth() {
+    const rollsDiv = document.getElementById("no-of-rolls-div");
+    const remarksWrap = document.getElementById("remarks-wrap");
+    if (!remarksWrap) return;
+    const rollsVisible = !!rollsDiv && rollsDiv.style.display !== "none";
+    remarksWrap.style.gridColumn = rollsVisible ? "span 7" : "span 10";
+  }
+
+  function renderSelectedItemDetailsTable() {
+    const detailsBox = document.getElementById("selected-item-details");
+    const rollsDiv = document.getElementById("no-of-rolls-div");
+    const rollsInput = document.getElementById("no-of-rolls");
+    if (!currentSelectedDetails) {
+      detailsBox.style.display = "none";
+      detailsBox.innerHTML = "";
+      if (rollsDiv) rollsDiv.style.display = "none";
+      syncRemarksWidth();
+      return;
+    }
+
+    const entries = getProfileDetailEntries(currentSelectedDetails);
+    const isLabelType = currentSelectedDetails.type === "LABEL" || currentSelectedDetails.type === "COLOR_LABEL";
+    if (isLabelType) {
+      const perRollQty = Number(currentSelectedDetails.perRollQty) || 0;
+      const qty = Number(String(quantityInput?.value || "").replace(/,/g, "")) || 0;
+      let rollsText = "-";
+      if (perRollQty > 0 && qty > 0) {
+        const rolls = qty / perRollQty;
+        rollsText = Number.isInteger(rolls) ? String(rolls) : rolls.toFixed(2);
+      }
+      if (rollsDiv) rollsDiv.style.display = "";
+      if (rollsInput) rollsInput.value = rollsText;
+    } else if (rollsDiv) {
+      rollsDiv.style.display = "none";
+    }
+
+    if (entries.length > 0) {
+      detailsBox.innerHTML = `<div class="ap-table-wrap">${kvTable(entries)}</div>`;
+      detailsBox.style.display = "block";
+    } else {
+      detailsBox.style.display = "none";
+      detailsBox.innerHTML = "";
+    }
+    syncRemarksWidth();
+  }
+
+  function getProfileDetailEntries(details) {
+    const d = details || {};
+    const type = String(d.type || "").toUpperCase();
+    const out = [];
+    const pushIf = (label, value, highlight) => {
+      if (value === null || value === undefined) return;
+      const text = String(value).trim();
+      if (!text) return;
+      out.push(highlight ? [label, text, true] : [label, text]);
+    };
+
+    if (type === "TTR") {
+      pushIf("Product ID", d.productId);
+      pushIf("Min Stock Qty", d.minQty);
+      pushIf("Client Material Code", d.clientMaterialCode);
+      pushIf("Material Code", d.materialCode);
+      pushIf("Client Type", d.clientType);
+      pushIf("Type", d.ttrType);
+      pushIf("Color", d.color);
+      pushIf("Ink Face", d.inkFace);
+      pushIf("Width", d.width);
+      pushIf("Meters", d.mtrs);
+      pushIf("Core ID", d.coreId);
+      pushIf("Core Length", d.coreLength);
+      pushIf("Notch", d.notch);
+      pushIf("Winding", d.winding);
+    } else if (type === "TAPE") {
+      pushIf("Product ID", d.productId);
+      pushIf("Min Stock Qty", d.minQty);
+      pushIf("Client Paper Code", d.clientPaperCode);
+      pushIf("Paper Code", d.paperCode);
+      pushIf("Client GSM", d.clientGsm);
+      pushIf("GSM", d.gsm);
+      pushIf("Paper Type", d.paperType);
+      pushIf("Adhesive GSM", d.adhesiveGsm);
+      pushIf("Width", d.width);
+      pushIf("Meters", d.mtrs);
+      pushIf("Core ID", d.coreId);
+      pushIf("Finish", d.finish);
+    } else if (type === "POS_ROLL") {
+      pushIf("Product ID", d.productId);
+      pushIf("Min Stock Qty", d.minQty);
+      pushIf("Client Paper Code", d.clientPaperCode);
+      pushIf("Paper Code", d.paperCode);
+      pushIf("Client GSM", d.clientGsm);
+      pushIf("GSM", d.gsm);
+      pushIf("Paper Type", d.paperType);
+      pushIf("Color", d.color);
+      pushIf("Width", d.width);
+      pushIf("Meters", d.mtrs);
+      pushIf("Core ID", d.coreId);
+    } else if (type === "TAFETA") {
+      pushIf("Product ID", d.productId);
+      pushIf("Min Stock Qty", d.minQty);
+      pushIf("Client Material Code", d.clientMaterialCode);
+      pushIf("Material Code", d.materialCode);
+      pushIf("Client Material Type", d.clientMaterialType);
+      pushIf("Material Type", d.materialType);
+      pushIf("Client GSM", d.clientGsm);
+      pushIf("GSM", d.gsm);
+      pushIf("Color", d.color);
+      pushIf("Width", d.width);
+      pushIf("Meters", d.mtrs);
+      pushIf("Core Length", d.coreLength);
+      pushIf("Notch", d.notch);
+      pushIf("Core ID", d.coreId);
+    } else if (type === "LABEL") {
+      pushIf("Product ID", d.productId);
+      pushIf("Width", d.width);
+      pushIf("Height", d.height);
+      pushIf("Job Type", d.jobType);
+      pushIf("Instructions", d.instructions);
+      pushIf("Paper Type", d.paperType);
+      pushIf("Gap", d.gap);
+      pushIf("Ups", d.ups);
+      pushIf("Core", d.core);
+      pushIf("Min Order Qty", d.minQty);
+      pushIf("Per Roll Qty", d.perRollQty, true);
+      pushIf("Per Roll Rate", d.perRoll, true);
+    } else if (type === "COLOR_LABEL") {
+      pushIf("Product ID", d.productId);
+      pushIf("Job Name", d.jobName);
+      pushIf("Paper Type", d.paperType);
+      pushIf("Width", d.width);
+      pushIf("Height", d.height);
+      pushIf("Gap", d.gap);
+      pushIf("Ups", d.ups);
+      pushIf("Core", d.core);
+      pushIf("Min Order Qty", d.minQty);
+      pushIf("Per Roll Qty", d.perRollQty, true);
+      pushIf("Per Roll Rate", d.perRoll, true);
+    }
+
+    return out;
+  }
+
+  async function updateStockDisplay() {
+    if (!itemChoices) return;
+    const selectedOption = itemChoices.getValue(); // Choices.js object
+    const stockDisplay = document.getElementById("stock-display");
+    const detailsBox = document.getElementById("selected-item-details");
+    updateRateDisplay(selectedOption);
+    updateQtyUnitBadge(selectedOption);
+    
+    // Reset location selection
+    sourceLocationInput.value = "";
+    hideStockWarning();
+
+    if (selectedOption && selectedOption.customProperties && selectedOption.customProperties.stock) {
+      try {
+        currentSelectedDetails = JSON.parse(selectedOption.customProperties.details || "{}");
+        renderSelectedItemDetailsTable();
+      } catch (_) {
+        currentSelectedDetails = null;
+        detailsBox.style.display = "none";
+        detailsBox.innerHTML = "";
+      }
+
+      try {
+        const stock = JSON.parse(selectedOption.customProperties.stock);
+        
+        const locRes = await fetch("/sachiko/api/locations");
+        const allLocations = await locRes.json();
+
+        // Build "ALL" option
+        let locationHtml = `<label class="location-option selected" data-location="ALL" data-qty="${stock.totalStock}" data-booked="${stock.booked || 0}" data-balance="${stock.balance || 0}">
+              <input type="radio" name="locationRadio" class="location-radio" value="ALL" data-qty="${stock.totalStock}" data-booked="${stock.booked || 0}" data-balance="${stock.balance || 0}" checked />
+              <span class="location-label">ALL:</span>
+              <span class="location-qty">${stock.totalStock}</span>
+            </label>`;
+
+        // Build per-location options
+        locationHtml += allLocations.map(locName => {
+          const locData = (stock.locations || []).find(l => l.location === locName);
+          const qty = locData ? locData.qty : 0;
+          const booked = locData ? (locData.booked || 0) : 0;
+          const balance = locData ? (locData.balance || 0) : 0;
+          return `<label class="location-option" data-location="${locName}" data-qty="${qty}" data-booked="${booked}" data-balance="${balance}">
+              <input type="radio" name="locationRadio" class="location-radio" value="${locName}" data-qty="${qty}" data-booked="${booked}" data-balance="${balance}" />
+              <span class="location-label">${locName}:</span>
+              <span class="location-qty">${qty}</span>
+            </label>`;
+        }).join("");
+
+        stockDisplay.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 22px; flex-wrap: nowrap; width: max-content; min-width: 100%;">
+            <div style="display: flex; flex-wrap: nowrap; align-items: center;">${locationHtml}</div>
+            <div id="stock-stats" style="display: flex; gap: 14px; align-items: center; flex-wrap: nowrap;">
+              <div style="font-weight: 700; color: #044A78; font-size: 16px;">
+                <i class="fa-solid fa-box-open"></i> Total: <span id="stat-total">${stock.totalStock || 0}</span>
+              </div>
+              <div style="font-weight: 700; color: #d97706; font-size: 16px;" title="Pending Orders">
+                <i class="fa-regular fa-clock"></i> Booked: <span id="stat-booked">${stock.booked || 0}</span>
+              </div>
+              <div id="stat-balance-wrap" style="font-weight: 700; color: ${Number(stock.balance) < 0 ? '#ef4444' : '#059669'}; font-size: 16px;" title="Available for new orders">
+                <i class="fa-solid fa-scale-balanced"></i> Balance: <span id="stat-balance">${stock.balance || 0}</span>
+              </div>
+            </div>
+          </div>
+        `;
+        stockDisplay.style.display = "block";
+
+        // Attach radio button listeners
+        stockDisplay.querySelectorAll('input[name="locationRadio"]').forEach(radio => {
+          radio.addEventListener("change", function () {
+            if (dispatchLocationLocked && normalizeLocationName(this.value) !== lockedDispatchLocation) {
+              showDispatchLocationLockedToast();
+              enforceLockedDispatchLocation();
+              return;
+            }
+
+            // Set source location (empty for ALL so validation catches it)
+            syncSourceLocation(this.value === "ALL" ? "" : this.value);
+
+            // Highlight selected
+            stockDisplay.querySelectorAll('.location-option').forEach(el => el.classList.remove('selected'));
+            this.closest('.location-option').classList.add('selected');
+
+            // Update stats display
+            document.getElementById("stat-total").textContent = this.dataset.qty;
+            document.getElementById("stat-booked").textContent = this.dataset.booked;
+            
+            const bal = Number(this.dataset.balance) || 0;
+            const balEl = document.getElementById("stat-balance");
+            const balWrap = document.getElementById("stat-balance-wrap");
+            balEl.textContent = bal;
+            if (balWrap) {
+              balWrap.style.color = bal < 0 ? "#ef4444" : "#059669";
+            }
+
+            // Check quantity warning
+            checkStockWarning();
+          });
+        });
+
+        if (dispatchLocationLocked) {
+          enforceLockedDispatchLocation();
+        }
+
+        // ================= PRE-SELECT LOCATION =================
+        // 1) Edit mode: prefer existing source location
+        if (orderToEdit && orderToEdit.sourceLocation) {
+          const editLocation = normalizeLocationName(orderToEdit.sourceLocation);
+          const locRadio = stockDisplay.querySelector(`input[name="locationRadio"][value="${editLocation}"]`);
+          if (locRadio) {
+            locRadio.checked = true;
+            locRadio.dispatchEvent(new Event('change'));
+            if (confirmMode) lockDispatchLocation(editLocation);
+          } else if (editLocation) {
+            syncSourceLocation(editLocation);
+            if (confirmMode) lockDispatchLocation(editLocation);
+          }
+        } else {
+          // 2) Create mode: preselect user's location if available
+          const userLocationValue = normalizeLocationName(locationSelect?.value || "");
+          if (userLocationValue) {
+            const userLocRadio = stockDisplay.querySelector(`input[name="locationRadio"][value="${userLocationValue}"]`);
+            if (userLocRadio) {
+              userLocRadio.checked = true;
+              userLocRadio.dispatchEvent(new Event('change'));
+              if (confirmMode) lockDispatchLocation(userLocationValue);
+            } else {
+              // Fallback if stock widget doesn't contain this location
+              syncSourceLocation(userLocationValue);
+              if (confirmMode) lockDispatchLocation(userLocationValue);
+            }
+          }
+        }
+
+      } catch (e) {
+        console.error("Error parsing stock data", e);
+        stockDisplay.style.display = "block";
+      }
+    } else {
+      currentSelectedDetails = null;
+      renderSelectedItemDetailsTable();
+      try {
+        const locRes = await fetch("/sachiko/api/locations");
+        const allLocations = await locRes.json();
+
+        const locationHtml = (Array.isArray(allLocations) ? allLocations : []).map((locName) => {
+          return `<label class="location-option" data-location="${locName}" data-qty="-" data-booked="-" data-balance="-">
+              <input type="radio" name="locationRadio" class="location-radio" value="${locName}" data-qty="-" data-booked="-" data-balance="-" />
+              <span class="location-label">${locName}:</span>
+              <span class="location-qty">-</span>
+            </label>`;
+        }).join("");
+
+        stockDisplay.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 22px; flex-wrap: nowrap; width: max-content; min-width: 100%;">
+            <div style="display: inline-flex; flex-wrap: nowrap; align-items: center; white-space: nowrap;">
+              ${locationHtml}
+            </div>
+            <div id="stock-stats" style="display: inline-flex; gap: 14px; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
+              <div style="font-weight: 700; color: #044A78; font-size: 16px;">
+                <i class="fa-solid fa-box-open"></i> Total: <span id="stat-total">-</span>
+              </div>
+              <div style="font-weight: 700; color: #d97706; font-size: 16px;" title="Pending Orders">
+                <i class="fa-regular fa-clock"></i> Booked: <span id="stat-booked">-</span>
+              </div>
+              <div style="font-weight: 700; color: #059669; font-size: 16px;" title="Available for new orders">
+                <i class="fa-solid fa-scale-balanced"></i> Balance: <span id="stat-balance">-</span>
+              </div>
+            </div>
+          </div>
+        `;
+        stockDisplay.style.display = "block";
+
+        stockDisplay.querySelectorAll('input[name="locationRadio"]').forEach((radio) => {
+          radio.addEventListener("change", function () {
+            if (dispatchLocationLocked && normalizeLocationName(this.value) !== lockedDispatchLocation) {
+              showDispatchLocationLockedToast();
+              enforceLockedDispatchLocation();
+              return;
+            }
+
+            syncSourceLocation(this.value === "ALL" ? "" : this.value);
+            stockDisplay.querySelectorAll('.location-option').forEach(el => el.classList.remove('selected'));
+            this.closest('.location-option').classList.add('selected');
+          });
+        });
+      } catch (e) {
+        console.error("Failed to build placeholder stock display", e);
+      }
+      if (detailsBox) {
+        detailsBox.style.display = "none";
+        detailsBox.innerHTML = "";
+      }
+    }
+  }
+
+  function checkStockWarning() {
+    const qty = parseQty(quantityInput);
+    const selectedRadio = document.querySelector('input[name="locationRadio"]:checked');
+
+    if (!selectedRadio || qty <= 0) {
+      hideStockWarning();
+      return;
+    }
+
+    const availableQty = parseInt(selectedRadio.dataset.qty) || 0;
+    const warningDiv = document.getElementById("stock-warning");
+    const warningText = document.getElementById("stock-warning-text");
+
+    const isConfirmPage = window.location.pathname.includes('/sales/order/confirm');
+
+    if (qty > availableQty && !isConfirmPage) {
+      warningText.innerHTML = `Ordered quantity <b>${qty}</b> exceeds available stock <b>${availableQty}</b> at ${selectedRadio.value}. Order can still be created.`;
+      warningDiv.style.display = "block";
+    } else {
+      hideStockWarning();
+    }
+  }
+
+  function hideStockWarning() {
+    document.getElementById("stock-warning").style.display = "none";
+  }
+
+  // Helper: set the Location choices field from a user object
+  // Populate the location dropdown from the user's locations. A location is
+  // auto-selected only when there is exactly one (or a preferred one is given);
+  // when the user has several, we leave it on the placeholder so the operator
+  // deliberately picks the location that scopes the item list.
+  function setLocationFromUser(user, preferredLocation = "", { autoSelectFirst = false } = {}) {
+    if (!locationChoices) return "";
+    const entries = getUserLocationEntries(user);
+    const preferred = normalizeLocationName(preferredLocation || "");
+    if (preferred && !entries.some((entry) => normalizeLocationName(entry.value) === preferred)) {
+      entries.unshift({ value: preferred, label: preferred });
+    }
+
+    let selectedEntry = null;
+    if (preferred) {
+      selectedEntry = entries.find((entry) => normalizeLocationName(entry.value) === preferred) || null;
+    }
+    if (!selectedEntry) {
+      if (entries.length === 1) selectedEntry = entries[0];
+      else if (autoSelectFirst) selectedEntry = entries[0] || null;
+    }
+    const loc = normalizeLocationName(selectedEntry?.value || "");
+
+    programmaticLocationUpdate = true;
+    locationChoices.clearStore();
+    locationChoices.setChoices(
+      entries.length > 0
+        ? [
+            { value: "", label: "Select Location", disabled: true, selected: !loc },
+            ...entries.map((entry) => ({
+              value: entry.value,
+              label: entry.label,
+              selected: normalizeLocationName(entry.value) === loc,
+            })),
+          ]
+        : [{ value: "", label: "N/A", disabled: true, selected: true }],
+      "value", "label", true
+    );
+    if (loc) {
+      locationSelect.value = loc;
+      syncSourceLocation(loc);
+      locationChoices.setChoiceByValue?.(loc);
+    } else {
+      locationSelect.value = "";
+      syncSourceLocation("");
+    }
+    programmaticLocationUpdate = false;
+    return loc;
+  }
+
+  function setLocationField(value) {
+    if (!locationChoices) return;
+    const loc = normalizeLocationName(value || "");
+    programmaticLocationUpdate = true;
+    locationChoices.clearStore();
+    locationChoices.setChoices(
+      loc ? [{ value: loc, label: loc, selected: true }] : [{ value: "", label: "N/A", disabled: true, selected: true }],
+      "value",
+      "label",
+      true,
+    );
+    locationSelect.value = loc;
+    programmaticLocationUpdate = false;
+  }
+
+  // ======= EVENT LISTENERS (Smart Cascading Filter) =======
+
+  // 1. Item Type → filter clients, reset everything downstream
+  itemTypeSelect.addEventListener("change", () => {
+    const itemType = itemTypeSelect.value;
+    if (itemType) loadClients(itemType);
+  });
+
+  // 2. Client → load filtered users, reset user/location/item
+  clientSelect.addEventListener("change", () => {
+    resetUsers();
+    loadUsers(clientSelect.value);
+  });
+
+  locationSelect.addEventListener("change", () => {
+    if (confirmMode && dispatchLocationLocked) {
+      showDispatchLocationLockedToast();
+      enforceLockedDispatchLocation();
+      return;
+    }
+
+    // Genuine location pick → reload the item list scoped to this location.
+    // (Skip programmatic updates and confirm mode, which uses a fixed item.)
+    // resetItems() clears the source location, so re-sync it afterwards.
+    if (!programmaticLocationUpdate && !confirmMode) {
+      resetItems();
+      loadItems(null, null, locationSelect.value);
+    }
+
+    syncSourceLocation(locationSelect.value);
+    const stockDisplay = document.getElementById("stock-display");
+    if (stockDisplay && locationSelect.value) {
+      const normalizedLocation = normalizeLocationName(locationSelect.value);
+      const radio = stockDisplay.querySelector(`input[name="locationRadio"][value="${normalizedLocation}"]`);
+      if (radio) {
+        radio.checked = true;
+        radio.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+  });
+
+  // 3. User → populate locations; items load once a location is chosen
+  userSelect.addEventListener("change", () => {
+    if (programmaticUserUpdate) return; // loadUsers() drives the programmatic path
+    const selected = userChoices.getValue();
+    userNameHidden.value = selected?.customProperties?.name || selected?.label || "";
+    // resetItems() clears the source location, so populate the location AFTER it.
+    resetItems();
+    const loc = setLocationFromUser({
+      userLocation: selected?.customProperties?.location || "",
+      locationDetails: selected?.customProperties?.locationDetails || [],
+    });
+    // Single-location user → location auto-selected → load now. Multi-location →
+    // loadItems shows "Select a location first" until the operator picks one.
+    loadItems(null, null, loc || null);
+  });
+
+  // 4. Item → update stock display
+  itemSelect.addEventListener("change", updateStockDisplay);
+  quantityInput.addEventListener("input", checkStockWarning);
+  if (orderRateInput) {
+    orderRateInput.addEventListener("input", () => {
+      orderRateInput.dataset.userEdited = "true";
+    });
+  }
+
+  updateStockDisplay();
+
+  function getFieldLabel(field) {
+    if (!field?.id) return "This field";
+    const label = document.querySelector(`label[for="${field.id}"]`);
+    if (!label) return "This field";
+    return label.textContent.replace(/\*/g, "").trim() || "This field";
+  }
+
+  function getValidationMessage(field) {
+    if (!field?.validity) return "Please check required fields.";
+    if (field.validity.valueMissing) return `${getFieldLabel(field)} is required.`;
+    if (field.validity.typeMismatch) return `Please enter a valid ${getFieldLabel(field).toLowerCase()}.`;
+    if (field.validity.rangeUnderflow) return `${getFieldLabel(field)} is below allowed minimum.`;
+    if (field.validity.rangeOverflow) return `${getFieldLabel(field)} exceeds allowed maximum.`;
+    if (field.validity.stepMismatch) return `${getFieldLabel(field)} has an invalid value.`;
+    if (field.validity.patternMismatch) return `${getFieldLabel(field)} format is invalid.`;
+    return field.validationMessage || `Please enter a valid ${getFieldLabel(field).toLowerCase()}.`;
+  }
+
+  function getSelectedStockLocation() {
+    const selectedRadio = document.querySelector('input[name="locationRadio"]:checked');
+    const selectedChipLocation = normalizeLocationName(document.querySelector(".location-option.selected")?.dataset?.location || "");
+    const radioLocation = normalizeLocationName(selectedRadio?.value || "");
+    const fallbackLocation = normalizeLocationName(currentSourceLocation || sourceLocationInput.value || locationSelect.value || selectedChipLocation || "");
+    return {
+      selectedRadio,
+      radioLocation,
+      selectedLocation: radioLocation && radioLocation !== "ALL" ? radioLocation : fallbackLocation,
+    };
+  }
+
+  function getAvailableStockForSelectedLocation(selectedRadio) {
+    if (!selectedRadio) return 0;
+    const balance = Number.parseInt(selectedRadio.dataset.balance || "", 10);
+    if (Number.isFinite(balance)) return balance;
+    const qty = Number.parseInt(selectedRadio.dataset.qty || "", 10);
+    return Number.isFinite(qty) ? qty : 0;
+  }
+
+  function getAvailableStockForLocation(locationName) {
+    const normalizedLocation = normalizeLocationName(locationName);
+    if (!normalizedLocation) return 0;
+
+    if (normalizedLocation === "ALL") {
+      const totalBalance = Number.parseInt(stockInfo?.balance ?? stockInfo?.totalStock ?? 0, 10);
+      return Number.isFinite(totalBalance) ? totalBalance : 0;
+    }
+
+    const locationEntry = (stockInfo?.locations || []).find((entry) => normalizeLocationName(entry?.location) === normalizedLocation);
+    if (locationEntry) {
+      const balance = Number.parseInt(locationEntry.balance ?? locationEntry.qty ?? 0, 10);
+      return Number.isFinite(balance) ? balance : 0;
+    }
+
+    const selectedRadio = document.querySelector(`input[name="locationRadio"][value="${normalizedLocation}"]`);
+    return getAvailableStockForSelectedLocation(selectedRadio);
+  }
+
+  function getPhysicalStockForLocation(locationName) {
+    const normalizedLocation = normalizeLocationName(locationName);
+    if (!normalizedLocation) return 0;
+
+    if (normalizedLocation === "ALL") {
+      const totalStock = Number.parseInt(stockInfo?.totalStock ?? 0, 10);
+      return Number.isFinite(totalStock) ? totalStock : 0;
+    }
+
+    const locationEntry = (stockInfo?.locations || []).find((entry) => normalizeLocationName(entry?.location) === normalizedLocation);
+    if (locationEntry) {
+      const qty = Number.parseInt(locationEntry.qty ?? 0, 10);
+      return Number.isFinite(qty) ? qty : 0;
+    }
+
+    const selectedRadio = document.querySelector(`input[name="locationRadio"][value="${normalizedLocation}"]`);
+    if (selectedRadio) {
+      const qty = Number.parseInt(selectedRadio.dataset.qty || "0", 10);
+      return Number.isFinite(qty) ? qty : 0;
+    }
+    return 0;
+  }
+
+  function selectStockLocation(locationName) {
+    const normalizedLocation = normalizeLocationName(locationName);
+    if (!normalizedLocation) return false;
+
+    const stockDisplay = document.getElementById("stock-display");
+    const radio = stockDisplay?.querySelector(`input[name="locationRadio"][value="${normalizedLocation}"]`);
+    if (!radio) return false;
+
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+
+  function setSubmittingState(isSubmitting) {
+    if (!orderForm) return;
+    orderForm.dataset.submitting = isSubmitting ? "1" : "0";
+    if (submitButton) submitButton.disabled = !!isSubmitting;
+  }
+
+  function isTemplateOnlyInvoice(invoice) {
+    const value = String(invoice || "").trim();
+    if (!value) return true;
+    return /^TECH\|IN\|\d{2}-\d{2}\|[A-Z_]+\|$/i.test(value);
+  }
+
+  // Form validation — prevent submit on invalid fields, disallow ALL location, and enforce min qty
+  orderForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (orderForm.dataset.submitting === "1") return false;
+    setSubmittingState(true);
+
+    const firstInvalid = orderForm.querySelector(":invalid");
+    if (firstInvalid) {
+      showToast(getValidationMessage(firstInvalid), "error");
+      firstInvalid.focus?.();
+      setSubmittingState(false);
+      return false;
+    }
+
+    const poValue = (poNumberInput?.value || "").trim();
+    if (!poValue) {
+      showToast("PO Number is required.", "error");
+      poNumberInput?.focus?.();
+      setSubmittingState(false);
+      return false;
+    }
+
+    if (confirmMode) {
+      const invoiceValue = (document.getElementById("invoice-number")?.value || "").trim();
+      if (!invoiceValue || isTemplateOnlyInvoice(invoiceValue)) {
+        showToast("Please enter Invoice Number before submitting the form.", "error");
+        document.getElementById("invoice-number")?.focus?.();
+        setSubmittingState(false);
+        return false;
+      }
+    }
+
+    const itemType = itemTypeSelect.value;
+    const qty = parseQty(quantityInput);
+    const selectedOption = itemChoices.getValue();
+    const { selectedRadio, radioLocation, selectedLocation } = getSelectedStockLocation();
+    
+    // Check Source Location - ALL is not allowed for stock-based items
+    if (itemType === "TAPE" || itemType === "POS_ROLL" || itemType === "TAFETA" || itemType === "TTR") {
+      const effectiveLocation = normalizeLocationName(
+        selectedLocation || sourceLocationInput.value || currentSourceLocation || locationSelect.value || "",
+      );
+
+      if (!effectiveLocation || effectiveLocation === "ALL") {
+        showToast("no location is selected", "error");
+        setSubmittingState(false);
+        return false;
+      }
+
+      if (radioLocation === "ALL") {
+        const fallbackRadio = document.querySelector(`input[name="locationRadio"][value="${effectiveLocation}"]`);
+        if (fallbackRadio) {
+          fallbackRadio.checked = true;
+          fallbackRadio.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
+
+      sourceLocationInput.value = effectiveLocation;
+    }
+
+    const dispatchQty = confirmMode ? (parseInt(confirmQuantityInput?.value) || 0) : qty;
+    // TEMPORARY: Labels aren't stock-tracked (matches the backend's
+    // onModel === "Label" bypass in POST /sales/order/status) — skip the
+    // physical-stock check for them so they can dispatch without stock.
+    if (confirmMode && itemType !== "LABEL") {
+      const confirmLocation = normalizeLocationName(sourceLocationInput.value || currentSourceLocation || selectedLocation || selectedRadio?.value || "");
+      // Validate against physical stock (qty) instead of available balance during dispatch
+      const physicalQty = getPhysicalStockForLocation(confirmLocation);
+      if (physicalQty <= 0 || dispatchQty > physicalQty) {
+        showToast("cannot dispatch, not enough stocks", "error");
+        setSubmittingState(false);
+        return;
+      }
+    }
+
+    // Check Minimum Order Qty. Qty and MOQ are always in the same unit
+    // (rolls vs rolls, labels vs labels) so no conversion needed.
+    if (selectedOption && selectedOption.customProperties) {
+      const cp = selectedOption.customProperties;
+      let cpDetails = {};
+      try { cpDetails = JSON.parse(cp.details || "{}"); } catch (e) { cpDetails = {}; }
+      const isLabel = cpDetails.type === "LABEL" || cpDetails.type === "COLOR_LABEL";
+      const minQty = parseInt(cp.minQty) || 0;
+      const effectiveMin = minQty;
+
+      if (effectiveMin > 0 && qty < effectiveMin) {
+        let moqText = String(minQty);
+        if (isLabel) {
+          // Labels and Color Labels are always MOQ'd in labels now,
+          // regardless of what an older binding has stored for moqUnit.
+          moqText = `${minQty} labels`;
+        }
+        showToast(`Order quantity (${qty}) is less than Minimum Order Quantity (${moqText}).`, "error");
+        setSubmittingState(false);
+        return;
+      }
+    }
+
+    // Normalize the displayed quantity (strip commas) so it submits as a plain number
+    quantityInput.value = String(qty);
+
+    // For create/update sales order, submit via AJAX so backend JSON errors show as toast
+    const actionPath = orderForm.getAttribute("action") || "";
+    if (actionPath === "/sachiko/sales/order" || actionPath === "/sachiko/sales/order/status") {
+      try {
+        const formData = new FormData(orderForm);
+        const payload = new URLSearchParams();
+        for (const [key, value] of formData.entries()) {
+          payload.append(key, value);
+        }
+
+        const res = await fetch(actionPath, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            "Accept": "application/json"
+          },
+          body: payload.toString()
+        });
+
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (_) {
+          data = null;
+        }
+
+        if (!res.ok || (data && data.success === false)) {
+          showToast(data?.message || "Failed to submit order", "error");
+          setSubmittingState(false);
+          return false;
+        }
+
+        if (data?.redirect) {
+          window.location.href = data.redirect;
+          return true;
+        }
+
+        if (actionPath === "/sachiko/sales/order/status") {
+          showToast("Order dispatched successfully", "success");
+        } else {
+          showToast("Sales order submitted successfully", "success");
+        }
+        window.location.reload();
+        return true;
+      } catch (err) {
+        console.error("Sales order submit error:", err);
+        showToast("Network error while submitting order", "error");
+        setSubmittingState(false);
+        return false;
+      }
+    }
+
+    orderForm.submit();
+    return true;
+  });
+
+
+
+  // Pre-fill form from URL params or Order Data
+  window.addEventListener("load", async () => {
+    // 0. Initialize Choices.js for select fields
+    if (clientSelect) clientChoices = new Choices(clientSelect, { searchEnabled: true, itemSelectText: "" });
+    if (userSelect) userChoices = new Choices(userSelect, { searchEnabled: true, itemSelectText: "" });
+    if (locationSelect) locationChoices = new Choices(locationSelect, { searchEnabled: false, itemSelectText: "", shouldSort: false });
+    if (itemTypeSelect) itemTypeChoices = new Choices(itemTypeSelect, { searchEnabled: true, itemSelectText: "" });
+    if (itemSelect) itemChoices = new Choices(itemSelect, { searchEnabled: true, itemSelectText: "" });
+
+
+    // Restore scroll position after log edit/delete reload
+    const savedScroll = sessionStorage.getItem('logEditScrollY');
+    if (savedScroll !== null) {
+      sessionStorage.removeItem('logEditScrollY');
+      requestAnimationFrame(() => window.scrollTo(0, parseInt(savedScroll)));
+    }
+    const params = new URLSearchParams(window.location.search);
+    let type = normalizeLookupText(params.get("type"));
+    let client = normalizeLookupText(params.get("client"));
+    let userId = normalizeLookupText(params.get("user"));
+    let itemId = normalizeLookupText(params.get("item"));
+
+    console.log("DEBUG URL Params:", { type, client, userId, itemId });
+
+    // Fallback to orderToEdit if params are missing (Robust Prefill)
+    if (orderToEdit) {
+      console.log("DEBUG: Processing orderToEdit prefill...");
+      if (!type) type = inferSalesOrderType(orderToEdit);
+      if (!client && orderToEdit.userId && orderToEdit.userId.clientName) client = normalizeLookupText(orderToEdit.userId.clientName);
+      if (!userId && orderToEdit.userId && orderToEdit.userId._id) userId = String(orderToEdit.userId._id);
+      
+      // Resolve Item ID from populated fields or raw ID
+      if (!itemId) {
+        if (orderToEdit.tapeBinding && orderToEdit.tapeBinding._id) itemId = String(orderToEdit.tapeBinding._id);
+        else if (orderToEdit.tapeBinding) itemId = String(orderToEdit.tapeBinding);
+        else if (orderToEdit.labelId) itemId = String(orderToEdit.labelId);
+        else if (orderToEdit.colorLabelId) itemId = String(orderToEdit.colorLabelId);
+        else if (orderToEdit.tapeId && orderToEdit.tapeId._id) itemId = String(orderToEdit.tapeId._id);
+      }
+    }
+
+    // 1. Handle Type Prefill
+    if (type) {
+      console.log(`DEBUG: Setting type ${type}`);
+      setChoiceValue(itemTypeChoices, itemTypeSelect, type);
+      await loadClients(type, client); // Pass client here to ensure it's not filtered out
+    }
+
+    // 2. Handle Client & Downstream Prefill
+    if (client) {
+      const decodedClient = normalizeLookupText(client);
+      console.log(`DEBUG: Prefilling client ${decodedClient}`);
+
+      const success = setChoiceValue(clientChoices, clientSelect, decodedClient);
+      if (success) {
+        const selectedValue = resolveSelectValue(clientSelect, decodedClient);
+        await loadUsers(selectedValue, userId || null, itemId || null);
+      } else {
+        // Force attempt user load if client was provided
+        await loadUsers(decodedClient, userId || null, itemId || null);
+      }
+    } else if (orderToEdit && orderToEdit.userId && orderToEdit.userId.clientName) {
+        // Final fallback for edit mode without URL params
+        const editClient = normalizeLookupText(orderToEdit.userId.clientName);
+        await loadUsers(editClient, userId || null, itemId || null);
+    }
+
+    // 3. Handle Order Details Prefill (Edit Mode Only)
+    if (orderToEdit && !confirmMode) {
+      console.log("DEBUG: Setting specific order fields...");
+      const _poDateSrc = orderToEdit.poDate || orderToEdit.createdAt;
+      if (_poDateSrc) {
+        const pd = new Date(_poDateSrc);
+        poDateInput.value = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
+      }
+      if (orderToEdit.poNumber) poNumberInput.value = orderToEdit.poNumber;
+
+      if (orderRateInput && typeof orderToEdit.orderRate !== "undefined" && orderToEdit.orderRate !== null) {
+        orderRateInput.value = String(orderToEdit.orderRate);
+        orderRateInput.dataset.fromOrder = "true";
+      }
+      
+      if (orderToEdit.quantity) { quantityInput.value = formatQtyWithCommas(orderToEdit.quantity); renderSelectedItemDetailsTable(); }
+      if (orderToEdit.remarks) remarksInput.value = orderToEdit.remarks;
+      
+      if (orderToEdit.estimatedDate) {
+        const d = new Date(orderToEdit.estimatedDate);
+        estimatedDateInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      }
+      
+      // Ensure all fields are enabled for editing
+      itemTypeChoices?.enable();
+      clientChoices?.enable();
+      userChoices?.enable();
+      itemChoices?.enable();
+      locationChoices?.enable();
+    }
+
+
+    // ==========================================
+    // CONFIRM MODE OPTIMIZATION (INSTANT LOAD)
+    // ==========================================
+    if (confirmMode && orderToEdit) {
+      if (client) {
+         // 1. Set Client & Type
+         if (type) itemTypeChoices.setChoiceByValue(type);
+         clientChoices.setChoiceByValue(client);
+         
+         // 2. Set User (Manually create option)
+         userChoices.clearStore();
+         userChoices.setChoices([{
+            value: userId,
+            label: orderToEdit.userId.userName || "User",
+            selected: true,
+            customProperties: {
+              name: orderToEdit.userId.userName || "User",
+              location: orderToEdit.userId.userLocation || ""
+            }
+         }], "value", "label", true);
+         
+         userNameHidden.value = orderToEdit.userId.userName || "User";
+
+         // 3. Set Item (Manually create option with injected stock)
+         let tapeName = "Item";
+         // Label/ColorLabel orders reference the client binding directly, so
+         // it carries its own `productId` field (Tape/Pos/Tafeta/Ttr use
+         // tapeProductId/posProductId/etc. instead) — a reliable discriminator.
+         const t = orderToEdit.tapeId || null;
+         if (t) {
+            if (t.tapePaperCode) tapeName = t.tapePaperCode + " " + t.tapeGsm + "gsm";
+            else if (t.posPaperCode) tapeName = t.posPaperCode + " " + t.posGsm + "gsm";
+            else if (t.tafetaMaterialCode) tapeName = t.tafetaMaterialCode + " " + t.tafetaGsm + "gsm";
+            else if (t.ttrProductId) {
+              const parts = [
+                t.ttrType,
+                t.ttrWidth ? `${t.ttrWidth}` : null,
+                t.ttrMtrs ? `${t.ttrMtrs}m` : null,
+              ].filter(Boolean);
+              tapeName = `${parts[0] || t.ttrProductId || "Item"} ${parts.slice(1).join(" ")}`.trim();
+            } else if (t.productId && type === "COLOR_LABEL") {
+              tapeName = `${t.labelWidth || ""} x ${t.labelHeight || ""} - ${t.labelFamily || ""} - COLOR`;
+            } else if (t.productId) {
+              tapeName = `${t.labelWidth || ""} x ${t.labelHeight || ""} - ${t.labelFamily || ""} - ${t.jobType || ""}`;
+            }
+         }
+          // Construct details object for profile display
+          const detailsObj = { type: type || "" };
+          if (t) {
+             detailsObj.type = type;
+             detailsObj.productId = t.tapeProductId || t.posProductId || t.tafetaProductId || t.ttrProductId || t.productId || "";
+             detailsObj.paperCode = t.tapePaperCode || t.posPaperCode || "";
+             detailsObj.materialCode = t.tafetaMaterialCode || t.ttrMaterialCode || "";
+             detailsObj.gsm = t.tapeGsm || t.posGsm || t.tafetaGsm || "";
+             detailsObj.paperType = t.tapePaperType || t.posPaperType || t.paperType || "";
+             detailsObj.materialType = t.tafetaMaterialType || "";
+             detailsObj.finish = t.tapeFinish || "";
+             detailsObj.color = t.posColor || t.tafetaColor || t.ttrColor || "";
+             detailsObj.width = t.tapeWidth || t.posWidth || t.tafetaWidth || t.ttrWidth || t.labelWidth || "";
+             detailsObj.mtrs = t.tapeMtrs || t.posMtrs || t.tafetaMtrs || t.ttrMtrs || "";
+             detailsObj.coreId = t.tapeCoreId || t.posCoreId || t.tafetaCoreId || t.coreId || "";
+             detailsObj.coreLength = t.tafetaCoreLen || t.coreLength || "";
+             detailsObj.notch = t.tafetaNotch || t.notch || "";
+             detailsObj.winding = t.ttrWinding || "";
+             detailsObj.inkFace = t.ttrInkFace || "";
+             detailsObj.adhesiveGsm = t.tapeAdhesiveGsm || "";
+             detailsObj.minQty = t.tapeMinQty || t.posMinQty || t.tafetaMinQty || t.ttrMinQty || "";
+
+             // Label / Color Label bindings carry their own spec + rate fields
+             // directly on `t` — there's no separate tapeBinding doc for these.
+             if (t.productId) {
+               detailsObj.productId = t.productId;
+               detailsObj.jobType = t.jobType || "";
+               detailsObj.jobName = t.jobName || "";
+               detailsObj.instructions = t.instructions || "";
+               detailsObj.height = t.labelHeight || "";
+               detailsObj.gap = t.labelGap || "";
+               detailsObj.ups = t.labelUps || "";
+               detailsObj.core = t.labelCore || "";
+               detailsObj.perRollQty = t.perRollQty || "";
+               detailsObj.perRoll = t.perRoll || "";
+               detailsObj.minQty = t.moqUnit === "ROLLS"
+                 ? ((Number(t.minOrderQty) || 0) * (Number(t.perRollQty) || 0)) || t.minOrderQty || ""
+                 : (t.minOrderQty || "");
+             }
+
+             // Client specific fields (from populated binding)
+             if (orderToEdit.tapeBinding) {
+                const b = orderToEdit.tapeBinding;
+                detailsObj.clientPaperCode = b.tapeClientPaperCode || b.posClientPaperCode || "";
+                detailsObj.clientMaterialCode = b.tafetaClientMaterialCode || b.ttrClientMaterialCode || "";
+                detailsObj.clientGsm = b.clientTapeGsm || b.clientPosGsm || b.clientTafetaGsm || "";
+                detailsObj.clientType = b.clientTtrType || "";
+                detailsObj.clientMaterialType = b.tafetaClientMaterialType || "";
+             }
+          }
+
+          itemChoices.clearStore();
+          itemChoices.setChoices([{
+             value: itemId,
+             label: tapeName,
+             selected: true,
+             customProperties: {
+                stock: stockInfo ? JSON.stringify(stockInfo) : JSON.stringify({ totalStock: 0, locations: [] }),
+                details: JSON.stringify(detailsObj),
+                minQty: orderToEdit.tapeBinding
+                  ? (orderToEdit.tapeBinding.tapeMinQty ??
+                    orderToEdit.tapeBinding.posMinQty ??
+                    orderToEdit.tapeBinding.tafetaMinQty ??
+                    orderToEdit.tapeBinding.ttrMinQty ??
+                    0)
+                  // Orders are always placed in labels (qty) now -- older bindings that
+                  // predate the Rolls option's removal may still have MOQ stored in
+                  // rolls, so convert it to the label-equivalent here too.
+                  : (t?.moqUnit === "ROLLS"
+                      ? ((Number(t.minOrderQty) || 0) * (Number(t.perRollQty) || 0)) || t?.minOrderQty || 0
+                      : (t?.minOrderQty ?? 0)),
+                rate: orderToEdit.tapeBinding
+                  ? (orderToEdit.tapeBinding.tapeRatePerRoll ??
+                    orderToEdit.tapeBinding.posRatePerRoll ??
+                    orderToEdit.tapeBinding.tafetaRatePerRoll ??
+                    orderToEdit.tapeBinding.ttrRatePerRoll ??
+                    0)
+                  : (t?.productId ? (t.ratePerLabel ?? 0) : null)
+             }
+          }], "value", "label", true);
+          setChoiceValue(itemChoices, itemSelect, itemId);
+
+          // 4. Update Stock Display
+          await updateStockDisplay();
+          const initialDispatchLocation = normalizeLocationName(
+            orderToEdit.sourceLocation || orderToEdit.userId?.userLocation || locationSelect?.value || "",
+          );
+          if (initialDispatchLocation) {
+            lockDispatchLocation(initialDispatchLocation);
+            selectStockLocation(initialDispatchLocation);
+            enforceLockedDispatchLocation();
+          }
+
+         // 5. Pre-fill confirm fields
+         const today = new Date();
+         const yyyy = today.getFullYear();
+         const mm = String(today.getMonth() + 1).padStart(2, '0');
+         const dd = String(today.getDate()).padStart(2, '0');
+         const confirmDateInput = document.getElementById('confirm-date');
+         const confirmQtyInput = document.getElementById('confirm-quantity');
+         const invoiceInput = document.getElementById('invoice-number');
+         
+         if (confirmDateInput) confirmDateInput.value = `${yyyy}-${mm}-${dd}`;
+         if (confirmQtyInput) confirmQtyInput.value = (orderToEdit.quantity - (orderToEdit.dispatchedQuantity || 0));
+         
+         if (invoiceInput) {
+           const currentMonth = today.getMonth() + 1; // 1-12
+           const startYear = currentMonth < 4 ? yyyy - 1 : yyyy;
+           const endYear = startYear + 1;
+           const finYearStr = `${String(startYear).slice(-2)}-${String(endYear).slice(-2)}`;
+           let typePrefix = type || itemTypeChoices.getValue(true) || "";
+           if (typePrefix === "POS_ROLL") typePrefix = "POSROLL";
+           
+           if (typePrefix) {
+             invoiceInput.value = `TECH|IN|${finYearStr}|${typePrefix}|`;
+           }
+         }
+
+         // 6. Pre-fill Original Order Fields
+         const _poDateSrc2 = orderToEdit.poDate || orderToEdit.createdAt;
+         if (_poDateSrc2) {
+           const pd = new Date(_poDateSrc2);
+           poDateInput.value = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
+         }
+         if (orderToEdit.poNumber) poNumberInput.value = orderToEdit.poNumber;
+         if (orderRateInput && typeof orderToEdit.orderRate !== "undefined" && orderToEdit.orderRate !== null) {
+           orderRateInput.value = String(orderToEdit.orderRate);
+           orderRateInput.dataset.fromOrder = "true";
+         }
+         if (orderToEdit.userId?.userLocation) {
+           setLocationField(orderToEdit.userId.userLocation);
+         }
+         if (orderToEdit.quantity) { quantityInput.value = formatQtyWithCommas(orderToEdit.quantity); renderSelectedItemDetailsTable(); }
+         if (orderToEdit.remarks) remarksInput.value = orderToEdit.remarks;
+         if (orderToEdit.estimatedDate) {
+            const d = new Date(orderToEdit.estimatedDate);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            estimatedDateInput.value = `${yyyy}-${mm}-${dd}`;
+         }
+
+         // 7. Disable fields
+         itemTypeChoices.disable();
+         clientChoices.disable();
+         userChoices.disable();
+         itemChoices.disable();
+         quantityInput.readOnly = true;
+         poDateInput.readOnly = true;
+         poNumberInput.readOnly = !!orderToEdit.poNumber;
+         if (orderRateInput) orderRateInput.readOnly = true;
+         estimatedDateInput.readOnly = true;
+         remarksInput.readOnly = true;
+         locationChoices.disable();
+
+         // EXIT early - do not run standard load logic
+         return;
+      }
+    }
+
+    // End of Load Handler
+
+
+  });
+
+  // ================= LOG EDIT / DELETE HANDLERS =================
+  function openEditDialog(logId, qty, invoice, date) {
+    document.getElementById('edit-log-id').value = logId;
+    document.getElementById('edit-log-qty').value = qty;
+    document.getElementById('edit-log-invoice').value = invoice;
+    document.getElementById('edit-log-date').value = date;
+    document.getElementById('edit-log-dialog').style.display = 'flex';
+  }
+
+  function closeEditDialog() {
+    document.getElementById('edit-log-dialog').style.display = 'none';
+  }
+
+  function confirmDeleteLog(logId) {
+    document.getElementById('delete-log-id').value = logId;
+    document.getElementById('delete-log-dialog').style.display = 'flex';
+  }
+
+  function closeDeleteDialog() {
+    document.getElementById('delete-log-dialog').style.display = 'none';
+  }
+  
+  async function refreshLogsSection() {
+    try {
+      const res = await fetch(window.location.href);
+      const html = await res.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      
+      const currentLogs = document.getElementById('logs-wrapper');
+      const newLogs = doc.getElementById('logs-wrapper');
+      if (currentLogs && newLogs) {
+        currentLogs.innerHTML = newLogs.innerHTML;
+      }
+
+      const currentConfirmQty = document.getElementById('confirm-quantity');
+      const newConfirmQty = doc.getElementById('confirm-quantity');
+      if (currentConfirmQty && newConfirmQty) {
+        currentConfirmQty.value = newConfirmQty.value;
+      }
+
+      // Extract new stockInfo from the HTML script tags 
+      const scripts = doc.getElementsByTagName('script');
+      for (let s of scripts) {
+        if (s.textContent.includes('const stockInfo =')) {
+          const match = s.textContent.match(/const stockInfo = (.*?);/);
+          if (match && match[1] && match[1] !== 'null') {
+            try {
+               const newStockData = JSON.parse(match[1]);
+               const itemOpt = document.querySelector('#item-select option');
+               if (itemOpt) {
+                 itemOpt.dataset.stock = JSON.stringify(newStockData);
+                 updateStockDisplay();
+               }
+            } catch(e) { console.error("Error parsing new stock info", e); }
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to refresh logs smoothly", err);
+      window.location.reload(); // Fallback
+    }
+  }
+
+  async function submitEditLog() {
+    const logId = document.getElementById('edit-log-id').value;
+    const qty = parseInt(document.getElementById('edit-log-qty').value);
+    const invoiceNumber = document.getElementById('edit-log-invoice').value.trim();
+    const date = document.getElementById('edit-log-date').value;
+
+    if (!qty || qty < 1) {
+      showToast('Quantity must be at least 1.', 'error');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/sachiko/sales/order/log/${logId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: qty, invoiceNumber, date })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Log updated successfully!', false);
+        await refreshLogsSection();
+      } else {
+        showToast(data.message || 'Failed to update log.', 'error');
+      }
+    } catch (err) {
+      console.error('Edit log error:', err);
+      showToast('Something went wrong.', 'error');
+    }
+    closeEditDialog();
+  }
+
+  async function submitDeleteLog() {
+    const logId = document.getElementById('delete-log-id').value;
+
+    try {
+      const res = await fetch(`/sachiko/sales/order/log/${logId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Log deleted successfully!', false);
+        await refreshLogsSection();
+      } else {
+        showToast(data.message || 'Failed to delete log.', 'error');
+      }
+    } catch (err) {
+      console.error('Delete log error:', err);
+      showToast('Something went wrong.', 'error');
+    }
+    closeDeleteDialog();
+  }
+</script>

@@ -1,0 +1,204 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_modern.min.css" rel="stylesheet" />
+
+<style>
+  #master-table {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+</style>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <div class="indi-head">
+    <h1>Loan Action Logs</h1>
+    <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+      <a
+        href="/sachiko/loan/view"
+        style="
+          padding: 6px 14px;
+          background: #044a78;
+          color: white;
+          border-radius: 6px;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: opacity 0.2s;
+        "
+        onmouseover="this.style.opacity = '0.85'"
+        onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-arrow-left"></i>
+        <span>Back to Loans</span>
+      </a>
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span>
+            <i class="fa-solid fa-file-arrow-down"></i>
+            <span class="download-typo">Download</span>
+          </span>
+          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+        </button>
+        <div class="download-selector__menu" id="downloads">
+          <span class="download-selector__option" id="download-pdf">
+            <i class="fas fa-file-pdf download-selector__option-icon"></i>
+            <span>PDF</span>
+          </span>
+          <span class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel download-selector__option-icon"></i>
+            <span>Excel</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+  const logsData = <%- safeJson(logs || []) %>;
+
+  function formatINR(value) {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(Number(value) || 0);
+  }
+
+  const withTextFilter = (column, placeholder = "Search") => ({
+    headerFilter: "input",
+    headerFilterPlaceholder: placeholder,
+    ...column,
+  });
+
+  const table = new Tabulator("#master-table", {
+    data: logsData,
+    // layout: "fitColumns",
+    responsiveLayout: false,
+    pagination: "local",
+    paginationSize: 30,
+    movableColumns: true,
+    placeholder: "No loan logs found",
+    columns: [
+      withTextFilter({
+        title: "Date",
+        field: "date",
+        width: 130,
+      }, "Search date"),
+      withTextFilter({
+        title: "Time",
+        field: "time",
+        width: 100,
+      }, "Search time"),
+      withTextFilter({
+        title: "Employee Name",
+        field: "employeeName",
+      }, "Search employee"),
+      withTextFilter({
+        title: "Employee ID",
+        field: "empId",
+        width: 140,
+      }, "Search id"),
+      withTextFilter({
+        title: "Action",
+        field: "action",
+        width: 150,
+        hozAlign: "center",
+        formatter: (cell) => {
+          const action = String(cell.getValue() || "-");
+          let bg = "#6b7280";
+          if (action === "INITIAL LOAN" || action === "LOAN TOP-UP") bg = "#2563eb";
+          else if (action === "LOAN CLOSE") bg = "#ef4444";
+          else if (action === "EMI DEDUCTION") bg = "#10b981";
+
+          return `<span style="display:inline-block; padding:2px 10px; background:${bg}; color:white; border-radius:12px; font-size:11px; font-weight:600; letter-spacing:0.4px;">${action}</span>`;
+        },
+      }, "Search action"),
+      withTextFilter({
+        title: "Amount",
+        field: "amount",
+        hozAlign: "right",
+        width: 120,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const value = Number(cell.getValue()) || 0;
+          const sign = row.type === "DEBIT" ? "-" : "+";
+          const color = row.type === "DEBIT" ? "#b91c1c" : "#047857";
+          return `<span style="font-weight:700; color:${color};">${sign} ${formatINR(value)}</span>`;
+        },
+      }, "Search amount"),
+      withTextFilter({
+        title: "Opening Balance",
+        field: "openingBalance",
+        hozAlign: "right",
+        width: 130,
+        formatter: (cell) => formatINR(cell.getValue()),
+      }, "Search opening"),
+      withTextFilter({
+        title: "Closing Balance",
+        field: "closingBalance",
+        hozAlign: "right",
+        width: 130,
+        formatter: (cell) => formatINR(cell.getValue()),
+      }, "Search closing"),
+      withTextFilter({
+        title: "Loan Status",
+        field: "loanStatus",
+        hozAlign: "center",
+        width: 110,
+      }, "Search status"),
+      withTextFilter({
+        title: "Type",
+        field: "type",
+        width: 100,
+        hozAlign: "center",
+      }, "Search type"),
+      withTextFilter({
+        title: "Source",
+        field: "source",
+        width: 110,
+        hozAlign: "center",
+      }, "Search source"),
+      withTextFilter({
+        title: "Loan Balance",
+        field: "loanBalance",
+        hozAlign: "right",
+        width: 120,
+        formatter: (cell) => formatINR(cell.getValue()),
+      }, "Search balance"),
+    ],
+  });
+
+  const selector = document.getElementById("downloadSelector");
+  const trigger = selector.querySelector(".download-selector__trigger");
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    selector.classList.toggle("download-selector--active");
+  });
+  document.addEventListener("click", () => selector.classList.remove("download-selector--active"));
+
+  document.getElementById("download-pdf").addEventListener("click", () => {
+    table.download("pdf", "loan_logs.pdf", { orientation: "landscape", title: "Loan Action Logs" });
+    selector.classList.remove("download-selector--active");
+  });
+  document.getElementById("download-xlsx").addEventListener("click", () => {
+    table.download("xlsx", "loan_logs.xlsx", { sheetName: "LoanLogs" });
+    selector.classList.remove("download-selector--active");
+  });
+</script>

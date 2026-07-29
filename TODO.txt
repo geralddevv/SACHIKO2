@@ -1,0 +1,125 @@
+HR:
+request form - given (pending)
+
+Advance:
+in adavance keep date from 11 to 10 on 10 deduct from the salary
+
+Loan:
+loan approval when entry (hold with reason)
+filtering option like (active, request, hold, closed)
+on top of the loan view show request total and active total
+
+Petty Cash:
+need a year/month selector, person and a from/to slector in the view transaction ✔️
+month wise export (like a statement)
+
+**Sim tab:
+add option for mobno, service provider, tracement service, data from employee, if no emp others - name, plan for the emp
+
+employee:
+add logs for commercial changes in the employee edit
+when employee name is edited it should reflect all over the application
+
+Am Main:
+
+consider item combo options in the sales order page (hold)
+if single digit add a 0 before the number
+add a pop up message when logged out default (partial need to check)
+want to add daily log⬇️
+(it should be more like an automated activity log (showing things like "Order #123 created by Gerald")?)
+add a specific date and qty for the sales order
+add item client item type in the tape binding and look out for other things also make a script to update the existing thing
+need to add a dashboard for each role (roles co1, co2, etc)
+
+vendor:
+after the edit of the form it should redirect to the main page not the edit page
+add user inactive/delete option
+resolve the stock edit error
+clear tsts in the pending logs
+in one po there can we multiple orders with differernt date
+
+multiple po (purchase) should not be created for a specific item
+
+show mtrs and width in the vendor details item page
+
+5/06
+add option to add items in others (spell check) vendors and add also tape
+client type in ttr details view and client data in details view
+
+ask: add select in the others field in vendor create
+
+6/06
+extra stock can come when inward
+po and billing rate
+in client page show details of user and items in the same page
+
+when its gone from reorder to pending order, so dont show - in the purchase order creation page
+the stock inside the purchase order will show yellow/orange in the pending sales order
+
+in the vendor commodites edit thing there is a add item bug
+
+**prod calc:**
+clients detaiils -> item page loc is showing ho location
+in view of the prod bind when view show the bind view in detail
+
+
+refactor after user delete/inavtive (replace) ---------
+if inches also need mm in label form ------
+individual client logs/employee logs ------
+location prblm in label --------
+
+individual hr history
+
+day schedule (machine dashboard) current progress
+new profile -> proprietor (tst needed)
+
+
+daybook -> data from the last day should carry forward
+teeth calc
+dispatch in the labels pending
+auto die change when replaced
+vendor, prod code, rate, family
+
+famiy in prod bind
+gst and pan (gst prblm)
+in the view dealer 645 and in the client 625
+filters in the machine queue
+
+machine no, operator, helper, vendor, pap type, pap code, pap size, no of rolls
+seprate details for die details
+
+width,height, qty, paper details, die specs
+next day task should auto add in the day book
+vendor name in task
+sperate complete task
+dont override in the daybook 
+share and personal
+day book -> mybook
+
+hide rate in prod bind ✔️
+wip - work in progress assigned things ✔️
+bind button in the pending prod ✔️
+job card, date and lot no in top ✔️
+pending prod -> assign
+assign -> job card
+
+type, code, size, no of rolls ✔️
+remove name ✔️
+every job will have alloted near no of rolls
+
+also consider locaion in operator in machine queue
+if operator in emp show the machine name in profile
+
+if operator also ask location in login
+
+no of rolls, no of hrs in machine queue
+urgent btn in the order page | reflect in machine queue
+if only one ups by default take by default 3mm gap (need ref)
+average margin for every customer
+add a maintainance record there
+add the scanning thing in the production entry
+reverse proxy setup
+
+machine no by def in mtns
+unit in login by def
+

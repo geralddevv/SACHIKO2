@@ -1,0 +1,312 @@
+:root {
+  --login-surface: #ffffff;
+  --login-border: rgba(4, 74, 120, 0.18);
+  --login-shadow: 0 24px 60px rgba(4, 74, 120, 0.18);
+  --login-text: #1b2430;
+  --login-muted: #5b6b7a;
+  --login-accent: rgba(4, 74, 120, 0.14);
+}
+
+.auth-body {
+  background:
+    radial-gradient(circle at top left, rgba(4, 74, 120, 0.12), rgba(248, 249, 250, 0.9) 60%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(233, 240, 248, 0.85));
+  color: var(--login-text);
+}
+
+.auth-container {
+  min-height: calc(100vh - 38px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem 2.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-container::before,
+.auth-container::after {
+  content: "";
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(4, 74, 120, 0.12), rgba(4, 74, 120, 0));
+  filter: blur(6px);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.auth-container::before {
+  top: -220px;
+  left: -180px;
+}
+
+.auth-container::after {
+  bottom: -240px;
+  right: -160px;
+}
+
+.login-shell {
+  position: relative;
+  width: min(460px, 94vw);
+  display: grid;
+  gap: 0.75rem;
+  z-index: 1;
+}
+
+.login-accent {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(4, 74, 120, 0.85), rgba(4, 74, 120, 0.15));
+  box-shadow: 0 8px 20px rgba(4, 74, 120, 0.2);
+}
+
+.login-card {
+  background: var(--login-surface);
+  border: 1px solid var(--login-border);
+  border-radius: 18px;
+  padding: 2.2rem 2rem 2rem;
+  box-shadow: var(--login-shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 80% 0%, rgba(4, 74, 120, 0.08), transparent 55%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.login-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+.login-mark {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid var(--login-border);
+  display: grid;
+  place-items: center;
+  background: var(--login-accent);
+}
+
+.login-mark img {
+  width: 28px;
+  height: 28px;
+}
+
+.login-header h2 {
+  font-size: 1.5rem;
+  margin: 0;
+  color: var(--login-text);
+}
+
+.login-header p {
+  margin: 0.1rem 0 0;
+  color: var(--login-muted);
+  font-size: 0.95rem;
+}
+
+.brand-switcher {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.4rem;
+  padding: 0.3rem;
+  border-radius: 12px;
+  background: rgba(4, 74, 120, 0.06);
+  border: 1px solid var(--login-border);
+  position: relative;
+  z-index: 1;
+}
+
+.brand-option {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--login-muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.brand-option img {
+  border-radius: 4px;
+  opacity: 0.65;
+  transition: opacity 0.18s ease;
+}
+
+.brand-option:hover {
+  color: var(--login-text);
+}
+
+.brand-option.active {
+  background: var(--login-surface);
+  color: #044a78;
+  border-color: var(--login-border);
+  box-shadow: 0 4px 12px rgba(4, 74, 120, 0.12);
+}
+
+.brand-option.active img {
+  opacity: 1;
+}
+
+.login-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  background: rgba(255, 229, 229, 0.8);
+  color: #842029;
+  font-size: 0.95rem;
+  margin-bottom: 1.2rem;
+  border: 1px solid rgba(132, 32, 41, 0.2);
+  position: relative;
+  z-index: 1;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  position: relative;
+  z-index: 1;
+}
+
+.login-form label {
+  font-size: 0.95rem;
+  color: var(--login-text);
+}
+
+.login-form .form-control {
+  border-radius: 10px;
+  border: 1px solid var(--login-border);
+  padding: 0.6rem 0.75rem;
+  font-size: 1rem;
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-field .form-control {
+  padding-right: 3rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--login-muted);
+  padding: 0.25rem;
+  cursor: pointer;
+}
+
+.password-toggle:focus {
+  outline: none;
+}
+
+.password-toggle i {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.login-form .form-control:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.2);
+}
+
+.login-form .form-control.is-valid,
+.login-form .form-control.is-invalid,
+.login-form.was-validated .form-control:valid,
+.login-form.was-validated .form-control:invalid {
+  background-image: none;
+  padding-right: 0.75rem;
+}
+
+.login-form .form-control.is-valid,
+.login-form.was-validated .form-control:valid {
+  border-color: #198754;
+  box-shadow: 0 0 0 2px rgba(25, 135, 84, 0.15);
+}
+
+.login-form .form-control.is-invalid,
+.login-form.was-validated .form-control:invalid {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.15);
+}
+
+.login-submit {
+  margin-top: 0.6rem;
+  padding: 0.7rem 1rem;
+  font-weight: 600;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.login-help {
+  margin: 1.25rem 0 0;
+  color: var(--login-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+/* The operator login's Location field is a <select>; keep it the same height
+   and shape as the text inputs beside it. */
+.login-form select.form-control {
+  height: auto;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%2364748b'%3e%3cpath d='M8 11 3 6h10z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 14px;
+  padding-right: 2.25rem;
+}
+
+.login-help a {
+  color: var(--primary-color);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login-help a:hover {
+  text-decoration: underline;
+}
+
+@media screen and (max-width: 768px) {
+  .login-card {
+    padding: 1.6rem;
+  }
+}

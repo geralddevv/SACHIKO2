@@ -1,0 +1,202 @@
+<% layout('/layout/boilerplate') -%>
+
+<div class="main-content">
+  <form class="rottary-content needs-validation" method="post" action="/sachiko/loan/create" onsubmit="return validateLoanBeforeSubmit()" autocomplete="off" novalidate>
+
+    <div class="span-full form-heading">
+      <h1>Employee Loan</h1>
+    </div>
+
+    <!-- ================= EMPLOYEE ID ================= -->
+    <div class="span-penta">
+      <label>Employee ID</label>
+      <input
+        type="text"
+        id="emp-id"
+        class="form-control input-tag"
+        placeholder="Auto from employee"
+        readonly
+      />
+    </div>
+
+    <!-- ================= EMPLOYEE ================= -->
+    <div class="span-hexa">
+      <label>Employee Name</label>
+      <select
+        id="employee-name"
+        name="employeeId"
+        class="form-control select-tag"
+        required
+      >
+        <option value="" disabled selected hidden>Select Employee</option>
+        <% employees.forEach(emp => { %>
+          <option value="<%= emp._id %>">
+            <%= emp.empName %>
+          </option>
+        <% }) %>
+      </select>
+    </div>
+
+    <!-- ================= CURRENT BALANCE ================= -->
+    <div class="span-penta">
+      <label>Current Balance</label>
+      <input
+        type="number"
+        id="loan-balance"
+        class="form-control input-tag"
+        value="0"
+        readonly
+      />
+    </div>
+
+    <div class="span-full form-subheading"></div>
+
+    <!-- ================= DATE ================= -->
+    <div class="span-four">
+      <label>Date</label>
+      <input
+        type="date"
+        name="loanDate"
+        class="form-control input-tag"
+        required
+      />
+    </div>
+
+    <!-- ================= LOAN AMOUNT ================= -->
+    <div class="span-six">
+      <label>Loan Amount</label>
+      <input
+        type="number"
+        name="loanAmount"
+        class="form-control input-tag"
+        placeholder="Enter Loan Amount"
+        required
+      />
+    </div>
+
+    <!-- ================= EMI AMOUNT ================= -->
+    <div class="span-six">
+      <label>EMI Amount</label>
+      <input
+        type="number"
+        name="emi"
+        class="form-control input-tag"
+        placeholder="Enter EMI Amount"
+        required
+      />
+    </div>
+
+    <!-- ================= REASON ================= -->
+    <div class="span-half">
+      <label>Reason</label>
+      <input
+        name="reason"
+        class="form-control input-tag"
+        placeholder="Optional"
+      />
+    </div>
+
+    <div class="span-full btn-grp">
+      <button class="submit-btn" type="submit">
+        Save Loan
+      </button>
+    </div>
+
+  </form>
+</div>
+
+<!-- ================= CHOICES JS ================= -->
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  const employeeChoices = new Choices("#employee-name", {
+    searchEnabled: true,
+    itemSelectText: "",
+    shouldSort: false,
+  });
+
+  const employeeSelect   = document.getElementById("employee-name");
+  const empIdInput       = document.getElementById("emp-id");
+  const loanBalanceInput = document.getElementById("loan-balance");
+  const loanDateInput    = document.querySelector('[name="loanDate"]');
+
+  if (loanDateInput && !loanDateInput.value) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    loanDateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  async function fetchEmployee(empId) {
+    const res = await fetch(`/sachiko/payroll/employee/${empId}`);
+    if (!res.ok) throw new Error("Employee fetch failed");
+    return await res.json();
+  }
+
+  async function fetchLoan(empId) {
+    const res = await fetch(`/sachiko/payroll/loan/${empId}`);
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  employeeSelect.addEventListener("change", async (e) => {
+    const empId = e.target.value;
+
+    empIdInput.value = "";
+    loanBalanceInput.value = 0;
+
+    if (!empId) return;
+
+    try {
+      const emp = await fetchEmployee(empId);
+      empIdInput.value = emp.empId || "";
+
+      const loan = await fetchLoan(empId);
+      loanBalanceInput.value = loan?.currentBalance ?? 0;
+
+    } catch (err) {
+      console.error(err);
+      empIdInput.value = "";
+      loanBalanceInput.value = 0;
+    }
+  });
+
+});
+
+function validateLoanBeforeSubmit() {
+  const employeeId = document.getElementById("employee-name")?.value || "";
+  const loanAmount = Number(document.querySelector('[name="loanAmount"]')?.value || 0);
+  const emiAmount = Number(document.querySelector('[name="emi"]')?.value || 0);
+  const loanDate = document.querySelector('[name="loanDate"]')?.value || "";
+
+  if (!employeeId) {
+    if (window.showToast) window.showToast("Please select an employee.", true);
+    return false;
+  }
+
+  if (!loanDate) {
+    if (window.showToast) window.showToast("Please select a loan date.", true);
+    return false;
+  }
+
+  if (loanAmount <= 0) {
+    if (window.showToast) window.showToast("Loan amount must be greater than 0.", true);
+    return false;
+  }
+
+  if (emiAmount <= 0) {
+    if (window.showToast) window.showToast("EMI amount must be greater than 0.", true);
+    return false;
+  }
+
+  if (emiAmount > loanAmount) {
+    if (window.showToast) window.showToast("EMI amount cannot be greater than loan amount.", true);
+    return false;
+  }
+
+  return true;
+}
+</script>

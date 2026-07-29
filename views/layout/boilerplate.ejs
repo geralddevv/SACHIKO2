@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="csrf-token" content="<%= csrfToken %>" />
+    <meta name="session-expires-at" content="<%= sessionExpiresAt || '' %>" />
+    <%# Where common.js sends this user when their session ends -- operators
+        sign in at their own portal, not the staff login. %>
+    <meta name="login-url" content="<%= (authUser && authUser.role === 'operator') ? '/sachiko/operator/login' : '/sachiko/login' %>" />
+    <title>Sachiko - <%= title %></title>
+    <link rel="icon" href="/assets/sachikofavicon.png" type="image/png" />
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <link rel="stylesheet" href="/bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/css/choices.min.css" />
+    <!-- <link rel="stylesheet" href="/css/ratecalculator.css" /> -->
+    <link rel="stylesheet" href="/css/common.css?v=6" />
+    <% if (CSS) { %>
+    <link rel="stylesheet" href="/css/<%= CSS %>" />
+    <% } %>
+
+    <style>
+      .premium-input {
+        padding: 12px 14px !important;
+        border-radius: 10px !important;
+        border: 1.5px solid #e2e8f0 !important;
+        font-size: 14px !important;
+        height: auto !important;
+        background-color: #f8fafc !important;
+        box-sizing: border-box !important;
+        transition: all 0.2s ease !important;
+      }
+      .premium-input:focus {
+        border-color: #044A78 !important;
+        background-color: #ffffff !important;
+        box-shadow: 0 0 0 4px rgba(4, 74, 120, 0.1) !important;
+        outline: none !important;
+      }
+      .toast-notification {
+        position: fixed;
+        bottom: 20px;
+        right: -300px; /* start off-screen */
+        background-color: #d1e7dd; /* match sidebar dark */
+        color: #0a3646;
+        padding: 12px 40px 12px 15px;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(255, 255, 255, 0.3);
+        z-index: 9999;
+        font-family: Arial, sans-serif;
+        font-size: 18px;
+        border-left: 4px solid #0a3646; /* green accent */
+        animation: slideIn 0.5s forwards;
+      }
+
+      .toast-close {
+        position: absolute;
+        right: 12px;
+        top: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 18px;
+        color: #0a3646;
+      }
+
+
+
+      .toast-success {
+        background-color: #d1e7dd;
+        color: #0a3646;
+        border-left: 4px solid #0a3646;
+      }
+
+      .toast-error {
+        background-color: #f8d7da;
+        color: #842029;
+        border-left: 4px solid #842029;
+      }
+
+      @keyframes slideIn {
+        from {
+          right: -300px;
+          opacity: 0;
+        }
+        to {
+          right: 20px;
+          opacity: 1;
+        }
+      }
+
+      @keyframes slideOut {
+        from {
+          right: 20px;
+          opacity: 1;
+        }
+        to {
+          right: -300px;
+          opacity: 0;
+        }
+      }
+
+      /* Nav readability tweaks */
+      .side-nav {
+        background: linear-gradient(180deg, #044a78 0%, #03365a 100%);
+      }
+
+      .nav-opt-wrap {
+        background-color: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+
+      .nav-opt-wrap > .nav-items:first-child {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      .side-nav:not(.nav-panel-toggle) .nav-opt-wrap {
+        width: 40px;
+        background-color: transparent;
+        border: none;
+      }
+      
+      .side-nav:not(.nav-panel-toggle) .nav-opt-wrap > .nav-items:first-child {
+        border-bottom: none;
+      }
+
+      .nav-items {
+        min-height: 3.6rem;
+        padding: 8px 12px;
+        gap: 10px;
+        border: 1px solid transparent;
+      }
+
+      .nav-items i {
+        font-size: 16px;
+        opacity: 0.95;
+      }
+
+      .nav-items-para {
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.2px;
+        line-height: 1.2;
+      }
+
+      .nav-items:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+
+      .nav-items.active {
+        background-color: #022a45;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+      }
+
+      .nav-items.active .nav-items-para {
+        font-weight: 600;
+      }
+
+      /* Side-nav scrollbar width */
+      .side-nav::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .side-nav {
+        scrollbar-width: auto;
+      }
+
+      /* Header nav buttons */
+      nav {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        justify-content: center;
+        padding: 0 12px;
+        position: relative;
+      }
+
+      nav h1 {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .header-nav {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 11px;
+        transition: background 0.18s ease, transform 0.18s ease;
+        cursor: pointer;
+      }
+
+      .header-nav:hover {
+        background: rgba(255, 255, 255, 0.22);
+        color: #ffffff;
+      }
+
+      .header-nav.disabled {
+        opacity: 0.55;
+        pointer-events: none;
+      }
+
+      .header-nav-wrap {
+        position: absolute;
+        left: 12px;
+        display: flex;
+        gap: 10px;
+      }
+
+      #fdNavBack, #fdNavForward, #fdMobileToggle {
+        padding: 6px 12px;
+        font-size: 16px;
+      }
+
+      #fdMobileToggle {
+        display: none;
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.4);
+      }
+
+      .header-nav-right {
+        left: auto;
+        right: 12px;
+      }
+
+      /* Premium Profile Button Style */
+      #fdProfileBtn {
+        height: 32px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 10px 0 2px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1.5px solid rgba(255, 255, 255, 0.3);
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+      }
+
+      .profile-avatar-circle {
+        width: 26px;
+        height: 26px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.2) 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        color: white;
+      }
+
+      .profile-username-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #ffffff;
+        letter-spacing: 0.01em;
+      }
+
+      #fdProfileBtn:hover {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.5);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }
+
+      #fdProfileBtn i {
+        font-size: 13px;
+        color: #ffffff;
+      }
+
+      .logout-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        z-index: 9998;
+      }
+
+      .logout-modal.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .logout-dialog {
+        width: min(560px, 94vw);
+        background: #ffffff;
+        border-radius: 14px;
+        border: 1px solid rgba(4, 74, 120, 0.15);
+        box-shadow: 0 24px 60px rgba(4, 74, 120, 0.2);
+        padding: 2.2rem;
+        text-align: left;
+      }
+
+      .logout-title {
+        font-size: 1.45rem;
+        font-weight: 600;
+        color: #03365a;
+        margin: 0 0 0.4rem 0;
+      }
+
+      .logout-text {
+        margin: 0;
+        color: #4b5b6a;
+        font-size: 1.05rem;
+      }
+
+      .logout-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.6rem;
+        margin-top: 1.55rem;
+      }
+
+      .logout-btn {
+        border-radius: 999px;
+        padding: 0.65rem 1.25rem;
+        font-weight: 600;
+        font-size: 1rem;
+        border: 1px solid rgba(4, 74, 120, 0.25);
+        background: #ffffff;
+        color: #03365a;
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      .logout-btn.primary {
+        background: #044a78;
+        color: #ffffff;
+        border-color: #044a78;
+      }
+
+      /* Profile Dropdown Styles */
+      .profile-dropdown {
+        position: relative;
+        display: inline-block;
+      }
+
+      .profile-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 240px;
+        background: #ffffff;
+        border-radius: 12px;
+        border: 1px solid rgba(4, 74, 120, 0.15);
+        box-shadow: 0 10px 25px rgba(4, 74, 120, 0.18);
+        padding: 12px;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-10px);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 9999;
+      }
+
+      .profile-menu.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+
+      .profile-menu-header {
+        padding: 12px;
+        border-bottom: 1px solid #f1f5f9;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .profile-menu-name {
+        display: block;
+        font-weight: 700;
+        color: #044a78;
+        font-size: 14px;
+        margin-bottom: 2px;
+      }
+
+      .profile-menu-code {
+        display: block;
+        font-size: 11px;
+        color: #0f766e;
+        font-weight: 700;
+        margin-bottom: 2px;
+      }
+
+      .profile-menu-role {
+        display: block;
+        font-size: 11px;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        font-weight: 600;
+      }
+
+      .profile-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        color: #1e293b;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.15s;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+      }
+
+      .profile-menu-item:hover {
+        background: #f1f5f9;
+        color: #044a78;
+      }
+
+      .profile-menu-item i {
+        font-size: 14px;
+        width: 16px;
+        text-align: center;
+        color: #64748b;
+      }
+
+      .profile-menu-item:hover i {
+        color: #044a78;
+      }
+
+      .profile-menu-divider {
+        height: 1px;
+        background: #f1f5f9;
+        margin: 6px 0;
+      }
+
+      /* Password Validation Styles */
+      .password-requirement {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 4px;
+        transition: color 0.2s ease;
+      }
+      .password-requirement i {
+        font-size: 10px;
+        color: #cbd5e1;
+      }
+      .password-requirement.met {
+        color: #10b981;
+      }
+      .password-requirement.met i {
+        color: #10b981;
+      }
+      .password-input-wrapper {
+        position: relative;
+      }
+      .password-toggle-icon {
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        cursor: pointer;
+        font-size: 14px;
+        transition: color 0.2s;
+        z-index: 10;
+      }
+      .password-toggle-icon:hover {
+        color: #044a78;
+      }
+
+      /* ------------------------------- Mobile -------------------------------
+         Last in the block on purpose: these override the header rules above,
+         which share the same specificity, so source order decides the winner. */
+      @media screen and (max-width: 768px) {
+        /* Both .header-nav-wrap blocks are absolutely positioned, so on a phone
+           the centred title runs straight underneath them and the two overlap.
+           Reserve the space they occupy and truncate the title. */
+        nav > a {
+          margin-left: 104px !important;
+          margin-right: 12px !important;
+          max-width: calc(100vw - 168px);
+          overflow: hidden;
+        }
+
+        nav h1 {
+          font-size: 1rem;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        /* Drop to an avatar-only button -- the name is still in the menu -- and
+           with the label gone make it a true circle rather than a squat pill. */
+        .profile-username-label { display: none; }
+
+        #fdProfileBtn {
+          width: 32px;
+          padding: 0;
+          gap: 0;
+          justify-content: center;
+          border-radius: 50%;
+          aspect-ratio: 1 / 1;
+          flex-shrink: 0;
+        }
+
+        /* Without a fixed basis the avatar shrinks to an oval inside the
+           narrower button. Scoped to the header button so the 42px avatar in
+           the dropdown header keeps its own size. */
+        #fdProfileBtn .profile-avatar-circle {
+          flex: 0 0 26px;
+          width: 26px;
+          height: 26px;
+          aspect-ratio: 1 / 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Client-side Toast Container (Dynamic) -->
+    <div id="fd-toast" class="toast-notification toast-success" style="display: none; opacity: 0;">
+      <span id="fd-toast-msg"></span>
+      <span class="toast-close" onclick="hideFdToast()">×</span>
+    </div>
+
+    <!-- Server-side Flash Notification (Static) -->
+    <% if ((notification && notification.length) || (error && error.length)) { %>
+    <div class="toast-notification <%= error && error.length ? 'toast-error' : 'toast-success' %>" id="static-toast">
+      <span> <%= error && error.length ? error[0] : notification[0] %> </span>
+      <span class="toast-close" onclick="hideStaticToast()">×</span>
+    </div>
+    <% } %>
+
+    <script>
+      function showToast(message, type = 'success') {
+        const t = document.getElementById("fd-toast");
+        const m = document.getElementById("fd-toast-msg");
+        if (!t || !m) return;
+        
+        let toastType = type;
+        if (type === true) toastType = 'error';
+        if (type === false) toastType = 'success';
+        
+        const icon = toastType === 'success' 
+          ? '<i class="fa-solid fa-circle-check" style="margin-right: 8px;"></i>' 
+          : '<i class="fa-solid fa-triangle-exclamation" style="margin-right: 8px;"></i>';
+          
+        m.innerHTML = icon + message;
+        t.className = `toast-notification toast-${toastType}`;
+        t.style.display = "block";
+        t.style.animation = "slideIn 0.5s forwards";
+        
+        setTimeout(hideFdToast, 4000);
+      }
+
+      function hideFdToast() {
+        const t = document.getElementById("fd-toast");
+        if (!t) return;
+        t.style.animation = "slideOut 0.5s forwards";
+        setTimeout(() => { t.style.display = "none"; }, 500);
+      }
+
+      function hideStaticToast() {
+        const t = document.getElementById("static-toast");
+        if (!t) return;
+        t.style.animation = "slideOut 0.5s forwards";
+        setTimeout(() => { t.style.display = "none"; }, 500);
+      }
+
+      // Auto-hide static toast if preset
+      window.addEventListener("DOMContentLoaded", () => {
+        const staticT = document.getElementById("static-toast");
+        if (staticT) setTimeout(hideStaticToast, 5000);
+      });
+    </script>
+
+    <nav>
+      <div class="header-nav-wrap">
+        <button type="button" class="header-nav" id="fdNavBack">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <button type="button" class="header-nav" id="fdNavForward">
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+      <div class="header-nav-wrap header-nav-right">
+        <div class="profile-dropdown">
+          <button type="button" id="fdProfileBtn" title="Profile">
+            <div class="profile-avatar-circle">
+              <i class="fa-solid fa-user"></i>
+            </div>
+            <span class="profile-username-label"><%= authUser?.empName || authUser?.username %></span>
+          </button>
+          
+          <div class="profile-menu" id="fdProfileMenu">
+            <div class="profile-menu-header">
+              <div class="profile-avatar-circle" style="width: 42px; height: 42px; flex-shrink: 0; background: #f0f7ff; border: 2px solid #e2e8f0; font-size: 18px;">
+                <% if (authUser?.empPhoto) { %>
+                  <img src="/images/empimg/<%= authUser.empPhoto %>" alt="Profile" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">
+                <% } else { %>
+                  <img src="/assets/sachikofavicon.png" alt="Sachiko" style="width: 65%; height: 65%; object-fit: contain;">
+                <% } %>
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                <span class="profile-menu-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><%= authUser?.empName || authUser?.username %></span>
+                <span class="profile-menu-code">Profile Code: <%= authUser?.profileCode || 'N/A' %></span>
+                <span class="profile-menu-role"><%= authUser?.role %> Access</span>
+              </div>
+            </div>
+            
+            <button type="button" class="profile-menu-item" id="openPasswordModal">
+              <i class="fa-solid fa-key"></i>
+              Change Password
+            </button>
+            
+            <div class="profile-menu-divider"></div>
+            
+            <a href="/logout" class="profile-menu-item" id="fdLogout" style="color: #dc2626;">
+              <i class="fa-solid fa-right-from-bracket" style="color: #dc2626;"></i>
+              Logout
+            </a>
+          </div>
+        </div>
+      </div>
+      <a href="<%= typeof homeUrl !== 'undefined' ? homeUrl : '/sachiko/welcome' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center; margin-right: auto; margin-left: 20px;">
+        <h1 style="margin: 0;">Fairtech Systems</h1>
+      </a>
+    </nav>    <div class="logout-modal" id="logoutModal" aria-hidden="true">
+      <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="logoutTitle">
+        <h2 class="logout-title" id="logoutTitle">Log out?</h2>
+        <p class="logout-text">You will need to sign in again to continue.</p>
+        <div class="logout-actions">
+          <button class="logout-btn" type="button" id="logoutCancel">Cancel</button>
+          <a class="logout-btn primary" href="/logout" id="logoutConfirm">Logout</a>
+        </div>
+      </div>
+    </div>
+    <!-- Password Change Modal -->
+    <div class="logout-modal" id="passwordModal" aria-hidden="true" style="padding: 15px; overflow-y: auto; align-items: center; backdrop-filter: blur(10px);">
+      <div class="logout-dialog" role="dialog" aria-modal="true" style="width: min(380px, 95vw); margin: auto; padding: 0; border: none; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.4); animation: modalScaleIn 0.3s ease-out;">
+
+        <div style="background: #044A78; padding: 20px; text-align: center; color: white;">
+          <h2 style="margin: 0; font-size: 1.1rem; font-weight: 700;">Update Password</h2>
+        </div>
+
+        <div style="padding: 24px; background: #ffffff;">
+          <form id="changePasswordForm" style="display: flex; flex-direction: column; gap: 20px;">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            
+            <div class="password-input-group">
+              <label style="display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px;">Current Password</label>
+              <div class="password-input-wrapper">
+                <input type="password" name="oldPassword" required class="form-control premium-input" style="padding: 12px 40px 12px 14px !important;" placeholder="Enter current password">
+                <i class="fa-solid fa-eye password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
+              </div>
+            </div>
+
+            <div class="password-input-group">
+              <label style="display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px;">New Password</label>
+              <div class="password-input-wrapper">
+                <input type="password" name="newPassword" id="newPasswordInput" required class="form-control premium-input" style="padding: 12px 40px 12px 14px !important;" placeholder="Enter new password">
+                <i class="fa-solid fa-eye password-toggle-icon" onclick="togglePasswordVisibility(this)"></i>
+              </div>
+              <div id="passwordRequirements" style="margin-top: 12px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 10px;">
+                <div class="password-requirement" data-req="length" style="margin: 0;"><i class="fa-solid fa-circle"></i> 10+ Characters</div>
+                <div class="password-requirement" data-req="uppercase" style="margin: 0;"><i class="fa-solid fa-circle"></i> 1+ Uppercase</div>
+                <div class="password-requirement" data-req="lowercase" style="margin: 0;"><i class="fa-solid fa-circle"></i> 1+ Lowercase</div>
+                <div class="password-requirement" data-req="number" style="margin: 0;"><i class="fa-solid fa-circle"></i> 1+ Number</div>
+                <div class="password-requirement" data-req="special" style="margin: 0; grid-column: span 2;"><i class="fa-solid fa-circle"></i> 1+ Symbol (!@#$%^&*)</div>
+              </div>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 5px;">
+              <button class="logout-btn primary" type="submit" style="width: 100%; border-radius: 12px; padding: 14px; font-size: 14px; font-weight: 700; background: #044A78; border: none; transition: all 0.25s ease; cursor: pointer; box-shadow: 0 4px 12px rgba(4, 74, 120, 0.25);">
+                Update Password
+              </button>
+              <button type="button" id="passwordCancel" style="width: 100%; border: none; background: transparent; color: #64748b; font-weight: 600; padding: 10px; font-size: 13px; cursor: pointer; transition: color 0.2s;">
+                Discard Changes
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    
+    <style>
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes modalScaleIn {
+        from { opacity: 0; transform: scale(0.95) translateY(10px); filter: blur(4px); }
+        to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+      }
+      #togglePasswordBtn:hover {
+        background: #f0f9ff;
+        transform: translateY(-1px);
+      }
+      .nav-opt-wrap .fa-chevron-down {
+        transform: rotate(-90deg);
+      }
+      .nav-opt-wrap.is-open .fa-chevron-down {
+        transform: rotate(0deg);
+      }
+    </style>
+    <% const isAdmin = authUser && (authUser.role === "admin" || authUser.role === "proprietor"); %>
+    <% const isHr = authUser && authUser.role === "hr"; %>
+    <% const isHod = authUser && authUser.role === "hod"; %>
+    <% const isSales = authUser && authUser.role === "sales"; %>
+    <% const isOperator = authUser && authUser.role === "operator"; %>
+
+    <div class="contain">
+      <!-- Navigation bar. Operators live on just two pages (their machine queue
+           and the job card form, reached from it), so they get no side nav at
+           all and the content takes the full width. -->
+      <% if (!isOperator) { %>
+      <div class="side-nav nav-panel-toggle">
+
+        <%# Home isn't /welcome for everyone -- the server hands the layout a
+            homeUrl so this link follows whatever the role can actually open. %>
+        <% const home = typeof homeUrl !== 'undefined' && homeUrl ? homeUrl : '/sachiko/welcome'; %>
+        <div title="Dashboard" class="<%= title === 'Welcome' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '<%= home %>'">
+          <i class="fa-solid fa-house" style="color: #ffffff"></i>
+          <p class="nav-items-para">Dashboard</p>
+        </div>
+
+        <% const permissions = authUser && authUser.permissions ? authUser.permissions : {}; %>
+        
+        <% const canView = isAdmin || isHod || isSales || permissions.master; %>
+        <% const canStock = isAdmin || isHod || isSales || permissions.inventory; %>
+        <% const canOrders = isAdmin || isHod || permissions.sales || isSales; %>
+        <% const canAccounting = isAdmin || isHr || permissions.accounting; %>
+        <% const canHr = isAdmin || isHr || permissions.hr; %>
+
+        <% if (canView) { %>
+        <div class="nav-opt-wrap">
+          <div title="View" class="view-toggle nav-items">
+            <i class="fa-solid fa-boxes-stacked" style="color: #ffffff"></i>
+            <p class="nav-items-para">SKUs List</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+
+          <div class="nav-labels-opt">
+            <div title="Labels View" class="<%= title === 'Labels View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/labels/view'" style="border-top: 2px solid #ffffff9d;" >
+              <i class="fa-solid fa-address-card" style="color: #ffffff"></i>
+              <p class="nav-items-para">Plain Labels</p>
+            </div>
+            <div title="Tape View" class="<%= title === 'Tape View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tape/view'" >
+              <i class="fa-solid fa-tape" style="color: #ffffff"></i>
+              <p class="nav-items-para">Tape</p>
+            </div>
+            <div title="POS Roll View" class="<%= title === 'POS Roll View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/pos-roll/view'" >
+              <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
+              <p class="nav-items-para">POS Roll</p>
+            </div>
+            <div title="Tafeta View" class="<%= title === 'Tafeta View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tafeta/view'" style="border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-toilet-paper" style="color: #ffffff"></i>
+              <p class="nav-items-para">Tafeta</p>
+            </div>
+          </div>
+        </div>
+
+        <% } %>
+
+        <% if (canView) { %>
+        <div class="nav-opt-wrap">
+          <div title="Client" class="view-toggle nav-items">
+            <i class="fa-solid fa-user-tie" style="color: #ffffff"></i>
+            <p class="nav-items-para">Client</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          
+          <div class="nav-labels-opt">
+            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
+              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">View</p>
+            </div>
+            <div title="Client View" class="<%= title === 'Client View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/client/view'">
+              <i class="fa-solid fa-eye" style="color: #ffffff"></i>
+              <p class="nav-items-para">Client List</p>
+            </div>
+            <div title="Client Details" class="<%= title === 'Client Details' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/master/view'">
+              <i class="fa-solid fa-eye" style="color: #ffffff"></i>
+              <p class="nav-items-para">Client Data</p>
+            </div>
+
+            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
+              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
+            </div>
+
+            <div title="Client Label" class="<%= title === 'Client Label' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/labels'" style="border-top: 2px solid #ffffff9d; margin-bottom: 2px;">
+              <i class="fa-solid fa-address-card" style="color: #ffffff"></i>
+              <p class="nav-items-para">Plain Label</p>
+            </div>
+            <div title="Client Tape" class="<%= title === 'Client Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/tape-binding'" >
+              <i class="fa-solid fa-tape" style="color: #ffffff"></i>
+              <p class="nav-items-para">Tape</p>
+            </div>
+            <div title="Client POS Roll" class="<%= title === 'Client POS Roll' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/pos-roll-binding'" >
+              <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
+              <p class="nav-items-para">POS Roll</p>
+            </div>
+            <div title="Client Tafeta" class="<%= title === 'Client Tafeta' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/tafeta-binding'" style="border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-toilet-paper" style="color: #ffffff"></i>
+              <p class="nav-items-para">Tafeta</p>
+            </div>
+          </div>
+        </div>
+        <% } %>
+
+        <% if (canView && !isSales) { %>
+        <div class="nav-opt-wrap">
+          <div title="Vendor" class="view-toggle nav-items">
+            <i class="fa-solid fa-shop" style="color: #ffffff"></i>
+            <p class="nav-items-para">Purchase</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          
+          <div class="nav-labels-opt">
+            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
+              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">View</p>
+            </div>          
+            <div title="Vendor List" class="<%= title === 'Vendor Details' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/vendor/view'">
+              <i class="fa-solid fa-eye" style="color: #ffffff"></i>
+              <p class="nav-items-para">Vendor List</p>
+            </div>
+            <div title="Vendor Details" class="<%= (title === 'Vendor Coordinator View' || title === 'Edit Vendor Coordinator') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/vendor/coordinator/view'">
+              <i class="fa-solid fa-eye" style="color: #ffffff"></i>
+              <p class="nav-items-para">Vendor Details</p>
+            </div>
+            <div title="Stock View" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/stocks/view'" >
+              <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
+              <p class="nav-items-para">Summary</p>
+            </div>            
+            <div title="Re-Order" class="<%= title === 'Reorder List' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/inventory/reorder'">
+              <i class="fa-solid fa-cart-flatbed" style="color: #ffffff"></i>
+              <p class="nav-items-para">Re-Order</p>
+            </div>
+            <div title="Pending PO" class="<%= title === 'Pending Purchase Orders' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/purchase/pending'">
+              <i class="fa-solid fa-clock-rotate-left" style="color: #ffffff"></i>
+              <p class="nav-items-para">Pending PO</p>
+            </div>
+
+            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
+              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Entry</p>
+            </div>   
+          
+            <div title="Purchase Order" class="<%= title === 'Purchase Order' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/inventory/purchase/order'">
+              <i class="fa-solid fa-file-invoice" style="color: #ffffff"></i>
+              <p class="nav-items-para">Purchase Order</p>
+            </div>
+
+            <div title="Vendor Create" class="<%= title === 'Vendor Form' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor'">
+              <i class="fa-solid fa-shop" style="color: #ffffff"></i>
+              <p class="nav-items-para">Vendor Create</p>
+            </div>
+
+            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
+              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
+            </div>
+
+            <div title="Vendor Tape" class="<%= title === 'Vendor Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor-item-binding/tape'" >
+              <i class="fa-solid fa-tape" style="color: #ffffff"></i>
+              <p class="nav-items-para">Tape</p>
+            </div>
+            <div title="Vendor POS Roll" class="<%= title === 'Vendor POS Roll' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor-item-binding/pos'" >
+              <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
+              <p class="nav-items-para">POS Roll</p>
+            </div>
+            <div title="Vendor Tafeta" class="<%= title === 'Vendor Tafeta' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor-item-binding/tafeta'" style="border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-toilet-paper" style="color: #ffffff"></i>
+              <p class="nav-items-para">Tafeta</p>
+            </div>
+          </div>
+        </div>
+        <% } %>
+
+        <% if (isAdmin || isHod) { %>
+        <div class="nav-opt-wrap">
+          <div title="Datasheet" class="view-toggle nav-items">
+            <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
+            <p class="nav-items-para">Datasheet</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+
+          <div class="nav-labels-opt">
+            <div title="Datasheet View" class="<%= (title === 'Datasheet View' || title === 'Datasheet Form' || title === 'Edit Datasheet') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/datasheet/view'" style="border-top: 2px solid #ffffff9d; border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
+              <p class="nav-items-para">Datasheet</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-opt-wrap">
+          <div title="Job Card" class="view-toggle nav-items">
+            <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
+            <p class="nav-items-para">Job Card</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+
+          <div class="nav-labels-opt">
+            <div title="Job Card View" class="<%= (title === 'Job Card View' || title === 'Job Card Form') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/jobcard/view'" style="border-top: 2px solid #ffffff9d; border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
+              <p class="nav-items-para">Job Card</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-opt-wrap">
+          <div title="Masters" class="masters-toggle nav-items">
+            <i class="fa-solid fa-database" style="color: #ffffff"></i>
+            <p class="nav-items-para">Masters</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+
+          <div class="nav-labels-opt">
+            <div title="Samples" class="<%= title === 'Samples' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/samples'" style="border-top: 2px solid #ffffff9d;" >
+              <i class="fa-solid fa-vials" style="color: #ffffff"></i>
+              <p class="nav-items-para">Samples</p>
+            </div>
+
+            <div title="Location Master" class="<%= title === 'Location Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/location'" >
+              <i class="fa-solid fa-location-dot" style="color: #ffffff"></i>
+              <p class="nav-items-para">Location</p>
+            </div>
+
+            <div title="Block" class="<%= title === 'Block' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/block'" >
+              <i class="fa-solid fa-cube" style="color: #ffffff"></i>
+              <p class="nav-items-para">Block</p>
+            </div>
+            <div title="Die" class="<%= title === 'Die Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/die/view'" >
+              <i class="fa-solid fa-brush" style="color: #ffffff"></i>
+              <p class="nav-items-para">Die</p>
+            </div>
+            <div title="Machine Master" class="<%= title === 'Machine Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/machine'" style="border-bottom: 2px solid #ffffff9d">
+              <i class="fa-solid fa-gears" style="color: #ffffff"></i>
+              <p class="nav-items-para">Machine</p>
+            </div>
+          </div>
+        </div>
+        
+        <% } %>
+
+
+        <% if ((canAccounting || canHr) && !isSales) { %>
+        <%# HR staff have nothing else in the sidebar, so their one group starts
+            expanded instead of making them open it on every page. %>
+        <div class="nav-opt-wrap" <%= isHr ? 'data-open-default' : '' %>>
+          <div title="Masters" class="masters-toggle nav-items">
+            <i class="fa-solid fa-users-gear" style="color: #ffffff"></i>
+            <p class="nav-items-para">HR</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          <div class="nav-labels-opt">
+            <div title="Petty Cash View" class="<%= title === 'Petty Cash View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/pettycash/view'" style="border-top: 2px solid #ffffff9d; margin-bottom: 5px">
+              <i class="fa-solid fa-money-bill-1" style="color: #ffffff"></i>
+              <p class="nav-items-para">Petty Cash</p>
+            </div>
+
+            <div title="Advance View" class="<%= title === 'Advance View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/advance/view'" >
+              <i class="fa-solid fa-arrow-up-1-9" style="color: #ffffff"></i>
+              <p class="nav-items-para">Advance</p>
+            </div>
+
+            <div title="Loan View" class="<%= title === 'Loan View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/loan/view'" >
+              <i class="fa-solid fa-handshake" style="color: #ffffff"></i>
+              <p class="nav-items-para">Loan</p>
+            </div>
+
+            <div title="Payroll View" class="<%= title === 'Payroll View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/payroll/view'" >
+              <i class="fa-solid fa-address-book" style="color: #ffffff"></i>
+              <p class="nav-items-para">Payroll</p>
+            </div>
+
+            <div title="Employee View" class="<%= title === 'Employee View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/employee/view'" style="border-bottom: 2px solid #ffffff9d" >
+              <i class="fa-solid fa-users" style="color: #ffffff"></i>
+              <p class="nav-items-para">Employee</p>
+            </div>
+          </div>
+        </div>
+        <% } %>
+
+        <% if (isAdmin) { %>
+        <div class="nav-opt-wrap">
+          <div title="Admin" class="view-toggle nav-items">
+            <i class="fa-solid fa-user-shield" style="color: #ffffff"></i>
+            <p class="nav-items-para">Admin Control</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          <div class="nav-labels-opt">
+            <div title="Permission Dashboard" class="<%= title === 'Permission Dashboard' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/employee/admin/permissions'">
+              <i class="fa-solid fa-shield-halved" style="color: #ffffff"></i>
+              <p class="nav-items-para">Permissions</p>
+            </div>
+            <div title="Audit Log" class="<%= title === 'Audit Log' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/audit/view'">
+              <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
+              <p class="nav-items-para">Audit Log</p>
+            </div>
+          </div>
+        </div>
+        <% } %>
+
+
+        <% if (canStock && !isSales) { %>
+        <div class="nav-opt-wrap">
+          <div title="Stocks" class="view-toggle nav-items">
+            <i class="fa-solid fa-warehouse" style="color: #ffffff"></i>
+            <p class="nav-items-para">Stocks</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+
+          <div class="nav-labels-opt">
+            <% if ((isAdmin || isHod || permissions.inventory) && !isSales) { %>
+            <div title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/stocks/view'" style="border-top: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
+              <p class="nav-items-para">Stock Summary</p>
+            </div>
+            <div title="Tape Stock" class="<%= title === 'Tape Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tapestock'">
+              <i class="fa-solid fa-tape" style="color: #ffffff"></i>
+              <p class="nav-items-para">Tape</p>
+            </div>
+            <div title="POS Roll Stock" class="<%= title === 'POS Roll Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/posrollstock'" >
+              <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
+              <p class="nav-items-para">POS Roll</p>
+            </div>
+            <div title="Tafeta Stock" class="<%= title === 'Tafeta Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tafetastock'" style="border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-toilet-paper" style="color: #ffffff"></i>
+              <p class="nav-items-para">Tafeta</p>
+            </div>
+            <% } %>
+          </div>
+        </div>
+        <% } %>
+
+        <% if (canOrders) { %>
+        <div class="nav-opt-wrap">
+          <div title="Orders" class="view-toggle nav-items">
+            <i class="fa-solid fa-receipt" style="color: #ffffff"></i>
+            <p class="nav-items-para">Orders</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+
+          <div class="nav-labels-opt">
+            <div title="Sales Order" class="<%= title === 'Sales Order' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/sales/order'" style="border-top: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-cart-plus" style="color: #ffffff"></i>
+              <p class="nav-items-para">Sales Order</p>
+            </div>
+            <div title="Pending Orders" class="<%= title === 'Pending Orders' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/sales/pending'" style="<%= isSales ? '' : 'border-bottom: 2px solid #ffffff9d;' %>">
+              <i class="fa-solid fa-clock-rotate-left" style="color: #ffffff"></i>
+              <p class="nav-items-para">Pending Orders</p>
+            </div>
+            <% if (isSales) { %>
+            <div title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/stocks/view'" style="border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
+              <p class="nav-items-para">Stock Summary</p>
+            </div>
+            <% } %>
+          </div>
+        </div>
+        <% } %>
+
+        <% if (isSales) { %>
+        <div class="nav-opt-wrap">
+          <div title="HR" class="view-toggle nav-items">
+            <i class="fa-solid fa-users-gear" style="color: #ffffff"></i>
+            <p class="nav-items-para">HR</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          <div class="nav-labels-opt">
+            <div title="Petty Cash" class="<%= title === 'Petty Cash View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/pettycash/view'" style="border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-money-bill-1" style="color: #ffffff"></i>
+              <p class="nav-items-para">Petty Cash</p>
+            </div>
+          </div>
+        </div>
+        <% } %>
+
+        <% if (isAdmin || isHod) { %>
+        <div class="nav-opt-wrap">
+          <div title="Rate Calculator" class="calc-toggle nav-items">
+            <i class="fa-solid fa-calculator" style="color: #ffffff"></i>
+            <p class="nav-items-para">Calculator</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+
+          <div class="nav-labels-opt">
+            <div title="Rate Calculator" class="nav-items" onclick="window.location.href = '/sachiko/form/ratecalculator'">
+              <i class="fa-solid fa-calculator" style="color: #ffffff"></i>
+              <p class="nav-items-para">Rate Calculator</p>
+            </div>
+            <div title="Sales Calculator" class="nav-items" onclick="window.location.href = '/sachiko/form/salescalc'">
+              <i class="fa-solid fa-money-bill-transfer" style="color: #ffffff"></i>
+              <p class="nav-items-para">Sales Calculator</p>
+            </div>
+          </div>
+        </div>
+
+        <% } %>
+
+        <div title="Company Tasks" class="<%= title === 'Company Tasks' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tasks'">
+          <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
+          <p class="nav-items-para">Tasks</p>
+        </div>
+
+        <div title="Daybook" class="<%= title === 'Daybook' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/daybook'">
+          <i class="fa-solid fa-book-open" style="color: #ffffff"></i>
+          <p class="nav-items-para">Daybook</p>
+        </div>
+      </div>
+      <% } %>
+
+      <!--- Loading Content --->
+      <div class="page-content" id="pageContent"></div>
+      <div class="main-content">
+        <%- body -%>
+      </div>
+    </div>
+
+    <script src="/js/common.js?v=nav-default-open" defer></script>
+    <script src="/bootstrap/js/bootstrap.bundle.min.js" defer></script>
+    <script src="/js/BTStrap.js" defer></script>
+    <script src="/js/choices.min.js" defer></script>
+    <% if(JS) { %>
+    <script src="/js/<%= JS %>" defer></script>
+    <% } %>
+
+    <script>
+      // Instantly hide and remove table spinners after page fully loads
+      window.addEventListener("load", () => {
+        document.querySelectorAll('.table-spinner').forEach(el => {
+          el.remove();
+        });
+      });
+
+      // Choices.js focus ring: toggle class on focusin/focusout
+      document.addEventListener("focusin", (e) => {
+        const choicesEl = e.target.closest(".choices");
+        if (choicesEl) choicesEl.classList.add("choices--focused");
+      });
+      document.addEventListener("focusout", (e) => {
+        const choicesEl = e.target.closest(".choices");
+        if (choicesEl) choicesEl.classList.remove("choices--focused");
+      });
+
+      const fdLogout = document.getElementById("fdLogout");
+      const logoutModal = document.getElementById("logoutModal");
+      const logoutCancel = document.getElementById("logoutCancel");
+      
+      const fdProfileBtn = document.getElementById("fdProfileBtn");
+      const fdProfileMenu = document.getElementById("fdProfileMenu");
+      const openPasswordModal = document.getElementById("openPasswordModal");
+      const passwordModal = document.getElementById("passwordModal");
+      const passwordCancel = document.getElementById("passwordCancel");
+      const changePasswordForm = document.getElementById("changePasswordForm");
+      const newPasswordInput = document.getElementById("newPasswordInput");
+      const submitPasswordBtn = changePasswordForm?.querySelector('button[type="submit"]');
+
+      window.togglePasswordVisibility = function(icon) {
+        const input = icon.parentElement.querySelector('input');
+        if (input.type === 'password') {
+          input.type = 'text';
+          icon.classList.remove('fa-eye');
+          icon.classList.add('fa-eye-slash');
+        } else {
+          input.type = 'password';
+          icon.classList.remove('fa-eye-slash');
+          icon.classList.add('fa-eye');
+        }
+      };
+
+      if (newPasswordInput) {
+        newPasswordInput.addEventListener('input', () => {
+          const val = newPasswordInput.value;
+          const checks = {
+            length: val.length >= 10,
+            uppercase: /[A-Z]/.test(val),
+            lowercase: /[a-z]/.test(val),
+            number: /[0-9]/.test(val),
+            special: /[!@#$%^&*(),.?":{}|<>]/.test(val)
+          };
+
+          let allMet = true;
+          Object.keys(checks).forEach(key => {
+            const el = document.querySelector(`.password-requirement[data-req="${key}"]`);
+            if (el) {
+              if (checks[key]) {
+                el.classList.add('met');
+                el.querySelector('i').className = 'fa-solid fa-circle-check';
+              } else {
+                el.classList.remove('met');
+                el.querySelector('i').className = 'fa-solid fa-circle';
+                allMet = false;
+              }
+            }
+          });
+
+          if (submitPasswordBtn) {
+            submitPasswordBtn.disabled = !allMet;
+            submitPasswordBtn.style.opacity = allMet ? '1' : '0.6';
+            submitPasswordBtn.style.cursor = allMet ? 'pointer' : 'not-allowed';
+          }
+        });
+      }
+
+      if (fdLogout) {
+        fdLogout.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (fdProfileMenu) fdProfileMenu.classList.remove("show");
+          if (logoutModal) {
+            logoutModal.classList.add("show");
+            logoutModal.setAttribute("aria-hidden", "false");
+          }
+        });
+      }
+
+      if (logoutCancel && logoutModal) {
+        logoutCancel.addEventListener("click", () => {
+          logoutModal.classList.remove("show");
+          logoutModal.setAttribute("aria-hidden", "true");
+        });
+      }
+
+      if (logoutModal) {
+        logoutModal.addEventListener("click", (e) => {
+          if (e.target === logoutModal) {
+            logoutModal.classList.remove("show");
+            logoutModal.setAttribute("aria-hidden", "true");
+          }
+        });
+      }
+
+      /* Profile Dropdown Logic */
+      if (fdProfileBtn && fdProfileMenu) {
+        fdProfileBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          fdProfileMenu.classList.toggle("show");
+        });
+
+        document.addEventListener("click", (e) => {
+          if (!fdProfileMenu.contains(e.target) && e.target !== fdProfileBtn) {
+            fdProfileMenu.classList.remove("show");
+          }
+        });
+      }
+
+      /* Password Modal Logic */
+      if (openPasswordModal) {
+        openPasswordModal.addEventListener("click", () => {
+          fdProfileMenu.classList.remove("show");
+          if (passwordModal) {
+            passwordModal.classList.add("show");
+            passwordModal.setAttribute("aria-hidden", "false");
+          }
+        });
+      }
+
+      if (passwordCancel && passwordModal) {
+        passwordCancel.addEventListener("click", () => {
+          passwordModal.classList.remove("show");
+          passwordModal.setAttribute("aria-hidden", "true");
+        });
+      }
+
+      if (passwordModal) {
+        passwordModal.addEventListener("click", (e) => {
+          if (e.target === passwordModal) {
+            passwordModal.classList.remove("show");
+            passwordModal.setAttribute("aria-hidden", "true");
+          }
+        });
+      }
+
+      if (changePasswordForm) {
+        changePasswordForm.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const formData = new FormData(changePasswordForm);
+          const data = Object.fromEntries(formData.entries());
+
+          try {
+            const resp = await fetch("/sachiko/profile/password", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data)
+            });
+            const resData = await resp.json();
+            if (resData.success) {
+              showToast("Password updated successfully", "success");
+              passwordModal.classList.remove("show");
+              passwordModal.setAttribute("aria-hidden", "true");
+              changePasswordForm.reset();
+            } else {
+              showToast(resData.message || "Failed to update password", true);
+            }
+          } catch (err) {
+            showToast("Server error occurred", true);
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

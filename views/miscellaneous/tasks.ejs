@@ -1,0 +1,740 @@
+<% layout('/layout/boilerplate') %>
+
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 2px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .header-action-btn:hover { background-color: #e4e4e4; }
+    #task-table { width: 100%; }
+    .row-btn {
+      padding: 3px 8px; border: none; border-radius: 4px;
+      cursor: pointer; font-size: 12px; color: #fff; transition: opacity 0.15s;
+    }
+    .row-btn:hover { opacity: 0.85; }
+    .dialog-header {
+      background: #044A78; padding: 18px 22px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-radius: 14px 14px 0 0;
+    }
+    .dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #fff; }
+    .dialog-close-btn {
+      background: none; border: none; color: #fff; font-size: 20px;
+      cursor: pointer; line-height: 1; padding: 0 2px; opacity: 0.8; transition: opacity 0.15s;
+    }
+    .dialog-close-btn:hover { opacity: 1; }
+    .dialog-body { padding: 24px; background: #fff; border-radius: 0 0 14px 14px; }
+    .dialog-field-label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px; }
+    .dialog-field-group { margin-bottom: 16px; }
+    .dialog-field-group.hidden-field { display: none; }
+    .dialog-field-row { display: flex; gap: 12px; margin-bottom: 16px; }
+    .dialog-field-row .dialog-field-group { flex: 1; margin-bottom: 0; min-width: 0; }
+    .dialog-error { color: #ef4444; font-size: 12px; margin-top: 5px; display: none; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .dialog-choices .choices__inner {
+      border-radius: 10px !important; border: 1.5px solid #e2e8f0 !important;
+      background-color: #f8fafc; font-size: 14px; min-height: 44px;
+      display: flex; align-items: center; padding-right: 34px !important;
+      /* Explicit chevron-down (data-URI SVG) instead of relying on Choices.js's
+         own pseudo-element arrow, which was getting lost in the cascade. */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23044a78' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat !important;
+      background-position: right 10px center !important;
+      background-size: 14px !important;
+    }
+    .dialog-choices .choices__list--single { padding: 6px 10px; }
+    .dialog-choices .choices__placeholder { opacity: 0.55; }
+    .dialog-choices .choices__list--dropdown { z-index: 99999; }
+    .dialog-choices .choices__input--cloned { padding: 10px 10px !important; font-size: 14px !important; min-height: 38px !important; }
+    .status-choices[data-value="PENDING"] .choices__inner { border-color: #f0ad4e !important; }
+    .status-choices[data-value="IN_PROGRESS"] .choices__inner { border-color: #044a78 !important; }
+    .status-choices[data-value="COMPLETED"] .choices__inner { border-color: #28a745 !important; }
+  </style>
+
+  <div class="indi-head">
+    <h1>
+      Company Tasks
+      <span id="viewLabel" style="font-weight: 400; font-size: 0.9rem; opacity: 0.85;">&nbsp;— Open</span>
+    </h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <!-- Same split as the Daybook: completed tasks stay in the list but sit
+           behind this toggle. Both pages read the one Task.status, so a task
+           completed on either page lands in the Completed view on both. -->
+      <button class="header-action-btn" id="viewToggleBtn" onclick="toggleView()">
+        <i class="fa-solid fa-circle-check" style="margin-right: 4px"></i>
+        <span id="viewToggleText">Completed</span>
+        <span id="viewToggleCount" style="margin-left: 4px; opacity: 0.85;"></span>
+      </button>
+      <button class="header-action-btn" onclick="openAddDialog()">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Task
+      </button>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="task-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<datalist id="taskLabelOptions"></datalist>
+
+<!-- ============ ADD TASK DIALOG ============ -->
+<div class="logout-modal" id="addDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
+    style="width: min(480px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="addDialogTitle">New Task</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <div class="dialog-field-group">
+        <label class="dialog-field-label" for="addDueDateInput">Date</label>
+        <input type="date" id="addDueDateInput" class="form-control premium-input" />
+      </div>
+      <div class="dialog-field-group dialog-choices">
+        <label class="dialog-field-label" for="addEmployeeSelect">Assigned Employee</label>
+        <select id="addEmployeeSelect"><option value="">Select Employee</option></select>
+      </div>
+      <div class="dialog-field-group hidden-field" id="addAssignedToManualGroup">
+        <label class="dialog-field-label" for="addAssignedToManualInput">Employee Name (Manual)</label>
+        <input type="text" id="addAssignedToManualInput" class="form-control premium-input"
+          placeholder="Enter employee name" autocomplete="off" maxlength="100" />
+      </div>
+      <div class="dialog-field-group dialog-choices">
+        <label class="dialog-field-label" for="addClientSelect">Company / Client</label>
+        <select id="addClientSelect"><option value="">Select Client</option></select>
+      </div>
+      <div class="dialog-field-group hidden-field" id="addClientManualGroup">
+        <label class="dialog-field-label" for="addClientManualInput">Company / Client (Manual)</label>
+        <input type="text" id="addClientManualInput" class="form-control premium-input"
+          placeholder="Enter company / client name" autocomplete="off" maxlength="100" />
+      </div>
+      <div class="dialog-field-group">
+        <label class="dialog-field-label" for="addTitleInput">Title</label>
+        <input type="text" id="addTitleInput" class="form-control premium-input" placeholder="Enter task title" autocomplete="off" maxlength="200" />
+      </div>
+      <div class="dialog-field-row">
+        <div class="dialog-field-group">
+          <label class="dialog-field-label" for="addLabelInput">Label</label>
+          <input type="text" id="addLabelInput" class="form-control premium-input" placeholder="Enter label" autocomplete="off" maxlength="60" list="taskLabelOptions" />
+        </div>
+        <div class="dialog-field-group dialog-choices status-choices" id="addStatusWrap" data-value="PENDING">
+          <label class="dialog-field-label" for="addStatusSelect">Status</label>
+          <select id="addStatusSelect"></select>
+        </div>
+      </div>
+      <div id="addTaskError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Task</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EDIT TASK DIALOG ============ -->
+<div class="logout-modal" id="editDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
+    style="width: min(480px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="editDialogTitle">Edit Task</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <div class="dialog-field-group">
+        <label class="dialog-field-label" for="editDueDateInput">Date</label>
+        <input type="date" id="editDueDateInput" class="form-control premium-input" />
+      </div>
+      <div class="dialog-field-group dialog-choices">
+        <label class="dialog-field-label" for="editEmployeeSelect">Assigned Employee</label>
+        <select id="editEmployeeSelect"><option value="">Select Employee</option></select>
+      </div>
+      <div class="dialog-field-group hidden-field" id="editAssignedToManualGroup">
+        <label class="dialog-field-label" for="editAssignedToManualInput">Employee Name (Manual)</label>
+        <input type="text" id="editAssignedToManualInput" class="form-control premium-input"
+          placeholder="Enter employee name" autocomplete="off" maxlength="100" />
+      </div>
+      <div class="dialog-field-group dialog-choices">
+        <label class="dialog-field-label" for="editClientSelect">Company / Client</label>
+        <select id="editClientSelect"><option value="">Select Client</option></select>
+      </div>
+      <div class="dialog-field-group hidden-field" id="editClientManualGroup">
+        <label class="dialog-field-label" for="editClientManualInput">Company / Client (Manual)</label>
+        <input type="text" id="editClientManualInput" class="form-control premium-input"
+          placeholder="Enter company / client name" autocomplete="off" maxlength="100" />
+      </div>
+      <div class="dialog-field-group">
+        <label class="dialog-field-label" for="editTitleInput">Title</label>
+        <input type="text" id="editTitleInput" class="form-control premium-input" placeholder="Enter task title" autocomplete="off" maxlength="200" />
+      </div>
+      <div class="dialog-field-row">
+        <div class="dialog-field-group">
+          <label class="dialog-field-label" for="editLabelInput">Label</label>
+          <input type="text" id="editLabelInput" class="form-control premium-input" placeholder="Enter label" autocomplete="off" maxlength="60" list="taskLabelOptions" />
+        </div>
+        <div class="dialog-field-group dialog-choices status-choices" id="editStatusWrap" data-value="PENDING">
+          <label class="dialog-field-label" for="editStatusSelect">Status</label>
+          <select id="editStatusSelect"></select>
+        </div>
+      </div>
+      <div id="editTaskError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Task</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DELETE CONFIRMATION DIALOG ============ -->
+<div class="logout-modal" id="deleteDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle"
+    style="width: min(400px, 95vw);">
+    <h2 class="logout-title" id="deleteDialogTitle">
+      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Delete Task?
+    </h2>
+    <p class="logout-text">
+      Are you sure you want to delete <strong id="deleteTaskName"></strong>? This action cannot be undone.
+    </p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" onclick="closeDeleteDialog()">Cancel</button>
+      <button class="logout-btn" type="button" id="deleteConfirmBtn" onclick="submitDelete()"
+        style="background: #ef4444; color: #fff; border-color: #ef4444;">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<script id="tasks-data" type="application/json"><%- safeJson(tasks) %></script>
+<script id="employees-data" type="application/json"><%- safeJson(employees) %></script>
+<script id="clients-data" type="application/json"><%- safeJson(clients) %></script>
+<script id="daybook-task-ids-data" type="application/json"><%- safeJson(daybookTaskIds) %></script>
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+  const employeesData = JSON.parse(document.getElementById("employees-data").textContent);
+  const clientsData   = JSON.parse(document.getElementById("clients-data").textContent);
+  const rawTasks      = JSON.parse(document.getElementById("tasks-data").textContent);
+  const daybookTaskIds = new Set(JSON.parse(document.getElementById("daybook-task-ids-data").textContent));
+
+  const STATUS_LABELS = { PENDING: "Pending", IN_PROGRESS: "In Progress", COMPLETED: "Completed" };
+  const STATUS_COLORS = { PENDING: "#f0ad4e", IN_PROGRESS: "#044a78", COMPLETED: "#28a745" };
+
+  function todayInputDate() {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  }
+
+  const tableData = rawTasks.map(t => ({
+    _id:          String(t._id),
+    title:        t.title || "",
+    label:        t.label || "",
+    employeeName: t.assignedToIsOthers ? t.assignedToOthers : (t.assignedTo?.empName || "Unassigned"),
+    employeeId:   t.assignedToIsOthers ? "OTHERS" : (t.assignedTo?._id ? String(t.assignedTo._id) : ""),
+    employeeManualName: t.assignedToIsOthers ? (t.assignedToOthers || "") : "",
+    clientName:   t.clientIsOthers ? t.clientOthers : (t.client?.clientName || "—"),
+    clientId:     t.clientIsOthers ? "OTHERS" : (t.client?._id ? String(t.client._id) : ""),
+    clientManualName: t.clientIsOthers ? (t.clientOthers || "") : "",
+    status:       t.status || "PENDING",
+    dueDate:      t.dueDate || "",
+    inDaybook:    daybookTaskIds.has(String(t._id)),
+  }));
+
+  // Completed work is kept, not hidden -- it moves behind the header toggle so
+  // the default list only carries what's still open. Split on the same
+  // Task.status the Daybook uses, so the two pages agree on what's completed.
+  // tableData stays the single source of truth: row actions patch it and the
+  // table together, so both lists stay correct without a page reload.
+  const isDone = row => row.status === "COMPLETED";
+  const rowsFor = completed => tableData.filter(r => isDone(r) === completed);
+  const masterRow = id => tableData.find(r => r._id === id);
+
+  const withTextFilter = col => ({ headerFilter: "input", headerFilterPlaceholder: "Search", ...col });
+
+  // Tabulator's built-in "date" sorter is a luxon wrapper, and luxon isn't
+  // loaded here -- it compares nothing, so clicking the Date header did
+  // nothing. These values are ISO strings straight from Mongo, so compare them
+  // as timestamps; undated rows stay at the bottom whichever way you sort.
+  function dateSorter(a, b, aRow, bRow, column, dir) {
+    const ta = a ? new Date(a).getTime() : NaN;
+    const tb = b ? new Date(b).getTime() : NaN;
+    const aBlank = isNaN(ta), bBlank = isNaN(tb);
+    if (aBlank && bBlank) return 0;
+    if (aBlank) return dir === "asc" ? 1 : -1;
+    if (bBlank) return dir === "asc" ? -1 : 1;
+    return ta - tb;
+  }
+
+  // Populate the Label inputs' <datalist> with every distinct label already
+  // in use, so users get autocomplete suggestions instead of retyping /
+  // accidentally forking near-duplicate labels (e.g. "Urgent" vs "URGENT").
+  const distinctLabels = [...new Set(tableData.map(t => t.label).filter(Boolean))].sort();
+  document.getElementById("taskLabelOptions").innerHTML =
+    distinctLabels.map(l => `<option value="${l.replace(/"/g, "&quot;")}"></option>`).join("");
+
+  const table = new Tabulator("#task-table", {
+    data:             rowsFor(false),
+    height:           "100%",
+    responsiveLayout: false,
+    movableColumns:   true,
+    placeholder:      "No tasks yet.",
+    columns: [
+      {
+        title: "Actions", field: "_id", width: 170, hozAlign: "center", headerSort: false,
+        formatter(cell) {
+          const t    = cell.getRow().getData();
+          const wrap = document.createElement("div");
+          wrap.style.cssText = "display:flex;gap:5px;justify-content:center;";
+
+          const completeBtn = document.createElement("button");
+          completeBtn.className = "row-btn";
+          completeBtn.style.background = t.status === "COMPLETED" ? "#94a3b8" : "#28a745";
+          completeBtn.title = t.status === "COMPLETED" ? "Reopen task" : "Mark complete";
+          completeBtn.innerHTML = t.status === "COMPLETED" ? '<i class="fa-solid fa-rotate-left"></i>' : '<i class="fa-solid fa-check"></i>';
+          completeBtn.addEventListener("click", () => toggleComplete(cell.getRow(), completeBtn));
+
+          // Completed work is a record, not a worklist: undo is the only thing
+          // worth offering. Reopen it and the full set of actions comes back.
+          if (t.status === "COMPLETED") {
+            wrap.appendChild(completeBtn);
+            return wrap;
+          }
+
+          const daybookBtn = document.createElement("button");
+          daybookBtn.className = "row-btn";
+          paintDaybookBtn(daybookBtn, t.inDaybook);
+          daybookBtn.addEventListener("click", () => toggleDaybook(cell.getRow(), daybookBtn));
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "row-btn";
+          editBtn.style.background = "#e67e22";
+          editBtn.title = "Edit";
+          editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
+          editBtn.addEventListener("click", () => openEditDialog(cell.getRow()));
+
+          const delBtn = document.createElement("button");
+          delBtn.className = "row-btn";
+          delBtn.style.background = "#d9534f";
+          delBtn.title = "Delete";
+          delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+          delBtn.addEventListener("click", () => openDeleteDialog(cell.getRow()));
+
+          wrap.appendChild(completeBtn);
+          wrap.appendChild(daybookBtn);
+          wrap.appendChild(editBtn);
+          wrap.appendChild(delBtn);
+          return wrap;
+        },
+      },
+      {
+        title: "Date", field: "dueDate", width: 130, hozAlign: "center", sorter: dateSorter,
+        formatter: cell => {
+          const row = cell.getRow().getData();
+          const val = cell.getValue();
+          if (!val) return "";
+          const d = new Date(val);
+          if (isNaN(d)) return "";
+          const label = d.toLocaleDateString("en-GB");
+          const isOverdue = row.status !== "COMPLETED" && d < new Date(new Date().toDateString());
+          return isOverdue ? `<span style="color:#dc3545;font-weight:700;">${label}</span>` : label;
+        },
+      },
+      withTextFilter({ title: "Assigned Employee", field: "employeeName", minWidth: 170, sorter: "string" }),
+      withTextFilter({ title: "Company / Client", field: "clientName", minWidth: 170, sorter: "string" }),
+      withTextFilter({ title: "Title", field: "title", minWidth: 200, sorter: "string" }),
+      withTextFilter({
+        title: "Label", field: "label", width: 150, hozAlign: "center", sorter: "string",
+        formatter: cell => {
+          const val = cell.getValue();
+          return val ? `<span style="background:#eef2ff;color:#3730a3;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${val}</span>` : "";
+        },
+      }),
+      {
+        title: "Status", field: "status", width: 130, hozAlign: "center", sorter: "string",
+        headerFilter: "select",
+        headerFilterParams: { values: { "": "All", PENDING: "Pending", IN_PROGRESS: "In Progress", COMPLETED: "Completed" } },
+        formatter: cell => {
+          const val = cell.getValue();
+          const bg = STATUS_COLORS[val] || "#6c757d";
+          return `<span style="background:${bg};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${STATUS_LABELS[val] || val}</span>`;
+        },
+      },
+    ],
+  });
+
+  /* ─── OPEN / COMPLETED VIEW TOGGLE ─── */
+  let showingCompleted = false;
+
+  // Repaints the header only -- called after every row action so the counts
+  // follow along without touching the table itself.
+  function paintToggle() {
+    const otherCount = rowsFor(!showingCompleted).length;
+    const btn = document.getElementById("viewToggleBtn");
+    document.getElementById("viewLabel").innerHTML =
+      "&nbsp;— " + (showingCompleted ? "Completed" : "Open");
+    document.getElementById("viewToggleText").textContent = showingCompleted ? "Open" : "Completed";
+    document.getElementById("viewToggleCount").textContent = `(${otherCount})`;
+    btn.querySelector("i").className =
+      showingCompleted ? "fa-solid fa-list-check" : "fa-solid fa-circle-check";
+    // Only the Open -> Completed jump is worth blocking when there's nothing
+    // there; the way back to Open always stays live.
+    const dead = !showingCompleted && !otherCount;
+    btn.style.opacity = dead ? "0.6" : "";
+    btn.style.cursor  = dead ? "default" : "";
+    btn.title         = dead ? "No completed tasks yet" : "";
+  }
+
+  function renderView() {
+    table.setData(rowsFor(showingCompleted));
+    paintToggle();
+  }
+
+  function toggleView() {
+    if (!showingCompleted && !rowsFor(true).length) return;
+    showingCompleted = !showingCompleted;
+    renderView();
+  }
+
+  // setData/DOM updates wait for the table to exist, otherwise the first
+  // render can land before Tabulator has built itself.
+  table.on("tableBuilt", renderView);
+
+  /* ─────────────────────────────────────────
+     Dialog helpers
+  ───────────────────────────────────────── */
+  const CHOICES_CONFIG = { searchEnabled: true, shouldSort: false, itemSelectText: "" };
+  const OTHERS_VALUE = "OTHERS";
+
+  function toggleManualNameField(groupId, inputId, show) {
+    const group = document.getElementById(groupId);
+    group.classList.toggle("hidden-field", !show);
+    if (!show) document.getElementById(inputId).value = "";
+  }
+
+  function buildEmployeeChoices(selectId, selectedId) {
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = '<option value="">Select Employee</option>' +
+      `<option value="${OTHERS_VALUE}"${selectedId === OTHERS_VALUE ? " selected" : ""}>Others (Not in Employee List)</option>` +
+      employeesData.map(e =>
+        `<option value="${e._id}"${String(e._id) === String(selectedId) ? " selected" : ""}>${e.empName}</option>`
+      ).join("");
+    return new Choices(sel, { ...CHOICES_CONFIG, searchPlaceholderValue: "Search employee..." });
+  }
+
+  function buildClientChoices(selectId, selectedId) {
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = '<option value="">Select Client</option>' +
+      `<option value="${OTHERS_VALUE}"${selectedId === OTHERS_VALUE ? " selected" : ""}>Others (Not in Client List)</option>` +
+      clientsData.map(c =>
+        `<option value="${c._id}"${String(c._id) === String(selectedId) ? " selected" : ""}>${c.clientName}</option>`
+      ).join("");
+    return new Choices(sel, { ...CHOICES_CONFIG, searchPlaceholderValue: "Search client..." });
+  }
+
+  function buildStatusChoices(selectId, wrapId, selectedStatus) {
+    const sel  = document.getElementById(selectId);
+    const wrap = document.getElementById(wrapId);
+    const value = selectedStatus || "PENDING";
+    sel.innerHTML = Object.entries(STATUS_LABELS).map(([val, label]) =>
+      `<option value="${val}"${val === value ? " selected" : ""}>${label}</option>`
+    ).join("");
+    wrap.dataset.value = value;
+    const choices = new Choices(sel, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+    sel.addEventListener("change", () => { wrap.dataset.value = sel.value; });
+    return choices;
+  }
+
+  function openModal(id)  { const d = document.getElementById(id); d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
+  function closeModal(id) { const d = document.getElementById(id); d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
+  function showError(elId, msg) { const el = document.getElementById(elId); el.textContent = msg; el.style.display = "block"; }
+  function hideError(elId)      { document.getElementById(elId).style.display = "none"; }
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.style.opacity = loading ? "0.7" : "";
+  }
+  function toIsoDate(val) {
+    if (!val) return "";
+    const d = new Date(val);
+    if (isNaN(d)) return "";
+    return d.toISOString().slice(0, 10);
+  }
+
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+      if (document.getElementById(id).classList.contains("show")) closeModal(id);
+    });
+  });
+
+  /* ─── ADD ─── */
+  let addEmployeeChoices = null, addClientChoices = null, addStatusChoices = null;
+
+  function openAddDialog() {
+    if (addEmployeeChoices) { addEmployeeChoices.destroy(); addEmployeeChoices = null; }
+    if (addClientChoices)   { addClientChoices.destroy();   addClientChoices = null; }
+    if (addStatusChoices)   { addStatusChoices.destroy();   addStatusChoices = null; }
+    addEmployeeChoices = buildEmployeeChoices("addEmployeeSelect", "");
+    addClientChoices   = buildClientChoices("addClientSelect", "");
+    addStatusChoices   = buildStatusChoices("addStatusSelect", "addStatusWrap", "PENDING");
+    toggleManualNameField("addAssignedToManualGroup", "addAssignedToManualInput", false);
+    toggleManualNameField("addClientManualGroup", "addClientManualInput", false);
+    document.getElementById("addTitleInput").value = "";
+    document.getElementById("addLabelInput").value = "";
+    document.getElementById("addDueDateInput").value = todayInputDate();
+    hideError("addTaskError");
+
+    document.getElementById("addEmployeeSelect").addEventListener("change", (e) => {
+      toggleManualNameField("addAssignedToManualGroup", "addAssignedToManualInput", e.target.value === OTHERS_VALUE);
+    });
+    document.getElementById("addClientSelect").addEventListener("change", (e) => {
+      toggleManualNameField("addClientManualGroup", "addClientManualInput", e.target.value === OTHERS_VALUE);
+    });
+
+    openModal("addDialog");
+    setTimeout(() => document.getElementById("addTitleInput").focus(), 60);
+  }
+  function closeAddDialog() { closeModal("addDialog"); }
+
+  async function submitAdd() {
+    const title               = document.getElementById("addTitleInput").value.trim();
+    const label                = document.getElementById("addLabelInput").value.trim();
+    const assignedTo          = addEmployeeChoices?.getValue(true) || "";
+    const assignedToManualName = document.getElementById("addAssignedToManualInput").value.trim();
+    const client               = addClientChoices?.getValue(true) || "";
+    const clientManualName     = document.getElementById("addClientManualInput").value.trim();
+    const dueDate     = document.getElementById("addDueDateInput").value;
+    const status      = addStatusChoices?.getValue(true) || "PENDING";
+
+    if (!title)      { showError("addTaskError", "Task title is required.");    return; }
+    if (!assignedTo) { showError("addTaskError", "Please select an employee."); return; }
+    if (assignedTo === OTHERS_VALUE && !assignedToManualName) { showError("addTaskError", "Please enter the employee name."); return; }
+    if (client === OTHERS_VALUE && !clientManualName) { showError("addTaskError", "Please enter the company / client name."); return; }
+    hideError("addTaskError");
+    setLoading("addSubmitBtn", true);
+    try {
+      const res  = await fetch("/sachiko/tasks", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, label, assignedTo, assignedToManualName, client, clientManualName, dueDate, status }),
+      });
+      const data = await res.json();
+      if (data.success) { window.location.href = data.redirect || "/sachiko/tasks"; }
+      else              { showError("addTaskError", data.message || "Failed to create task."); }
+    } catch { showError("addTaskError", "Server error. Please try again."); }
+    finally  { setLoading("addSubmitBtn", false); }
+  }
+
+  /* ─── EDIT ─── */
+  let editRow = null, editEmployeeChoices = null, editClientChoices = null, editStatusChoices = null;
+
+  function openEditDialog(row) {
+    editRow = row;
+    const t = row.getData();
+    if (editEmployeeChoices) { editEmployeeChoices.destroy(); editEmployeeChoices = null; }
+    if (editClientChoices)   { editClientChoices.destroy();   editClientChoices = null; }
+    if (editStatusChoices)   { editStatusChoices.destroy();   editStatusChoices = null; }
+    editEmployeeChoices = buildEmployeeChoices("editEmployeeSelect", t.employeeId);
+    editClientChoices   = buildClientChoices("editClientSelect", t.clientId);
+    editStatusChoices   = buildStatusChoices("editStatusSelect", "editStatusWrap", t.status);
+
+    toggleManualNameField("editAssignedToManualGroup", "editAssignedToManualInput", t.employeeId === OTHERS_VALUE);
+    if (t.employeeId === OTHERS_VALUE) document.getElementById("editAssignedToManualInput").value = t.employeeManualName || "";
+
+    toggleManualNameField("editClientManualGroup", "editClientManualInput", t.clientId === OTHERS_VALUE);
+    if (t.clientId === OTHERS_VALUE) document.getElementById("editClientManualInput").value = t.clientManualName || "";
+
+    document.getElementById("editTitleInput").value = t.title;
+    document.getElementById("editLabelInput").value = t.label || "";
+    document.getElementById("editDueDateInput").value = toIsoDate(t.dueDate);
+    hideError("editTaskError");
+
+    document.getElementById("editEmployeeSelect").addEventListener("change", (e) => {
+      toggleManualNameField("editAssignedToManualGroup", "editAssignedToManualInput", e.target.value === OTHERS_VALUE);
+    });
+    document.getElementById("editClientSelect").addEventListener("change", (e) => {
+      toggleManualNameField("editClientManualGroup", "editClientManualInput", e.target.value === OTHERS_VALUE);
+    });
+
+    openModal("editDialog");
+    setTimeout(() => { const inp = document.getElementById("editTitleInput"); inp.focus(); inp.select(); }, 60);
+  }
+  function closeEditDialog() { closeModal("editDialog"); editRow = null; }
+
+  async function submitEdit() {
+    if (!editRow) return;
+    const title              = document.getElementById("editTitleInput").value.trim();
+    const label                 = document.getElementById("editLabelInput").value.trim();
+    const assignedTo           = editEmployeeChoices?.getValue(true) || "";
+    const assignedToManualName = document.getElementById("editAssignedToManualInput").value.trim();
+    const client                = editClientChoices?.getValue(true) || "";
+    const clientManualName      = document.getElementById("editClientManualInput").value.trim();
+    const dueDate     = document.getElementById("editDueDateInput").value;
+    const status      = editStatusChoices?.getValue(true) || "PENDING";
+
+    if (!title)      { showError("editTaskError", "Task title is required.");    return; }
+    if (!assignedTo) { showError("editTaskError", "Please select an employee."); return; }
+    if (assignedTo === OTHERS_VALUE && !assignedToManualName) { showError("editTaskError", "Please enter the employee name."); return; }
+    if (client === OTHERS_VALUE && !clientManualName) { showError("editTaskError", "Please enter the company / client name."); return; }
+    hideError("editTaskError");
+    setLoading("editSubmitBtn", true);
+    const row = editRow;
+    try {
+      const res  = await fetch(`/sachiko/api/tasks/${row.getData()._id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, label, assignedTo, assignedToManualName, client, clientManualName, dueDate, status }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        showError("editTaskError", data.message || "Failed to update task.");
+        return;
+      }
+
+      // The server stores ids; the table shows names. Both come straight off
+      // the dialog, so the row can be repainted without re-fetching the page.
+      const patch = {
+        title,
+        label,
+        employeeId:         assignedTo,
+        employeeManualName: assignedTo === OTHERS_VALUE ? assignedToManualName : "",
+        employeeName:       assignedTo === OTHERS_VALUE
+          ? assignedToManualName
+          : (editEmployeeChoices?.getValue()?.label || "Unassigned"),
+        clientId:           client,
+        clientManualName:   client === OTHERS_VALUE ? clientManualName : "",
+        clientName:         !client ? "—"
+          : client === OTHERS_VALUE ? clientManualName
+          : (editClientChoices?.getValue()?.label || "—"),
+        dueDate,
+        status,
+      };
+      Object.assign(row.getData(), patch);
+      Object.assign(masterRow(row.getData()._id) || {}, patch);
+
+      // A status change can push the task into the other list -- then the row
+      // has to leave this view rather than just repaint.
+      if (isDone(patch) === showingCompleted) await row.update(patch);
+      else                                    await row.delete();
+
+      paintToggle();
+      closeEditDialog();
+      showToast("Task updated.");
+    } catch { showError("editTaskError", "Server error. Please try again."); }
+    finally  { setLoading("editSubmitBtn", false); }
+  }
+
+  /* ─── QUICK COMPLETE / REOPEN ─── */
+  // Flipping the status always moves the task to the other list, so the row
+  // leaves the view it was clicked in. Dropping just that row keeps scroll
+  // position, header filters and sort intact -- a reload would lose all three.
+  async function toggleComplete(row, btn) {
+    const t = row.getData();
+    const nextStatus = t.status === "COMPLETED" ? "PENDING" : "COMPLETED";
+    btn.disabled = true;
+    try {
+      const res  = await fetch(`/sachiko/api/tasks/${t._id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        showToast(data.message || "Failed to update task.", "error");
+        return;
+      }
+      const rec = masterRow(t._id);
+      if (rec) rec.status = nextStatus;
+      await row.delete();
+      paintToggle();
+      showToast(nextStatus === "COMPLETED" ? "Task marked complete." : "Task reopened.");
+    } catch {
+      showToast("Error updating task.", "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /* ─── ADD TO / REMOVE FROM DAYBOOK (one toggle button) ─── */
+
+  function paintDaybookBtn(btn, inDaybook) {
+    btn.style.background = inDaybook ? "#94a3b8" : "#6366f1";
+    btn.title            = inDaybook ? "Remove from Daybook" : "Add to Daybook";
+    btn.innerHTML        = inDaybook ? '<i class="fa-solid fa-book"></i>' : '<i class="fa-solid fa-book-open"></i>';
+  }
+
+  // Only this one flag changes, so the button is repainted in place rather than
+  // reloading the page. `silent: true` suppresses the server flash, which would
+  // otherwise wait in the session and pop up on the next page the user opens.
+  async function toggleDaybook(row, btn) {
+    const t      = row.getData();
+    const adding = !t.inDaybook;
+    btn.disabled = true;
+    try {
+      const res = adding
+        ? await fetch("/sachiko/daybook", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ taskIds: [t._id], silent: true }),
+          })
+        : await fetch(`/sachiko/api/daybook/task/${t._id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        const rec = masterRow(t._id);
+        if (rec) rec.inDaybook = adding;
+        await row.update({ inDaybook: adding });
+        paintDaybookBtn(btn, adding);
+        showToast(adding ? "Added to Daybook." : "Removed from Daybook.");
+      } else {
+        showToast(data.message || `Failed to ${adding ? "add to" : "remove from"} Daybook.`, "error");
+      }
+    } catch {
+      showToast(`Error ${adding ? "adding to" : "removing from"} Daybook.`, "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  /* ─── DELETE ─── */
+  let deleteRow = null;
+
+  function openDeleteDialog(row) {
+    deleteRow = row;
+    document.getElementById("deleteTaskName").textContent = row.getData().title;
+    openModal("deleteDialog");
+  }
+  function closeDeleteDialog() { closeModal("deleteDialog"); deleteRow = null; }
+
+  async function submitDelete() {
+    if (!deleteRow) return;
+    const row = deleteRow;
+    const id  = row.getData()._id;
+    setLoading("deleteConfirmBtn", true);
+    try {
+      const res  = await fetch(`/sachiko/api/tasks/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!data.success) {
+        closeDeleteDialog();
+        showToast(data.message || "Failed to delete task.", "error");
+        return;
+      }
+      const i = tableData.findIndex(r => r._id === id);
+      if (i > -1) tableData.splice(i, 1);
+      await row.delete();
+      paintToggle();
+      closeDeleteDialog();
+      showToast("Task deleted.");
+    } catch { closeDeleteDialog(); showToast("Error deleting task.", "error"); }
+    finally  { setLoading("deleteConfirmBtn", false); }
+  }
+</script>

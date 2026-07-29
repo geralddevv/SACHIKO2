@@ -1,0 +1,445 @@
+<% layout('/layout/boilerplate') -%>
+
+<%
+  const locationRows = typeof initialLocationDetails !== "undefined" && Array.isArray(initialLocationDetails) && initialLocationDetails.length
+    ? initialLocationDetails
+    : [{ userLocation: user.userLocation || "", dispatchAddress: user.dispatchAddress || "" }];
+  // Render one full per-location dispatch block (used for the server-rendered rows).
+  const locField = (loc, k) => String(loc && loc[k] != null ? loc[k] : "");
+%>
+
+<style>
+  .locations-details {
+    grid-column: span 32;
+  }
+
+  .location-row {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 5px;
+    border: 2px solid #044a78;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .location-row .loc-line {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .location-row .loc-title {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #044a78;
+    margin-bottom: 6px;
+  }
+
+  /* All dispatch fields (type selector first) on a single wrapping row. */
+  .location-row .loc-fields {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .location-row .loc-dispatch-mode {
+    flex: 0 0 150px;
+  }
+
+  /* Transparent wrapper so the transport fields share the .loc-fields row. */
+  .location-row .loc-transport {
+    display: contents;
+  }
+
+  .location-row .loc-fields > input,
+  .location-row .loc-transport > input,
+  .location-row .loc-transport > select {
+    flex: 1 1 130px;
+    min-width: 110px;
+  }
+
+  .location-row .loc-self .loc-self-badge {
+    display: inline-block;
+    background: #eef5fb;
+    color: #044a78;
+    border: 1px dashed #044a78;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .location-row input,
+  .location-row select,
+  .location-row textarea {
+    width: 100%;
+    border: 1px solid #044a78;
+    height: 38px;
+  }
+
+  .location-row textarea {
+    resize: none;
+  }
+
+  #user-client-id,
+  #username-ho-location,
+  #username-account-head {
+    background-color: #e9ecef;
+  }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
+  <div>
+    <div class="span-full form-subheading gap" style="margin-bottom: 10px;">
+      <div>
+        <h1>Edit User Details</h1>
+      </div>
+    </div>
+
+    <form
+      action="/sachiko/form/edit/user/<%= user._id %>"
+      method="post"
+      class="span-full needs-validation"
+      style="display: grid; grid-template-columns: repeat(32, 1fr); gap: 10px;"
+      autocomplete="off"
+      novalidate
+    >
+      <div class="span-full form-subheading">
+        <h1>Client Reference</h1>
+      </div>
+
+      <div class="span-seven">
+        <label for="user-client-id">Client Id</label>
+        <input id="user-client-id" class="form-control input-tag" value="<%= user.clientId %>" disabled />
+      </div>
+
+      <div class="span-six">
+        <label for="client-name">Client Name</label>
+        <input class="form-control input-tag" value="<%= user.clientName %>" disabled />
+      </div>
+
+      <div class="span-six">
+        <label for="client-type">Client Type</label>
+        <input class="form-control input-tag" value="<%= user.clientType %>" disabled />
+      </div>
+
+      <div class="span-six">
+        <label for="ho-location">H/O Location</label>
+        <input
+          type="text"
+          id="username-ho-location"
+          class="form-control input-tag"
+          name="hoLocation"
+          value="<%= user.hoLocation %>"
+          placeholder="Enter H/O Location"
+          disabled
+        />
+      </div>
+
+      <div class="span-seven">
+        <label for="account-head">Account Head</label>
+        <input
+          type="text"
+          id="username-account-head"
+          class="form-control input-tag"
+          name="accountHead"
+          value="<%= user.accountHead %>"
+          placeholder="Enter Account Head"
+          disabled
+        />
+      </div>
+
+      <div class="span-full form-subheading">
+        <h1>Username Information</h1>
+      </div>
+
+      <div class="span-dual">
+        <label for="user-name">Username</label>
+        <input type="text" id="user-name" class="form-control input-tag" name="userName" value="<%= user.userName %>" placeholder="Enter Username" required />
+      </div>
+
+      <div class="span-dual">
+        <label for="user-department">Department</label>
+        <input type="text" id="user-department" class="form-control input-tag" name="userDepartment" value="<%= user.userDepartment %>" placeholder="Enter Department" required />
+      </div>
+
+      <div class="span-dual">
+        <label for="user-contact-no">Contact No</label>
+        <input type="text" id="user-contact-no" class="form-control input-tag" name="userContact" value="<%= user.userContact %>" placeholder="Enter Contact No" required />
+      </div>
+
+      <div class="span-dual">
+        <label for="user-email">Email</label>
+        <input type="email" id="user-email" class="form-control" name="userEmail" value="<%= user.userEmail %>" placeholder="Enter Email" required />
+      </div>
+
+      <div class="span-full form-subheading" style="display: flex; align-items: center; gap: 12px;">
+        <h1>Location Details</h1>
+        <div style="display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;">
+          <button type="button" id="locations-minus" style="width: 30px; height: 30px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 18px; line-height: 1; cursor: pointer;">-</button>
+          <input
+            type="text"
+            id="locations-count"
+            style="width: 56px; height: 30px; text-align: center; border: 1px solid #044A78; border-radius: 4px;"
+            class="form-control"
+            name="locationsCount"
+            value="<%= locationRows.length %>"
+            readonly
+          />
+          <button type="button" id="locations-plus" style="width: 30px; height: 30px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 18px; line-height: 1; cursor: pointer;">+</button>
+        </div>
+      </div>
+
+      <div class="span-full" style="font-size: 12px; color: #64748b; padding: 10px 14px;">
+        Each location has its own dispatch details. Choose Transport or Self Dispatch per location.
+      </div>
+
+      <div id="locations-details" class="locations-details">
+        <% locationRows.forEach((loc, index) => { %>
+          <% const isSelf = locField(loc, "selfDispatch") === "Self Dispatch"; %>
+          <div class="location-row">
+            <div class="loc-line">
+              <input
+                type="text"
+                class="form-control input-tag"
+                name="locationDetails[<%= index %>][userLocation]"
+                placeholder="Enter Location"
+                aria-label="Location <%= index + 1 %>"
+                value="<%= String(loc.userLocation || loc.location || '').toUpperCase() %>"
+                oninput="this.value = this.value.toUpperCase()"
+                required
+              />
+              <input
+                type="text"
+                class="form-control input-tag"
+                name="locationDetails[<%= index %>][dispatchAddress]"
+                placeholder="Enter Address"
+                aria-label="Address <%= index + 1 %>"
+                value="<%= String(loc.dispatchAddress || loc.address || '').toUpperCase() %>"
+                oninput="this.value = this.value.toUpperCase()"
+                required
+              />
+            </div>
+            <div class="loc-dispatch">
+              <span class="loc-title">Dispatch Details — Location <%= index + 1 %></span>
+              <div class="loc-fields">
+                <select class="loc-dispatch-mode form-control select-tag" aria-label="Dispatch Type for location <%= index + 1 %>">
+                  <option value="TRANSPORT" <%= isSelf ? '' : 'selected' %>>Transport</option>
+                  <option value="SELF" <%= isSelf ? 'selected' : '' %>>Self Dispatch</option>
+                </select>
+                <input type="hidden" class="loc-self-dispatch" name="locationDetails[<%= index %>][selfDispatch]" value="<%= isSelf ? 'Self Dispatch' : '' %>" />
+                <div class="loc-transport" style="<%= isSelf ? 'display:none;' : '' %>">
+                  <input type="text" class="form-control input-tag" name="locationDetails[<%= index %>][transportName]" placeholder="Transport Name" value="<%= locField(loc, 'transportName').toUpperCase() %>" oninput="this.value = this.value.toUpperCase()" />
+                  <input type="text" class="form-control input-tag loc-transport-contact" name="locationDetails[<%= index %>][transportContact]" placeholder="Transport Contact" value="<%= locField(loc, 'transportContact') %>" />
+                  <input type="text" class="form-control input-tag" name="locationDetails[<%= index %>][dropLocation]" placeholder="Drop Location" value="<%= locField(loc, 'dropLocation').toUpperCase() %>" oninput="this.value = this.value.toUpperCase()" />
+                  <select class="form-control select-tag" name="locationDetails[<%= index %>][deliveryMode]">
+                    <option value="">Delivery Mode</option>
+                    <option value="DOOR" <%= locField(loc, 'deliveryMode') === 'DOOR' ? 'selected' : '' %>>DOOR</option>
+                    <option value="GODOWN" <%= locField(loc, 'deliveryMode') === 'GODOWN' ? 'selected' : '' %>>GODOWN</option>
+                  </select>
+                  <input type="text" class="form-control input-tag" name="locationDetails[<%= index %>][deliveryLocation]" placeholder="Delivery Location" value="<%= locField(loc, 'deliveryLocation').toUpperCase() %>" oninput="this.value = this.value.toUpperCase()" />
+                  <select class="form-control select-tag" name="locationDetails[<%= index %>][clientPayment]">
+                    <option value="">Payment</option>
+                    <option value="PAY" <%= locField(loc, 'clientPayment') === 'PAY' ? 'selected' : '' %>>PAY</option>
+                    <option value="TO PAY" <%= locField(loc, 'clientPayment') === 'TO PAY' ? 'selected' : '' %>>TO PAY</option>
+                  </select>
+                </div>
+                <div class="loc-self" style="<%= isSelf ? '' : 'display:none;' %>">
+                  <span class="loc-self-badge">Self Dispatch</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+
+      <div class="span-full btn-grp">
+        <button class="submit-btn" type="submit">Update User Details</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const form = document.querySelector("form");
+    const locationCountInput = document.getElementById("locations-count");
+    const locationContainer = document.getElementById("locations-details");
+    const locationMinusBtn = document.getElementById("locations-minus");
+    const locationPlusBtn = document.getElementById("locations-plus");
+
+    function normalizeLocationCount(value) {
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed) || parsed < 1) return 1;
+      return Math.min(parsed, 25);
+    }
+
+    function escapeAttr(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function formatMobileValue(value) {
+      const digits = String(value ?? "").replace(/\D/g, "").slice(0, 10);
+      return digits.length > 5 ? `${digits.slice(0, 5)} ${digits.slice(5)}` : digits;
+    }
+
+    const EMPTY_ROW = {
+      userLocation: "",
+      dispatchAddress: "",
+      selfDispatch: "",
+      transportName: "",
+      transportContact: "",
+      dropLocation: "",
+      deliveryMode: "",
+      deliveryLocation: "",
+      clientPayment: "",
+    };
+
+    function readRowValues(row) {
+      const get = (suffix) => row.querySelector(`[name$="[${suffix}]"]`)?.value || "";
+      return {
+        userLocation: get("userLocation"),
+        dispatchAddress: get("dispatchAddress"),
+        selfDispatch: get("selfDispatch"),
+        transportName: get("transportName"),
+        transportContact: get("transportContact"),
+        dropLocation: get("dropLocation"),
+        deliveryMode: get("deliveryMode"),
+        deliveryLocation: get("deliveryLocation"),
+        clientPayment: get("clientPayment"),
+      };
+    }
+
+    function buildRowHtml(i, v) {
+      const isSelf = v.selfDispatch === "Self Dispatch";
+      const sel = (val, opt) => (val === opt ? "selected" : "");
+      return `
+        <div class="location-row">
+          <div class="loc-line">
+            <input type="text" class="form-control input-tag" name="locationDetails[${i}][userLocation]"
+              placeholder="Enter Location" aria-label="Location ${i + 1}"
+              value="${escapeAttr(v.userLocation.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" required />
+            <input type="text" class="form-control input-tag" name="locationDetails[${i}][dispatchAddress]"
+              placeholder="Enter Address" aria-label="Address ${i + 1}"
+              value="${escapeAttr(v.dispatchAddress.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" required />
+          </div>
+          <div class="loc-dispatch">
+            <span class="loc-title">Dispatch Details — Location ${i + 1}</span>
+            <div class="loc-fields">
+              <select class="loc-dispatch-mode form-control select-tag" aria-label="Dispatch Type for location ${i + 1}">
+                <option value="TRANSPORT" ${isSelf ? "" : "selected"}>Transport</option>
+                <option value="SELF" ${isSelf ? "selected" : ""}>Self Dispatch</option>
+              </select>
+              <input type="hidden" class="loc-self-dispatch" name="locationDetails[${i}][selfDispatch]" value="${isSelf ? "Self Dispatch" : ""}" />
+              <div class="loc-transport" style="${isSelf ? "display:none;" : ""}">
+                <input type="text" class="form-control input-tag" name="locationDetails[${i}][transportName]"
+                  placeholder="Transport Name" value="${escapeAttr(v.transportName.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" />
+                <input type="text" class="form-control input-tag loc-transport-contact" name="locationDetails[${i}][transportContact]"
+                  placeholder="Transport Contact" value="${escapeAttr(v.transportContact)}" />
+                <input type="text" class="form-control input-tag" name="locationDetails[${i}][dropLocation]"
+                  placeholder="Drop Location" value="${escapeAttr(v.dropLocation.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" />
+                <select class="form-control select-tag" name="locationDetails[${i}][deliveryMode]">
+                  <option value="">Delivery Mode</option>
+                  <option value="DOOR" ${sel(v.deliveryMode, "DOOR")}>DOOR</option>
+                  <option value="GODOWN" ${sel(v.deliveryMode, "GODOWN")}>GODOWN</option>
+                </select>
+                <input type="text" class="form-control input-tag" name="locationDetails[${i}][deliveryLocation]"
+                  placeholder="Delivery Location" value="${escapeAttr(v.deliveryLocation.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" />
+                <select class="form-control select-tag" name="locationDetails[${i}][clientPayment]">
+                  <option value="">Payment</option>
+                  <option value="PAY" ${sel(v.clientPayment, "PAY")}>PAY</option>
+                  <option value="TO PAY" ${sel(v.clientPayment, "TO PAY")}>TO PAY</option>
+                </select>
+              </div>
+              <div class="loc-self" style="${isSelf ? "" : "display:none;"}">
+                <span class="loc-self-badge">Self Dispatch</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLocationRows(count) {
+      if (!locationContainer) return;
+
+      const safeCount = normalizeLocationCount(count);
+      const existingRows = Array.from(locationContainer.querySelectorAll(".location-row"));
+      const currentValues = existingRows.map(readRowValues);
+
+      let html = "";
+      for (let i = 0; i < safeCount; i += 1) {
+        html += buildRowHtml(i, currentValues[i] || { ...EMPTY_ROW });
+      }
+      locationContainer.innerHTML = html;
+    }
+
+    function setLocationCount(value) {
+      const safeCount = normalizeLocationCount(value);
+      if (locationCountInput) locationCountInput.value = String(safeCount);
+      renderLocationRows(safeCount);
+    }
+
+    function applyDispatchMode(row, mode) {
+      if (!row) return;
+      const transport = row.querySelector(".loc-transport");
+      const self = row.querySelector(".loc-self");
+      const hidden = row.querySelector(".loc-self-dispatch");
+      const isSelf = mode === "SELF";
+      if (transport) transport.style.display = isSelf ? "none" : "";
+      if (self) self.style.display = isSelf ? "" : "none";
+      if (hidden) hidden.value = isSelf ? "Self Dispatch" : "";
+    }
+
+    if (locationCountInput && locationContainer) {
+      // Re-render so the count input and rows stay in sync (values preserved).
+      setLocationCount(locationCountInput.value || 1);
+
+      locationMinusBtn?.addEventListener("click", () => {
+        const current = normalizeLocationCount(locationCountInput.value || 1);
+        setLocationCount(Math.max(1, current - 1));
+      });
+      locationPlusBtn?.addEventListener("click", () => {
+        const current = normalizeLocationCount(locationCountInput.value || 1);
+        setLocationCount(Math.min(25, current + 1));
+      });
+
+      // Per-row dispatch-type toggle (delegated, survives re-renders).
+      locationContainer.addEventListener("change", (e) => {
+        const modeSel = e.target.closest(".loc-dispatch-mode");
+        if (!modeSel) return;
+        applyDispatchMode(modeSel.closest(".location-row"), modeSel.value);
+      });
+
+      // Mobile formatting for each row's transport contact.
+      locationContainer.addEventListener("input", (e) => {
+        const el = e.target.closest(".loc-transport-contact");
+        if (!el) return;
+        el.value = formatMobileValue(el.value);
+      });
+    }
+
+    form?.addEventListener("submit", (e) => {
+      const rows = Array.from(document.querySelectorAll(".location-row"));
+      const hasValidLocation = rows.some((row) => {
+        const loc = row.querySelector('[name$="[userLocation]"]');
+        const addr = row.querySelector('[name$="[dispatchAddress]"]');
+        return String(loc?.value || "").trim() && String(addr?.value || "").trim();
+      });
+
+      if (!hasValidLocation) {
+        e.preventDefault();
+        alert("Please add at least one location and address");
+      }
+    });
+  });
+</script>

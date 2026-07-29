@@ -1,0 +1,425 @@
+<% layout('/layout/boilerplate') %>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <div class="indi-head">
+    <h1>Re-Order List</h1>
+    <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+      <!-- Item Filter -->
+      <div style="position: relative; display: inline-block">
+        <select
+          id="item-filter"
+          style="
+            appearance: none;
+            -webkit-appearance: none;
+            padding: 3px 30px 2px 14px;
+            background: #ffffff;
+            color: #3e3e3e;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            outline: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease-in-out;
+            min-width: 140px;
+          "
+          onmouseover="this.style.boxShadow = '0 3px 6px rgba(0,0,0,0.08)'"
+          onmouseout="this.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)'"
+        >
+          <option value="">All Items</option>
+          <option value="Tape">Tape</option>
+          <option value="Tafeta">Tafeta</option>
+          <option value="POS Roll">POS Roll</option>
+          <option value="TTR">TTR</option>
+        </select>
+        <i
+          class="fa-solid fa-chevron-down"
+          style="
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 11px;
+            color: #6b7280;
+            pointer-events: none;
+          "
+        ></i>
+      </div>
+
+      <a
+        href="/sachiko/purchase/order/logs"
+        style="
+          padding: 6px 14px;
+          background: #044a78;
+          color: white;
+          border-radius: 6px;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: opacity 0.2s;
+        "
+        onmouseover="this.style.opacity = '0.85'"
+        onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span>View Logs</span>
+      </a>
+
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span>
+            <i class="fa-solid fa-file-arrow-down"></i>
+            <span class="download-typo">Download</span>
+          </span>
+          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+        </button>
+        <div class="download-selector__menu" id="downloads">
+          <span class="download-selector__option" id="download-pdf">
+            <i class="fas fa-file-pdf download-selector__option-icon"></i>
+            <span>PDF</span>
+          </span>
+          <span class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel download-selector__option-icon"></i>
+            <span>Excel</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PO QUEUE PANEL ===== -->
+  <div
+    id="po-cart"
+    style="
+      display: none;
+      width: 100%;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 12px rgba(4, 74, 120, 0.15);
+      border: 1px solid rgba(4, 74, 120, 0.1);
+      flex-direction: column;
+      max-height: 600px;
+    "
+  >
+    <!-- Header bar — matches indi-head -->
+    <div
+      style="
+        background: #044a78;
+        color: white;
+        padding: 0.6rem 1rem;
+        border-radius: 0.5rem 0.5rem 0 0;
+        flex-shrink: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      "
+    >
+      <div style="display: flex; align-items: center; gap: 12px">
+        <i class="fa-solid fa-cart-shopping" style="font-size: 20px"></i>
+        <span style="font-size: 1rem; font-weight: 700; margin: 0">Purchase Order Queue</span>
+        <span
+          id="cart-count-badge"
+          style="
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+            border-radius: 99px;
+            padding: 2px 14px;
+            font-size: 14px;
+            font-weight: 700;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+          "
+          >0</span
+        >
+      </div>
+      <button
+        onclick="proceedToOrder()"
+        style="
+          padding: 8px 24px;
+          background: #04782e;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          font-size: 15px;
+          font-weight: 700;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: opacity 0.2s;
+          letter-spacing: 0.02em;
+        "
+        onmouseover="this.style.opacity = '0.85'"
+        onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-paper-plane"></i> Place Order
+      </button>
+    </div>
+    <!-- Items — grid layout -->
+    <div
+      id="cart-items"
+      style="
+        background: #f8f9fa;
+        padding: 15px 15px 15px 15px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        overflow-y: auto;
+        border-radius: 0 0 0.5rem 0.5rem;
+      "
+    ></div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+<script id="reorder-data" type="application/json">
+  <%- safeJson(items || []) %>
+</script>
+
+<script>
+  const reorderData = JSON.parse(document.getElementById("reorder-data").textContent);
+
+  // ===== CART STATE =====
+  let cart = [];
+
+  function addToCart(id, typeKey, name, type, productId, stock, booked, minQty, shortage) {
+    if (cart.find((i) => i.id === id)) {
+      const panel = document.getElementById("po-cart");
+      const hdr = panel.querySelector("div");
+      if (hdr) {
+        hdr.style.background = "#b45309";
+        setTimeout(() => {
+          hdr.style.background = "#044A78";
+        }, 700);
+      }
+      return;
+    }
+    cart.push({ id, typeKey, name, type, productId, stock, booked, minQty, shortage });
+    renderCart();
+    if (window._reorderTable) window._reorderTable.redraw(true);
+  }
+
+  function removeFromCart(id) {
+    cart = cart.filter((i) => i.id !== id);
+    renderCart();
+    if (window._reorderTable) window._reorderTable.redraw(true);
+  }
+
+  function renderCart() {
+    const cartEl = document.getElementById("po-cart");
+    const cartItemsEl = document.getElementById("cart-items");
+    const badge = document.getElementById("cart-count-badge");
+
+    badge.textContent = cart.length;
+
+    if (cart.length === 0) {
+      cartEl.style.display = "none";
+      return;
+    }
+
+    cartEl.style.display = "flex";
+    cartItemsEl.innerHTML = cart
+      .map(
+        (item) => `
+      <div style="background:#fff; border:1px solid rgba(4,74,120,0.15); border-radius:8px; padding:8px 12px; display:flex; align-items:center; gap:10px; box-shadow:0 2px 4px rgba(0,0,0,0.05); min-width:0;">
+        <span style="background:#044A78; color:#fff; border-radius:4px; padding:2px 8px; font-size:11px; font-weight:700; white-space:nowrap; flex-shrink:0;">${item.type}</span>
+        
+        <span style="font-size:14px; font-weight:700; color:#0f172a; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex-grow:1;" title="${item.name}">${item.name}</span>
+
+        <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+          <span style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; border-radius:4px; padding:4px 10px; font-size:14px; font-weight:800; white-space:nowrap;">${item.shortage}</span>
+        </div>
+      </div>
+    `,
+      )
+      .join("");
+  }
+
+  function proceedToOrder() {
+    if (cart.length === 0) return;
+    // Opens a blank purchase order form in a new tab — vendor and items are
+    // picked manually there rather than prefilled from the cart.
+    window.open("/sachiko/inventory/purchase/order", "_blank");
+  }
+
+  // ===== TABULATOR =====
+  document.addEventListener("DOMContentLoaded", () => {
+    const table = new Tabulator("#master-table", {
+      data: reorderData,
+      // layout: "fitColumns",
+      placeholder: "No items need reordering",
+      columns: [
+        {
+          title: "Action",
+          hozAlign: "center",
+          headerSort: false,
+          width: 100,
+          formatter: (cell) => {
+            const row = cell.getRow().getData();
+            const isInCart = !!cart.find((i) => i.id === String(row._id));
+            if (isInCart) {
+              return `<button
+                onclick="removeFromCart('${row._id}')"
+                style="width: 72px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 4px 0; background:#dc2626; color:white; border-radius:4px; border:none; cursor:pointer; font-size:12px; font-weight:600;"
+                onmouseover="this.style.opacity='0.8'"
+                onmouseout="this.style.opacity='1'"
+              ><i class='fa-solid fa-trash-can'></i></button>`;
+            }
+            const safeName = (row.name || "").replace(/'/g, "\\'");
+            const safeType = (row.type || "").replace(/'/g, "\\'");
+            const safePid = (row.productId || "").replace(/'/g, "\\'");
+            return `<button
+              onclick="addToCart('${row._id}','${row.typeKey}','${safeName}','${safeType}','${safePid}',${row.stock || 0},${row.booked || 0},${row.minQty || 0},${row.shortage || 0})"
+              style="width: 72px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 4px 0; gap: 4px; background:#044a78; color:white; border-radius:4px; border:none; cursor:pointer; font-size:12px; font-weight:600;"
+              onmouseover="this.style.opacity='0.8'"
+              onmouseout="this.style.opacity='1'"
+            ><i class='fa-solid fa-plus'></i> Add</button>`;
+          },
+        },
+        {
+          title: "Vendors",
+          field: "vendors",
+          headerFilter: "input",
+          headerFilterPlaceholder: "Filter vendors...",
+          formatter: (cell) => {
+            const row = cell.getRow().getData();
+            if (!row.hasVendors) {
+              return `<a
+                href="${row.bindingPath}?itemId=${row._id}"
+                title="No vendors bound — click to add"
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  gap: 5px;
+                  width: 100%;
+                  padding: 4px 0;
+                  background: #fff7ed;
+                  color: #c2410c;
+                  border: 1px solid #fed7aa;
+                  border-radius: 5px;
+                  font-size: 12px;
+                  font-weight: 600;
+                  text-decoration: none;
+                  white-space: nowrap;
+                  box-sizing: border-box;
+                  transition: background 0.15s;
+                "
+                onmouseover="this.style.background='#ffedd5'"
+                onmouseout="this.style.background='#fff7ed'"
+              ><i class='fa-solid fa-link' style='font-size:11px'></i> Bind Vendors</a>`;
+            }
+            return `<span style="color:#374151;">${cell.getValue()}</span>`;
+          },
+        },
+        {
+          title: "Coordinators",
+          field: "coordinators",
+          headerFilter: "input",
+          headerFilterPlaceholder: "Filter coords...",
+          formatter: (cell) => {
+            const row = cell.getRow().getData();
+            if (!row.hasVendors) {
+              return `<span style="color:#9ca3af; font-size:12px; font-style:italic;">—</span>`;
+            }
+            return `<span style="color:#374151;">${cell.getValue()}</span>`;
+          },
+        },
+        {
+          title: "Location",
+          field: "locations",
+          headerFilter: "input",
+          headerFilterPlaceholder: "Filter loc...",
+          formatter: (cell) => {
+            const row = cell.getRow().getData();
+            if (!row.hasVendors) {
+              return `<span style="color:#9ca3af; font-size:12px; font-style:italic;">—</span>`;
+            }
+            return `<span style="color:#374151;">${cell.getValue()}</span>`;
+          },
+        },
+        { title: "ID", field: "productId", width: 140, headerFilter: "input", headerFilterPlaceholder: "Filter ID..." },
+        { title: "Type", field: "type", width: 100, headerFilter: "input", headerFilterPlaceholder: "Filter type..." },
+        { title: "Item Name", field: "name", headerFilter: "input", headerFilterPlaceholder: "Filter specs..." },
+        {
+          title: "Stock",
+          field: "stock",
+          hozAlign: "center",
+          width: 80,
+          headerFilter: "input",
+          headerFilterPlaceholder: "#",
+          formatter: (cell) => {
+            const val = cell.getValue();
+            return `<span style="font-weight:700; color:${val < 0 ? "#dc2626" : "#374151"}">${val}</span>`;
+          },
+        },
+        {
+          title: "Booked",
+          field: "booked",
+          hozAlign: "center",
+          width: 80,
+          headerFilter: "input",
+          headerFilterPlaceholder: "#",
+        },
+        {
+          title: "MSQ",
+          field: "minQty",
+          hozAlign: "center",
+          width: 80,
+          headerFilter: "input",
+          headerFilterPlaceholder: "#",
+        },
+        {
+          title: "Shortage",
+          field: "shortage",
+          hozAlign: "center",
+          width: 100,
+          headerFilter: "input",
+          headerFilterPlaceholder: "#",
+          formatter: (cell) => `<span style="font-weight:800; color:#dc2626;">${cell.getValue()}</span>`,
+        },
+      ],
+    });
+
+    window._reorderTable = table;
+
+    table.on("tableBuilt", () => {
+      document.querySelector(".table-spinner")?.classList.add("hidden");
+    });
+
+    document.getElementById("item-filter").addEventListener("change", function () {
+      if (this.value) table.setFilter("type", "=", this.value);
+      else table.clearFilter();
+    });
+
+    const selector = document.getElementById("downloadSelector");
+    const trigger = selector.querySelector(".download-selector__trigger");
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selector.classList.toggle("download-selector--active");
+    });
+    document.addEventListener("click", () => selector.classList.remove("download-selector--active"));
+
+    document.getElementById("download-pdf").addEventListener("click", () => {
+      table.download("pdf", "reorder_list.pdf", { orientation: "landscape", title: "Reorder List" });
+      selector.classList.remove("download-selector--active");
+    });
+    document.getElementById("download-xlsx").addEventListener("click", () => {
+      table.download("xlsx", "reorder_list.xlsx", { sheetName: "Reorder" });
+      selector.classList.remove("download-selector--active");
+    });
+  });
+</script>

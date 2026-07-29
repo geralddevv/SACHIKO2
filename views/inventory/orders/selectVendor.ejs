@@ -1,0 +1,437 @@
+<% layout('/layout/boilerplate') -%>
+
+<%
+  const groupedVendors = {};
+
+  allCoordinators?.forEach(v => {
+    const vId = v.vendorId;
+    if (!vId) return;
+
+    if (!groupedVendors[vId]) {
+      groupedVendors[vId] = {
+        id: vId,
+        name: v.vendorName,
+        coordinators: []
+      };
+    }
+
+    const binding = bindings?.find(b => b.vendorUserId?._id.toString() === v._id.toString());
+
+    groupedVendors[vId].coordinators.push({
+      bindingId: binding ? binding._id : null,
+      userId: v._id,
+      userName: v.userName,
+      userContact: v.userContact,
+      userLocation: v.userLocation,
+      locationDetails: v.locationDetails || [],
+      vendorCode: binding ? (binding.vendorTapePaperCode || binding.vendorPosPaperCode || binding.vendorTafetaMaterialCode || binding.vendorTtrType || '') : '',
+      minQty: binding ? (binding.tapeMinQty || binding.posMinQty || binding.tafetaMinQty || binding.ttrMinQty || 0) : 0,
+      hasBinding: !!binding
+    });
+  });
+
+  const hasVendorOptions = Object.keys(groupedVendors).length > 0;
+%>
+
+<div class="main-content">
+  <% if (!hasVendorOptions) { %>
+    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 15px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <i class="fa-solid fa-circle-exclamation" style="color: #dc2626; font-size: 20px;"></i>
+        <div>
+          <strong style="color: #991b1b; display: block; font-size: 15px;">Vendor not binded</strong>
+          <span style="color: #b91c1c; font-size: 14px;">This item does not have any usable vendor bindings yet. Submit will not create a purchase order until a vendor is bound.</span>
+        </div>
+      </div>
+      <% 
+        let bindUrl = '#';
+        const itype = String(type || "").toUpperCase();
+        if (itype === 'TTR') {
+          bindUrl = `/sachiko/form/ttr-vendor-binding?itemId=${item._id}`;
+        } else if (itype === 'TAPE') {
+          bindUrl = `/sachiko/form/vendor-item-binding/tape?itemId=${item._id}`;
+        } else if (itype === 'POSROLL') {
+          bindUrl = `/sachiko/form/vendor-item-binding/pos?itemId=${item._id}`;
+        } else if (itype === 'TAFETA') {
+          bindUrl = `/sachiko/form/vendor-item-binding/tafeta?itemId=${item._id}`;
+        }
+      %>
+      <a href="<%= bindUrl %>" style="background: #dc2626; color: white; padding: 8px 16px; border-radius: 6px; font-weight: 700; text-decoration: none; font-size: 13px; white-space: nowrap;">
+        Bind Vendor Now
+      </a>
+    </div>
+  <% } %>
+
+  <form id="purchase-order-form" action="/sachiko/inventory/reorder/create-po" method="post" class="needs-validation" autocomplete="off" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="itemId" value="<%= item._id %>" />
+    <input type="hidden" name="itemType" value="<%= type %>" />
+    <input type="hidden" name="vendorBindingId" id="vendor-binding-id" value="" />
+    <% if (typeof orderToEdit !== 'undefined' && orderToEdit) { %>
+      <input type="hidden" name="orderId" value="<%= orderToEdit._id %>" />
+    <% } %>
+
+    <div class="span-full form-heading">
+      <h1>Purchase Order</h1>
+    </div>
+
+    <!-- Item Status Info (Static for PO) -->
+    <div id="stock-display" class="span-full" style="display: flex; padding: 10px 15px; background: #fff; border: 1px solid #044A78; border-radius: 0.5rem; flex-direction: row; justify-content: space-between; align-items: center;">
+      <div style="font-weight: 700; color: #044A78; font-size: 16px;">
+        <i class="fa-solid fa-box-open"></i> Target Item: <span style="margin-left: 8px;"><%= itemName %></span>
+      </div>
+      <div id="stock-stats" style="display: flex; gap: 20px; align-items: center;">
+        <div style="font-weight: 700; color: #dc2626; font-size: 18px;" title="Current Shortage">
+          Required: <span id="stat-shortage"><%= shortage %></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= ORDER ENTITIES ================= -->
+    <div class="span-full form-subheading">
+      <h1>Purchase Details</h1>
+    </div>
+
+    <div class="span-seven">
+      <label for="item-type-display">Item Type</label>
+      <input type="text" id="item-type-display" class="form-control" value="<%= type %>" readonly />
+    </div>
+
+    <div class="span-seven">
+      <label for="vendor-select">Select Vendor</label>
+      <select id="vendor-select" class="form-control select-tag" <%= hasVendorOptions ? 'required' : '' %>>
+        <option value="" disabled selected hidden>Select Vendor Partner</option>
+        <% Object.values(groupedVendors).forEach(v => { %>
+          <option value="<%= v.id %>"><%= v.name %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="coordinator-select">Select Coordinator</label>
+      <select name="vendorUserId" id="coordinator-select" class="form-control select-tag" <%= hasVendorOptions ? 'required' : '' %>>
+        <option value="" disabled selected hidden>Select Coordinator</option>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="location-select">Coordinator Location</label>
+      <select name="userLocation" id="location-select" class="form-control select-tag" <%= hasVendorOptions ? 'required' : '' %>>
+        <option value="" disabled selected hidden>Select Location</option>
+      </select>
+    </div>
+
+    <div class="span-six">
+      <label for="vendor-contact">Coordinator Contact</label>
+      <input type="text" id="vendor-contact" class="form-control" placeholder="Coordinator Contact" readonly />
+    </div>
+
+    <div id="selected-item-details" class="span-full" style="padding:6px 8px; background: #ffffff; border: 1px solid #044A78; border-radius: 4px; margin-top: 10px;">
+       <%
+         const d = item || {};
+         const itemType = String(type || "").toUpperCase();
+         const entries = [];
+         const pushIf = (label, value) => {
+           if (value === null || value === undefined) return;
+           const text = String(value).trim();
+           if (!text) return;
+           entries.push([label, text]);
+         };
+
+         if (itemType === "TTR") {
+           pushIf("Product ID", d.ttrProductId);
+           pushIf("Type", d.ttrType);
+           pushIf("Ink Face", d.ttrInkFace);
+           pushIf("Width", d.ttrWidth);
+           pushIf("Meters", d.ttrMtrs);
+           pushIf("Core ID", d.ttrCoreId);
+           pushIf("Core Length", d.ttrCoreLength);
+           pushIf("Notch", d.ttrNotch);
+           pushIf("Winding", d.ttrWinding);
+         } else if (itemType === "TAPE") {
+           pushIf("Product ID", d.tapeProductId);
+           pushIf("Paper Code", d.tapePaperCode);
+           pushIf("GSM", d.tapeGsm);
+           pushIf("Paper Type", d.tapePaperType);
+           pushIf("Adhesive GSM", d.tapeAdhesiveGsm);
+           pushIf("Width", d.tapeWidth);
+           pushIf("Meters", d.tapeMtrs);
+           pushIf("Core ID", d.tapeCoreId);
+           pushIf("Finish", d.tapeFinish);
+         } else if (itemType === "POSROLL") {
+           pushIf("Product ID", d.posProductId);
+           pushIf("Paper Code", d.posPaperCode);
+           pushIf("GSM", d.posGsm);
+           pushIf("Paper Type", d.posPaperType);
+           pushIf("Color", d.posColor);
+           pushIf("Width", d.posWidth);
+           pushIf("Meters", d.posMtrs);
+           pushIf("Core ID", d.posCoreId);
+         } else if (itemType === "TAFETA") {
+           pushIf("Product ID", d.tafetaProductId);
+           pushIf("Material Code", d.tafetaMaterialCode);
+           pushIf("Material Type", d.tafetaMaterialType);
+           pushIf("GSM", d.tafetaGsm);
+           pushIf("Color", d.tafetaColor);
+           pushIf("Width", d.tafetaWidth);
+           pushIf("Meters", d.tafetaMtrs);
+           pushIf("Core Length", d.tafetaCoreLength);
+           pushIf("Notch", d.tafetaNotch);
+           pushIf("Core ID", d.tafetaCoreId);
+         }
+       %>
+       <div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:4px 8px;">
+         <% entries.forEach(([label, v]) => { %>
+           <div style="display:grid; grid-template-columns:180px 1fr; gap:8px; padding:4px 6px; border-bottom:1px solid #eef2f7; border-right:1px solid #e5e7eb; line-height:1.2;">
+             <div style="font-size:12px; color:#6b7280;"><%= label %></div>
+             <div style="font-size:12px; color:#111827; font-weight:600;"><%= v %></div>
+           </div>
+         <% }) %>
+       </div>
+    </div>
+
+    <!-- ================= QUANTITY & DATE ================= -->
+    <div class="span-full form-subheading">
+      <h1>Purchase Order Info</h1>
+    </div>
+
+    <div class="span-dual">
+      <label for="quantity">Purchase Quantity</label>
+      <input type="number" id="quantity" name="quantity" class="form-control" min="1" placeholder="Enter quantity" value="<%= (typeof orderToEdit !== 'undefined' && orderToEdit) ? orderToEdit.quantity : shortage %>" required />
+    </div>
+
+    <div class="span-dual">
+      <label for="po-number">PO Number</label>
+      <input type="text" id="po-number" name="poNumber" class="form-control" placeholder="Enter PO number" value="<%= (typeof orderToEdit !== 'undefined' && orderToEdit) ? orderToEdit.poNumber : '' %>" required />
+    </div>    
+
+    <div class="span-dual">
+      <label for="estimated-date">Expected Delivery</label>
+      <input type="date" id="estimated-date" name="estimatedDate" class="form-control" value="<%= (typeof orderToEdit !== 'undefined' && orderToEdit && orderToEdit.estimatedDate) ? new Date(orderToEdit.estimatedDate).toISOString().split('T')[0] : '' %>" required />
+    </div>
+
+    <div class="span-dual" style="grid-column: span 8;">
+      <label for="remarks">Order Remarks (Optional)</label>
+      <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Specific vendor instructions..." value="<%= (typeof orderToEdit !== 'undefined' && orderToEdit) ? orderToEdit.remarks : '' %>" />
+    </div>
+
+    <!-- ================= SUBMIT ================= -->
+    <div class="span-full btn-grp" style="margin-top: 30px;">
+      <button
+        type="submit"
+        id="purchase-order-submit"
+        <%= hasVendorOptions ? '' : 'disabled' %>
+        style="background: #044A78; color: white; padding: 12px 30px; border-radius: 6px; font-weight: 700; border: none; cursor: pointer; <%= hasVendorOptions ? '' : 'opacity:0.55; cursor:not-allowed;' %>"
+      >
+        <%= hasVendorOptions ? ((typeof orderToEdit !== 'undefined' && orderToEdit) ? 'Update Purchase Order' : 'Create Purchase Order') : 'Vendor Binding Required' %>
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  // Grouped vendor data and orderToEdit from EJS
+  const groupedVendors = <%- JSON.stringify(groupedVendors) %>;
+  const orderToEdit = <%- (typeof orderToEdit !== 'undefined' && orderToEdit) ? JSON.stringify(orderToEdit) : 'null' %>;
+  const hasVendorOptions = <%- hasVendorOptions ? 'true' : 'false' %>;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const vendorSelectEl = document.getElementById('vendor-select');
+    const coordinatorSelectEl = document.getElementById('coordinator-select');
+    const locationSelectEl = document.getElementById('location-select');
+    const contactInput = document.getElementById('vendor-contact');
+    const bindingIdInput = document.getElementById('vendor-binding-id');
+    const quantityInput = document.getElementById('quantity');
+    const poNumberInput = document.getElementById('po-number');
+    const estDateInput = document.getElementById('estimated-date');
+    const submitBtn = document.getElementById('purchase-order-submit');
+
+    // Initialize Choices.js
+    const vendorChoices = new Choices(vendorSelectEl, { searchEnabled: true, itemSelectText: '', shouldSort: false });
+    const coordinatorChoices = new Choices(coordinatorSelectEl, { searchEnabled: true, itemSelectText: '', shouldSort: false });
+    const locationChoices = new Choices(locationSelectEl, { searchEnabled: false, itemSelectText: '', shouldSort: false });
+
+    function getSelectedValue(el) {
+      return String(el?.value || '').trim();
+    }
+
+    function validateSubmitState() {
+      if (!submitBtn) return;
+      if (!hasVendorOptions) {
+        submitBtn.disabled = true;
+        return;
+      }
+
+      const canSubmit = Boolean(
+        getSelectedValue(vendorSelectEl) &&
+        getSelectedValue(coordinatorSelectEl) &&
+        getSelectedValue(locationSelectEl)
+      );
+
+      submitBtn.disabled = !canSubmit;
+      submitBtn.style.opacity = canSubmit ? '1' : '0.55';
+      submitBtn.style.cursor = canSubmit ? 'pointer' : 'not-allowed';
+    }
+
+    function setBindingId(value) {
+      if (bindingIdInput) {
+        bindingIdInput.value = value ? String(value) : '';
+      }
+    }
+
+    if (!hasVendorOptions) {
+      resetLocation();
+      contactInput.value = '';
+      setBindingId('');
+      vendorChoices.disable();
+      coordinatorChoices.disable();
+      locationChoices.disable();
+      validateSubmitState();
+      return;
+    }
+
+    // Set default date logic
+    if (!estDateInput.value) {
+      const date = new Date();
+      date.setDate(date.getDate() + 7);
+      estDateInput.value = date.toISOString().split('T')[0];
+    }
+
+    vendorSelectEl.addEventListener('change', function() {
+      const vendorId = this.value;
+      const vendor = groupedVendors[vendorId];
+      if (!vendor) {
+        resetLocation();
+        contactInput.value = '';
+        setBindingId('');
+        validateSubmitState();
+        return;
+      }
+
+      const coordinators = vendor.coordinators || [];
+      
+      // Update Coordinators
+      coordinatorChoices.clearStore();
+      const coordChoices = coordinators.map(c => ({
+        value: c.userId,
+        label: c.userName,
+        selected: (orderToEdit && String(orderToEdit.vendorUserId?._id || orderToEdit.vendorUserId) === String(c.userId)) || (coordinators.length === 1 && !orderToEdit)
+      }));
+      coordinatorChoices.setChoices([{ value: "", label: "Select Coordinator", disabled: true, selected: !coordChoices.some(c => c.selected) }, ...coordChoices], 'value', 'label', true);
+
+      const activeCoordinator = coordChoices.find(c => c.selected);
+      if (activeCoordinator) {
+        updateCoordinatorDetails(activeCoordinator.value);
+      } else {
+        resetLocation();
+        contactInput.value = '';
+        setBindingId('');
+      }
+      validateSubmitState();
+    });
+
+    coordinatorSelectEl.addEventListener('change', function() {
+      updateCoordinatorDetails(this.value);
+      validateSubmitState();
+    });
+
+    locationSelectEl.addEventListener('change', validateSubmitState);
+
+    function updateCoordinatorDetails(userId) {
+      if (!userId) return;
+      const vendorId = vendorSelectEl.value;
+      const vendor = groupedVendors[vendorId];
+      if (!vendor) return;
+
+      const coordinator = vendor.coordinators.find(c => String(c.userId) === String(userId));
+      if (!coordinator) return;
+
+      // Update Contact
+      contactInput.value = coordinator.userContact || 'N/A';
+      setBindingId(coordinator.bindingId);
+
+      // Update Min Qty if quantity is empty or equal to previous default
+      if (!orderToEdit && (!quantityInput.value || quantityInput.value == 0)) {
+        quantityInput.value = coordinator.minQty || '';
+      }
+
+      // Update Locations
+      const locations = [];
+      if (coordinator.userLocation) {
+        locations.push({ value: coordinator.userLocation, label: coordinator.userLocation });
+      }
+      if (Array.isArray(coordinator.locationDetails)) {
+        coordinator.locationDetails.forEach(ld => {
+          const loc = ld.userLocation || ld.location || ld.dispatchAddress;
+          if (loc && !locations.find(l => l.value === loc)) {
+            locations.push({ value: loc, label: loc });
+          }
+        });
+      }
+
+      locationChoices.clearStore();
+      const locChoices = locations.map((l, index) => ({
+        value: l.value,
+        label: l.label,
+        selected: (orderToEdit && orderToEdit.userLocation === l.value) || (locations.length === 1 && !orderToEdit)
+      }));
+      locationChoices.setChoices([{ value: "", label: "Select Location", disabled: true, selected: !locChoices.some(l => l.selected) }, ...locChoices], 'value', 'label', true);
+      validateSubmitState();
+    }
+
+    function resetLocation() {
+      locationChoices.clearStore();
+      locationChoices.setChoices([{ value: "", label: "Select Location", disabled: true, selected: true }], 'value', 'label', true);
+      validateSubmitState();
+    }
+
+    // Initialization logic
+    if (orderToEdit) {
+      const editCoordId = String(orderToEdit.vendorUserId?._id || orderToEdit.vendorUserId);
+      
+      // Find the vendorId from groupedVendors where one coordinator matches orderToEdit.vendorUserId
+      const editVendorId = Object.keys(groupedVendors).find(vId => 
+        groupedVendors[vId].coordinators.some(c => String(c.userId) === editCoordId)
+      );
+
+      if (editVendorId) {
+        vendorChoices.setChoiceByValue(editVendorId);
+        
+        // Manually trigger the update logic since setChoiceByValue doesn't fire 'change'
+        const vendor = groupedVendors[editVendorId];
+        if (vendor) {
+          const coordinators = vendor.coordinators || [];
+          coordinatorChoices.clearStore();
+          const coordChoices = coordinators.map(c => ({
+            value: c.userId,
+            label: c.userName,
+            selected: String(c.userId) === editCoordId
+          }));
+          coordinatorChoices.setChoices([{ value: "", label: "Select Coordinator", disabled: true, selected: !coordChoices.some(c => c.selected) }, ...coordChoices], 'value', 'label', true);
+
+          const activeCoordinator = coordChoices.find(c => c.selected);
+      if (activeCoordinator) {
+        updateCoordinatorDetails(activeCoordinator.value);
+      }
+    }
+      }
+    } else {
+      // Auto-select if only one vendor
+      const vendorIds = Object.keys(groupedVendors);
+      if (vendorIds.length === 1) {
+        vendorChoices.setChoiceByValue(vendorIds[0]);
+        // Trigger manually
+        const vendor = groupedVendors[vendorIds[0]];
+        if (vendor) {
+            const coordinators = vendor.coordinators || [];
+            coordinatorChoices.clearStore();
+            const coordChoices = coordinators.map(c => ({ value: c.userId, label: c.userName, selected: coordinators.length === 1 }));
+            coordinatorChoices.setChoices([{ value: "", label: "Select Coordinator", disabled: true, selected: coordinators.length !== 1 }, ...coordChoices], 'value', 'label', true);
+            if (coordinators.length === 1) updateCoordinatorDetails(coordinators[0].userId);
+        }
+      }
+    }
+
+    validateSubmitState();
+  });
+</script>

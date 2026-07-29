@@ -1,0 +1,608 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- ================= TABULATOR CSS ================= -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<style>
+  .loan-highlight {
+    padding: 0.25rem 0.6rem;
+    border-radius: 0.35rem;
+    font-weight: 600;
+    font-size: 1.15rem;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    background-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .loan-highlight.active {
+    background-color: rgba(255, 255, 255, 0.16);
+  }
+
+  .loan-highlight.expense {
+    background-color: rgba(220, 53, 69, 0.22);
+    border-color: rgba(255, 255, 255, 0.65);
+  }
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: transparent;
+    padding: 6px 14px;
+    border: 1px solid #ffffffaa;
+    border-radius: 0.3rem;
+    cursor: pointer;
+    color: #fff;
+    text-decoration: none;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+
+  .back-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .download-selector {
+    width: 160px;
+  }
+
+  .download-selector__trigger {
+    height: 34px;
+    padding: 0 14px;
+    box-sizing: border-box;
+  }
+</style>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <div class="indi-head">
+    <span style="display: flex; align-items: center; gap: 10px">
+      <h1 id="pettyCashHeading">
+        Petty Cash - <%= location %>
+        <span style="font-size: 1.1rem; color: #cbd5e1; font-weight: 600; margin-left: 6px;">(<%= viewLabel %>)</span>
+        <span class="loan-highlight active" style="margin-left: 8px;">
+          Balance: <%= new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(balance || 0)) %>
+        </span>
+        <span id="pettyCashExpense" class="loan-highlight expense" style="margin-left: 8px;">
+          <span id="pettyCashExpenseLabel"><%= mode === 'CURRENT' ? 'Month Expense' : 'Total Expense' %></span>:
+          <span id="pettyCashExpenseAmount"><%= new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(currentMonthExpense || 0)) %></span>
+        </span>
+        <span id="pettyCashIncome" class="loan-highlight active" style="margin-left: 8px;">
+          <span id="pettyCashIncomeLabel"><%= mode === 'CURRENT' ? 'Month Income' : 'Total Income' %></span>:
+          <span id="pettyCashIncomeAmount"><%= new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(currentMonthIncome || 0)) %></span>
+        </span>
+      </h1>
+    </span>
+
+    <div style="display:flex; gap:10px; align-items:center;">
+      <!-- Location Filter -->
+      <div style="position:relative;">
+        <select
+          id="location-switcher"
+          style="height:34px; min-width:140px; padding:4px 32px 4px 12px; border:1px solid rgba(255,255,255,0.45); border-radius:6px; background:#ffffff; color:#044A78; font-size:13px; font-weight:600; appearance:none; -webkit-appearance:none; cursor:pointer;"
+        >
+          <option value="all">All Locations</option>
+          <% allLocations.forEach(loc => { %>
+            <option value="<%= loc %>" <%= (location === loc || (location === 'All Locations' && loc === 'all')) ? 'selected' : '' %>><%= loc %></option>
+          <% }) %>
+        </select>
+        <i class="fa-solid fa-location-dot" style="position:absolute; right:11px; top:50%; transform:translateY(-50%); color:#044A78; font-size:11px; pointer-events:none;"></i>
+      </div>
+
+      <!-- Month Filter -->
+      <div style="position:relative;">
+        <select
+          id="month-filter"
+          style="height:34px; min-width:140px; padding:4px 32px 4px 12px; border:1px solid rgba(255,255,255,0.45); border-radius:6px; background:#ffffff; color:#044A78; font-size:13px; font-weight:600; appearance:none; -webkit-appearance:none; cursor:pointer;"
+        >
+          <option value="">All Months</option>
+        </select>
+        <i class="fa-solid fa-calendar-days" style="position:absolute; right:11px; top:50%; transform:translateY(-50%); color:#044A78; font-size:11px; pointer-events:none;"></i>
+      </div>
+
+      <div class="download-selector" id="downloadSelector">
+        <div class="download-selector__trigger">
+          <span><i class="fa-solid fa-file-arrow-down"></i> Download</span>
+          <i class="fa-solid fa-chevron-down"></i>
+        </div>
+
+        <div class="download-selector__menu">
+          <div class="download-selector__option" id="download-pdf">PDF</div>
+          <div class="download-selector__option" id="download-xlsx">Excel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table"></div>
+</div>
+
+<!-- ===== EDIT LOG DIALOG ===== -->
+<div
+  id="pc-edit-dialog"
+  style="display:none; position:fixed; inset:0; background:rgba(17,24,39,0.55); z-index:9999; align-items:center; justify-content:center; backdrop-filter: blur(1px);"
+>
+  <div style="background:#fff; width:560px; max-width:94vw; border-radius:14px; padding:20px 22px; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+      <h3 style="margin:0; color:#0f172a; font-size:18px;">
+        <i class="fa-solid fa-pen-to-square" style="margin-right:6px; color:#2563eb;"></i>Edit Petty Cash Log
+      </h3>
+      <button type="button" onclick="closeEditDialog()" title="Close" style="border:none; background:transparent; color:#6b7280; font-size:18px; cursor:pointer;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div style="font-size:12px; color:#64748b; margin-bottom:12px;">Update the amount and details. Balances will auto-recalculate.</div>
+    <input type="hidden" id="pc-edit-id" />
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+      <div>
+        <label style="font-size:12px; color:#6b7280; font-weight:600;">Type</label>
+        <div style="position:relative;">
+          <select id="pc-edit-type" style="width:100%; height:42px; padding:10px 32px 10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; appearance:none; -webkit-appearance:none; cursor:pointer;">
+            <option value="RECEIVED">RECEIVED</option>
+            <option value="PAID">PAID</option>
+          </select>
+          <i class="fa-solid fa-chevron-down" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; font-size:12px; color:#64748b;"></i>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:12px; color:#6b7280; font-weight:600;">Amount</label>
+        <div style="display:flex; align-items:center; gap:8px; border:1px solid #cbd5e1; border-radius:8px; padding:0 10px; background:#ffffff; height:42px;">
+          <span style="color:#044A78; font-weight:600;">₹</span>
+          <input type="number" id="pc-edit-amount" min="1" style="width:100%; padding:10px 0; border:none; background:transparent; outline:none; color:#0f172a; font-size:14px; line-height:20px;" />
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px; color:#6b7280; font-weight:600;">Location</label>
+      <div style="position:relative;">
+        <select id="pc-edit-location" style="width:100%; height:42px; padding:10px 32px 10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; appearance:none; -webkit-appearance:none; cursor:pointer;">
+          <% allLocations.forEach(loc => { %>
+            <option value="<%= loc %>"><%= loc %></option>
+          <% }) %>
+        </select>
+        <i class="fa-solid fa-chevron-down" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; font-size:12px; color:#64748b;"></i>
+      </div>
+    </div>
+
+    <div id="pc-edit-from-wrap" style="margin-bottom:12px;">
+      <label style="font-size:12px; color:#6b7280; font-weight:600;">From</label>
+      <input type="text" id="pc-edit-from" placeholder="Sender / source" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+    </div>
+    <div id="pc-edit-to-wrap" style="margin-bottom:12px;">
+      <label style="font-size:12px; color:#6b7280; font-weight:600;">To</label>
+      <input type="text" id="pc-edit-to" placeholder="Receiver / payee" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px; color:#6b7280; font-weight:600;">Reason</label>
+      <input type="text" id="pc-edit-reason" placeholder="Optional note" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px; color:#6b7280; font-weight:600;">Entry Date</label>
+      <input type="date" id="pc-edit-date" style="width:100%; height:42px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff; color:#0f172a; font-size:14px; line-height:20px;" />
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button type="button" onclick="closeEditDialog()" style="padding:9px 16px; border:1px solid #e2e8f0; background:white; color:#334155; border-radius:8px; cursor:pointer;">Cancel</button>
+      <button type="button" onclick="submitEditLog()" style="padding:9px 16px; border:none; background:#044A78; color:white; border-radius:8px; cursor:pointer;">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DELETE LOG DIALOG ===== -->
+<div
+  id="pc-delete-dialog"
+  style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;"
+>
+  <div style="background:#fff; width:460px; max-width:92vw; border-radius:10px; padding:18px 20px;">
+    <h3 style="margin:0 0 10px; color:#b91c1c; font-size:17px;">
+      <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i>Delete Log
+    </h3>
+    <p style="margin:0 0 14px; color:#374151;">Are you sure you want to delete this petty cash log?</p>
+    <input type="hidden" id="pc-delete-id" />
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button type="button" onclick="closeDeleteDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer;">Cancel</button>
+      <button type="button" onclick="submitDeleteLog()" style="padding:8px 16px; border:none; background:#ef4444; color:white; border-radius:6px; cursor:pointer;">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SCRIPTS ================= -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<script>
+  const logsData = <%- safeJson(logs || []) %>;
+  const currentViewMode = <%- safeJson(mode || 'ALL') %>;
+  const currentLocation = <%- safeJson(location) %>;
+  const pettyCashExpenseLabel = document.getElementById("pettyCashExpenseLabel");
+  const pettyCashExpenseAmount = document.getElementById("pettyCashExpenseAmount");
+  const pettyCashIncomeLabel = document.getElementById("pettyCashIncomeLabel");
+  const pettyCashIncomeAmount = document.getElementById("pettyCashIncomeAmount");
+
+  function formatINRCurrency(value) {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(Number(value) || 0);
+  }
+
+  function formatDDMMYY(date) {
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const yy = String(date.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
+  }
+
+  function formatDDMMYYUTC(date) {
+    const dd = String(date.getUTCDate()).padStart(2, "0");
+    const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const yy = String(date.getUTCFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
+  }
+
+  function formatDateOnly(value) {
+    if (!value) return "-";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return formatDDMMYY(d);
+  }
+
+  function formatDateForExport(row) {
+    const raw = String(row?.entryDate || row?.createdAt || "").trim();
+    if (!raw) return "-";
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [year, month, day] = raw.split("-").map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day));
+      if (Number.isNaN(date.getTime())) return raw;
+      return formatDDMMYYUTC(date);
+    }
+
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return raw;
+    return formatDDMMYY(date);
+  }
+
+  function getMonthKey(row) {
+    const raw = String(row?.entryDate || row?.createdAt || "").trim();
+    if (!raw) return "";
+    if (/^\d{4}-\d{2}/.test(raw)) return raw.slice(0, 7);
+
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  function formatMonthLabel(monthKey) {
+    const [year, month] = String(monthKey || "").split("-").map(Number);
+    if (!year || !month) return monthKey;
+    return new Date(year, month - 1, 1).toLocaleDateString("en-IN", {
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  function getOutwardExpense(rows) {
+    return (rows || []).reduce((sum, row) => {
+      if (String(row?.type || "").toUpperCase() !== "OUTWARD") return sum;
+      return sum + (Number(row?.amount) || 0);
+    }, 0);
+  }
+
+  function getActiveRowsData() {
+    return table.getRows("active").map((row) => row.getData());
+  }
+
+  function exportPettyCashExcel() {
+    const exportRows = getActiveRowsData().map((row, index) => ({
+      "#": index + 1,
+      "Entry Date": formatDateForExport(row),
+      Location: row.location || "-",
+      Type: row.type === "INWARD" ? "INWARD" : "OUTWARD",
+      From: row.from || "-",
+      To: row.to || "-",
+      "Opening Balance": Number(row.openingBalance) || 0,
+      Amount: Number(row.amount) || 0,
+      "Closing Balance": Number(row.closingBalance) || 0,
+      Reason: row.reason || "-",
+    }));
+
+    const sheet = XLSX.utils.json_to_sheet(exportRows, { skipHeader: false });
+    sheet["!cols"] = [
+      { wch: 6 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 28 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Petty Cash Logs");
+    XLSX.writeFile(workbook, `pettycash_${currentLocation}.xlsx`);
+  }
+
+  function getInwardIncome(rows) {
+    return (rows || []).reduce((sum, row) => {
+      if (String(row?.type || "").toUpperCase() !== "INWARD") return sum;
+      return sum + (Number(row?.amount) || 0);
+    }, 0);
+  }
+
+  function updateCashSummary(monthKey = "") {
+    const filteredLogs = monthKey
+      ? logsData.filter((row) => getMonthKey(row) === monthKey)
+      : logsData;
+
+    const expense = getOutwardExpense(filteredLogs);
+    const income = getInwardIncome(filteredLogs);
+    const label = monthKey
+      ? `${formatMonthLabel(monthKey)} Expense`
+      : currentViewMode === "CURRENT"
+        ? "Month Expense"
+        : "Total Expense";
+    const incomeLabel = monthKey
+      ? `${formatMonthLabel(monthKey)} Income`
+      : currentViewMode === "CURRENT"
+        ? "Month Income"
+        : "Total Income";
+
+    if (pettyCashExpenseLabel) pettyCashExpenseLabel.textContent = label;
+    if (pettyCashExpenseAmount) pettyCashExpenseAmount.textContent = formatINRCurrency(expense);
+    if (pettyCashIncomeLabel) pettyCashIncomeLabel.textContent = incomeLabel;
+    if (pettyCashIncomeAmount) pettyCashIncomeAmount.textContent = formatINRCurrency(income);
+  }
+
+  const columns = [
+    {
+      title: "Date",
+      field: "entryDate",
+      formatter: cell => formatDateOnly(cell.getValue() || cell.getRow().getData().createdAt),
+      headerFilter: "input",
+      headerFilterPlaceholder: "Search",
+    },
+    { title: "Location", field: "location", headerFilter: "input", headerFilterPlaceholder: "Search" },
+    { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search" },
+    { title: "From", field: "from", headerFilter: "input", headerFilterPlaceholder: "Search" },
+    { title: "To", field: "to", headerFilter: "input", headerFilterPlaceholder: "Search" },
+    {
+      title: "Opening Balance",
+      field: "openingBalance",
+      formatter: (c) => formatINRCurrency(c.getValue()),
+      headerFilter: "input",
+      headerFilterPlaceholder: "Search",
+    },
+    {
+      title: "Amount",
+      field: "amount",
+      formatter: c => {
+        const r = c.getRow().getData();
+        return r.type === "OUTWARD"
+          ? `- ${formatINRCurrency(c.getValue())}` : `+ ${formatINRCurrency(c.getValue())}`;
+      },
+      headerFilter: "input",
+      headerFilterPlaceholder: "Search",
+    },
+    {
+      title: "Closing Balance",
+      field: "closingBalance",
+      formatter: (c) => formatINRCurrency(c.getValue()),
+      headerFilter: "input",
+      headerFilterPlaceholder: "Search",
+    },
+    { title: "Reason", field: "reason", headerFilter: "input", headerFilterPlaceholder: "Search" },
+    {
+      title: "Actions",
+      width: 80,
+      hozAlign: "center",
+      headerHozAlign: "center",
+      headerSort: false,
+      formatter: () =>
+        `<button class="pc-log-btn pc-log-edit" title="Edit" style="height:20px; width:28px; padding:0; margin-right:6px; border:1px solid #d1d5db; background:#fff; border-radius:4px; cursor:pointer; line-height:1;">
+            <i class="fa-solid fa-pen-to-square" style="font-size:11px; color:#044A78;"></i>
+         </button>
+         <button class="pc-log-btn pc-log-delete" title="Delete" style="height:20px; width:28px; padding:0; border:1px solid #fca5a5; background:#fee2e2; border-radius:4px; cursor:pointer; line-height:1;">
+            <i class="fa-solid fa-trash" style="font-size:11px; color:#b91c1c;"></i>
+         </button>`,
+      cellClick: (e, cell) => {
+        const row = cell.getRow().getData();
+        if (e.target.closest(".pc-log-edit")) {
+          openEditDialog(row);
+        } else if (e.target.closest(".pc-log-delete")) {
+          openDeleteDialog(row);
+        }
+      },
+    },
+  ];
+
+  const table = new Tabulator("#master-table", {
+    data: logsData,
+    // layout: "fitColumns",
+    pagination: "local",
+    paginationSize: 30,
+    columns: columns,
+  });
+
+  const monthFilter = document.getElementById("month-filter");
+  const locationSwitcher = document.getElementById("location-switcher");
+  const monthKeys = [...new Set(logsData.map(getMonthKey).filter(Boolean))].sort().reverse();
+
+  monthKeys.forEach((monthKey) => {
+    const option = document.createElement("option");
+    option.value = monthKey;
+    option.textContent = formatMonthLabel(monthKey);
+    monthFilter.appendChild(option);
+  });
+
+  // Handle URL parameters for Month
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramMonth = urlParams.get('month');
+  if (paramMonth) {
+    monthFilter.value = paramMonth;
+    // We'll apply filter after table is ready
+  }
+
+  updateCashSummary(monthFilter.value);
+
+  monthFilter.addEventListener("change", () => {
+    const selectedMonth = monthFilter.value;
+    if (!selectedMonth) {
+      table.clearFilter();
+      updateUrlParam('month', '');
+      updateCashSummary("");
+      return;
+    }
+
+    table.setFilter((row) => getMonthKey(row) === selectedMonth);
+    updateUrlParam('month', selectedMonth);
+    updateCashSummary(selectedMonth);
+  });
+
+  locationSwitcher.addEventListener("change", () => {
+    const newLoc = locationSwitcher.value;
+    const currentMonth = monthFilter.value;
+    let url = `/sachiko/pettycash/logs/${encodeURIComponent(newLoc)}/view`;
+    if (currentMonth) {
+      url += `?month=${currentMonth}`;
+    }
+    window.location.href = url;
+  });
+
+  function updateUrlParam(key, value) {
+    const url = new URL(window.location.href);
+    if (value) {
+      url.searchParams.set(key, value);
+    } else {
+      url.searchParams.delete(key);
+    }
+    window.history.replaceState({}, '', url);
+  }
+
+  // Apply initial filter if needed
+  table.on("tableBuilt", () => {
+    if (monthFilter.value) {
+      table.setFilter((row) => getMonthKey(row) === monthFilter.value);
+    }
+    updateCashSummary(monthFilter.value);
+  });
+
+  /* ===== DOWNLOAD ===== */
+  const selector = document.getElementById("downloadSelector");
+  selector.querySelector(".download-selector__trigger").onclick = () =>
+    selector.classList.toggle("download-selector--active");
+
+  document.getElementById("download-pdf").onclick = () =>
+    table.download("pdf", `pettycash_${currentLocation}.pdf`);
+
+  document.getElementById("download-xlsx").onclick = () =>
+    exportPettyCashExcel();
+
+  /* ===== DIALOGS ===== */
+  const editDialog = document.getElementById("pc-edit-dialog");
+  const deleteDialog = document.getElementById("pc-delete-dialog");
+
+  function syncEditFields() {
+    const type = document.getElementById("pc-edit-type").value;
+    const fromWrap = document.getElementById("pc-edit-from-wrap");
+    const toWrap = document.getElementById("pc-edit-to-wrap");
+    if (type === "PAID") {
+      fromWrap.style.display = "none";
+      toWrap.style.display = "block";
+    } else {
+      toWrap.style.display = "none";
+      fromWrap.style.display = "block";
+    }
+  }
+
+  document.getElementById("pc-edit-type").addEventListener("change", syncEditFields);
+
+  function openEditDialog(row) {
+    document.getElementById("pc-edit-id").value = row._id;
+    document.getElementById("pc-edit-amount").value = row.amount;
+    document.getElementById("pc-edit-location").value = row.location || "";
+    document.getElementById("pc-edit-reason").value = row.reason || "";
+    document.getElementById("pc-edit-type").value = row.type === "INWARD" ? "RECEIVED" : "PAID";
+    document.getElementById("pc-edit-from").value = row.from || "";
+    document.getElementById("pc-edit-to").value = row.to || "";
+    const dateValue = row.entryDate || row.createdAt || "";
+    document.getElementById("pc-edit-date").value = dateValue ? String(dateValue).slice(0, 10) : "";
+    syncEditFields();
+    editDialog.style.display = "flex";
+  }
+
+  function closeEditDialog() {
+    editDialog.style.display = "none";
+  }
+
+  function openDeleteDialog(row) {
+    document.getElementById("pc-delete-id").value = row._id;
+    deleteDialog.style.display = "flex";
+  }
+
+  function closeDeleteDialog() {
+    deleteDialog.style.display = "none";
+  }
+
+  async function submitEditLog() {
+    const id = document.getElementById("pc-edit-id").value;
+    const location = document.getElementById("pc-edit-location").value.trim();
+    const typeUi = document.getElementById("pc-edit-type").value;
+    const amount = Number(document.getElementById("pc-edit-amount").value);
+    const from = document.getElementById("pc-edit-from").value.trim();
+    const to = document.getElementById("pc-edit-to").value.trim();
+    const reason = document.getElementById("pc-edit-reason").value.trim();
+    const entryDate = document.getElementById("pc-edit-date").value;
+
+    if (!id || !amount || amount <= 0 || !location) {
+      alert("Please enter a valid amount and location.");
+      return;
+    }
+    const payload = {
+      location,
+      amount,
+      type: typeUi === "RECEIVED" ? "INWARD" : "OUTWARD",
+      from,
+      to,
+      reason,
+      entryDate,
+    };
+
+    try {
+      const res = await fetch(`/sachiko/pettycash/logs/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) window.location.reload();
+      else {
+        const err = await res.json();
+        alert("Error: " + (err.message || "Failed to update log"));
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update log");
+    }
+  }
+
+  async function submitDeleteLog() {
+    const id = document.getElementById("pc-delete-id").value;
+    try {
+      const res = await fetch(`/sachiko/pettycash/logs/${id}`, { method: "DELETE" });
+      if (res.ok) window.location.reload();
+      else alert("Failed to delete log");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete log");
+    }
+  }
+</script>

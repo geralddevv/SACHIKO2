@@ -1,0 +1,108 @@
+<% layout('/layout/boilerplate') %>
+
+<!-- The main content -->
+<div class="main-content">
+  <form action="/sachiko/form/salescalc" class="needs-validation" method="post" novalidate>
+    <div class="span-full form-heading">
+      <h1>Sales Calculator</h1>
+    </div>
+
+    <div class="span-four">
+      <label for="date">Date</label>
+      <input type="date" id="date" class="form-control input-tag" name="date" required />
+    </div>
+
+    <div class="span-penta">
+      <div class="clientName-label"><label for="company-name">Client Name</label><span class="asterisk" style="font-size: 14px;"></span></div>
+      <select name="companyName" id="company-name" class="form-control select-tag" required>
+        <option value="" selected disabled hidden>Select</option>
+        <% for (let client of clients) { %>
+          <option value="<%= client %>"><%= client %></option>
+        <% } %>
+      </select>
+    </div>
+
+    <div class="span-four">
+      <label for="label-width">Width</label>
+      <input type="number" step="any" id="label-width" class="form-control input-tag" name="labelWidth" placeholder="Enter width" required />
+    </div>
+
+    <div class="span-four">
+      <label for="label-height">Height</label>
+      <input type="number" step="any" id="label-height" class="form-control input-tag" name="labelHeight" placeholder="Enter height" required />
+    </div>
+
+    <div class="span-five">
+      <label for="job-ups">job ups</label>
+      <input type="number" oninput="limitToTwoChars(this)" id="job-ups" class="form-control input-tag" name="jobUps" placeholder="Enter job ups" required />
+    </div>
+
+    <div class="span-five">
+      <label for="per-1k">Per 1000</label>
+      <input type="number" step="any" id="per-1k" class="form-control input-tag" name="perOneK" placeholder="Enter per 1000" required />
+    </div>
+
+    <div class="span-dual">
+      <label for="paper-type">Paper type</label>
+      <input list="paper_type_options" id="paper-type" class="form-control input-tag" name="labelType" placeholder="Enter label type" required />
+
+      <datalist id="paper_type_options">
+        <option value="Avery"></option>
+        <option value="Chromo"></option>
+        <option value="PVC / PP"></option>
+        <option value="D.T"></option>
+      </datalist>
+    </div>
+
+    <div class="span-dual">
+      <label for="printed">Printed</label>
+      <select name="printed" id="printed" class="form-control select-tag" required>
+        <option value="" selected disabled hidden>Select</option>
+        <option value="Plain">Plain</option>
+        <option value="Printed">Printed</option>
+      </select>
+    </div>
+
+    <div class="span-dual">
+      <label for="job-name">Job Name</label>
+      <input type="text" id="job-name" class="form-control input-tag" name="jobName" placeholder="Enter Job Name" required />
+    </div>
+
+    <div class="span-dual">
+      <label for="order-quantity">Order quantity</label>
+      <input type="number" step="any" id="order-quantity" class="form-control input-tag" name="orderQuantity" placeholder="Enter order quantity" required />
+    </div>
+
+    <div class="btn-grp span-full">
+      <button id="calc-btn" type="button">Calculate</button>
+    </div>
+
+
+    <div class="span-dual">
+      <label for="sales-area">Sales Area</label>
+      <input type="number" step="any" id="sales-area" class="form-control auto-calc input-tag" name="sales" placeholder="Enter sales area" required />
+    </div>
+
+    <div class="span-dual">
+      <label for="sales-rate">Sales rate</label>
+      <input type="number" step="any" id="sales-rate" class="form-control auto-calc input-tag" name="salesRate" placeholder="Sales rate" required />
+    </div>
+
+    <div class="span-dual">
+      <label for="order-value">Order value</label>
+      <input type="number" step="any" id="order-value" class="form-control auto-calc input-tag" name="orderValue" placeholder="Order value" required />
+    </div>
+
+    <div class="span-dual">
+      <label for="cost-percent">Cost (%)</label>
+      <input type="number" step="any" id="cost-percent" class="form-control auto-calc input-tag" name="costPercent" placeholder="Cost %" required />
+    </div>
+
+    <div class="btn-grp span-full">
+      <button class="view-btn" type="button">View Details</button>
+      <button class="submit-btn" type="submit">Submit Order Details</button>
+    </div>
+  </form>
+</div>
+
+<script src="/js/salesCalc.js" defer></script>

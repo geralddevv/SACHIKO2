@@ -1,0 +1,414 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<body>
+  <style>
+    #master-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    #master-table .tabulator-row.row-missing-employee-details .tabulator-cell {
+      color: #dc2626 !important;
+    }
+    #master-table .tabulator-row.row-missing-employee-details .tabulator-cell * {
+      color: #dc2626 !important;
+      text-decoration-color: #dc2626 !important;
+    }
+    #master-table .tabulator-row.row-missing-employee-details .tabulator-cell .status-badge-active,
+    #master-table .tabulator-row.row-missing-employee-details .tabulator-cell .status-badge-active * { color: #1a7f4b !important; }
+    #master-table .tabulator-row.row-missing-employee-details .tabulator-cell .status-badge-pending,
+    #master-table .tabulator-row.row-missing-employee-details .tabulator-cell .status-badge-pending * { color: #b9770e !important; }
+    #master-table .tabulator-row.row-missing-employee-details .tabulator-cell .status-badge-inactive,
+    #master-table .tabulator-row.row-missing-employee-details .tabulator-cell .status-badge-inactive * { color: #c0392b !important; }
+  </style>
+  <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+    <div class="indi-head">
+      <h1>Employees</h1>
+      <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+        <a
+          href="/sachiko/employee/create"
+          class="header-action-btn"
+          style="
+            height: 30px;
+            padding: 0 14px;
+            background: #f0f0f0;
+            color: #044a78;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+          "
+        >
+          <i class="fa-solid fa-plus"></i>
+          <span>Add Employee</span>
+        </a>
+
+        <div class="download-selector" id="downloadSelector">
+          <button class="download-selector__trigger" style="height: 30px; display: flex; align-items: center; padding: 0 12px; border: 1.5px solid #e2e8f0; border-radius: 6px; background: #fff; font-size: 14px; font-weight: 500; cursor: pointer;">
+            <span>
+              <i class="fa-solid fa-file-arrow-down"></i>
+              <span class="download-typo">Download</span>
+            </span>
+            <i class="fas fa-chevron-down download-selector__trigger-icon" style="font-size: 12px; margin-left: 6px;"></i>
+          </button>
+          <div class="download-selector__menu" id="downloads">
+            <span class="download-selector__option" id="download-pdf">
+              <i class="fas fa-file-pdf download-selector__option-icon"></i>
+              <span>PDF</span>
+            </span>
+            <span class="download-selector__option" id="download-xlsx">
+              <i class="fas fa-file-excel download-selector__option-icon"></i>
+              <span>Excel</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-spinner"><div class="spinner-circle"></div></div>
+    <div id="master-table" class="tabulator tabulator-modern"></div>
+  </div>
+
+  <!-- Tabulator JS -->
+  <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+  <script>
+      // ================= DOWNLOAD DROPDOWN =================
+
+      const downloadSelector = document.getElementById("downloadSelector");
+      const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
+
+      triggerBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        downloadSelector.classList.toggle("download-selector--active");
+
+        const icon = triggerBtn.querySelector(".download-selector__trigger-icon");
+        icon.style.transform = downloadSelector.classList.contains("download-selector--active")
+          ? "rotate(180deg)"
+          : "rotate(0deg)";
+      });
+
+      document.addEventListener("click", () => {
+        downloadSelector.classList.remove("download-selector--active");
+        const icon = triggerBtn.querySelector(".download-selector__trigger-icon");
+        icon.style.transform = "rotate(0deg)";
+      });
+
+      downloadSelector
+        .querySelector(".download-selector__menu")
+        .addEventListener("click", (e) => e.stopPropagation());
+
+      // ================= DATA =================
+
+      const tableData = <%- safeJson(jsonData) %>;
+
+      function isMissingValue(value) {
+        return value === null || value === undefined || String(value).trim() === "";
+      }
+
+      function formatEmployeeField(value, defaultColor = "#044A78", fontWeight = 500) {
+        const missing = isMissingValue(value);
+        const displayValue = missing ? "-" : value;
+        const color = missing ? "#dc2626" : defaultColor;
+
+        return `
+          <span style="font-weight:${fontWeight};color:${color}">
+            ${displayValue}
+          </span>
+        `;
+      }
+
+      // ================= TABULATOR =================
+
+      let table;
+      const requiredEmployeeFields = [
+        "empId",
+        "empName",
+        "empDateOfJoining",
+        "empType",
+        "empLoc",
+        "empDept",
+        "empReportingManager",
+        "empProfile",
+        "empDob",
+        "empGender",
+        "empMobile1",
+        "empEmergencyNo1",
+        "empMartialStatus",
+        "empPresentAddress",
+        "empPermanentAddress",
+        "empAadhaar",
+        "empPan",
+        "empBankName",
+        "empAccountHolderName",
+        "empAccNo",
+        "empIfscCode",
+      ];
+
+      function hasMissingEmployeeDetails(row) {
+        return requiredEmployeeFields.some((field) => isMissingValue(row?.[field]));
+      }
+
+      function initTable() {
+      table = new Tabulator("#master-table", {
+        data: tableData,
+        height: "100%",
+        // layout: "fitColumns",
+        columnMinWidth: 120,
+        resizableColumns: true,
+        movableColumns: true,
+        initialSort: [
+          { column: "empName", dir: "asc" }
+        ],
+        rowFormatter: function (row) {
+          const rowEl = row.getElement();
+          if (hasMissingEmployeeDetails(row.getData())) {
+            rowEl.classList.add("row-missing-employee-details");
+          } else {
+            rowEl.classList.remove("row-missing-employee-details");
+          }
+        },
+
+        columns: [
+          {
+            title: "Status",
+            field: "isActive",
+            width: 110,
+            hozAlign: "center",
+            headerFilter: "list",
+            headerFilterParams: { values: { "": "All", "active": "Active", "pending": "Pending", "inactive": "Inactive" } },
+            headerFilterFunc: function(headerValue, rowValue, rowData) {
+              if (!headerValue) return true;
+              const givenAssets = [rowData.empAssets1, rowData.empAssets2, rowData.empAssets3, rowData.empAssets4].map(a => (a || "").trim()).filter(Boolean);
+              const surrendered = new Set((rowData.empAssetsSurrendered || []).map(a => (a || "").trim()).filter(Boolean));
+              const pendingAssets = givenAssets.filter(a => !surrendered.has(a)).length;
+              const hasPendingBalance = (rowData.loanBalance > 0) || (rowData.advanceBalance > 0);
+              const isInactive = rowData.isActive === false;
+              if (headerValue === "active") return !isInactive;
+              if (headerValue === "pending") return isInactive && (pendingAssets > 0 || hasPendingBalance);
+              if (headerValue === "inactive") return isInactive && pendingAssets === 0 && !hasPendingBalance;
+              return true;
+            },
+            formatter: function(cell) {
+              const data = cell.getRow().getData();
+              const givenAssets = [data.empAssets1, data.empAssets2, data.empAssets3, data.empAssets4].map(a => (a || "").trim()).filter(Boolean);
+              const surrendered = new Set((data.empAssetsSurrendered || []).map(a => (a || "").trim()).filter(Boolean));
+              const pendingAssets = givenAssets.filter(a => !surrendered.has(a)).length;
+              const hasPendingBalance = (data.loanBalance > 0) || (data.advanceBalance > 0);
+              const isInactive = data.isActive === false;
+              if (!isInactive) return `<span class="status-badge-active" style="background:#e7f7ee;color:#1a7f4b;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;">Active</span>`;
+              if (pendingAssets > 0 || hasPendingBalance) return `<span class="status-badge-pending" style="background:#fff3e0;color:#b9770e;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;">Pending</span>`;
+              return `<span class="status-badge-inactive" style="background:#fdecec;color:#c0392b;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;">Inactive</span>`;
+            }
+          },
+          {
+            title: "Name",
+            field: "empName",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Search",
+            formatter: function (cell) {
+              const value = cell.getValue();
+              const missing = isMissingValue(value);
+              return `
+                <span style="font-weight:600;color:${missing ? "#dc2626" : "#044A78"};text-decoration:underline;text-decoration-color:${missing ? "#dc2626" : "#044A78"}">
+                  ${missing ? "-" : value}
+                </span>
+              `;
+            },
+            cellClick: function (e, cell) {
+              const data = cell.getRow().getData();
+              window.location.href = `/sachiko/employee/profile/${data._id}`;
+            },
+          },
+
+          {
+            title: "Employee Id",
+            field: "empId",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Search",
+            width: 150,
+            formatter: function (cell) {
+              return `
+                <span style="font-weight:600;font-size:14px;color:${isMissingValue(cell.getValue()) ? "#dc2626" : "#044A78"}">
+                  ${isMissingValue(cell.getValue()) ? "-" : cell.getValue()}
+                </span>
+              `;
+            }
+          },
+          {
+            title: "Image",
+            field: "empPhoto",
+            width: 80,
+            hozAlign: "center",
+            formatter: function (cell) {
+              const data = cell.getRow().getData();
+              const hasPhoto = !isMissingValue(data.empPhoto);
+              return `
+                <i class="fa-solid fa-image"
+                   style="font-size:16px;color:${hasPhoto ? '#044A78' : '#94a3b8'}">
+                </i>
+              `;
+            },
+            cellClick: function (e, cell) {
+              const data = cell.getRow().getData();
+
+              const imgSrc = data.empPhoto
+                ? `/images/empimg/${data.empPhoto}`
+                : `/images/empimg/${data.empGender === "FEMALE" ? "female.jpg" : "male.jpg"}`;
+
+              openImgModal(imgSrc);
+            }
+          },
+          {
+            title: "Reporting Manager",
+            field: "empReportingManager",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Search",
+            formatter: function (cell) {
+              return formatEmployeeField(cell.getValue(), "#111827");
+            }
+          },
+          {
+            title: "Office Mobile",
+            field: "empOfficeMob",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Search",
+            formatter: function (cell) {
+              return formatEmployeeField(cell.getValue(), "#111827");
+            }
+          },
+          {
+            title: "Personal Mobile",
+            field: "empMobile1",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Search",
+            formatter: function (cell) {
+              return formatEmployeeField(cell.getValue(), "#111827");
+            }
+          },
+          {
+            title: "Office Email",
+            field: "empOfficeEmailId",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Search",
+            formatter: function (cell) {
+              return formatEmployeeField(cell.getValue(), "#111827");
+            }
+          },
+          {
+            title: "Employee Type",
+            field: "empType",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Search",
+            formatter: function (cell) {
+              return formatEmployeeField(cell.getValue(), "#111827");
+            }
+          },
+          {
+            title: "Department",
+            field: "empDept",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Search",
+            formatter: function (cell) {
+              return formatEmployeeField(cell.getValue(), "#111827");
+            }
+          },
+          {
+            title: "Profile",
+            field: "empProfile",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Search",
+            formatter: function (cell) {
+              return formatEmployeeField(cell.getValue(), "#111827");
+            }
+          },
+          {
+            title: "Location",
+            field: "empLoc",
+            headerFilter: "input",
+            headerFilterPlaceholder: "Search",
+            formatter: function (cell) {
+              return formatEmployeeField(cell.getValue(), "#111827");
+            }
+          },
+        ],
+      });
+    }
+
+      window.addEventListener("load", initTable);
+
+      // ================= DOWNLOAD =================
+
+      document.getElementById("download-pdf").addEventListener("click", () => {
+        if (!table) return;
+
+        table.download("pdf", "employee-data.pdf", {
+          orientation: "landscape",
+          title: "Employee Data",
+        });
+
+        downloadSelector.classList.remove("download-selector--active");
+      });
+
+      document.getElementById("download-xlsx").addEventListener("click", () => {
+        if (!table) return;
+
+        table.download("xlsx", "employee-data.xlsx", {
+          sheetName: "Employees",
+        });
+
+        downloadSelector.classList.remove("download-selector--active");
+      });
+  </script>
+  <!-- IMAGE PREVIEW MODAL -->
+  <div
+    id="imgModal"
+    style="
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    "
+    onclick="closeImgModal()"
+  >
+    <img
+      id="imgModalSrc"
+      style="
+        max-width: 90%;
+        max-height: 90%;
+        border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        background: #fff;
+      "
+    />
+  </div>
+
+  <script>
+    function openImgModal(src) {
+      document.getElementById("imgModalSrc").src = src;
+      document.getElementById("imgModal").style.display = "flex";
+    }
+
+    function closeImgModal() {
+      document.getElementById("imgModal").style.display = "none";
+    }
+  </script>
+</body>

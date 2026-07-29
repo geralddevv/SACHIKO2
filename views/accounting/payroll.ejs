@@ -1,0 +1,540 @@
+<% layout('/layout/boilerplate') -%>
+
+<div class="main-content" style="padding: 10px;">
+  <form class="rottary-content needs-validation" method="post" action="/sachiko/payroll/create" onsubmit="return validatePayrollBeforeSubmit()" autocomplete="off" novalidate>
+
+    <!-- ================= HEADING ================= -->
+    <div class="span-full form-heading">
+      <h1>Create Payroll</h1>
+    </div>
+
+    <!-- ================= EMP ID ================= -->
+    <div class="span-five">
+      <label>Employee ID</label>
+      <input
+        type="text"
+        id="emp-id"
+        class="form-control input-tag"
+        name="empId"
+        readonly
+        placeholder="Auto from employee"
+      />
+    </div>
+
+    <!-- ================= EMPLOYEE ================= -->
+    <div class="span-hexa">
+      <label>Employee Name</label>
+      <select
+        id="employee-name"
+        name="employeeId"
+        class="form-control select-tag"
+        required
+      >
+        <option value="" disabled selected hidden>Select Employee</option>
+        <% employees.forEach(emp => { %>
+          <option value="<%= emp._id %>"><%= emp.empName %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <script id="employees-data" type="application/json"><%- safeJson(employees.map(e => ({ _id: e._id, empName: e.empName }))) %></script>
+    <script id="existing-payrolls-data" type="application/json"><%- safeJson(existingPayrolls) %></script>
+
+    <!-- ================= BASE SALARY ================= -->
+    <div class="span-seven">
+      <label>Base Salary</label>
+      <input
+        type="text"
+        id="base-salary"
+        placeholder="Auto from employee"
+        class="form-control input-tag amount-input"
+        readonly
+      />
+    </div>
+
+    <!-- ================= MONTH / YEAR ================= -->
+    <div class="span-four">
+      <label>Month</label>
+      <select id="month-select" name="month" class="form-control select-tag" required>
+        <%
+          const months = [
+            { name: "Jan", value: 1 },
+            { name: "Feb", value: 2 },
+            { name: "Mar", value: 3 },
+            { name: "Apr", value: 4 },
+            { name: "May", value: 5 },
+            { name: "Jun", value: 6 },
+            { name: "Jul", value: 7 },
+            { name: "Aug", value: 8 },
+            { name: "Sep", value: 9 },
+            { name: "Oct", value: 10 },
+            { name: "Nov", value: 11 },
+            { name: "Dec", value: 12 }
+          ];
+          const currentMonth = new Date().getMonth() + 1;
+        %>
+
+        <% months.forEach(m => { %>
+          <option value="<%= m.value %>" <%= m.value === currentMonth ? 'selected' : '' %>><%= m.name %></option>
+        <% }) %>
+      </select>
+    </div>
+
+
+    <div class="span-four">
+      <label>Year</label>
+      <select id="year-input" name="year" class="form-control select-tag" required>
+        <%
+          const currentYear = new Date().getFullYear();
+          const yearOptions = [];
+          for (let y = currentYear - 5; y <= currentYear + 1; y++) yearOptions.push(y);
+        %>
+        <% yearOptions.forEach(y => { %>
+          <option value="<%= y %>" <%= y === currentYear ? 'selected' : '' %>><%= y %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <%# Attendance (span 20) + Extras (span 12) sit in the same grid row %>
+    <div style="grid-column: span 20; display: flex; flex-direction: column; gap: 1rem;">
+      <div class="span-full form-subheading">
+        <h1>Attendance</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+        <div class="span-dual" style="grid-column: auto;">
+          <label>Total Days</label>
+          <input type="number" id="total-days" name="totalDays" placeholder="Auto from month" class="form-control input-tag" readonly required />
+        </div>
+
+        <div class="span-dual" style="grid-column: auto;">
+          <label>Absent Days</label>
+          <input type="number" step="0.5" id="absent-days" name="absentDays" placeholder="Enter Absent Days" class="form-control input-tag" required />
+        </div>
+
+        <div class="span-dual" style="grid-column: auto;">
+          <label>Present Days</label>
+          <input type="number" id="present-days" name="presentDays" placeholder="Auto from total & absent days" class="form-control input-tag" readonly />
+        </div>
+
+        <div class="span-dual" style="grid-column: auto;">
+          <label>OT Hours</label>
+          <input type="number" name="othrs" class="form-control input-tag" placeholder="Enter OT Hours" />
+        </div>
+      </div>
+    </div>
+
+    <div style="grid-column: span 12; display: flex; flex-direction: column; gap: 1rem;">
+      <div class="span-full form-subheading">
+        <h1>Extras</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+        <div class="span-half" style="grid-column: auto;">
+          <label>Incentive</label>
+          <input type="text" inputmode="decimal" name="incentive" class="form-control input-tag amount-input" value="0" />
+        </div>
+
+        <div class="span-half" style="grid-column: auto;">
+          <label>Advance</label>
+          <input type="text" name="advance" class="form-control input-tag amount-input" value="0" readonly />
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= DEDUCTIONS ================= -->
+    <div class="span-full form-subheading"><h1>Deductions</h1></div>
+
+    <div style="grid-column: span 32; display: grid; grid-template-columns: repeat(8, 1fr); gap: 1rem;">
+      <div class="span-four" style="grid-column: auto;"><label>PT</label><input type="text" inputmode="numeric" pattern="[0-9]*" id="emp-pt" name="empPT" value="0" class="form-control input-tag amount-input" /></div>
+      <div class="span-four" style="grid-column: auto;"><label>TDS</label><input id="emp-tds" value="0" class="form-control input-tag amount-input" readonly /></div>
+      <div class="span-four" style="grid-column: auto;"><label>LIC</label><input id="emp-lic" value="0" class="form-control input-tag amount-input" readonly /></div>
+      <div class="span-four" style="grid-column: auto;"><label>Medical</label><input id="emp-medical" value="0" class="form-control input-tag amount-input" readonly /></div>
+      <div class="span-four" style="grid-column: auto;"><label>NSIC</label><input id="emp-nsic" value="0" class="form-control input-tag amount-input" readonly /></div>
+      <div class="span-four" style="grid-column: auto;"><label>ESIC</label><input id="emp-esic" value="0" class="form-control input-tag amount-input" readonly /></div>
+      <div class="span-four" style="grid-column: auto;"><label>PF</label><input id="emp-pf" value="0" class="form-control input-tag amount-input" readonly /></div>
+      <div class="span-four" style="grid-column: auto;"><label>House Rent</label><input type="text" name="houseRent" value="0" class="form-control input-tag amount-input" readonly /></div>
+    </div>
+
+    <%# Allowances (span 12) + Loan (span 20) sit in the same grid row %>
+    <div style="grid-column: span 12; display: flex; flex-direction: column; gap: 1rem;">
+      <div class="span-full form-subheading">
+        <h1>Allowances</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+        <div class="span-penta" style="grid-column: auto;">
+          <label>Railway Pass</label>
+          <input type="text" inputmode="decimal" name="railwayPass" value="0" class="form-control input-tag amount-input" />
+        </div>
+
+        <div class="span-penta" style="grid-column: auto;">
+          <label>Travelling</label>
+          <input type="text" inputmode="decimal" name="travelling" value="0" class="form-control input-tag amount-input" />
+        </div>
+
+        <div class="span-penta" style="grid-column: auto;">
+          <label>OT Amount</label>
+          <input type="text" name="empOtAmount" value="0" class="form-control input-tag amount-input" readonly />
+        </div>
+      </div>
+    </div>
+
+    <div style="grid-column: span 20; display: flex; flex-direction: column; gap: 1rem;">
+      <div class="span-full form-subheading">
+        <h1>Loan</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+        <div class="span-seven" style="grid-column: auto;">
+          <label>Opening Balance</label>
+          <input type="text" id="loan-opening" name="openingBalance" class="form-control input-tag amount-input" readonly value="0" />
+        </div>
+
+        <div class="span-seven" style="grid-column: auto;">
+          <label>EMI</label>
+          <input type="text" inputmode="decimal" id="loan-emi" name="emi" class="form-control input-tag amount-input" value="0" />
+        </div>
+
+        <div class="span-hexa" style="grid-column: auto;">
+          <label>Reason</label>
+          <input type="text" id="loan-reason" name="reason" class="form-control input-tag" />
+        </div>
+
+        <div class="span-six" style="grid-column: auto;">
+          <label>Closing Balance</label>
+          <input type="text" id="loan-closing" class="form-control input-tag amount-input" readonly value="0" />
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= SALARY SUMMARY + SUBMIT ================= -->
+    <div class="span-full btn-grp" style="flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: wrap; padding: 10px 20px;">
+      <div style="display: flex; gap: 2.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span style="font-size: 15px; font-weight: 600; color: var(--primary-dark); text-transform: uppercase; letter-spacing: 0.04em;">Gross Salary</span>
+          <span id="gross-salary" style="font-size: 26px; font-weight: 700; color: var(--primary-color); line-height: 1;">₹0</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span style="font-size: 15px; font-weight: 600; color: var(--primary-dark); text-transform: uppercase; letter-spacing: 0.04em;">Take Away</span>
+          <span id="take-away" style="font-size: 26px; font-weight: 700; color: #16a34a; line-height: 1;">₹0</span>
+        </div>
+      </div>
+
+      <button class="submit-btn" type="submit" style="width: 30%; flex: 0 0 auto; padding: 0.5rem 6.5rem;">Save Payroll</button>
+    </div>
+
+  </form>
+</div>
+
+<small id="advance-warning" style="color:red; display:none;">
+  Advance deduction cannot exceed 50% of basic salary.
+</small>
+
+
+<!-- ================= SCRIPTS ================= -->
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+<script>
+function formatAmount(value) {
+  const n = Number(String(value ?? "").replace(/[₹,]/g, "")) || 0;
+  return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
+function parseAmount(value) {
+  return Number(String(value ?? "").replace(/[₹,]/g, "")) || 0;
+}
+
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+
+  let employeeChoices = null;
+
+  const allEmployees = JSON.parse(document.getElementById("employees-data").textContent);
+  const existingPayrolls = JSON.parse(document.getElementById("existing-payrolls-data").textContent);
+
+  const employeeSelect = document.getElementById("employee-name");
+  const empIdInput = document.getElementById("emp-id");
+  const baseSalaryInput = document.getElementById("base-salary");
+
+  const loanOpeningInput = document.getElementById("loan-opening");
+  const loanEmiInput = document.getElementById("loan-emi");
+  const loanClosingInput = document.getElementById("loan-closing");
+  const advanceInput = document.querySelector('[name="advance"]');
+
+  const railwayInput = document.querySelector('[name="railwayPass"]');
+  const travellingInput = document.querySelector('[name="travelling"]');
+  const houseRentInput = document.querySelector('[name="houseRent"]');
+  const empOtInput = document.querySelector('[name="empOtAmount"]');
+  const otHoursInput = document.querySelector('[name="othrs"]');
+
+  const monthSelect = document.getElementById("month-select");
+  const yearInput = document.getElementById("year-input");
+  const totalDaysInput = document.getElementById("total-days");
+  const presentDaysInput = document.getElementById("present-days");
+  const absentDaysInput = document.getElementById("absent-days");
+
+  const incentiveInput = document.querySelector('[name="incentive"]');
+  const empPtInput = document.getElementById("emp-pt");
+  const grossSalaryInput = document.getElementById("gross-salary");
+  const takeAwayInput = document.getElementById("take-away");
+
+  let maxAdvanceAllowed = 0;
+
+  // OT amount = Basic Salary / 30 / 9 * OT Hours (per company salary sheet formula)
+  function calculateOTAmount() {
+    const hrs = Number(otHoursInput.value) || 0;
+    const basic = parseAmount(baseSalaryInput.value);
+    empOtInput.value = formatAmount((basic / 30 / 9) * hrs);
+  }
+
+  function calculateLoanClosing() {
+    loanClosingInput.value = formatAmount(
+      Math.max(parseAmount(loanOpeningInput.value) - parseAmount(loanEmiInput.value), 0)
+    );
+  }
+
+  function calculateTotalDaysInMonth() {
+    const month = Number(monthSelect.value) || 0;
+    const year = Number(yearInput.value) || 0;
+    totalDaysInput.value = month && year ? new Date(year, month, 0).getDate() : "";
+  }
+
+  function resetEmployeeDependentFields() {
+    empIdInput.value = "";
+    baseSalaryInput.value = "";
+    document.getElementById("emp-pt").value = formatAmount(0);
+    document.getElementById("emp-tds").value = formatAmount(0);
+    document.getElementById("emp-lic").value = formatAmount(0);
+    document.getElementById("emp-medical").value = formatAmount(0);
+    document.getElementById("emp-nsic").value = formatAmount(0);
+    document.getElementById("emp-esic").value = formatAmount(0);
+    document.getElementById("emp-pf").value = formatAmount(0);
+    railwayInput.value = formatAmount(0);
+    travellingInput.value = formatAmount(0);
+    houseRentInput.value = formatAmount(0);
+    empOtInput.value = formatAmount(0);
+    loanOpeningInput.value = formatAmount(0);
+    loanEmiInput.value = formatAmount(0);
+    loanClosingInput.value = formatAmount(0);
+    advanceInput.value = formatAmount(0);
+    calculateSalaryPreview();
+  }
+
+  // Employees who already have a payroll record for the selected month/year
+  // shouldn't be selectable again — filter them out of the dropdown.
+  function refreshEmployeeOptions() {
+    const month = Number(monthSelect.value) || 0;
+    const year = Number(yearInput.value) || 0;
+
+    const takenIds = new Set(
+      existingPayrolls
+        .filter((p) => p.month === month && p.year === year)
+        .map((p) => p.employee)
+    );
+
+    const previouslySelected = employeeSelect.value;
+    const availableEmployees = allEmployees.filter((e) => !takenIds.has(e._id));
+
+    employeeSelect.innerHTML =
+      '<option value="" disabled selected hidden>Select Employee</option>' +
+      availableEmployees
+        .map((e) => `<option value="${escapeHtml(e._id)}">${escapeHtml(e.empName)}</option>`)
+        .join("");
+
+    if (employeeChoices) {
+      employeeChoices.destroy();
+      employeeChoices = null;
+    }
+
+    if (previouslySelected && availableEmployees.some((e) => e._id === previouslySelected)) {
+      employeeSelect.value = previouslySelected;
+    } else if (previouslySelected) {
+      employeeSelect.value = "";
+      resetEmployeeDependentFields();
+    }
+
+    employeeChoices = new Choices(employeeSelect, {
+      searchEnabled: true,
+      itemSelectText: "",
+      shouldSort: false,
+    });
+  }
+
+  function calculatePresentDays() {
+    const total = Number(totalDaysInput.value) || 0;
+    const absent = Number(absentDaysInput.value) || 0;
+    presentDaysInput.value = total ? Math.max(total - absent, 0) : "";
+  }
+
+  function calculateSalaryPreview() {
+    const basic = parseAmount(baseSalaryInput.value);
+    const incentive = parseAmount(incentiveInput.value);
+    const otAmount = parseAmount(empOtInput.value);
+    const railwayPass = parseAmount(railwayInput.value);
+    const travelling = parseAmount(travellingInput.value);
+    const houseRent = parseAmount(houseRentInput.value);
+
+    const absentDays = Number(absentDaysInput.value || 0);
+    const totalDays = Number(totalDaysInput.value || 0);
+    const perDay = totalDays ? basic / totalDays : 0;
+    const absentAmount = absentDays * perDay;
+
+    const deductions =
+      parseAmount(empPtInput.value) +
+      parseAmount(advanceInput.value) +
+      parseAmount(loanEmiInput.value) +
+      absentAmount;
+
+    const gross = basic + incentive + otAmount + railwayPass + travelling + houseRent;
+    const takeAway = gross - deductions;
+
+    grossSalaryInput.textContent = formatAmount(Math.round(gross));
+    takeAwayInput.textContent = formatAmount(Math.round(takeAway));
+  }
+
+  async function fetchEmployee(id) {
+    const res = await fetch(`/sachiko/employee/${id}`);
+    if (!res.ok) throw new Error("Employee fetch failed");
+    return res.json();
+  }
+
+  async function fetchLoan(id) {
+    const res = await fetch(`/sachiko/payroll/loan/${id}`);
+    return res.ok ? res.json() : null;
+  }
+
+  async function fetchAdvance(id) {
+    const res = await fetch(`/sachiko/payroll/advance/${id}`);
+    return res.ok ? res.json() : null;
+  }
+
+  employeeSelect.addEventListener("change", async () => {
+    const id = employeeSelect.value;
+    if (!id) return;
+
+    const emp = await fetchEmployee(id);
+
+    maxAdvanceAllowed = Number(emp.basicSalary || 0) * 0.5;
+    document.getElementById("advance-warning").style.display = "none";
+
+    empIdInput.value = emp.empId || "";
+    baseSalaryInput.value = formatAmount(emp.basicSalary || 0);
+
+    document.getElementById("emp-pt").value = formatAmount(emp.empPT || 0);
+    document.getElementById("emp-tds").value = formatAmount(emp.empTDS || 0);
+    document.getElementById("emp-lic").value = formatAmount(emp.empLIC || 0);
+    document.getElementById("emp-medical").value = formatAmount(emp.empMedical || 0);
+    document.getElementById("emp-nsic").value = formatAmount(emp.empNSIC || 0);
+    document.getElementById("emp-esic").value = formatAmount(emp.empESIC || 0);
+    document.getElementById("emp-pf").value = formatAmount(emp.empPF || 0);
+
+    railwayInput.value = formatAmount(emp.railwayPass || 0);
+    travellingInput.value = formatAmount(emp.travelling || 0);
+    houseRentInput.value = formatAmount(emp.houseRent || 0);
+
+    calculateOTAmount();
+
+    const loan = await fetchLoan(id);
+    loanOpeningInput.value = formatAmount(loan?.currentBalance || 0);
+    loanEmiInput.value = formatAmount(loan?.emi || 0);
+    calculateLoanClosing();
+
+    const advance = await fetchAdvance(id);
+    advanceInput.value = formatAmount(advance?.currentBalance || 0);
+
+    calculateSalaryPreview();
+  });
+
+  loanEmiInput.addEventListener("input", () => {
+    calculateLoanClosing();
+    calculateSalaryPreview();
+  });
+  otHoursInput.addEventListener("input", () => {
+    calculateOTAmount();
+    calculateSalaryPreview();
+  });
+  monthSelect.addEventListener("change", () => {
+    calculateTotalDaysInMonth();
+    calculatePresentDays();
+    calculateSalaryPreview();
+    refreshEmployeeOptions();
+  });
+  yearInput.addEventListener("change", () => {
+    calculateTotalDaysInMonth();
+    calculatePresentDays();
+    calculateSalaryPreview();
+    refreshEmployeeOptions();
+  });
+  absentDaysInput.addEventListener("input", () => {
+    calculatePresentDays();
+    calculateSalaryPreview();
+  });
+  incentiveInput.addEventListener("input", calculateSalaryPreview);
+  railwayInput.addEventListener("input", calculateSalaryPreview);
+  travellingInput.addEventListener("input", calculateSalaryPreview);
+  empPtInput.addEventListener("input", () => {
+    const digitsOnly = empPtInput.value.replace(/\D/g, "");
+    if (digitsOnly !== empPtInput.value) empPtInput.value = digitsOnly;
+    calculateSalaryPreview();
+  });
+
+  // Unformat editable amount fields on focus so typing isn't hindered by ₹/commas,
+  // reformat on blur for a readable display.
+  [incentiveInput, railwayInput, travellingInput, loanEmiInput, empPtInput].forEach((el) => {
+    el.addEventListener("focus", () => {
+      const raw = parseAmount(el.value);
+      el.value = raw ? String(raw) : "";
+    });
+    el.addEventListener("blur", () => {
+      el.value = formatAmount(el.value);
+    });
+  });
+
+  document.querySelectorAll(".amount-input").forEach((el) => {
+    el.value = formatAmount(el.value);
+  });
+
+  calculateTotalDaysInMonth();
+  calculatePresentDays();
+  refreshEmployeeOptions();
+
+});
+
+function normalizeAmountFieldsBeforeSubmit() {
+  document.querySelectorAll(".amount-input[name]").forEach((el) => {
+    el.value = String(parseAmount(el.value));
+  });
+}
+
+function validatePayrollBeforeSubmit() {
+  const employeeId = document.getElementById("employee-name")?.value || "";
+  const totalDays = Number(document.getElementById("total-days")?.value || 0);
+  const absentDays = Number(document.getElementById("absent-days")?.value || 0);
+
+  if (!employeeId) {
+    if (window.showToast) window.showToast("Please select an employee.", true);
+    return false;
+  }
+
+  if (totalDays <= 0) {
+    if (window.showToast) window.showToast("Please select a valid month and year.", true);
+    return false;
+  }
+
+  if (absentDays < 0) {
+    if (window.showToast) window.showToast("Please enter valid absent days.", true);
+    return false;
+  }
+
+  if (absentDays > totalDays) {
+    if (window.showToast) window.showToast("Absent days cannot exceed total days in the month.", true);
+    return false;
+  }
+
+  normalizeAmountFieldsBeforeSubmit();
+  return true;
+}
+</script>

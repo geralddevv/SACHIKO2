@@ -1,0 +1,112 @@
+<% layout('/layout/boilerplate') %>
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
+  <form action="/sachiko/form/machine" method="post" class="needs-validation" autocomplete="off" novalidate>
+    <div class="span-full form-heading">
+      <h1>Machine Master</h1>
+    </div>
+
+    <div class="span-full form-subheading">
+      <h1>Add New Machine</h1>
+    </div>
+
+    <div class="span-eight">
+      <label for="machine-name">Machine Name</label>
+      <input
+        type="text"
+        id="machine-name"
+        class="form-control"
+        name="machineName"
+        placeholder="Enter Machine Name"
+        required
+      />
+    </div>
+
+    <div class="btn-grp span-full" style="grid-column: span 24;">
+      <button type="submit">Save Machine</button>
+    </div>
+
+    <!-- EXISTING MACHINES -->
+    <div class="span-full form-subheading">
+      <h1>Existing Machines</h1>
+    </div>
+
+    <div class="span-full" style="padding: 0.5rem;">
+      <% if (machines && machines.length > 0) { %>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <% machines.forEach(machine => { %>
+            <span style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              padding: 6px 14px;
+              background: #e0f2fe;
+              color: #044A78;
+              border-radius: 6px;
+              font-weight: 600;
+              font-size: 14px;
+              border: 1px solid #bae6fd;
+            ">
+              <%= machine.machineName %>
+            </span>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <p style="color: #6b7280; font-size: 14px; margin: 0px;">No machines added yet.</p>
+      <% } %>
+    </div>
+  </form>
+</div>
+
+<!-- ================= DELETE CONFIRMATION DIALOG ================= -->
+<div id="delete-dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+  <div style="background:white; border-radius:8px; width:400px; max-width:90%; box-shadow:0 4px 15px rgba(0,0,0,0.2); overflow:hidden; animation:dialogPop 0.2s ease-out;">
+    <div style="padding:25px 20px; text-align:center;">
+      <i class="fa-solid fa-triangle-exclamation" style="font-size:28px; color:#ef4444; margin-bottom:12px;"></i>
+      <p style="margin:0; color:#333; font-size:16px; line-height:1.5;">
+        Are you sure you want to delete <strong id="delete-machine-name"></strong>?
+      </p>
+    </div>
+    <div style="padding:15px 20px; background:#f9fafb; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb;">
+      <button type="button" onclick="closeDeleteDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='white'">Cancel</button>
+      <button type="button" onclick="submitDelete()" style="padding:8px 16px; border:none; background:#ef4444; color:white; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes dialogPop {
+    0% { transform: scale(0.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+</style>
+
+<script>
+  let deleteId = null;
+
+  function confirmDelete(id, name) {
+    deleteId = id;
+    document.getElementById("delete-machine-name").textContent = name;
+    document.getElementById("delete-dialog").style.display = "flex";
+  }
+
+  function closeDeleteDialog() {
+    document.getElementById("delete-dialog").style.display = "none";
+    deleteId = null;
+  }
+
+  async function submitDelete() {
+    if (!deleteId) return;
+    try {
+      const res = await fetch(`/sachiko/api/machines/${deleteId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        alert(data.message || "Failed to delete machine");
+      }
+    } catch (err) {
+      alert("Error deleting machine");
+    }
+    closeDeleteDialog();
+  }
+</script>

@@ -1,0 +1,141 @@
+.hardware {
+  height: 3rem;
+  float: left;
+  width: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease-in-out;
+  cursor: pointer;
+}
+.software {
+  height: 3rem;
+  float: right;
+  width: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease-in-out;
+  cursor: pointer;
+}
+
+.hardware-options {
+  display: grid;
+  grid-template-columns: repeat(32, 1fr);
+  gap: 10px;
+}
+
+.hardware:hover {
+  background-color: #03365a;
+}
+
+.software:hover {
+  background-color: #03365a;
+}
+
+.software-options {
+  display: grid;
+  grid-template-columns: repeat(32, 1fr);
+  gap: 10px;
+  display: none;
+}
+
+.gap {
+  gap: 0.5rem;
+}
+
+/* Main tab switch between client-content and user-content in clientForm */
+
+.client-content {
+  display: grid;
+  grid-template-columns: repeat(32, 1fr);
+  gap: 10px;
+}
+
+.user-content {
+  /* display: grid;
+  grid-template-columns: repeat(32, 1fr);
+  gap: 10px; */
+  display: none;
+}
+
+.client-switch {
+  height: 3rem;
+  float: left;
+  width: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease-in-out;
+  cursor: pointer;
+}
+
+.user-switch {
+  height: 3rem;
+  float: left;
+  width: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease-in-out;
+  cursor: pointer;
+}
+
+.client-switch:hover {
+  background-color: #03365a;
+}
+
+.user-switch:hover {
+  background-color: #03365a;
+}
+
+/* asjdklajsdlkjasldkjasldjasljd */
+
+.rottary-content {
+  display: grid;
+  grid-template-columns: repeat(32, 1fr);
+  gap: 10px;
+}
+
+.flatbed-content {
+  /* display: grid;
+  grid-template-columns: repeat(32, 1fr);
+  gap: 10px; */
+  display: none;
+}
+
+.rottary-switch {
+  height: 3rem;
+  float: left;
+  width: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease-in-out;
+  cursor: pointer;
+}
+
+.flatbed-switch {
+  height: 3rem;
+  float: left;
+  width: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease-in-out;
+  cursor: pointer;
+}
+
+.rottary-switch:hover {
+  background-color: #03365a;
+}
+
+.flatbed-switch:hover {
+  background-color: #03365a;
+}

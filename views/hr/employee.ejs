@@ -1,0 +1,1157 @@
+<!--- Link to boilerplate.ejs -->
+<% layout('/layout/boilerplate') -%>
+
+<style>
+/* ================= FLEX ROW FOR IMAGE + INPUT ================= */
+.die-remark-div {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ================= IMAGE PREVIEWS (PHOTO / AADHAAR / PAN) ================= */
+#empPhotoPreview,
+#empAadhaarPreview,
+#empPanPreview {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background-color: #f3f3f3;
+  display: none;
+  flex-shrink: 0;
+  cursor: pointer;
+
+  /* smooth UX */
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Hover effect */
+#empPhotoPreview:hover,
+#empAadhaarPreview:hover,
+#empPanPreview:hover {
+  transform: scale(1.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* ================= INPUT + LABEL WRAPPER ================= */
+.photo-upload-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.photo-upload-wrapper input[type="file"] {
+  width: 100%;
+}
+
+/* ================= REMOVE IMAGE BUTTON ================= */
+.remove-photo-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: #fdecea;
+  color: #dc3545;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.remove-photo-btn:hover {
+  background: #dc3545;
+  color: #fff;
+}
+
+/* ================= IMAGE MODAL ================= */
+.image-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+  animation: fadeIn 0.2s ease;
+}
+
+/* Enlarged image */
+.image-modal img {
+  max-width: 90%;
+  max-height: 90%;
+  border-radius: 10px;
+  box-shadow: 0 0 25px rgba(0, 0, 0, 0.6);
+}
+
+/* Close button */
+.close-btn {
+  position: absolute;
+  top: 18px;
+  right: 28px;
+  font-size: 36px;
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ================= ANIMATIONS ================= */
+@keyframes slideIn {
+  from { right: -300px; opacity: 0; }
+  to { right: 20px; opacity: 1; }
+}
+@keyframes slideOut {
+  from { right: 20px; opacity: 1; }
+  to { right: -300px; opacity: 0; }
+}
+
+.toast-notification {
+  position: fixed;
+  bottom: 20px;
+  right: -300px;
+  background-color: #d1e7dd;
+  color: #0a3646;
+  padding: 12px 40px 12px 15px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  border-left: 4px solid #0a3646;
+  display: none;
+  align-items: center;
+}
+
+.toast-close {
+  position: absolute;
+  right: 12px;
+  top: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 18px;
+  color: inherit;
+}
+</style>
+
+<div class="toast-notification" id="toast">
+  <span id="toast-msg"></span>
+  <span class="toast-close" onclick="hideToast()">×</span>
+</div>
+
+<div class="main-content">
+    <form
+      id="employeeForm"
+      method="post"
+      enctype="multipart/form-data"
+      novalidate
+      action="<%= employee ? `/sachiko/employee/edit/${employee._id}` : '/sachiko/employee/form' %>"
+    >
+
+    <div class="span-full form-heading">
+        <h1>Employment</h1>
+    </div>    
+
+    <div class="span-six">
+      <label for="emp-id">Employee ID</label>
+      <input
+        type="text"
+        name="empId"
+        class="form-control input-tag emp-id-display"
+        value="<%= employee ? employee.empId : `FS | EMPLOYEE | ${employeeCount.toString().padStart(3,'0')}` %>"
+        readonly
+        tabindex="-1"
+      >
+    </div>
+
+    <div class="span-six">
+      <label for="emp-date-of-joining">Date of Joining</label>
+      <input type="date" id="emp-date-of-joining" value="<%= employee?.empDateOfJoining || '' %>" class="form-control input-tag" name="empDateOfJoining" placeholder="Enter Date of Joining" required/>
+    </div>
+
+    <div class="span-five">
+      <label for="emp-type">Employee Type</label>
+       <select name="empType" class="form-control select-tag">
+        <option value="" disabled selected hidden>Select</option>
+        <option value="SKILLED" <%= employee?.empType === 'SKILLED' ? 'selected' : '' %>>SKILLED</option>
+        <option value="UNSKILLED" <%= employee?.empType === 'UNSKILLED' ? 'selected' : '' %>>UNSKILLED</option>
+      </select>
+    </div>
+
+    <div class="span-four">
+      <label for="emp-under">Under</label>
+       <select name="empUnder" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select</option>
+        <option value="TECH" <%= employee?.empUnder === 'TECH' ? 'selected' : '' %>>TECH</option>
+        <option value="TAGS" <%= employee?.empUnder === 'TAGS' ? 'selected' : '' %>>TAGS</option>
+        <option value="SACHIKO" <%= employee?.empUnder === 'SACHIKO' ? 'selected' : '' %>>SACHIKO</option>
+        <option value="CONTRACT" <%= employee?.empUnder === 'CONTRACT' ? 'selected' : '' %>>CONTRACT</option>
+       </select>
+    </div>   
+    
+    <div class="span-four">
+      <label for="emp-loc">Location</label>
+      <select id="emp-loc" name="empLoc" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select</option>
+        <option value="OFFICE" <%= employee?.empLoc === 'OFFICE' ? 'selected' : '' %>>OFFICE</option>
+        <option value="UNIT 1" <%= employee?.empLoc === 'UNIT 1' ? 'selected' : '' %>>UNIT 1</option>
+        <option value="UNIT 2" <%= employee?.empLoc === 'UNIT 2' ? 'selected' : '' %>>UNIT 2</option>
+        <option value="Palghar" <%= employee?.empLoc === 'Palghar' ? 'selected' : '' %>>Palghar</option>
+        <option value="Vapi" <%= employee?.empLoc === 'Vapi' ? 'selected' : '' %>>Vapi</option>
+        <option value="Aurangabad" <%= employee?.empLoc === 'Aurangabad' ? 'selected' : '' %>>Aurangabad</option>
+        <option value="WFH" <%= employee?.empLoc === 'WFH' ? 'selected' : '' %>>WFH</option>
+      </select>
+    </div>
+    
+    <div class="span-seven span-row-2">
+      <label for="emp-assets">Assets</label>
+      <input type="text" name="empAssets1" value="<%= employee?.empAssets1 || '' %>" placeholder="1" id="emp-assets" class="form-control select-tag"/>
+      <input type="text" name="empAssets2" value="<%= employee?.empAssets2 || '' %>" placeholder="2" id="emp-assets" class="form-control select-tag"/>
+      <input type="text" name="empAssets3" value="<%= employee?.empAssets3 || '' %>" placeholder="3" id="emp-assets" class="form-control select-tag"/>
+      <input type="text" name="empAssets4" value="<%= employee?.empAssets4 || '' %>" placeholder="4" id="emp-assets" class="form-control select-tag"/>
+    </div>
+
+    <div class="span-four">
+      <label for="emp-status">Status</label>
+      <select name="status" id="emp-status" class="form-control select-tag">
+        <option value="active" <%= (!employee || employee.isActive !== false) ? 'selected' : '' %>>Active</option>
+        <option value="inactive" <%= (employee && employee.isActive === false) ? 'selected' : '' %>>Inactive</option>
+      </select>
+      <input type="hidden" name="empInactiveReason" id="empInactiveReason" value="<%= employee?.empInactiveReason || '' %>" />
+      <input type="hidden" name="empAssetsSurrenderedJson" id="empAssetsSurrenderedJson" value="<%= JSON.stringify(employee?.empAssetsSurrendered || []) %>" />
+    </div>
+
+    <div class="span-four">
+      <label for="emp-dept">Department</label>
+      <input type="text" id="emp-dept" class="form-control input-tag" name="empDept" value="<%= employee?.empDept || '' %>" placeholder="Enter Department" autocomplete="off" required/>
+    </div>
+
+    <div class="span-five">
+      <label for="emp-reporting-manager">Reporting Manager</label>
+      <select
+        id="emp-reporting-manager"
+        class="form-control select-tag"
+        name="empReportingManager"
+        required
+      >
+        <option value="" disabled <%= !employee?.empReportingManager ? 'selected' : '' %> hidden>Select</option>
+        <% if (employee?.empReportingManager) { %>
+          <% const inList = (employees || []).some(e => e?.empName === employee.empReportingManager); %>
+          <% if (!inList) { %>
+            <option value="<%= employee.empReportingManager %>" selected><%= employee.empReportingManager %></option>
+          <% } %>
+        <% } %>
+        <% (employees || []).forEach(emp => { %>
+          <% if (emp?.empName) { %>
+            <option value="<%= emp.empName %>" <%= employee?.empReportingManager === emp.empName ? 'selected' : '' %>><%= emp.empName %></option>
+          <% } %>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="span-four">
+      <label for="emp-profile">Profile</label>
+      <input type="text" id="emp-profile" class="form-control input-tag" name="empProfile" value="<%= employee?.empProfile || '' %>" placeholder="Enter Profile" autocomplete="off" required/>
+    </div>
+
+    <div class="span-three">
+      <label for="emp-profile-code">Profile Code</label>
+      <input type="text" id="emp-profile-code" class="form-control input-tag" name="empProfileCode" value="<%= employee?.empProfileCode || '' %>" placeholder="Enter Profile Code" autocomplete="off"/>
+      <select id="emp-profile-code-select" class="form-control select-tag" name="empProfileCode" style="display:none;" disabled>
+        <option value="" disabled <%= !employee?.empProfileCode ? 'selected' : '' %> hidden>Select Machine</option>
+        <% const empCodeInList = (machineNames || []).some(name => name === employee?.empProfileCode); %>
+        <% if (employee?.empProfileCode && !empCodeInList) { %>
+          <option value="<%= employee.empProfileCode %>" selected><%= employee.empProfileCode %></option>
+        <% } %>
+        <% (machineNames || []).forEach(name => { %>
+          <option value="<%= name %>" <%= employee?.empProfileCode === name ? 'selected' : '' %>><%= name %></option>
+        <% }) %>
+      </select>
+    </div>
+    <script>
+      // An OPERATOR's Profile Code is the name of the machine they run (see
+      // routes/system/machine.js's Machine Queue operator lookup) -- swap the
+      // free-text Profile Code field for a machine-name select while Profile
+      // is set to OPERATOR. Both share name="empProfileCode"; only the
+      // visible one is enabled so just one of them submits.
+      (function () {
+        const profileInput = document.getElementById("emp-profile");
+        const profileCodeInput = document.getElementById("emp-profile-code");
+        const profileCodeSelect = document.getElementById("emp-profile-code-select");
+        if (!profileInput || !profileCodeInput || !profileCodeSelect) return;
+
+        function syncProfileCodeField() {
+          const isOperator = profileInput.value.trim().toUpperCase() === "OPERATOR";
+          profileCodeInput.style.display = isOperator ? "none" : "";
+          profileCodeInput.disabled = isOperator;
+          profileCodeInput.required = false;
+          profileCodeSelect.style.display = isOperator ? "" : "none";
+          profileCodeSelect.disabled = !isOperator;
+        }
+
+        profileInput.addEventListener("input", syncProfileCodeField);
+        syncProfileCodeField();
+      })();
+    </script>
+
+    <div class="span-four">
+      <label for="emp-office-mob">Office Mobile No</label>
+      <input type="text" inputmode="numeric" id="emp-office-mob" class="form-control input-tag" name="empOfficeMob" value="<%= employee?.empOfficeMob || '' %>" placeholder="Enter Office Mobile No" autocomplete="off"/>
+    </div>
+
+    <div class="span-five">
+      <label for="emp-office-email-id">Office Email ID</label>
+      <input type="email" id="emp-office-email-id" class="form-control input-tag" name="empOfficeEmailId" value="<%= employee?.empOfficeEmailId || '' %>" placeholder="Enter Office Email ID" autocomplete="off"/>
+    </div>
+
+    <div class="span-full form-subheading">
+      <h1>Employee Details</h1>
+    </div>
+
+    <div class="span-six">
+      <label for="emp-name">Name</label>
+      <input type="text" id="emp-name" class="form-control input-tag" name="empName" value="<%= employee?.empName || '' %>" placeholder="Enter Name" autocomplete="off" required />
+    </div>
+
+    <div class="span-four">
+      <label for="emp-nick-name">Nick Name</label>
+      <%
+        // Required, because it's what an OPERATOR signs in with on the
+        // shopfloor portal (server.js's /sachiko/operator/login) -- an
+        // employee with no nick name could never log in. An older record
+        // saved before this field existed shows the first word of the Name,
+        // so simply opening and saving it fills the gap.
+        const nickDefault = employee?.empNickName || String(employee?.empName || "").trim().split(/\s+/)[0] || "";
+      %>
+      <input type="text" id="emp-nick-name" class="form-control input-tag" name="empNickName" value="<%= nickDefault %>" placeholder="Enter Nick Name" autocomplete="off" required />
+    </div>
+    <script>
+      // Nick Name defaults to the first word of the Name (matching
+      // scripts/backfill-employee-nickname.js) -- but stops auto-tracking as
+      // soon as the user types their own value, so an edited nick name is
+      // never overwritten by a later Name change.
+      (function () {
+        const nameInput = document.getElementById("emp-name");
+        const nickInput = document.getElementById("emp-nick-name");
+        if (!nameInput || !nickInput) return;
+
+        const firstWord = (value) => String(value || "").trim().split(/\s+/)[0] || "";
+        // On edit, an existing nick name that isn't just the first word was set
+        // by hand -- leave it alone.
+        let autoFill = !nickInput.value.trim() || nickInput.value.trim() === firstWord(nameInput.value);
+
+        nickInput.addEventListener("input", () => { autoFill = false; });
+        nameInput.addEventListener("input", () => {
+          if (autoFill) nickInput.value = firstWord(nameInput.value);
+        });
+      })();
+    </script>
+
+    <div class="span-five">
+      <label for="emp-dob">D.O.B</label>
+      <input type="date" id="emp-dob" class="form-control input-tag" name="empDob" value="<%= employee?.empDob || '' %>" placeholder="Enter D.O.B" autocomplete="off" required />
+    </div>
+
+    <div class="span-five">
+      <label for="emp-gender">Gender</label>
+       <select name="empGender" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select</option>
+        <option value="MALE" <%= employee?.empGender === 'MALE' ? 'selected' : '' %>>MALE</option>
+        <option value="FEMALE" <%= employee?.empGender === 'FEMALE' ? 'selected' : '' %>>FEMALE</option>
+       </select>
+    </div>
+
+    <div class="span-six">
+      <label for="emp-mobile1">Mobile No 1</label>
+      <input type="text" inputmode="numeric"  id="emp-mobile1" class="form-control input-tag" name="empMobile1" value="<%= employee?.empMobile1 || '' %>" placeholder="Enter Mobile No 1" autocomplete="off" required/>
+    </div>
+
+    <div class="span-six">
+      <label for="emp-mobile2">Mobile No 2</label>
+      <input type="text" inputmode="numeric" id="emp-mobile2" class="form-control input-tag" name="empMobile2" value="<%= employee?.empMobile2 || '' %>" placeholder="Enter Mobile No 2" autocomplete="off"/>
+    </div>
+
+    <div
+      id="emp-emergency-no1-container"
+      class="<%= employee?.empMartialStatus === 'SINGLE' ? 'span-dual' : 'span-six' %>"
+      data-normal-span="span-six"
+    >
+      <label for="emp-emergency-no1">Emergency No 1</label>
+      <input type="text" inputmode="numeric" id="emp-emergency-no1" class="form-control input-tag" name="empEmergencyNo1" value="<%= employee?.empEmergencyNo1 || '' %>" placeholder="Enter emergency No" autocomplete="off" required/>
+    </div> 
+
+    <div
+      id="emp-emergency-no2-container"
+      class="<%= employee?.empMartialStatus === 'SINGLE' ? 'span-dual' : 'span-six' %>"
+      data-normal-span="span-six"
+    >
+      <label for="emp-emergency-no2">Emergency No 2</label>
+      <input type="text" inputmode="numeric" id="emp-emergency-no2" class="form-control input-tag" name="empEmergencyNo2" value="<%= employee?.empEmergencyNo2 || '' %>" placeholder="Enter emergency No" autocomplete="off"/>
+    </div>    
+
+    <div
+      id="emp-email-container"
+      class="<%= employee?.empMartialStatus === 'SINGLE' ? 'span-dual' : 'span-seven' %>"
+      data-normal-span="span-seven"
+    >
+      <label for="emp-email">Email</label>
+      <input type="text" id="emp-email" class="form-control input-tag" name="empEmail" value="<%= employee?.empEmail || '' %>" placeholder="Enter Email or NA" autocomplete="off" />
+    </div>
+
+    <div
+      id="emp-martial-status-container"
+      class="<%= employee?.empMartialStatus === 'SINGLE' ? 'span-dual' : 'span-six' %>"
+      data-normal-span="span-six"
+    >
+      <label for="emp-martial-status">Marital Status</label>
+       <select name="empMartialStatus" id="emp-martial-status" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select</option>
+        <option value="SINGLE" <%= employee?.empMartialStatus === 'SINGLE' ? 'selected' : '' %>>SINGLE</option>
+        <option value="MARRIED" <%= employee?.empMartialStatus === 'MARRIED' ? 'selected' : '' %>>MARRIED</option>
+       </select>
+    </div>
+    
+    <div class="span-seven" id="marriage-anniv-container" style="display: none;">
+      <label for="emp-marriage-anniversary">Marriage Anniv</label>
+      <input type="date" id="emp-marriage-anniversary" class="form-control input-tag" name="empMarriageAnniversary" value="<%= employee?.empMarriageAnniversary || '' %>" placeholder="Enter Marriage Anniversary" autocomplete="off"/>
+    </div>
+
+    <div class="span-penta">
+      <label for="emp-present-address">Present Address</label>
+      <textarea
+        id="emp-present-address"
+        class="form-control input-tag"
+        name="empPresentAddress"
+        placeholder="Enter Employee Present Address"
+        rows="3"
+        style="border: 1px solid #044A78; resize: none;"
+        autocomplete="off"
+        oninput="this.value = this.value.toUpperCase()"
+      ><%= employee?.empPresentAddress || '' %></textarea>
+    </div>
+
+    <div class="span-hexa">
+      <label for="emp-permanent-address">Permanent Address</label>
+      <textarea
+        id="emp-permanent-address"
+        class="form-control input-tag"
+        name="empPermanentAddress"
+        placeholder="Enter Employee Permanent Address"
+        rows="3"
+        style="border: 1px solid #044A78; resize: none;"
+        autocomplete="off"
+        oninput="this.value = this.value.toUpperCase()"
+      ><%= employee?.empPermanentAddress || '' %></textarea>
+    </div>
+
+    <div class="span-penta">
+      <label for="emp-hobbies">Hobbies & Interests</label>
+      <textarea
+        id="emp-hobbies"
+        class="form-control input-tag"
+        name="empHobbies"
+        placeholder="Enter Employee Hobbies & Interests"
+        rows="3"
+        style="border: 1px solid #044A78; resize: none;"
+        autocomplete="off"
+        oninput="this.value = this.value.toUpperCase()"
+      ><%= employee?.empHobbies || '' %></textarea>
+    </div>       
+
+    <div class="span-full form-subheading">
+        <h1>Identification</h1>
+    </div>    
+
+    <div class="span-eight die-remark-div">
+      <img id="empPhotoPreview" alt="Employee Photo Preview" loading="lazy" />
+      <div class="photo-upload-wrapper">
+        <label for="emp-photo">Photo</label>
+        <input type="file" id="emp-photo" class="form-control input-tag" name="empPhoto" accept="image/*" aria-label="Upload employee photo" />
+      </div>
+      <button type="button" id="removeEmpPhotoBtn" class="remove-photo-btn" style="display:none;" title="Remove photo">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+      <input type="hidden" name="removeEmpPhoto" id="removeEmpPhoto" value="false" />
+    </div>
+ 
+    <div class="span-five">
+      <label for="emp-aadhaar">Aadhaar</label>
+      <input type="text" inputmode="numeric" id="emp-aadhaar" class="form-control input-tag" name="empAadhaar" value="<%= employee?.empAadhaar || '' %>" placeholder="Enter Aadhaar" autocomplete="off"/>
+    </div>
+
+    <div class="span-seven die-remark-div">
+      <img id="empAadhaarPreview" alt="Aadhaar Preview" loading="lazy"/>
+      <div class="photo-upload-wrapper">
+        <label for="emp-aadhaar-img">Aadhaar Img</label>
+        <input type="file" name="empAadhaarImg" id="emp-aadhaar-img" class="form-control input-tag" accept="image/*" aria-label="Upload Aadhaar image" />
+      </div>
+      <button type="button" id="removeEmpAadhaarImgBtn" class="remove-photo-btn" style="display:none;" title="Remove Aadhaar image">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+      <input type="hidden" name="removeEmpAadhaarImg" id="removeEmpAadhaarImg" value="false" />
+    </div>
+
+    <div class="span-five">
+      <label for="emp-pan">PAN</label>
+      <input type="text" id="emp-pan" class="form-control input-tag" maxlength="10" name="empPan" value="<%= employee?.empPan || '' %>" placeholder="Enter PAN" autocomplete="off" required />
+    </div>
+
+    <div class="span-seven die-remark-div">
+      <img id="empPanPreview" alt="PAN Preview" loading="lazy" />
+      <div class="photo-upload-wrapper">
+        <label for="emp-pan-img">PAN Img</label>
+        <input type="file" name="empPanImg" id="emp-pan-img" class="form-control input-tag" accept="image/*" aria-label="Upload PAN image" />
+      </div>
+      <button type="button" id="removeEmpPanImgBtn" class="remove-photo-btn" style="display:none;" title="Remove PAN image">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+      <input type="hidden" name="removeEmpPanImg" id="removeEmpPanImg" value="false" />
+    </div>
+
+    <div class="span-full form-subheading">
+        <h1>Banking</h1>
+    </div>      
+
+    <div class="span-dual">
+      <label for="emp-bank-name">Bank Name</label>
+      <input type="text" id="emp-bank-name" class="form-control input-tag" name="empBankName" value="<%= employee?.empBankName || '' %>" placeholder="Enter Bank Name" autocomplete="off" required />
+    </div>
+
+    <div class="span-dual">
+      <label for="emp-account-holder-name">Account Holder Name</label>
+      <input type="text" id="emp-account-holder-name" class="form-control input-tag" name="empAccountHolderName" value="<%= employee?.empAccountHolderName || '' %>" placeholder="Enter Account Holder Name" autocomplete="off" required />
+    </div>
+
+    <div class="span-dual">
+      <label for="emp-acc-no">Account No</label>
+      <input type="text" id="emp-acc-no" class="form-control input-tag" name="empAccNo" value="<%= employee?.empAccNo || '' %>" placeholder="Enter Account No" autocomplete="off" required />
+    </div>
+
+    <div class="span-dual">
+      <label for="emp-ifsc-code">IFSC Code</label>
+        <input type="text" id="emp-ifsc-code" class="form-control input-tag" name="empIfscCode" value="<%= employee?.empIfscCode || '' %>" placeholder="Enter IFSC Code" maxlength="11" autocomplete="off" required />
+    </div>
+
+    <div class="span-full form-subheading">
+        <h1>Deductions</h1>
+    </div>     
+
+    <div class="span-four">
+      <label for="emp-pt">PT</label>
+      <input type="number" step="any" id="emp-pt" class="form-control input-tag" name="empPT" value="<%= employee?.empPT || 0 %>" placeholder="Enter PT" autocomplete="off" required />
+    </div>    
+
+    <div class="span-four">
+      <label for="emp-tds">TDS</label>
+      <input type="number" step="any" id="emp-tds" class="form-control input-tag" name="empTDS" value="<%= employee?.empTDS || 0 %>" placeholder="Enter TDS" autocomplete="off" required />
+    </div>    
+
+    <div class="span-four">
+      <label for="emp-lic">LIC</label>
+      <input type="number" step="any" id="emp-lic" class="form-control input-tag" name="empLIC" value="<%= employee?.empLIC || 0 %>" placeholder="Enter LIC" autocomplete="off" required />
+    </div>    
+
+    <div class="span-five">
+      <label for="emp-medical">Medical</label>
+      <input type="number" step="any" id="emp-medical" class="form-control input-tag" name="empMedical" value="<%= employee?.empMedical || 0 %>" placeholder="Enter Medical" autocomplete="off" required />
+    </div>    
+
+    <div class="span-five">
+      <label for="emp-nsic">NSC</label>
+      <input type="number" step="any" id="emp-nsic" class="form-control input-tag" name="empNSIC" value="<%= employee?.empNSIC || 0 %>" placeholder="Enter NSIC" autocomplete="off" required />
+    </div>    
+
+    <div class="span-five">
+      <label for="emp-esic">ESIC</label>
+      <input type="number" step="any" id="emp-esic" class="form-control input-tag" name="empESIC" value="<%= employee?.empESIC || 0 %>" placeholder="Enter ESIC" autocomplete="off" required />
+    </div>    
+
+    <div class="span-five">
+      <label for="emp-pf">PF</label>
+      <input type="number" step="any" id="emp-pf" class="form-control input-tag" name="empPF" value="<%= employee?.empPF || 0 %>" placeholder="Enter PF" autocomplete="off" required />
+    </div>
+    
+    <div class="span-full form-subheading">
+      <h1>Payroll Details</h1>
+    </div>
+
+    <div class="span-five">
+      <label for="basicSalary">Basic Salary</label>
+      <input type="number" step="any" name="basicSalary" value="<%= employee?.basicSalary || 0 %>" id="basicSalary" class="form-control input-tag" placeholder="Enter Basic Salary" autocomplete="off" />
+    </div>
+
+    <div class="span-five">
+      <label for="railwayPass">Railway Pass</label>
+      <input type="number" step="any" name="railwayPass" value="<%= employee?.railwayPass || 0 %>" id="railwayPass"  class="form-control input-tag" placeholder="Enter Railway Pass" autocomplete="off" />
+    </div>
+
+    <div class="span-four">
+      <label for="travelling">Travelling</label>
+      <input type="number" step="any" name="travelling" value="<%= employee?.travelling || 0 %>" id="travelling" class="form-control input-tag" placeholder="Enter Travelling" autocomplete="off" />
+    </div>
+
+    <div class="span-five">
+      <label for="houseRent">House Rent</label>
+      <input type="number" step="any" name="houseRent" value="<%= employee?.houseRent || 0 %>" id="houseRent" class="form-control input-tag" placeholder="Enter House Rent" autocomplete="off" />
+    </div>
+    <div class="span-five">
+      <label for="staffQuarters">Staff Quaters</label>
+      <input type="number" step="any" name="staffQuarters" value="<%= employee?.staffQuarters || 0 %>" id="staffQuarters" class="form-control input-tag" placeholder="Enter House Rent" autocomplete="off" />
+    </div>
+
+    <div class="span-four">
+      <label for="otRatePerHour">OT Per Hour</label>
+      <input type="number" step="any" name="otRatePerHour" value="<%= employee?.otRatePerHour || 0 %>" id="otRatePerHour" class="form-control input-tag" placeholder="Enter OT" autocomplete="off" />
+    </div>
+
+    <div class="span-four">
+      <label for="bonus">Bonus %</label>
+      <input type="number" step="any" name="bonus" value="<%= employee?.bonus || 0 %>" id="bonus" class="form-control input-tag" placeholder="Enter Bonus" autocomplete="off" />
+    </div>
+
+
+    <div class="span-full form-subheading" style="display: flex; align-items: center;">
+        <h1>Dependents Details</h1>
+        <input type="text" id="dependents-count" style="width: 130px; height: 25px; margin-left: 20px;"  maxlength="2" class="form-control" name="dependentsCount" placeholder="Dependents Count" autocomplete="off" />
+    </div>
+
+    <div class="dependent-headings" style="margin-bottom: 0px; grid-column: span 32; background-color: #044A78; color: white; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;"> 
+      <span style="flex: 1; font-size: 16px; font-weight: 600; padding-left: 15px;">Name</span>
+      <span style="flex: 1; font-size: 16px; font-weight: 600; padding-left: 15px;">DOB</span>
+      <span style="flex: 1; font-size: 16px; font-weight: 600; padding-left: 15px;">Relation</span>
+    </div> 
+    
+    <div id="dependents-details" style="grid-column: span 32;">
+        <div class="dependents-details" style="margin-bottom: 10px; grid-column: span 32; padding: 10px; border-radius: 5px; border: 2px solid #044A78; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+          <input type="text" class="form-control" value="-" style="flex: 1; border: 1px solid #044A78;" tabindex="-1" readonly />
+          <input type="text" class="form-control" value="-" style="flex: 1; border: 1px solid #044A78;" tabindex="-1" readonly />
+          <input type="text" class="form-control" value="-" style="flex: 1; border: 1px solid #044A78;" tabindex="-1" readonly />
+        </div>
+    </div>
+
+    <div class="span-full btn-grp" style="flex-direction: row !important; gap: 1.2rem;">
+      <a href="/sachiko/employee/view" class="cancel-btn" style="
+        width: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        color: white;
+        background-color: var(--primary-color);
+        font-size: 1.25rem;
+        font-weight: 500;
+        padding: 0.5rem 1.5rem;
+        border: 2px solid var(--primary-color);
+        border-radius: 0.5rem;
+        transition: all 0.3s ease-in-out;
+      ">Cancel Edit</a>
+      <button class="submit-btn" type="submit" style="width: 50%;">Save Employee</button>
+    </div>
+
+<style>
+  .cancel-btn:hover {
+    transform: scale(0.99);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.75);
+    color: white;
+  }
+  @media screen and (max-width: 768px) {
+    .btn-grp { flex-direction: column !important; }
+    .submit-btn, .cancel-btn { width: 100% !important; }
+  }
+</style>
+  </form>
+</div>
+
+<!-- Image Preview Modal -->
+<div id="imageModal" class="image-modal">
+  <span class="close-btn">&times;</span>
+  <img id="modalImage" />
+</div>
+
+<!-- Inactive Status Modal -->
+<div id="inactiveModal" class="inactive-modal">
+  <div class="inactive-modal-card">
+    <h2 class="inactive-modal-title">Mark Employee Inactive</h2>
+    <% if ((loan && loan.currentBalance > 0) || (advance && advance.currentBalance > 0)) { %>
+    <div style="display:flex; gap:12px; margin-bottom:14px;">
+      <% if (loan && loan.currentBalance > 0) { %>
+      <div style="flex:1; background:#fff3e0; border:1px solid #f0c27f; border-radius:8px; padding:10px 14px;">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#b9770e; margin-bottom:4px;">Loan Pending</div>
+        <div style="font-size:16px; font-weight:700; color:#b9770e;">₹ <%= Number(loan.currentBalance).toLocaleString('en-IN') %></div>
+      </div>
+      <% } %>
+      <% if (advance && advance.currentBalance > 0) { %>
+      <div style="flex:1; background:#fdecec; border:1px solid #f5c6c6; border-radius:8px; padding:10px 14px;">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#c0392b; margin-bottom:4px;">Advance Pending</div>
+        <div style="font-size:16px; font-weight:700; color:#c0392b;">₹ <%= Number(advance.currentBalance).toLocaleString('en-IN') %></div>
+      </div>
+      <% } %>
+    </div>
+    <% } %>
+    <label for="inactiveReasonInput" class="inactive-modal-label">Reason for marking inactive <span style="color:red;">*</span></label>
+    <textarea id="inactiveReasonInput" rows="3" class="form-control" placeholder="Why is this employee being marked inactive?" style="resize:none; border:1px solid #044A78; width:100%;"></textarea>
+    <p id="inactiveReasonError" style="color:#dc3545; font-size:0.85rem; margin:4px 0 0; display:none;">Please enter a reason.</p>
+    <p class="inactive-modal-label" style="margin-top:14px;">Assets surrendered</p>
+    <div id="assetCheckboxes" class="asset-checkboxes"></div>
+    <div class="inactive-modal-actions">
+      <button type="button" id="inactiveCancelBtn" class="inactive-btn-cancel">Cancel</button>
+      <button type="button" id="inactiveConfirmBtn" class="inactive-btn-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .inactive-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; justify-content:center; align-items:center; }
+  .inactive-modal-card { background:#fff; width:min(460px,92vw); border-radius:12px; padding:22px 22px 18px; box-shadow:0 18px 50px rgba(0,0,0,0.3); }
+  .inactive-modal-title { font-size:1.25rem; margin:0 0 14px; color:#044A78; }
+  .inactive-modal-label { font-weight:600; color:#1b2430; font-size:0.95rem; margin-bottom:6px; }
+  .asset-checkboxes { display:flex; flex-direction:row; flex-wrap:wrap; gap:8px 16px; padding:6px 2px; }
+  .asset-checkboxes label { display:flex; align-items:center; gap:6px; font-size:0.95rem; cursor:pointer; white-space:nowrap; }
+  .asset-checkboxes input[type="checkbox"] { width:16px; height:16px; flex-shrink:0; }
+  .asset-checkboxes .no-assets { color:#5b6b7a; font-style:italic; }
+  .inactive-modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+  .inactive-btn-cancel, .inactive-btn-confirm { padding:0.5rem 1.2rem; border-radius:8px; font-weight:600; cursor:pointer; border:2px solid #044A78; }
+  .inactive-btn-cancel { background:#fff; color:#044A78; }
+  .inactive-btn-confirm { background:#044A78; color:#fff; }
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const statusSelect     = document.getElementById("emp-status");
+  const inactiveModal    = document.getElementById("inactiveModal");
+  const reasonInput      = document.getElementById("inactiveReasonInput");
+  const reasonError      = document.getElementById("inactiveReasonError");
+  const assetCheckboxes  = document.getElementById("assetCheckboxes");
+  const hiddenReason     = document.getElementById("empInactiveReason");
+  const hiddenSurrender  = document.getElementById("empAssetsSurrenderedJson");
+  const confirmBtn       = document.getElementById("inactiveConfirmBtn");
+  const cancelBtn        = document.getElementById("inactiveCancelBtn");
+  if (!statusSelect || !inactiveModal) return;
+
+  const assetFields = ["empAssets1", "empAssets2", "empAssets3", "empAssets4"];
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function currentAssets() {
+    return assetFields
+      .map((n) => (document.querySelector(`[name="${n}"]`)?.value || "").trim())
+      .filter(Boolean);
+  }
+
+  function parseSurrendered() {
+    try { const a = JSON.parse(hiddenSurrender.value || "[]"); return Array.isArray(a) ? a : []; }
+    catch { return []; }
+  }
+
+  function openModal() {
+    reasonInput.value = hiddenReason.value || "";
+    reasonError.style.display = "none";
+    const already = new Set(parseSurrendered());
+    const assets = currentAssets();
+    assetCheckboxes.innerHTML = assets.length
+      ? assets.map((a) => `<label><input type="checkbox" value="${esc(a)}" ${already.has(a) ? "checked" : ""}/> <span>${esc(a)}</span></label>`).join("")
+      : `<span class="no-assets">No assets recorded for this employee.</span>`;
+    inactiveModal.style.display = "flex";
+    reasonInput.focus();
+  }
+
+  function closeModal() { inactiveModal.style.display = "none"; }
+
+  function clearInactiveData() {
+    hiddenReason.value = "";
+    hiddenSurrender.value = "[]";
+  }
+
+  function revertToActive() {
+    statusSelect.value = "active";
+    clearInactiveData();
+    closeModal();
+  }
+
+  statusSelect.addEventListener("change", () => {
+    if (statusSelect.value === "inactive") openModal();
+    else clearInactiveData();
+  });
+
+  confirmBtn.addEventListener("click", () => {
+    const reason = reasonInput.value.trim();
+    if (!reason) { reasonError.style.display = "block"; reasonInput.focus(); return; }
+    hiddenReason.value = reason;
+    const checked = Array.from(assetCheckboxes.querySelectorAll('input[type="checkbox"]:checked')).map((cb) => cb.value);
+    hiddenSurrender.value = JSON.stringify(checked);
+    closeModal();
+  });
+
+  cancelBtn.addEventListener("click", revertToActive);
+  inactiveModal.addEventListener("click", (e) => { if (e.target === inactiveModal) revertToActive(); });
+});
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/selectize/dist/js/standalone/selectize.min.js"></script>
+<script>
+  const dependentsData = <%- safeJson(employee?.dependentsDetails || []) %>;
+  const existingProfileCodes = new Set(<%- safeJson(existingProfileCodes || []) %>);
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  /* ================= REPORTING MANAGER CHOICES ================= */
+  const reportingManagerSelect = document.getElementById("emp-reporting-manager");
+  if (reportingManagerSelect) {
+    new Choices(reportingManagerSelect, {
+      searchEnabled: true,
+      itemSelectText: "",
+      shouldSort: false
+    });
+  }
+
+  /* ================= MARRIAGE ANNIVERSARY TOGGLE ================= */
+  const martialStatusSelect = document.getElementById("emp-martial-status");
+  const marriageAnnivContainer = document.getElementById("marriage-anniv-container");
+  const martialLayoutFields = [
+    document.getElementById("emp-emergency-no1-container"),
+    document.getElementById("emp-emergency-no2-container"),
+    document.getElementById("emp-email-container"),
+    document.getElementById("emp-martial-status-container")
+  ].filter(Boolean);
+
+  function updateMartialLayout(status) {
+    const isMarried = status === "MARRIED";
+    const useDualLayout = status !== "MARRIED";
+
+    martialLayoutFields.forEach((field) => {
+      const normalSpan = field.dataset.normalSpan;
+      if (!normalSpan) return;
+
+      field.classList.remove("span-dual", "span-four", "span-five", "span-six", "span-seven", "span-eight", "span-penta", "span-hexa");
+      if (field.id === "emp-martial-status-container") {
+        field.classList.add(isMarried ? normalSpan : "span-dual");
+      } else {
+        field.classList.add(useDualLayout ? "span-dual" : normalSpan);
+      }
+    });
+
+    if (marriageAnnivContainer) {
+      marriageAnnivContainer.style.display = isMarried ? "block" : "none";
+    }
+
+    if (!isMarried) {
+      const annivInput = document.getElementById("emp-marriage-anniversary");
+      if (annivInput) annivInput.value = "";
+    }
+  }
+
+  if (martialStatusSelect) {
+    martialStatusSelect.addEventListener("change", (e) => {
+      updateMartialLayout(e.target.value);
+    });
+
+    updateMartialLayout(martialStatusSelect.value);
+  }
+
+  /* ================= ADD MANDATORY STARS ================= */
+  const requiredInputs = document.querySelectorAll("input[required], select[required], textarea[required]");
+  requiredInputs.forEach(input => {
+    let label = null;
+    if (input.id) label = document.querySelector(`label[for='${input.id}']`);
+    if (!label && input.parentElement) label = input.parentElement.querySelector("label");
+    if (label && !label.querySelector('.mandatory-star')) {
+      label.insertAdjacentHTML('beforeend', ' <span class="mandatory-star" style="color: red; font-weight: bold;">*</span>');
+    }
+  });
+
+  /* ================= FORMAT MOBILE NUMBERS ================= */
+  const mobileInputs = [
+    "emp-office-mob",
+    "emp-mobile1",
+    "emp-mobile2",
+    "emp-emergency-no1",
+    "emp-emergency-no2"
+  ];
+  
+  function formatMobileNumber(inputElement) {
+    let value = inputElement.value.replace(/\D/g, "");
+    value = value.substring(0, 10);
+    if (value.length > 5) {
+      value = value.substring(0, 5) + " " + value.substring(5);
+    }
+    inputElement.value = value;
+  }
+
+  mobileInputs.forEach(id => {
+    const input = document.getElementById(id);
+    if (input) {
+      // Format on page load for existing DB data
+      formatMobileNumber(input);
+      // Format on user input dynamically
+      input.addEventListener("input", () => formatMobileNumber(input));
+    }
+  });
+
+  /* ================= MODAL ELEMENTS ================= */
+  const modal = document.getElementById("imageModal");
+  const modalImg = document.getElementById("modalImage");
+  const closeBtn = document.querySelector(".close-btn");
+
+  /* ================= GENERIC PREVIEW SETUP ================= */
+  function setupImagePreview({ inputId, previewId, existingPath, removeBtnId, removeFieldId }) {
+    const input = document.getElementById(inputId);
+    const preview = document.getElementById(previewId);
+    const removeBtn = removeBtnId ? document.getElementById(removeBtnId) : null;
+    const removeField = removeFieldId ? document.getElementById(removeFieldId) : null;
+
+    if (!preview) return;
+
+    // show existing image (edit mode)
+    if (existingPath) {
+      preview.src = existingPath;
+      preview.style.display = "block";
+      if (removeBtn) removeBtn.style.display = "flex";
+    }
+
+    // live preview on file select
+    if (input) {
+      input.addEventListener("change", () => {
+        const file = input.files[0];
+        if (!file || !file.type.startsWith("image/")) {
+          preview.src = "";
+          preview.style.display = "none";
+          if (removeBtn) removeBtn.style.display = "none";
+          return;
+        }
+
+        // A freshly chosen file replaces whatever "remove" state was pending.
+        if (removeField) removeField.value = "false";
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          preview.src = reader.result;
+          preview.style.display = "block";
+          if (removeBtn) removeBtn.style.display = "flex";
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // remove → clear preview, clear the chosen file, flag for deletion on save
+    if (removeBtn) {
+      removeBtn.addEventListener("click", () => {
+        preview.src = "";
+        preview.style.display = "none";
+        removeBtn.style.display = "none";
+        if (input) input.value = "";
+        if (removeField) removeField.value = "true";
+      });
+    }
+
+    // click → open modal
+    preview.addEventListener("click", () => {
+      if (!preview.src) return;
+      modalImg.src = preview.src;
+      modal.style.display = "flex";
+    });
+  }
+
+  /* ================= EMPLOYEE PHOTO ================= */
+  setupImagePreview({
+    inputId: "emp-photo",
+    previewId: "empPhotoPreview",
+    removeBtnId: "removeEmpPhotoBtn",
+    removeFieldId: "removeEmpPhoto",
+    existingPath:
+      <% if (employee?.empPhoto) { %>
+        "/images/empimg/<%= employee.empPhoto %>"
+      <% } else { %>
+        null
+      <% } %>
+  });
+
+  /* ================= AADHAAR IMAGE ================= */
+  setupImagePreview({
+    inputId: "emp-aadhaar-img",
+    previewId: "empAadhaarPreview",
+    removeBtnId: "removeEmpAadhaarImgBtn",
+    removeFieldId: "removeEmpAadhaarImg",
+    existingPath:
+      <% if (employee?.empAadhaarImg) { %>
+        "/images/aadhaar/<%= employee.empAadhaarImg %>"
+      <% } else { %>
+        null
+      <% } %>
+  });
+
+  /* ================= PAN IMAGE ================= */
+  setupImagePreview({
+    inputId: "emp-pan-img",
+    previewId: "empPanPreview",
+    removeBtnId: "removeEmpPanImgBtn",
+    removeFieldId: "removeEmpPanImg",
+    existingPath:
+      <% if (employee?.empPanImg) { %>
+        "/images/pan/<%= employee.empPanImg %>"
+      <% } else { %>
+        null
+      <% } %>
+  });
+
+  /* ================= MODAL CLOSE ================= */
+  closeBtn.addEventListener("click", () => {
+    modal.style.display = "none";
+  });
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      modal.style.display = "none";
+    }
+  });
+
+/* ================= DEPENDENTS INPUTS BY COUNT ================= */
+const dependentsCountInput = document.getElementById("dependents-count");
+const dependentsContainer = document.getElementById("dependents-details");
+
+function renderDependents(count) {
+  dependentsContainer.innerHTML = "";
+
+  if (!count || count <= 0) return;
+
+  for (let i = 0; i < count; i++) {
+    dependentsContainer.insertAdjacentHTML("beforeend", `
+      <div class="dependents-details" style="
+        margin-bottom: 10px;
+        padding: 10px;
+        border-radius: 5px;
+        border: 2px solid #044A78;
+        display: flex;
+        gap: 10px;
+      ">
+        <input
+          type="text"
+          name="dependentsDetails[${i}][dependentsName]"
+          class="form-control"
+          placeholder="Name"
+          required
+        />
+        <input
+          type="date"
+          name="dependentsDetails[${i}][dependentsDOB]"
+          class="form-control"
+          required
+        />
+        <input
+          type="text"
+          name="dependentsDetails[${i}][dependentsRelation]"
+          class="form-control"
+          placeholder="Relation"
+          required
+        />
+      </div>
+    `);
+  }
+}
+
+/* listen to count change */
+dependentsCountInput.addEventListener("input", (e) => {
+  const count = parseInt(e.target.value, 10);
+  renderDependents(count);
+});
+
+/* ================= ASYNC FORM SUBMISSION ================= */
+const empForm = document.getElementById("employeeForm");
+if (empForm) {
+  empForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const profileCodeInput = document.getElementById("emp-profile-code");
+    const profileCodeSelect = document.getElementById("emp-profile-code-select");
+    const activeProfileCodeField = profileCodeSelect && !profileCodeSelect.disabled ? profileCodeSelect : profileCodeInput;
+    const profileCode = (activeProfileCodeField?.value || "").trim().toUpperCase();
+
+    // A Profile Code only has to be unique per location -- same code at a
+    // different location is fine (see routes/hr/employee.js's
+    // profileCodeLocationKey), so the key has to match the server's.
+    const normalizeLocationName = (value) => String(value || "")
+      .trim().toUpperCase().replace(/\s+/g, " ").replace(/^[.,]+|[.,]+$/g, "");
+    const empLocValue = document.getElementById("emp-loc")?.value || "";
+    const profileCodeKey = `${profileCode}||${normalizeLocationName(empLocValue)}`;
+
+    if (profileCode && existingProfileCodes.has(profileCodeKey)) {
+      showToast("Profile Code already exists at this location. Please enter a different code.", true);
+      if (activeProfileCodeField) {
+        activeProfileCodeField.focus();
+        if (activeProfileCodeField.select) activeProfileCodeField.select();
+      }
+      return;
+    }
+
+    if (!empForm.checkValidity()) {
+      empForm.classList.add("was-validated");
+      return;
+    }
+    
+    // Optional: Keep the validated styles while saving
+    empForm.classList.add("was-validated");
+    
+    const submitBtn = empForm.querySelector(".submit-btn");
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = "Saving...";
+    submitBtn.disabled = true;
+
+    try {
+      const formData = new FormData(empForm);
+      const action = empForm.getAttribute("action");
+      
+      const res = await fetch(action, {
+        method: "POST",
+        headers: { "Accept": "application/json" },
+        body: formData
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        showToast(data.message || "An error occurred during submission", true);
+      } else {
+        showToast(data.message || "Employee saved successfully!", false);
+        if (data.redirect) {
+          setTimeout(() => window.location.href = data.redirect, 1500);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Network error. Please check your connection and try again.", true);
+    } finally {
+      submitBtn.textContent = originalText;
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+});
+
+const toast = document.getElementById("toast");
+const toastMsg = document.getElementById("toast-msg");
+function showToast(message, isError) {
+  if (!toast) return;
+  toastMsg.textContent = message;
+  toast.style.borderLeftColor = isError ? "#dc3545" : "#0a3646";
+  toast.style.backgroundColor = isError ? "#f8d7da" : "#d1e7dd";
+  toast.style.color = isError ? "#842029" : "#0a3646";
+  
+  toast.style.animation = "none";
+  toast.offsetHeight; // trigger reflow
+  toast.style.display = "flex";
+  toast.style.animation = "slideIn 0.5s forwards";
+}
+
+function hideToast() {
+  if (toast) {
+    toast.style.animation = "slideOut 0.5s forwards";
+    setTimeout(() => { toast.style.display = "none"; }, 500);
+  }
+}
+</script>

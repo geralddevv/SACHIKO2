@@ -1,0 +1,210 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_modern.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <div class="indi-head">
+    <h1>Purchase Action Logs</h1>
+    <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+      <a
+        href="/sachiko/purchase/pending"
+        style="
+          padding: 6px 14px;
+          background: #044a78;
+          color: white;
+          border-radius: 6px;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: opacity 0.2s;
+        "
+        onmouseover="this.style.opacity = '0.85'"
+        onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-arrow-left"></i>
+        <span>Back to Pending</span>
+      </a>
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span>
+            <i class="fa-solid fa-file-arrow-down"></i>
+            <span class="download-typo">Download</span>
+          </span>
+          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+        </button>
+        <div class="download-selector__menu" id="downloads">
+          <span class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel download-selector__option-icon"></i>
+            <span>Excel</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+  const rawLogsData = <%- safeJson(logs || []) %>;
+
+  function getItemName(log) {
+    const order = log.orderId || {};
+    const item = order.itemId || {};
+    if (!item) return "N/A";
+    if (order.onModel === "Tape") {
+      return `${item.tapePaperCode || ""} ${item.tapeGsm || ""}gsm`.trim() || item.tapeProductId;
+    }
+    if (order.onModel === "PosRoll") {
+      return `${item.posPaperCode || ""} ${item.posGsm || ""}gsm`.trim() || item.posProductId;
+    }
+    if (order.onModel === "Tafeta") {
+      return `${item.tafetaMaterialCode || ""} ${item.tafetaGsm || ""}gsm`.trim() || item.tafetaProductId;
+    }
+    if (order.onModel === "Ttr") {
+      return `${item.ttrType || ""} ${item.ttrWidth || ""}x${item.ttrMtrs || ""}`.trim() || item.ttrProductId;
+    }
+    return "Unknown Item";
+  }
+
+  const logsData = rawLogsData.map((log) => {
+    const order = log.orderId || {};
+    const vendor = order.vendorUserId || {};
+
+    const performedAtDate = log.performedAt ? new Date(log.performedAt) : null;
+    const performedAtText = performedAtDate && !Number.isNaN(performedAtDate.getTime())
+      ? performedAtDate.toLocaleDateString("en-IN") + " " + performedAtDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+      : "-";
+
+    return {
+      ...log,
+      performedAtText,
+      vendorName: vendor.vendorName || "N/A",
+      coordinator: vendor.userName || "N/A",
+      itemName: getItemName(log),
+      itemType: order.onModel || "N/A",
+      poNumber: log.poNumber || "-",
+      remarksDisplay: log.remarks || "-",
+      quantity: log.quantity || 0,
+      performedBy: log.performedBy || "SYSTEM"
+    };
+  });
+
+  const table = new Tabulator("#master-table", {
+    data: logsData,
+    // layout: "fitColumns",
+    responsiveLayout: false,
+    movableColumns: true,
+    placeholder: "No purchase logs found",
+    columns: [
+      {
+        title: "Date",
+        field: "performedAtText",
+        width: 160,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search date",
+      },
+      {
+        title: "Action",
+        field: "action",
+        width: 120,
+        hozAlign: "center",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search action",
+        formatter: (cell) => {
+          const action = cell.getValue();
+          let bg = "#6b7280";
+          if (action === "RECEIVED") bg = "#10b981";
+          else if (action === "CANCELLED") bg = "#ef4444";
+          else if (action === "CREATED") bg = "#3b82f6";
+          else if (action === "EDITED") bg = "#f59e0b";
+          return `<span style="display:inline-block; padding:2px 10px; background:${bg}; color:white; border-radius:12px; font-size:11px; font-weight:600; letter-spacing:0.5px;">${action}</span>`;
+        },
+      },
+      {
+        title: "Vendor",
+        field: "vendorName",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search vendor",
+      },
+      {
+        title: "Coordinator",
+        field: "coordinator",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search name",
+      },
+      {
+        title: "Item Type",
+        field: "itemType",
+        width: 100,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Type",
+      },
+      {
+        title: "Item Details",
+        field: "itemName",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search item",
+        formatter: (cell) => {
+          return `<span style="color:#044A78; font-weight:600; display:block;">
+                    ${cell.getValue() || "N/A"}
+                  </span>`;
+        },
+      },
+      {
+        title: "Qty",
+        field: "quantity",
+        hozAlign: "center",
+        width: 80,
+        headerFilter: "input",
+        headerFilterPlaceholder: "#",
+      },
+      {
+        title: "PO Number",
+        field: "poNumber",
+        width: 130,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search PO",
+      },
+      {
+        title: "Performed By",
+        field: "performedBy",
+        width: 120,
+        headerFilter: "input",
+        headerFilterPlaceholder: "User",
+      },
+      {
+        title: "Remarks",
+        field: "remarksDisplay",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search remarks",
+      }
+    ],
+  });
+
+  // Dropdown toggle
+  const selector = document.getElementById("downloadSelector");
+  if (selector) {
+      const trigger = selector.querySelector(".download-selector__trigger");
+      trigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        selector.classList.toggle("download-selector--active");
+      });
+      document.addEventListener("click", () => selector.classList.remove("download-selector--active"));
+
+      document.getElementById("download-xlsx")?.addEventListener("click", () => {
+        table.download("xlsx", "purchase_order_logs.xlsx", { sheetName: "PurchaseLogs" });
+        selector.classList.remove("download-selector--active");
+      });
+  }
+</script>

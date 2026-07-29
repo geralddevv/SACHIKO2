@@ -1,0 +1,730 @@
+<!--- Link to boilerplate.ejs -->
+<% layout('/layout/boilerplate') -%>
+    
+    <style>
+        :root {
+            --primary: #044A78;
+            --secondary: #2c3e50;
+            --accent: #e74c3c;
+            --light: #9e9e9e;
+            --dark: #2c3e50;
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --danger: #e74c3c;
+            --gray: #95a5a6;
+            --light-gray: #f5f5f5;
+        }
+        
+        .client-details-container {
+            width: 100%;
+            margin: 0 auto;
+            background: white;
+            border-radius: 0.5rem;
+            border: 2px solid #044A78;
+            /* box-shadow: 0 0 20px rgba(0, 0, 0, 0.1); */
+            overflow: hidden;
+        }
+        
+        .client-header-section {
+            color: white;
+            background-color: var(--primary);
+            padding: 25px;
+        }
+        
+        .client-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .client-id {
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .client-details-container h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .client-type {
+            display: inline-block;
+            background-color: var(--success);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+            padding: 25px;
+        }
+        
+        .info-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease;
+            border: 2px solid var(--primary);
+        }
+        
+        .info-card h3 {
+            background-color: var(--primary);
+            color: white;
+            margin-bottom: 15px;
+            padding: 6px 10px 6px 10px ;
+            /* border-bottom: 2px solid var(--dark); */
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-radius: 0.5rem;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            /* padding-bottom: 12px; */
+            padding: 0px 10px 10px 10px ;
+            border-bottom: 1px solid var(--light);
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: var(--dark);
+            flex: 1;
+        }
+        
+        .info-value {
+            flex: 2;
+            text-align: right;
+            color: #555;
+        }
+        
+        /* Full width card for dispatch information */
+        .full-width-card {
+            grid-column: 1 / span 2;
+            margin-top: 20px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+            padding: 0 25px;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary);
+        }
+        
+        .section-title {
+            font-size: 22px;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .count-badge {
+            background-color: var(--primary);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 25px;
+        }
+        
+        .product-card {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .product-header {
+            background-color: var(--primary);
+            color: white;
+            padding: 15px;
+        }
+        
+        .product-id {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+        
+        .product-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .product-body {
+            padding: 20px;
+        }
+        
+        .product-specs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        .spec-item {
+            margin-bottom: 12px;
+        }
+        
+        .spec-label {
+            font-size: 12px;
+            color: var(--gray);
+            margin-bottom: 4px;
+        }
+        
+        .spec-value {
+            font-weight: 500;
+            color: #444;
+        }
+        
+        .product-footer {
+            padding: 15px 20px;
+            background-color: var(--light-gray);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .price {
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .action-btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        
+        .action-btn:hover {
+            background-color: #2980b9;
+        }
+        
+        @media (max-width: 768px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .products-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .client-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .client-id {
+                margin-top: 10px;
+            }
+            
+            .full-width-card {
+                grid-column: 1;
+            }
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 30px;
+            background-color: white;
+            border-radius: 10px;
+            color: var(--gray);
+            border: 1px dashed #ddd;
+        }
+        
+        .no-data i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            color: #ddd;
+        }
+        
+        .client-footer {
+            text-align: center;
+            padding: 20px;
+            background-color: var(--light);
+            color: var(--gray);
+            font-size: 14px;
+        }
+        
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            right: -300px; /* start off-screen */
+            background-color: #d1e7dd; /* match sidebar dark */
+            color: #0a3646;
+            padding: 12px 40px 12px 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(255, 255, 255, 0.3);
+            z-index: 9999;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            border-left: 4px solid #0a3646; /* green accent */
+            animation: slideIn 0.5s forwards;
+        }
+
+        .toast-close {
+            position: absolute;
+            right: 12px;
+            top: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 18px;
+            color: #0a3646;
+        }
+
+        @keyframes slideIn {
+            from { right: -300px; opacity: 0; }
+            to { right: 20px; opacity: 1; }
+        }
+
+        @keyframes slideOut {
+            from { right: 20px; opacity: 1; }
+            to { right: -300px; opacity: 0; }
+        }
+    </style>
+
+
+    <% if (notification && notification.length > 0) { %>
+    <div class="toast-notification" id="toast">
+        <span><%= notification[0] %></span>
+        <span class="toast-close" onclick="hideToast()">×</span>
+    </div>
+    <% } %>
+    <div class="main-content">
+
+      <!--- Loading Content --->
+      <div class="client-details-container">
+        <header class="client-header-section">
+            <div class="client-header">
+                <div>
+                    <h1><%= userData.clientName %></h1>
+                    <span class="client-type"><%= userData.clientType %></span>
+                </div>
+                <div class="client-id">Client ID: <%= userData.clientId %></div>
+            </div>
+        </header>
+        
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>Contact Information</h3>
+                <div class="info-item">
+                    <span class="info-label">Account Head:</span>
+                    <span class="info-value"><%= userData.accountHead %></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Username:</span>
+                    <span class="info-value"><%= userData.userName %></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Contact:</span>
+                    <span class="info-value"><%= userData.userContact %></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value"><%= userData.userEmail %></span>
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <h3>Location Details</h3>
+                <div class="info-item">
+                    <span class="info-label">HO Location:</span>
+                    <span class="info-value"><%= userData.hoLocation %></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Location:</span>
+                    <span class="info-value"><%= userData.userLocation %></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Department:</span>
+                    <span class="info-value"><%= userData.userDepartment %></span>
+                </div>
+                <div class="info-item" style="border: none;">
+                    <span class="info-label">Dispatch Type:</span>
+                    <span class="info-value"><%= userData.SelfDispatch ? 'Self Dispatch' : 'Transport' %></span>
+                </div>
+            </div>
+            
+            <!-- Full width dispatch information card -->
+            <div class="info-card full-width-card">
+                <h3>Dispatch Information</h3>
+                <style>.full-width-card .info-item:last-child { border-bottom: none !important; }</style>
+                <div class="info-item">
+                    <span class="info-label">Dispatch Address:</span>
+                    <span class="info-value"><%= userData.dispatchAddress %></span>
+                </div>
+                <% if (!userData.SelfDispatch) { %>
+                    <div class="info-item">
+                        <span class="info-label">Transport Name:</span>
+                        <span class="info-value"><%= userData.transportName || 'N/A' %></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Transport Contact:</span>
+                        <span class="info-value"><%= userData.transportContact || 'N/A' %></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Drop Location:</span>
+                        <span class="info-value"><%= userData.dropLocation || 'N/A' %></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Delivery Mode:</span>
+                        <span class="info-value"><%= userData.deliveryMode || 'N/A' %></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Delivery Location:</span>
+                        <span class="info-value"><%= userData.deliveryLocation || 'N/A' %></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Payment:</span>
+                        <span class="info-value"><%= userData.clientPayment || 'N/A' %></span>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+        
+        <!-- Labels Section -->
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">Label</h2>
+                <span class="count-badge"><%= labels.length %> label(s)</span>
+            </div>
+            
+            <% if (labels.length > 0) { %>
+                <div class="products-grid">
+                    <% labels.forEach(function(label) { %>
+                        <div class="product-card">
+                            <div class="product-header">
+                                <div class="product-id">Label ID: <%= label._id %></div>
+                                <div class="product-title"><%= label.jobType %> Label</div>
+                            </div>
+                            <div class="product-body">
+                                <div class="product-specs">
+                                    <div class="spec-item">
+                                        <div class="spec-label">Paper Type</div>
+                                        <div class="spec-value"><%= label.paperType %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Dimensions</div>
+                                        <div class="spec-value"><%= label.labelWidth %>mm x <%= label.labelHeight %>mm</div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Varnish</div>
+                                        <div class="spec-value"><%= label.varnish %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Foil Number</div>
+                                        <div class="spec-value"><%= label.foilNo %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Per Roll Qty</div>
+                                        <div class="spec-value"><%= label.perRollQty %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Rate per 1000</div>
+                                        <div class="spec-value">₹<%= label.ratePerK %></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="product-footer">
+                                <div class="price">Sale Cost: ₹<%= label.saleCost %></div>
+                                <button class="action-btn">View Details</button>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                <div class="no-data">
+                    <i class="fas fa-tags"></i>
+                    <h3>No Labels Found</h3>
+                    <p>This client doesn't have any labels associated with their account.</p>
+                </div>
+            <% } %>
+        </div>
+        
+        <!-- TTRs Section -->
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">TTR</h2>
+                <span class="count-badge"><%= ttrs.length %> TTR(s)</span>
+            </div>
+            
+            <% if (ttrs.length > 0) { %>
+                <div class="products-grid">
+                    <% ttrs.forEach(function(ttr) { %>
+                        <div class="product-card">
+                            <div class="product-header">
+                                <div class="product-id"><%= ttr.productId %></div>
+                                <div class="product-title"><%= ttr.ttrType %> - <%= ttr.ttrColor %></div>
+                            </div>
+                            <div class="product-body">
+                                <div class="product-specs">
+                                    <div class="spec-item">
+                                        <div class="spec-label">Material Code</div>
+                                        <div class="spec-value"><%= ttr.ttrMaterialCode %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Width</div>
+                                        <div class="spec-value"><%= ttr.ttrWidth %>mm</div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Meters</div>
+                                        <div class="spec-value"><%= ttr.ttrMtrs %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Ink Face</div>
+                                        <div class="spec-value"><%= ttr.ttrInkFace %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Winding</div>
+                                        <div class="spec-value"><%= ttr.ttrWinding %></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="product-footer">
+                                <div class="price">Sale Cost: ₹<%= ttr.ttrSaleCost %></div>
+                                <button class="action-btn">View Details</button>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                <div class="no-data">
+                    <i class="fas fa-barcode"></i>
+                    <h3>No TTRs Found</h3>
+                    <p>This client doesn't have any TTRs associated with their account.</p>
+                </div>
+            <% } %>
+        </div>
+        
+        <!-- Tapes Section -->
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">Tape</h2>
+                <span class="count-badge"><%= tapes.length %> tape(s)</span>
+            </div>
+            
+            <% if (tapes.length > 0) { %>
+                <div class="products-grid">
+                    <% tapes.forEach(function(tape) { %>
+                        <div class="product-card">
+                            <div class="product-header">
+                                <div class="product-id"><%= tape.tapeTroductId %></div>
+                                <div class="product-title"><%= tape.tapePaperType %> Tape</div>
+                            </div>
+                            <div class="product-body">
+                                <div class="product-specs">
+                                    <div class="spec-item">
+                                        <div class="spec-label">Paper Code</div>
+                                        <div class="spec-value"><%= tape.tapePaperCode %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">GSM</div>
+                                        <div class="spec-value"><%= tape.tapeGsm %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Client Paper Code</div>
+                                        <div class="spec-value"><%= tape.tapeClientPaperCode %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Width</div>
+                                        <div class="spec-value"><%= tape.tapeWidth %>mm</div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Meters</div>
+                                        <div class="spec-value"><%= tape.tapeMtrs %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Core ID</div>
+                                        <div class="spec-value"><%= tape.tapeCoreId %></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="product-footer">
+                                <div class="price">Sale Cost: ₹<%= tape.tapeSaleCost %></div>
+                                <button class="action-btn">View Details</button>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                </div>
+            <% } else { %>
+                <div class="no-data">
+                    <i class="fas fa-scroll"></i>
+                    <h3>No Tapes Found</h3>
+                    <p>This client doesn't have any tapes associated with their account.</p>
+                </div>
+            <% } %>
+        </div>
+
+        <!-- POS Rolls Section -->
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">POS Roll</h2>
+                <span class="count-badge"><%= posRolls ? posRolls.length : 0 %> POS Roll(s)</span>
+            </div>
+            
+            <% if (posRolls && posRolls.length > 0) { %>
+                <div class="products-grid">
+                    <% posRolls.forEach(function(pos) { %>
+                        <div class="product-card">
+                            <div class="product-header">
+                                <div class="product-id"><%= pos.posProductId %></div>
+                                <div class="product-title"><%= pos.posPaperType %> POS Roll</div>
+                            </div>
+                            <div class="product-body">
+                                <div class="product-specs">
+                                    <div class="spec-item">
+                                        <div class="spec-label">Paper Code</div>
+                                        <div class="spec-value"><%= pos.posPaperCode %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Color</div>
+                                        <div class="spec-value"><%= pos.posColor %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">GSM / Width</div>
+                                        <div class="spec-value"><%= pos.posGsm %>gsm / <%= pos.posWidth %>mm</div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Client Paper Code</div>
+                                        <div class="spec-value"><%= pos.posClientPaperCode %></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="product-footer">
+                                <div class="price">Sale Cost: ₹<%= pos.posSaleCost %></div>
+                                <button class="action-btn">View Details</button>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                <div class="no-data">
+                    <i class="fas fa-scroll"></i>
+                    <h3>No POS Rolls Found</h3>
+                    <p>This client doesn't have any POS rolls associated with their account.</p>
+                </div>
+            <% } %>
+        </div>
+
+        <!-- Tafetas Section -->
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">Tafeta</h2>
+                <span class="count-badge"><%= tafetas ? tafetas.length : 0 %> Tafeta(s)</span>
+            </div>
+            
+            <% if (tafetas && tafetas.length > 0) { %>
+                <div class="products-grid">
+                    <% tafetas.forEach(function(tafeta) { %>
+                        <div class="product-card">
+                            <div class="product-header">
+                                <div class="product-id"><%= tafeta.tafetaProductId %></div>
+                                <div class="product-title"><%= tafeta.tafetaMaterialType %> Tafeta</div>
+                            </div>
+                            <div class="product-body">
+                                <div class="product-specs">
+                                    <div class="spec-item">
+                                        <div class="spec-label">Material Code</div>
+                                        <div class="spec-value"><%= tafeta.tafetaMaterialCode %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Color</div>
+                                        <div class="spec-value"><%= tafeta.tafetaColor %></div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">GSM / Width</div>
+                                        <div class="spec-value"><%= tafeta.tafetaGsm %>gsm / <%= tafeta.tafetaWidth %>mm</div>
+                                    </div>
+                                    <div class="spec-item">
+                                        <div class="spec-label">Client Material Code</div>
+                                        <div class="spec-value"><%= tafeta.tafetaClientMaterialCode %></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="product-footer">
+                                <div class="price">Sale Cost: ₹<%= tafeta.tafetaSaleCost %></div>
+                                <button class="action-btn">View Details</button>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                <div class="no-data">
+                    <i class="fas fa-scroll"></i>
+                    <h3>No Tafetas Found</h3>
+                    <p>This client doesn't have any tafetas associated with their account.</p>
+                </div>
+            <% } %>
+        </div>
+    
+    </div>
+    </div>
+
+    <script src="/js/common.js" defer></script>
+    <script src="/bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/BTStrap.js" defer></script>
+    <script src="/js/choices.min.js"></script>
+    
+    <script>
+        // Simple JavaScript for interactivity
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add click event to action buttons
+            const actionButtons = document.querySelectorAll('.action-btn');
+            actionButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const productCard = this.closest('.product-card');
+                    const productTitle = productCard.querySelector('.product-title').textContent;
+                    alert(`Viewing details for: ${productTitle}`);
+                });
+            });
+        });
+
+        const toast = document.getElementById("toast");
+
+        function hideToast() {
+            if (toast) {
+                toast.style.animation = "slideOut 0.5s forwards";
+                setTimeout(() => {
+                    toast.style.display = "none";
+                }, 500);
+            }
+        }
+
+        // Auto hide after 5 seconds
+        if (toast) {
+            setTimeout(hideToast, 5000);
+        }
+    </script>   

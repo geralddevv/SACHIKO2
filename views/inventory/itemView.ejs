@@ -1,0 +1,1140 @@
+<!-- Link to boilerplate.ejs -->
+<% layout('/layout/boilerplate') -%>
+<%
+  // Reel-level edit/delete (paper profile) replaces the per-location Stock edit:
+  // when reelConfig is present the "Rolls in Stock" list carries the Edit/Delete
+  // actions, so the location table drops its Edit button but keeps Booked /
+  // Available. Every other item type keeps the per-location edit as before.
+  const hasReelActions = typeof reelConfig !== 'undefined' && reelConfig;
+  const showLocEdit =
+    typeof stockEditConfig !== 'undefined' && stockEditConfig && stockEditConfig.enabled && !hasReelActions;
+%>
+
+<style>
+  .tape-details-shell {
+    padding: 18px;
+    background: linear-gradient(180deg, #eef5fb 0%, #f7f9fc 100%);
+  }
+
+  .tape-details-card {
+    position: relative;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 18px 42px rgba(4, 74, 120, 0.12);
+    border: 1px solid rgba(4, 74, 120, 0.12);
+    overflow: hidden;
+  }
+
+  .tape-details-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-end;
+    padding: 24px 24px 22px;
+    background:
+      radial-gradient(circle at top right, rgba(255,255,255,0.16), transparent 34%),
+      linear-gradient(135deg, #044a78 0%, #03365a 100%);
+    color: #fff;
+  }
+
+  .header-copy {
+    max-width: 100%;
+  }
+
+  .tape-details-header h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+
+  .header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .header-action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.2px;
+    backdrop-filter: blur(8px);
+    transition: background 0.18s ease;
+  }
+
+  .header-action-link:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .status-pill {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .pill-active {
+    background: rgba(34, 197, 94, 0.18);
+    color: #16a34a;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+
+  .pill-inactive {
+    background: rgba(156, 163, 175, 0.18);
+    color: #6b7280;
+    border: 1px solid rgba(156, 163, 175, 0.5);
+  }
+
+  .status-radio-group {
+    display: flex;
+    gap: 12px;
+  }
+
+  .status-radio-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 2px solid #e5e7eb;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .status-radio-label:has(input:checked) {
+    border-color: #044a78;
+    background: #eef5fb;
+    color: #044a78;
+  }
+
+  .ap-card {
+    width: 100%;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .ap-card-title {
+    background: #044a78;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    padding: 9px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .ap-table-wrap {
+    overflow-x: auto;
+  }
+
+  .ap-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    table-layout: fixed;
+  }
+
+  .ap-table th,
+  .ap-table td {
+    padding: 8px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+    text-align: left;
+  }
+
+  .ap-table tr > *:last-child {
+    border-right: none;
+  }
+
+  .ap-table tbody tr:last-child > * {
+    border-bottom: none;
+  }
+
+  .ap-table th {
+    background: #f8fafc;
+    color: #044a78;
+    font-weight: 700;
+    white-space: nowrap;
+    width: 10%;
+  }
+
+  .ap-table td {
+    color: #1f2a44;
+    font-weight: 600;
+    word-break: break-word;
+  }
+
+  .diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #e6eaf2;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .diff-table th,
+  .diff-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e6eaf2;
+    text-align: left;
+    font-size: 13px;
+    vertical-align: top;
+  }
+
+  .diff-table th {
+    background: #f4f7ff;
+    color: #044a78;
+    font-weight: 700;
+  }
+
+  .diff-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .diff-table .key-col {
+    width: 32%;
+    color: #5a6586;
+    font-weight: 600;
+  }
+
+  .diff-table .resolved {
+    font-weight: 700;
+    color: #1f2a44;
+  }
+
+  .tape-details-body {
+    padding: 22px 24px 24px;
+  }
+
+  .stock-section,
+  .details-section {
+    margin-top: 18px;
+  }
+
+  .stock-summary {
+    display: none;
+  }
+
+  .stock-table {
+    width: 100%;
+    display: table;
+    table-layout: fixed;
+    border-collapse: collapse;
+    border: 1px solid #e6eaf2;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .stock-table th,
+  .stock-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+    text-align: left;
+    font-size: 13px;
+  }
+
+  .stock-table th {
+    background: #f8fafc;
+    color: #044a78;
+    font-weight: 700;
+  }
+
+  .stock-table tr > *:last-child {
+    border-right: none;
+  }
+
+  .stock-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .stock-table .qty-col {
+    width: 88px;
+    max-width: 88px;
+    min-width: 88px;
+    white-space: nowrap;
+    font-weight: 700;
+  }
+
+  .stock-table th:first-child,
+  .stock-table td:first-child {
+    padding-right: 6px;
+    width: 20%;
+  }
+
+  .stock-table th.qty-col,
+  .stock-table td.qty-col {
+    padding-left: 4px;
+    padding-right: 8px;
+  }
+
+  .stock-table .action-col {
+    width: 92px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  /* Long headers (e.g. "Running Mtrs") wrap instead of overflowing their fixed
+     column and painting over the next one. */
+  .stock-table th.qty-col { white-space: normal; }
+
+  /* Rolls in Stock carries more columns than the location table it shares this
+     class with (roll id, location, size, mtrs, status, plus Label/Edit/Delete), so it
+     sizes to content rather than using the fixed location-table layout -- that
+     keeps Location tight, stops Size/Running Mtrs/Status overlapping, and holds
+     the two action buttons on one line. */
+  .stock-table.rolls-stock { table-layout: auto; }
+  .stock-table.rolls-stock th,
+  .stock-table.rolls-stock td { white-space: nowrap; }
+  .stock-table.rolls-stock th.qty-col { white-space: nowrap; }
+  .stock-table.rolls-stock .qty-col { width: auto; min-width: 0; max-width: none; }
+  .stock-table.rolls-stock th:first-child,
+  .stock-table.rolls-stock td:first-child { width: auto; }
+  .stock-table.rolls-stock .action-col { width: 1%; }
+
+  .stock-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    border-radius: 999px;
+    background: #044a78;
+    color: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+    transition: background 0.18s ease;
+  }
+
+  .stock-edit-btn:hover {
+    background: #03365a;
+  }
+
+  .stock-edit-btn.reel-delete-btn {
+    background: #dc2626;
+  }
+  .stock-edit-btn.reel-delete-btn:hover {
+    background: #b91c1c;
+  }
+  .stock-edit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .stock-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.5);
+    z-index: 9999;
+    padding: 20px;
+  }
+
+  .stock-modal.show {
+    display: flex;
+  }
+
+  .stock-modal-card {
+    width: min(460px, 100%);
+    background: #fff;
+    border-radius: 18px;
+    border: 1px solid rgba(4, 74, 120, 0.12);
+    box-shadow: 0 22px 48px rgba(15, 23, 42, 0.22);
+    overflow: hidden;
+  }
+
+  .stock-modal-head {
+    padding: 18px 20px 10px;
+  }
+
+  .stock-modal-head h3 {
+    margin: 0;
+    color: #044a78;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .stock-modal-subtitle {
+    margin: 6px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .stock-modal-body {
+    padding: 8px 20px 20px;
+  }
+
+  .stock-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .stock-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .stock-form-field.select-field {
+    position: relative;
+  }
+
+  .stock-form-field.full {
+    grid-column: 1 / -1;
+  }
+
+  .stock-form-field label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .stock-form-field input,
+  .stock-form-field select {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 10px 12px;
+    min-height: 42px;
+    font-size: 14px;
+    outline: none;
+    background: #fff;
+    line-height: 1.2;
+    box-sizing: border-box;
+  }
+
+  .stock-form-field select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 40px;
+  }
+
+  .stock-form-field.select-field::after {
+    content: "";
+    position: absolute;
+    right: 16px;
+    top: calc(50% + 11px);
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid #64748b;
+    border-bottom: 2px solid #64748b;
+    transform: translateY(-50%) rotate(45deg);
+    pointer-events: none;
+  }
+
+  .stock-form-field input[readonly] {
+    background: #f8fafc;
+  }
+
+  .stock-form-note {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .stock-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .stock-modal-btn {
+    border: none;
+    border-radius: 999px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  .stock-modal-btn.cancel {
+    background: #e2e8f0;
+    color: #0f172a;
+  }
+
+  .stock-modal-btn.primary {
+    background: #044a78;
+    color: #fff;
+  }
+
+  @media (max-width: 768px) {
+    .tape-details-header {
+      flex-direction: column;
+      align-items: flex-start;
+      padding-top: 24px;
+    }
+
+    .stock-form-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="main-content tape-details-shell">
+  <div class="tape-details-card">
+    <div class="tape-details-header">
+      <div class="header-copy">
+        <h1><%= pageTitle %></h1>
+        <% if (typeof currentStatus !== 'undefined') { %>
+          <span class="status-pill <%= (currentStatus || 'ACTIVE') === 'ACTIVE' ? 'pill-active' : 'pill-inactive' %>">
+            <%= currentStatus || 'ACTIVE' %>
+          </span>
+        <% } %>
+      </div>
+      <div class="header-actions">
+        <% if (typeof statusUrl !== 'undefined' && statusUrl) { %>
+          <button class="header-action-link" type="button" onclick="openStatusDialog()">
+            <i class="fa-solid fa-toggle-on"></i> Change Status
+          </button>
+        <% } %>
+      </div>
+    </div>
+
+    <div class="tape-details-body">
+      <% if (typeof stockFirst !== 'undefined' && stockFirst && typeof stockInfo !== 'undefined' && stockInfo) { %>
+        <div class="stock-section ap-card">
+          <div class="ap-card-title"><span><i class="fa-solid fa-warehouse"></i> Stock by Location</span></div>
+          <div class="ap-table-wrap">
+          <table class="stock-table">
+            <thead>
+              <tr>
+                <th>Location</th>
+                <th class="qty-col">Stock</th>
+                <% if (stockInfo.showMtrs) { %><th class="qty-col">Running Mtrs</th><% } %>
+                <% if (typeof stockEditConfig !== 'undefined' && stockEditConfig && stockEditConfig.enabled) { %>
+                  <th class="qty-col">Booked</th>
+                  <th class="qty-col">Available</th>
+                  <% if (showLocEdit) { %><th class="action-col"></th><% } %>
+                <% } %>
+              </tr>
+            </thead>
+            <tbody>
+              <% (stockInfo.locations || []).forEach(entry => { %>
+                <tr>
+                  <td><%= entry.location %></td>
+                  <td class="qty-col"><%= entry.qty %></td>
+                  <% if (stockInfo.showMtrs) { %><td class="qty-col"><%= Number(entry.mtrs || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }) %></td><% } %>
+                  <% if (typeof stockEditConfig !== 'undefined' && stockEditConfig && stockEditConfig.enabled) { %>
+                    <td class="qty-col"><%= entry.booked ?? 0 %></td>
+                    <td class="qty-col"><%= entry.balance ?? 0 %></td>
+                    <% if (showLocEdit) { %>
+                    <td class="action-col">
+                      <button
+                        type="button"
+                        class="stock-edit-btn"
+                        data-stock-edit
+                        data-location="<%= entry.location %>"
+                        data-qty="<%= entry.qty %>"
+                        data-booked="<%= entry.booked ?? 0 %>">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                        Edit
+                      </button>
+                    </td>
+                    <% } %>
+                  <% } %>
+                </tr>
+              <% }) %>
+              <tr>
+                <td><strong>Total</strong></td>
+                <td class="qty-col"><strong><%= stockInfo.totalStock ?? 0 %></strong></td>
+                <% if (stockInfo.showMtrs) { %><td class="qty-col"><strong><%= Number(stockInfo.totalMtrs || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }) %></strong></td><% } %>
+                <% if (typeof stockEditConfig !== 'undefined' && stockEditConfig && stockEditConfig.enabled) { %>
+                  <td class="qty-col"><strong><%= stockInfo.booked ?? 0 %></strong></td>
+                  <td class="qty-col"><strong><%= stockInfo.balance ?? 0 %></strong></td>
+                  <% if (showLocEdit) { %><td class="action-col"></td><% } %>
+                <% } %>
+              </tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      <% } %>
+
+      <div class="details-section ap-card">
+        <div class="ap-card-title"><span><i class="fa-solid fa-circle-info"></i> <%= sectionTitle %></span></div>
+        <div class="ap-table-wrap">
+          <table class="ap-table">
+            <tbody>
+              <% const detailRows = rows || []; %>
+              <% for (let i = 0; i < detailRows.length; i += 3) { %>
+                <% const chunk = detailRows.slice(i, i + 3); %>
+                <tr>
+                  <% chunk.forEach((row) => { %>
+                    <th><%= row.label %></th><td><%= row.value %></td>
+                  <% }) %>
+                  <% for (let j = chunk.length; j < 3; j++) { %>
+                    <th></th><td></td>
+                  <% } %>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <% if (!(typeof stockFirst !== 'undefined' && stockFirst) && typeof stockInfo !== 'undefined' && stockInfo) { %>
+        <div class="stock-section ap-card">
+          <div class="ap-card-title"><span><i class="fa-solid fa-warehouse"></i> Stock by Location</span></div>
+          <div class="ap-table-wrap">
+          <table class="stock-table">
+            <thead>
+              <tr>
+                <th>Location</th>
+                <th class="qty-col">Stock</th>
+                <% if (stockInfo.showMtrs) { %><th class="qty-col">Running Mtrs</th><% } %>
+                <% if (typeof stockEditConfig !== 'undefined' && stockEditConfig && stockEditConfig.enabled) { %>
+                  <th class="qty-col">Booked</th>
+                  <th class="qty-col">Available</th>
+                  <% if (showLocEdit) { %><th class="action-col"></th><% } %>
+                <% } %>
+              </tr>
+            </thead>
+            <tbody>
+              <% (stockInfo.locations || []).forEach(entry => { %>
+                <tr>
+                  <td><%= entry.location %></td>
+                  <td class="qty-col"><%= entry.qty %></td>
+                  <% if (stockInfo.showMtrs) { %><td class="qty-col"><%= Number(entry.mtrs || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }) %></td><% } %>
+                  <% if (typeof stockEditConfig !== 'undefined' && stockEditConfig && stockEditConfig.enabled) { %>
+                    <td class="qty-col"><%= entry.booked ?? 0 %></td>
+                    <td class="qty-col"><%= entry.balance ?? 0 %></td>
+                    <% if (showLocEdit) { %>
+                    <td class="action-col">
+                      <button
+                        type="button"
+                        class="stock-edit-btn"
+                        data-stock-edit
+                        data-location="<%= entry.location %>"
+                        data-qty="<%= entry.qty %>"
+                        data-booked="<%= entry.booked ?? 0 %>">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                        Edit
+                      </button>
+                    </td>
+                    <% } %>
+                  <% } %>
+                </tr>
+              <% }) %>
+              <tr>
+                <td><strong>Total</strong></td>
+                <td class="qty-col"><strong><%= stockInfo.totalStock ?? 0 %></strong></td>
+                <% if (stockInfo.showMtrs) { %><td class="qty-col"><strong><%= Number(stockInfo.totalMtrs || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }) %></strong></td><% } %>
+                <% if (typeof stockEditConfig !== 'undefined' && stockEditConfig && stockEditConfig.enabled) { %>
+                  <td class="qty-col"><strong><%= stockInfo.booked ?? 0 %></strong></td>
+                  <td class="qty-col"><strong><%= stockInfo.balance ?? 0 %></strong></td>
+                  <% if (showLocEdit) { %><td class="action-col"></td><% } %>
+                <% } %>
+              </tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      <% } %>
+
+      <% if (typeof reels !== 'undefined' && reels && reels.length) { %>
+        <div class="stock-section ap-card">
+          <div class="ap-card-title"><span><i class="fa-solid fa-scroll"></i> Rolls in Stock</span></div>
+          <div class="ap-table-wrap">
+          <table class="stock-table rolls-stock">
+            <thead>
+              <tr>
+                <th>Roll ID</th>
+                <th>Vendor Roll ID</th>
+                <th>Location</th>
+                <th class="qty-col">Size</th>
+                <th class="qty-col">Running Mtrs</th>
+                <th class="qty-col">Rate</th>
+                <th class="qty-col">Status</th>
+                <% if (hasReelActions) { %><th class="action-col"></th><% } %>
+              </tr>
+            </thead>
+            <tbody>
+              <% reels.forEach(reel => { %>
+                <tr>
+                  <td><%= reel.rollId %></td>
+                  <td><%= reel.vendorRollId %></td>
+                  <td><%= reel.location %></td>
+                  <td class="qty-col"><%= reel.paperSize %></td>
+                  <td class="qty-col"><%= Number(reel.paperMtrs || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }) %></td>
+                  <td class="qty-col"><%= reel.rate != null ? `₹${Number(reel.rate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}` : '—' %></td>
+                  <td class="qty-col"><%= reel.booked ? 'Booked' : 'Available' %></td>
+                  <% if (hasReelActions) { %>
+                  <td class="action-col">
+                    <div style="display:flex; gap:6px; justify-content:flex-end;">
+                      <% if (reelConfig.labelActionBase) { %>
+                        <!-- Reprint: labels get scuffed off reels on the floor, and a
+                             reel whose QR won't scan can't be booked off at the job
+                             card. Same page the inward flow lands on. -->
+                        <a class="stock-edit-btn" target="_blank" rel="noopener"
+                           href="<%= reelConfig.labelActionBase %>/<%= reel._id %>">
+                          <i class="fa-solid fa-qrcode"></i> Label
+                        </a>
+                      <% } %>
+                      <button type="button" class="stock-edit-btn" data-reel-edit
+                        data-id="<%= reel._id %>"
+                        data-rollid="<%= reel.rollId %>"
+                        data-vendorrollid="<%= reel.vendorRollId === '—' ? '' : reel.vendorRollId %>"
+                        data-location="<%= reel.location %>"
+                        data-size="<%= reel.paperSize %>"
+                        data-mtrs="<%= reel.paperMtrs %>"
+                        data-booked="<%= reel.booked ? '1' : '0' %>">
+                        <i class="fa-solid fa-pen-to-square"></i> Edit
+                      </button>
+                      <button type="button" class="stock-edit-btn reel-delete-btn" data-reel-delete
+                        data-id="<%= reel._id %>"
+                        data-rollid="<%= reel.rollId %>"
+                        data-booked="<%= reel.booked ? '1' : '0' %>">
+                        <i class="fa-solid fa-trash"></i> Delete
+                      </button>
+                    </div>
+                  </td>
+                  <% } %>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<% if (typeof statusUrl !== 'undefined' && statusUrl) { %>
+<form id="statusForm" method="POST" action="<%= statusUrl %>" style="display:none;">
+  <input type="hidden" name="status" id="statusInput">
+</form>
+
+<div class="logout-modal" id="statusModal" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" style="width: min(400px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header" style="padding: 18px 22px 14px; border-radius: 14px 14px 0 0; background: #044a78; color: #fff;">
+      <h2 style="margin: 0; font-size: 17px; font-weight: 700;">Change Status</h2>
+      <p style="margin: 4px 0 0; font-size: 13px; opacity: 0.8;"><%= pageTitle %></p>
+    </div>
+    <div class="dialog-body" style="padding: 20px 22px 22px; border-radius: 0 0 14px 14px; background: #fff;">
+      <div class="status-radio-group">
+        <label class="status-radio-label">
+          <input type="radio" name="statusChoice" value="ACTIVE" <%= (currentStatus || 'ACTIVE') === 'ACTIVE' ? 'checked' : '' %>>
+          <i class="fa-solid fa-circle-check" style="color: #16a34a;"></i> ACTIVE
+        </label>
+        <label class="status-radio-label">
+          <input type="radio" name="statusChoice" value="INACTIVE" <%= currentStatus === 'INACTIVE' ? 'checked' : '' %>>
+          <i class="fa-solid fa-circle-xmark" style="color: #9ca3af;"></i> INACTIVE
+        </label>
+      </div>
+      <div class="logout-actions" style="margin-top: 18px;">
+        <button class="logout-btn" type="button" onclick="closeStatusModal()">Cancel</button>
+        <button class="logout-btn primary" type="button" onclick="submitStatus()">Update</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const statusModal = document.getElementById("statusModal");
+
+  function openStatusDialog() {
+    statusModal.classList.add("show");
+    statusModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeStatusModal() {
+    statusModal.classList.remove("show");
+    statusModal.setAttribute("aria-hidden", "true");
+  }
+
+  function submitStatus() {
+    const chosen = statusModal.querySelector('input[name="statusChoice"]:checked');
+    if (!chosen) return;
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+    const form = document.getElementById("statusForm");
+    let csrfInput = form.querySelector('input[name="_csrf"]');
+    if (!csrfInput) {
+      csrfInput = Object.assign(document.createElement("input"), { type: "hidden", name: "_csrf" });
+      form.appendChild(csrfInput);
+    }
+    csrfInput.value = csrf;
+    document.getElementById("statusInput").value = chosen.value;
+    form.submit();
+  }
+
+  statusModal.addEventListener("click", (e) => { if (e.target === statusModal) closeStatusModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeStatusModal(); });
+</script>
+<% } %>
+
+<% if (showLocEdit) { %>
+  <form id="stock-edit-form" action="<%= stockEditConfig.editAction %>" method="post" style="display:none;">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="fromLocation" id="stock-from-location" />
+    <input type="hidden" name="toLocation" id="stock-to-location-hidden" />
+    <input type="hidden" name="quantity" id="stock-quantity-hidden" />
+  </form>
+
+  <div class="stock-modal" id="stock-edit-modal" aria-hidden="true">
+    <div class="stock-modal-card" role="dialog" aria-modal="true" aria-labelledby="stock-edit-title">
+      <div class="stock-modal-head">
+        <h3 id="stock-edit-title">Edit Stock</h3>
+        <p class="stock-modal-subtitle" id="stock-edit-subtitle"></p>
+      </div>
+      <div class="stock-modal-body">
+        <div class="stock-form-grid">
+          <div class="stock-form-field">
+            <label for="stock-current-location">Current Location</label>
+            <input type="text" id="stock-current-location" readonly />
+          </div>
+          <div class="stock-form-field">
+            <label for="stock-booked-qty">Booked</label>
+            <input type="text" id="stock-booked-qty" readonly />
+          </div>
+          <div class="stock-form-field select-field">
+            <label for="stock-new-location">New Location</label>
+            <select id="stock-new-location" required>
+              <% Array.from(new Set(stockEditConfig.locationOptions || [])).forEach((location) => { %>
+                <option value="<%= location %>"><%= location %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="stock-form-field">
+            <label for="stock-new-quantity">New Quantity</label>
+            <input type="number" id="stock-new-quantity" min="0" step="1" required />
+          </div>
+        </div>
+        <div class="stock-form-note" id="stock-edit-note">
+          
+        </div>
+        <div class="stock-modal-actions">
+          <button type="button" class="stock-modal-btn cancel" id="stock-edit-cancel">Cancel</button>
+          <button type="button" class="stock-modal-btn primary" id="stock-edit-save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const modal = document.getElementById("stock-edit-modal");
+      const form = document.getElementById("stock-edit-form");
+      const fromLocationInput = document.getElementById("stock-from-location");
+      const toLocationHidden = document.getElementById("stock-to-location-hidden");
+      const quantityHidden = document.getElementById("stock-quantity-hidden");
+      const currentLocationInput = document.getElementById("stock-current-location");
+      const bookedQtyInput = document.getElementById("stock-booked-qty");
+      const newLocationSelect = document.getElementById("stock-new-location");
+      const newQuantityInput = document.getElementById("stock-new-quantity");
+      const subtitle = document.getElementById("stock-edit-subtitle");
+      const note = document.getElementById("stock-edit-note");
+      let activeRow = null;
+
+      const closeModal = () => {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+        activeRow = null;
+      };
+
+      const ensureLocationOption = (value) => {
+        if (!value) return;
+        const exists = Array.from(newLocationSelect.options).some((option) => option.value === value);
+        if (!exists) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = value;
+          newLocationSelect.appendChild(option);
+        }
+      };
+
+      document.querySelectorAll("[data-stock-edit]").forEach((button) => {
+        button.addEventListener("click", () => {
+          activeRow = {
+            location: button.dataset.location || "UNKNOWN",
+            qty: Number(button.dataset.qty || 0),
+            booked: Number(button.dataset.booked || 0),
+          };
+          ensureLocationOption(activeRow.location);
+          fromLocationInput.value = activeRow.location;
+          currentLocationInput.value = activeRow.location;
+          bookedQtyInput.value = String(activeRow.booked);
+          newLocationSelect.value = activeRow.location;
+          newQuantityInput.value = String(activeRow.qty);
+          subtitle.textContent = `${activeRow.location} stock can be adjusted or moved to another location.`;
+          note.textContent = activeRow.booked > 0
+            ? `Booked stock at this location is ${activeRow.booked}. You can increase quantity here, but you cannot move this stock to another location unless booked stock is cleared.`
+            : "";
+          modal.classList.add("show");
+          modal.setAttribute("aria-hidden", "false");
+        });
+      });
+
+      document.getElementById("stock-edit-cancel").addEventListener("click", closeModal);
+      document.getElementById("stock-edit-save").addEventListener("click", () => {
+        if (!activeRow) return;
+        const quantity = Number(newQuantityInput.value);
+        const toLocation = String(newLocationSelect.value || "").trim();
+
+        if (!Number.isFinite(quantity) || quantity < 0) {
+          alert("Enter a valid quantity.");
+          return;
+        }
+
+        if (!toLocation) {
+          alert("Select a location.");
+          return;
+        }
+
+        if (toLocation === activeRow.location) {
+          // No restriction on adjustment at same location
+        } else {
+          if (activeRow.booked > 0) {
+            alert(`Validation Failed: Cannot move stock from ${activeRow.location} because ${activeRow.booked} units are booked here.`);
+            return;
+          }
+        }
+
+        toLocationHidden.value = toLocation;
+        quantityHidden.value = String(quantity);
+        form.submit();
+      });
+
+      modal.addEventListener("click", (event) => {
+        if (event.target === modal) closeModal();
+      });
+    })();
+  </script>
+<% } %>
+
+<% if (hasReelActions) { %>
+  <!-- Per-reel edit -->
+  <!-- reelId is the PaperStock row's _id, not the Roll ID printed on its label:
+       the two are different things now, so the field names keep them apart. -->
+  <form id="reel-edit-form" action="<%= reelConfig.editAction %>" method="post" style="display:none;">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="reelId" id="reel-edit-id" />
+    <input type="hidden" name="location" id="reel-edit-location-hidden" />
+    <input type="hidden" name="paperSize" id="reel-edit-size-hidden" />
+    <input type="hidden" name="paperMtrs" id="reel-edit-mtrs-hidden" />
+    <input type="hidden" name="vendorRollId" id="reel-edit-vendorrollid-hidden" />
+  </form>
+
+  <!-- Per-reel delete -->
+  <form id="reel-delete-form" action="<%= reelConfig.deleteAction %>" method="post" style="display:none;">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="reelId" id="reel-delete-id" />
+  </form>
+
+  <div class="stock-modal" id="reel-edit-modal" aria-hidden="true">
+    <div class="stock-modal-card" role="dialog" aria-modal="true" aria-labelledby="reel-edit-title">
+      <div class="stock-modal-head">
+        <h3 id="reel-edit-title">Edit Roll</h3>
+        <p class="stock-modal-subtitle" id="reel-edit-subtitle"></p>
+      </div>
+      <div class="stock-modal-body">
+        <div class="stock-form-grid">
+          <!-- Read-only: the Roll ID is printed on the QR label stuck to the
+               physical reel, so changing it here would leave that label naming
+               a reel nothing can find. A mislabelled reel is deleted and
+               inwarded again, which prints a fresh label. -->
+          <div class="stock-form-field">
+            <label for="reel-edit-rollid">Roll ID</label>
+            <input type="text" id="reel-edit-rollid" readonly
+                   style="background:#f0f7ff; color:#044a78; font-weight:700; cursor:default;" />
+          </div>
+          <!-- Just a cross-reference against the vendor's paperwork, so it's
+               editable even on a booked reel -- unlike Roll ID/Location/Size,
+               correcting it doesn't touch what the job card scans against. -->
+          <div class="stock-form-field">
+            <label for="reel-edit-vendorrollid">Vendor Roll ID</label>
+            <input type="text" id="reel-edit-vendorrollid" placeholder="As written on the roll" />
+          </div>
+          <div class="stock-form-field select-field">
+            <label for="reel-edit-location">Location</label>
+            <select id="reel-edit-location">
+              <% Array.from(new Set(reelConfig.locationOptions || [])).forEach((location) => { %>
+                <option value="<%= location %>"><%= location %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="stock-form-field">
+            <label for="reel-edit-size">Size</label>
+            <input type="number" id="reel-edit-size" min="0" step="any" />
+          </div>
+          <div class="stock-form-field">
+            <label for="reel-edit-mtrs">Running Mtrs</label>
+            <input type="number" id="reel-edit-mtrs" min="0" step="any" />
+          </div>
+        </div>
+        <div class="stock-form-note" id="reel-edit-note"></div>
+        <div class="stock-modal-actions">
+          <button type="button" class="stock-modal-btn cancel" id="reel-edit-cancel">Cancel</button>
+          <button type="button" class="stock-modal-btn primary" id="reel-edit-save">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stock-modal" id="reel-delete-modal" aria-hidden="true">
+    <div class="stock-modal-card" role="dialog" aria-modal="true" aria-labelledby="reel-delete-title">
+      <div class="stock-modal-head">
+        <h3 id="reel-delete-title">Delete Roll</h3>
+        <p class="stock-modal-subtitle" id="reel-delete-subtitle"></p>
+      </div>
+      <div class="stock-modal-body">
+        <div class="stock-modal-actions">
+          <button type="button" class="stock-modal-btn cancel" id="reel-delete-cancel">Cancel</button>
+          <button type="button" class="stock-modal-btn primary" id="reel-delete-confirm" style="background:#dc2626;">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const editModal = document.getElementById("reel-edit-modal");
+      const editForm = document.getElementById("reel-edit-form");
+      const idHidden = document.getElementById("reel-edit-id");
+      const locHidden = document.getElementById("reel-edit-location-hidden");
+      const sizeHidden = document.getElementById("reel-edit-size-hidden");
+      const mtrsHidden = document.getElementById("reel-edit-mtrs-hidden");
+      const vendorRollIdHidden = document.getElementById("reel-edit-vendorrollid-hidden");
+      const rollIdInput = document.getElementById("reel-edit-rollid");
+      const locSelect = document.getElementById("reel-edit-location");
+      const sizeInput = document.getElementById("reel-edit-size");
+      const mtrsInput = document.getElementById("reel-edit-mtrs");
+      const vendorRollIdInput = document.getElementById("reel-edit-vendorrollid");
+      const editSubtitle = document.getElementById("reel-edit-subtitle");
+      const editNote = document.getElementById("reel-edit-note");
+
+      const ensureLocationOption = (value) => {
+        if (!value) return;
+        const exists = Array.from(locSelect.options).some((o) => o.value === value);
+        if (!exists) {
+          const opt = document.createElement("option");
+          opt.value = value;
+          opt.textContent = value;
+          locSelect.appendChild(opt);
+        }
+      };
+
+      const closeEdit = () => {
+        editModal.classList.remove("show");
+        editModal.setAttribute("aria-hidden", "true");
+      };
+
+      document.querySelectorAll("[data-reel-edit]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const booked = btn.dataset.booked === "1";
+          idHidden.value = btn.dataset.id || "";
+          rollIdInput.value = btn.dataset.rollid || "";
+          vendorRollIdInput.value = btn.dataset.vendorrollid || "";
+          ensureLocationOption(btn.dataset.location || "");
+          locSelect.value = btn.dataset.location || "";
+          sizeInput.value = btn.dataset.size || "";
+          mtrsInput.value = btn.dataset.mtrs || "";
+          editSubtitle.textContent = `Roll ${btn.dataset.rollid || ""}`;
+
+          // A booked reel is spoken for by a job: only its running metres may be
+          // corrected here -- location and size stay locked too.
+          locSelect.disabled = booked;
+          sizeInput.disabled = booked;
+          editNote.textContent = booked
+            ? "This roll is booked to a job — only Running Mtrs can be changed. Clear the booking to move or resize it."
+            : "";
+
+          editModal.classList.add("show");
+          editModal.setAttribute("aria-hidden", "false");
+        });
+      });
+
+      document.getElementById("reel-edit-cancel").addEventListener("click", closeEdit);
+      editModal.addEventListener("click", (e) => { if (e.target === editModal) closeEdit(); });
+
+      document.getElementById("reel-edit-save").addEventListener("click", () => {
+        const mtrs = Number(mtrsInput.value);
+        if (!Number.isFinite(mtrs) || mtrs < 0) { alert("Enter valid running metres."); return; }
+        const size = Number(sizeInput.value);
+        if (!Number.isFinite(size) || size < 0) { alert("Enter a valid size."); return; }
+        const vendorRollId = String(vendorRollIdInput.value || "").trim();
+        if (!vendorRollId) { alert("Vendor Roll ID can't be empty."); return; }
+
+        locHidden.value = String(locSelect.value || "").trim();
+        sizeHidden.value = String(size);
+        mtrsHidden.value = String(mtrs);
+        vendorRollIdHidden.value = vendorRollId;
+        editForm.submit();
+      });
+
+      // ── Delete ──
+      const delModal = document.getElementById("reel-delete-modal");
+      const delForm = document.getElementById("reel-delete-form");
+      const delId = document.getElementById("reel-delete-id");
+      const delSubtitle = document.getElementById("reel-delete-subtitle");
+      const delConfirm = document.getElementById("reel-delete-confirm");
+
+      const closeDelete = () => {
+        delModal.classList.remove("show");
+        delModal.setAttribute("aria-hidden", "true");
+      };
+
+      document.querySelectorAll("[data-reel-delete]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (btn.dataset.booked === "1") {
+            alert(`Roll ${btn.dataset.rollid || ""} is booked to a job and can't be deleted. Clear the booking first.`);
+            return;
+          }
+          delId.value = btn.dataset.id || "";
+          delSubtitle.textContent = `Remove roll ${btn.dataset.rollid || ""} from stock? This can't be undone.`;
+          delConfirm.disabled = false;
+          delModal.classList.add("show");
+          delModal.setAttribute("aria-hidden", "false");
+        });
+      });
+
+      document.getElementById("reel-delete-cancel").addEventListener("click", closeDelete);
+      delModal.addEventListener("click", (e) => { if (e.target === delModal) closeDelete(); });
+      delConfirm.addEventListener("click", () => {
+        delConfirm.disabled = true;
+        delForm.submit();
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") { closeEdit(); closeDelete(); }
+      });
+    })();
+  </script>
+<% } %>

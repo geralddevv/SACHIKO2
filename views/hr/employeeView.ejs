@@ -1,0 +1,466 @@
+<% layout('/layout/boilerplate') -%>
+
+<style>
+  .emp-profile {
+    --primary: #044A78;
+    --primary-soft: #e8f1f8;
+    --ink: #1b2533;
+    --muted: #6b7280;
+    --bg: #eef1f6;
+    --card: #ffffff;
+    --line: #cbd3df;
+    --ok-bg: #e7f7ee; --ok-fg: #1a7f4b;
+    --warn-bg: #fff3e0; --warn-fg: #b9770e;
+    --bad-bg: #fdecec;  --bad-fg: #c0392b;
+
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 16px;
+    color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  .emp-profile * { box-sizing: border-box; }
+  .emp-profile .wrap { width: 100%; max-width: none; margin: 0; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ================= HEADER CARD ================= */
+  .emp-profile .profile-head {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; box-shadow: 0 10px 30px rgba(4, 74, 120, 0.08); overflow: hidden;
+  }
+  .emp-profile .profile-head__banner { display: none; }
+  .emp-profile .profile-head__body {
+    display: flex; align-items: center; gap: 22px;
+    padding: 20px 28px; flex-wrap: wrap;
+  }
+  .emp-profile .profile-head__body h1 { margin: 0; font-size: 24px; font-weight: 700; color: var(--ink); letter-spacing: 0.2px; }
+  .emp-profile .avatar {
+    width: 112px; height: 112px; border-radius: 16px; object-fit: cover;
+    border: 4px solid #fff; background: #eef0f6; box-shadow: 0 6px 16px rgba(0,0,0,0.12); cursor: pointer;
+  }
+  .emp-profile .profile-head__info { flex: 1; min-width: 240px; padding-bottom: 4px; }
+  .emp-profile .profile-head__info h1 { margin: 0 0 12px; font-size: 24px; font-weight: 700; letter-spacing: 0.2px; color: var(--ink); }
+  .emp-profile .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .emp-profile .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--primary-soft); color: var(--primary);
+    padding: 4px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  }
+  .emp-profile .chip i { font-size: 11px; opacity: 0.8; }
+
+  .emp-profile .status-badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  }
+  .emp-profile .status-badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .emp-profile .status-active { background: var(--ok-bg); color: var(--ok-fg); }
+  .emp-profile .status-inactive { background: var(--bad-bg); color: var(--bad-fg); }
+
+  .emp-profile .edit-btn {
+    align-self: flex-start; margin-bottom: 4px; padding: 9px 18px;
+    background: var(--primary); color: #fff; border-radius: 9px; text-decoration: none;
+    font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;
+    transition: background 0.2s ease, transform 0.15s ease;
+  }
+  .emp-profile .edit-btn:hover { background: #06365a; transform: translateY(-1px); }
+
+  .emp-profile .edit-inactive-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; font-size: 12.5px; font-weight: 700;
+    color: var(--primary); background: #fff; border: 1.5px solid var(--primary);
+    border-radius: 8px; text-decoration: none; cursor: pointer;
+  }
+  .emp-profile .edit-inactive-link:hover { background: var(--primary-soft); }
+
+  /* ================= INACTIVE EDIT DIALOG ================= */
+  .inact-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 100000; justify-content: center; align-items: center; }
+  .inact-card { background: #fff; width: min(460px, 92vw); border-radius: 12px; padding: 22px; box-shadow: 0 18px 50px rgba(0,0,0,0.3); font-family: "Segoe UI", system-ui, sans-serif; }
+  .inact-title { font-size: 1.2rem; margin: 0 0 14px; color: #044A78; }
+  .inact-label { font-weight: 600; color: #1b2533; font-size: 0.95rem; margin: 0 0 6px; }
+  .inact-textarea { width: 100%; resize: none; border: 1px solid #044A78; border-radius: 8px; padding: 10px; font-family: inherit; font-size: 14px; box-sizing: border-box; }
+  .inact-error { color: #dc3545; font-size: 0.85rem; margin: 4px 0 0; display: none; }
+  .inact-checks { display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow: auto; padding: 6px 2px; }
+  .inact-checks label { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+  .inact-checks input { width: 16px; height: 16px; flex-shrink: 0; }
+  .inact-checks .none { color: #6b7280; font-style: italic; }
+  .inact-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+  .inact-btn-cancel, .inact-btn-save { padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; border: 2px solid #044A78; }
+  .inact-btn-cancel { background: #fff; color: #044A78; }
+  .inact-btn-save { background: #044A78; color: #fff; }
+  .inact-btn-save:disabled { opacity: 0.6; cursor: default; }
+
+  /* ================= GRID OF CARDS ================= */
+  .emp-profile .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  .emp-profile .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px; box-shadow: 0 6px 18px rgba(4, 74, 120, 0.05);
+  }
+  /* All non-full cards default to span 2 (3-per-row) */
+  .emp-profile .grid .card:not(.card--full) { grid-column: span 2; }
+  /* Address always full-width */
+  .emp-profile .card--full { grid-column: 1 / -1; }
+  /* Active: Employment & Personal each span 3 (50/50) */
+  .emp-profile .grid--active .card:nth-child(1) { grid-column: span 3; }
+  .emp-profile .grid--active .card:nth-child(2) { grid-column: span 3; }
+
+  .emp-profile .card__title {
+    display: flex; align-items: center; gap: 10px; margin: 0 0 4px;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--primary);
+  }
+  .emp-profile .card__title i { font-size: 13px; }
+  .emp-profile .card__rule { height: 1px; background: var(--line); margin: 12px 0 6px; }
+
+  .emp-profile .field {
+    display: grid; grid-template-columns: 150px 1fr; gap: 10px;
+    padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 13.5px; align-items: baseline;
+  }
+  .emp-profile .field:last-child { border-bottom: none; }
+  .emp-profile .field .k { color: var(--muted); font-weight: 500; }
+  .emp-profile .field .v { color: var(--ink); font-weight: 600; word-break: break-word; }
+  .emp-profile .field-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+  .emp-profile .field-row .field { border-bottom: none; padding: 0; grid-template-columns: auto 1fr; gap: 6px; }
+
+  /* ================= STATUS / ASSETS ================= */
+  .emp-profile .stats { display: flex; flex-wrap: nowrap; gap: 8px; margin: 14px 0 4px; }
+  .emp-profile .stat { flex: 1 1 0; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; text-align: center; }
+  .emp-profile .stat__n { font-size: 18px; font-weight: 700; line-height: 1; }
+  .emp-profile .stat__l { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.2; }
+
+  .emp-profile .stat--ok .stat__n { color: var(--ok-fg); }
+  .emp-profile .stat--warn .stat__n { color: var(--warn-fg); }
+  .emp-profile .stat--total .stat__n { color: var(--primary); }
+
+  .emp-profile .reason-box {
+    background: #fbfcfe; border: 1px solid var(--line); border-left: 3px solid var(--primary);
+    border-radius: 8px; padding: 12px 14px; font-size: 14px; color: var(--ink); margin-top: 6px;
+  }
+  .emp-profile .reason-box .k { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 4px; }
+
+  .emp-profile table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+  .emp-profile table th, .emp-profile table td { padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; text-align: left; }
+  .emp-profile table th { font-weight: 700; color: var(--muted); text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.6px; }
+  .emp-profile table tbody tr:last-child td { border-bottom: none; }
+
+  .emp-profile .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .emp-profile .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .emp-profile .pill--ok { background: var(--ok-bg); color: var(--ok-fg); }
+  .emp-profile .pill--pending { background: var(--warn-bg); color: var(--warn-fg); }
+
+  .emp-profile .empty-text { margin-top: 8px; font-size: 14px; color: var(--muted); }
+
+  /* ================= IMAGE MODAL ================= */
+  .emp-profile .image-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 99999; justify-content: center; align-items: center; }
+  .emp-profile .image-modal img { max-width: 90%; max-height: 90%; border-radius: 10px; box-shadow: 0 0 25px rgba(0,0,0,0.6); }
+  .emp-profile .close-btn { position: absolute; top: 18px; right: 28px; font-size: 36px; color: #fff; cursor: pointer; user-select: none; }
+
+  @media (max-width: 1100px) {
+    .emp-profile .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 760px) {
+    .emp-profile .grid { grid-template-columns: 1fr; }
+    .emp-profile .field { grid-template-columns: 1fr; gap: 2px; }
+    .emp-profile .field .v { font-weight: 700; }
+  }
+</style>
+
+<%
+  function formatDateIN(dateStr) {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  }
+  const val = (v) => (v === 0 ? '0' : (v ? v : '—'));
+  const money = (v) => '₹ ' + Number(v || 0).toLocaleString('en-IN');
+
+  const givenAssets = [employee.empAssets1, employee.empAssets2, employee.empAssets3, employee.empAssets4]
+    .map(a => (a || '').trim()).filter(Boolean);
+  const surrenderedSet = new Set((employee.empAssetsSurrendered || []).map(a => (a || '').trim()).filter(Boolean));
+  const surrenderedCount = givenAssets.filter(a => surrenderedSet.has(a)).length;
+  const pendingCount = givenAssets.length - surrenderedCount;
+  const isInactive = employee.isActive === false;
+%>
+
+<section class="emp-profile">
+  <div class="wrap">
+
+    <!-- ================= HEADER ================= -->
+    <div class="profile-head">
+      <div class="profile-head__banner"></div>
+      <div class="profile-head__body">
+        <img
+          src="<%= employee.empPhoto
+            ? `/images/empimg/${employee.empPhoto}`
+            : `/images/empimg/${employee.empGender === 'FEMALE' ? 'female.jpg' : 'male.jpg'}` %>"
+          class="avatar click-enlarge"
+          alt="<%= employee.empName %>"
+        />
+        <div style="flex: 1;">
+          <h1><%= employee.empName %></h1>
+          <div class="chips" style="margin-top: 6px;">
+          <span class="status-badge <%= isInactive ? 'status-inactive' : 'status-active' %>"><%= isInactive ? 'Inactive' : 'Active' %></span>
+          <% if (employee.empDateOfJoining) { %><span class="chip"><i class="fa-solid fa-calendar-check"></i> Joined <%= formatDateIN(employee.empDateOfJoining) %></span><% } %>
+          <% if (isInactive && employee.updatedAt) { %><span class="chip" style="background: var(--bad-bg); color: var(--bad-fg);"><i class="fa-solid fa-calendar-xmark"></i> Inactive <%= formatDateIN(employee.updatedAt) %></span><% } %>
+          </div>
+        </div>
+        <a href="/sachiko/employee/edit/<%= employee._id %>" class="edit-btn"><i class="fa-solid fa-pen"></i> Edit</a>
+      </div>
+    </div>
+
+    <!-- ================= DETAIL CARDS ================= -->
+    <div class="grid <%= isInactive ? 'grid--inactive' : 'grid--active' %>">
+
+    <!-- ================= EMPLOYMENT STATUS ================= -->
+    <% if (isInactive) { %>
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+        <h2 class="card__title" style="margin:0;"><i class="fa-solid fa-circle-check"></i> Employment Status</h2>
+        <button type="button" id="editInactiveBtn" class="edit-inactive-link" style="font-size: 11px; padding: 4px 10px;">
+          <i class="fa-solid fa-pen"></i> Edit
+        </button>
+      </div>
+      <div class="card__rule"></div>
+
+      <div class="field" style="padding: 12px 0;">
+        <div class="k">Current Status</div>
+        <div class="v"><span class="status-badge status-inactive">Inactive</span></div>
+      </div>
+
+      <div class="field" style="padding: 12px 0;">
+        <div class="k">Reason</div>
+        <div class="v"><%= employee.empInactiveReason || '—' %></div>
+      </div>
+
+      <div class="field" style="padding: 12px 0;">
+        <div class="k">Assets Summary</div>
+        <div class="v">
+          <div style="display: flex; justify-content: space-between; width: 100%;">
+            <span><strong><%= givenAssets.length %></strong> issued</span>
+            <span><strong><%= surrenderedCount %></strong> surrendered</span>
+            <span><strong><%= pendingCount %></strong> pending</span>
+          </div>
+        </div>
+      </div>
+
+      <% if ((loan && loan.currentBalance > 0) || (advance && advance.currentBalance > 0)) { %>
+        <div style="display:flex; gap:10px; margin-top:10px;">
+          <% if (loan && loan.currentBalance > 0) { %>
+          <div style="flex:1; background:#fff3e0; border:1px solid #f0c27f; border-radius:8px; padding:8px 12px;">
+            <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#b9770e; margin-bottom:3px;">Loan Pending</div>
+            <div style="font-size:15px; font-weight:700; color:#b9770e;">₹ <%= Number(loan.currentBalance).toLocaleString('en-IN') %></div>
+          </div>
+          <% } %>
+          <% if (advance && advance.currentBalance > 0) { %>
+          <div style="flex:1; background:#fdecec; border:1px solid #f5c6c6; border-radius:8px; padding:8px 12px;">
+            <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#c0392b; margin-bottom:3px;">Advance Pending</div>
+            <div style="font-size:15px; font-weight:700; color:#c0392b;">₹ <%= Number(advance.currentBalance).toLocaleString('en-IN') %></div>
+          </div>
+          <% } %>
+        </div>
+      <% } %>
+
+      <% if (givenAssets.length) { %>
+        <div style="margin-top: 12px;">
+          <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.5px;">Asset Details</div>
+          <div style="font-size: 12px;">
+          <% givenAssets.forEach((a, idx) => { %>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; <%= idx !== givenAssets.length - 1 ? 'border-bottom: 1px dashed var(--line);' : '' %>">
+              <span style="color: var(--muted); font-weight: 500;"><%= a %></span>
+              <span>
+                <% if (surrenderedSet.has(a)) { %>
+                  <span class="pill pill--ok" style="font-size: 11px;">Surrendered</span>
+                <% } else { %>
+                  <span class="pill pill--pending" style="font-size: 11px;">Pending</span>
+                <% } %>
+              </span>
+            </div>
+          <% }) %>
+          </div>
+        </div>
+      <% } %>
+    </div>
+    <% } %>
+
+      <div class="card">
+        <h2 class="card__title"><i class="fa-solid fa-briefcase"></i> Employment</h2>
+        <div class="card__rule"></div>
+        <div class="field"><div class="k">Employee Type</div><div class="v"><%= val(employee.empType) %></div></div>
+        <div class="field"><div class="k">Under</div><div class="v"><%= val(employee.empUnder) %></div></div>
+        <div class="field"><div class="k">Department</div><div class="v"><%= val(employee.empDept) %></div></div>
+        <div class="field"><div class="k">Location</div><div class="v"><%= val(employee.empLoc) %></div></div>
+        <div class="field"><div class="k">Reporting Manager</div><div class="v"><%= val(employee.empReportingManager) %></div></div>
+        <div class="field"><div class="k">Date of Joining</div><div class="v"><%= formatDateIN(employee.empDateOfJoining) %></div></div>
+        <div class="field"><div class="k">Office Mobile</div><div class="v"><%= val(employee.empOfficeMob) %></div></div>
+        <div class="field"><div class="k">Office Email</div><div class="v"><%= val(employee.empOfficeEmailId) %></div></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title"><i class="fa-solid fa-user"></i> Personal</h2>
+        <div class="card__rule"></div>
+        <div class="field"><div class="k">Date of Birth</div><div class="v"><%= formatDateIN(employee.empDob) %></div></div>
+        <div class="field"><div class="k">Gender</div><div class="v"><%= val(employee.empGender) %></div></div>
+        <div class="field"><div class="k">Marital Status</div><div class="v"><%= val(employee.empMartialStatus) %></div></div>
+        <div class="field"><div class="k">Email</div><div class="v"><%= val(employee.empEmail) %></div></div>
+        <div class="field"><div class="k">Mobile</div><div class="v"><%= val(employee.empMobile1) %></div></div>
+        <div class="field"><div class="k">Alternate Mobile</div><div class="v"><%= val(employee.empMobile2) %></div></div>
+        <div class="field"><div class="k">Emergency No.</div><div class="v"><%= val(employee.empEmergencyNo1) %></div></div>
+      </div>
+
+      <div class="card card--full">
+        <h2 class="card__title"><i class="fa-solid fa-location-dot"></i> Address</h2>
+        <div class="card__rule"></div>
+        <div class="field"><div class="k">Present Address</div><div class="v"><%= val(employee.empPresentAddress) %></div></div>
+        <div class="field"><div class="k">Permanent Address</div><div class="v"><%= val(employee.empPermanentAddress) %></div></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title"><i class="fa-solid fa-building-columns"></i> Bank</h2>
+        <div class="card__rule"></div>
+        <div class="field"><div class="k">Bank Name</div><div class="v"><%= val(employee.empBankName) %></div></div>
+        <div class="field"><div class="k">Account Holder</div><div class="v"><%= val(employee.empAccountHolderName) %></div></div>
+        <div class="field"><div class="k">Account Number</div><div class="v"><%= val(employee.empAccNo) %></div></div>
+        <div class="field"><div class="k">IFSC Code</div><div class="v"><%= val(employee.empIfscCode) %></div></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title"><i class="fa-solid fa-indian-rupee-sign"></i> Salary Structure</h2>
+        <div class="card__rule"></div>
+        <div class="field"><div class="k">Basic Salary</div><div class="v"><%= money(employee.basicSalary) %></div></div>
+        <div class="field"><div class="k">OT Rate / Hour</div><div class="v"><%= money(employee.otRatePerHour) %></div></div>
+        <div class="field"><div class="k">PF</div><div class="v"><%= money(employee.empPF) %></div></div>
+        <div class="field"><div class="k">ESIC</div><div class="v"><%= money(employee.empESIC) %></div></div>
+        <div class="field"><div class="k">PT</div><div class="v"><%= money(employee.empPT) %></div></div>
+        <div class="field"><div class="k">TDS</div><div class="v"><%= money(employee.empTDS) %></div></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title"><i class="fa-solid fa-people-roof"></i> Dependents</h2>
+        <div class="card__rule"></div>
+        <% if (employee.dependentsDetails?.length) { %>
+          <table>
+            <thead><tr><th>Name</th><th>Date of Birth</th><th>Relation</th></tr></thead>
+            <tbody>
+              <% employee.dependentsDetails.forEach(d => { %>
+                <tr>
+                  <td><%= val(d.dependentsName) %></td>
+                  <td><%= formatDateIN(d.dependentsDOB) %></td>
+                  <td><%= val(d.dependentsRelation) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } else { %>
+          <div class="empty-text">No dependents recorded.</div>
+        <% } %>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Image Preview Modal -->
+  <div id="imageModal" class="image-modal">
+    <span class="close-btn">&times;</span>
+    <img id="modalImage" />
+  </div>
+
+  <!-- Edit Inactive Details Dialog -->
+  <div id="inactiveModal" class="inact-modal">
+    <div class="inact-card">
+      <h2 class="inact-title">Edit inactive details</h2>
+      <label class="inact-label" for="inactiveReasonInput">Reason for marking inactive <span style="color:red;">*</span></label>
+      <textarea id="inactiveReasonInput" rows="3" class="inact-textarea" placeholder="Why is this employee inactive?"></textarea>
+      <p id="inactiveReasonError" class="inact-error">Please enter a reason.</p>
+      <p class="inact-label" style="margin-top:14px;">Assets surrendered</p>
+      <div id="assetCheckboxes" class="inact-checks"></div>
+      <div class="inact-actions">
+        <button type="button" id="inactiveCancelBtn" class="inact-btn-cancel">Cancel</button>
+        <button type="button" id="inactiveSaveBtn" class="inact-btn-save">Save</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("imageModal");
+  const modalImg = document.getElementById("modalImage");
+  const closeBtn = modal ? modal.querySelector(".close-btn") : null;
+
+  document.querySelectorAll(".emp-profile .click-enlarge").forEach((img) => {
+    img.addEventListener("click", () => {
+      modalImg.src = img.src;
+      modal.style.display = "flex";
+    });
+  });
+
+  if (closeBtn) closeBtn.addEventListener("click", () => { modal.style.display = "none"; });
+  if (modal) modal.addEventListener("click", (e) => { if (e.target === modal) modal.style.display = "none"; });
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const data = <%- JSON.stringify({
+    assets: givenAssets,
+    surrendered: [...surrenderedSet],
+    reason: employee.empInactiveReason || "",
+    saveUrl: "/sachiko/employee/inactive-details/" + employee._id
+  }) %>;
+
+  const openBtn   = document.getElementById("editInactiveBtn");
+  const modal     = document.getElementById("inactiveModal");
+  if (!openBtn || !modal) return;
+
+  const reasonInput = document.getElementById("inactiveReasonInput");
+  const reasonError = document.getElementById("inactiveReasonError");
+  const checks      = document.getElementById("assetCheckboxes");
+  const cancelBtn   = document.getElementById("inactiveCancelBtn");
+  const saveBtn     = document.getElementById("inactiveSaveBtn");
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function openDialog() {
+    reasonInput.value = data.reason || "";
+    reasonError.style.display = "none";
+    const already = new Set(data.surrendered || []);
+    checks.innerHTML = (data.assets && data.assets.length)
+      ? data.assets.map((a) => `<label><input type="checkbox" value="${esc(a)}" ${already.has(a) ? "checked" : ""}/> <span>${esc(a)}</span></label>`).join("")
+      : '<span class="none">No assets were issued to this employee.</span>';
+    modal.style.display = "flex";
+    reasonInput.focus();
+  }
+  function closeDialog() { modal.style.display = "none"; }
+
+  openBtn.addEventListener("click", openDialog);
+  cancelBtn.addEventListener("click", closeDialog);
+  modal.addEventListener("click", (e) => { if (e.target === modal) closeDialog(); });
+
+  saveBtn.addEventListener("click", async () => {
+    const reason = reasonInput.value.trim();
+    if (!reason) { reasonError.style.display = "block"; reasonInput.focus(); return; }
+    const surrendered = Array.from(checks.querySelectorAll('input[type="checkbox"]:checked')).map((c) => c.value);
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+    try {
+      const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+      const res = await fetch(data.saveUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json", "CSRF-Token": token },
+        body: JSON.stringify({ empInactiveReason: reason, empAssetsSurrenderedJson: JSON.stringify(surrendered) }),
+      });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok || !out.success) {
+        alert(out.message || "Could not save. Please try again.");
+        saveBtn.disabled = false; saveBtn.textContent = "Save";
+        return;
+      }
+      window.location.reload();
+    } catch (err) {
+      alert("Network error. Please try again.");
+      saveBtn.disabled = false; saveBtn.textContent = "Save";
+    }
+  });
+});
+</script>

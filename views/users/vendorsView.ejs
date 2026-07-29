@@ -1,0 +1,353 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- ================= TABULATOR CSS ================= -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    #master-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+  </style>
+  <div class="indi-head">
+    <h1>Vendors</h1>
+
+    <style>
+      .header-action-btn {
+        background-color: #f0f0f0;
+        color: #044a78;
+        padding: 2px 14px; /* Matches Download button padding exactly */
+        font-size: 14px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease-in-out;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .header-action-btn:hover {
+        background-color: #e4e4e4;
+      }
+    </style>
+
+    <div style="display: flex; gap: 10px; align-items: center">
+      <button class="header-action-btn" onclick="window.location.href = '/sachiko/form/vendor?tab=user'">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Coordinator
+      </button>
+      <button class="header-action-btn" onclick="window.location.href = '/sachiko/form/vendor?tab=vendor'">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Vendor
+      </button>
+
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span> <i class="fa-solid fa-file-arrow-down"></i> Download </span>
+          <i class="fas fa-chevron-down"></i>
+        </button>
+
+        <div class="download-selector__menu">
+          <div class="download-selector__option" id="download-pdf"><i class="fas fa-file-pdf"></i> PDF</div>
+          <div class="download-selector__option" id="download-xlsx"><i class="fas fa-file-excel"></i> Excel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table"></div>
+</div>
+
+<!-- ================= VENDOR DETAILS POPUP (Legacy support or quick view) ================= -->
+<style>
+  .vendor-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+
+  .vendor-modal {
+    background: #f8f9fa;
+    border: 1px solid #044a78;
+    border-radius: 8px;
+    width: 85%;
+    max-width: 820px;
+    overflow: hidden;
+  }
+
+  .vendor-modal-header {
+    background: #044a78;
+    color: white;
+    padding: 6px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .vendor-modal-title {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .vendor-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .vendor-edit-btn {
+    color: #044a78;
+    background: #fff;
+    padding: 0px 10px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: opacity 0.15s ease;
+  }
+
+  .vendor-edit-btn:hover {
+    opacity: 0.85;
+  }
+
+  .vendor-close {
+    cursor: pointer;
+    font-size: 1rem;
+  }
+
+  .vendor-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .vendor-field {
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(26, 26, 46, 0.25);
+    border-right: 1px solid rgba(26, 26, 46, 0.25);
+  }
+
+  .vendor-field:nth-child(2n) {
+    border-right: none;
+  }
+
+  .vendor-label {
+    font-size: 11px;
+    color: #6c757d;
+  }
+
+  .vendor-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: #044a78;
+  }
+
+  @media (max-width: 700px) {
+    .vendor-grid {
+      grid-template-columns: 1fr;
+    }
+    .vendor-field {
+      border-right: none;
+    }
+  }
+</style>
+
+<div class="vendor-modal-backdrop" id="vendorModal">
+  <div class="vendor-modal">
+    <div class="vendor-modal-header">
+      <div class="vendor-modal-title" id="vendorModalTitle"></div>
+
+      <div class="vendor-modal-actions">
+        <a id="editVendorBtn" class="vendor-edit-btn">Edit</a>
+        <span class="vendor-close" onclick="closeVendorModal()">✕</span>
+      </div>
+    </div>
+
+    <div class="vendor-grid" id="vendorModalBody"></div>
+  </div>
+</div>
+
+<!-- ================= SCRIPTS ================= -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script>
+  /* ===== Dropdown ===== */
+  const downloadSelector = document.getElementById("downloadSelector");
+  const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
+
+  triggerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    downloadSelector.classList.toggle("download-selector--active");
+  });
+
+  document.addEventListener("click", () => {
+    downloadSelector.classList.remove("download-selector--active");
+  });
+
+  /* ===== Table ===== */
+  const rawData = <%- safeJson(jsonData) %>;
+  const tableData = [];
+
+  rawData.forEach(row => {
+    const commodities = Array.isArray(row.commodities) && row.commodities.length > 0 ? row.commodities : ["-"];
+    commodities.forEach(commodity => {
+      let displayCommodity = commodity;
+      let filterCommodity = commodity;
+
+      if (typeof commodity === "string" && commodity.startsWith("OTHERS - ")) {
+        displayCommodity = commodity;
+        filterCommodity = "OTHERS";
+      }
+
+      tableData.push({
+        ...row,
+        displayCommodity,
+        filterCommodity
+      });
+    });
+  });
+
+  function normalizeStatus(value) {
+    return String(value ?? "").trim().toUpperCase();
+  }
+
+  const withTextFilter = (column, placeholder = "Search") => ({
+    headerFilter: "input",
+    headerFilterPlaceholder: placeholder,
+    minWidth: 100,
+    ...column,
+  });
+
+  const withSelectFilter = (column, values) => ({
+    headerFilter: "list",
+    headerFilterParams: {
+      values: values,
+      clearable: true,
+    },
+    ...column,
+  });
+
+  const table = new Tabulator("#master-table", {
+    data: tableData,
+    height: "100%",
+    // layout: "fitColumns",
+    initialSort: [{ column: "vendorName", dir: "asc" }],
+
+    columns: [
+      withTextFilter({
+        title: "Vendor Name",
+        field: "vendorName",
+        minWidth: 220,
+
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const hasUsers = Number(row.userCount || 0) > 0;
+          cell.getElement().classList.add("client-name-cell");
+          if (!hasUsers) {
+            return `<span style="color:#dc2626;font-weight:600;text-decoration:underline;text-decoration-color:#dc2626;">${cell.getValue()}</span>`;
+          }
+          return cell.getValue();
+        },
+
+        cellClick: (e, cell) => {
+          const row = cell.getRow().getData();
+          window.location.href = `/sachiko/vendor/profile/${row._id}`;
+        },
+      }),
+      withTextFilter({
+        title: "Coordinators",
+        field: "userCount",
+        width: 120,
+        hozAlign: "center",
+        headerHozAlign: "center",
+        sorter: "number",
+        formatter: (cell) => {
+          const value = Number(cell.getValue() || 0);
+          return `<span style="font-weight:600;color:#044a78">${value}</span>`;
+        },
+      }),
+      withSelectFilter({
+        title: "Commodities",
+        field: "filterCommodity",
+        minWidth: 200,
+        headerSort: true,
+        sorter: "string",
+        formatter: (cell) => {
+          const data = cell.getRow().getData();
+          return data.displayCommodity;
+        }
+      }, (() => {
+        const distinct = Array.from(new Set(tableData.map(r => r.filterCommodity))).filter(c => c && c !== "-").sort();
+        const obj = {"": "All"};
+        distinct.forEach(c => { obj[c] = c; });
+        return obj;
+      })()),
+      withTextFilter({ title: "HO Location", field: "hoLocation" }),
+      withTextFilter({ title: "Warehouse Location", field: "warehouseLocation" }),
+      withSelectFilter({
+        title: "Status",
+        field: "vendorStatus",
+        headerSort: true,
+        formatter: (cell) => {
+          const v = cell.getValue();
+          const status = normalizeStatus(v);
+          const color = status === "ACTIVE" ? "#28a745" : "#dc3545";
+          return `<span style="font-weight:600;color:${color}">${v || "-"}</span>`;
+        },
+      }, {
+        "": "All",
+        "ACTIVE": "ACTIVE",
+        "INACTIVE": "INACTIVE",
+        "BLACKLISTED": "BLACKLISTED",
+        "OTHERS": "OTHERS"
+      }),
+    ],
+  });
+
+  /* ===== POPUP LOGIC (Legacy support) ===== */
+  async function openVendorModal(id) {
+    const res = await fetch(`/sachiko/form/vendor/api/${id}`);
+    const vendor = await res.json();
+
+    document.getElementById("vendorModalTitle").innerText = vendor.vendorName;
+    document.getElementById("editVendorBtn").href =
+      `/sachiko/vendor/edit/${vendor._id}`;
+
+    const fields = [
+      ["Vendor ID", vendor.vendorId],
+      ["Status", vendor.vendorStatus],
+      ["HO Location", vendor.hoLocation],
+      ["Warehouse Location", vendor.warehouseLocation],
+      ["GST", vendor.vendorGst],
+      ["PAN", vendor.vendorPan],
+      ["MSME", vendor.vendorMsme],
+      ["Gumasta", vendor.vendorGumasta],
+    ];
+
+    const body = document.getElementById("vendorModalBody");
+    body.innerHTML = "";
+
+    fields.forEach(([label, value]) => {
+      body.innerHTML += `
+        <div class="vendor-field">
+          <div class="vendor-label">${label}</div>
+          <div class="vendor-value">${value || "-"}</div>
+        </div>
+      `;
+    });
+
+    document.getElementById("vendorModal").style.display = "flex";
+  }
+
+  function closeVendorModal() {
+    document.getElementById("vendorModal").style.display = "none";
+  }
+</script>

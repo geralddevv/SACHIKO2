@@ -1,0 +1,259 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<style>
+  #permissions-table {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    border: 1px solid #ced4da;
+  }
+
+  .role-select {
+    width: 100%;
+    height: 25px;
+    padding: 0 28px 0 8px; /* Removed vertical padding to use line-height for centering */
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+    font-size: 13px;
+    color: #044a78;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-weight: 600;
+    line-height: 23px; /* Slightly less than height for vertical centering */
+    vertical-align: middle;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    /* Custom Dropdown Arrow */
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23044A78' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px;
+  }
+
+  .role-select:focus {
+    border-color: #044a78;
+    background-color: #fff;
+  }
+
+  /* Horizontal Checkbox Group */
+  .access-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    padding: 4px 0;
+  }
+
+  .cb-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .cb-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: #044a78;
+    width: 17px;
+    height: 17px;
+    margin: 0;
+  }
+
+  .cb-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #044a78;
+  }
+</style>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px; width: 100%; height: 100%">
+  <div class="indi-head">
+    <div style="display: flex; align-items: center">
+      <h1>Permission Dashboard</h1>
+    </div>
+  </div>
+
+  <div id="permissions-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+<script>
+  const tableData = <%- JSON.stringify(employees) %>;
+  const CSRF = "<%= csrfToken %>";
+
+  const ROLE_PERMISSIONS = {
+      'proprietor': { sales: true, inventory: true, hr: true, accounting: true, master: true },
+      'admin': { sales: true, inventory: true, hr: true, accounting: true, master: true },
+      'hr':    { sales: false, inventory: false, hr: true, accounting: true, master: false },
+      'sales': { sales: true, inventory: true, hr: false, accounting: false, master: false },
+      'none':  { sales: false, inventory: false, hr: false, accounting: false, master: false }
+  };
+
+  function autoSave(row) {
+      const data = row.getData();
+      const rowEl = row.getElement();
+
+      const role = rowEl.querySelector(".role-select").value;
+      const canRead = rowEl.querySelector(".mode-read").checked;
+      const canWrite = rowEl.querySelector(".mode-write").checked;
+      const canDelete = rowEl.querySelector(".mode-delete").checked;
+
+      const permissions = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS['sales'];
+
+      // If role is none, force read/write/delete to false visually as well
+      if (role === 'none') {
+        rowEl.querySelector(".mode-read").checked = false;
+        rowEl.querySelector(".mode-write").checked = false;
+        rowEl.querySelector(".mode-delete").checked = false;
+      }
+
+      fetch(`/sachiko/employee/admin/permissions/${data._id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role, permissions, canRead, canWrite, canDelete })
+      })
+      .then(async res => {
+          const isJson = res.headers.get("content-type")?.includes("application/json");
+          const data = isJson ? await res.json() : null;
+
+          if (res.ok && data?.success) {
+              showToast("Updated", "success");
+          } else {
+              const msg = data?.message || `Error ${res.status}`;
+              showToast(msg, "error");
+          }
+      })
+      .catch(err => {
+          console.error(err);
+          showToast(`Connection Error: ${err.message}`, "error");
+      });
+  }
+
+  function initTable() {
+      new Tabulator("#permissions-table", {
+          data: tableData,
+          height: "100%",
+        //   layout: "fitColumns",
+          resizableColumns: true,
+          initialSort: [{ column: "empName", dir: "asc" }],
+          initialHeaderFilter: [
+              { field: "role", value: "assigned" }
+          ],
+          columns: [
+              {
+                  title: "Employee Name",
+                  field: "empName",
+                  headerFilter: "input",
+                  headerFilterPlaceholder: "Search",
+                  minWidth: 130,
+                  vertAlign: "middle",
+                  formatter: function(cell) {
+                      return `<span style="font-weight:700; color:#044A78; font-size:14px;">${cell.getValue()}</span>`;
+                  }
+              },
+
+              {
+                  title: "Employee ID",
+                  field: "empId",
+                  headerFilter: "input",
+                  headerFilterPlaceholder: "Search",
+                  width: 180,
+                  vertAlign: "middle",
+                  formatter: function(cell) {
+                      return `<span style="font-weight:600; color:#4b5b6a; font-size:13px;">${cell.getValue() || "—"}</span>`;
+                  }
+              },
+              {
+                  title: "Profile Code",
+                  field: "empProfileCode",
+                  headerFilter: "input",
+                  headerFilterPlaceholder: "Search",
+                  width: 180,
+                  vertAlign: "middle",
+                  formatter: function(cell) {
+                      return `<span style="font-weight:600; color:#0f766e; font-size:13px;">${cell.getValue() || "-"}</span>`;
+                  }
+              },
+              {
+                  title: "Assigned Role",
+                  field: "role",
+                  hozAlign: "center",
+                  vertAlign: "middle",
+                  width: 220,
+                  headerFilter: "select",
+                  headerFilterParams: {
+                      values: {
+                          "": "All Employees",
+                          "assigned": "Assigned Roles Only",
+                          none: "None (No Access)",
+                          sales: "Sales",
+                          hr: "HR / Accounts",
+                          admin: "System Admin",
+                          proprietor: "Proprietor",
+                      },
+                  },
+                  headerFilterFunc: function(headerValue, rowValue) {
+                      if (headerValue === "") return true;
+                      if (headerValue === "assigned") return rowValue && rowValue !== "none";
+                      return rowValue === headerValue;
+                  },
+                  formatter: function(cell) {
+                      const val = cell.getValue();
+                      return `
+                          <select class="role-select">
+                              <option value="none" ${val === 'none' ? 'selected' : ''}>None (No Access)</option>
+                              <option value="sales" ${val === 'sales' ? 'selected' : ''}>Sales</option>
+                              <option value="hr" ${val === 'hr' ? 'selected' : ''}>HR / Accounts</option>
+                              <option value="admin" ${val === 'admin' ? 'selected' : ''}>System Admin</option>
+                              <option value="proprietor" ${val === 'proprietor' ? 'selected' : ''}>Proprietor</option>
+                          </select>
+                      `;
+                  }
+              },
+              {
+                  title: "Access Control",
+                  hozAlign: "center",
+                  vertAlign: "middle",
+                  headerSort: false,
+                  formatter: function(cell) {
+                      const d = cell.getData();
+                      return `
+                          <div class="access-group">
+                              <label class="cb-item">
+                                  <input type="checkbox" class="mode-read" ${d.canRead ? 'checked' : ''}>
+                                  <span class="cb-label">Read</span>
+                              </label>
+                              <label class="cb-item">
+                                  <input type="checkbox" class="mode-write" ${d.canWrite ? 'checked' : ''}>
+                                  <span class="cb-label">Write</span>
+                              </label>
+                              <label class="cb-item">
+                                  <input type="checkbox" class="mode-delete" ${d.canDelete ? 'checked' : ''}>
+                                  <span class="cb-label">Delete</span>
+                              </label>
+                          </div>
+                      `;
+                  }
+              }
+          ],
+          rowFormatter: function(row) {
+              const el = row.getElement();
+              el.querySelectorAll('select, input').forEach(input => {
+                  input.addEventListener('change', () => autoSave(row));
+              });
+          }
+      });
+  }
+
+  window.addEventListener("load", initTable);
+</script>

@@ -1,0 +1,24 @@
+<% layout('/layout/auth') -%>
+
+<section class="login-shell">
+  <div class="login-accent"></div>
+  <div class="login-card" style="text-align: center;">
+    <div style="width: 72px; height: 72px; border-radius: 50%; background: rgba(4, 74, 120, 0.1); display: grid; place-items: center; margin: 0 auto 1.25rem;">
+      <i class="fa-solid fa-map-signs" style="font-size: 28px; color: #044a78;"></i>
+    </div>
+
+    <h2 style="margin: 0 0 0.5rem; color: #1b2430; font-size: 1.5rem;">Page Not Found</h2>
+    <p style="margin: 0 0 1.5rem; color: #5b6b7a; font-size: 0.98rem;">
+      The page you're looking for doesn't exist or may have moved.
+    </p>
+
+    <a
+      href="<%= typeof homeUrl !== 'undefined' ? homeUrl : '/sachiko/welcome' %>"
+      class="login-submit"
+      style="display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: #044a78; color: #ffffff; text-decoration: none; padding: 0.7rem 1.4rem; border-radius: 10px; font-weight: 600;"
+    >
+      <i class="fa-solid fa-house"></i>
+      <span><%= typeof homeLabel !== "undefined" ? homeLabel : "Back to Dashboard" %></span>
+    </a>
+  </div>
+</section>

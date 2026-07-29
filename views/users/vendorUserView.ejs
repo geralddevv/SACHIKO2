@@ -1,0 +1,405 @@
+<% layout('/layout/boilerplate') -%>
+
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 2px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .header-action-btn:hover {
+      background-color: #e4e4e4;
+    }
+
+    .col-count-center .tabulator-col-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      padding: 4px 2px 6px;
+    }
+
+    .tabulator .tabulator-header .tabulator-col.col-count-center {
+      justify-content: center;
+    }
+
+    .col-count-center .tabulator-col-title-holder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: auto;
+      width: 100%;
+    }
+
+    .col-count-center .tabulator-col-title {
+      width: 100%;
+      text-align: center;
+      white-space: nowrap;
+      line-height: 1.1;
+    }
+
+    .col-count-center .tabulator-header-filter {
+      width: 100%;
+      margin-top: 0;
+    }
+
+    .col-count-center .tabulator-header-filter input {
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .tabulator-cell.col-count-center {
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .count-link {
+      cursor: pointer;
+      text-decoration: underline;
+      font-weight: 600;
+      color: #044a78;
+    }
+
+    #master-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+  </style>
+
+  <div class="indi-head">
+    <h1>Vendor Coordinator View</h1>
+
+    <div style="display: flex; gap: 10px; align-items: center">
+      <button class="header-action-btn" onclick="window.location.href = '/sachiko/form/vendor'">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Vendor
+      </button>
+      <button class="header-action-btn" onclick="window.location.href = '/sachiko/form/vendor?tab=user'">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Coordinator
+      </button>
+      <button class="header-action-btn" onclick="window.location.href = '/sachiko/ttr-vendor/view'">
+        <i class="fa-solid fa-eye" style="margin-right: 4px"></i> TTRs
+      </button>
+
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span>
+            <i class="fa-solid fa-file-arrow-down"></i>
+            <span class="download-typo">Download</span>
+          </span>
+          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+        </button>
+        <div class="download-selector__menu" id="downloads">
+          <span class="download-selector__option" id="download-pdf">
+            <i class="fas fa-file-pdf download-selector__option-icon"></i>
+            <span>PDF</span>
+          </span>
+          <span class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel download-selector__option-icon"></i>
+            <span>Excel</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script>
+  const downloadSelector = document.getElementById("downloadSelector");
+  const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
+
+  triggerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    downloadSelector.classList.toggle("download-selector--active");
+
+    const icon = triggerBtn.querySelector(".download-selector__trigger-icon");
+    icon.style.transform = downloadSelector.classList.contains("download-selector--active")
+      ? "rotate(180deg)"
+      : "rotate(0deg)";
+  });
+
+  document.addEventListener("click", () => {
+    downloadSelector.classList.remove("download-selector--active");
+    const icon = triggerBtn.querySelector(".download-selector__trigger-icon");
+    icon.style.transform = "rotate(0deg)";
+  });
+
+  downloadSelector.querySelector(".download-selector__menu").addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
+  let tableData = [];
+  try {
+    tableData = <%- safeJson(jsonData || []) %>;
+  } catch (err) {
+    console.error("Vendor coordinator view JSON error", err);
+  }
+
+  // Mirrors utils/locations.js normalizeLocationName — see /master/view's same
+  // per-location flatten for why this normalization matters.
+  const normalizeLocationName = (value) =>
+    String(value || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, " ")
+      .replace(/^[.,]+|[.,]+$/g, "");
+
+  // One row per coordinator location — same pattern as /master/view, so a
+  // coordinator with multiple locations shows up as multiple rows here too.
+  const byLocation = [];
+  tableData.forEach((row) => {
+    const locs = Array.isArray(row.locationDetails) && row.locationDetails.length
+      ? row.locationDetails
+      : [{
+          userLocation: row.userLocation,
+          dispatchAddress: row.dispatchAddress,
+          selfDispatch: row.SelfDispatch,
+          transportName: row.transportName,
+          transportContact: row.transportContact,
+          dropLocation: row.dropLocation,
+          dropLocation1: row.dropLocation1,
+          deliveryMode: row.deliveryMode,
+          deliveryLocation: row.deliveryLocation,
+          deliveryLocation1: row.deliveryLocation1,
+          vendorPayment: row.vendorPayment,
+        }];
+
+    locs.forEach((loc) => {
+      byLocation.push({
+        ...row,
+        userLocation: normalizeLocationName(loc.userLocation) || row.userLocation,
+        dispatchAddress: loc.dispatchAddress ?? row.dispatchAddress,
+        SelfDispatch: loc.selfDispatch || "",
+        transportName: loc.transportName || "",
+        transportContact: loc.transportContact || "",
+        dropLocation: loc.dropLocation || "",
+        dropLocation1: loc.dropLocation1 || "",
+        deliveryMode: loc.deliveryMode || "",
+        deliveryLocation: loc.deliveryLocation || "",
+        deliveryLocation1: loc.deliveryLocation1 || "",
+        vendorPayment: loc.vendorPayment || "",
+        dispatchType: loc.selfDispatch ? "Self Dispatch" : "Transport",
+      });
+    });
+  });
+  tableData = byLocation;
+
+  const flattenedData = [];
+  tableData.forEach((row) => {
+    const dispatchType = row.dispatchType || (row.SelfDispatch ? "Self Dispatch" : "Transport");
+    const commodities = Array.isArray(row.commodities) && row.commodities.length > 0 ? row.commodities : ["-"];
+
+    commodities.forEach((commodity) => {
+      const dispatchType = row.dispatchType || (row.SelfDispatch ? "Self Dispatch" : "Transport");
+      let displayCommodity = commodity;
+      let filterCommodity = commodity;
+
+      if (typeof commodity === "string" && commodity.startsWith("OTHERS - ")) {
+        displayCommodity = commodity;
+        filterCommodity = "OTHERS";
+      }
+
+      flattenedData.push({
+        ...row,
+        dispatchType,
+        displayCommodity: displayCommodity,
+        filterCommodity: filterCommodity,
+      });
+    });
+  });
+  tableData = flattenedData;
+
+  // Commodity -> vendor-scoped binding-view URL. Only TTR/Tape/POS Roll/Tafeta
+  // have a binding-view route; other commodities (Face Paper, Adhesive, etc.)
+  // stay plain text. Vendor form stores this one as "TAFFETA" (double-F) while
+  // the rest of the codebase uses "tafeta" (single-F) for routes/models.
+  function commodityLink(commodity, rowId) {
+    if (!rowId) return null;
+    switch (String(commodity || "").trim().toUpperCase()) {
+      case "TTR": return `/sachiko/ttr-vendor/view?userId=${encodeURIComponent(rowId)}`;
+      case "TAPE": return `/sachiko/vendor-item/view/tape?userId=${encodeURIComponent(rowId)}`;
+      case "POS ROLL": return `/sachiko/vendor-item/view/pos?userId=${encodeURIComponent(rowId)}`;
+      case "TAFFETA": return `/sachiko/vendor-item/view/tafeta?userId=${encodeURIComponent(rowId)}`;
+      default: return null;
+    }
+  }
+
+  let table;
+  const withTextFilter = (column, placeholder = "Search") => ({
+    headerFilter: "input",
+    headerFilterPlaceholder: placeholder,
+    ...column,
+  });
+
+  const withSelectFilter = (column, values) => ({
+    headerFilter: "list",
+    headerFilterParams: {
+      values: values,
+      clearable: true,
+      autocomplete: true,
+    },
+    ...column,
+  });
+
+  function initTable() {
+    table = new Tabulator("#master-table", {
+      data: tableData,
+      height: "100%",
+      // layout: "fitColumns",
+      virtualDom: true,
+      responsiveLayout: false,
+      initialSort: [{ column: "vendorName", dir: "asc" }],
+      movableColumns: true,
+      placeholder: "No data to display",
+      columns: [
+        withSelectFilter({
+          title: "Commodities",
+          field: "filterCommodity",
+          minWidth: 200,
+          headerSort: true,
+          sorter: "string",
+          formatter: (cell) => {
+            const data = cell.getRow().getData();
+            const link = commodityLink(data.filterCommodity, data._id);
+            return link ? `<span class="count-link">${data.displayCommodity}</span>` : data.displayCommodity;
+          },
+          cellClick: (e, cell) => {
+            const data = cell.getRow().getData();
+            const link = commodityLink(data.filterCommodity, data._id);
+            if (link) window.location.href = link;
+          },
+        }, (() => {
+          const distinct = Array.from(new Set(tableData.map(r => r.filterCommodity))).filter(c => c && c !== "-").sort();
+          const obj = {"": "All"};
+          distinct.forEach(c => { obj[c] = c; });
+          return obj;
+        })()),
+        withTextFilter({
+          title: "Vendor",
+          field: "vendorName",
+          headerSort: true,
+          widthGrow: 2,
+        }),
+        withTextFilter({
+          title: "Coordinator",
+          field: "userName",
+          headerSort: true,
+          widthGrow: 2,
+          formatter: (cell) => {
+            const row = cell.getRow().getData();
+            if (!row?._id) return cell.getValue() || "";
+            return `<span class="count-link">${cell.getValue() || ""}</span>`;
+          },
+          cellClick: (e, cell) => {
+            const row = cell.getRow().getData();
+            if (!row?._id) return;
+            window.location.href = `/sachiko/vendor/coordinator/details/${encodeURIComponent(row._id)}`;
+          },
+        }),
+        withSelectFilter({
+          title: "Status",
+          field: "vendorStatus",
+          headerSort: true,
+          width: 120,
+        }, {
+          "": "All",
+          "ACTIVE": "ACTIVE",
+          "INACTIVE": "INACTIVE",
+          "BLACKLISTED": "BLACKLISTED",
+          "OTHERS": "OTHERS"
+        }),
+        withTextFilter({
+          title: "Location",
+          field: "userLocation",
+          headerSort: true,
+          widthGrow: 2,
+        }),
+        withTextFilter({
+          title: "Pick Up Loc",
+          field: "deliveryLocation",
+          headerSort: true,
+          widthGrow: 2,
+        }),
+        withTextFilter({
+          title: "Pick Up Loc 1",
+          field: "deliveryLocation1",
+          headerSort: true,
+          widthGrow: 2,
+        }),
+        withTextFilter({
+          title: "Drop Location",
+          field: "dropLocation",
+          headerSort: true,
+          widthGrow: 2,
+        }),
+        withTextFilter({
+          title: "Drop Location 1",
+          field: "dropLocation1",
+          headerSort: true,
+          widthGrow: 2,
+        }),
+      ],
+    });
+  }
+
+  window.addEventListener("load", initTable);
+
+  document.getElementById("download-pdf").addEventListener("click", () => {
+    if (!table) return;
+    table.download("pdf", "vendor-coordinator-view.pdf", {
+      orientation: "landscape",
+      title: "Vendor Coordinator View",
+    });
+    downloadSelector.classList.remove("download-selector--active");
+  });
+
+  document.getElementById("download-xlsx").addEventListener("click", () => {
+    if (!table) return;
+    table.download("xlsx", "vendor-coordinator-view.xlsx", {
+      sheetName: "Vendor Coordinator View",
+    });
+    downloadSelector.classList.remove("download-selector--active");
+  });
+</script>
+
+<% if (notification && notification.length) { %>
+<script>
+  const vendorCoordinatorFlashMessage = <%- safeJson(notification[0]) %>;
+  const vendorCoordinatorFlashType = /failed|not found|error/i.test(String(vendorCoordinatorFlashMessage)) ? "error" : "success";
+
+  const showVendorCoordinatorFlash = () => {
+    if (typeof hideStaticToast === "function") hideStaticToast();
+    if (typeof showToast === "function") showToast(vendorCoordinatorFlashMessage, vendorCoordinatorFlashType);
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", showVendorCoordinatorFlash, { once: true });
+  } else {
+    showVendorCoordinatorFlash();
+  }
+</script>
+<% } %>

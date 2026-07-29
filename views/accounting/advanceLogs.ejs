@@ -1,0 +1,246 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_modern.min.css" rel="stylesheet" />
+
+<style>
+  .order-highlight {
+    padding: 0.3rem 0.85rem;
+    border-radius: 0.35rem;
+    font-weight: 600;
+    font-size: 1.15rem;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    background-color: rgba(255, 255, 255, 0.12);
+    margin-left: 8px;
+    display: inline-block;
+  }
+  .order-highlight.active {
+    background-color: rgba(255, 255, 255, 0.18);
+  }
+  .order-highlight.filtered {
+    background-color: rgba(16, 185, 129, 0.22);
+    border-color: rgba(255, 255, 255, 0.65);
+  }
+  #master-table {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+</style>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <div class="indi-head">
+    <h1>
+      Advance Logs
+      <span id="total-value-display" class="order-highlight active">Total: ₹0.00</span>
+      <span id="filtered-value-display" class="order-highlight filtered" style="display: none">Filtered: ₹0.00</span>
+    </h1>
+    <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+      <a
+        href="/sachiko/advance/view"
+        style="
+          padding: 6px 14px;
+          background: #044a78;
+          color: white;
+          border-radius: 6px;
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 500;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          transition: opacity 0.2s;
+        "
+        onmouseover="this.style.opacity = '0.85'"
+        onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-arrow-left"></i>
+        <span>Back to Advance</span>
+      </a>
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span>
+            <i class="fa-solid fa-file-arrow-down"></i>
+            <span class="download-typo">Download</span>
+          </span>
+          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+        </button>
+        <div class="download-selector__menu" id="downloads">
+          <span class="download-selector__option" id="download-pdf">
+            <i class="fas fa-file-pdf download-selector__option-icon"></i>
+            <span>PDF</span>
+          </span>
+          <span class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel download-selector__option-icon"></i>
+            <span>Excel</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+  const logsData = <%- safeJson(logs || []) %>;
+
+  function formatINR(value) {
+    return "₹" + Number(value).toLocaleString("en-IN", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  const table = new Tabulator("#master-table", {
+    data: logsData,
+    layout: "fitColumns",
+    responsiveLayout: false,
+    pagination: "local",
+    paginationSize: 30,
+    movableColumns: true,
+    placeholder: "No advance logs found",
+    columns: [
+      {
+        title: "Date",
+        field: "date",
+        width: 120,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+      },
+      {
+        title: "Time",
+        field: "time",
+        width: 100,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+      },
+      {
+        title: "Employee Name",
+        field: "employeeName",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+      },
+      {
+        title: "Employee ID",
+        field: "empId",
+        width: 130,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+      },
+      {
+        title: "Action",
+        field: "action",
+        width: 180,
+        hozAlign: "center",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        formatter: (cell) => {
+          const action = String(cell.getValue() || "-");
+          let bg = "#6b7280";
+          if (action === "INITIAL ADVANCE" || action === "ADVANCE TOP-UP") bg = "#2563eb";
+          else if (action.includes("RECOVERY")) bg = "#10b981";
+
+          return `<span style="display:inline-block; padding:2px 10px; background:${bg}; color:white; border-radius:12px; font-size:11px; font-weight:600; letter-spacing:0.4px;">${action}</span>`;
+        },
+      },
+      {
+        title: "Amount",
+        field: "amount",
+        hozAlign: "right",
+        width: 120,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const value = Number(cell.getValue()) || 0;
+          const sign = row.type === "DEBIT" ? "-" : "+";
+          const color = row.type === "DEBIT" ? "#b91c1c" : "#047857";
+          return `<span style="font-weight:700; color:${color};">${sign} ${formatINR(value)}</span>`;
+        },
+      },
+      {
+        title: "Opening Bal",
+        field: "openingBalance",
+        hozAlign: "right",
+        width: 140,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        formatter: (cell) => formatINR(cell.getValue()),
+      },
+      {
+        title: "Closing Bal",
+        field: "closingBalance",
+        hozAlign: "right",
+        width: 140,
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        formatter: (cell) => formatINR(cell.getValue()),
+      },
+      {
+        title: "Type",
+        field: "type",
+        width: 90,
+        hozAlign: "center",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+      },
+      {
+        title: "Source",
+        field: "source",
+        width: 110,
+        hozAlign: "center",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+      },
+    ],
+  });
+
+  /* Badge calculation */
+  const totalAmount = logsData.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  document.getElementById("total-value-display").textContent = "Total: " + formatINR(totalAmount);
+
+  table.on("dataFiltered", function (filters, rows) {
+    const filteredEl = document.getElementById("filtered-value-display");
+    if (!filteredEl) return;
+
+    if (!filters || filters.length === 0) {
+      filteredEl.style.display = "none";
+      return;
+    }
+
+    let filteredTotal = 0;
+    rows.forEach((row) => {
+      filteredTotal += Number(row.getData().amount) || 0;
+    });
+
+    filteredEl.textContent = "Filtered: " + formatINR(filteredTotal);
+    filteredEl.style.display = "inline-block";
+  });
+
+  const selector = document.getElementById("downloadSelector");
+  const trigger = selector.querySelector(".download-selector__trigger");
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    selector.classList.toggle("download-selector--active");
+  });
+  document.addEventListener("click", () => selector.classList.remove("download-selector--active"));
+
+  document.getElementById("download-pdf").addEventListener("click", () => {
+    table.download("pdf", "advance_logs.pdf", { orientation: "landscape", title: "Advance Logs" });
+    selector.classList.remove("download-selector--active");
+  });
+  document.getElementById("download-xlsx").addEventListener("click", () => {
+    table.download("xlsx", "advance_logs.xlsx", { sheetName: "AdvanceLogs" });
+    selector.classList.remove("download-selector--active");
+  });
+</script>

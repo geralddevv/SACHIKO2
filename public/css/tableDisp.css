@@ -1,0 +1,257 @@
+#master-table,
+#daybook-table,
+#task-table,
+#wip-table {
+  height: 100%;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+input {
+  height: 20px;
+  padding: 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  background-color: #f8f9fa !important;
+  border: 1px solid #ced4da;
+  flex-grow: 1;
+  outline: none;
+}
+
+.tabulator .tabulator-tableholder {
+  overflow-y: auto !important;
+}
+
+.tabulator .tabulator-header {
+  background-color: #044A78 !important;
+}
+
+
+.tabulator .tabulator-col,
+.tabulator .tabulator-col-content {
+  background-color: #044A78 !important;
+  color: #fff !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  padding: 2px 4px !important;
+}
+
+.tabulator .tabulator-cell {
+  font-size: 14px;
+  font-weight: 500;
+  color: #044A78 !important;
+  border: 2px solid transparent;
+  padding: 2px 4px !important;
+  transition: all 0.1s ease-in-out;
+  outline: 0.75px solid rgba(128, 128, 128, 0.25);
+}
+
+.tabulator .tabulator-cell:hover {
+  border: 2px solid #044A78;
+}
+
+.tabulator .tabulator-row {
+  transition: all 0.2s ease-in-out;
+}
+
+.tabulator .tabulator-row:hover {
+  background-color: rgba(140, 154, 173, 0.3) !important;
+  color: #0f172a !important;
+  cursor: default !important;
+  border: none !important;
+  transition: all 0.2s ease;
+}
+
+.tabulator .tabulator-tableholder,
+.tabulator .tabulator-table {
+  background-color: #f8f9fa !important;
+}
+
+/* Target the table scrollbars */
+.tabulator .tabulator-tableholder::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.tabulator .tabulator-tableholder::-webkit-scrollbar-track {
+  background: #f0f2f5;
+}
+
+.tabulator .tabulator-tableholder::-webkit-scrollbar-thumb {
+  background: #044A78;
+  border-radius: 6px;
+}
+
+.tabulator .tabulator-tableholder::-webkit-scrollbar-thumb:hover {
+  background: #044A78;
+}
+
+/* Firefox */
+.tabulator .tabulator-tableholder {
+  scrollbar-width: thin;
+  scrollbar-color: #044A78 #f0f2f5;
+}
+
+.side-nav {
+  transition: transform 1s;
+}
+
+.side-nav.animate {
+  will-change: transform;
+}
+
+.download-btns {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #0f172a;
+}
+
+.download-btns button {
+  height: 20px;
+}
+
+.download-btns button:hover {
+  background-color: rgba(255, 255, 255, 0.85);
+}
+
+/* The download document dropdown */
+.download-selector {
+  position: relative;
+  display: inline-block;
+  width: 160px; /* Fixed width for the dropdown */
+}
+
+.download-selector__trigger {
+  background-color: #f0f0f0;
+  color: #044A78;
+  padding: 2px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.download-selector__trigger-icon {
+  font-size: 12px;
+  transition: all 0.2s ease-in-out;
+}
+
+.download-selector__menu {
+  position: absolute;
+  background-color: rgb(240, 240, 240);
+  width: 100%;
+  border: 1px solid #044A78;
+  border-radius: 0.5rem;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: all 0.2s ease-in-out;
+  right: 0;
+  margin-top: 12px;
+}
+
+.download-selector--active .download-selector__menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.download-selector__option {
+  color: #044A78;
+  padding: 8px 10px;
+  font-size: 15px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s ease-in-out;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background-color: rgb(240, 240, 240);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  width: auto;
+  height: auto;
+}
+
+.download-selector__option:hover {
+  background-color: rgb(216, 216, 216);
+  border-radius: 0.5rem;
+}
+
+.download-selector__option-icon {
+  width: 20px;
+  color: #044A78;
+}
+
+.download-typo {
+  margin-left: 2px;
+}
+
+.indi-head {
+  width: 100%;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background-color: #044A78;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-direction: row;
+}
+
+.indi-head h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+/* Remove the "x" clear button in Tabulator header filters */
+.tabulator
+  .tabulator-header
+  .tabulator-col
+  .tabulator-header-filter
+  input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input[type="search"]::-ms-clear {
+  display: none;
+}
+
+.tabulator .tabulator-header .tabulator-col .tabulator-header-filter input[type="search"]::-ms-reveal {
+  display: none;
+}
+
+/* Remove sort arrows from Tabulator header */
+.tabulator .tabulator-col .tabulator-arrow {
+  display: none !important;
+}
+
+/* Also remove space reserved for arrow */
+.tabulator .tabulator-col .tabulator-col-title {
+  padding-right: 0 !important;
+}
+
+#master-table .tabulator-cell.client-name-cell {
+  cursor: pointer !important;
+}
+
+/* Pointer only for client-name column */
+.client-name-cell {
+  cursor: pointer;
+  font-weight: 600;
+  color: #044A78;
+  text-decoration: underline;
+}

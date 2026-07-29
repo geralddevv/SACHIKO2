@@ -1,0 +1,243 @@
+<% layout('/layout/boilerplate') %>
+
+<div class="welcome-shell">
+    <div class="welcome-card">
+        <div class="welcome-header">
+            <div class="profile-circle">
+                <% if (authUser?.empPhoto) { %>
+                    <img src="/images/empimg/<%= authUser.empPhoto %>" alt="Profile">
+                <% } else { %>
+                    <img src="/assets/fairfavicon.png" alt="Fairdesk" style="width: 60%; height: 60%; object-fit: contain;">
+                <% } %>
+            </div>
+            
+            <div class="welcome-text-group">
+                <h1 class="welcome-title">
+                    Welcome,<br>
+                    <span class="highlight-text"><%= authUser?.empName || authUser?.username %></span>
+                </h1>
+                <p class="welcome-subtitle">We're glad to see you back. Your dashboard is ready with all the latest updates.</p>
+            </div>
+        </div>
+        
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">Name</span>
+                <span class="info-value"><%= authUser?.empName || authUser?.username %></span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Profile Code</span>
+                <span class="info-value"><%= authUser?.profileCode || 'N/A' %></span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Role</span>
+                <span class="info-value"><%= authUser?.role?.toUpperCase() %></span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Today</span>
+                <span class="info-value"><%= new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) %></span>
+            </div>
+        </div>
+
+        <div id="quote-container" class="quote-box">
+            <i class="fa-solid fa-quote-left quote-icon"></i>
+            <p id="quote-text" class="quote-text">"Loading inspiration..."</p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .welcome-shell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - 80px);
+        padding: 40px 20px;
+        background: radial-gradient(circle at top right, rgba(4, 74, 120, 0.05), transparent),
+                    radial-gradient(circle at bottom left, rgba(4, 74, 120, 0.03), transparent);
+    }
+
+    .welcome-card {
+        background: #ffffff;
+        padding: 60px;
+        border-radius: 12px;
+        box-shadow: 0 25px 50px -12px rgba(4, 74, 120, 0.15);
+        border: 1px solid rgba(4, 74, 120, 0.08);
+        max-width: 1000px;
+        width: 95%;
+        text-align: left;
+        position: relative;
+        margin-top: 40px;
+    }
+
+    .welcome-header {
+        display: flex;
+        align-items: center;
+        gap: 40px;
+        margin-bottom: 40px;
+    }
+
+    .profile-circle {
+        flex-shrink: 0;
+        width: 180px;
+        height: 180px;
+        background: #f0f7ff;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        box-shadow: 0 10px 20px rgba(4, 74, 120, 0.12);
+        border: 6px solid #ffffff;
+        transition: transform 0.3s ease;
+    }
+
+    .profile-circle:hover {
+        transform: scale(1.05);
+    }
+
+    .profile-circle img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .welcome-text-group {
+        flex-grow: 1;
+    }
+
+    .welcome-title {
+        color: #03365a;
+        font-weight: 800;
+        font-size: 2.8rem;
+        margin-bottom: 8px;
+        line-height: 1.1;
+        letter-spacing: -0.5px;
+    }
+
+    .highlight-text {
+        background: linear-gradient(135deg, #044a78 0%, #0669a9 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .welcome-subtitle {
+        color: #64748b;
+        font-size: 1.15rem;
+        margin: 0;
+        line-height: 1.6;
+        max-width: 500px;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 40px;
+    }
+
+    .info-item {
+        background: #f8fafc;
+        padding: 22px;
+        border-radius: 10px;
+        border: 1px solid #f1f5f9;
+        transition: all 0.2s ease;
+        text-align: left;
+        min-height: 70px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .info-item:hover {
+        background: #f1f5f9;
+        transform: translateY(-2px);
+    }
+
+    .info-label {
+        display: block;
+        font-size: 11px;
+        color: #94a3b8;
+        text-transform: uppercase;
+        font-weight: 800;
+        letter-spacing: 0.8px;
+        margin-bottom: 6px;
+    }
+
+    .info-value {
+        font-weight: 700;
+        color: #044a78;
+        font-size: 1.1rem;
+    }
+
+    .quote-box {
+        padding: 35px;
+        background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%);
+        border-radius: 24px;
+        border: 1px solid #e2e8f0;
+        position: relative;
+        text-align: center; /* center the quote text */
+        opacity: 0;
+        transform: translateY(15px);
+        transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .quote-icon {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        font-size: 32px;
+        color: #044a78;
+        opacity: 0.1;
+    }
+
+    .quote-text {
+        color: #03365a;
+        font-size: 1.4rem;
+        font-style: italic;
+        margin: 0;
+        line-height: 1.5;
+        font-weight: 600;
+        letter-spacing: -0.2px;
+    }
+
+    @media (max-width: 640px) {
+        .welcome-card {
+            padding: 40px 25px;
+            border-radius: 24px;
+        }
+        .welcome-header {
+            flex-direction: column;
+            text-align: center;
+            gap: 20px;
+        }
+        .welcome-title {
+            font-size: 2.2rem;
+        }
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        const container = document.getElementById('quote-container');
+        const textEl = document.getElementById('quote-text');
+
+        try {
+            const response = await fetch('/sachiko/api/motivational?t=' + Date.now());
+            if (!response.ok) throw new Error('API Error');
+            const data = await response.json();
+            if (data && data.q) textEl.innerText = `"${data.q}"`;
+        } catch (error) {
+            textEl.innerText = '"Quality is not an act, it is a habit."';
+        } finally {
+            setTimeout(() => {
+                container.style.opacity = '1';
+                container.style.transform = 'translateY(0)';
+            }, 300);
+        }
+    });
+</script>

@@ -1,0 +1,307 @@
+<% layout('/layout/boilerplate') %>
+
+<style>
+  .choices[data-type*="select-one"]::after {
+    display: block !important;
+    content: "" !important;
+    width: 12px !important;
+    height: 8px !important;
+    border-style: none !important;
+    border-width: 0 !important;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23044a78' stroke-width='2' fill='none'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-size: contain !important;
+    position: absolute !important;
+    right: 11.5px !important;
+    top: 50% !important;
+    margin-top: 0 !important;
+    transform: translateY(-50%) !important;
+  }
+  .choices[data-type*="select-one"].is-open::after {
+    transform: translateY(-50%) rotate(180deg) !important;
+  }
+
+  .jc-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(4,74,120,0.08);
+  }
+  .jc-table th {
+    background: #044a78;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 14px;
+    text-align: left;
+    letter-spacing: 0.02em;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .jc-table th:last-child {
+    border-right: none;
+  }
+  .jc-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    vertical-align: middle;
+  }
+  .jc-table td:last-child {
+    border-right: none;
+  }
+  .jc-table tr:last-child td {
+    border-bottom: none;
+  }
+  .jc-table input.form-control {
+    padding: 8px 10px !important;
+    font-size: 13px !important;
+    height: auto !important;
+    background: #f0f7ff !important;
+    color: #044a78 !important;
+    font-weight: 600 !important;
+  }
+  .jc-table.deckle-free-mode tbody tr:first-child td {
+    border-bottom: none;
+  }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
+  <form
+    action="/sachiko/sales/order"
+    method="POST"
+    class="needs-validation"
+    autocomplete="off"
+    novalidate
+  >
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+    <div class="span-full form-heading">
+      <h1>Sales Order</h1>
+    </div>
+
+    <!-- Row 1: Sales Order ID | Client Name | Client User -->
+    <div class="span-five">
+      <label for="salesOrderId">Sales Order ID</label>
+      <input
+        type="text"
+        id="salesOrderId"
+        name="salesOrderId"
+        class="form-control"
+        value="<%= previewSalesOrderId %>"
+        readonly
+        style="background:#f0f7ff; color:#044a78; font-weight:700; cursor:default;"
+      />
+    </div>
+
+    <div class="span-eight">
+      <label for="clientName">Client Name</label>
+      <select id="clientName" name="clientName" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select client</option>
+        <% clients.forEach(c => { %>
+        <option value="<%= c.clientName %>" data-client-id="<%= c.clientId %>"><%= c.clientName %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="span-seven">
+      <label for="clientUserName">Client User</label>
+      <select id="clientUserName" name="clientUserName" class="form-control select-tag">
+        <option value="">Select user</option>
+      </select>
+    </div>
+
+    <!-- Row 2: Select Product | Deckle -->
+    <div class="span-seven">
+      <label for="productCode">Select Product</label>
+      <select id="productCode" name="productCode" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select product</option>
+        <% datasheets.forEach(ds => { %>
+        <option
+          value="<%= ds.productCode %>"
+          data-fs-type="<%= ds.facestock?.facestockType || '' %>"
+          data-fs-gsm="<%= ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm + ' GSM' : '' %>"
+          data-fs-mic="<%= ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + ' MIC' : '' %>"
+          data-ad-type="<%= ds.adhesive?.adhesiveType || '' %>"
+          data-ad-gsm="<%= ds.adhesive?.adhesiveGsm != null ? ds.adhesive.adhesiveGsm + ' GSM' : '' %>"
+          data-rl-type="<%= ds.releaseLiner?.releaseLinerType || '' %>"
+          data-rl-gsm="<%= ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + ' GSM' : '' %>"
+        ><%= ds.productCode %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="span-five">
+      <label for="deckleType">Deckle</label>
+      <select id="deckleType" name="deckleType" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select type</option>
+        <option value="Deckle Set">Deckle Set</option>
+        <option value="Deckle Free">Deckle Free</option>
+      </select>
+    </div>
+
+    <!-- Materials Table -->
+    <div class="span-full">
+      <table class="jc-table deckle-free-mode" style="table-layout:fixed;">
+        <colgroup>
+          <col style="width:16.66%;" />
+          <col style="width:16.66%;" />
+          <col style="width:16.66%;" />
+          <col style="width:16.66%;" />
+          <col style="width:16.66%;" />
+          <col style="width:16.66%;" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>FS Code</th>
+            <th>FS GSM / MIC</th>
+            <th>Ad Code</th>
+            <th>Ad GSM / MIC</th>
+            <th>RL Code</th>
+            <th>RL GSM / MIC</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><input type="text" name="fsCode" id="fsCode" class="form-control" placeholder="Code" /></td>
+            <td><input type="text" name="fsGsmMic" id="fsGsmMic" class="form-control" placeholder="GSM / MIC" /></td>
+            <td><input type="text" name="adCode" id="adCode" class="form-control" placeholder="Code" readonly /></td>
+            <td><input type="text" name="adGsmMic" id="adGsmMic" class="form-control" placeholder="GSM / MIC" readonly style="background:#f0f7ff;color:#044a78;font-weight:600;cursor:default;" /></td>
+            <td><input type="text" name="rlCode" id="rlCode" class="form-control" placeholder="Code" /></td>
+            <td><input type="text" name="rlGsmMic" id="rlGsmMic" class="form-control" placeholder="GSM / MIC" /></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="span-full form-subheading">
+      <h1>Order Info</h1>
+    </div>
+
+    <div class="span-five">
+      <label for="size">Size</label>
+      <input type="text" id="size" name="size" class="form-control" placeholder="Size" />
+    </div>
+
+    <div class="span-five">
+      <label for="rollNo">Roll No</label>
+      <input type="text" id="rollNo" name="rollNo" class="form-control" placeholder="Roll No" />
+    </div>
+
+    <div class="span-five">
+      <label for="poNumber">PO Number</label>
+      <input type="text" id="poNumber" name="poNumber" class="form-control" placeholder="PO Number" />
+    </div>
+
+    <!-- Row: Rate | Est Delivery Date | Remarks -->
+    <div class="span-four">
+      <label for="rate">Rate</label>
+      <input type="text" id="rate" name="rate" class="form-control" placeholder="Rate" />
+    </div>
+
+    <div class="span-five">
+      <label for="estDeliveryDate">Est Delivery Date</label>
+      <input type="text" id="estDeliveryDate" name="estDeliveryDate" class="form-control" placeholder="dd/mm/yyyy" />
+    </div>
+
+    <div class="span-eight">
+      <label for="remarks">Remarks (Optional)</label>
+      <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Remarks (Optional)" />
+    </div>
+
+    <div class="btn-grp span-full">
+      <button type="submit">Save Sales Order</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  const allClientUsers = <%- JSON.stringify(clientUsers) %>;
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const productSelect    = document.getElementById("productCode");
+    const clientNameSelect = document.getElementById("clientName");
+
+    new Choices(document.getElementById("deckleType"), {
+      searchEnabled: false,
+      shouldSort: false,
+      itemSelectText: "",
+    });
+
+    const clientNameChoices = new Choices(clientNameSelect, {
+      searchEnabled: true,
+      shouldSort: false,
+      itemSelectText: "",
+      searchPlaceholderValue: "Search client…",
+    });
+
+    const clientUserChoices = new Choices(document.getElementById("clientUserName"), {
+      searchEnabled: true,
+      shouldSort: false,
+      itemSelectText: "",
+      searchPlaceholderValue: "Search user…",
+    });
+
+    new Choices(productSelect, {
+      searchEnabled: true,
+      shouldSort: false,
+      itemSelectText: "",
+      searchPlaceholderValue: "Search product…",
+    });
+
+    clientNameSelect.addEventListener("change", () => {
+      const sel = clientNameSelect.options[clientNameSelect.selectedIndex];
+      const clientId = sel?.dataset?.clientId || "";
+      const users = allClientUsers.filter(u => u.clientId === clientId);
+      clientUserChoices.clearChoices();
+      clientUserChoices.setChoices(
+        [{ value: "", label: "Select user", placeholder: true }].concat(
+          users.map(u => ({ value: u.userName, label: u.userName }))
+        ),
+        "value", "label", true
+      );
+      if (users.length === 1) {
+        clientUserChoices.setChoiceByValue(users[0].userName);
+      }
+    });
+
+    function autofillFromSelection() {
+      const sel = productSelect.options[productSelect.selectedIndex];
+      if (!sel || !sel.value) return;
+
+      const fsType   = sel.dataset.fsType  || "";
+      const fsMic    = sel.dataset.fsMic   || "";
+      const fsGsmVal = sel.dataset.fsGsm   || "";
+      const adType   = sel.dataset.adType  || "";
+      const adGsmVal = sel.dataset.adGsm   || "";
+      const rlType   = sel.dataset.rlType  || "";
+      const rlGsmVal = sel.dataset.rlGsm   || "";
+
+      document.getElementById("fsCode").value   = fsType;
+      document.getElementById("fsGsmMic").value = fsMic || fsGsmVal;
+      document.getElementById("adCode").value   = adType;
+      document.getElementById("adGsmMic").value = adGsmVal;
+      document.getElementById("rlCode").value   = rlType;
+      document.getElementById("rlGsmMic").value = rlGsmVal;
+    }
+
+    productSelect.addEventListener("change", autofillFromSelection);
+
+    const deckleSelect = document.getElementById("deckleType");
+    const materialsTable = document.querySelector(".jc-table");
+
+    function toggleDeckleFields() {
+      const val = deckleSelect.value;
+      if (val === "Deckle Set") {
+        materialsTable.classList.remove("deckle-free-mode");
+      } else {
+        materialsTable.classList.add("deckle-free-mode");
+      }
+    }
+
+    deckleSelect.addEventListener("change", toggleDeckleFields);
+    // Initialize state
+    toggleDeckleFields();
+  });
+</script>

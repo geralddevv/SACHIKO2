@@ -1,0 +1,244 @@
+<% layout('/layout/boilerplate') -%>
+<style>
+  /* Choices.js Premium Styling */
+  .choices {
+    margin-bottom: 0;
+    width: 100%;
+  }
+
+  .choices__inner {
+    border: 1px solid #044A78 !important;
+    border-radius: 5px !important;
+    background-color: #ffffff !important;
+    min-height: 38px !important;
+    padding: 2px 8px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .choices__list--dropdown {
+    border: 1px solid #044A78 !important;
+    border-radius: 5px !important;
+    z-index: 100 !important;
+  }
+
+  .choices__list--dropdown .choices__item--selectable.is-highlighted {
+    background-color: #f0f7ff !important;
+    color: #044A78 !important;
+  }
+
+  .choices__placeholder {
+    opacity: 1;
+    color: #6c757d !important;
+  }
+</style>
+
+<div class="main-content">
+  <form class="rottary-content" method="post" action="/sachiko/pettycash/create">
+    <!-- ================= FORM HEADING ================= -->
+    <div class="span-full form-heading" style="display: flex; justify-content: space-between; flex-direction: row">
+      <div class="span-five" style="display: flex; gap: 6px; justify-content: start; flex-direction: row; width: auto; align-items: center;">
+        <label style="width: auto; color: white; margin: 0;"> Location </label>
+        <div style="width: 150px;">
+          <select name="location" id="locationSelect" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Location</option>
+            <option value="OFFICE">OFFICE</option>
+            <option value="UNIT 1">UNIT 1</option>
+            <option value="UNIT 2">UNIT 2</option>
+          </select>
+        </div>
+      </div>
+      <h1>Petty Cash Entry</h1>
+
+      <!-- ================= CURRENT BALANCE ================= -->
+      <div
+        class="span-five"
+        id="balanceWrap"
+        style="display: flex; gap: 6px; justify-content: end; flex-direction: row; width: auto"
+      >
+        <label style="width: auto; color: white">Current Balance</label>
+        <input
+          type="number"
+          id="currentBalance"
+          class="form-control input-tag"
+          style="width: 100px"
+          value="0"
+          readonly
+        />
+      </div>
+    </div>
+
+    <!-- ================= TRANSACTION TYPE ================= -->
+    <div class="span-seven">
+      <label>Transaction Type</label>
+      <select name="type" id="txnType" class="form-control select-tag" required>
+        <option value="PAID" selected>PAID</option>
+        <option value="RECEIVED">RECEIVED</option>
+      </select>
+    </div>
+
+    <!-- ================= FROM ================= -->
+    <div class="span-five">
+      <label id="fromLabel">From</label>
+      <input
+        type="text"
+        name="from"
+        id="fromInput"
+        class="form-control input-tag"
+        placeholder="Owner / Bank / Office"
+        required
+      />
+    </div>
+
+    <div class="span-five" id="toWrap">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <label style="margin: 0;">To</label>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <label style="display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; color: #044A78; font-size: 13px; font-weight: 600;">
+            <input type="radio" name="toType" value="external" checked style="width: 14px; height: 14px; margin: 0; accent-color: #044A78;"> External
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; color: #044A78; font-size: 13px; font-weight: 600;">
+            <input type="radio" name="toType" value="internal" style="width: 14px; height: 14px; margin: 0; accent-color: #044A78;"> Internal
+          </label>
+        </div>
+      </div>
+      <input
+        type="text"
+        name="to"
+        id="toInput"
+        class="form-control input-tag"
+        placeholder="Vendor / Expense / Person"
+        required
+      />
+      <select id="toSelect">
+        <option value="" disabled selected hidden>Select Employee</option>
+        <% employees.forEach(emp => { %>
+          <option value="<%= emp.empName %>"><%= emp.empName %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <!-- ================= AMOUNT ================= -->
+    <div class="span-six">
+      <label>Amount</label>
+      <input type="number" name="amount" class="form-control input-tag" placeholder="Enter amount" min="1" required />
+    </div>
+
+    <!-- ================= ENTRY DATE ================= -->
+    <div class="span-six">
+      <label>Entry Date</label>
+      <input type="date" name="entryDate" id="entryDate" class="form-control input-tag" required />
+    </div>
+
+    <!-- ================= REASON ================= -->
+    <div class="span-eight">
+      <label>Reason</label>
+      <input type="text" name="reason" class="form-control input-tag" placeholder="Optional" />
+    </div>
+
+    <!-- ================= SUBMIT BUTTON ================= -->
+    <div class="span-full btn-grp">
+      <button class="submit-btn" type="submit">Save Petty Cash</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  window.addEventListener('DOMContentLoaded', () => {
+    /* ===== ELEMENTS ===== */
+    const locationSelect = document.getElementById("locationSelect");
+    const balanceInput = document.getElementById("currentBalance");
+
+    const txnType = document.getElementById("txnType");
+    const fromInput = document.getElementById("fromInput");
+    const toInput = document.getElementById("toInput");
+    const toSelect = document.getElementById("toSelect");
+    const toTypeRadios = document.getElementsByName("toType");
+    const entryDateInput = document.getElementById("entryDate");
+    const fromWrap = fromInput.closest(".span-five");
+    const toWrap = document.getElementById("toWrap");
+
+    /* ===== INITIALIZE CHOICES ===== */
+    const locChoices = new Choices(locationSelect, { searchEnabled: false, itemSelectText: "", placeholder: true });
+    const txnChoices = new Choices(txnType, { searchEnabled: false, itemSelectText: "", placeholder: true });
+    const toChoices = new Choices(toSelect, { searchEnabled: true, itemSelectText: "", placeholder: true, placeholderValue: "Select Employee" });
+
+    balanceInput.value = 0;
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    entryDateInput.value = `${yyyy}-${mm}-${dd}`;
+
+    /* ===== LOCATION → FETCH BALANCE ===== */
+    locationSelect.addEventListener("change", async () => {
+      const loc = locationSelect.value;
+      if (!loc) return;
+
+      try {
+        const res = await fetch(`/sachiko/pettycash/balance/${loc}`);
+        const data = await res.json();
+        balanceInput.value = data.balance ?? 0;
+      } catch {
+        balanceInput.value = 0;
+      }
+    });
+
+    /* ===== TO TYPE TOGGLE ===== */
+    function syncToType() {
+      const isInternal = Array.from(toTypeRadios).find(r => r.checked)?.value === "internal";
+      const choicesContainer = toChoices.containerOuter.element;
+      
+      if (isInternal) {
+        toInput.style.display = "none";
+        toInput.required = false;
+        toInput.disabled = true;
+        toInput.name = "";
+
+        choicesContainer.style.display = "block";
+        toSelect.required = true;
+        toSelect.disabled = false;
+        toSelect.name = "to";
+      } else {
+        choicesContainer.style.display = "none";
+        toSelect.required = false;
+        toSelect.disabled = true;
+        toSelect.name = "";
+
+        toInput.style.display = "block";
+        toInput.required = true;
+        toInput.disabled = false;
+        toInput.name = "to";
+      }
+    }
+
+    toTypeRadios.forEach(radio => radio.addEventListener("change", syncToType));
+
+    /* ===== TRANSACTION TYPE → VISIBILITY + REQUIRED FIX ===== */
+    function syncFields() {
+      if (!fromWrap || !toWrap) return;
+
+      if (txnType.value === "PAID") {
+        fromWrap.style.display = "none";
+        fromInput.required = false;
+        fromInput.value = "";
+
+        toWrap.style.display = "block";
+        syncToType();
+      } else {
+        toWrap.style.display = "none";
+        toInput.required = false;
+        toSelect.required = false;
+        toInput.value = "";
+        toChoices.removeActiveItems(); // Reset choices
+
+        fromWrap.style.display = "block";
+        fromInput.required = true;
+      }
+    }
+
+    txnType.addEventListener("change", syncFields);
+    syncFields(); // on load
+    syncToType(); // on load
+  });
+</script>

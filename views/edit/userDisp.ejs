@@ -1,0 +1,205 @@
+<!--- Link to boilerplate.ejs -->
+<% layout('/layout/boilerplate') -%>
+
+<style>
+  .client-container {
+    display: flex;
+    width: 100%;
+    padding: 0;
+    margin-top: 10px;
+    gap: 0px;
+  }
+
+  .client-container > div:nth-child(odd):not(.client-header) {
+    background-color: #eeeeee;
+  }
+  
+  .client-container > div:nth-child(even):not(.client-header) {
+    background-color: #f8f9fa;
+  }
+
+  .client-header {
+    background-color: #044A78;
+    color: white;
+    font-size: 15px;
+    font-weight: 500;
+    border: none;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 0.4fr 1.5fr 1fr 1fr 1fr;
+    border-radius: 4px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .client-row {
+    border: none;
+    width: 100%;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    padding: 0.6rem;
+    display: grid;
+    grid-template-columns: 0.4fr 1.5fr 1fr 1fr 1fr;
+    transition: background-color 0.2s ease;
+    cursor: pointer;
+  }
+
+  .client-row:hover {
+    background-color: #94a3b8 !important;
+  }
+
+  .client-item {
+    padding: 0 10px;
+  }
+
+  /* Search and filter styles */
+  .search-filters {
+    margin: 20px 0px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    box-shadow: 0 0px 10px rgba(0,0,0,0.25);
+  }
+
+  .filters-container {
+    display: flex;
+    gap: 15px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 175px;
+  }
+
+  .filter-select {
+    height: 2.75rem;
+    font-size: 13px;
+  }
+
+  .filter-btn {
+    height: 2.75rem;
+    padding: 8px 12px;
+    background-color: #044A78;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 450;
+    transition: background-color 0.2s;
+  }
+
+  .filter-btn:hover {
+    background-color: #16213e;
+  }
+
+  .filter-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .input-tag {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    font-size: 13px;
+    flex-grow: 1;
+    max-width: 400px;
+  }
+
+  form {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .search-form {
+    flex: 1;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .search-input {
+    max-width: 230px;
+    height: 2.75rem;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    font-size: 13px;
+    border: 1px solid #16213e;
+  }
+
+  .search-input::placeholder {
+    font-size: 13px;
+  }
+</style>
+
+<div class="main-content">
+  <div class="span-full form-heading">
+    <h1>Users</h1>
+  </div>
+
+  <!-- Search and Filters Section -->
+  <div class="search-filters">
+    <form method="get" action="http://localhost:3000/sachiko/filter">
+      <div class="filters-container">
+        <div class="filter-group">
+          <select class="filter-select" id="departmentFilter" name="department">
+            <option value="" selected disabled hidden>Choose Client Type</option>
+           <option value="DEALER">DEALER</option>
+           <option value="CLIENT">CLIENT</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <select class="filter-select" id="batchFilter" name="batch">
+            <option value="" disabled hidden selected>Choose Client Status</option>
+            <option value="ACTIVE">ACTIVE</option>
+            <option value="INACTIVE">INACTIVE</option>
+            <option value="FOLLOW UP">FOLLOW UP</option>
+            <option value="BLACKLISTED">BLACKLISTED</option>
+            <option value="ADVANCED">ADVANCED</option>
+            <option value="OTHERS">OTHERS</option>            
+          </select>
+        </div>
+
+        <button class="filter-btn">Apply Filter</button>
+        <button type="button" class="filter-btn" onclick="window.location.href = '/fairtech'">Clear Filter</button>
+      </div>
+      <div class="search-form">
+        <input type="text" name="search" placeholder="Search by Client Name or ID" class="form-control input-tag search-input" />
+        <button type="submit" class="filter-btn">Search</button>
+      </div>      
+    </form>
+  </div>
+
+  <!-- Clients Table -->
+  <div class="span-full client-container">
+    <div class="span-full client-header">
+      <div class="items w-100 h-100 client-item">Client ID</div>
+      <div class="items w-100 h-100 client-item">Client Name</div>
+      <div class="items w-100 h-100 client-item">Client Type</div>
+      <div class="items w-100 h-100 client-item">Location</div>
+      <div class="items w-100 h-100 client-item">Status</div>
+    </div>
+    <% for (user of users) { %>
+    <div class="span-full client-row" onclick="window.location.href='/sachiko/edit/details/<%= user._id %>'">
+      <div class="items w-100 h-100 px-10px client-item"><%= user.clientId %></div>
+      <div class="items w-100 h-100 client-item"><%= user.userName %></div>
+      <div class="items w-100 h-100 client-item"><%= user.userLocation %></div>
+      <div class="items w-100 h-100 client-item"><%= user.userDepartment %></div>
+      <div class="items w-100 h-100 client-item"><%= user.userEmail %></div>
+    </div>
+    <% } %>
+  </div>
+</div>

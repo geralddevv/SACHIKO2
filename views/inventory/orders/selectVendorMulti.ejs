@@ -1,0 +1,547 @@
+<% layout('/layout/boilerplate') -%>
+
+<style>
+  .item-po-row {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 10px 12px;
+    width: 100%;
+    background: transparent;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    position: relative; /* For dropdown z-index */
+  }
+  .item-po-row:focus-within {
+    z-index: 10;
+  }
+  .item-po-row:last-child {
+    border-bottom: none;
+  }
+  .item-po-row:hover {
+    background: rgba(4, 74, 120, 0.04);
+  }
+  .header-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: #044a78;
+    color: white;
+    padding: 10px 12px;
+    border-radius: 8px 8px 0 0;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    width: 100%;
+  }
+  .col-info { width: 280px; flex-shrink: 0; }
+  .col-shortage { width: 85px; flex-shrink: 0; text-align: center; }
+  .col-vendor { flex: 1.2; min-width: 0; }
+  .col-coord { flex: 1; min-width: 0; }
+  .col-loc { flex: 1; min-width: 0; }
+  .col-qty { width: 80px; flex-shrink: 0; }
+  .col-contact { flex: 1.4; min-width: 0; }
+  .col-remove { width: 45px; flex-shrink: 0; text-align: center; }
+
+  /* Choices.js Overrides for Row Alignment */
+  .choices {
+    margin-bottom: 0 !important;
+    font-size: 13px !important;
+  }
+  .choices__inner {
+    min-height: 36px !important;
+    padding: 4px 8px !important;
+    background-color: #ffffff !important;
+    border-radius: 6px !important;
+    border: 1px solid #d1d5db !important;
+    display: flex;
+    align-items: center;
+  }
+  .choices__list--dropdown {
+    z-index: 100 !important;
+  }
+  .choices[data-type*="select-one"]::after {
+    border-color: #6b7280 transparent transparent transparent !important;
+  }
+
+  @media (max-width: 1200px) {
+    .header-row { display: none; }
+    .item-po-row {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 15px;
+      gap: 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+  }
+</style>
+
+<div class="main-content" style="padding: 10px;">
+
+  <form id="multi-po-form" action="/sachiko/inventory/reorder/create-po-multi" method="post" style="border:none; padding:0; gap:20px; background:transparent;">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="items" id="f-items" />
+
+    <div class="span-full form-heading" style="border-radius:10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+      <h1>Purchase Order</h1>
+    </div>
+    
+    <!-- PO Info banner -->
+    <div class="span-full" style="display:flex; gap:12px; flex-wrap:wrap; padding: 0; border: none; flex-direction: row; margin-bottom: -8px;">
+      <div style="display:flex; align-items:center; gap:12px; background:#f0f7ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px 20px; flex:1; min-width:220px;">
+        <i class="fa-solid fa-boxes-stacked" style="color:#044a78; font-size:22px;"></i>
+        <div>
+          <div style="font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:.05em;">Items in Queue</div>
+          <div id="queue-count" style="font-size:20px; font-weight:800; color:#044a78;"><%= cartItems.length %></div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:12px 20px; flex:1; min-width:220px;">
+        <i class="fa-solid fa-triangle-exclamation" style="color:#dc2626; font-size:22px;"></i>
+        <div>
+          <div style="font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:.05em;">Total Shortage</div>
+          <div id="shortage-sum" style="font-size:20px; font-weight:800; color:#dc2626;"><%= cartItems.reduce((s,i) => s + Number(i.shortage || 0), 0) %></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PER-ITEM VENDOR SELECTION ===== -->
+    <div class="span-full" id="item-rows-container" style="display:flex; flex-direction:column; padding: 0; border: none; background: white; border-radius: 8px; border: 1px solid #e5e7eb; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+      
+      <div class="header-row">
+        <div class="col-info">Item Details</div>
+        <div class="col-shortage">Shortage</div>
+        <div class="col-vendor">Select Vendor</div>
+        <div class="col-coord">Coordinator</div>
+        <div class="col-loc">Location</div>
+        <div class="col-qty">Quantity</div>
+        <div class="col-contact">Contact Info</div>
+        <div class="col-remove"></div>
+      </div>
+      <% cartItems.forEach((ci, idx) => {
+        const gv = ci.groupedVendors || {};
+        const hasVendors = Object.keys(gv).length > 0;
+      %>
+      <div class="item-po-row" data-index="<%= idx %>" data-shortage="<%= ci.shortage %>" style="padding: 12px 12px;">
+        <% if (!hasVendors) { %>
+          <div class="col-info">
+            <div style="background: #f0f7ff; border: 1px solid #bfdbfe; padding: 6px 12px; border-radius: 8px; display: flex; align-items: center; justify-content: flex-start; gap: 10px; height: 42px;">
+              <span style="background:#044a78; color:white; border-radius:4px; padding:0 6px; font-size:10px; font-weight:800; text-transform: uppercase; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 38px;"><%= ci.typeKey %></span>
+              <div style="font-size:14px; font-weight:800; color:#1e3a5f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="<%= ci.itemName %>"><%= ci.itemName %></div>
+            </div>
+          </div>
+          <div class="col-shortage">
+            <div style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; padding: 6px; border-radius: 8px; font-weight: 800; font-size: 14px;"><%= ci.shortage %></div>
+          </div>
+          <div style="flex:1; background:transparent; border-left:3px solid #fecaca; color:#991b1b; padding:4px 18px; font-size:13px; font-weight:600; display:flex; align-items:center;">
+            <i class="fa-solid fa-circle-exclamation" style="margin-right:8px;"></i> No vendor binding found.
+          </div>
+          <div class="col-remove">
+            <button type="button" onclick="removeItemRow(this)" style="background:#fee2e2; color:#dc2626; border:1px solid #fecaca; border-radius:6px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .2s;">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        <% } else { %>
+          <input type="hidden" class="item-field" data-idx="<%= idx %>" data-key="itemId"   value="<%= ci._id %>">
+          <input type="hidden" class="item-field" data-idx="<%= idx %>" data-key="itemType" value="<%= ci.typeKey %>">
+          <input type="hidden" class="item-field" data-idx="<%= idx %>" data-key="shortage" value="<%= ci.shortage %>">
+          <input type="hidden" class="item-binding-id" data-idx="<%= idx %>" value="">
+
+          <div class="col-info">
+            <div style="background: #f0f7ff; border: 1px solid #dbeafe; padding: 6px 12px; border-radius: 8px; display: flex; align-items: center; justify-content: flex-start; gap: 10px; height: 42px;">
+              <span style="background:#044a78; color:white; border-radius:4px; padding:0 6px; font-size:10px; font-weight:800; text-transform: uppercase; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; height: 20px; min-width: 38px;"><%= ci.typeKey %></span>
+              <div style="font-size:14px; font-weight:800; color:#1e3a5f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="<%= ci.itemName %>"><%= ci.itemName %></div>
+            </div>
+          </div>
+
+          <div class="col-shortage">
+            <div style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; padding: 6px; border-radius: 8px; font-weight: 900; font-size: 15px;"><%= ci.shortage %></div>
+          </div>
+
+          <div class="col-vendor">
+            <select class="form-control select-tag vendor-sel" data-idx="<%= idx %>">
+              <option value="" disabled selected hidden>Select Vendor</option>
+              <% Object.values(gv).forEach(v => { %>
+                <option value="<%= v.id %>"><%= v.name %></option>
+              <% }) %>
+            </select>
+          </div>
+
+          <div class="col-coord">
+            <select class="form-control select-tag coord-sel" data-idx="<%= idx %>">
+              <option value="" disabled selected hidden>Select Coordinator</option>
+            </select>
+          </div>
+
+          <div class="col-loc">
+            <select class="form-control select-tag loc-sel" data-idx="<%= idx %>">
+              <option value="" disabled selected hidden>Select Location</option>
+            </select>
+          </div>
+
+          <div class="col-qty">
+            <input type="number" class="form-control qty-input" data-idx="<%= idx %>" min="1" value="<%= ci.shortage %>" style="width:100%; height:38px; font-size:14px; font-weight: 600; border: 1.5px solid #d1d5db; padding: 0 10px; border-radius: 8px;">
+          </div>
+
+          <div class="col-contact">
+            <input type="text" class="form-control contact-disp" data-idx="<%= idx %>" readonly placeholder="—" style="width:100%; height:38px; font-size:13px; font-weight: 500; background:#f9fafb; border: 1.5px solid #d1d5db; padding: 0 12px; border-radius: 8px;">
+          </div>
+
+          <div class="col-remove">
+            <button type="button" onclick="removeItemRow(this)" style="background:#fee2e2; color:#dc2626; border:1px solid #fecaca; border-radius:6px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .2s;">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        <% } %>
+      </div><% }) %>
+    </div>
+
+    <!-- ===== SHARED PO DETAILS ===== -->
+    <div class="span-full form-subheading" style="margin-top:8px;">
+      <h1>Purchase Order Info</h1>
+    </div>
+
+    <div class="span-eight">
+      <label for="po-number">PO Number</label>
+      <input type="text" id="po-number" name="poNumber" class="form-control" placeholder="Enter PO number" required />
+    </div>
+
+    <div class="span-eight">
+      <label for="estimated-date">Expected Delivery</label>
+      <input type="date" id="estimated-date" name="estimatedDate" class="form-control" required />
+    </div>
+
+    <div class="span-half">
+      <label for="remarks">Remarks (Optional)</label>
+      <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Specific vendor instructions..." />
+    </div>
+
+    <!-- Submit -->
+    <!-- Submit -->
+    <div class="span-full btn-grp" style="margin-top:20px; display:flex; flex-direction: row; gap:16px; align-items:center; justify-content: center; border: none; padding: 0;">
+      <button type="button"
+        onclick="window.location.href='/sachiko/inventory/reorder'"
+        style="flex: 1; padding:12px 32px; background:#044A78; color:#ffffff; border-radius:10px; font-weight:700; text-decoration:none; font-size:15px; border:none; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; cursor: pointer; outline: none; box-shadow: 0 4px 6px rgba(4, 74, 120, 0.15);"
+        onmouseover="this.style.background='#033d63'; this.style.transform='translateY(-1px)';"
+        onmouseout="this.style.background='#044A78'; this.style.transform='none';"
+      >
+        <i class="fa-solid fa-arrow-left"></i> Back to Reorder
+      </button>
+
+      <button
+        type="button"
+        id="submit-multi-po"
+        onclick="submitMultiPO()"
+        style="flex: 1; background:#044A78; color:white; padding:12px 40px; border-radius:10px; font-weight:700; border:none; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content: center; gap:10px; box-shadow: 0 4px 6px rgba(4, 74, 120, 0.2);"
+        onmouseover="this.style.background='#033d63'; this.style.transform='translateY(-1px)';"
+        onmouseout="this.style.background='#044A78'; this.style.transform='none';"
+      >
+        <i class="fa-solid fa-check-double"></i> Create Purchase Orders
+      </button>
+    </div>
+
+  </form>
+</div>
+
+<!-- Custom Confirmation Modal -->
+<div class="logout-modal" id="confirmModal" aria-hidden="true" style="padding: 15px; overflow-y: auto; align-items: center; backdrop-filter: blur(10px);">
+  <div class="logout-dialog" role="dialog" aria-modal="true" style="width: min(500px, 95vw); margin: auto; padding: 0; border: none; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.4); animation: modalScaleIn 0.3s ease-out;">
+    <div style="background: #044A78; padding: 20px 24px; text-align: left; color: white; display: flex; align-items: center; gap: 16px;">
+      <i class="fa-solid fa-circle-question" style="font-size: 1.8rem; opacity: 0.9;"></i>
+      <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.5px;">Remove Item?</h2>
+    </div>
+    <div style="padding: 24px 24px; background: #ffffff; text-align: left;">
+      <p style="margin: 0; color: #475569; font-size: 15px; font-weight: 500; line-height: 1.6;">Are you sure you want to remove this item from the purchase queue?</p>
+      
+      <div style="display: flex; gap: 12px; margin-top: 25px;">
+        <button type="button" id="confirmCancel" style="flex: 1; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #64748b; font-weight: 700; padding: 12px; border-radius: 12px; font-size: 14px; cursor: pointer; transition: all 0.2s;">
+          Cancel
+        </button>
+        <button type="button" id="confirmDelete" style="flex: 1; background: #dc2626; color: #ffffff; border: none; font-weight: 700; padding: 12px; border-radius: 12px; font-size: 14px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);">
+          Remove
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  @keyframes modalScaleIn {
+    from { opacity: 0; transform: scale(0.9) translateY(20px); filter: blur(5px); }
+    to { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+  }
+</style>
+
+<script id="vendor-data" type="application/json">
+  <%- JSON.stringify(cartItems.map(ci => ci.groupedVendors || {})) %>
+</script>
+
+<script>
+  // Vendor data injected from server
+  const allGroupedVendors = JSON.parse(document.getElementById('vendor-data').textContent);
+  const choicesInstances = {};
+  let pendingRow = null;
+
+  const modal = document.getElementById('confirmModal');
+  const confirmBtn = document.getElementById('confirmDelete');
+  const cancelBtn = document.getElementById('confirmCancel');
+
+  function removeItemRow(btn) {
+    pendingRow = btn.closest('.item-po-row');
+    if (modal) modal.classList.add('show');
+  }
+
+  if (cancelBtn) {
+    cancelBtn.onclick = () => {
+      if (modal) modal.classList.remove('show');
+      pendingRow = null;
+    };
+  }
+
+  if (confirmBtn) {
+    confirmBtn.onclick = () => {
+      if (!pendingRow) return;
+      
+      const row = pendingRow;
+      // Cleanup Choices.js instances for this row
+      const idx = row.dataset.index;
+      if (choicesInstances[idx]) {
+        Object.keys(choicesInstances[idx]).forEach(k => {
+          if (choicesInstances[idx][k]) choicesInstances[idx][k].destroy();
+        });
+        delete choicesInstances[idx];
+      }
+
+      row.remove();
+      if (modal) modal.classList.remove('show');
+      pendingRow = null;
+
+      // Update Totals
+      const allRows = document.querySelectorAll('.item-po-row');
+      document.getElementById('queue-count').textContent = allRows.length;
+
+      let totalShortage = 0;
+      allRows.forEach(r => {
+        totalShortage += Number(r.dataset.shortage || 0);
+      });
+      document.getElementById('shortage-sum').textContent = totalShortage;
+
+      if (allRows.length === 0) {
+        const container = document.getElementById('item-rows-container');
+        container.innerHTML = '<div style="padding:40px; text-align:center; color:#6b7280; font-size:16px; font-weight:600;">The PO queue is currently empty.</div>';
+        const submitBtn = document.getElementById('submit-multi-po');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = '0.5';
+          submitBtn.style.cursor = 'not-allowed';
+        }
+      }
+    };
+  }
+
+  // Close modal on click outside
+  if (modal) {
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        modal.classList.remove('show');
+        pendingRow = null;
+      }
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Choices.js for all select tags
+    document.querySelectorAll('.select-tag').forEach(sel => {
+      const idx = sel.dataset.idx;
+      const type = sel.classList.contains('vendor-sel') ? 'vendor' : 
+                   sel.classList.contains('coord-sel')  ? 'coord' : 'loc';
+      
+      const instance = new Choices(sel, {
+        searchEnabled: true,
+        shouldSort: false,
+        placeholder: true,
+        placeholderValue: sel.options[0]?.text || 'Select',
+        itemSelectText: '',
+      });
+
+      if (!choicesInstances[idx]) choicesInstances[idx] = {};
+      choicesInstances[idx][type] = instance;
+    });
+
+    // Default date: 7 days from now
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 7);
+    const dateInput = document.getElementById('estimated-date');
+    if (dateInput) dateInput.value = defaultDate.toISOString().split('T')[0];
+
+    // Add change listeners
+    document.querySelectorAll('.vendor-sel').forEach(sel => {
+      const idx = parseInt(sel.dataset.idx);
+      sel.addEventListener('change', () => onVendorChange(idx));
+    });
+    document.querySelectorAll('.coord-sel').forEach(sel => {
+      const idx = parseInt(sel.dataset.idx);
+      sel.addEventListener('change', () => onCoordChange(idx));
+    });
+
+    // Auto-select items with only 1 vendor choice
+    setTimeout(() => {
+      document.querySelectorAll('.vendor-sel').forEach(sel => {
+        const idx = parseInt(sel.dataset.idx);
+        const validOptions = Array.from(sel.options).filter(o => o.value && !o.disabled);
+        
+        if (validOptions.length === 1) {
+          const val = validOptions[0].value;
+          const instance = choicesInstances[idx]?.vendor;
+          if (instance) {
+            instance.setChoiceByValue(val);
+            onVendorChange(idx);
+          }
+        } else if (sel.value) {
+          // If already has a value (e.g. from server selection)
+          onVendorChange(idx);
+        }
+      });
+    }, 200);
+  });
+
+  function updateChoicesOptions(instance, options, placeholder = 'Select') {
+    if (!instance) return;
+    instance.clearStore();
+    instance.setChoices([
+      { value: '', label: placeholder, selected: true, disabled: true, placeholder: true },
+      ...options
+    ], 'value', 'label', true);
+  }
+
+  function onVendorChange(idx) {
+    const vendorValue = document.querySelector(`.vendor-sel[data-idx="${idx}"]`).value;
+    const coordInstance = choicesInstances[idx]?.coord;
+    const locInstance   = choicesInstances[idx]?.loc;
+    
+    const contactEl = document.querySelector(`.contact-disp[data-idx="${idx}"]`);
+    const bindingEl = document.querySelector(`.item-binding-id[data-idx="${idx}"]`);
+
+    const gv = allGroupedVendors[idx] || {};
+    const vendor = gv[vendorValue];
+
+    // Reset downstream
+    updateChoicesOptions(coordInstance, [], 'Select Coordinator');
+    updateChoicesOptions(locInstance, [], 'Select Location');
+    if (contactEl) contactEl.value = '';
+    if (bindingEl) bindingEl.value = '';
+
+    if (!vendor) return;
+
+    const coordOptions = (vendor.coordinators || []).map(c => ({
+      value: c.userId,
+      label: c.userName
+    }));
+
+    updateChoicesOptions(coordInstance, coordOptions, 'Select Coordinator');
+
+    // Auto-select if only one coordinator
+    if (coordOptions.length === 1) {
+      coordInstance.setChoiceByValue(coordOptions[0].value);
+      onCoordChange(idx);
+    }
+  }
+
+  function onCoordChange(idx) {
+    const vendorValue = document.querySelector(`.vendor-sel[data-idx="${idx}"]`).value;
+    const coordValue  = document.querySelector(`.coord-sel[data-idx="${idx}"]`).value;
+    const locInstance = choicesInstances[idx]?.loc;
+    
+    const contactEl = document.querySelector(`.contact-disp[data-idx="${idx}"]`);
+    const bindingEl = document.querySelector(`.item-binding-id[data-idx="${idx}"]`);
+
+    const gv = allGroupedVendors[idx] || {};
+    const vendor = gv[vendorValue];
+    if (!vendor) return;
+
+    const coord = (vendor.coordinators || []).find(c => String(c.userId) === String(coordValue));
+    if (!coord) return;
+
+    if (contactEl) contactEl.value = coord.userContact || '—';
+    if (bindingEl) bindingEl.value = coord.bindingId || '';
+
+    // Populate locations
+    const locs = [];
+    if (coord.userLocation) locs.push(coord.userLocation);
+    if (Array.isArray(coord.locationDetails)) {
+      coord.locationDetails.forEach(ld => {
+        const loc = ld.userLocation || ld.location || ld.dispatchAddress;
+        if (loc && !locs.includes(loc)) locs.push(loc);
+      });
+    }
+
+    const locOptions = locs.map(l => ({ value: l, label: l }));
+    updateChoicesOptions(locInstance, locOptions, 'Select Location');
+
+    if (locOptions.length === 1) {
+      locInstance.setChoiceByValue(locOptions[0].value);
+    }
+  }
+
+  function submitMultiPO() {
+    const poNumber       = document.getElementById('po-number').value.trim();
+    const estimatedDate  = document.getElementById('estimated-date').value;
+
+    if (!poNumber) {
+      alert('Please enter a PO Number before submitting.');
+      document.getElementById('po-number').focus();
+      return;
+    }
+    if (!estimatedDate) {
+      alert('Please select an Expected Delivery date.');
+      document.getElementById('estimated-date').focus();
+      return;
+    }
+
+    const items = [];
+    let valid = true;
+    document.querySelectorAll('.item-po-row').forEach(row => {
+      const idx      = parseInt(row.dataset.index);
+      const vendorSel = row.querySelector('.vendor-sel');
+      if (!vendorSel) return;
+
+      const coordSel  = row.querySelector('.coord-sel');
+      const locSel    = row.querySelector('.loc-sel');
+      const qtyInput  = row.querySelector('.qty-input');
+      const bindingEl = row.querySelector('.item-binding-id');
+
+      const itemId    = (row.querySelector(`.item-field[data-key="itemId"]`) || {}).value;
+      const itemType  = (row.querySelector(`.item-field[data-key="itemType"]`) || {}).value;
+      const shortage  = (row.querySelector(`.item-field[data-key="shortage"]`) || {}).value;
+
+      if (!itemId || !itemType) return;
+      if (!coordSel.value || !locSel.value) {
+        alert(`Please select a vendor, coordinator and location for every item before submitting.`);
+        coordSel.focus();
+        valid = false;
+        return;
+      }
+
+      items.push({
+        itemId,
+        itemType,
+        vendorUserId:    coordSel.value,
+        vendorBindingId: bindingEl ? bindingEl.value : '',
+        userLocation:    locSel.value,
+        quantity:        qtyInput ? qtyInput.value : shortage,
+      });
+    });
+
+    if (!valid) return;
+
+    if (items.length === 0) {
+      alert('No valid items with vendor bindings. Please go back and check your items.');
+      return;
+    }
+
+    document.getElementById('f-items').value = JSON.stringify(items);
+    document.getElementById('multi-po-form').submit();
+  }
+</script>
