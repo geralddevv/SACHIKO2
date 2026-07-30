@@ -198,7 +198,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created payroll for "${emp.empName}" (${month}/${year}, take-away ₹${takeAway})`;
     req.flash("notification", "Payroll created successfully");
-    return res.redirect("/fairtech/payroll/view");
+    return res.redirect("/sachiko/payroll/view");
   } catch (err) {
     console.error(err);
     req.flash("error", "Failed to create payroll");

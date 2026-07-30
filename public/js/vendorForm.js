@@ -261,8 +261,6 @@
               </select>
               <input type="text" class="form-control input-tag" name="locationDetails[${i}][deliveryLocation]"
                 placeholder="Pick Up Loc" value="${escapeAttr(v.deliveryLocation.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" />
-              <input type="text" class="form-control input-tag" name="locationDetails[${i}][deliveryLocation1]"
-                placeholder="Pick Up Loc 1" value="${escapeAttr(v.deliveryLocation1.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" />
               <select class="form-control select-tag" name="locationDetails[${i}][vendorPayment]">
                 <option value="">Payment</option>
                 <option value="PAY" ${sel(v.vendorPayment, "PAY")}>PAY</option>

@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const sachikoSLSchema = new mongoose.Schema(
   {
     slId: { type: String, required: true, unique: true },
+    skuCode: { type: String, required: true, unique: true },
     productCode: { type: String, required: true, trim: true },
     wordFile: { type: String },
     wordFileOriginalName: { type: String },

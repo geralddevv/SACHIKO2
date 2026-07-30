@@ -61,6 +61,12 @@ const userSchema = new mongoose.Schema({
       ref: "TapeBinding",
     },
   ],
+  sl: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "SLBinding",
+    },
+  ],
 });
 
 const Username = mongoose.model("Username", userSchema);

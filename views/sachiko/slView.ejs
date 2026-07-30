@@ -74,6 +74,7 @@
     return {
       _id: String(ds._id),
       slId: ds.slId || "",
+      skuCode: ds.skuCode || "",
       productCode: ds.productCode,
       wordFileOriginalName: ds.wordFileOriginalName || "",
       product,
@@ -129,6 +130,7 @@
             </div>`;
         },
       },
+      withTextFilter({ title: "SKU", field: "skuCode", minWidth: 180 }),
       withTextFilter({ title: "Product Code", field: "productCode", width: 150, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
       withTextFilter({ title: "Product",      field: "product",     minWidth: 220, formatter: (cell) => `<span style="font-weight:600;color:#03365a;">${cell.getValue()}</span>` }),
       withSelectFilter({ title: "FS Family",  field: "fsFamily",  minWidth: 120 },

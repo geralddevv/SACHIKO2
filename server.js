@@ -11,6 +11,7 @@ import advanceRoute from "./routes/acccounting/advance.js";
 import employeeRoute from "./routes/hr/employee.js";
 import pettycashRoute from "./routes/acccounting/pettycash.js";
 import tapeBindingRoutes from "./routes/inventory/tapeBinding.js";
+import slBindingRoutes from "./routes/sachiko/slBinding.js";
 import tapeStockRoutes from "./routes/stock/tapeStock.js";
 import stockViewRoutes from "./routes/stock/stockView.js";
 import clientFormRoute from "./routes/users/clients.js";
@@ -717,6 +718,7 @@ app.use("/sachiko/tapestock", requireAuth, requireRole(["proprietor", "admin", "
 app.use("/sachiko/stocks", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), stockViewRoutes);
 app.use("/sachiko/inventory", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), reorderRoutes);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod"]), sachikoRoute);
+app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), slBindingRoutes);
 
 /* 404 */
 app.all("*", (req, res) => {

@@ -1,0 +1,521 @@
+<% layout('/layout/boilerplate') %>
+<style>
+  .sl-id-success {
+    border: 2px solid #28a745 !important;
+    background-color: #f3fff6;
+    color: #155724;
+    font-weight: 600;
+  }
+
+  .sl-id-error {
+    border: 2px solid #dc3545 !important;
+    background-color: #fff5f5;
+    color: #721c24;
+    font-weight: 600;
+  }
+</style>
+
+<!-- The main content -->
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
+  <form action="/sachiko/form/sl-binding" method="post" onsubmit="return validateSlBeforeSubmit()" class="needs-validation" autocomplete="off" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="span-full form-heading">
+      <h1>Client SL</h1>
+    </div>
+
+    <div class="span-full form-subheading">
+      <h1>User Info</h1>
+    </div>
+
+    <div id="sl-id-div" class="span-seven">
+      <label for="sl-id">SKU Code</label>
+      <input type="text" id="sl-id" class="form-control" name="skuCode" placeholder="Will appear here" readonly required />
+    </div>
+
+    <div id="client-name-div" class="span-six">
+      <div class="clientName-label"><label for="client-name">Client Name</label><span class="asterisk" style="font-size: 14px;"></span></div>
+      <select name="clientName" id="client-name" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Search</option>
+        <% for (let client of clients) { %>
+        <option value="<%= client %>"><%= client %></option>
+        <% } %>
+      </select>
+    </div>
+
+    <div id="user-name-div" class="span-six">
+      <label>User Name</label>
+      <select id="client-user-name" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Search</option>
+      </select>
+    </div>
+    <div id="user-name-contact-div" class="span-six">
+      <label for="user-contact">User Contact</label>
+      <input type="text" id="user-contact" class="form-control" placeholder="Enter User Contact" required readonly />
+    </div>
+    <div id="client-location-div" class="span-seven">
+      <label for="client-location">Location</label>
+      <select name="location" id="client-location" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select location</option>
+      </select>
+    </div>
+
+    <div class="span-full form-subheading" style="display: flex; justify-content: space-between; align-items: center;">
+      <h1>SL Specifications</h1>
+      <button type="button" id="reset-specs-btn" style="padding: 4px 12px; border-radius: 4px; background-color: #dc3545; color: white; border: none; cursor: pointer; font-size: 14px;">
+        Reset
+      </button>
+    </div>
+
+    <!-- Facestock -->
+    <div style="grid-column: span 12; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Facestock</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem">
+        <div class="span-six" style="grid-column: auto">
+          <label>Family</label>
+          <select id="fs-family" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% fsFamilies?.forEach(v => { %>
+              <option value="<%= v %>"><%= v %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="span-six" style="grid-column: auto">
+          <label>Type</label>
+          <select id="fs-type" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% fsTypes?.forEach(v => { %>
+              <option value="<%= v %>"><%= v %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label>GSM</label>
+          <select id="fs-gsm" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% fsGsms?.forEach(v => { %>
+              <option value="<%= v %>"><%= v %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label>Micron</label>
+          <select id="fs-micron" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% fsMicrons?.forEach(v => { %>
+              <option value="<%= v %>"><%= v %></option>
+            <% }) %>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Adhesive -->
+    <div style="grid-column: span 8; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Adhesive</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem">
+        <div class="span-seven" style="grid-column: auto">
+          <label>Type</label>
+          <select id="ad-type" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% adTypes?.forEach(v => { %>
+              <option value="<%= v %>"><%= v %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label>GSM</label>
+          <select id="ad-gsm" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% adGsms?.forEach(v => { %>
+              <option value="<%= v %>"><%= v %></option>
+            <% }) %>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Release Liner -->
+    <div style="grid-column: span 12; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Release Liner</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem">
+        <div class="span-seven" style="grid-column: auto">
+          <label>Type</label>
+          <select id="rl-type" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% rlTypes?.forEach(v => { %>
+              <option value="<%= v %>"><%= v %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label>Color</label>
+          <select id="rl-color" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% rlColors?.forEach(v => { %>
+              <option value="<%= v %>"><%= v %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label>GSM</label>
+          <select id="rl-gsm" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% rlGsms?.forEach(v => { %>
+              <option value="<%= v %>"><%= v %></option>
+            <% }) %>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <input type="hidden" name="slId" id="resolved-sl-id">
+    <input type="hidden" name="userId" id="user-id">
+
+    <div class="btn-grp span-full">
+      <button type="submit">Save SL Binding</button>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  /* ================= ELEMENTS ================= */
+  const submitBtn = document.querySelector("button[type='submit']");
+
+  const clientSelect = document.getElementById("client-name");
+  const userSelect = document.getElementById("client-user-name");
+
+  const userIdInput = document.getElementById("user-id");
+  const userContactInput = document.getElementById("user-contact");
+  const locationSelect = document.getElementById("client-location");
+
+  const slIdInput = document.getElementById("resolved-sl-id");
+  const slIdDisplay = document.getElementById("sl-id");
+
+  const specFields = ["fs-family", "fs-type", "fs-gsm", "fs-micron", "ad-type", "ad-gsm", "rl-type", "rl-color", "rl-gsm"];
+
+  // Map from element ID to the query param / API response key (same names on both ends).
+  const fieldToKey = {
+    "fs-family": "fsFamily",
+    "fs-type": "fsType",
+    "fs-gsm": "fsGsm",
+    "fs-micron": "fsMicron",
+    "ad-type": "adType",
+    "ad-gsm": "adGsm",
+    "rl-type": "rlType",
+    "rl-color": "rlColor",
+    "rl-gsm": "rlGsm",
+  };
+
+  submitBtn.disabled = true;
+
+  /* ================= CHOICES INIT ================= */
+  const clientChoices = new Choices(clientSelect, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+  const userChoices = new Choices(userSelect, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+  const locationChoices = new Choices(locationSelect, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+  // Full user docs for the selected client (kept for locationDetails lookup)
+  let currentUsers = [];
+
+  // Store Choices instances for spec fields
+  const specChoices = {};
+  specFields.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      specChoices[id] = new Choices(el, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    }
+  });
+
+  /* ================= HELPERS ================= */
+  function normalizeLocationName(value) {
+    return String(value || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, " ")
+      .replace(/^[.,]+|[.,]+$/g, "");
+  }
+
+  function getUserLocationEntries(user) {
+    const details = Array.isArray(user?.locationDetails) ? user.locationDetails : [];
+    const entries = details
+      .map((entry) => {
+        const userLocation = normalizeLocationName(entry?.userLocation || entry?.location || "");
+        if (!userLocation) return null;
+        return { value: userLocation, label: userLocation };
+      })
+      .filter(Boolean);
+
+    if (entries.length > 0) {
+      const seen = new Set();
+      return entries.filter((e) => (seen.has(e.value) ? false : seen.add(e.value)));
+    }
+
+    const fallbackLocation = normalizeLocationName(user?.userLocation || "");
+    if (!fallbackLocation) return [];
+    return [{ value: fallbackLocation, label: fallbackLocation }];
+  }
+
+  function clearLocationChoices() {
+    locationChoices.clearStore();
+    locationChoices.setChoices(
+      [{ value: "", label: "Select location", disabled: true, selected: true }],
+      "value",
+      "label",
+      true
+    );
+  }
+
+  function populateLocationChoices(user) {
+    const entries = getUserLocationEntries(user);
+    if (entries.length === 0) {
+      clearLocationChoices();
+      return;
+    }
+    const autoSelect = entries.length === 1;
+    locationChoices.clearStore();
+    locationChoices.setChoices(
+      [
+        { value: "", label: "Select location", disabled: true, selected: !autoSelect, placeholder: true },
+        ...entries.map((e, i) => ({ value: e.value, label: e.label, selected: autoSelect && i === 0 })),
+      ],
+      "value",
+      "label",
+      true
+    );
+  }
+
+  function resetUserFields() {
+    userIdInput.value = "";
+    userContactInput.value = "";
+    clearLocationChoices();
+  }
+
+  function hardResetUserSelection() {
+    userChoices.removeActiveItems();
+    userChoices.clearChoices();
+    resetUserFields();
+  }
+
+  function resetResolvedSl() {
+    slIdInput.value = "";
+    slIdDisplay.value = "";
+    submitBtn.disabled = true;
+    slIdDisplay.classList.remove("sl-id-success", "sl-id-error");
+  }
+
+  /* ================= SMART FILTER ================= */
+  async function filterSpecs(changedFieldId) {
+    const params = new URLSearchParams();
+    specFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.value) {
+        params.set(fieldToKey[id], el.value);
+      }
+    });
+
+    try {
+      const res = await fetch(`/sachiko/form/sl-binding/filter-specs?${params}`);
+      const data = await res.json();
+      if (!data) return;
+
+      const autoSelected = [];
+
+      specFields.forEach(id => {
+        if (id === changedFieldId) return;
+        const choicesInstance = specChoices[id];
+        if (!choicesInstance) return;
+
+        const apiKey = fieldToKey[id];
+        const filteredValues = data[apiKey] || [];
+        const currentValue = document.getElementById(id)?.value || "";
+
+        const newChoices = filteredValues.map(v => ({
+          value: String(v),
+          label: String(v),
+          selected: String(v) === currentValue,
+        }));
+
+        if (changedFieldId !== "reset-all" && filteredValues.length === 1 && !currentValue) {
+          newChoices[0].selected = true;
+          autoSelected.push(id);
+        }
+
+        choicesInstance.clearStore();
+        choicesInstance.setChoices(
+          [{ value: "", label: "Search", disabled: true, selected: !newChoices.some(c => c.selected) }, ...newChoices],
+          "value",
+          "label",
+          true
+        );
+      });
+
+      if (autoSelected.length > 0) {
+        await filterSpecs(autoSelected[0]);
+        resolveSl();
+      }
+    } catch (err) {
+      console.error("Filter specs error:", err);
+    }
+  }
+
+  /* ================= CLIENT → USER ================= */
+  clientSelect.addEventListener("change", async () => {
+    const clientName = clientSelect.value;
+
+    hardResetUserSelection();
+
+    const res = await fetch(`/sachiko/form/sl-binding/client/${clientName}`);
+    const clientData = await res.json();
+    if (!clientData || !clientData.users) return;
+
+    currentUsers = clientData.users;
+
+    if (clientData.users.length === 1) {
+      const u = clientData.users[0];
+
+      userChoices.setChoices(
+        [{
+          value: u._id,
+          label: u.userName,
+          selected: true,
+          customProperties: { mobile: u.userContact || "", location: u.userLocation || "" }
+        }],
+        "value",
+        "label",
+        true
+      );
+
+      userIdInput.value = u._id;
+      userContactInput.value = u.userContact || "";
+      populateLocationChoices(u);
+      return;
+    }
+
+    userChoices.setChoices(
+      clientData.users.map(u => ({
+        value: u._id,
+        label: u.userName,
+        customProperties: { mobile: u.userContact || "", location: u.userLocation || "" }
+      })),
+      "value",
+      "label",
+      true
+    );
+
+    resetUserFields();
+  });
+
+  /* ================= USER CHANGE ================= */
+  userSelect.addEventListener("change", () => {
+    const selectedId = userChoices.getValue(true);
+    if (!selectedId) return;
+
+    const choice = userChoices._store.choices.find(c => c.value === selectedId);
+    if (!choice) return;
+
+    userIdInput.value = choice.value;
+    userContactInput.value = choice.customProperties?.mobile || "";
+
+    const selectedUser = currentUsers.find(u => String(u._id) === String(selectedId));
+    populateLocationChoices(selectedUser || { userLocation: choice.customProperties?.location || "" });
+  });
+
+  /* ================= SL RESOLVE ================= */
+  async function resolveSl() {
+    resetResolvedSl();
+
+    const values = {};
+    for (let id of specFields) {
+      const el = document.getElementById(id);
+      if (!el || !el.value) return;
+      values[id] = el.value;
+    }
+
+    const params = new URLSearchParams();
+    specFields.forEach(id => params.set(fieldToKey[id], values[id]));
+
+    const res = await fetch(`/sachiko/form/sl-binding/resolve-sl?${params}`);
+
+    if (!res.ok) {
+      slIdDisplay.value = "No matching SL found";
+      slIdDisplay.classList.add("sl-id-error");
+      return;
+    }
+
+    const data = await res.json();
+
+    slIdInput.value = data.slId;
+    slIdDisplay.value = data.skuCode;
+    slIdDisplay.classList.add("sl-id-success");
+    submitBtn.disabled = false;
+  }
+
+  /* ================= SPEC CHANGE HANDLER ================= */
+  specFields.forEach(id => {
+    document.getElementById(id)?.addEventListener("change", async () => {
+      await filterSpecs(id);
+      resolveSl();
+    });
+  });
+
+  /* ================= RESET SPECS ================= */
+  const resetSpecsBtn = document.getElementById("reset-specs-btn");
+  if (resetSpecsBtn) {
+    resetSpecsBtn.addEventListener("click", async () => {
+      specFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+        if (specChoices[id]) specChoices[id].setChoiceByValue("");
+      });
+
+      resetResolvedSl();
+
+      if (typeof clientChoices !== "undefined") {
+        clientChoices.setChoiceByValue("");
+      }
+      hardResetUserSelection();
+
+      await filterSpecs("reset-all");
+    });
+  }
+});
+
+/* ================= CUSTOM TOAST ================= */
+function showClientToast(message, isError = true) {
+  const existingToast = document.getElementById("client-toast");
+  if (existingToast) existingToast.remove();
+
+  const toast = document.createElement("div");
+  toast.id = "client-toast";
+  toast.className = `toast-notification ${isError ? 'toast-error' : 'toast-success'}`;
+  toast.innerHTML = `
+    <span>${message}</span>
+    <span class="toast-close" onclick="this.parentElement.remove()">×</span>
+  `;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.style.animation = "slideOut 0.5s forwards";
+      setTimeout(() => toast.remove(), 500);
+    }
+  }, 5000);
+}
+
+/* ================= FORM GUARD ================= */
+function validateSlBeforeSubmit() {
+  const slId = document.getElementById("resolved-sl-id").value;
+  if (!slId) {
+    showClientToast("Please select a valid SL specification.", true);
+    return false;
+  }
+  return true;
+}
+</script>

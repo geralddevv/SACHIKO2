@@ -358,7 +358,7 @@ router.use((req, res, next) => {
   const hasSalesAccess = role === "sales" || Boolean(permissions.sales);
   const hasHrAccess = role === "hr" || Boolean(permissions.hr);
 
-  if (!role) return res.redirect("/fairtech/login");
+  if (!role) return res.redirect("/sachiko/login");
 
   if (role === "proprietor" || role === "admin" || role === "hod") return next();
 
@@ -389,7 +389,6 @@ router.use((req, res, next) => {
       "/stocks/view",
       "/pettycash/view",
       "/labels/view",
-      "/form/labels",
       "/form/tape-master",
     ];
 
@@ -414,7 +413,6 @@ router.use((req, res, next) => {
       /^\/form\/tape-binding$/,
       /^\/tape\/edit\/[^/]+$/,
       /^\/pettycash\/create$/,
-      /^\/form\/labels$/,
       /^\/labels\/edit\/[^/]+$/,
       /^\/form\/tape$/,
     ];
@@ -698,7 +696,7 @@ router.post("/form/client", requireAuth, createLimiter, async (req, res) => {
     await Client.create(formData);
     res.locals.auditDescription = `Created client "${clientName}"`;
     req.flash("notification", "Client created successfully!");
-    res.json({ success: true, redirect: "/fairtech/client/view" });
+    res.json({ success: true, redirect: "/sachiko/client/view" });
   } catch (err) {
     console.error(err);
     if (err?.code === 11000) {
@@ -818,7 +816,7 @@ router.post("/form/user", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created user "${userName}" under client "${client.clientName}"`;
     req.flash("notification", "User created successfully!");
-    res.json({ success: true, redirect: "/fairtech/master/view" });
+    res.json({ success: true, redirect: "/sachiko/master/view" });
   } catch (err) {
     console.error(err);
     if (err?.code === 11000) {
@@ -968,7 +966,7 @@ router.post("/tasks", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created task "${task.title}" assigned to "${assignee.empName}"`;
     req.flash("notification", "Task created successfully!");
-    res.json({ success: true, redirect: "/fairtech/tasks" });
+    res.json({ success: true, redirect: "/sachiko/tasks" });
   } catch (err) {
     console.error("TASK CREATE ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to create task." });
@@ -1165,7 +1163,7 @@ router.post("/daybook", requireAuth, createLimiter, async (req, res) => {
     await DaybookEntry.bulkWrite(ops);
 
     if (!req.body.silent) req.flash("notification", "Added to Daybook.");
-    res.json({ success: true, redirect: "/fairtech/daybook" });
+    res.json({ success: true, redirect: "/sachiko/daybook" });
   } catch (err) {
     console.error("DAYBOOK ADD ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to add to Daybook." });
@@ -1217,37 +1215,9 @@ router.delete("/api/daybook/:id", requireAuth, deleteLimiter, async (req, res) =
 });
 
 // ----------------------------------Labels (client binding)---------------------------------->
-router.get("/form/labels", async (req, res) => {
-  let clients = await Client.distinct("clientName");
-  let labelsCount = (await Label.countDocuments()) + 1;
-
-  res.render("inventory/labels/labels.ejs", {
-    title: "Labels",
-    JS: "labels.js",
-    CSS: false,
-    clients,
-    labelsCount,
-    notification: req.flash("notification"),
-  });
-});
-
-router.post("/form/labels", requireAuth, createLimiter, async (req, res) => {
-  try {
-    let { userObjId } = req.body;
-    let savedLabel = await Label.create(req.body);
-    let user = await Username.findOne({ _id: userObjId });
-    user.label.push(savedLabel);
-    await user.save();
-
-    res.locals.auditDescription = `Created label for "${req.body.clientName || ""}" (${req.body.userName || ""})`;
-    req.flash("notification", "Label created successfully!");
-    res.json({ success: true, redirect: "/fairtech/form/labels" });
-  } catch (err) {
-    console.error(err);
-    res.status(400).json({ success: false, message: err.message });
-  }
-});
-
+// Client + user lookup by client name -- still used by the Sales Order form's
+// client picker (views/inventory/orders/salesOrderForm.ejs), even though the
+// label-creation page that originally used it has been removed.
 router.get("/form/labels/:name", async (req, res) => {
   try {
     const rawName = String(req.params.name || "");
@@ -1362,7 +1332,7 @@ router.post("/form/samples", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created ${activeTab} sample "${sampleCode}" (${material})`;
     req.flash("notification", `${activeTab === "client" ? "Client" : "Vendor"} sample submitted successfully!`);
-    res.json({ success: true, redirect: `/fairtech/form/samples?tab=${activeTab}` });
+    res.json({ success: true, redirect: `/sachiko/form/samples?tab=${activeTab}` });
   } catch (err) {
     console.error(err);
     res.status(400).json({ success: false, message: err.message });
@@ -1472,7 +1442,7 @@ router.post("/form/tape", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created tape master "${data.tapeProductId}" (${data.tapePaperCode}, ${data.tapeGsm}gsm)`;
     req.flash("notification", "Tape Master created successfully!");
-    res.json({ success: true, redirect: "/fairtech/tape/view" });
+    res.json({ success: true, redirect: "/sachiko/tape/view" });
   } catch (err) {
     console.error(err);
     if (err?.code === 11000) {
@@ -1497,7 +1467,7 @@ router.get("/form/edit/user/:userId", async (req, res) => {
 
     if (!user) {
       req.flash("error", "User not found.");
-      return res.redirect("/fairtech/users/master");
+      return res.redirect("/sachiko/users/master");
     }
 
     // Build the rows for the form. Dispatch details are now per-location; for
@@ -1548,7 +1518,7 @@ router.post("/form/edit/user/:userId", requireAuth, updateLimiter, async (req, r
     const currentUser = await Username.findById(userId);
     if (!currentUser) {
       req.flash("error", "User not found.");
-      return res.redirect("/fairtech/users/master");
+      return res.redirect("/sachiko/users/master");
     }
 
     const updateData = {
@@ -1643,7 +1613,7 @@ router.post("/form/edit/user/:userId", requireAuth, updateLimiter, async (req, r
       console.error("BINDING IDENTITY SYNC ERROR:", err);
     }
     req.flash("notification", notification);
-    res.redirect(`/fairtech/client/details/${userId}`);
+    res.redirect(`/sachiko/client/details/${userId}`);
   } catch (err) {
     console.error(err);
     req.flash("error", "Error updating user details.");
@@ -1681,7 +1651,7 @@ router.post("/form/location", requireAuth, createLimiter, async (req, res) => {
     await Location.create({ locationName });
     res.locals.auditDescription = `Created location "${locationName}"`;
     req.flash("notification", "Location created successfully!");
-    res.json({ success: true, redirect: "/fairtech/form/location" });
+    res.json({ success: true, redirect: "/sachiko/form/location" });
   } catch (err) {
     console.error(err);
     const msg = err.code === 11000 ? "location already exist" : err.message;
@@ -1773,7 +1743,7 @@ router.post("/form/machine", requireAuth, createLimiter, async (req, res) => {
     await Machine.create({ machineName });
     res.locals.auditDescription = `Created machine "${machineName}"`;
     req.flash("notification", "Machine created successfully!");
-    res.json({ success: true, redirect: "/fairtech/form/machine" });
+    res.json({ success: true, redirect: "/sachiko/form/machine" });
   } catch (err) {
     console.error(err);
     const msg = err.code === 11000 ? "machine already exist" : err.message;
@@ -1893,8 +1863,8 @@ router.get("/tape/profile/:id", async (req, res) => {
 
   const primaryBinding = tapeBindings[0] || null;
   const backUrl = primaryBinding?.userId?._id
-    ? `/fairtech/client/details/${primaryBinding.userId._id}`
-    : "/fairtech/tape/view";
+    ? `/sachiko/client/details/${primaryBinding.userId._id}`
+    : "/sachiko/tape/view";
   const stockSummary = await getItemStockSummary("Tape", tape._id);
   const locationOptions = await Location.find().sort({ locationName: 1 }).lean();
 
@@ -1915,7 +1885,7 @@ router.get("/tape/profile/:id", async (req, res) => {
     pageTitle: "Tape Details",
     sectionTitle: "Tape Details",
     valueHeader: "Value",
-    statusUrl: `/fairtech/tape/edit/${tape._id}`,
+    statusUrl: `/sachiko/tape/edit/${tape._id}`,
     currentStatus: tape.status || "ACTIVE",
     rows,
     tape,
@@ -1931,7 +1901,7 @@ router.get("/tape/profile/:id", async (req, res) => {
     stockEditConfig: {
       enabled: true,
       itemType: "Tape",
-      editAction: `/fairtech/tape/profile/${tape._id}/stock/edit`,
+      editAction: `/sachiko/tape/profile/${tape._id}/stock/edit`,
       locationOptions: locationOptions.map((entry) => canonicalizeLocationName(entry.locationName)).filter(Boolean),
     },
     title: "Tape Details",
@@ -1945,7 +1915,7 @@ router.post("/tape/profile/:id/stock/edit", requireAuth, updateLimiter, async (r
   handleProfileStockEdit(req, res, {
     itemType: "Tape",
     model: Tape,
-    redirectPath: "/fairtech/tape/profile",
+    redirectPath: "/sachiko/tape/profile",
   }));
 
 function normalizePosPart(value) {
@@ -2032,7 +2002,7 @@ router.post("/tape/edit/:id", requireAuth, updateLimiter, async (req, res) => {
     const tapeDoc = await Tape.findByIdAndUpdate(req.params.id, { status }).select("tapeProductId").lean();
     res.locals.auditDescription = `Set tape "${tapeDoc?.tapeProductId || req.params.id}" status to ${status}`;
     req.flash("notification", "Tape status updated successfully!");
-    res.redirect(`/fairtech/tape/profile/${req.params.id}`);
+    res.redirect(`/sachiko/tape/profile/${req.params.id}`);
   } catch (err) {
     console.error(err);
     req.flash("notification", "Failed to update tape status");
@@ -2216,7 +2186,7 @@ router.post("/form/vendor", requireAuth, createLimiter, async (req, res) => {
     await Vendor.create(formData);
     res.locals.auditDescription = `Created vendor "${vendorName}"`;
     req.flash("notification", "Vendor created successfully!");
-    res.json({ success: true, redirect: "/fairtech/form/vendor" });
+    res.json({ success: true, redirect: "/sachiko/form/vendor" });
   } catch (err) {
     console.error(err);
     if (err?.code === 11000) {
@@ -2244,7 +2214,7 @@ router.get("/vendor/edit/:id", async (req, res) => {
     const vendor = await Vendor.findById(req.params.id).lean();
     if (!vendor) {
       req.flash("notification", "Vendor not found");
-      return res.redirect("/fairtech/vendor/view");
+      return res.redirect("/sachiko/vendor/view");
     }
 
     res.render("users/vendorEditForm.ejs", {
@@ -2257,7 +2227,7 @@ router.get("/vendor/edit/:id", async (req, res) => {
   } catch (err) {
     console.error("VENDOR EDIT GET ERROR:", err);
     req.flash("notification", "Failed to load vendor edit page");
-    res.redirect("/fairtech/vendor/view");
+    res.redirect("/sachiko/vendor/view");
   }
 });
 
@@ -2354,7 +2324,7 @@ router.post("/vendor/edit/:id", requireAuth, updateLimiter, async (req, res) => 
 
     res.locals.auditDescription = `Updated vendor "${updatedData.vendorName}"`;
     req.flash("notification", "Vendor updated successfully!");
-    res.json({ success: true, redirect: "/fairtech/vendor/view" });
+    res.json({ success: true, redirect: "/sachiko/vendor/view" });
   } catch (err) {
     console.error("VENDOR EDIT POST ERROR:", err);
     if (err?.code === 11000) {
@@ -2445,7 +2415,7 @@ router.post("/form/vendor-user", requireAuth, createLimiter, async (req, res) =>
 
     res.locals.auditDescription = `Created vendor coordinator "${userName}" for vendor "${vendor.vendorName}"`;
     req.flash("notification", "Vendor user created successfully!");
-    res.json({ success: true, redirect: "/fairtech/form/vendor?tab=user" });
+    res.json({ success: true, redirect: "/sachiko/form/vendor?tab=user" });
   } catch (err) {
     console.error(err);
     if (err?.code === 11000) {
@@ -2686,7 +2656,7 @@ router.post("/sales/order", async (req, res) => {
           quantity: data.quantity, poNumber: data.poNumber, isUpdate: true,
         });
         req.flash("notification", "Sales order updated successfully!");
-        res.json({ success: true, redirect: "/fairtech/sales/pending" });
+        res.json({ success: true, redirect: "/sachiko/sales/pending" });
       } else {
         // CREATE new order
         data.createdBy = createdByUser;
@@ -2704,7 +2674,7 @@ router.post("/sales/order", async (req, res) => {
         data.submissionToken = String(submissionToken || "").trim() || undefined;
         const existingOrder = await TapeSalesOrder.findOne({ orderSignature: data.orderSignature }).select("_id").lean();
         if (existingOrder) {
-          return res.json({ success: true, redirect: "/fairtech/sales/pending", duplicate: true });
+          return res.json({ success: true, redirect: "/sachiko/sales/pending", duplicate: true });
         }
         const newOrder = await TapeSalesOrder.create(data);
 
@@ -2723,7 +2693,7 @@ router.post("/sales/order", async (req, res) => {
         req.flash("notification", "Sales order created successfully!");
 
         // Redirect to pending orders
-        res.json({ success: true, redirect: "/fairtech/sales/pending" });
+        res.json({ success: true, redirect: "/sachiko/sales/pending" });
       }
     } else {
       return res.status(400).json({ success: false, message: "Unsupported item type" });
@@ -2742,7 +2712,7 @@ router.post("/sales/order", async (req, res) => {
         String(err?.message || "").includes("orderSignature"));
 
     if (duplicateSubmissionToken) {
-      return res.json({ success: true, redirect: "/fairtech/sales/pending", duplicate: true });
+      return res.json({ success: true, redirect: "/sachiko/sales/pending", duplicate: true });
     }
     const sourceLocError = err?.errors?.sourceLocation;
     if (sourceLocError) {
@@ -2878,7 +2848,7 @@ router.get("/purchase/receive", async (req, res) => {
     const { orderId } = req.query;
     if (!orderId) {
       req.flash("notification", "No order ID provided.");
-      return res.redirect("/fairtech/purchase/pending");
+      return res.redirect("/sachiko/purchase/pending");
     }
 
     const order = await PurchaseOrder.findById(orderId)
@@ -2888,7 +2858,7 @@ router.get("/purchase/receive", async (req, res) => {
 
     if (!order) {
       req.flash("notification", "Purchase Order not found.");
-      return res.redirect("/fairtech/purchase/pending");
+      return res.redirect("/sachiko/purchase/pending");
     }
 
     const [logs, locations] = await Promise.all([
@@ -2921,12 +2891,12 @@ router.post("/purchase/receive", async (req, res) => {
     const po = await PurchaseOrder.findById(orderId).populate("itemId");
     if (!po) {
       req.flash("notification", "Purchase Order not found.");
-      return res.redirect("/fairtech/purchase/pending");
+      return res.redirect("/sachiko/purchase/pending");
     }
 
     if (po.status === "RECEIVED") {
       req.flash("notification", "This order has already been received.");
-      return res.redirect("/fairtech/purchase/pending");
+      return res.redirect("/sachiko/purchase/pending");
     }
 
     const qty = Number(receivedQuantity) || po.quantity;
@@ -2968,7 +2938,7 @@ router.post("/purchase/receive", async (req, res) => {
 
     res.locals.auditDescription = `Received ${newlyReceived} units into stock at "${location}" for PO "${po.poNumber}"`;
     req.flash("notification", "Purchase Order received and stock updated successfully.");
-    res.redirect("/fairtech/purchase/pending");
+    res.redirect("/sachiko/purchase/pending");
   } catch (err) {
     console.error("RECEIVE PO POST ERROR:", err);
     req.flash("notification", "Error processing receipt: " + err.message);
@@ -2982,7 +2952,7 @@ router.get("/sales/order/confirm", async (req, res) => {
     const { orderId } = req.query;
     if (!orderId) {
       req.flash("notification", "No order specified");
-      return res.redirect("/fairtech/sales/pending");
+      return res.redirect("/sachiko/sales/pending");
     }
 
     let order = await TapeSalesOrder.findById(orderId)
@@ -3001,7 +2971,7 @@ router.get("/sales/order/confirm", async (req, res) => {
 
     if (!order) {
       req.flash("notification", "Order not found");
-      return res.redirect("/fairtech/sales/pending");
+      return res.redirect("/sachiko/sales/pending");
     }
 
     const logs = await SalesOrderLog.find({ orderId, action: "DELIVERED" }).sort({ performedAt: -1 }).lean();
@@ -3034,7 +3004,7 @@ router.get("/sales/order/confirm", async (req, res) => {
   } catch (err) {
     console.error("CONFIRM ORDER PAGE ERROR:", err);
     req.flash("notification", "Failed to load confirm page");
-    res.redirect("/fairtech/sales/pending");
+    res.redirect("/sachiko/sales/pending");
   }
 });
 
@@ -3081,7 +3051,7 @@ router.get("/sales/order/logs", async (req, res) => {
   } catch (err) {
     console.error("ORDER LOGS ERROR:", err);
     req.flash("notification", "Failed to load logs");
-    res.redirect("/fairtech/sales/pending");
+    res.redirect("/sachiko/sales/pending");
   }
 });
 
@@ -3291,7 +3261,7 @@ router.get("/purchase/order/logs", async (req, res) => {
   } catch (err) {
     console.error("PURCHASE LOGS ERROR:", err);
     req.flash("notification", "Failed to load purchase logs");
-    res.redirect("/fairtech/purchase/pending");
+    res.redirect("/sachiko/purchase/pending");
   }
 });
 
@@ -3301,13 +3271,13 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
     const accepts = req.headers.accept || "";
     const wantsJson = req.xhr || accepts.includes("application/json") || accepts.includes("text/json");
     const { orderId, status, cancelReason, invoiceNumber, confirmDate, confirmQuantity, poNumber, sourceLocation } = req.body;
-    const confirmRedirectUrl = orderId ? `/fairtech/sales/order/confirm?orderId=${encodeURIComponent(orderId)}` : "/fairtech/sales/pending";
+    const confirmRedirectUrl = orderId ? `/sachiko/sales/order/confirm?orderId=${encodeURIComponent(orderId)}` : "/sachiko/sales/pending";
     let order = await TapeSalesOrder.findById(orderId)
       .populate({ path: "tapeId", select: "tapeFinish tapePaperCode tapeGsm" })
       .lean();
 
     let ActiveOrderModel = TapeSalesOrder;
-    let pendingRedirectUrl = "/fairtech/sales/pending";
+    let pendingRedirectUrl = "/sachiko/sales/pending";
 
     if (!order) {
       const message = "Order not found";
@@ -3792,7 +3762,7 @@ router.delete("/sales/order/log/:logId", requireAuth, deleteLimiter, async (req,
 
 // Legacy route redirect
 router.get("/form/salesorder", (req, res) => {
-  res.redirect("/fairtech/sales/order");
+  res.redirect("/sachiko/sales/order");
 });
 
 // ----------------------------------Sales Calculator---------------------------------->
@@ -3846,7 +3816,7 @@ router.get("/audit/view", async (req, res) => {
   const role = req.session?.authUser?.role;
   if (role !== "proprietor" && role !== "admin" && role !== "hod") {
     req.flash("notification", "Access denied");
-    return res.redirect("/fairtech/welcome");
+    return res.redirect("/sachiko/welcome");
   }
 
   const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(5000).lean();
@@ -3881,7 +3851,7 @@ router.post("/form/block", requireAuth, createLimiter, async (req, res) => {
     await Block.create(formData);
     res.locals.auditDescription = `Created block "${formData.blockNo}"`;
     req.flash("notification", "Block created successfully!");
-    res.json({ success: true, redirect: "/fairtech/form/block" });
+    res.json({ success: true, redirect: "/sachiko/form/block" });
   } catch (err) {
     console.error(err);
     res.status(400).json({ success: false, message: err.message });
@@ -4157,7 +4127,7 @@ router.post("/form/die", requireAuth, createLimiter, handleDieUpload, async (req
         : `Created die "${created.dieDieNo}" (V${dieVersion}) as a new version of "${replacesDie.dieDieNo}"`
       : `Created die "${created.dieDieNo}" for "${req.body.dieClientName || "N/A"}"`;
     req.flash("notification", "Die created successfully!");
-    res.json({ success: true, redirect: "/fairtech/die/view" });
+    res.json({ success: true, redirect: "/sachiko/die/view" });
   } catch (err) {
     cleanupDieUploads(req.files);
     console.error(err);
@@ -4180,7 +4150,7 @@ router.get("/die/profile/:id", async (req, res) => {
   const die = await Die.findById(req.params.id).lean();
   if (!die) {
     req.flash("notification", "Die not found");
-    return res.redirect("/fairtech/die/view");
+    return res.redirect("/sachiko/die/view");
   }
   const [replacedDie, replacedByDie] = await Promise.all([
     die.replacesDieId ? Die.findById(die.replacesDieId).select("dieDieNo dieVersion").lean() : null,
@@ -4207,7 +4177,7 @@ router.get("/die/edit/:id", async (req, res) => {
   ]);
   if (!die) {
     req.flash("notification", "Die not found");
-    return res.redirect("/fairtech/die/view");
+    return res.redirect("/sachiko/die/view");
   }
   dieVendors.sort((a, b) => String(a).localeCompare(String(b)));
   res.render("utilities/dieMaster.ejs", {
@@ -4280,7 +4250,7 @@ router.post("/die/edit/:id", requireAuth, updateLimiter, handleDieUpload, async 
 
     res.locals.auditDescription = `Updated die "${updated.dieDieNo}"`;
     req.flash("notification", "Die updated successfully!");
-    res.json({ success: true, redirect: `/fairtech/die/profile/${req.params.id}` });
+    res.json({ success: true, redirect: `/sachiko/die/profile/${req.params.id}` });
   } catch (err) {
     cleanupDieUploads(req.files);
     console.error("DIE EDIT ERROR:", err);
@@ -4351,9 +4321,10 @@ router.get("/edit/user/:id", async (req, res) => {
 // route for details page.
 router.get("/master/view", async (req, res) => {
   let jsonData = await Username.find()
-    .select("clientName clientType accountHead userName userLocation userDepartment locationDetails label tape")
+    .select("clientName clientType accountHead userName userLocation userDepartment locationDetails label tape sl")
     .populate({ path: "label", select: "location" })
     .populate({ path: "tape", select: "location" })
+    .populate({ path: "sl", select: "location" })
     .sort({ clientName: 1, userName: 1 })
     .lean();
 
@@ -4397,7 +4368,7 @@ router.get("/vendor/view", async (req, res) => {
   } catch (err) {
     console.error("VENDOR VIEW ERROR:", err);
     req.flash("notification", "Failed to load vendor details");
-    res.redirect("/fairtech/form/vendor");
+    res.redirect("/sachiko/form/vendor");
   }
 });
 
@@ -4413,7 +4384,7 @@ router.get("/vendor/profile/:id", async (req, res) => {
 
     if (!vendor) {
       req.flash("notification", "Vendor not found");
-      return res.redirect("/fairtech/vendor/view");
+      return res.redirect("/sachiko/vendor/view");
     }
 
     res.render("users/vendorProfile.ejs", {
@@ -4426,13 +4397,13 @@ router.get("/vendor/profile/:id", async (req, res) => {
   } catch (err) {
     console.error("VENDOR PROFILE ERROR:", err);
     req.flash("notification", "Invalid vendor link");
-    res.redirect("/fairtech/vendor/view");
+    res.redirect("/sachiko/vendor/view");
   }
 });
 
 // Backward-compatible redirect for the old vendor coordinator URL.
 router.get("/vendor/user/view", async (req, res) => {
-  return res.redirect("/fairtech/vendor/coordinator/view");
+  return res.redirect("/sachiko/vendor/coordinator/view");
 });
 
 // ----------------------------------Vendor coordinator display----------------------------------
@@ -4475,7 +4446,7 @@ router.get("/vendor/coordinator/view", async (req, res) => {
   } catch (err) {
     console.error("VENDOR COORDINATOR VIEW ERROR:", err);
     req.flash("notification", "Failed to load vendor coordinator view");
-    res.redirect("/fairtech/form/vendor");
+    res.redirect("/sachiko/form/vendor");
   }
 });
 
@@ -4492,7 +4463,7 @@ router.get("/vendor/coordinator/details/:userId", async (req, res) => {
 
     if (!vendorUser) {
       req.flash("notification", "Vendor coordinator not found");
-      return res.redirect("/fairtech/vendor/coordinator/view");
+      return res.redirect("/sachiko/vendor/coordinator/view");
     }
 
     const vendor = await Vendor.findOne({ vendorId: vendorUser.vendorId }).lean();
@@ -4516,7 +4487,7 @@ router.get("/vendor/coordinator/details/:userId", async (req, res) => {
   } catch (err) {
     console.error("VENDOR COORDINATOR DETAILS ERROR:", err);
     req.flash("notification", "Failed to load vendor coordinator details");
-    res.redirect("/fairtech/vendor/coordinator/view");
+    res.redirect("/sachiko/vendor/coordinator/view");
   }
 });
 
@@ -4527,7 +4498,7 @@ router.post("/vendor/coordinator/details/:userId/delete", requireAuth, deleteLim
 
     if (!vendorUser) {
       req.flash("notification", "Vendor coordinator not found");
-      return res.redirect("/fairtech/vendor/coordinator/view");
+      return res.redirect("/sachiko/vendor/coordinator/view");
     }
 
     await Vendor.updateOne(
@@ -4539,11 +4510,11 @@ router.post("/vendor/coordinator/details/:userId/delete", requireAuth, deleteLim
 
     res.locals.auditDescription = `Deleted vendor coordinator "${vendorUser.userName}"`;
     req.flash("notification", `Coordinator ${vendorUser.userName} removed successfully`);
-    return res.redirect("/fairtech/vendor/coordinator/view");
+    return res.redirect("/sachiko/vendor/coordinator/view");
   } catch (err) {
     console.error("VENDOR COORDINATOR DELETE ERROR:", err);
     req.flash("notification", "Failed to remove coordinator");
-    return res.redirect("/fairtech/vendor/coordinator/details/" + req.params.userId);
+    return res.redirect("/sachiko/vendor/coordinator/details/" + req.params.userId);
   }
 });
 
@@ -4553,7 +4524,7 @@ router.get("/form/edit/vendor-user/:userId", async (req, res) => {
     const user = await VendorUser.findById(req.params.userId).lean();
     if (!user) {
       req.flash("notification", "Vendor coordinator not found");
-      return res.redirect("/fairtech/vendor/coordinator/view");
+      return res.redirect("/sachiko/vendor/coordinator/view");
     }
 
     const vendor = await Vendor.findOne({ vendorId: user.vendorId }).lean();
@@ -4598,7 +4569,7 @@ router.get("/form/edit/vendor-user/:userId", async (req, res) => {
   } catch (err) {
     console.error("VENDOR COORDINATOR EDIT GET ERROR:", err);
     req.flash("notification", "Failed to load vendor coordinator edit page");
-    res.redirect("/fairtech/vendor/coordinator/view");
+    res.redirect("/sachiko/vendor/coordinator/view");
   }
 });
 
@@ -4690,7 +4661,7 @@ router.post("/form/edit/vendor-user/:userId", requireAuth, updateLimiter, async 
     await VendorUser.findByIdAndUpdate(userId, updatedData, { runValidators: true });
     res.locals.auditDescription = `Updated vendor coordinator "${userName}"`;
     req.flash("notification", "Vendor coordinator updated successfully!");
-    return res.json({ success: true, redirect: `/fairtech/vendor/coordinator/details/${userId}` });
+    return res.json({ success: true, redirect: `/sachiko/vendor/coordinator/details/${userId}` });
   } catch (err) {
     console.error("VENDOR COORDINATOR EDIT POST ERROR:", err);
     if (err?.code === 11000) {
@@ -4777,7 +4748,7 @@ router.post("/labels-binding/delete/:id", requireAuth, deleteLimiter, async (req
 
     res.locals.auditDescription = `Deleted label binding "${binding?.productId || req.params.id}"`;
     req.flash("notification", "Label binding removed successfully!");
-    return res.redirect(owner ? `/fairtech/labels/view/${owner._id}` : "/fairtech/master/view");
+    return res.redirect(owner ? `/sachiko/labels/view/${owner._id}` : "/sachiko/master/view");
   } catch (err) {
     console.error("LABEL BINDING DELETE ERROR:", err);
     req.flash("notification", "Failed to remove Label binding");

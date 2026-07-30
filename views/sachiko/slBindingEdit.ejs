@@ -1,0 +1,332 @@
+<% layout('/layout/boilerplate') -%>
+<style>
+  .sl-id-success {
+    border: 2px solid #28a745 !important;
+    background-color: #f3fff6;
+    color: #155724;
+    font-weight: 600;
+  }
+  .sl-id-error {
+    border: 2px solid #dc3545 !important;
+    background-color: #fff5f5;
+    color: #721c24;
+    font-weight: 600;
+  }
+  input[readonly] { background: #f1f5f9; cursor: not-allowed; }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
+  <form
+    class="needs-validation"
+    action="/sachiko/sl-binding/edit/<%= binding._id %>"
+    method="post"
+    onsubmit="return validateBeforeSubmit()"
+    autocomplete="off"
+    novalidate
+  >
+    <input type="hidden" name="slId" id="resolved-sl-id" value="<%= binding.sl?._id || '' %>" />
+
+    <div class="span-full form-heading">
+      <h1>Edit SL Binding</h1>
+    </div>
+
+    <!-- ================= USER INFO (READ-ONLY) ================= -->
+    <div class="span-full form-subheading">
+      <h1>User Information</h1>
+    </div>
+
+    <div class="span-seven">
+      <label>SKU ID</label>
+      <input type="text" class="form-control input-tag"
+        value="<%= binding.sl?.slId || 'N/A' %>" readonly />
+    </div>
+    <div class="span-seven">
+      <label>SKU Code</label>
+      <input type="text" id="sl-id-display" class="form-control input-tag"
+        value="<%= binding.sl?.skuCode || 'N/A' %>" readonly />
+    </div>
+    <div class="span-six">
+      <label>Client Name</label>
+      <input type="text" class="form-control input-tag" value="<%= binding.userId?.clientName || '' %>" readonly />
+    </div>
+    <div class="span-six">
+      <label>User Name</label>
+      <input type="text" class="form-control input-tag" value="<%= binding.userId?.userName || '' %>" readonly />
+    </div>
+    <div class="span-six">
+      <label for="binding-location">Location</label>
+      <select name="location" id="binding-location" class="form-control select-tag" required>
+        <% (userLocations || []).forEach(loc => { %>
+          <option value="<%= loc %>" <%= (binding.location || '') === loc ? 'selected' : '' %>><%= loc %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <!-- ================= SL SPECIFICATIONS ================= -->
+    <div class="span-full form-subheading" style="display: flex; justify-content: space-between; align-items: center;">
+      <h1>SL Specifications</h1>
+      <button type="button" id="reset-specs-btn" style="padding: 4px 12px; border-radius: 4px; background-color: #dc3545; color: white; border: none; cursor: pointer; font-size: 14px;">Reset</button>
+    </div>
+
+    <!-- Facestock -->
+    <div style="grid-column: span 12; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Facestock</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem">
+        <div class="span-six" style="grid-column: auto">
+          <label>Family</label>
+          <select id="fs-family" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% fsFamilies?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
+          </select>
+        </div>
+        <div class="span-six" style="grid-column: auto">
+          <label>Type</label>
+          <select id="fs-type" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% fsTypes?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label>GSM</label>
+          <select id="fs-gsm" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% fsGsms?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label>Micron</label>
+          <select id="fs-micron" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% fsMicrons?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Adhesive -->
+    <div style="grid-column: span 8; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Adhesive</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem">
+        <div class="span-seven" style="grid-column: auto">
+          <label>Type</label>
+          <select id="ad-type" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% adTypes?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label>GSM</label>
+          <select id="ad-gsm" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% adGsms?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Release Liner -->
+    <div style="grid-column: span 12; display: flex; flex-direction: column; gap: 1rem">
+      <div class="span-full form-subheading">
+        <h1>Release Liner</h1>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem">
+        <div class="span-seven" style="grid-column: auto">
+          <label>Type</label>
+          <select id="rl-type" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% rlTypes?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label>Color</label>
+          <select id="rl-color" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% rlColors?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
+          </select>
+        </div>
+        <div class="span-four" style="grid-column: auto">
+          <label>GSM</label>
+          <select id="rl-gsm" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
+            <% rlGsms?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= BUTTONS ================= -->
+    <div class="span-full btn-grp" style="flex-direction: row-reverse;">
+      <button class="submit-btn" type="submit">Update SL Binding</button>
+      <button type="button" id="cancelBtn">Cancel</button>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const CURRENT = {
+    fsFamily: "<%= binding.sl?.facestock?.facestockFamily || '' %>",
+    fsType:   "<%= binding.sl?.facestock?.facestockType || '' %>",
+    fsGsm:    "<%= binding.sl?.facestock?.facestockGsm ?? '' %>",
+    fsMicron: "<%= binding.sl?.facestock?.facestockMicron ?? '' %>",
+    adType:   "<%= binding.sl?.adhesive?.adhesiveType || '' %>",
+    adGsm:    "<%= binding.sl?.adhesive?.adhesiveGsm ?? '' %>",
+    rlType:   "<%= binding.sl?.releaseLiner?.releaseLinerType || '' %>",
+    rlColor:  "<%= binding.sl?.releaseLiner?.releaseLinerColor || '' %>",
+    rlGsm:    "<%= binding.sl?.releaseLiner?.releaseLinerGsm ?? '' %>",
+  };
+
+  const specFields = ["fs-family", "fs-type", "fs-gsm", "fs-micron", "ad-type", "ad-gsm", "rl-type", "rl-color", "rl-gsm"];
+
+  const fieldToKey = {
+    "fs-family": "fsFamily", "fs-type": "fsType", "fs-gsm": "fsGsm", "fs-micron": "fsMicron",
+    "ad-type": "adType", "ad-gsm": "adGsm",
+    "rl-type": "rlType", "rl-color": "rlColor", "rl-gsm": "rlGsm",
+  };
+
+  const slIdInput = document.getElementById("resolved-sl-id");
+  const slIdDisplay = document.getElementById("sl-id-display");
+
+  const specChoices = {};
+  specFields.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) specChoices[id] = new Choices(el, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+  });
+
+  const locationEl = document.getElementById("binding-location");
+  if (locationEl) new Choices(locationEl, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+  async function filterSpecs(changedFieldId) {
+    const params = new URLSearchParams();
+    specFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.value) params.set(fieldToKey[id], el.value);
+    });
+
+    try {
+      const res = await fetch(`/sachiko/form/sl-binding/filter-specs?${params}`);
+      const data = await res.json();
+      if (!data) return;
+
+      const autoSelected = [];
+      specFields.forEach(id => {
+        if (id === changedFieldId) return;
+        const inst = specChoices[id];
+        if (!inst) return;
+        const filteredValues = data[fieldToKey[id]] || [];
+        const currentValue = document.getElementById(id)?.value || "";
+
+        const newChoices = filteredValues.map(v => ({
+          value: String(v), label: String(v), selected: String(v) === currentValue,
+        }));
+
+        if (changedFieldId !== "reset-all" && filteredValues.length === 1 && !currentValue) {
+          newChoices[0].selected = true;
+          autoSelected.push(id);
+        }
+
+        inst.clearStore();
+        inst.setChoices(
+          [{ value: "", label: "Search", disabled: true, selected: !newChoices.some(c => c.selected) }, ...newChoices],
+          "value", "label", true
+        );
+
+        if (currentValue && filteredValues.map(String).includes(currentValue)) {
+          inst.setChoiceByValue(currentValue);
+        } else if (changedFieldId !== "reset-all" && filteredValues.length === 1 && !currentValue) {
+          inst.setChoiceByValue(String(filteredValues[0]));
+        }
+      });
+
+      if (autoSelected.length) await filterSpecs(autoSelected[0]);
+    } catch (err) {
+      console.error("Filter specs error:", err);
+    }
+  }
+
+  async function resolveSl() {
+    const values = {};
+    for (const id of specFields) {
+      const el = document.getElementById(id);
+      if (!el || !el.value) {
+        slIdInput.value = "";
+        slIdDisplay.value = "— select all specs —";
+        slIdDisplay.className = "form-control input-tag";
+        return;
+      }
+      values[id] = el.value;
+    }
+
+    const params = new URLSearchParams();
+    specFields.forEach(id => params.set(fieldToKey[id], values[id]));
+
+    try {
+      const res = await fetch(`/sachiko/form/sl-binding/resolve-sl?${params}`);
+      if (!res.ok) {
+        slIdInput.value = "";
+        slIdDisplay.value = "No matching SL found";
+        slIdDisplay.className = "form-control input-tag sl-id-error";
+        return;
+      }
+      const data = await res.json();
+      slIdInput.value = data.slId;
+      slIdDisplay.value = data.skuCode;
+      slIdDisplay.className = "form-control input-tag sl-id-success";
+    } catch (err) {
+      console.error("Resolve SL error:", err);
+    }
+  }
+
+  specFields.forEach(id => {
+    document.getElementById(id)?.addEventListener("change", async () => {
+      await filterSpecs(id);
+      await resolveSl();
+    });
+  });
+
+  document.getElementById("reset-specs-btn").addEventListener("click", async () => {
+    specFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+      specChoices[id]?.setChoiceByValue("");
+    });
+    slIdInput.value = "";
+    slIdDisplay.value = "";
+    slIdDisplay.className = "form-control input-tag";
+    await filterSpecs("reset-all");
+  });
+
+  document.getElementById("cancelBtn").addEventListener("click", () => window.history.back());
+
+  (async () => {
+    await filterSpecs("init-none");
+
+    for (const [id, key] of Object.entries(fieldToKey)) {
+      const val = CURRENT[key];
+      if (val && specChoices[id]) specChoices[id].setChoiceByValue(String(val));
+    }
+
+    await filterSpecs("init-none");
+
+    for (const [id, key] of Object.entries(fieldToKey)) {
+      const val = CURRENT[key];
+      if (val && specChoices[id]) specChoices[id].setChoiceByValue(String(val));
+    }
+
+    await resolveSl();
+  })();
+});
+
+function validateBeforeSubmit() {
+  const slId = document.getElementById("resolved-sl-id").value;
+  if (!slId) {
+    showToast("Please select valid SL specifications.", "error");
+    return false;
+  }
+  return true;
+}
+</script>

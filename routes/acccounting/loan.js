@@ -180,7 +180,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
 
       res.locals.auditDescription = `Issued loan of ₹${amount} for "${empName}" (EMI ₹${newEmi})`;
       req.flash("notification", "Loan issued successfully");
-      return res.json({ success: true, redirect: "/fairtech/loan/view" });
+      return res.json({ success: true, redirect: "/sachiko/loan/view" });
     }
 
     /* LOAN RE-ISSUE (TOP-UP / CONSOLIDATION) */
@@ -219,7 +219,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Re-issued/topped-up loan of ₹${amount} for "${empName}" (new balance ₹${consolidatedAmount}, EMI ₹${newEmi})`;
     req.flash("notification", "Loan re-issued successfully");
-    return res.json({ success: true, redirect: "/fairtech/loan/view" });
+    return res.json({ success: true, redirect: "/sachiko/loan/view" });
   } catch (err) {
     console.error(err);
     res.status(400).json({ success: false, message: "Failed to issue loan" });
@@ -295,7 +295,7 @@ router.get("/logs", async (req, res) => {
   } catch (err) {
     console.error(err);
     req.flash("notification", "Failed to load loan logs");
-    res.redirect("/fairtech/loan/view");
+    res.redirect("/sachiko/loan/view");
   }
 });
 

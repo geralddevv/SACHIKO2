@@ -172,7 +172,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Recorded advance of ₹${amount} for "${emp.empName}"`;
     req.flash("notification", "Advance saved successfully");
-    res.json({ success: true, redirect: "/fairtech/advance/view" });
+    res.json({ success: true, redirect: "/sachiko/advance/view" });
   } catch (err) {
     console.error(err);
     res.status(400).json({ success: false, message: "Failed to save advance" });
@@ -248,7 +248,7 @@ router.get("/logs", async (req, res) => {
   } catch (err) {
     console.error(err);
     req.flash("notification", "Failed to load advance logs");
-    res.redirect("/fairtech/advance/view");
+    res.redirect("/sachiko/advance/view");
   }
 });
 
@@ -260,7 +260,7 @@ router.get("/employee/:employeeId/view-logs", async (req, res) => {
     const emp = await Employee.findById(employeeId);
     if (!emp) {
       req.flash("error", "Employee not found");
-      return res.redirect("/fairtech/advance/view");
+      return res.redirect("/sachiko/advance/view");
     }
 
     const logs = await AdvanceLog.find({ employee: employeeId })
@@ -302,7 +302,7 @@ router.get("/employee/:employeeId/view-logs", async (req, res) => {
   } catch (err) {
     console.error(err);
     req.flash("error", "Failed to load employee logs");
-    res.redirect("/fairtech/advance/view");
+    res.redirect("/sachiko/advance/view");
   }
 });
 

@@ -191,6 +191,7 @@
           ...user,
           userLocation: loc,
           tapeCount: countAtLoc(user.tape, loc),
+          slCount: countAtLoc(user.sl, loc),
           dispatchType: user.SelfDispatch ? "Self Dispatch" : "Transport",
         });
       });
@@ -304,6 +305,26 @@
             cellClick: (e, cell) => {
               const row = cell.getRow().getData();
               window.location.href = `/sachiko/tape/view/${row._id}`;
+            },
+          }),
+          withTextFilter({
+            title: "SL",
+            field: "slCount",
+            width: 80,
+            widthGrow: 0,
+            widthShrink: 0,
+            hozAlign: "center",
+            headerSort: true,
+            headerSortStartingDir: "desc",
+            cssClass: "col-count-center",
+            formatter: (cell) => {
+              const row = cell.getRow().getData();
+              if (!row.slCount) return "";
+              return `<span style="cursor:pointer;text-decoration:underline;">${row.slCount}</span>`;
+            },
+            cellClick: (e, cell) => {
+              const row = cell.getRow().getData();
+              window.location.href = `/sachiko/sl-binding/view/${row._id}`;
             },
           }),
         ],

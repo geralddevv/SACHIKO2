@@ -26,7 +26,7 @@ import AuditLog from "../models/system/auditLog.js";
  */
 
 const AUDITED_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const SKIP_PATHS = new Set(["/fairtech/login", "/logout"]);
+const SKIP_PATHS = new Set(["/sachiko/login", "/logout"]);
 
 const ACTION_BY_METHOD = {
   POST: "CREATE",

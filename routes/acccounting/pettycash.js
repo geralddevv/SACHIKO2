@@ -230,7 +230,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Recorded petty cash ${type} of ₹${txnAmount} at "${location}" (${internalType === "OUTWARD" ? "to " + (to || "-") : "from " + (from || "-")})`;
     req.flash("notification", "Petty cash updated successfully");
-    return res.redirect("/fairtech/pettycash/view");
+    return res.redirect("/sachiko/pettycash/view");
   } catch (err) {
     console.error(err);
     req.flash("error", "Petty cash transaction failed");
@@ -347,7 +347,7 @@ router.get("/logs/:location/view", async (req, res) => {
   } catch (err) {
     console.error(err);
     req.flash("error", "Failed to load petty cash logs");
-    res.redirect("/fairtech/pettycash/view");
+    res.redirect("/sachiko/pettycash/view");
   }
 });
 

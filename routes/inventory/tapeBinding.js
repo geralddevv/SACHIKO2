@@ -98,7 +98,7 @@ router.post("/form/tape-binding", requireAuth, createLimiter, async (req, res) =
 
     res.locals.auditDescription = `Created tape binding "${tapeBinding.tapeClientPaperCode}" for "${user.userName}"`;
     req.flash("notification", "Tape binding created successfully!");
-    res.json({ success: true, redirect: "/fairtech/client/details/" + userId });
+    res.json({ success: true, redirect: "/sachiko/client/details/" + userId });
   } catch (err) {
     console.error("TAPE BINDING ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to create tape binding." });
@@ -392,7 +392,7 @@ router.get("/tape/compare/:id", async (req, res) => {
       vendorLabel: "Vendor",
       orgLabel: "Fairtech",
       clientLabel: "Client",
-      editBindingUrl: `/fairtech/tape-binding/edit/${binding._id}`,
+      editBindingUrl: `/sachiko/tape-binding/edit/${binding._id}`,
       clientName: user?.clientName || "",
       userName: user?.userName || "",
       compareRows,
@@ -515,11 +515,11 @@ router.post("/tape-binding/edit/:id", requireAuth, updateLimiter, async (req, re
     res.locals.auditDescription = `Updated tape binding "${binding.tapeClientPaperCode}"`;
     req.flash("notification", "Tape binding updated successfully!");
 
-    if (typeof returnTo === "string" && returnTo.startsWith("/fairtech/")) {
+    if (typeof returnTo === "string" && returnTo.startsWith("/sachiko/")) {
       return res.redirect(returnTo);
     }
 
-    res.redirect("/fairtech/tape/view/" + binding.userId);
+    res.redirect("/sachiko/tape/view/" + binding.userId);
   } catch (err) {
     console.error("EDIT BINDING POST ERROR:", err);
     if (err.code === 11000) {
@@ -546,7 +546,7 @@ router.post("/tape-binding/delete/:id", requireAuth, deleteLimiter, async (req, 
 
     res.locals.auditDescription = `Deleted tape binding "${binding.tapeClientPaperCode}"`;
     req.flash("notification", "Tape binding removed successfully!");
-    return res.redirect(`/fairtech/tape/view/${binding.userId}`);
+    return res.redirect(`/sachiko/tape/view/${binding.userId}`);
   } catch (err) {
     console.error("TAPE BINDING DELETE ERROR:", err);
     req.flash("notification", "Failed to remove Tape binding");

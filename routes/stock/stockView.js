@@ -229,7 +229,7 @@ router.get("/view", async (req, res) => {
         buildProductId: (master) => master.tapeProductId,
         buildSpec: (master) =>
           `${master.tapePaperCode || ""} ${master.tapeGsm ? master.tapeGsm + "gsm" : ""}`.trim() || master.tapeProductId,
-        buildProfileUrl: (itemId) => `/fairtech/tape/profile/${itemId}`,
+        buildProfileUrl: (itemId) => `/sachiko/tape/profile/${itemId}`,
       }),
     ]);
 
@@ -274,13 +274,13 @@ router.post("/edit/:itemType/:itemId/:location", requireAuth, updateLimiter, asy
     const cfg = getStockConfig(itemType);
     if (!cfg) {
       req.flash("notification", "Invalid stock item type");
-      return res.redirect("/fairtech/stocks/view");
+      return res.redirect("/sachiko/stocks/view");
     }
 
     const newQuantity = Number(quantity);
     if (!Number.isFinite(newQuantity) || newQuantity < 0) {
       req.flash("notification", "Enter a valid stock quantity");
-      return res.redirect("/fairtech/stocks/view");
+      return res.redirect("/sachiko/stocks/view");
     }
 
     const snapshot = await getStockSnapshot({
@@ -293,13 +293,13 @@ router.post("/edit/:itemType/:itemId/:location", requireAuth, updateLimiter, asy
 
     if (newQuantity < snapshot.booked) {
       req.flash("notification", `Cannot reduce below booked quantity (${snapshot.booked}).`);
-      return res.redirect("/fairtech/stocks/view");
+      return res.redirect("/sachiko/stocks/view");
     }
 
     const delta = newQuantity - snapshot.currentStock;
     if (delta === 0) {
       req.flash("notification", "Stock quantity is already up to date.");
-      return res.redirect("/fairtech/stocks/view");
+      return res.redirect("/sachiko/stocks/view");
     }
 
     await applyStockDelta({
@@ -316,11 +316,11 @@ router.post("/edit/:itemType/:itemId/:location", requireAuth, updateLimiter, asy
     const masterDoc = await cfg.masterModel.findById(itemId).select(cfg.productIdField).lean();
     res.locals.auditDescription = `Adjusted ${cfg.itemLabel} "${masterDoc?.[cfg.productIdField] || itemId}" stock at "${location}" to ${newQuantity} (was ${snapshot.currentStock})`;
     req.flash("notification", `${cfg.itemLabel} stock updated successfully.`);
-    return res.redirect("/fairtech/stocks/view");
+    return res.redirect("/sachiko/stocks/view");
   } catch (err) {
     console.error("STOCK EDIT ERROR:", err);
     req.flash("notification", "Failed to update stock");
-    return res.redirect("/fairtech/stocks/view");
+    return res.redirect("/sachiko/stocks/view");
   }
 });
 
@@ -330,7 +330,7 @@ router.post("/delete/:itemType/:itemId/:location", requireAuth, deleteLimiter, a
     const cfg = getStockConfig(itemType);
     if (!cfg) {
       req.flash("notification", "Invalid stock item type");
-      return res.redirect("/fairtech/stocks/view");
+      return res.redirect("/sachiko/stocks/view");
     }
 
     const snapshot = await getStockSnapshot({
@@ -343,12 +343,12 @@ router.post("/delete/:itemType/:itemId/:location", requireAuth, deleteLimiter, a
 
     if (snapshot.booked > 0) {
       req.flash("notification", `Cannot delete stock with booked quantity (${snapshot.booked}).`);
-      return res.redirect("/fairtech/stocks/view");
+      return res.redirect("/sachiko/stocks/view");
     }
 
     if (snapshot.currentStock === 0) {
       req.flash("notification", "Stock entry is already empty.");
-      return res.redirect("/fairtech/stocks/view");
+      return res.redirect("/sachiko/stocks/view");
     }
 
     await applyStockDelta({
@@ -365,11 +365,11 @@ router.post("/delete/:itemType/:itemId/:location", requireAuth, deleteLimiter, a
     const masterDoc = await cfg.masterModel.findById(itemId).select(cfg.productIdField).lean();
     res.locals.auditDescription = `Deleted ${cfg.itemLabel} "${masterDoc?.[cfg.productIdField] || itemId}" stock at "${location}" (was ${snapshot.currentStock})`;
     req.flash("notification", `${cfg.itemLabel} stock deleted successfully.`);
-    return res.redirect("/fairtech/stocks/view");
+    return res.redirect("/sachiko/stocks/view");
   } catch (err) {
     console.error("STOCK DELETE ERROR:", err);
     req.flash("notification", "Failed to delete stock");
-    return res.redirect("/fairtech/stocks/view");
+    return res.redirect("/sachiko/stocks/view");
   }
 });
 

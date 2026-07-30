@@ -15,7 +15,7 @@ const ITEM_CONFIGS = {
     title: "Vendor Tape",
     heading: "Vendor Tape",
     template: "inventory/tape/tapeVendorBinding.ejs",
-    redirectTo: "/fairtech/vendor/coordinator/view",
+    redirectTo: "/sachiko/vendor/coordinator/view",
     bindingModel: VendorTapeBinding,
     bindingField: "tapeId",
     vendorArrayField: "tape",
@@ -311,7 +311,7 @@ router.get("/vendor-item/view/:kind", async (req, res) => {
   } catch (err) {
     console.error(`VENDOR ${req.params.kind.toUpperCase()} VIEW ERROR:`, err);
     req.flash("notification", `Failed to load Vendor ${req.params.kind} view`);
-    res.redirect("/fairtech/vendor/coordinator/view");
+    res.redirect("/sachiko/vendor/coordinator/view");
   }
 });
 
@@ -388,7 +388,7 @@ router.post("/vendor-item/edit/:kind/:id", requireAuth, updateLimiter, async (re
     const overrideCode = updateData.vendorTapePaperCode || binding._id;
     res.locals.auditDescription = `Updated vendor ${config.title} binding "${overrideCode}"`;
     req.flash("notification", "Binding updated successfully!");
-    res.json({ success: true, redirect: returnTo || `/fairtech/vendor-item/view/${kind}?userId=${binding.vendorUserId}` });
+    res.json({ success: true, redirect: returnTo || `/sachiko/vendor-item/view/${kind}?userId=${binding.vendorUserId}` });
   } catch (err) {
     console.error("VENDOR EDIT POST ERROR:", err);
     res.status(400).json({ success: false, message: err.message });
@@ -437,7 +437,7 @@ router.get("/vendor-item/compare/:kind/:id", async (req, res) => {
       sectionTitle: `${kind.toUpperCase()} Details (Vendor - Fairtech)`,
       orgLabel: "Vendor",
       clientLabel: "Fairtech",
-      editBindingUrl: `/fairtech/vendor-item/edit/${kind}/${binding._id}`,
+      editBindingUrl: `/sachiko/vendor-item/edit/${kind}/${binding._id}`,
       clientName: vendorUser?.vendorName || "",
       userName: vendorUser?.userName || "",
       compareRows,
@@ -465,7 +465,7 @@ router.post("/vendor-item/delete/:kind/:id", requireAuth, deleteLimiter, async (
     const deletedCode = binding.vendorTapePaperCode || id;
     res.locals.auditDescription = `Deleted vendor ${config.title} binding "${deletedCode}"`;
     req.flash("notification", "Binding removed successfully!");
-    res.redirect(`/fairtech/vendor-item/view/${kind}?userId=${binding.vendorUserId}`);
+    res.redirect(`/sachiko/vendor-item/view/${kind}?userId=${binding.vendorUserId}`);
   } catch (err) {
     console.error("VENDOR DELETE ERROR:", err);
     res.redirect("back");

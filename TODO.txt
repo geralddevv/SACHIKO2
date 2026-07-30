@@ -1,6 +1,6 @@
-add sl and remove the tafeta, pos roll
+add sl and remove the tafeta, pos roll ✔️
 sep prod in datasheet
-rem other items in client data
+rem other items in client data ✔️
 datasheet -> sl
 orders before job card
 binding (paper width and sl)

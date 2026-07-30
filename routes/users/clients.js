@@ -43,7 +43,7 @@ router.use((req, res, next) => {
   const hasSalesAccess = role === "sales" || Boolean(permissions.sales);
   const hasClientAccess = hasSalesAccess || Boolean(permissions.master);
 
-  if (!role) return res.redirect("/fairtech/login");
+  if (!role) return res.redirect("/sachiko/login");
 
   if (role === "proprietor" || role === "admin" || role === "hod") return next();
 
@@ -62,10 +62,10 @@ router.use((req, res, next) => {
       return next();
     }
 
-    return res.redirect("/fairtech/login");
+    return res.redirect("/sachiko/login");
   }
 
-  return res.redirect("/fairtech/login");
+  return res.redirect("/sachiko/login");
 });
 
 // Groups sales orders (of a given collection) by the owning client, via a
@@ -146,7 +146,7 @@ router.get("/orders/:id", async (req, res) => {
     const client = await Client.findById(req.params.id).select("clientName clientId users").lean();
     if (!client) {
       req.flash("notification", "Client not found");
-      return res.redirect("/fairtech/client/view");
+      return res.redirect("/sachiko/client/view");
     }
 
     const userIds = client.users || [];
@@ -177,7 +177,7 @@ router.get("/orders/:id", async (req, res) => {
   } catch (err) {
     console.error("CLIENT ORDERS ERROR:", err);
     req.flash("notification", "Failed to load client purchase history");
-    res.redirect("/fairtech/client/view");
+    res.redirect("/sachiko/client/view");
   }
 });
 
@@ -203,7 +203,7 @@ router.get("/edit/:id", async (req, res) => {
 
     if (!client) {
       req.flash("notification", "Client not found");
-      return res.redirect("/fairtech/client/view");
+      return res.redirect("/sachiko/client/view");
     }
 
     res.render("users/clientEditForm.ejs", {
@@ -217,7 +217,7 @@ router.get("/edit/:id", async (req, res) => {
   } catch (err) {
     console.error(err);
     req.flash("notification", "Failed to load client");
-    res.redirect("/fairtech/client/view");
+    res.redirect("/sachiko/client/view");
   }
 });
 
@@ -336,7 +336,7 @@ router.post("/edit/:id", requireAuth, updateLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Updated client "${clientName}"`;
     req.flash("notification", "Client updated successfully!");
-    res.json({ success: true, redirect: "/fairtech/client/view" });
+    res.json({ success: true, redirect: "/sachiko/client/view" });
   } catch (err) {
     console.error(err);
     res.status(400).json({ success: false, message: "Failed to update client" });
@@ -356,7 +356,7 @@ router.get("/profile/:id", async (req, res) => {
 
     if (!client) {
       req.flash("notification", "Client not found");
-      return res.redirect("/fairtech/client/view");
+      return res.redirect("/sachiko/client/view");
     }
 
     res.render("users/clientProfile.ejs", {
@@ -369,7 +369,7 @@ router.get("/profile/:id", async (req, res) => {
   } catch (err) {
     console.error(err);
     req.flash("notification", "Invalid client link");
-    res.redirect("/fairtech/client/view");
+    res.redirect("/sachiko/client/view");
   }
 });
 
@@ -385,7 +385,7 @@ router.get("/details/:userId", async (req, res) => {
 
     if (!user) {
       req.flash("notification", "User not found");
-      return res.redirect("/fairtech/master/view");
+      return res.redirect("/sachiko/master/view");
     }
 
     const userData = {
@@ -430,7 +430,7 @@ router.get("/details/:userId", async (req, res) => {
   } catch (err) {
     console.error("USER DETAILS ERROR:", err);
     req.flash("notification", "Failed to load user details");
-    res.redirect("/fairtech/master/view");
+    res.redirect("/sachiko/master/view");
   }
 });
 
@@ -441,17 +441,17 @@ router.post("/details/:userId/delete", requireAuth, deleteLimiter, async (req, r
     const user = await Username.findById(userId).lean();
     if (!user) {
       req.flash("notification", "User not found");
-      return res.redirect("/fairtech/master/view");
+      return res.redirect("/sachiko/master/view");
     }
     await Client.updateOne({ clientId: user.clientId }, { $pull: { users: user._id } });
     await Username.deleteOne({ _id: user._id });
     res.locals.auditDescription = `Deleted user "${user.userName}" (client: ${user.clientName})`;
     req.flash("notification", `User ${user.userName} deleted successfully`);
-    return res.redirect("/fairtech/master/view");
+    return res.redirect("/sachiko/master/view");
   } catch (err) {
     console.error("USER DELETE ERROR:", err);
     req.flash("notification", "Failed to delete user");
-    return res.redirect(`/fairtech/client/details/${req.params.userId}`);
+    return res.redirect(`/sachiko/client/details/${req.params.userId}`);
   }
 });
 

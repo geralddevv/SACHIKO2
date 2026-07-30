@@ -97,7 +97,7 @@ async function getReorderData() {
           coordinators: Array.from(coordinatorMap[itemIdStr] || []).join(", "),
           locations: Array.from(locationMap[itemIdStr] || []).join(", "),
           hasVendors: (vendorMap[itemIdStr] || new Set()).size > 0,
-          bindingPath: ({ Tape: "/fairtech/form/vendor-item-binding/tape" })[t.typeKey] || "/fairtech/vendor/coordinator/view"
+          bindingPath: ({ Tape: "/sachiko/form/vendor-item-binding/tape" })[t.typeKey] || "/sachiko/vendor/coordinator/view"
         });
       }
     });
@@ -253,7 +253,7 @@ router.post("/reorder/create-po", requireAuth, createLimiter, async (req, res) =
 
     if (!bindingModel) {
         req.flash("notification", "Invalid item type specified.");
-        return res.redirect("/fairtech/purchase/pending");
+        return res.redirect("/sachiko/purchase/pending");
     }
 
     let binding = null;
@@ -276,7 +276,7 @@ router.post("/reorder/create-po", requireAuth, createLimiter, async (req, res) =
     }
     if (!binding) {
       req.flash("notification", "Vendor not binded for this item. Purchase Order was not created.");
-      return res.redirect("/fairtech/purchase/pending");
+      return res.redirect("/sachiko/purchase/pending");
     }
 
     const resolvedVendorUserId = vendorUserId || binding.vendorUserId;
@@ -327,7 +327,7 @@ router.post("/reorder/create-po", requireAuth, createLimiter, async (req, res) =
       req.flash("notification", "Purchase Order created successfully.");
     }
 
-    res.redirect("/fairtech/purchase/pending");
+    res.redirect("/sachiko/purchase/pending");
   } catch (err) {
     console.error("CREATE PO ERROR:", err);
     req.flash("notification", "Error: " + (err.message || "Failed to create Purchase Order."));
@@ -361,7 +361,7 @@ router.post("/purchase/status", requireAuth, updateLimiter, async (req, res) => 
 
     res.locals.auditDescription = `Marked purchase order "${po.poNumber}" as ${status}`;
     req.flash("notification", `Purchase Order mark as ${status.toLowerCase()} successfully.`);
-    res.redirect("/fairtech/purchase/pending");
+    res.redirect("/sachiko/purchase/pending");
   } catch (err) {
     console.error("PO STATUS UPDATE ERROR:", err);
     req.flash("notification", "Error updating Purchase Order status.");
@@ -372,7 +372,7 @@ router.post("/purchase/status", requireAuth, updateLimiter, async (req, res) => 
 router.get("/reorder/select-vendor-multi", async (req, res) => {
   try {
     const itemsParam = req.query.items;
-    if (!itemsParam) return res.redirect("/fairtech/inventory/orders/reorder");
+    if (!itemsParam) return res.redirect("/sachiko/inventory/orders/reorder");
 
     const tokens = decodeURIComponent(itemsParam).split(",").map(s => s.trim()).filter(Boolean);
     const cartItems = [];
@@ -425,7 +425,7 @@ router.get("/reorder/select-vendor-multi", async (req, res) => {
       });
     }
 
-    if (cartItems.length === 0) return res.redirect("/fairtech/inventory/orders/reorder");
+    if (cartItems.length === 0) return res.redirect("/sachiko/inventory/orders/reorder");
 
     res.render("inventory/orders/selectVendorMulti.ejs", {
       title: "Create Purchase Orders",
@@ -506,7 +506,7 @@ router.post("/reorder/create-po-multi", requireAuth, createLimiter, async (req, 
       req.flash("notification", "No Purchase Orders were created. Check vendor bindings for the selected items.");
     }
 
-    res.redirect("/fairtech/purchase/pending");
+    res.redirect("/sachiko/purchase/pending");
   } catch (err) {
     console.error("CREATE MULTI PO ERROR:", err);
     req.flash("notification", "Error: " + (err.message || "Failed to create Purchase Orders."));
@@ -742,7 +742,7 @@ router.post("/purchase/order", requireAuth, createLimiter, async (req, res) => {
     }
     if (!binding) {
       req.flash("notification", "Vendor binding not found for selected item.");
-      return res.redirect("/fairtech/inventory/purchase/order");
+      return res.redirect("/sachiko/inventory/purchase/order");
     }
 
     const parsedDate = new Date(estimatedDate);
@@ -783,7 +783,7 @@ router.post("/purchase/order", requireAuth, createLimiter, async (req, res) => {
       req.flash("notification", "Purchase Order created successfully.");
     }
 
-    res.redirect("/fairtech/purchase/pending");
+    res.redirect("/sachiko/purchase/pending");
   } catch (err) {
     console.error("CREATE PURCHASE ORDER ERROR:", err);
     req.flash("notification", "Error: " + (err.message || "Failed to create Purchase Order."));
@@ -863,7 +863,7 @@ router.post("/purchase/order-multi", requireAuth, createLimiter, async (req, res
       req.flash("notification", "No Purchase Orders were created. Check vendor bindings for the selected items.");
     }
 
-    res.redirect("/fairtech/purchase/pending");
+    res.redirect("/sachiko/purchase/pending");
   } catch (err) {
     console.error("CREATE PURCHASE ORDER MULTI ERROR:", err);
     req.flash("notification", "Error: " + (err.message || "Failed to create Purchase Orders."));

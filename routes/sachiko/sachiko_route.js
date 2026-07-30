@@ -78,6 +78,40 @@ const toArray = (value) => {
   return Array.isArray(value) ? value : [value];
 };
 
+// SKU code format mirrors the Tape master's Product ID (routes/fairdesk_route.js
+// formatTapeId): `FS | SL | 000001`. Scanned/incremented directly against the
+// highest existing skuCode, same as Tape, rather than the shared Counter used
+// by slId/jobCardId/lotNo above -- this is a separate, human-facing SKU, not
+// the row's own generated identifier.
+const formatSkuCode = (n) => `FS | SL | ${String(n).padStart(6, "0")}`;
+const parseSkuSeq = (skuCode) => {
+  const match = String(skuCode || "").match(/(\d{6})$/);
+  return match ? Number(match[1]) : 0;
+};
+
+async function previewNextSkuCode() {
+  const latest = await SachikoSL.findOne().sort({ skuCode: -1 }).select("skuCode").lean();
+  let nextSeq = parseSkuSeq(latest?.skuCode) + 1;
+  while (await SachikoSL.exists({ skuCode: formatSkuCode(nextSeq) })) {
+    nextSeq += 1;
+  }
+  return formatSkuCode(nextSeq);
+}
+
+async function generateSkuCode() {
+  let nextSeq = parseSkuSeq(
+    (await SachikoSL.findOne().sort({ skuCode: -1 }).select("skuCode").lean())?.skuCode,
+  ) + 1;
+
+  const maxAttempts = 10000;
+  for (let i = 0; i < maxAttempts; i++) {
+    const candidate = formatSkuCode(nextSeq);
+    if (!(await SachikoSL.exists({ skuCode: candidate }))) return candidate;
+    nextSeq += 1;
+  }
+  throw new Error("Unable to generate unique SL SKU code");
+}
+
 /* ================= SL ================= */
 router.get("/sl/view", async (req, res) => {
   const jsonData = await SachikoSL.find().sort({ productCode: 1 }).lean();
@@ -91,10 +125,12 @@ router.get("/sl/view", async (req, res) => {
 });
 
 router.get("/sl/form", async (req, res) => {
+  const previewSkuCode = await previewNextSkuCode();
   res.render("sachiko/slForm.ejs", {
     title: "SL Form",
     CSS: false,
     JS: false,
+    previewSkuCode,
     notification: req.flash("notification"),
   });
 });
@@ -123,12 +159,13 @@ function buildSLPayload(body) {
 router.post("/sl/form", requireAuth, createLimiter, handleWordUpload, async (req, res) => {
   try {
     const slId = await generateId("sachikoSLId", "SL");
+    const skuCode = await generateSkuCode();
     const payload = buildSLPayload(req.body);
     if (req.file) {
       payload.wordFile = req.file.filename;
       payload.wordFileOriginalName = req.file.originalname;
     }
-    await SachikoSL.create({ slId, ...payload });
+    await SachikoSL.create({ slId, skuCode, ...payload });
     req.flash("notification", "SL created successfully!");
     res.redirect("/sachiko/sl/view");
   } catch (err) {
