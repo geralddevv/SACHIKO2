@@ -1,14 +1,8 @@
 ﻿import express from "express";
 import Tape from "../../models/inventory/tape.js";
-import PosRoll from "../../models/inventory/posRoll.js";
-import Tafeta from "../../models/inventory/tafeta.js";
 import TapeStock from "../../models/inventory/TapeStock.js";
-import PosRollStock from "../../models/inventory/PosRollStock.js";
-import TafetaStock from "../../models/inventory/TafetaStock.js";
 import TapeSalesOrder from "../../models/inventory/TapeSalesOrder.js";
 import VendorTapeBinding from "../../models/inventory/vendorTapeBinding.js";
-import VendorPosRollBinding from "../../models/inventory/vendorPosRollBinding.js";
-import VendorTafetaBinding from "../../models/inventory/vendorTafetaBinding.js";
 import VendorUser from "../../models/users/vendorUser.js";
 import Vendor from "../../models/users/vendor.js";
 import PurchaseOrder from "../../models/inventory/PurchaseOrder.js";
@@ -22,8 +16,6 @@ async function getReorderData() {
   const activePOStatuses = ["PENDING", "CONFIRMED", "PARTIALLY_RECEIVED"];
   const types = [
     { model: Tape, stockModel: TapeStock, stockRef: "tape", minQtyField: "tapeMinQty", typeKey: "Tape", label: "Tape", bindingModel: VendorTapeBinding, refField: "tapeId" },
-    { model: PosRoll, stockModel: PosRollStock, stockRef: "posRoll", minQtyField: "posMinQty", typeKey: "PosRoll", label: "POS Roll", bindingModel: VendorPosRollBinding, refField: "posRollId" },
-    { model: Tafeta, stockModel: TafetaStock, stockRef: "tafeta", minQtyField: "tafetaMinQty", typeKey: "Tafeta", label: "Tafeta", bindingModel: VendorTafetaBinding, refField: "tafetaId" },
   ];
 
   const results = [];
@@ -94,7 +86,7 @@ async function getReorderData() {
           _id: item._id,
           type: t.label,
           typeKey: t.typeKey,
-          productId: item.tapeProductId || item.posProductId || item.tafetaProductId || "N/A",
+          productId: item.tapeProductId || "N/A",
           name: getItemName(item, t.typeKey),
           stock,
           booked,
@@ -105,7 +97,7 @@ async function getReorderData() {
           coordinators: Array.from(coordinatorMap[itemIdStr] || []).join(", "),
           locations: Array.from(locationMap[itemIdStr] || []).join(", "),
           hasVendors: (vendorMap[itemIdStr] || new Set()).size > 0,
-          bindingPath: ({ Tape: "/fairtech/form/vendor-item-binding/tape", PosRoll: "/fairtech/form/vendor-item-binding/pos", Tafeta: "/fairtech/form/vendor-item-binding/tafeta" })[t.typeKey] || "/fairtech/vendor/coordinator/view"
+          bindingPath: ({ Tape: "/fairtech/form/vendor-item-binding/tape" })[t.typeKey] || "/fairtech/vendor/coordinator/view"
         });
       }
     });
@@ -116,8 +108,6 @@ async function getReorderData() {
 
 function getItemName(item, type) {
   if (type === "Tape") return `${item.tapePaperCode || ""} ${item.tapeGsm || ""}gsm`.trim() || item.tapeProductId;
-  if (type === "PosRoll") return `${item.posPaperCode || ""} ${item.posGsm || ""}gsm`.trim() || item.posProductId;
-  if (type === "Tafeta") return `${item.tafetaMaterialCode || ""} ${item.tafetaGsm || ""}gsm`.trim() || item.tafetaProductId;
   return "N/A";
 }
 
@@ -125,13 +115,11 @@ async function getItemShortage(type, id) {
   try {
     const types = {
       "Tape": { stockModel: TapeStock, stockRef: "tape", minQtyField: "tapeMinQty" },
-      "PosRoll": { stockModel: PosRollStock, stockRef: "posRoll", minQtyField: "posMinQty" },
-      "Tafeta": { stockModel: TafetaStock, stockRef: "tafeta", minQtyField: "tafetaMinQty" },
     };
     const t = types[type];
     if (!t) return 0;
 
-    const item = await (type === "Tape" ? Tape : type === "PosRoll" ? PosRoll : Tafeta).findById(id).lean();
+    const item = await Tape.findById(id).lean();
     if (!item) return 0;
 
     // Current Stock
@@ -184,12 +172,6 @@ router.get("/reorder/api/vendors/:type/:id", async (req, res) => {
     if (type === "Tape") {
         bindingModel = VendorTapeBinding;
         refField = "tapeId";
-    } else if (type === "PosRoll") {
-        bindingModel = VendorPosRollBinding;
-        refField = "posRollId";
-    } else if (type === "Tafeta") {
-        bindingModel = VendorTafetaBinding;
-        refField = "tafetaId";
     }
 
     if (!bindingModel) return res.status(400).json([]);
@@ -215,14 +197,6 @@ router.get("/reorder/select-vendor/:type/:id", async (req, res) => {
       model = Tape;
       bindingModel = VendorTapeBinding;
       refField = "tapeId";
-    } else if (normalizedType === "pos-roll" || normalizedType === "posroll") {
-      model = PosRoll;
-      bindingModel = VendorPosRollBinding;
-      refField = "posRollId";
-    } else if (normalizedType === "tafeta") {
-      model = Tafeta;
-      bindingModel = VendorTafetaBinding;
-      refField = "tafetaId";
     }
 
     if (!model) return res.status(404).send("Item Type Not Found");
@@ -268,8 +242,6 @@ router.post("/reorder/create-po", requireAuth, createLimiter, async (req, res) =
     let { orderId, itemId, itemType, vendorUserId, vendorBindingId, userLocation, quantity, poNumber, estimatedDate, remarks } = req.body;
 
     // Standardize itemType for Model Enums
-    if (itemType === "pos-roll") itemType = "PosRoll";
-    if (itemType === "tafeta") itemType = "Tafeta";
     if (itemType === "tape") itemType = "Tape";
 
     let bindingModel, refField, onBindingModel;
@@ -277,14 +249,6 @@ router.post("/reorder/create-po", requireAuth, createLimiter, async (req, res) =
       bindingModel = VendorTapeBinding;
       refField = "tapeId";
       onBindingModel = "VendorTapeBinding";
-    } else if (itemType === "PosRoll" || itemType === "Pos-Roll") {
-      bindingModel = VendorPosRollBinding;
-      refField = "posRollId";
-      onBindingModel = "VendorPosRollBinding";
-    } else if (itemType === "Tafeta") {
-      bindingModel = VendorTafetaBinding;
-      refField = "tafetaId";
-      onBindingModel = "VendorTafetaBinding";
     }
 
     if (!bindingModel) {
@@ -416,14 +380,12 @@ router.get("/reorder/select-vendor-multi", async (req, res) => {
     for (const token of tokens) {
       const parts = token.split(":");
       if (parts.length < 2) continue;
-      const typeKey  = parts[0];  // Tape | PosRoll | Tafeta
+      const typeKey  = parts[0];  // Tape
       const id       = parts[1];
       const shortage = parseInt(parts[2]) || 0;
 
       let model, bindingModel, refField;
       if (typeKey === "Tape")    { model = Tape;    bindingModel = VendorTapeBinding;    refField = "tapeId"; }
-      else if (typeKey === "PosRoll") { model = PosRoll; bindingModel = VendorPosRollBinding; refField = "posRollId"; }
-      else if (typeKey === "Tafeta")  { model = Tafeta;  bindingModel = VendorTafetaBinding;  refField = "tafetaId"; }
       else continue;
 
       const [item, bindings] = await Promise.all([
@@ -448,7 +410,7 @@ router.get("/reorder/select-vendor-multi", async (req, res) => {
           userContact:     v.userContact,
           userLocation:    v.userLocation,
           locationDetails: v.locationDetails || [],
-          minQty:          binding ? (binding.tapeMinQty || binding.posMinQty || binding.tafetaMinQty || 0) : 0,
+          minQty:          binding ? (binding.tapeMinQty || 0) : 0,
           hasBinding:      !!binding
         });
       });
@@ -497,8 +459,6 @@ router.post("/reorder/create-po-multi", requireAuth, createLimiter, async (req, 
 
       let bindingModel, refField, onBindingModel;
       if (itemType === "Tape")    { bindingModel = VendorTapeBinding;    refField = "tapeId";    onBindingModel = "VendorTapeBinding"; }
-      else if (itemType === "PosRoll") { bindingModel = VendorPosRollBinding; refField = "posRollId"; onBindingModel = "VendorPosRollBinding"; }
-      else if (itemType === "Tafeta")  { bindingModel = VendorTafetaBinding;  refField = "tafetaId"; onBindingModel = "VendorTafetaBinding"; }
       else continue;
 
       let binding = null;
@@ -595,8 +555,6 @@ router.get("/purchase/order", async (req, res) => {
 
         let bindingModel, refField;
         if      (typeKey === "Tape")    { bindingModel = VendorTapeBinding;    refField = "tapeId"; }
-        else if (typeKey === "PosRoll") { bindingModel = VendorPosRollBinding; refField = "posRollId"; }
-        else if (typeKey === "Tafeta")  { bindingModel = VendorTafetaBinding;  refField = "tafetaId"; }
 
         if (bindingModel) {
           const binding = await bindingModel.findOne({ [refField]: id }).populate("vendorUserId").lean();
@@ -643,7 +601,7 @@ router.get("/purchase/coordinators/:vendorId", async (req, res) => {
 /**
  * GET /purchase/items/:type/:vendorUserId
  * Returns items bound to the given coordinator, enriched with stock & shortage info.
- * type: Tape | PosRoll | Tafeta
+ * type: Tape
  */
 router.get("/purchase/items/:type/:vendorUserId", async (req, res) => {
   try {
@@ -652,8 +610,6 @@ router.get("/purchase/items/:type/:vendorUserId", async (req, res) => {
 
     let bindingModel, stockModel, stockRef, itemRef, minQtyField;
     if      (type === "Tape")    { bindingModel = VendorTapeBinding;    stockModel = TapeStock;    stockRef = "tape";    itemRef = "tapeId";    minQtyField = "tapeMinQty"; }
-    else if (type === "PosRoll") { bindingModel = VendorPosRollBinding; stockModel = PosRollStock; stockRef = "posRoll"; itemRef = "posRollId"; minQtyField = "posMinQty"; }
-    else if (type === "Tafeta")  { bindingModel = VendorTafetaBinding;  stockModel = TafetaStock;  stockRef = "tafeta"; itemRef = "tafetaId"; minQtyField = "tafetaMinQty"; }
     else return res.status(400).json([]);
 
     const bindings = await bindingModel
@@ -710,17 +666,6 @@ router.get("/purchase/items/:type/:vendorUserId", async (req, res) => {
         details = { type: "Tape", productId: item.tapeProductId, paperCode: item.tapePaperCode, gsm: item.tapeGsm,
           paperType: item.tapePaperType, width: item.tapeWidth, mtrs: item.tapeMtrs, finish: item.tapeFinish,
           vendorPaperCode: b.vendorTapePaperCode, vendorGsm: b.vendorTapeGsm, minQty };
-      } else if (type === "PosRoll") {
-        displayName = `${item.posProductId || "N/A"} — ${item.posPaperCode || ""} ${item.posGsm || ""}gsm`;
-        rate    = b.posRatePerRoll;
-        details = { type: "PosRoll", productId: item.posProductId, paperCode: item.posPaperCode, gsm: item.posGsm,
-          width: item.posWidth, mtrs: item.posMtrs, vendorPaperCode: b.vendorPosPaperCode, minQty };
-      } else if (type === "Tafeta") {
-        displayName = `${item.tafetaProductId || "N/A"} — ${item.tafetaMaterialCode || ""} ${item.tafetaGsm || ""}gsm`;
-        rate    = b.tafetaRatePerRoll;
-        details = { type: "Tafeta", productId: item.tafetaProductId, materialCode: item.tafetaMaterialCode,
-          gsm: item.tafetaGsm, width: item.tafetaWidth, mtrs: item.tafetaMtrs,
-          vendorPaperCode: b.vendorTafetaMaterialCode, minQty };
       }
 
       return {
@@ -785,14 +730,12 @@ router.post("/purchase/order", requireAuth, createLimiter, async (req, res) => {
 
     let bindingModel, onBindingModel;
     if      (itemType === "Tape")    { bindingModel = VendorTapeBinding;    onBindingModel = "VendorTapeBinding"; }
-    else if (itemType === "PosRoll") { bindingModel = VendorPosRollBinding; onBindingModel = "VendorPosRollBinding"; }
-    else if (itemType === "Tafeta")  { bindingModel = VendorTafetaBinding;  onBindingModel = "VendorTafetaBinding"; }
     else { return res.status(400).json({ success: false, message: "Invalid item type." }); }
 
     let binding = null;
     if (vendorBindingId) binding = await bindingModel.findById(vendorBindingId);
     if (!binding && vendorUserId && itemId) {
-      const refField = itemType === "Tape" ? "tapeId" : itemType === "PosRoll" ? "posRollId" : "tafetaId";
+      const refField = itemType === "Tape" ? "tapeId" : null;
       // A coordinator can have this item bound at more than one location now —
       // disambiguate with the selected delivery location when we have one.
       binding = await bindingModel.findOne({ [refField]: itemId, vendorUserId, ...(userLocation ? { location: userLocation } : {}) });
@@ -871,8 +814,6 @@ router.post("/purchase/order-multi", requireAuth, createLimiter, async (req, res
 
       let bindingModel, refField, onBindingModel;
       if      (itemType === "Tape")    { bindingModel = VendorTapeBinding;    refField = "tapeId";    onBindingModel = "VendorTapeBinding"; }
-      else if (itemType === "PosRoll") { bindingModel = VendorPosRollBinding; refField = "posRollId"; onBindingModel = "VendorPosRollBinding"; }
-      else if (itemType === "Tafeta")  { bindingModel = VendorTafetaBinding;  refField = "tafetaId";  onBindingModel = "VendorTafetaBinding"; }
       else continue;
 
       let binding = null;

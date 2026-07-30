@@ -61,18 +61,6 @@ const userSchema = new mongoose.Schema({
       ref: "TapeBinding",
     },
   ],
-  posRoll: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: "PosRollBinding",
-    },
-  ],
-  tafeta: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: "TafetaBinding",
-    },
-  ],
 });
 
 const Username = mongoose.model("Username", userSchema);

@@ -1,12 +1,8 @@
 ﻿import express from "express";
 import Tape from "../../models/inventory/tape.js";
-import PosRoll from "../../models/inventory/posRoll.js";
-import Tafeta from "../../models/inventory/tafeta.js";
 import Vendor from "../../models/users/vendor.js";
 import VendorUser from "../../models/users/vendorUser.js";
 import VendorTapeBinding from "../../models/inventory/vendorTapeBinding.js";
-import VendorPosRollBinding from "../../models/inventory/vendorPosRollBinding.js";
-import VendorTafetaBinding from "../../models/inventory/vendorTafetaBinding.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { getUserLocationNames } from "../../utils/locations.js";
@@ -47,84 +43,6 @@ const ITEM_CONFIGS = {
 
       { id: "tape-min-qty", name: "tapeMinQty", label: "MSQ", type: "number" },
       { id: "tape-rate-per-roll", name: "tapeRatePerRoll", label: "Rate Per Roll", type: "number" },
-    ],
-  },
-  pos: {
-    key: "pos",
-    title: "Vendor POS Roll",
-    heading: "Vendor POS Roll",
-    template: "inventory/posRoll/posRollVendorBinding.ejs",
-    redirectTo: "/fairtech/vendor/coordinator/view",
-    bindingModel: VendorPosRollBinding,
-    bindingField: "posRollId",
-    vendorArrayField: "posRoll",
-    masterModel: PosRoll,
-    displayValueKey: "posProductId",
-    widthField: "posWidth",
-    mtrsField: "posMtrs",
-    rateField: "posRatePerRoll",
-    saleCostField: "posSaleCost",
-    minQtyField: "posMinQty",
-    odrQtyField: "posOdrQty",
-    specFields: [
-      { id: "pos-paper-code", name: "posPaperCode", label: "Paper Code" },
-      { id: "pos-paper-type", name: "posPaperType", label: "Paper Type" },
-      { id: "pos-gsm", name: "posGsm", label: "GSM" },
-      { id: "pos-width", name: "posWidth", label: "Width" },
-      { id: "pos-mtrs", name: "posMtrs", label: "Meters" },
-      { id: "pos-core-id", name: "posCoreId", label: "Core ID", type: "select" },
-      { id: "pos-color", name: "posColor", label: "Color", type: "select" },
-    ],
-    overrideFields: [
-      { id: "vendor-pos-paper-code", name: "vendorPosPaperCode", label: "Vendor Paper Code", type: "text" },
-      { id: "vendor-pos-gsm", name: "vendorPosGsm", label: "Vendor GSM", type: "number" },
-      { id: "pos-mtrs-del-input", name: "posMtrsDel", label: "MTRS Delivered", type: "number" },
-      { id: "pos-rate-per-roll", name: "posRatePerRoll", label: "Rate Per Roll", type: "number" },
-      { id: "pos-sale-cost", name: "posSaleCost", label: "Sales sq mtrs Cost", type: "number", readonly: true },
-      { id: "pos-min-qty", name: "posMinQty", label: "Minimum Order QTY", type: "number" },
-      { id: "pos-odr-qty", name: "posOdrQty", label: "Order QTY", type: "number" },
-      { id: "pos-odr-freq", name: "posOdrFreq", label: "Repeat Order Freq", type: "text" },
-      { id: "pos-credit-term", name: "posCreditTerm", label: "CR", type: "text" },
-    ],
-  },
-  tafeta: {
-    key: "tafeta",
-    title: "Vendor Tafeta",
-    heading: "Vendor Tafeta",
-    template: "inventory/tafeta/tafetaVendorBinding.ejs",
-    redirectTo: "/fairtech/vendor/coordinator/view",
-    bindingModel: VendorTafetaBinding,
-    bindingField: "tafetaId",
-    vendorArrayField: "tafeta",
-    masterModel: Tafeta,
-    displayValueKey: "tafetaProductId",
-    widthField: "tafetaWidth",
-    mtrsField: "tafetaMtrs",
-    rateField: "tafetaRatePerRoll",
-    saleCostField: "tafetaSaleCost",
-    minQtyField: "tafetaMinQty",
-    odrQtyField: "tafetaOdrQty",
-    specFields: [
-      { id: "tafeta-material-code", name: "tafetaMaterialCode", label: "Material Code" },
-      { id: "tafeta-material-type", name: "tafetaMaterialType", label: "Material Type", type: "select" },
-      { id: "tafeta-color", name: "tafetaColor", label: "Color" },
-      { id: "tafeta-gsm", name: "tafetaGsm", label: "GSM" },
-      { id: "tafeta-width", name: "tafetaWidth", label: "Width" },
-      { id: "tafeta-mtrs", name: "tafetaMtrs", label: "Meters" },
-      { id: "tafeta-core-len", name: "tafetaCoreLen", label: "Core Len" },
-      { id: "tafeta-notch", name: "tafetaNotch", label: "Notch", type: "select" },
-      { id: "tafeta-core-id", name: "tafetaCoreId", label: "Core ID", type: "select" },
-    ],
-    overrideFields: [
-      { id: "vendor-tafeta-material-code", name: "vendorTafetaMaterialCode", label: "Vendor Material Code", type: "text" },
-      { id: "vendor-tafeta-gsm", name: "vendorTafetaGsm", label: "Vendor GSM", type: "text" },
-      { id: "tafeta-mtrs-del-input", name: "tafetaMtrsDel", label: "MTRS Delivered", type: "text" },
-      { id: "tafeta-rate-per-roll", name: "tafetaRatePerRoll", label: "Rate Per Roll", type: "number" },
-      { id: "tafeta-sale-cost", name: "tafetaSaleCost", label: "Sales sq mtrs Cost", type: "number", readonly: true },
-      { id: "tafeta-min-qty", name: "tafetaMinQty", label: "Minimum Order QTY", type: "number" },
-      { id: "tafeta-odr-qty", name: "tafetaOdrQty", label: "Order QTY", type: "number" },
-      { id: "tafeta-odr-freq", name: "tafetaOdrFreq", label: "Repeat Order Freq", type: "text" },
-      { id: "tafeta-credit-term", name: "tafetaCreditTerm", label: "CR", type: "text" },
     ],
   },
 };
@@ -227,49 +145,6 @@ async function saveBinding(req, res, kind) {
       createData.tapeMinQty = Number(req.body.tapeMinQty);
       if (req.body.tapeRatePerRoll) createData.tapeRatePerRoll = Number(req.body.tapeRatePerRoll);
     }
-    if (config.bindingField === "posRollId") {
-      createData.vendorPosGsm = Number(req.body.vendorPosGsm);
-      createData.posMinQty = Number(req.body.posMinQty);
-      // Only set optional fields if they were actually submitted
-      if (req.body.posMtrsDel !== undefined && req.body.posMtrsDel !== "") {
-        createData.posMtrsDel = Number(req.body.posMtrsDel);
-      }
-      if (req.body.posRatePerRoll !== undefined && req.body.posRatePerRoll !== "") {
-        createData.posRatePerRoll = Number(req.body.posRatePerRoll);
-      }
-      if (req.body.posSaleCost !== undefined && req.body.posSaleCost !== "") {
-        createData.posSaleCost = Number(req.body.posSaleCost);
-      }
-      if (req.body.posOdrQty !== undefined && req.body.posOdrQty !== "") {
-        createData.posOdrQty = Number(req.body.posOdrQty);
-      }
-      // Remove any empty-string values so Mongoose doesn't try to cast them
-      ["posRatePerRoll", "posSaleCost", "posOdrQty", "posMtrsDel"].forEach((key) => {
-        if (createData[key] !== undefined && isNaN(createData[key])) {
-          delete createData[key];
-        }
-      });
-    }
-    if (config.bindingField === "tafetaId") {
-      createData.tafetaMinQty = Number(req.body.tafetaMinQty);
-      // Only set optional numeric fields if present
-      if (req.body.tafetaRatePerRoll !== undefined && req.body.tafetaRatePerRoll !== "") {
-        createData.tafetaRatePerRoll = Number(req.body.tafetaRatePerRoll);
-      }
-      if (req.body.tafetaSaleCost !== undefined && req.body.tafetaSaleCost !== "") {
-        createData.tafetaSaleCost = Number(req.body.tafetaSaleCost);
-      }
-      if (req.body.tafetaOdrQty !== undefined && req.body.tafetaOdrQty !== "") {
-        createData.tafetaOdrQty = Number(req.body.tafetaOdrQty);
-      }
-      // Purge any NaN values
-      ["tafetaRatePerRoll", "tafetaSaleCost", "tafetaOdrQty"].forEach((key) => {
-        if (createData[key] !== undefined && isNaN(createData[key])) {
-          delete createData[key];
-        }
-      });
-    }
-
     const binding = await config.bindingModel.create(createData);
 
     // Sync MSQ to master item
@@ -349,7 +224,7 @@ async function resolveMaster(req, res, kind) {
     res.json({
       ...master,
       itemId: master._id,
-      displayValue: master[config.displayValueKey] || master.tapeProductId || master.posProductId || master.tafetaProductId || master._id,
+      displayValue: master[config.displayValueKey] || master.tapeProductId || master._id,
       [config.minQtyField]: master[config.minQtyField] || "",
     });
   } catch (err) {
@@ -395,12 +270,6 @@ router.get("/vendor-item/view/:kind", async (req, res) => {
       if (kind === "tape") {
         StockModel = (await import("../../models/inventory/TapeStock.js")).default;
         matchField = "tape";
-      } else if (kind === "pos") {
-        StockModel = (await import("../../models/inventory/PosRollStock.js")).default;
-        matchField = "posRoll";
-      } else if (kind === "tafeta") {
-        StockModel = (await import("../../models/inventory/TafetaStock.js")).default;
-        matchField = "tafeta";
       }
 
       if (StockModel) {
@@ -429,8 +298,6 @@ router.get("/vendor-item/view/:kind", async (req, res) => {
 
     const displayTemplates = {
       tape: "inventory/tape/tapeVendorDisp.ejs",
-      pos: "inventory/posRoll/posRollVendorDisp.ejs",
-      tafeta: "inventory/tafeta/tafetaVendorDisp.ejs",
     };
 
     res.render(displayTemplates[kind] || "inventory/itemVendorDisp.ejs", {
@@ -464,8 +331,6 @@ router.get("/vendor-item/edit/:kind/:id", async (req, res) => {
 
     const editTemplates = {
       tape: "inventory/tape/tapeVendorBindingEdit.ejs",
-      pos: "inventory/posRoll/posRollVendorBindingEdit.ejs",
-      tafeta: "inventory/tafeta/tafetaVendorBindingEdit.ejs",
     };
 
     const template = editTemplates[kind];
@@ -507,13 +372,6 @@ router.post("/vendor-item/edit/:kind/:id", requireAuth, updateLimiter, async (re
       updateData.vendorTapeGsm = Number(req.body.vendorTapeGsm);
       updateData.tapeMinQty = Number(req.body.tapeMinQty);
       if (req.body.tapeRatePerRoll) updateData.tapeRatePerRoll = Number(req.body.tapeRatePerRoll);
-    } else if (kind === "pos") {
-      updateData.vendorPosGsm = Number(req.body.vendorPosGsm);
-      updateData.posMinQty = Number(req.body.posMinQty);
-      if (req.body.posRatePerRoll) updateData.posRatePerRoll = Number(req.body.posRatePerRoll);
-    } else if (kind === "tafeta") {
-      updateData.tafetaMinQty = Number(req.body.tafetaMinQty);
-      if (req.body.tafetaRatePerRoll) updateData.tafetaRatePerRoll = Number(req.body.tafetaRatePerRoll);
     }
 
     const binding = await config.bindingModel.findByIdAndUpdate(id, updateData, { new: true });
@@ -527,7 +385,7 @@ router.post("/vendor-item/edit/:kind/:id", requireAuth, updateLimiter, async (re
       );
     }
 
-    const overrideCode = updateData.vendorTapePaperCode || updateData.vendorPosPaperCode || updateData.vendorTafetaMaterialCode || binding._id;
+    const overrideCode = updateData.vendorTapePaperCode || binding._id;
     res.locals.auditDescription = `Updated vendor ${config.title} binding "${overrideCode}"`;
     req.flash("notification", "Binding updated successfully!");
     res.json({ success: true, redirect: returnTo || `/fairtech/vendor-item/view/${kind}?userId=${binding.vendorUserId}` });
@@ -569,34 +427,6 @@ router.get("/vendor-item/compare/:kind/:id", async (req, res) => {
         { field: "MSQ", orgValue: "-", clientValue: master.tapeMinQty ?? binding.tapeMinQty ?? "N/A" },
         { field: "Status", orgValue: binding.status || "ACTIVE", clientValue: "-" },
       ];
-    } else if (kind === "pos") {
-      compareRows = [
-        { field: "Paper Code", orgValue: binding.vendorPosPaperCode || "N/A", clientValue: master.posPaperCode || "N/A" },
-        { field: "GSM", orgValue: binding.vendorPosGsm ?? "N/A", clientValue: master.posGsm ?? "N/A" },
-        { field: "Sample ID", orgValue: "-", clientValue: master.posProductId || "N/A" },
-        { field: "Paper Type", orgValue: "-", clientValue: master.posPaperType || "N/A" },
-        { field: "Width", orgValue: "-", clientValue: master.posWidth || "N/A" },
-        { field: "Meters", orgValue: "-", clientValue: master.posMtrs || "N/A" },
-        { field: "Core ID", orgValue: "-", clientValue: master.posCoreId || "N/A" },
-        { field: "Color", orgValue: "-", clientValue: master.posColor || "N/A" },
-        { field: "MSQ", orgValue: "-", clientValue: master.posMinQty ?? binding.posMinQty ?? "N/A" },
-        { field: "Status", orgValue: binding.status || "ACTIVE", clientValue: "-" },
-      ];
-    } else if (kind === "tafeta") {
-      compareRows = [
-        { field: "Material Code", orgValue: binding.vendorTafetaMaterialCode || "N/A", clientValue: master.tafetaMaterialCode || "N/A" },
-        { field: "GSM", orgValue: binding.vendorTafetaGsm ?? "N/A", clientValue: master.tafetaGsm ?? "N/A" },
-        { field: "Sample ID", orgValue: "-", clientValue: master.tafetaProductId || "N/A" },
-        { field: "Material Type", orgValue: "-", clientValue: master.tafetaMaterialType || "N/A" },
-        { field: "Color", orgValue: "-", clientValue: master.tafetaColor || "N/A" },
-        { field: "Width", orgValue: "-", clientValue: master.tafetaWidth || "N/A" },
-        { field: "Meters", orgValue: "-", clientValue: master.tafetaMtrs || "N/A" },
-        { field: "Core Len", orgValue: "-", clientValue: master.tafetaCoreLen || "N/A" },
-        { field: "Notch", orgValue: "-", clientValue: master.tafetaNotch || "N/A" },
-        { field: "Core ID", orgValue: "-", clientValue: master.tafetaCoreId || "N/A" },
-        { field: "MSQ", orgValue: "-", clientValue: master.tafetaMinQty ?? binding.tafetaMinQty ?? "N/A" },
-        { field: "Status", orgValue: binding.status || "ACTIVE", clientValue: "-" },
-      ];
     }
 
     res.render("inventory/itemCompare.ejs", {
@@ -632,7 +462,7 @@ router.post("/vendor-item/delete/:kind/:id", requireAuth, deleteLimiter, async (
     await config.bindingModel.deleteOne({ _id: id });
     await VendorUser.updateOne({ _id: binding.vendorUserId }, { $pull: { [config.vendorArrayField]: id } });
 
-    const deletedCode = binding.vendorTapePaperCode || binding.vendorPosPaperCode || binding.vendorTafetaMaterialCode || id;
+    const deletedCode = binding.vendorTapePaperCode || id;
     res.locals.auditDescription = `Deleted vendor ${config.title} binding "${deletedCode}"`;
     req.flash("notification", "Binding removed successfully!");
     res.redirect(`/fairtech/vendor-item/view/${kind}?userId=${binding.vendorUserId}`);

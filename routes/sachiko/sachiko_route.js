@@ -6,7 +6,7 @@ import { randomBytes } from "crypto";
 import Client from "../../models/users/client.js";
 import Username from "../../models/users/username.js";
 import Counter from "../../models/system/counter.js";
-import SachikoDatasheet from "../../models/sachiko/sachikoDatasheet.js";
+import SachikoSL from "../../models/sachiko/sachikoSL.js";
 import SachikoJobcard from "../../models/sachiko/sachikoJobcard.js";
 import SachikoSalesOrder from "../../models/sachiko/sachikoSalesOrder.js";
 import { requireAuth } from "../../middleware/auth.js";
@@ -14,12 +14,12 @@ import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiter
 
 const router = express.Router();
 
-/* ================= FILE UPLOAD (DATASHEET WORD FILE) ================= */
-const DATASHEET_UPLOAD_DIR = path.resolve("uploads/sachiko/datasheets");
-fs.mkdirSync(DATASHEET_UPLOAD_DIR, { recursive: true });
+/* ================= FILE UPLOAD (SL WORD FILE) ================= */
+const SL_UPLOAD_DIR = path.resolve("uploads/sachiko/sls");
+fs.mkdirSync(SL_UPLOAD_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, DATASHEET_UPLOAD_DIR),
+  destination: (req, file, cb) => cb(null, SL_UPLOAD_DIR),
   filename: (req, file, cb) => {
     cb(null, randomBytes(16).toString("hex") + path.extname(file.originalname));
   },
@@ -78,11 +78,11 @@ const toArray = (value) => {
   return Array.isArray(value) ? value : [value];
 };
 
-/* ================= DATASHEET ================= */
-router.get("/datasheet/view", async (req, res) => {
-  const jsonData = await SachikoDatasheet.find().sort({ productCode: 1 }).lean();
-  res.render("sachiko/datasheetView.ejs", {
-    title: "Datasheet View",
+/* ================= SL ================= */
+router.get("/sl/view", async (req, res) => {
+  const jsonData = await SachikoSL.find().sort({ productCode: 1 }).lean();
+  res.render("sachiko/slView.ejs", {
+    title: "SL View",
     CSS: "tableDisp.css",
     JS: false,
     jsonData,
@@ -90,16 +90,16 @@ router.get("/datasheet/view", async (req, res) => {
   });
 });
 
-router.get("/datasheet/form", async (req, res) => {
-  res.render("sachiko/datasheetForm.ejs", {
-    title: "Datasheet Form",
+router.get("/sl/form", async (req, res) => {
+  res.render("sachiko/slForm.ejs", {
+    title: "SL Form",
     CSS: false,
     JS: false,
     notification: req.flash("notification"),
   });
 });
 
-function buildDatasheetPayload(body) {
+function buildSLPayload(body) {
   return {
     productCode: trim(body.productCode),
     facestock: {
@@ -120,33 +120,33 @@ function buildDatasheetPayload(body) {
   };
 }
 
-router.post("/datasheet/form", requireAuth, createLimiter, handleWordUpload, async (req, res) => {
+router.post("/sl/form", requireAuth, createLimiter, handleWordUpload, async (req, res) => {
   try {
-    const datasheetId = await generateId("sachikoDatasheetId", "DS");
-    const payload = buildDatasheetPayload(req.body);
+    const slId = await generateId("sachikoSLId", "SL");
+    const payload = buildSLPayload(req.body);
     if (req.file) {
       payload.wordFile = req.file.filename;
       payload.wordFileOriginalName = req.file.originalname;
     }
-    await SachikoDatasheet.create({ datasheetId, ...payload });
-    req.flash("notification", "Datasheet created successfully!");
-    res.redirect("/sachiko/datasheet/view");
+    await SachikoSL.create({ slId, ...payload });
+    req.flash("notification", "SL created successfully!");
+    res.redirect("/sachiko/sl/view");
   } catch (err) {
-    console.error("SACHIKO DATASHEET CREATE ERROR:", err);
-    if (req.file) fs.existsSync(path.join(DATASHEET_UPLOAD_DIR, req.file.filename)) && fs.unlinkSync(path.join(DATASHEET_UPLOAD_DIR, req.file.filename));
-    req.flash("notification", "Failed to create datasheet");
-    res.redirect("/sachiko/datasheet/form");
+    console.error("SACHIKO SL CREATE ERROR:", err);
+    if (req.file) fs.existsSync(path.join(SL_UPLOAD_DIR, req.file.filename)) && fs.unlinkSync(path.join(SL_UPLOAD_DIR, req.file.filename));
+    req.flash("notification", "Failed to create SL");
+    res.redirect("/sachiko/sl/form");
   }
 });
 
-router.get("/datasheet/edit/:id", async (req, res) => {
-  const ds = await SachikoDatasheet.findById(req.params.id).lean();
+router.get("/sl/edit/:id", async (req, res) => {
+  const ds = await SachikoSL.findById(req.params.id).lean();
   if (!ds) {
-    req.flash("notification", "Datasheet not found");
-    return res.redirect("/sachiko/datasheet/view");
+    req.flash("notification", "SL not found");
+    return res.redirect("/sachiko/sl/view");
   }
-  res.render("sachiko/datasheetEdit.ejs", {
-    title: "Edit Datasheet",
+  res.render("sachiko/slEdit.ejs", {
+    title: "Edit SL",
     CSS: false,
     JS: false,
     ds,
@@ -154,60 +154,60 @@ router.get("/datasheet/edit/:id", async (req, res) => {
   });
 });
 
-router.post("/datasheet/edit/:id", requireAuth, updateLimiter, handleWordUpload, async (req, res) => {
+router.post("/sl/edit/:id", requireAuth, updateLimiter, handleWordUpload, async (req, res) => {
   try {
-    const existing = await SachikoDatasheet.findById(req.params.id);
+    const existing = await SachikoSL.findById(req.params.id);
     if (!existing) {
-      req.flash("notification", "Datasheet not found");
-      return res.redirect("/sachiko/datasheet/view");
+      req.flash("notification", "SL not found");
+      return res.redirect("/sachiko/sl/view");
     }
 
-    const payload = buildDatasheetPayload(req.body);
+    const payload = buildSLPayload(req.body);
 
     if (req.file) {
       // Remove the previous file before swapping in the new one.
       if (existing.wordFile) {
-        const oldPath = path.join(DATASHEET_UPLOAD_DIR, existing.wordFile);
+        const oldPath = path.join(SL_UPLOAD_DIR, existing.wordFile);
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
       payload.wordFile = req.file.filename;
       payload.wordFileOriginalName = req.file.originalname;
     }
 
-    await SachikoDatasheet.findByIdAndUpdate(req.params.id, payload);
-    req.flash("notification", "Datasheet updated successfully!");
-    res.redirect("/sachiko/datasheet/view");
+    await SachikoSL.findByIdAndUpdate(req.params.id, payload);
+    req.flash("notification", "SL updated successfully!");
+    res.redirect("/sachiko/sl/view");
   } catch (err) {
-    console.error("SACHIKO DATASHEET UPDATE ERROR:", err);
-    req.flash("notification", "Failed to update datasheet");
-    res.redirect(`/sachiko/datasheet/edit/${req.params.id}`);
+    console.error("SACHIKO SL UPDATE ERROR:", err);
+    req.flash("notification", "Failed to update SL");
+    res.redirect(`/sachiko/sl/edit/${req.params.id}`);
   }
 });
 
-router.get("/datasheet/file/:filename", async (req, res) => {
+router.get("/sl/file/:filename", async (req, res) => {
   const filename = path.basename(req.params.filename);
-  const filePath = path.join(DATASHEET_UPLOAD_DIR, filename);
+  const filePath = path.join(SL_UPLOAD_DIR, filename);
   if (!fs.existsSync(filePath)) {
     return res.status(404).send("File not found");
   }
-  const ds = await SachikoDatasheet.findOne({ wordFile: filename }).select("wordFileOriginalName").lean();
+  const ds = await SachikoSL.findOne({ wordFile: filename }).select("wordFileOriginalName").lean();
   res.download(filePath, ds?.wordFileOriginalName || filename);
 });
 
-router.delete("/datasheet/:id", requireAuth, deleteLimiter, async (req, res) => {
+router.delete("/sl/:id", requireAuth, deleteLimiter, async (req, res) => {
   try {
-    const ds = await SachikoDatasheet.findByIdAndDelete(req.params.id);
+    const ds = await SachikoSL.findByIdAndDelete(req.params.id);
     if (!ds) {
-      return res.status(404).json({ success: false, message: "Datasheet not found" });
+      return res.status(404).json({ success: false, message: "SL not found" });
     }
     if (ds.wordFile) {
-      const filePath = path.join(DATASHEET_UPLOAD_DIR, ds.wordFile);
+      const filePath = path.join(SL_UPLOAD_DIR, ds.wordFile);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
     res.json({ success: true });
   } catch (err) {
-    console.error("SACHIKO DATASHEET DELETE ERROR:", err);
-    res.status(500).json({ success: false, message: "Failed to delete datasheet" });
+    console.error("SACHIKO SL DELETE ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to delete SL" });
   }
 });
 
@@ -224,13 +224,13 @@ router.get("/jobcard/view", async (req, res) => {
 });
 
 router.get("/jobcard/form", async (req, res) => {
-  const datasheets = await SachikoDatasheet.find().sort({ productCode: 1 }).lean();
+  const sls = await SachikoSL.find().sort({ productCode: 1 }).lean();
   const previewLotNo = await previewId("sachikoLotNo", "LOT");
   res.render("sachiko/jobcardForm.ejs", {
     title: "Job Card Form",
     CSS: false,
     JS: false,
-    datasheets,
+    sls,
     previewLotNo,
     notification: req.flash("notification"),
   });
@@ -319,10 +319,10 @@ router.post("/jobcard/form", requireAuth, createLimiter, async (req, res) => {
 
 /* ================= SALES ORDER ================= */
 router.get("/sales/order", async (req, res) => {
-  const [clients, clientUsers, datasheets] = await Promise.all([
+  const [clients, clientUsers, sls] = await Promise.all([
     Client.find().select("clientId clientName").sort({ clientName: 1 }).lean(),
     Username.find().select("clientId userName").lean(),
-    SachikoDatasheet.find().sort({ productCode: 1 }).lean(),
+    SachikoSL.find().sort({ productCode: 1 }).lean(),
   ]);
   const previewSalesOrderId = await previewId("sachikoSalesOrderId", "SO");
   res.render("sachiko/salesOrderForm.ejs", {
@@ -331,7 +331,7 @@ router.get("/sales/order", async (req, res) => {
     JS: false,
     clients,
     clientUsers,
-    datasheets,
+    sls,
     previewSalesOrderId,
     notification: req.flash("notification"),
   });

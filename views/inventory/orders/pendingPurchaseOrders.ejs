@@ -193,8 +193,6 @@
         >
           <option value="">All Items</option>
           <option value="Tape">Tape</option>
-          <option value="Tafeta">Tafeta</option>
-          <option value="PosRoll">POS Roll</option>
           <option value="Ttr">TTR</option>
         </select>
       </div>
@@ -400,12 +398,6 @@
     if (row.onModel === "Tape") {
       return `${item.tapePaperCode || ""} ${item.tapeGsm || ""}gsm`.trim() || item.tapeProductId;
     }
-    if (row.onModel === "PosRoll") {
-      return `${item.posPaperCode || ""} ${item.posGsm || ""}gsm`.trim() || item.posProductId;
-    }
-    if (row.onModel === "Tafeta") {
-      return `${item.tafetaMaterialCode || ""} ${item.tafetaGsm || ""}gsm`.trim() || item.tafetaProductId;
-    }
     if (row.onModel === "Ttr") {
       return `${item.ttrType || ""} ${item.ttrWidth || ""}x${item.ttrMtrs || ""}`.trim() || item.ttrProductId;
     }
@@ -596,11 +588,7 @@
         // width: 120,
         headerFilter: "input",
         headerFilterPlaceholder: "Filter type...",
-        formatter: (cell) => {
-          const val = cell.getValue();
-          if (val === "PosRoll") return "POS Roll";
-          return val;
-        },
+        formatter: (cell) => cell.getValue(),
       },
       {
         title: "Item Details",

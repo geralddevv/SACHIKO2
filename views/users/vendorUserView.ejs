@@ -233,17 +233,14 @@
   });
   tableData = flattenedData;
 
-  // Commodity -> vendor-scoped binding-view URL. Only TTR/Tape/POS Roll/Tafeta
-  // have a binding-view route; other commodities (Face Paper, Adhesive, etc.)
-  // stay plain text. Vendor form stores this one as "TAFFETA" (double-F) while
-  // the rest of the codebase uses "tafeta" (single-F) for routes/models.
+  // Commodity -> vendor-scoped binding-view URL. Only TTR/Tape have a
+  // binding-view route; other commodities (Face Paper, Adhesive, etc.) stay
+  // plain text.
   function commodityLink(commodity, rowId) {
     if (!rowId) return null;
     switch (String(commodity || "").trim().toUpperCase()) {
       case "TTR": return `/sachiko/ttr-vendor/view?userId=${encodeURIComponent(rowId)}`;
       case "TAPE": return `/sachiko/vendor-item/view/tape?userId=${encodeURIComponent(rowId)}`;
-      case "POS ROLL": return `/sachiko/vendor-item/view/pos?userId=${encodeURIComponent(rowId)}`;
-      case "TAFFETA": return `/sachiko/vendor-item/view/tafeta?userId=${encodeURIComponent(rowId)}`;
       default: return null;
     }
   }

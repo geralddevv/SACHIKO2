@@ -152,8 +152,7 @@ router.get("/orders/:id", async (req, res) => {
     const userIds = client.users || [];
     const populateUser = { path: "userId", select: "clientName userName" };
     const itemSelect =
-      "productId tapeProductId tapePaperCode tapeWidth tapeMtrs posProductId posPaperCode posGsm " +
-      "tafetaProductId tafetaMaterialCode tafetaGsm labelWidth labelHeight";
+      "productId tapeProductId tapePaperCode tapeWidth tapeMtrs labelWidth labelHeight";
     const orderSelect =
       "onModel userId quantity dispatchedQuantity poDate poNumber orderRate estimatedDate status remarks createdAt sourceLocation";
 
@@ -352,8 +351,6 @@ router.get("/profile/:id", async (req, res) => {
       populate: [
         { path: "label" },
         { path: "tape", populate: { path: "tapeId" } },
-        { path: "posRoll", populate: { path: "posRollId" } },
-        { path: "tafeta", populate: { path: "tafetaId" } },
       ],
     });
 
@@ -384,14 +381,6 @@ router.get("/details/:userId", async (req, res) => {
       .populate({
         path: "tape",
         populate: { path: "tapeId" },
-      })
-      .populate({
-        path: "posRoll",
-        populate: { path: "posRollId" },
-      })
-      .populate({
-        path: "tafeta",
-        populate: { path: "tafetaId" },
       });
 
     if (!user) {
@@ -425,8 +414,6 @@ router.get("/details/:userId", async (req, res) => {
     const stats = {
       labels: (user.label || []).length,
       tapes: (user.tape || []).length,
-      posRolls: (user.posRoll || []).length,
-      tafetas: (user.tafeta || []).length,
     };
 
     res.render("users/clientDetails.ejs", {
@@ -436,8 +423,6 @@ router.get("/details/:userId", async (req, res) => {
       userData,
       labels: user.label || [],
       tapes: user.tape || [],
-      posRolls: user.posRoll || [],
-      tafetas: user.tafeta || [],
       stats,
       filterLocation: req.query.location ? String(req.query.location).trim() : "",
       notification: req.flash("notification"),

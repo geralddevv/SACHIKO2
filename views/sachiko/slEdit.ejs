@@ -24,7 +24,7 @@
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
   <form
-    action="/sachiko/datasheet/edit/<%= ds._id %>?_csrf=<%= encodeURIComponent(csrfToken) %>"
+    action="/sachiko/sl/edit/<%= ds._id %>?_csrf=<%= encodeURIComponent(csrfToken) %>"
     method="POST"
     enctype="multipart/form-data"
     class="needs-validation"
@@ -34,7 +34,7 @@
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
 
     <div class="span-full form-heading">
-      <h1>Edit Datasheet <span style="font-size:1rem; font-weight:500; color:#64748b;"><%= ds.datasheetId %></span></h1>
+      <h1>Edit SL <span style="font-size:1rem; font-weight:500; color:#64748b;"><%= ds.slId %></span></h1>
     </div>
 
     <!-- Product Code -->
@@ -59,7 +59,7 @@
           <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
             <label for="wordFile" style="margin:0;">Word File</label>
             <% if (ds.wordFile) { %>
-            <a href="/sachiko/datasheet/file/<%= ds.wordFile %>" title="<%= ds.wordFileOriginalName || ds.wordFile %>"
+            <a href="/sachiko/sl/file/<%= ds.wordFile %>" title="<%= ds.wordFileOriginalName || ds.wordFile %>"
               style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#044a78;text-decoration:none;padding:2px 8px;border:1px solid #044a78;border-radius:4px;background:#f0f7ff;line-height:1.6;">
               <i class="fa-solid fa-file-word"></i> Show current file
             </a>
@@ -169,8 +169,8 @@
     </div>
 
     <div class="btn-grp span-full" style="display:flex;flex-direction:row;gap:10px;">
-      <a href="/sachiko/datasheet/view" style="width:50%;color:white;background-color:#044a78;font-size:1.25rem;font-weight:500;padding:0.5rem 1.5rem;border:2px solid #044a78;border-radius:0.5rem;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.3s ease-in-out;">Cancel</a>
-      <button type="submit">Update Datasheet</button>
+      <a href="/sachiko/sl/view" style="width:50%;color:white;background-color:#044a78;font-size:1.25rem;font-weight:500;padding:0.5rem 1.5rem;border:2px solid #044a78;border-radius:0.5rem;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.3s ease-in-out;">Cancel</a>
+      <button type="submit">Update SL</button>
     </div>
   </form>
 </div>

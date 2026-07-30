@@ -82,8 +82,6 @@
       <select name="itemType" id="item-type" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Select Item Type</option>
         <option value="TAPE">Tape</option>
-        <option value="POS_ROLL">POS Roll</option>
-        <option value="TAFETA">Tafeta</option>
         <option value="LABEL">Plain Label</option>
         <option value="COLOR_LABEL">Color Label</option>
         <option value="TTR">TTR</option>
@@ -574,8 +572,6 @@
     const bindingModel = String(order?.onBindingModel || "").toUpperCase();
 
     if (model === "TAPE" || bindingModel.includes("TAPEBINDING")) return "TAPE";
-    if (model === "POSROLL" || bindingModel.includes("POSROLLBINDING")) return "POS_ROLL";
-    if (model === "TAFETA" || bindingModel.includes("TAFETABINDING")) return "TAFETA";
     if (model === "TTR" || bindingModel.includes("TTRBINDING")) return "TTR";
     if (model === "COLORLABEL" || bindingModel === "COLORLABEL") return "COLOR_LABEL";
     if (model === "LABEL" || bindingModel.includes("LABEL")) return "LABEL";
@@ -1058,33 +1054,6 @@
       pushIf("Meters", d.mtrs);
       pushIf("Core ID", d.coreId);
       pushIf("Finish", d.finish);
-    } else if (type === "POS_ROLL") {
-      pushIf("Product ID", d.productId);
-      pushIf("Min Stock Qty", d.minQty);
-      pushIf("Client Paper Code", d.clientPaperCode);
-      pushIf("Paper Code", d.paperCode);
-      pushIf("Client GSM", d.clientGsm);
-      pushIf("GSM", d.gsm);
-      pushIf("Paper Type", d.paperType);
-      pushIf("Color", d.color);
-      pushIf("Width", d.width);
-      pushIf("Meters", d.mtrs);
-      pushIf("Core ID", d.coreId);
-    } else if (type === "TAFETA") {
-      pushIf("Product ID", d.productId);
-      pushIf("Min Stock Qty", d.minQty);
-      pushIf("Client Material Code", d.clientMaterialCode);
-      pushIf("Material Code", d.materialCode);
-      pushIf("Client Material Type", d.clientMaterialType);
-      pushIf("Material Type", d.materialType);
-      pushIf("Client GSM", d.clientGsm);
-      pushIf("GSM", d.gsm);
-      pushIf("Color", d.color);
-      pushIf("Width", d.width);
-      pushIf("Meters", d.mtrs);
-      pushIf("Core Length", d.coreLength);
-      pushIf("Notch", d.notch);
-      pushIf("Core ID", d.coreId);
     } else if (type === "LABEL") {
       pushIf("Product ID", d.productId);
       pushIf("Width", d.width);
@@ -1614,7 +1583,7 @@
     const { selectedRadio, radioLocation, selectedLocation } = getSelectedStockLocation();
     
     // Check Source Location - ALL is not allowed for stock-based items
-    if (itemType === "TAPE" || itemType === "POS_ROLL" || itemType === "TAFETA" || itemType === "TTR") {
+    if (itemType === "TAPE" || itemType === "TTR") {
       const effectiveLocation = normalizeLocationName(
         selectedLocation || sourceLocationInput.value || currentSourceLocation || locationSelect.value || "",
       );
@@ -1860,13 +1829,11 @@
          // 3. Set Item (Manually create option with injected stock)
          let tapeName = "Item";
          // Label/ColorLabel orders reference the client binding directly, so
-         // it carries its own `productId` field (Tape/Pos/Tafeta/Ttr use
-         // tapeProductId/posProductId/etc. instead) — a reliable discriminator.
+         // it carries its own `productId` field (Tape/Ttr use
+         // tapeProductId/ttrProductId/etc. instead) — a reliable discriminator.
          const t = orderToEdit.tapeId || null;
          if (t) {
             if (t.tapePaperCode) tapeName = t.tapePaperCode + " " + t.tapeGsm + "gsm";
-            else if (t.posPaperCode) tapeName = t.posPaperCode + " " + t.posGsm + "gsm";
-            else if (t.tafetaMaterialCode) tapeName = t.tafetaMaterialCode + " " + t.tafetaGsm + "gsm";
             else if (t.ttrProductId) {
               const parts = [
                 t.ttrType,
@@ -1884,23 +1851,22 @@
           const detailsObj = { type: type || "" };
           if (t) {
              detailsObj.type = type;
-             detailsObj.productId = t.tapeProductId || t.posProductId || t.tafetaProductId || t.ttrProductId || t.productId || "";
-             detailsObj.paperCode = t.tapePaperCode || t.posPaperCode || "";
-             detailsObj.materialCode = t.tafetaMaterialCode || t.ttrMaterialCode || "";
-             detailsObj.gsm = t.tapeGsm || t.posGsm || t.tafetaGsm || "";
-             detailsObj.paperType = t.tapePaperType || t.posPaperType || t.paperType || "";
-             detailsObj.materialType = t.tafetaMaterialType || "";
+             detailsObj.productId = t.tapeProductId || t.ttrProductId || t.productId || "";
+             detailsObj.paperCode = t.tapePaperCode || "";
+             detailsObj.materialCode = t.ttrMaterialCode || "";
+             detailsObj.gsm = t.tapeGsm || "";
+             detailsObj.paperType = t.tapePaperType || t.paperType || "";
              detailsObj.finish = t.tapeFinish || "";
-             detailsObj.color = t.posColor || t.tafetaColor || t.ttrColor || "";
-             detailsObj.width = t.tapeWidth || t.posWidth || t.tafetaWidth || t.ttrWidth || t.labelWidth || "";
-             detailsObj.mtrs = t.tapeMtrs || t.posMtrs || t.tafetaMtrs || t.ttrMtrs || "";
-             detailsObj.coreId = t.tapeCoreId || t.posCoreId || t.tafetaCoreId || t.coreId || "";
-             detailsObj.coreLength = t.tafetaCoreLen || t.coreLength || "";
-             detailsObj.notch = t.tafetaNotch || t.notch || "";
+             detailsObj.color = t.ttrColor || "";
+             detailsObj.width = t.tapeWidth || t.ttrWidth || t.labelWidth || "";
+             detailsObj.mtrs = t.tapeMtrs || t.ttrMtrs || "";
+             detailsObj.coreId = t.tapeCoreId || t.coreId || "";
+             detailsObj.coreLength = t.coreLength || "";
+             detailsObj.notch = t.notch || "";
              detailsObj.winding = t.ttrWinding || "";
              detailsObj.inkFace = t.ttrInkFace || "";
              detailsObj.adhesiveGsm = t.tapeAdhesiveGsm || "";
-             detailsObj.minQty = t.tapeMinQty || t.posMinQty || t.tafetaMinQty || t.ttrMinQty || "";
+             detailsObj.minQty = t.tapeMinQty || t.ttrMinQty || "";
 
              // Label / Color Label bindings carry their own spec + rate fields
              // directly on `t` — there's no separate tapeBinding doc for these.
@@ -1923,11 +1889,10 @@
              // Client specific fields (from populated binding)
              if (orderToEdit.tapeBinding) {
                 const b = orderToEdit.tapeBinding;
-                detailsObj.clientPaperCode = b.tapeClientPaperCode || b.posClientPaperCode || "";
-                detailsObj.clientMaterialCode = b.tafetaClientMaterialCode || b.ttrClientMaterialCode || "";
-                detailsObj.clientGsm = b.clientTapeGsm || b.clientPosGsm || b.clientTafetaGsm || "";
+                detailsObj.clientPaperCode = b.tapeClientPaperCode || "";
+                detailsObj.clientMaterialCode = b.ttrClientMaterialCode || "";
+                detailsObj.clientGsm = b.clientTapeGsm || "";
                 detailsObj.clientType = b.clientTtrType || "";
-                detailsObj.clientMaterialType = b.tafetaClientMaterialType || "";
              }
           }
 
@@ -1941,8 +1906,6 @@
                 details: JSON.stringify(detailsObj),
                 minQty: orderToEdit.tapeBinding
                   ? (orderToEdit.tapeBinding.tapeMinQty ??
-                    orderToEdit.tapeBinding.posMinQty ??
-                    orderToEdit.tapeBinding.tafetaMinQty ??
                     orderToEdit.tapeBinding.ttrMinQty ??
                     0)
                   // Orders are always placed in labels (qty) now -- older bindings that
@@ -1953,8 +1916,6 @@
                       : (t?.minOrderQty ?? 0)),
                 rate: orderToEdit.tapeBinding
                   ? (orderToEdit.tapeBinding.tapeRatePerRoll ??
-                    orderToEdit.tapeBinding.posRatePerRoll ??
-                    orderToEdit.tapeBinding.tafetaRatePerRoll ??
                     orderToEdit.tapeBinding.ttrRatePerRoll ??
                     0)
                   : (t?.productId ? (t.ratePerLabel ?? 0) : null)
@@ -1991,8 +1952,6 @@
            const endYear = startYear + 1;
            const finYearStr = `${String(startYear).slice(-2)}-${String(endYear).slice(-2)}`;
            let typePrefix = type || itemTypeChoices.getValue(true) || "";
-           if (typePrefix === "POS_ROLL") typePrefix = "POSROLL";
-           
            if (typePrefix) {
              invoiceInput.value = `TECH|IN|${finYearStr}|${typePrefix}|`;
            }

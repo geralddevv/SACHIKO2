@@ -190,12 +190,7 @@
         flatData.push({
           ...user,
           userLocation: loc,
-          labelCount: countAtLoc(user.label, loc),
-          colorLabelCount: countAtLoc(user.colorLabel, loc),
-          ttrCount: countAtLoc(user.ttr, loc),
           tapeCount: countAtLoc(user.tape, loc),
-          posRollCount: countAtLoc(user.posRoll, loc),
-          tafetaCount: countAtLoc(user.tafeta, loc),
           dispatchType: user.SelfDispatch ? "Self Dispatch" : "Transport",
         });
       });
@@ -292,68 +287,6 @@
             widthGrow: 2,
           }),
           withTextFilter({
-            title: "Labels",
-            field: "labelCount",
-            width: 95,
-            widthGrow: 0,
-            widthShrink: 0,
-            hozAlign: "center",
-            headerSort: true,
-            headerSortStartingDir: "desc",
-            cssClass: "col-count-center",
-            formatter: (cell) => {
-              const row = cell.getRow().getData();
-              if (!row.labelCount) return "";
-              return `<span style="cursor:pointer;text-decoration:underline;">${row.labelCount}</span>`;
-            },
-            cellClick: (e, cell) => {
-              const row = cell.getRow().getData();
-              const loc = row.userLocation ? `?location=${encodeURIComponent(row.userLocation)}` : "";
-              window.location.href = `/sachiko/labels/view/${row._id}${loc}`;
-            },
-          }),
-          withTextFilter({
-            title: "Color Labels",
-            field: "colorLabelCount",
-            width: 110,
-            widthGrow: 0,
-            widthShrink: 0,
-            hozAlign: "center",
-            headerSort: true,
-            headerSortStartingDir: "desc",
-            cssClass: "col-count-center",
-            formatter: (cell) => {
-              const row = cell.getRow().getData();
-              if (!row.colorLabelCount) return "";
-              return `<span style="cursor:pointer;text-decoration:underline;">${row.colorLabelCount}</span>`;
-            },
-            cellClick: (e, cell) => {
-              const row = cell.getRow().getData();
-              const loc = row.userLocation ? `?location=${encodeURIComponent(row.userLocation)}` : "";
-              window.location.href = `/sachiko/color-labels/view/${row._id}${loc}`;
-            },
-          }),
-          withTextFilter({
-            title: "TTR's",
-            field: "ttrCount",
-            width: 95,
-            widthGrow: 0,
-            widthShrink: 0,
-            hozAlign: "center",
-            headerSort: true,
-            headerSortStartingDir: "desc",
-            cssClass: "col-count-center",
-            formatter: (cell) => {
-              const row = cell.getRow().getData();
-              if (!row.ttrCount) return "";
-              return `<span style="cursor:pointer;text-decoration:underline;">${row.ttrCount}</span>`;
-            },
-            cellClick: (e, cell) => {
-              const row = cell.getRow().getData();
-              window.location.href = `/sachiko/ttr/view/${row._id}`;
-            },
-          }),
-          withTextFilter({
             title: "Tapes",
             field: "tapeCount",
             width: 95,
@@ -371,46 +304,6 @@
             cellClick: (e, cell) => {
               const row = cell.getRow().getData();
               window.location.href = `/sachiko/tape/view/${row._id}`;
-            },
-          }),
-          withTextFilter({
-            title: "POS Rolls",
-            field: "posRollCount",
-            width: 95,
-            widthGrow: 0,
-            widthShrink: 0,
-            hozAlign: "center",
-            headerSort: true,
-            headerSortStartingDir: "desc",
-            cssClass: "col-count-center",
-            formatter: (cell) => {
-              const row = cell.getRow().getData();
-              if (!row.posRollCount) return "";
-              return `<span style="cursor:pointer;text-decoration:underline;">${row.posRollCount}</span>`;
-            },
-            cellClick: (e, cell) => {
-              const row = cell.getRow().getData();
-              window.location.href = `/sachiko/pos-roll/view/${row._id}`;
-            },
-          }),
-          withTextFilter({
-            title: "Tafeta",
-            field: "tafetaCount",
-            width: 95,
-            widthGrow: 0,
-            widthShrink: 0,
-            hozAlign: "center",
-            headerSort: true,
-            headerSortStartingDir: "desc",
-            cssClass: "col-count-center",
-            formatter: (cell) => {
-              const row = cell.getRow().getData();
-              if (!row.tafetaCount) return "";
-              return `<span style="cursor:pointer;text-decoration:underline;">${row.tafetaCount}</span>`;
-            },
-            cellClick: (e, cell) => {
-              const row = cell.getRow().getData();
-              window.location.href = `/sachiko/tafeta/view/${row._id}`;
             },
           }),
         ],

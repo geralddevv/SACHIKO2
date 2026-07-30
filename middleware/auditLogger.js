@@ -55,12 +55,8 @@ const GENERIC_NAME_FIELDS = [
   "companyName",
   "tapeClientPaperCode",
   "ttrClientMaterialCode",
-  "posClientPaperCode",
-  "tafetaClientMaterialCode",
   "vendorTapePaperCode",
   "vendorTtrMaterialCode",
-  "vendorPosPaperCode",
-  "vendorTafetaMaterialCode",
 ];
 
 // Replace ObjectId-looking path segments with :id so similar routes group together.

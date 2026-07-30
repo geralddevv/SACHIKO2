@@ -27,17 +27,7 @@ import TapeStock from "../models/inventory/TapeStock.js";
 import TapeStockLog from "../models/inventory/TapeStockLog.js";
 import SalesOrderLog from "../models/inventory/SalesOrderLog.js";
 import PurchaseOrderLog from "../models/inventory/PurchaseOrderLog.js";
-import PosRoll from "../models/inventory/posRoll.js";
-import Tafeta from "../models/inventory/tafeta.js";
-import PosRollBinding from "../models/inventory/posRollBinding.js";
-import TafetaBinding from "../models/inventory/tafetaBinding.js";
-import PosRollStock from "../models/inventory/PosRollStock.js";
-import TafetaStock from "../models/inventory/TafetaStock.js";
 import VendorTapeBinding from "../models/inventory/vendorTapeBinding.js";
-import VendorPosRollBinding from "../models/inventory/vendorPosRollBinding.js";
-import VendorTafetaBinding from "../models/inventory/vendorTafetaBinding.js";
-import PosRollStockLog from "../models/inventory/PosRollStockLog.js";
-import TafetaStockLog from "../models/inventory/TafetaStockLog.js";
 import Location from "../models/system/location.js";
 import Counter from "../models/system/counter.js";
 import AuditLog from "../models/system/auditLog.js";
@@ -64,7 +54,7 @@ function duplicateMasterMessage(item, productId) {
 // Pending value = remaining (undispatched) balance * order rate, summed over
 // PENDING + CONFIRMED orders (an order can be partially dispatched while
 // staying CONFIRMED). Shared by the sales-pending header totals across the
-// Tape/POS/Tafeta/TTR, Plain Label, and Color Label pending pages.
+// Tape/TTR, Plain Label, and Color Label pending pages.
 function remainingOrderValuePipeline(extraMatch = {}, statuses = ["PENDING", "CONFIRMED"]) {
   return [
     { $match: { status: { $in: statuses }, ...extraMatch } },
@@ -98,27 +88,6 @@ function getProfileStockConfig(itemType) {
       logModel: TapeStockLog,
       itemField: "tape",
       onModel: "Tape",
-    },
-    "POS Roll": {
-      itemLabel: "POS Roll",
-      stockModel: PosRollStock,
-      logModel: PosRollStockLog,
-      itemField: "posRoll",
-      onModel: "PosRoll",
-    },
-    PosRoll: {
-      itemLabel: "POS Roll",
-      stockModel: PosRollStock,
-      logModel: PosRollStockLog,
-      itemField: "posRoll",
-      onModel: "PosRoll",
-    },
-    Tafeta: {
-      itemLabel: "Tafeta",
-      stockModel: TafetaStock,
-      logModel: TafetaStockLog,
-      itemField: "tafeta",
-      onModel: "Tafeta",
     },
   };
   return map[itemType] || null;
@@ -251,8 +220,6 @@ async function applyItemStockDelta({ itemType, itemId, location, delta, remarks,
 // Keys must match the exact itemType strings passed at each handleProfileStockEdit call site.
 const STOCK_EDIT_PRODUCT_ID_FIELD = {
   Tape: "tapeProductId",
-  "POS Roll": "posProductId",
-  Tafeta: "tafetaProductId",
 };
 
 async function handleProfileStockEdit(req, res, { itemType, model, redirectPath }) {
@@ -418,32 +385,20 @@ router.use((req, res, next) => {
       "/client/view",
       "/form/client",
       "/tape/view",
-      "/pos-roll/view",
-      "/tafeta/view",
       "/form/tape-binding",
-      "/form/pos-roll-binding",
-      "/form/tafeta-binding",
       "/stocks/view",
       "/pettycash/view",
       "/labels/view",
       "/form/labels",
       "/form/tape-master",
-      "/form/pos-roll-master",
-      "/form/tafeta-master",
     ];
 
     const allowedGetPatterns = [
       /^\/form\/client\/[^/]+$/,
       /^\/client\/details\/[^/]+$/,
       /^\/tape\/profile\/[^/]+$/,
-      /^\/pos-roll\/profile\/[^/]+$/,
-      /^\/tafeta\/profile\/[^/]+$/,
       /^\/tape\/edit\/[^/]+$/,
-      /^\/pos-roll\/edit\/[^/]+$/,
-      /^\/tafeta\/edit\/[^/]+$/,
       /^\/form\/tape-binding(?:\/.*)?$/,
-      /^\/form\/pos-roll-binding(?:\/.*)?$/,
-      /^\/form\/tafeta-binding(?:\/.*)?$/,
       /^\/api\/motivational$/,
       /^\/form\/labels\/.*$/,
       /^\/api\/locations$/,
@@ -457,24 +412,18 @@ router.use((req, res, next) => {
       /^\/form\/client$/,
       /^\/form\/user$/,
       /^\/form\/tape-binding$/,
-      /^\/form\/pos-roll-binding$/,
-      /^\/form\/tafeta-binding$/,
       /^\/tape\/edit\/[^/]+$/,
-      /^\/pos-roll\/edit\/[^/]+$/,
-      /^\/tafeta\/edit\/[^/]+$/,
       /^\/pettycash\/create$/,
       /^\/form\/labels$/,
       /^\/labels\/edit\/[^/]+$/,
       /^\/form\/tape$/,
-      /^\/form\/pos-roll-master$/,
-      /^\/form\/tafeta-master$/,
     ];
 
     if (req.method === "GET") {
       const normalizedPath = path.toLowerCase().replace(/\/$/, "");
 
       // Explicit keyword matches for resilience
-      const keywords = ["master/view", "compare", "binding", "welcome", "api/motivational", "tape/view", "pos-roll/view", "tafeta/view", "client", "vendor", "user", "stocks", "pettycash"];
+      const keywords = ["master/view", "compare", "binding", "welcome", "api/motivational", "tape/view", "client", "vendor", "user", "stocks", "pettycash"];
       if (keywords.some(k => normalizedPath.includes(k))) return next();
 
       if (allowedGetRoutes.includes(normalizedPath) || allowedGetPatterns.some((re) => re.test(path))) {
@@ -1702,243 +1651,6 @@ router.post("/form/edit/user/:userId", requireAuth, updateLimiter, async (req, r
   }
 });
 
-// ----------------------------------POS Roll Master---------------------------------->
-
-// GET: POS Roll Master form
-router.get("/form/pos-roll-master", async (req, res) => {
-  const formatPosProductId = (n) => `FS | POS Roll | ${String(n).padStart(6, "0")}`;
-  const parsePosSeq = (productId) => {
-    const match = String(productId || "").match(/(\d{6})$/);
-    return match ? Number(match[1]) : 0;
-  };
-  const getNextPosProductIdPreview = async () => {
-    const latestPos = await PosRoll.findOne().sort({ posProductId: -1 }).select("posProductId").lean();
-    let nextSeq = parsePosSeq(latestPos?.posProductId) + 1;
-
-    while (await PosRoll.exists({ posProductId: formatPosProductId(nextSeq) })) {
-      nextSeq += 1;
-    }
-    return formatPosProductId(nextSeq);
-  };
-
-  const previewPosProductId = await getNextPosProductIdPreview();
-
-  res.render("inventory/posRoll/posRoll.ejs", {
-    JS: false,
-    CSS: false,
-    title: "POS Roll Master",
-    previewPosProductId,
-    notification: req.flash("notification"),
-  });
-});
-
-// POST: POS Roll Master submission
-router.post("/form/pos-roll-master", requireAuth, createLimiter, async (req, res) => {
-  try {
-    const formatPosProductId = (n) => `FS | POS Roll | ${String(n).padStart(6, "0")}`;
-    const parsePosSeq = (productId) => {
-      const match = String(productId || "").match(/(\d{6})$/);
-      return match ? Number(match[1]) : 0;
-    };
-    const generatePosProductId = async () => {
-      let nextSeq = parsePosSeq(
-        (await PosRoll.findOne().sort({ posProductId: -1 }).select("posProductId").lean())?.posProductId,
-      ) + 1;
-
-      const maxAttempts = 10000;
-      for (let i = 0; i < maxAttempts; i++) {
-        const candidateId = formatPosProductId(nextSeq);
-        const exists = await PosRoll.exists({ posProductId: candidateId });
-        if (!exists) return candidateId;
-        nextSeq += 1;
-      }
-      throw new Error("Unable to generate unique POS Roll product id");
-    };
-
-    // Prevent duplicates based on POS Roll specs (productId is always unique).
-    const posSignature = hashSignature(buildPosSignature(req.body));
-    const widthRaw = req.body.posWidth;
-    const widthTrim = typeof widthRaw === "string" ? widthRaw.trim() : widthRaw;
-    const widthNum = typeof widthTrim === "string" ? Number(widthTrim) : Number(widthTrim);
-    const widthVal =
-      typeof widthTrim === "string" && widthTrim !== "" && !Number.isNaN(widthNum) ? widthNum : widthTrim;
-    const posCoreId = normalizePosCoreId(req.body.posCoreId);
-
-    const duplicatePosQuery = {
-      $or: [
-        { posSignature },
-        {
-          posPaperCode: flexPosValue(req.body.posPaperCode),
-          posPaperType: flexPosValue(req.body.posPaperType),
-          posColor: flexPosValue(req.body.posColor),
-          posGsm: flexPosValue(Number(req.body.posGsm)),
-          posWidth: flexPosValue(widthVal),
-          posMtrs: flexPosValue(Number(req.body.posMtrs)),
-          posCoreId: flexPosValue(Number(posCoreId)),
-        },
-      ],
-    };
-    const alreadyExists = await PosRoll.findOne(duplicatePosQuery).select("posProductId").lean();
-    if (alreadyExists) {
-      return res.status(400).json({
-        success: false,
-        message: duplicateMasterMessage("POS Roll", alreadyExists.posProductId),
-      });
-    }
-
-    const data = {
-      posProductId: await generatePosProductId(),
-      posPaperCode: String(req.body.posPaperCode).trim(),
-      posPaperType: String(req.body.posPaperType).trim(),
-      posColor: String(req.body.posColor).trim(),
-      posGsm: Number(req.body.posGsm),
-      posWidth: widthVal,
-      posMtrs: Number(req.body.posMtrs),
-      posCoreId: Number(posCoreId),
-      posSignature,
-    };
-
-    await PosRoll.create(data);
-
-    res.locals.auditDescription = `Created POS Roll master "${data.posProductId}" (${data.posPaperCode}, ${data.posGsm}gsm)`;
-    req.flash("notification", "POS Roll Master created successfully!");
-    res.json({ success: true, redirect: "/fairtech/pos-roll/view" });
-  } catch (err) {
-    console.error(err);
-    if (err?.code === 11000) {
-      const duplicatePosRoll = await PosRoll.findOne({ posSignature: hashSignature(buildPosSignature(req.body)) })
-        .select("posProductId")
-        .lean();
-      return res.status(409).json({
-        success: false,
-        message: duplicateMasterMessage("POS Roll", duplicatePosRoll?.posProductId),
-      });
-    }
-    res.status(400).json({ success: false, message: err.message });
-  }
-});
-
-// ----------------------------------Tafeta Master---------------------------------->
-
-// GET: Tafeta Master form
-router.get("/form/tafeta-master", async (req, res) => {
-  const formatTafetaProductId = (n) => `FS | Tafeta | ${String(n).padStart(6, "0")}`;
-  const parseTafetaSeq = (productId) => {
-    const match = String(productId || "").match(/(\d{6})$/);
-    return match ? Number(match[1]) : 0;
-  };
-  const getNextTafetaProductIdPreview = async () => {
-    const latestTafeta = await Tafeta.findOne().sort({ tafetaProductId: -1 }).select("tafetaProductId").lean();
-    let nextSeq = parseTafetaSeq(latestTafeta?.tafetaProductId) + 1;
-
-    while (await Tafeta.exists({ tafetaProductId: formatTafetaProductId(nextSeq) })) {
-      nextSeq += 1;
-    }
-    return formatTafetaProductId(nextSeq);
-  };
-
-  const previewTafetaProductId = await getNextTafetaProductIdPreview();
-
-  res.render("inventory/tafeta/tafeta.ejs", {
-    JS: false,
-    CSS: false,
-    title: "Tafeta Master",
-    previewTafetaProductId,
-    notification: req.flash("notification"),
-  });
-});
-
-// POST: Tafeta Master submission
-router.post("/form/tafeta-master", requireAuth, createLimiter, async (req, res) => {
-  console.log("TAFETA MASTER BODY", req.body);
-  try {
-    const formatTafetaProductId = (n) => `FS | Tafeta | ${String(n).padStart(6, "0")}`;
-    const parseTafetaSeq = (productId) => {
-      const match = String(productId || "").match(/(\d{6})$/);
-      return match ? Number(match[1]) : 0;
-    };
-    const generateTafetaProductId = async () => {
-      let nextSeq = parseTafetaSeq(
-        (await Tafeta.findOne().sort({ tafetaProductId: -1 }).select("tafetaProductId").lean())?.tafetaProductId,
-      ) + 1;
-
-      const maxAttempts = 10000;
-      for (let i = 0; i < maxAttempts; i++) {
-        const candidateId = formatTafetaProductId(nextSeq);
-        const exists = await Tafeta.exists({ tafetaProductId: candidateId });
-        if (!exists) return candidateId;
-        nextSeq += 1;
-      }
-      throw new Error("Unable to generate unique Tafeta product id");
-    };
-
-    // Prevent duplicates based on Tafeta specs (productId is always unique).
-    const tafetaSignature = hashSignature(buildTafetaSignature(req.body));
-    const widthRaw = req.body.tafetaWidth;
-    const widthTrim = typeof widthRaw === "string" ? widthRaw.trim() : widthRaw;
-    const widthNum = typeof widthTrim === "string" ? Number(widthTrim) : Number(widthTrim);
-    const widthVal =
-      typeof widthTrim === "string" && widthTrim !== "" && !Number.isNaN(widthNum) ? widthNum : widthTrim;
-    const tafetaCoreId = normalizeTafetaCoreId(req.body.tafetaCoreId);
-
-    const duplicateTafetaQuery = {
-      $or: [
-        { tafetaSignature },
-        {
-          tafetaMaterialCode: flexTafetaValue(req.body.tafetaMaterialCode),
-          tafetaMaterialType: flexTafetaValue(req.body.tafetaMaterialType),
-          tafetaColor: flexTafetaValue(req.body.tafetaColor),
-          tafetaGsm: flexTafetaValue(req.body.tafetaGsm),
-          tafetaWidth: flexTafetaValue(widthVal),
-          tafetaMtrs: flexTafetaValue(req.body.tafetaMtrs),
-          tafetaCoreLen: flexTafetaValue(req.body.tafetaCoreLen),
-          tafetaNotch: flexTafetaValue(req.body.tafetaNotch),
-          tafetaCoreId: flexTafetaValue(tafetaCoreId),
-        },
-      ],
-    };
-    const alreadyExists = await Tafeta.findOne(duplicateTafetaQuery).select("tafetaProductId").lean();
-    if (alreadyExists) {
-      return res.status(400).json({
-        success: false,
-        message: duplicateMasterMessage("Tafeta", alreadyExists.tafetaProductId),
-      });
-    }
-
-    const data = {
-      tafetaProductId: await generateTafetaProductId(),
-      tafetaMaterialCode: String(req.body.tafetaMaterialCode).trim(),
-      tafetaMaterialType: String(req.body.tafetaMaterialType).trim(),
-      tafetaColor: String(req.body.tafetaColor).trim(),
-      tafetaGsm: String(req.body.tafetaGsm).trim(),
-      tafetaWidth: widthVal,
-      tafetaMtrs: String(req.body.tafetaMtrs).trim(),
-      tafetaCoreLen: String(req.body.tafetaCoreLen).trim(),
-      tafetaNotch: String(req.body.tafetaNotch).trim(),
-      tafetaCoreId,
-      tafetaSignature,
-    };
-
-    await Tafeta.create(data);
-
-    res.locals.auditDescription = `Created Tafeta master "${data.tafetaProductId}" (${data.tafetaMaterialCode}, ${data.tafetaGsm}gsm)`;
-    req.flash("notification", "Tafeta Master created successfully!");
-    res.json({ success: true, redirect: "/fairtech/tafeta/view" });
-  } catch (err) {
-    console.error(err);
-    if (err?.code === 11000) {
-      const duplicateTafeta = await Tafeta.findOne({ tafetaSignature: hashSignature(buildTafetaSignature(req.body)) })
-        .select("tafetaProductId")
-        .lean();
-      return res.status(409).json({
-        success: false,
-        message: duplicateMasterMessage("Tafeta", duplicateTafeta?.tafetaProductId),
-      });
-    }
-    res.status(400).json({ success: false, message: err.message });
-  }
-});
-
 // ----------------------------------Location Master---------------------------------->
 
 // GET: Location Master form
@@ -2164,196 +1876,6 @@ router.get("/tape/view", async (req, res) => {
   });
 });
 
-// ================= TAFETA MASTER LIST VIEW =================
-router.get("/tafeta/view", async (req, res) => {
-  const tafetas = await Tafeta.find().sort({ tafetaProductId: 1 }).lean();
-  const tafetaIds = tafetas.map((t) => t._id).filter(Boolean);
-
-  const [stockAgg, bindingAgg, vendorBindingAgg] = await Promise.all([
-    tafetaIds.length
-      ? TafetaStock.aggregate([
-          { $match: { tafeta: { $in: tafetaIds } } },
-          {
-            $group: {
-              _id: "$tafeta",
-              qty: { $sum: "$quantity" },
-            },
-          },
-        ])
-      : [],
-    tafetaIds.length
-      ? TafetaBinding.aggregate([
-          { $match: { tafetaId: { $in: tafetaIds } } },
-          {
-            $group: {
-              _id: "$tafetaId",
-              count: { $sum: 1 },
-            },
-          },
-        ])
-      : [],
-    tafetaIds.length
-      ? VendorTafetaBinding.aggregate([
-          { $match: { tafetaId: { $in: tafetaIds } } },
-          {
-            $group: {
-              _id: "$tafetaId",
-              count: { $sum: 1 },
-            },
-          },
-        ])
-      : []
-  ]);
-
-  const stockByItem = {};
-  stockAgg.forEach((row) => {
-    const itemId = String(row._id || "");
-    stockByItem[itemId] = Number(row.qty || 0);
-  });
-
-  const bindingsByItem = {};
-  bindingAgg.forEach((row) => {
-    const itemId = String(row._id || "");
-    bindingsByItem[itemId] = Number(row.count || 0);
-  });
-
-  const vendorBindingsByItem = {};
-  vendorBindingAgg.forEach((row) => {
-    const itemId = String(row._id || "");
-    vendorBindingsByItem[itemId] = Number(row.count || 0);
-  });
-
-  tafetas.forEach((t) => {
-    const itemId = String(t._id);
-    t.stock = stockByItem[itemId] ?? 0;
-    t.bindingCount = bindingsByItem[itemId] ?? 0;
-    t.vendorBindingCount = vendorBindingsByItem[itemId] ?? 0;
-  });
-
-  res.render("inventory/tafeta/tafetaMasterDisp.ejs", {
-    jsonData: tafetas,
-    CSS: "tableDisp.css",
-    JS: false,
-    title: "Tafeta View",
-    notification: req.flash("notification"),
-  });
-});
-
-function normalizeTafetaPart(value) {
-  if (value === undefined || value === null) return "";
-  return String(value).trim();
-}
-
-function normalizeTafetaCoreId(value) {
-  const raw = normalizeTafetaPart(value);
-  if (!raw) return "";
-  const numeric = Number(raw);
-  return Number.isFinite(numeric) ? String(numeric) : raw;
-}
-
-function buildTafetaSignature(source) {
-  return [
-    normalizeTafetaPart(source.tafetaMaterialCode),
-    normalizeTafetaPart(source.tafetaMaterialType),
-    normalizeTafetaPart(source.tafetaColor),
-    normalizeTafetaPart(source.tafetaGsm),
-    normalizeTafetaPart(source.tafetaWidth),
-    normalizeTafetaPart(source.tafetaMtrs),
-    normalizeTafetaPart(source.tafetaCoreLen),
-    normalizeTafetaPart(source.tafetaNotch),
-    normalizeTafetaCoreId(source.tafetaCoreId),
-  ].join("||");
-}
-
-function flexTafetaValue(val) {
-  if (val === undefined || value === null) return val;
-  const arr = [val];
-  if (typeof val === "string") {
-    const t = val.trim();
-    if (t !== val) arr.push(t);
-    const n = Number(t);
-    if (t !== "" && !Number.isNaN(n)) arr.push(n);
-  } else {
-    arr.push(String(val));
-  }
-  return { $in: arr };
-}
-
-// ================= POS ROLL MASTER LIST VIEW =================
-router.get("/pos-roll/view", async (req, res) => {
-  const posRolls = await PosRoll.find().sort({ posProductId: 1 }).lean();
-  const posRollIds = posRolls.map((p) => p._id).filter(Boolean);
-
-  const [stockAgg, bindingAgg, vendorBindingAgg] = await Promise.all([
-    posRollIds.length
-      ? PosRollStock.aggregate([
-          { $match: { posRoll: { $in: posRollIds } } },
-          {
-            $group: {
-              _id: "$posRoll",
-              qty: { $sum: "$quantity" },
-            },
-          },
-        ])
-      : [],
-    posRollIds.length
-      ? PosRollBinding.aggregate([
-          { $match: { posRollId: { $in: posRollIds } } },
-          {
-            $group: {
-              _id: "$posRollId",
-              count: { $sum: 1 },
-            },
-          },
-        ])
-      : [],
-    posRollIds.length
-      ? VendorPosRollBinding.aggregate([
-          { $match: { posRollId: { $in: posRollIds } } },
-          {
-            $group: {
-              _id: "$posRollId",
-              count: { $sum: 1 },
-            },
-          },
-        ])
-      : []
-  ]);
-
-  const stockByItem = {};
-  stockAgg.forEach((row) => {
-    const itemId = String(row._id || "");
-    stockByItem[itemId] = Number(row.qty || 0);
-  });
-
-  const bindingsByItem = {};
-  bindingAgg.forEach((row) => {
-    const itemId = String(row._id || "");
-    bindingsByItem[itemId] = Number(row.count || 0);
-  });
-
-  const vendorBindingsByItem = {};
-  vendorBindingAgg.forEach((row) => {
-    const itemId = String(row._id || "");
-    vendorBindingsByItem[itemId] = Number(row.count || 0);
-  });
-
-  posRolls.forEach((p) => {
-    const itemId = String(p._id);
-    p.stock = stockByItem[itemId] ?? 0;
-    p.bindingCount = bindingsByItem[itemId] ?? 0;
-    p.vendorBindingCount = vendorBindingsByItem[itemId] ?? 0;
-  });
-
-  res.render("inventory/posRoll/posRollMasterDisp.ejs", {
-    jsonData: posRolls,
-    CSS: "tableDisp.css",
-    JS: false,
-    title: "POS Roll View",
-    notification: req.flash("notification"),
-  });
-});
-
 // ================= TTR MASTER LIST VIEW =================
 // ================= TAPE PROFILE VIEW =================
 router.get("/tape/profile/:id", async (req, res) => {
@@ -2514,179 +2036,6 @@ router.post("/tape/edit/:id", requireAuth, updateLimiter, async (req, res) => {
   } catch (err) {
     console.error(err);
     req.flash("notification", "Failed to update tape status");
-    res.redirect("back");
-  }
-});
-
-// ================= POS ROLL PROFILE VIEW =================
-router.get("/pos-roll/profile/:id", async (req, res) => {
-  const posRoll = await PosRoll.findById(req.params.id).lean();
-
-  if (!posRoll) {
-    req.flash("notification", "POS Roll not found");
-    return res.redirect("back");
-  }
-
-  const posRollBindings = await PosRollBinding.find({ posRollId: req.params.id })
-    .populate({ path: "userId", select: "userName clientName hoLocation" })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  const primaryBinding = posRollBindings[0] || null;
-  const backUrl = primaryBinding?.userId?._id
-    ? `/fairtech/client/details/${primaryBinding.userId._id}`
-    : "/fairtech/pos-roll/view";
-  const stockSummary = await getItemStockSummary("POS Roll", posRoll._id);
-  const locationOptions = await Location.find().sort({ locationName: 1 }).lean();
-
-  const rows = [
-    { label: "Product ID", value: posRoll.posProductId || "N/A" },
-    { label: "Paper Code", value: posRoll.posPaperCode || "N/A" },
-    { label: "GSM", value: posRoll.posGsm ?? "N/A" },
-    { label: "Paper Type", value: posRoll.posPaperType || "N/A" },
-    { label: "Color", value: posRoll.posColor || "N/A" },
-    { label: "Width", value: posRoll.posWidth ?? "N/A" },
-    { label: "Meters", value: posRoll.posMtrs ?? "N/A" },
-    { label: "Core ID", value: posRoll.posCoreId ?? "N/A" },
-    { label: "Min Stock Qty", value: posRoll.posMinQty ?? "N/A" },
-  ];
-
-  res.render("inventory/itemView.ejs", {
-    pageTitle: "POS Roll Details",
-    sectionTitle: "POS Roll Details",
-    valueHeader: "Value",
-    statusUrl: `/fairtech/pos-roll/edit/${posRoll._id}`,
-    currentStatus: posRoll.status || "ACTIVE",
-    rows,
-    posRoll,
-    posRollBindings,
-    primaryBinding,
-    backUrl,
-    stockInfo: {
-      totalStock: stockSummary.totalStock,
-      locations: stockSummary.locations,
-      booked: stockSummary.totalBooked,
-      balance: stockSummary.totalBalance,
-    },
-    stockEditConfig: {
-      enabled: true,
-      itemType: "POS Roll",
-      editAction: `/fairtech/pos-roll/profile/${posRoll._id}/stock/edit`,
-      locationOptions: locationOptions.map((entry) => canonicalizeLocationName(entry.locationName)).filter(Boolean),
-    },
-    title: "POS Roll Details",
-    CSS: false,
-    JS: false,
-    notification: req.flash("notification"),
-  });
-});
-
-router.post("/pos-roll/profile/:id/stock/edit", requireAuth, updateLimiter, async (req, res) =>
-  handleProfileStockEdit(req, res, {
-    itemType: "POS Roll",
-    model: PosRoll,
-    redirectPath: "/fairtech/pos-roll/profile",
-  }));
-
-// ================= POS ROLL EDIT =================
-router.post("/pos-roll/edit/:id", requireAuth, updateLimiter, async (req, res) => {
-  try {
-    const status = req.body.status === "INACTIVE" ? "INACTIVE" : "ACTIVE";
-    const posDoc = await PosRoll.findByIdAndUpdate(req.params.id, { status }).select("posProductId").lean();
-    res.locals.auditDescription = `Set POS Roll "${posDoc?.posProductId || req.params.id}" status to ${status}`;
-    req.flash("notification", "POS Roll status updated successfully!");
-    res.redirect(`/fairtech/pos-roll/profile/${req.params.id}`);
-  } catch (err) {
-    console.error(err);
-    req.flash("notification", "Failed to update POS Roll status");
-    res.redirect("back");
-  }
-});
-
-
-// ================= TAFETA PROFILE VIEW =================
-router.get("/tafeta/profile/:id", async (req, res) => {
-  const tafeta = await Tafeta.findById(req.params.id).lean();
-
-  if (!tafeta) {
-    req.flash("notification", "Tafeta not found");
-    return res.redirect("back");
-  }
-
-  const tafetaBindings = await TafetaBinding.find({ tafetaId: req.params.id })
-    .populate({ path: "userId", select: "userName clientName hoLocation" })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  const primaryBinding = tafetaBindings[0] || null;
-  const backUrl = primaryBinding?.userId?._id
-    ? `/fairtech/client/details/${primaryBinding.userId._id}`
-    : "/fairtech/tafeta/view";
-  const stockSummary = await getItemStockSummary("Tafeta", tafeta._id);
-  const locationOptions = await Location.find().sort({ locationName: 1 }).lean();
-
-  const rows = [
-    { label: "Product ID", value: tafeta.tafetaProductId || "N/A" },
-    { label: "Material Code", value: tafeta.tafetaMaterialCode || "N/A" },
-    { label: "GSM", value: tafeta.tafetaGsm ?? "N/A" },
-    { label: "Material Type", value: tafeta.tafetaMaterialType || "N/A" },
-    { label: "Color", value: tafeta.tafetaColor || "N/A" },
-    { label: "Width", value: tafeta.tafetaWidth ?? "N/A" },
-    { label: "Meters", value: tafeta.tafetaMtrs ?? "N/A" },
-    { label: "Core Length", value: tafeta.tafetaCoreLen ?? "N/A" },
-    { label: "Notch", value: tafeta.tafetaNotch || "N/A" },
-    { label: "Core ID", value: tafeta.tafetaCoreId ?? "N/A" },
-    { label: "Min Stock Qty", value: tafeta.tafetaMinQty ?? "N/A" },
-  ];
-
-  res.render("inventory/itemView.ejs", {
-    pageTitle: "Tafeta Details",
-    sectionTitle: "Tafeta Details",
-    valueHeader: "Value",
-    statusUrl: `/fairtech/tafeta/edit/${tafeta._id}`,
-    currentStatus: tafeta.status || "ACTIVE",
-    rows,
-    tafeta,
-    tafetaBindings,
-    primaryBinding,
-    backUrl,
-    stockInfo: {
-      totalStock: stockSummary.totalStock,
-      locations: stockSummary.locations,
-      booked: stockSummary.totalBooked,
-      balance: stockSummary.totalBalance,
-    },
-    stockEditConfig: {
-      enabled: true,
-      itemType: "Tafeta",
-      editAction: `/fairtech/tafeta/profile/${tafeta._id}/stock/edit`,
-      locationOptions: locationOptions.map((entry) => canonicalizeLocationName(entry.locationName)).filter(Boolean),
-    },
-    title: "Tafeta Details",
-    CSS: false,
-    JS: false,
-    notification: req.flash("notification"),
-  });
-});
-
-router.post("/tafeta/profile/:id/stock/edit", requireAuth, updateLimiter, async (req, res) =>
-  handleProfileStockEdit(req, res, {
-    itemType: "Tafeta",
-    model: Tafeta,
-    redirectPath: "/fairtech/tafeta/profile",
-  }));
-
-// ================= TAFETA EDIT =================
-router.post("/tafeta/edit/:id", requireAuth, updateLimiter, async (req, res) => {
-  try {
-    const status = req.body.status === "INACTIVE" ? "INACTIVE" : "ACTIVE";
-    const tafetaDoc = await Tafeta.findByIdAndUpdate(req.params.id, { status }).select("tafetaProductId").lean();
-    res.locals.auditDescription = `Set Tafeta "${tafetaDoc?.tafetaProductId || req.params.id}" status to ${status}`;
-    req.flash("notification", "Tafeta status updated successfully!");
-    res.redirect(`/fairtech/tafeta/profile/${req.params.id}`);
-  } catch (err) {
-    console.error(err);
-    req.flash("notification", "Failed to update Tafeta status");
     res.redirect("back");
   }
 });
@@ -3163,8 +2512,6 @@ router.get("/sales/clients/:itemType", async (req, res) => {
     const { itemType } = req.params;
     let bindingModel;
     if (itemType === "TAPE") bindingModel = TapeBinding;
-    else if (itemType === "POS_ROLL") bindingModel = PosRollBinding;
-    else if (itemType === "TAFETA") bindingModel = TafetaBinding;
     else {
       const clients = await Client.distinct("clientName");
       return res.json(clients.sort());
@@ -3196,14 +2543,6 @@ router.get("/sales/items/:type/:userId", async (req, res) => {
       .populate({
         path: "tape",
         populate: { path: "tapeId" },
-      })
-      .populate({
-        path: "posRoll",
-        populate: { path: "posRollId" },
-      })
-      .populate({
-        path: "tafeta",
-        populate: { path: "tafetaId" },
       })
       .lean();
 
@@ -3251,86 +2590,6 @@ router.get("/sales/items/:type/:userId", async (req, res) => {
           };
         }),
       );
-    } else if (type === "POS_ROLL") {
-      const bindings = (user.posRoll || []).filter((b) => matchesLocation(b.location));
-      items = await Promise.all(
-        bindings.map(async (binding) => {
-          if (!binding.posRollId) return null;
-          if (binding.status === "INACTIVE") return null; // disabled binding: not orderable
-          const stockInfo = await getItemStockSummary("POS Roll", binding.posRollId._id);
-          const t = binding.posRollId;
-          return {
-            _id: binding._id,
-            location: binding.location || "",
-            displayName: `${t.posPaperCode || ""} - ${t.posGsm || ""}gsm`,
-            minOrderQty: binding.posMinQty || 0,
-            rate: binding.posRatePerRoll || 0,
-            stock: stockInfo,
-            details: {
-              type: "POS_ROLL",
-              productId: t.posProductId || "",
-              paperCode: t.posPaperCode || "",
-              gsm: t.posGsm || "",
-              paperType: t.posPaperType || "",
-              color: t.posColor || "",
-              width: t.posWidth || "",
-              mtrs: t.posMtrs || "",
-              coreId: t.posCoreId || "",
-              coreLength: t.posCoreLength || "",
-              notch: t.posNotch || "",
-              winding: t.posWinding || "",
-              clientPaperCode: binding.posClientPaperCode || "",
-              clientGsm: binding.clientPosGsm || "",
-              deliveredMtrs: binding.posMtrsDel || "",
-              saleCost: binding.posSaleCost || 0,
-              minQty: t.posMinQty || 0,
-              orderQty: binding.posOdrQty || 0,
-              orderFreq: binding.posOdrFreq || "",
-              creditTerm: binding.posCreditTerm || "",
-            },
-          };
-        }),
-      );
-    } else if (type === "TAFETA") {
-      const bindings = (user.tafeta || []).filter((b) => matchesLocation(b.location));
-      items = await Promise.all(
-        bindings.map(async (binding) => {
-          if (!binding.tafetaId) return null;
-          if (binding.status === "INACTIVE") return null; // disabled binding: not orderable
-          const stockInfo = await getItemStockSummary("Tafeta", binding.tafetaId._id);
-          const t = binding.tafetaId;
-          return {
-            _id: binding._id,
-            location: binding.location || "",
-            displayName: `${t.tafetaMaterialCode || ""} - ${t.tafetaGsm || ""}gsm`,
-            minOrderQty: binding.tafetaMinQty || 0,
-            rate: binding.tafetaRatePerRoll || 0,
-            stock: stockInfo,
-            details: {
-              type: "TAFETA",
-              productId: t.tafetaProductId || "",
-              materialCode: t.tafetaMaterialCode || "",
-              materialType: t.tafetaMaterialType || "",
-              gsm: t.tafetaGsm || "",
-              color: t.tafetaColor || "",
-              width: t.tafetaWidth || "",
-              mtrs: t.tafetaMtrs || "",
-              coreLength: t.tafetaCoreLen || "",
-              coreId: t.tafetaCoreId || "",
-              notch: t.tafetaNotch || "",
-              clientMaterialCode: binding.tafetaClientMaterialCode || "",
-              clientMaterialType: binding.tafetaClientMaterialType || "",
-              clientGsm: binding.clientTafetaGsm || "",
-              deliveredMtrs: binding.tafetaMtrsDel || "",
-              saleCost: binding.tafetaSaleCost || 0,
-              minQty: t.tafetaMinQty || 0,
-              orderQty: binding.tafetaOdrQty || 0,
-              orderFreq: binding.tafetaOdrFreq || "",
-              creditTerm: binding.tafetaCreditTerm || "",
-            },
-          };
-        }),
-      );
     }
 
     res.json(items.filter(Boolean));
@@ -3356,11 +2615,11 @@ router.post("/sales/order", async (req, res) => {
     const { orderId, itemType, userId, itemId, quantity, estimatedDate, remarks, sourceLocation, locationRadio, userLocation, poNumber, poDate, orderRate, submissionToken } = req.body;
     const createdByUser = req.user?.username || "SYSTEM";
 
-    if (["TAPE", "POS_ROLL", "TAFETA"].includes(itemType) && canonicalizeLocationName(locationRadio) === "ALL") {
+    if (["TAPE"].includes(itemType) && canonicalizeLocationName(locationRadio) === "ALL") {
       return res.status(400).json({ success: false, message: "Location cannot be ALL. Please select a specific location." });
     }
     let normalizedSourceLocation = canonicalizeLocationName(sourceLocation || locationRadio || userLocation);
-    const isStockBasedType = ["TAPE", "POS_ROLL", "TAFETA"].includes(itemType);
+    const isStockBasedType = ["TAPE"].includes(itemType);
 
     // "ALL" is not a valid storage location for stock-based orders.
     if (normalizedSourceLocation === "ALL") normalizedSourceLocation = "";
@@ -3377,12 +2636,6 @@ router.post("/sales/order", async (req, res) => {
 
       if (itemType === "TAPE") {
         const binding = await TapeBinding.findById(itemId).select("userId").lean();
-        bindingUserId = binding?.userId || null;
-      } else if (itemType === "POS_ROLL") {
-        const binding = await PosRollBinding.findById(itemId).select("userId").lean();
-        bindingUserId = binding?.userId || null;
-      } else if (itemType === "TAFETA") {
-        const binding = await TafetaBinding.findById(itemId).select("userId").lean();
         bindingUserId = binding?.userId || null;
       }
 
@@ -3472,140 +2725,6 @@ router.post("/sales/order", async (req, res) => {
         // Redirect to pending orders
         res.json({ success: true, redirect: "/fairtech/sales/pending" });
       }
-    } else if (itemType === "POS_ROLL") {
-      const binding = await PosRollBinding.findById(itemId);
-      if (!binding) {
-        return res.status(400).json({ success: false, message: "Invalid POS Roll item selected" });
-      }
-      if (!orderId && binding.status === "INACTIVE") {
-        return res.status(400).json({ success: false, message: "This item is disabled for the selected client and cannot be ordered." });
-      }
-      const parsedOrderRate = Number(orderRate);
-      const finalOrderRate = Number.isFinite(parsedOrderRate) ? parsedOrderRate : Number(binding.posRatePerRoll) || 0;
-
-      const data = {
-        tapeBinding: itemId,
-        onBindingModel: "PosRollBinding",
-        userId: binding.userId,
-        tapeId: binding.posRollId,
-        onModel: "PosRoll",
-        sourceLocation: sourceLocationForSave,
-        poDate: poDate ? new Date(poDate) : undefined,
-        poNumber,
-        orderRate: finalOrderRate,
-        quantity: Number(quantity),
-        estimatedDate: new Date(estimatedDate),
-        remarks,
-        status: "PENDING",
-      };
-
-      if (orderId) {
-        await TapeSalesOrder.findByIdAndUpdate(orderId, data);
-        res.locals.auditDescription = await describeSalesOrder({
-          itemTypeLabel: "POS Roll", userId: binding.userId,
-          quantity: data.quantity, poNumber: data.poNumber, isUpdate: true,
-        });
-        req.flash("notification", "POS Roll order updated successfully!");
-        res.json({ success: true, redirect: "/fairtech/sales/pending" });
-      } else {
-        data.createdBy = createdByUser;
-        data.orderSignature = buildSalesOrderSignature({
-          itemType,
-          itemId,
-          userId: binding.userId,
-          quantity: data.quantity,
-          estimatedDate,
-          poNumber,
-          sourceLocation: sourceLocationForSave,
-          orderRate: finalOrderRate,
-          createdBy: createdByUser,
-        });
-        data.submissionToken = String(submissionToken || "").trim() || undefined;
-        const existingOrder = await TapeSalesOrder.findOne({ orderSignature: data.orderSignature }).select("_id").lean();
-        if (existingOrder) {
-          return res.json({ success: true, redirect: "/fairtech/sales/pending", duplicate: true });
-        }
-        const newOrder = await TapeSalesOrder.create(data);
-        await SalesOrderLog.create({
-          orderId: newOrder._id,
-          action: "CREATED",
-          quantity: Number(quantity),
-          performedBy: createdByUser,
-        });
-        res.locals.auditDescription = await describeSalesOrder({
-          itemTypeLabel: "POS Roll", userId: binding.userId,
-          quantity: data.quantity, poNumber: data.poNumber, isUpdate: false,
-        });
-        req.flash("notification", "POS Roll order created successfully!");
-        res.json({ success: true, redirect: "/fairtech/sales/pending" });
-      }
-    } else if (itemType === "TAFETA") {
-      const binding = await TafetaBinding.findById(itemId);
-      if (!binding) {
-        return res.status(400).json({ success: false, message: "Invalid Tafeta item selected" });
-      }
-      if (!orderId && binding.status === "INACTIVE") {
-        return res.status(400).json({ success: false, message: "This item is disabled for the selected client and cannot be ordered." });
-      }
-      const parsedOrderRate = Number(orderRate);
-      const finalOrderRate = Number.isFinite(parsedOrderRate) ? parsedOrderRate : Number(binding.tafetaRatePerRoll) || 0;
-
-      const data = {
-        tapeBinding: itemId,
-        onBindingModel: "TafetaBinding",
-        userId: binding.userId,
-        tapeId: binding.tafetaId,
-        onModel: "Tafeta",
-        sourceLocation: sourceLocationForSave,
-        poDate: poDate ? new Date(poDate) : undefined,
-        poNumber,
-        orderRate: finalOrderRate,
-        quantity: Number(quantity),
-        estimatedDate: new Date(estimatedDate),
-        remarks,
-        status: "PENDING",
-      };
-
-      if (orderId) {
-        await TapeSalesOrder.findByIdAndUpdate(orderId, data);
-        res.locals.auditDescription = await describeSalesOrder({
-          itemTypeLabel: "Tafeta", userId: binding.userId,
-          quantity: data.quantity, poNumber: data.poNumber, isUpdate: true,
-        });
-        req.flash("notification", "Tafeta order updated successfully!");
-        res.json({ success: true, redirect: "/fairtech/sales/pending" });
-      } else {
-        data.createdBy = createdByUser;
-        data.orderSignature = buildSalesOrderSignature({
-          itemType,
-          itemId,
-          userId: binding.userId,
-          quantity: data.quantity,
-          estimatedDate,
-          poNumber,
-          sourceLocation: sourceLocationForSave,
-          orderRate: finalOrderRate,
-          createdBy: createdByUser,
-        });
-        data.submissionToken = String(submissionToken || "").trim() || undefined;
-        const existingOrder = await TapeSalesOrder.findOne({ orderSignature: data.orderSignature }).select("_id").lean();
-        if (existingOrder) {
-          return res.json({ success: true, redirect: "/fairtech/sales/pending", duplicate: true });
-        }
-        const newOrder = await TapeSalesOrder.create(data);
-        await SalesOrderLog.create({
-          orderId: newOrder._id,
-          action: "CREATED",
-          quantity: Number(quantity),
-          performedBy: createdByUser,
-        });
-        res.locals.auditDescription = await describeSalesOrder({
-          itemTypeLabel: "Tafeta", userId: binding.userId,
-          quantity: data.quantity, poNumber: data.poNumber, isUpdate: false,
-        });
-        req.flash("notification", "Tafeta order created successfully!");
-        res.json({ success: true, redirect: "/fairtech/sales/pending" });
-      }
     } else {
       return res.status(400).json({ success: false, message: "Unsupported item type" });
     }
@@ -3644,19 +2763,15 @@ router.get("/sales/pending", async (req, res) => {
       .populate({
         path: "tapeId",
         // Widened beyond what the table itself needs so the "View" dialog's
-        // Fairtech-vs-Client comparison (mirrors /tape|pos|tafeta/compare/:id,
+        // Fairtech-vs-Client comparison (mirrors /tape/compare/:id,
         // minus the vendor column) has every spec field it displays.
         select:
-          "tapeProductId tapePaperCode tapePaperType tapeGsm tapeWidth tapeMtrs tapeCoreId tapeFinish tapeAdhesiveGsm " +
-          "posProductId posPaperCode posPaperType posColor posGsm posWidth posMtrs posCoreId " +
-          "tafetaProductId tafetaMaterialCode tafetaMaterialType tafetaColor tafetaGsm tafetaWidth tafetaMtrs tafetaCoreLen tafetaNotch tafetaCoreId",
+          "tapeProductId tapePaperCode tapePaperType tapeGsm tapeWidth tapeMtrs tapeCoreId tapeFinish tapeAdhesiveGsm",
       })
       .populate({
         path: "tapeBinding",
         select:
-          "tapeClientPaperCode tapeRatePerRoll tapeOdrQty tapeOdrFreq tapeCreditTerm tapeSaleCost tapeMtrsDel tapeMinQty clientTapeGsm " +
-          "posClientPaperCode posRatePerRoll posOdrQty posOdrFreq posCreditTerm posSaleCost posMtrsDel posMinQty clientPosGsm " +
-          "tafetaClientMaterialCode tafetaClientMaterialType tafetaRatePerRoll tafetaOdrQty tafetaOdrFreq tafetaCreditTerm tafetaSaleCost tafetaMtrsDel tafetaMinQty clientTafetaGsm status",
+          "tapeClientPaperCode tapeRatePerRoll tapeOdrQty tapeOdrFreq tapeCreditTerm tapeSaleCost tapeMtrsDel tapeMinQty clientTapeGsm status",
       })
       .sort({ createdAt: 1 })
       .lean();
@@ -3664,8 +2779,6 @@ router.get("/sales/pending", async (req, res) => {
     // Group pending orders by model type and itemId to fetch total stock
     const itemIdsByModel = {
       Tape: new Set(),
-      PosRoll: new Set(),
-      Tafeta: new Set(),
     };
 
     pendingOrders.forEach(o => {
@@ -3682,21 +2795,11 @@ router.get("/sales/pending", async (req, res) => {
         { $match: { tape: { $in: Array.from(itemIdsByModel.Tape).map(id => new mongoose.Types.ObjectId(id)) } } },
         { $group: { _id: "$tape", total: { $sum: "$quantity" } } }
       ]),
-      PosRollStock.aggregate([
-        { $match: { posRoll: { $in: Array.from(itemIdsByModel.PosRoll).map(id => new mongoose.Types.ObjectId(id)) } } },
-        { $group: { _id: "$posRoll", total: { $sum: "$quantity" } } }
-      ]),
-      TafetaStock.aggregate([
-        { $match: { tafeta: { $in: Array.from(itemIdsByModel.Tafeta).map(id => new mongoose.Types.ObjectId(id)) } } },
-        { $group: { _id: "$tafeta", total: { $sum: "$quantity" } } }
-      ]),
     ];
 
-    const [tapeStocks, posStocks, tafetaStocks] = await Promise.all(stockPromises);
+    const [tapeStocks] = await Promise.all(stockPromises);
 
     tapeStocks.forEach(s => stockMap[`Tape:${s._id}`] = s.total);
-    posStocks.forEach(s => stockMap[`PosRoll:${s._id}`] = s.total);
-    tafetaStocks.forEach(s => stockMap[`Tafeta:${s._id}`] = s.total);
 
     // Fetch active Purchase Orders for these items
     const allItemIds = Object.values(itemIdsByModel).flatMap(set => Array.from(set)).map(id => new mongoose.Types.ObjectId(id));
@@ -3740,7 +2843,7 @@ router.get("/purchase/pending", async (req, res) => {
       .populate({
         path: "itemId",
         select:
-          "tapeProductId tapePaperCode tapeGsm posProductId posPaperCode posGsm tafetaProductId tafetaMaterialCode tafetaGsm ttrProductId ttrType ttrWidth ttrMtrs",
+          "tapeProductId tapePaperCode tapeGsm ttrProductId ttrType ttrWidth ttrMtrs",
       })
       .sort({ createdAt: -1 })
       .lean();
@@ -3767,8 +2870,6 @@ router.get("/purchase/pending", async (req, res) => {
 function getItemName(item, type) {
   if (!item) return "N/A";
   if (type === "Tape") return `${item.tapePaperCode || ""} ${item.tapeGsm || ""}gsm`.trim() || item.tapeProductId;
-  if (type === "PosRoll" || type === "Pos-Roll") return `${item.posPaperCode || ""} ${item.posGsm || ""}gsm`.trim() || item.posProductId;
-  if (type === "Tafeta") return `${item.tafetaMaterialCode || ""} ${item.tafetaGsm || ""}gsm`.trim() || item.tafetaProductId;
   return "N/A";
 }
 
@@ -3839,20 +2940,6 @@ router.post("/purchase/receive", async (req, res) => {
         remarks: remarks || `From PO: ${po.poNumber}`,
         tapeFinish: po.itemId.tapeFinish || "MATTE"
       });
-    } else if (po.onModel === "PosRoll" || po.onModel === "Pos-Roll") {
-      await PosRollStock.create({
-        posRoll: po.itemId._id,
-        location,
-        quantity: qty,
-        remarks: remarks || `From PO: ${po.poNumber}`
-      });
-    } else if (po.onModel === "Tafeta") {
-      await TafetaStock.create({
-        tafeta: po.itemId._id,
-        location,
-        quantity: qty,
-        remarks: remarks || `From PO: ${po.poNumber}`
-      });
     }
 
     // Update PO Status & Quantities
@@ -3903,12 +2990,12 @@ router.get("/sales/order/confirm", async (req, res) => {
       .populate({
         path: "tapeId",
         select:
-          "tapeProductId tapePaperCode tapeGsm tapeFinish tapePaperType tapeAdhesiveGsm tapeWidth tapeMtrs tapeCoreId posProductId posPaperCode posGsm posPaperType posColor posWidth posCoreId posMtrs tafetaProductId tafetaMaterialCode tafetaGsm tafetaMaterialType tafetaColor tafetaWidth tafetaMtrs tafetaCoreLen tafetaCoreId tafetaNotch ttrProductId ttrType ttrColor ttrMaterialCode ttrWidth ttrMtrs ttrInkFace ttrCoreId ttrCoreLength ttrNotch ttrWinding labelWidth labelHeight",
+          "tapeProductId tapePaperCode tapeGsm tapeFinish tapePaperType tapeAdhesiveGsm tapeWidth tapeMtrs tapeCoreId ttrProductId ttrType ttrColor ttrMaterialCode ttrWidth ttrMtrs ttrInkFace ttrCoreId ttrCoreLength ttrNotch ttrWinding labelWidth labelHeight",
       })
       .populate({
         path: "tapeBinding",
         select:
-          "tapeRatePerRoll tapeOdrQty tapeMinQty tapeClientMaterialCode clientTapeGsm posRatePerRoll posOdrQty posMinQty posClientMaterialCode clientPosGsm tafetaRatePerRoll tafetaOdrQty tafetaMinQty tafetaClientMaterialCode clientTafetaGsm ttrRatePerRoll ttrOdrQty ttrMinQty ttrClientMaterialCode clientTtrType",
+          "tapeRatePerRoll tapeOdrQty tapeMinQty tapeClientMaterialCode clientTapeGsm ttrRatePerRoll ttrOdrQty ttrMinQty ttrClientMaterialCode clientTtrType",
       })
       .lean();
 
@@ -3962,7 +3049,7 @@ router.get("/sales/order/logs", async (req, res) => {
     // Step 2: Collect all orderId values that need to be resolved
     const allOrderIds = [...new Set(rawLogs.map((l) => String(l.orderId)).filter(Boolean))];
 
-    const ITEM_SELECT = "tapeProductId tapePaperCode tapeGsm tapeFinish posProductId posPaperCode posGsm tafetaProductId tafetaMaterialCode tafetaGsm clientSkuCode";
+    const ITEM_SELECT = "tapeProductId tapePaperCode tapeGsm tapeFinish clientSkuCode";
     const USER_SELECT = "clientName userName";
 
     // Step 3: Query the order collection
@@ -4018,16 +3105,6 @@ router.put("/purchase/log/:logId", requireAuth, updateLimiter, async (req, res) 
     let StockModel = TapeStock;
     let StockLogModel = TapeStockLog;
     let matchField = "tape";
-
-    if (po.onModel === "PosRoll") {
-      StockModel = PosRollStock;
-      StockLogModel = PosRollStockLog;
-      matchField = "posRoll";
-    } else if (po.onModel === "Tafeta") {
-      StockModel = TafetaStock;
-      StockLogModel = TafetaStockLog;
-      matchField = "tafeta";
-    }
 
     if (location && po.itemId && qtyDiff !== 0) {
       // Get current stock at location
@@ -4132,16 +3209,6 @@ router.delete("/purchase/log/:logId", requireAuth, deleteLimiter, async (req, re
     let StockLogModel = TapeStockLog;
     let matchField = "tape";
 
-    if (po.onModel === "PosRoll") {
-      StockModel = PosRollStock;
-      StockLogModel = PosRollStockLog;
-      matchField = "posRoll";
-    } else if (po.onModel === "Tafeta") {
-      StockModel = TafetaStock;
-      StockLogModel = TafetaStockLog;
-      matchField = "tafeta";
-    }
-
     if (location && po.itemId && qtyToRemove > 0) {
       // Reverse stock (outward)
       const bal = await StockModel.aggregate([
@@ -4207,7 +3274,7 @@ router.get("/purchase/order/logs", async (req, res) => {
           {
             path: "itemId",
             select:
-              "tapeProductId tapePaperCode tapeGsm posProductId posPaperCode posGsm tafetaProductId tafetaMaterialCode tafetaGsm ttrProductId ttrType ttrWidth ttrMtrs",
+              "tapeProductId tapePaperCode tapeGsm ttrProductId ttrType ttrWidth ttrMtrs",
           },
         ],
       })
@@ -4282,16 +3349,6 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
       let StockLogModel = TapeStockLog;
       let matchField = "tape";
 
-      if (order.onModel === "PosRoll") {
-        StockModel = PosRollStock;
-        StockLogModel = PosRollStockLog;
-        matchField = "posRoll";
-      } else if (order.onModel === "Tafeta") {
-        StockModel = TafetaStock;
-        StockLogModel = TafetaStockLog;
-        matchField = "tafeta";
-      }
-
       if (!location) {
         const message = "Cannot confirm: Source location missing on order";
         if (wantsJson) {
@@ -4363,7 +3420,6 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
         remarks: `Sales Order Confirmed: ${orderId}`,
       };
       if (order.onModel === "Tape") stockData.tapeFinish = tape.tapeFinish;
-      if (order.onModel === "Tafeta") stockData.tafetaType = tape.tafetaType;
 
       await StockModel.create(stockData);
 
@@ -4441,16 +3497,6 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
       let StockLogModel = TapeStockLog;
       let matchField = "tape";
 
-      if (order.onModel === "PosRoll") {
-        StockModel = PosRollStock;
-        StockLogModel = PosRollStockLog;
-        matchField = "posRoll";
-      } else if (order.onModel === "Tafeta") {
-        StockModel = TafetaStock;
-        StockLogModel = TafetaStockLog;
-        matchField = "tafeta";
-      }
-
       const qty = order.quantity; // TODO: Should this be dispatchedQuantity? For now assume cancelling full order if it was fully confirmed. Or partial?
       // If partial dispatch was supported, we really need to know *what* to reverse.
       // But assuming CONFIRMED means *fully* dispatched for now (or at least that's the only state we reverse from).
@@ -4482,7 +3528,6 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
         remarks: `Sales Order Cancelled (reversed): ${orderId}`,
       };
       if (order.onModel === "Tape") stockData.tapeFinish = tape.tapeFinish;
-      if (order.onModel === "Tafeta") stockData.tafetaType = tape.tafetaType;
 
       await StockModel.create(stockData);
 
@@ -4571,16 +3616,6 @@ router.put("/sales/order/log/:logId", requireAuth, updateLimiter, async (req, re
     let StockLogModel = TapeStockLog;
     let matchField = "tape";
 
-    if (order.onModel === "PosRoll") {
-      StockModel = PosRollStock;
-      StockLogModel = PosRollStockLog;
-      matchField = "posRoll";
-    } else if (order.onModel === "Tafeta") {
-      StockModel = TafetaStock;
-      StockLogModel = TafetaStockLog;
-      matchField = "tafeta";
-    }
-
     if (location && tape && qtyDiff !== 0) {
       // Get current stock at location
       const bal = await StockModel.aggregate([
@@ -4605,7 +3640,6 @@ router.put("/sales/order/log/:logId", requireAuth, updateLimiter, async (req, re
           remarks: `Log Edit (additional deduction): ${log.orderId}`,
         };
         if (order.onModel === "Tape") stockData.tapeFinish = tape.tapeFinish;
-        if (order.onModel === "Tafeta") stockData.tafetaType = tape.tafetaType;
 
         await StockModel.create(stockData);
 
@@ -4632,7 +3666,6 @@ router.put("/sales/order/log/:logId", requireAuth, updateLimiter, async (req, re
           remarks: `Log Edit (partial reversal): ${log.orderId}`,
         };
         if (order.onModel === "Tape") stockData.tapeFinish = tape.tapeFinish;
-        if (order.onModel === "Tafeta") stockData.tafetaType = tape.tafetaType;
 
         await StockModel.create(stockData);
 
@@ -4704,16 +3737,6 @@ router.delete("/sales/order/log/:logId", requireAuth, deleteLimiter, async (req,
     let StockLogModel = TapeStockLog;
     let matchField = "tape";
 
-    if (order.onModel === "PosRoll") {
-      StockModel = PosRollStock;
-      StockLogModel = PosRollStockLog;
-      matchField = "posRoll";
-    } else if (order.onModel === "Tafeta") {
-      StockModel = TafetaStock;
-      StockLogModel = TafetaStockLog;
-      matchField = "tafeta";
-    }
-
     // Reverse stock deduction (add stock back)
     if (location && tape && qty > 0) {
       const bal = await StockModel.aggregate([
@@ -4729,7 +3752,6 @@ router.delete("/sales/order/log/:logId", requireAuth, deleteLimiter, async (req,
         remarks: `Log Deleted (reversed): ${log.orderId}`,
       };
       if (order.onModel === "Tape") stockData.tapeFinish = tape.tapeFinish;
-      if (order.onModel === "Tafeta") stockData.tafetaType = tape.tafetaType;
 
       await StockModel.create(stockData);
 
@@ -5329,11 +4351,9 @@ router.get("/edit/user/:id", async (req, res) => {
 // route for details page.
 router.get("/master/view", async (req, res) => {
   let jsonData = await Username.find()
-    .select("clientName clientType accountHead userName userLocation userDepartment locationDetails label tape posRoll tafeta")
+    .select("clientName clientType accountHead userName userLocation userDepartment locationDetails label tape")
     .populate({ path: "label", select: "location" })
     .populate({ path: "tape", select: "location" })
-    .populate({ path: "posRoll", select: "location" })
-    .populate({ path: "tafeta", select: "location" })
     .sort({ clientName: 1, userName: 1 })
     .lean();
 
@@ -5388,8 +4408,6 @@ router.get("/vendor/profile/:id", async (req, res) => {
       populate: [
         { path: "label" },
         { path: "tape", populate: { path: "tapeId" } },
-        { path: "posRoll", populate: { path: "posRollId" } },
-        { path: "tafeta", populate: { path: "tafetaId" } },
       ],
     });
 
@@ -5445,8 +4463,6 @@ router.get("/vendor/coordinator/view", async (req, res) => {
     jsonData.forEach((row) => {
       row.dispatchType = row.SelfDispatch ? "Self Dispatch" : "Transport";
       row.tapeCount = row.tape?.length || 0;
-      row.posRollCount = row.posRoll?.length || 0;
-      row.tafetaCount = row.tafeta?.length || 0;
     });
 
     res.render("users/vendorUserView.ejs", {
@@ -5472,14 +4488,6 @@ router.get("/vendor/coordinator/details/:userId", async (req, res) => {
         path: "tape",
         populate: { path: "tapeId" },
       })
-      .populate({
-        path: "posRoll",
-        populate: { path: "posRollId" },
-      })
-      .populate({
-        path: "tafeta",
-        populate: { path: "tafetaId" },
-      })
       .lean();
 
     if (!vendorUser) {
@@ -5492,8 +4500,6 @@ router.get("/vendor/coordinator/details/:userId", async (req, res) => {
     const stats = {
       labels: (vendorUser.label || []).length,
       tapes: (vendorUser.tape || []).length,
-      posRolls: (vendorUser.posRoll || []).length,
-      tafetas: (vendorUser.tafeta || []).length,
     };
 
     res.render("users/vendorUserDetails.ejs", {
@@ -5504,8 +4510,6 @@ router.get("/vendor/coordinator/details/:userId", async (req, res) => {
       vendor,
       labels: vendorUser.label || [],
       tapes: vendorUser.tape || [],
-      posRolls: vendorUser.posRoll || [],
-      tafetas: vendorUser.tafeta || [],
       stats,
       notification: req.flash("notification"),
     });

@@ -1,14 +1,8 @@
 import express from "express";
 import mongoose from "mongoose";
 import Tape from "../../models/inventory/tape.js";
-import PosRoll from "../../models/inventory/posRoll.js";
-import Tafeta from "../../models/inventory/tafeta.js";
 import TapeStock from "../../models/inventory/TapeStock.js";
 import TapeStockLog from "../../models/inventory/TapeStockLog.js";
-import PosRollStock from "../../models/inventory/PosRollStock.js";
-import PosRollStockLog from "../../models/inventory/PosRollStockLog.js";
-import TafetaStock from "../../models/inventory/TafetaStock.js";
-import TafetaStockLog from "../../models/inventory/TafetaStockLog.js";
 import TapeSalesOrder from "../../models/inventory/TapeSalesOrder.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -28,24 +22,6 @@ const STOCK_CONFIG = {
     onModel: "Tape",
     masterModel: Tape,
     productIdField: "tapeProductId",
-  },
-  "POS Roll": {
-    stockModel: PosRollStock,
-    logModel: PosRollStockLog,
-    itemField: "posRoll",
-    itemLabel: "POS Roll",
-    onModel: "PosRoll",
-    masterModel: PosRoll,
-    productIdField: "posProductId",
-  },
-  Tafeta: {
-    stockModel: TafetaStock,
-    logModel: TafetaStockLog,
-    itemField: "tafeta",
-    itemLabel: "Tafeta",
-    onModel: "Tafeta",
-    masterModel: Tafeta,
-    productIdField: "tafetaProductId",
   },
 };
 
@@ -255,31 +231,6 @@ router.get("/view", async (req, res) => {
           `${master.tapePaperCode || ""} ${master.tapeGsm ? master.tapeGsm + "gsm" : ""}`.trim() || master.tapeProductId,
         buildProfileUrl: (itemId) => `/fairtech/tape/profile/${itemId}`,
       }),
-      loadStockRows({
-        stockModel: PosRollStock,
-        itemField: "posRoll",
-        masterModel: PosRoll,
-        masterSelect: "posProductId posPaperCode posPaperType posColor posGsm posWidth posMtrs posCoreId",
-        onModel: "PosRoll",
-        itemType: "POS Roll",
-        buildProductId: (master) => master.posProductId,
-        buildSpec: (master) =>
-          `${master.posPaperCode || ""} ${master.posGsm ? master.posGsm + "gsm" : ""}`.trim() || master.posProductId,
-        buildProfileUrl: (itemId) => `/fairtech/pos-roll/profile/${itemId}`,
-      }),
-      loadStockRows({
-        stockModel: TafetaStock,
-        itemField: "tafeta",
-        masterModel: Tafeta,
-        masterSelect:
-          "tafetaProductId tafetaMaterialCode tafetaMaterialType tafetaColor tafetaGsm tafetaWidth tafetaMtrs tafetaCoreId",
-        onModel: "Tafeta",
-        itemType: "Tafeta",
-        buildProductId: (master) => master.tafetaProductId,
-        buildSpec: (master) =>
-          `${master.tafetaMaterialCode || ""} ${master.tafetaGsm ? master.tafetaGsm + "gsm" : ""}`.trim() || master.tafetaProductId,
-        buildProfileUrl: (itemId) => `/fairtech/tafeta/profile/${itemId}`,
-      }),
     ]);
 
     const rows = groupedRows
@@ -294,8 +245,6 @@ router.get("/view", async (req, res) => {
     const summary = {
       totalLines: rows.length,
       totalQuantity: rows.reduce((sum, row) => sum + toNumber(row.quantity), 0),
-      posQty: rows.filter(r => r.itemType === "POS Roll").reduce((sum, row) => sum + toNumber(row.quantity), 0),
-      tafetaQty: rows.filter(r => r.itemType === "Tafeta").reduce((sum, row) => sum + toNumber(row.quantity), 0),
       tapeQty: rows.filter(r => r.itemType === "Tape").reduce((sum, row) => sum + toNumber(row.quantity), 0),
       totalBooked: rows.reduce((sum, row) => sum + toNumber(row.booked), 0),
       totalBalance: rows.reduce((sum, row) => sum + toNumber(row.balance), 0),

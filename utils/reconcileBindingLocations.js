@@ -1,15 +1,11 @@
 import Username from "../models/users/username.js";
 import Label from "../models/inventory/labels.js";
 import TapeBinding from "../models/inventory/tapeBinding.js";
-import PosRollBinding from "../models/inventory/posRollBinding.js";
-import TafetaBinding from "../models/inventory/tafetaBinding.js";
 import { getUserLocationNames, normalizeLocationName } from "./locations.js";
 
 const BINDING_TYPES = [
   [Label, "label"],
   [TapeBinding, "tape"],
-  [PosRollBinding, "posRoll"],
-  [TafetaBinding, "tafeta"],
 ];
 
 // A location rename commonly prepends/appends a town name onto what used to
@@ -49,7 +45,7 @@ function resolveRenameTarget(oldLoc, validLocs) {
  */
 export async function reconcileUserBindingLocations(userId) {
   const user = await Username.findById(userId)
-    .select("locationDetails userLocation label colorLabel ttr tape posRoll tafeta")
+    .select("locationDetails userLocation label colorLabel ttr tape")
     .populate(BINDING_TYPES.map(([, field]) => ({ path: field, select: "location" })))
     .lean();
 
@@ -90,7 +86,7 @@ const IDENTITY_BINDING_TYPES = [
 ];
 
 /*
- * Label/ColorLabel bindings (unlike Tape/TTR/POS Roll/Tafeta) don't reference
+ * Label/ColorLabel bindings (unlike Tape/TTR) don't reference
  * the owning user live via userId — they store their own denormalized copy
  * of clientName/userName/userContact, captured at binding-creation time. If
  * the user's name or contact is edited afterward, those bindings keep the

@@ -59,20 +59,6 @@ const vendorUserSchema = new mongoose.Schema({
     },
   ],
 
-  posRoll: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: "VendorPosRollBinding",
-    },
-  ],
-
-  tafeta: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: "VendorTafetaBinding",
-    },
-  ],
-
   // Multiple label per vendor (future-proof)
   label: [
     {

@@ -12,12 +12,8 @@ import employeeRoute from "./routes/hr/employee.js";
 import pettycashRoute from "./routes/acccounting/pettycash.js";
 import tapeBindingRoutes from "./routes/inventory/tapeBinding.js";
 import tapeStockRoutes from "./routes/stock/tapeStock.js";
-import posRollStockRoutes from "./routes/stock/posRollStock.js";
-import tafetaStockRoutes from "./routes/stock/tafetaStock.js";
 import stockViewRoutes from "./routes/stock/stockView.js";
 import clientFormRoute from "./routes/users/clients.js";
-import posRollBindingRoutes from "./routes/inventory/posRollBinding.js";
-import tafetaBindingRoutes from "./routes/inventory/tafetaBinding.js";
 import vendorItemBindingRoutes from "./routes/inventory/vendorItemBinding.js";
 import reorderRoutes from "./routes/inventory/reorder.js";
 import { requireAuth, requireRole } from "./middleware/auth.js";
@@ -716,17 +712,8 @@ app.use(
 
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales", "hr"]), fairdeskRoute);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeBindingRoutes);
-app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), posRollBindingRoutes);
-app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tafetaBindingRoutes);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), vendorItemBindingRoutes);
 app.use("/sachiko/tapestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeStockRoutes);
-app.use(
-  "/sachiko/posrollstock",
-  requireAuth,
-  requireRole(["proprietor", "admin", "hod", "sales"]),
-  posRollStockRoutes,
-);
-app.use("/sachiko/tafetastock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tafetaStockRoutes);
 app.use("/sachiko/stocks", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), stockViewRoutes);
 app.use("/sachiko/inventory", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), reorderRoutes);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod"]), sachikoRoute);

@@ -659,7 +659,7 @@ select {
   border-radius: 0.5rem;
 }
 
-.nav-datasheet-height {
+.nav-sl-height {
   height: 70px;
   transition: height 0.3s ease-in-out;
   /* border: 2px solid var(--primary-color); */

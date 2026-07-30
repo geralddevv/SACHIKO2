@@ -24,8 +24,8 @@
       userContact: v.userContact,
       userLocation: v.userLocation,
       locationDetails: v.locationDetails || [],
-      vendorCode: binding ? (binding.vendorTapePaperCode || binding.vendorPosPaperCode || binding.vendorTafetaMaterialCode || binding.vendorTtrType || '') : '',
-      minQty: binding ? (binding.tapeMinQty || binding.posMinQty || binding.tafetaMinQty || binding.ttrMinQty || 0) : 0,
+      vendorCode: binding ? (binding.vendorTapePaperCode || binding.vendorTtrType || '') : '',
+      minQty: binding ? (binding.tapeMinQty || binding.ttrMinQty || 0) : 0,
       hasBinding: !!binding
     });
   });
@@ -50,10 +50,6 @@
           bindUrl = `/sachiko/form/ttr-vendor-binding?itemId=${item._id}`;
         } else if (itype === 'TAPE') {
           bindUrl = `/sachiko/form/vendor-item-binding/tape?itemId=${item._id}`;
-        } else if (itype === 'POSROLL') {
-          bindUrl = `/sachiko/form/vendor-item-binding/pos?itemId=${item._id}`;
-        } else if (itype === 'TAFETA') {
-          bindUrl = `/sachiko/form/vendor-item-binding/tafeta?itemId=${item._id}`;
         }
       %>
       <a href="<%= bindUrl %>" style="background: #dc2626; color: white; padding: 8px 16px; border-radius: 6px; font-weight: 700; text-decoration: none; font-size: 13px; white-space: nowrap;">
@@ -158,26 +154,6 @@
            pushIf("Meters", d.tapeMtrs);
            pushIf("Core ID", d.tapeCoreId);
            pushIf("Finish", d.tapeFinish);
-         } else if (itemType === "POSROLL") {
-           pushIf("Product ID", d.posProductId);
-           pushIf("Paper Code", d.posPaperCode);
-           pushIf("GSM", d.posGsm);
-           pushIf("Paper Type", d.posPaperType);
-           pushIf("Color", d.posColor);
-           pushIf("Width", d.posWidth);
-           pushIf("Meters", d.posMtrs);
-           pushIf("Core ID", d.posCoreId);
-         } else if (itemType === "TAFETA") {
-           pushIf("Product ID", d.tafetaProductId);
-           pushIf("Material Code", d.tafetaMaterialCode);
-           pushIf("Material Type", d.tafetaMaterialType);
-           pushIf("GSM", d.tafetaGsm);
-           pushIf("Color", d.tafetaColor);
-           pushIf("Width", d.tafetaWidth);
-           pushIf("Meters", d.tafetaMtrs);
-           pushIf("Core Length", d.tafetaCoreLength);
-           pushIf("Notch", d.tafetaNotch);
-           pushIf("Core ID", d.tafetaCoreId);
          }
        %>
        <div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:4px 8px;">

@@ -97,8 +97,6 @@
     <h1>
       Stock View
       <span class="order-highlight active">Total: <%= summary.totalQuantity %></span>
-      <span class="order-highlight active" style="background-color: rgba(4, 74, 120, 0.4);">POS: <%= summary.posQty %></span>
-      <span class="order-highlight active" style="background-color: rgba(4, 74, 120, 0.4);">Tafeta: <%= summary.tafetaQty %></span>
       <span class="order-highlight active" style="background-color: rgba(4, 74, 120, 0.4);">Tape: <%= summary.tapeQty %></span>
       <span class="order-highlight active" style="background-color: rgba(4, 74, 120, 0.4);">TTR: <%= summary.ttrQty %></span>
       <span class="order-highlight active" style="background-color: rgba(4, 74, 120, 0.4);">Paper: <%= summary.paperQty %></span>
@@ -210,7 +208,7 @@
         width: 120,
         headerFilter: "select",
         headerFilterParams: {
-          values: { "": "All", Tape: "Tape", "POS Roll": "POS Roll", Tafeta: "Tafeta", TTR: "TTR", Paper: "Paper" },
+          values: { "": "All", Tape: "Tape", TTR: "TTR", Paper: "Paper" },
           clearable: true,
         },
       },

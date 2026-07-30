@@ -73,9 +73,7 @@
     else if (action === "CREATED") actionLabel = "Created";
 
     let itemTypeLabel = "Tape";
-    if (order.onModel === "PosRoll") itemTypeLabel = "POS Roll";
-    else if (order.onModel === "Tafeta") itemTypeLabel = "Tafeta";
-    else if (order.onModel === "Ttr") itemTypeLabel = "TTR";
+    if (order.onModel === "Ttr") itemTypeLabel = "TTR";
     else if (order.onModel === "Label") itemTypeLabel = "Label";
     else if (order.onModel === "ColorLabel") itemTypeLabel = "Color Label";
 
@@ -83,12 +81,6 @@
     if (order.onModel === "Tape" || !order.onModel) {
       if (item.tapePaperCode) itemName = `${item.tapePaperCode} ${item.tapeGsm ?? ""}gsm`.trim();
       else if (item.tapeProductId) itemName = String(item.tapeProductId);
-    } else if (order.onModel === "PosRoll") {
-      if (item.posPaperCode) itemName = `${item.posPaperCode} ${item.posGsm ?? ""}gsm`.trim();
-      else if (item.posProductId) itemName = String(item.posProductId);
-    } else if (order.onModel === "Tafeta") {
-      if (item.tafetaMaterialCode) itemName = `${item.tafetaMaterialCode} ${item.tafetaGsm ?? ""}gsm`.trim();
-      else if (item.tafetaProductId) itemName = String(item.tafetaProductId);
     } else if (order.onModel === "Ttr") {
       // Width is shown in its own column, so only the type and roll length are
       // left to describe the item here.
@@ -106,7 +98,7 @@
 
     // Width / height broken out of the item description into their own columns
     // so they can be sorted and header-filtered on their own. Only the models
-    // that actually carry a size have one -- tape / POS / tafeta don't.
+    // that actually carry a size have one -- tape doesn't.
     let itemWidth  = "-";
     let itemHeight = "-";
     if (order.onModel === "Label" || order.onModel === "ColorLabel") {

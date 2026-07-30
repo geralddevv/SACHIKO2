@@ -410,8 +410,6 @@
                 const locLabel = (user.label || []).filter(i => sameLoc(i.location, loc.userLocation));
                 const locTtr = (user.ttr || []).filter(i => sameLoc(i.location, loc.userLocation));
                 const locTape = (user.tape || []).filter(i => sameLoc(i.location, loc.userLocation));
-                const locPosRoll = (user.posRoll || []).filter(i => sameLoc(i.location, loc.userLocation));
-                const locTafeta = (user.tafeta || []).filter(i => sameLoc(i.location, loc.userLocation));
               %>
               <tr class="user-row expanded" onclick="toggleUserExpand(this)">
                 <td><i class="fa-solid fa-chevron-right toggle-icon"></i></td>
@@ -567,104 +565,10 @@
                         </div>
                       <% } %>
 
-                      <!-- POS Rolls -->
-                      <% if (locPosRoll.length > 0) { %>
-                        <div class="item-category-group">
-                          <div class="item-category-header">
-                            <span class="item-type-label">POS Rolls</span>
-                            <span class="item-count-badge"><%= locPosRoll.length %></span>
-                          </div>
-                          <table class="inner-spec-table">
-                            <thead>
-                              <tr>
-                                <th style="width: 15%;">Item</th>
-                                <th>GSM</th>
-                                <th>Type</th>
-                                <th>Color</th>
-                                <th>Width</th>
-                                <th>Mtrs</th>
-                                <th>Core</th>
-                                <th>Min</th>
-                                <th>Odr</th>
-                                <th>Freq</th>
-                                <th>Credit</th>
-                                <th>Rate</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <% locPosRoll.forEach(i => { %>
-                                <tr>
-                                  <td class="item-name-cell"><%= i.posClientPaperCode %></td>
-                                  <td><%= i.clientPosGsm || (i.posRollId ? i.posRollId.posGsm : '-') %></td>
-                                  <td><%= i.posRollId ? i.posRollId.posPaperType : '-' %></td>
-                                  <td><%= i.posRollId ? i.posRollId.posColor : '-' %></td>
-                                  <td><%= i.posRollId ? i.posRollId.posWidth : '-' %></td>
-                                  <td><%= i.posMtrsDel %></td>
-                                  <td><%= i.posRollId ? i.posRollId.posCoreId : '-' %></td>
-                                  <td><%= i.posMinQty %></td>
-                                  <td><%= i.posOdrQty || '-' %></td>
-                                  <td><%= i.posOdrFreq || '-' %></td>
-                                  <td><%= i.posCreditTerm || '-' %></td>
-                                  <td style="font-weight:600;">₹<%= i.posRatePerRoll %></td>
-                                </tr>
-                              <% }) %>
-                            </tbody>
-                          </table>
-                        </div>
-                      <% } %>
-
-                      <!-- Tafeta -->
-                      <% if (locTafeta.length > 0) { %>
-                        <div class="item-category-group">
-                          <div class="item-category-header">
-                            <span class="item-type-label">Tafeta</span>
-                            <span class="item-count-badge"><%= locTafeta.length %></span>
-                          </div>
-                          <table class="inner-spec-table">
-                            <thead>
-                              <tr>
-                                <th style="width: 15%;">Item</th>
-                                <th>Type</th>
-                                <th>GSM</th>
-                                <th>Color</th>
-                                <th>Width</th>
-                                <th>Mtrs</th>
-                                <th>Core</th>
-                                <th>Min</th>
-                                <th>Odr</th>
-                                <th>Freq</th>
-                                <th>Credit</th>
-                                <th>Rate</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <% locTafeta.forEach(i => { %>
-                                <tr>
-                                  <td class="item-name-cell"><%= i.tafetaClientMaterialCode %></td>
-                                  <td><%= i.tafetaClientMaterialType || (i.tafetaId ? i.tafetaId.tafetaMaterialType : '-') %></td>
-                                  <td><%= i.clientTafetaGsm || (i.tafetaId ? i.tafetaId.tafetaGsm : '-') %></td>
-                                  <td><%= i.tafetaId ? i.tafetaId.tafetaColor : '-' %></td>
-                                  <td><%= i.tafetaId ? i.tafetaId.tafetaWidth : '-' %></td>
-                                  <td><%= i.tafetaMtrsDel %></td>
-                                  <td><%= i.tafetaId ? i.tafetaId.tafetaCoreId : '-' %></td>
-                                  <td><%= i.tafetaMinQty || '-' %></td>
-                                  <td><%= i.tafetaOdrQty || '-' %></td>
-                                  <td><%= i.tafetaOdrFreq || '-' %></td>
-                                  <td><%= i.tafetaCreditTerm || '-' %></td>
-                                  <td style="font-weight:600;">₹<%= i.tafetaRatePerRoll %></td>
-                                </tr>
-                              <% }) %>
-                            </tbody>
-                          </table>
-                        </div>
-                      <% } %>
-
                       <% if (
                         locLabel.length === 0 &&
                         locTtr.length === 0 &&
-                        locTape.length === 0 &&
-                        locPosRoll.length === 0 &&
-                        locTafeta.length === 0
+                        locTape.length === 0
                       ) { %>
                         <div style="padding: 15px; color: #94a3b8; font-style: italic; font-size: 13px;">
                           No items associated with this user at this location.

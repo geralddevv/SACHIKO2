@@ -65,12 +65,6 @@
     if (order.onModel === "Tape") {
       return `${item.tapePaperCode || ""} ${item.tapeGsm || ""}gsm`.trim() || item.tapeProductId;
     }
-    if (order.onModel === "PosRoll") {
-      return `${item.posPaperCode || ""} ${item.posGsm || ""}gsm`.trim() || item.posProductId;
-    }
-    if (order.onModel === "Tafeta") {
-      return `${item.tafetaMaterialCode || ""} ${item.tafetaGsm || ""}gsm`.trim() || item.tafetaProductId;
-    }
     if (order.onModel === "Ttr") {
       return `${item.ttrType || ""} ${item.ttrWidth || ""}x${item.ttrMtrs || ""}`.trim() || item.ttrProductId;
     }

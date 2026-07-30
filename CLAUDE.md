@@ -52,7 +52,7 @@ All app routes live under `/fairtech/`. Routes are split into sub-router files a
 | `/fairtech/advance` | `routes/acccounting/advance.js` |
 | `/fairtech/employee` | `routes/hr/employee.js` |
 | `/fairtech/client` | `routes/users/clients.js` |
-| `/fairtech/` (tape/pos/tafeta/ttr bindings) | `routes/inventory/*.js` |
+| `/fairtech/` (tape/ttr bindings) | `routes/inventory/*.js` |
 | `/fairtech/tapestock` etc. | `routes/stock/*.js` |
 
 Roles: `proprietor`, `admin`, `hod`, `sales`, `hr`, `employee`, `master`, `operator`. `proprietor` sits above `admin` and is granted access everywhere `admin` is. Access guarded by `requireAuth` and `requireRole([...])` from `middleware/auth.js`.

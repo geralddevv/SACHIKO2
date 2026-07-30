@@ -208,8 +208,6 @@
 
   function getItemType(row) {
     let itemType = "TAPE";
-    if (row.onModel === "PosRoll") itemType = "POS_ROLL";
-    if (row.onModel === "Tafeta") itemType = "TAFETA";
     if (row.onModel === "Ttr") itemType = "TTR";
     if (row.onModel === "Label") itemType = "LABEL";
     return itemType;
@@ -222,14 +220,6 @@
       if (tape.tapePaperCode) return tape.tapePaperCode;
       if (tape.tapeProductId) return String(tape.tapeProductId);
     }
-    if (row.onModel === "PosRoll") {
-      if (tape.posPaperCode) return `${tape.posPaperCode} ${tape.posGsm ?? ""}gsm`.trim();
-      if (tape.posProductId) return String(tape.posProductId);
-    }
-    if (row.onModel === "Tafeta") {
-      if (tape.tafetaMaterialCode) return `${tape.tafetaMaterialCode} ${tape.tafetaGsm ?? ""}gsm`.trim();
-      if (tape.tafetaProductId) return String(tape.tafetaProductId);
-    }
     if (row.onModel === "Ttr") {
       if (tape.ttrType) return tape.ttrType;
       if (tape.ttrProductId) return String(tape.ttrProductId);
@@ -240,26 +230,22 @@
     return "Unknown Item";
   }
 
-  // GSM is only meaningful for Tape, POS Roll and Tafeta rows (TTR/Label have
+  // GSM is only meaningful for Tape rows (TTR/Label have
   // no GSM field at all) — shown as its own column, "-" when not applicable.
   function getItemGsm(row) {
     const tape = row.tapeId;
     if (!tape) return "";
     if (row.onModel === "Tape") return tape.tapeGsm ?? "";
-    if (row.onModel === "PosRoll") return tape.posGsm ?? "";
-    if (row.onModel === "Tafeta") return tape.tafetaGsm ?? "";
     return "";
   }
 
-  // Client GSM is the per-client-binding GSM (clientTapeGsm/clientPosGsm/
-  // clientTafetaGsm on tapeBinding) — distinct from the item's own GSM above.
+  // Client GSM is the per-client-binding GSM (clientTapeGsm
+  // on tapeBinding) — distinct from the item's own GSM above.
   // TTR/Label bindings have no client GSM field.
   function getClientGsm(row) {
     const binding = row.tapeBinding;
     if (!binding) return "";
     if (row.onModel === "Tape") return binding.clientTapeGsm ?? "";
-    if (row.onModel === "PosRoll") return binding.clientPosGsm ?? "";
-    if (row.onModel === "Tafeta") return binding.clientTafetaGsm ?? "";
     return "";
   }
 
@@ -282,7 +268,7 @@
   }
 
   // Per-field Fairtech vs Client comparison for the item bound to this order —
-  // mirrors the item's own /tape|pos|tafeta|ttr/compare/:id page (itemCompare.ejs)
+  // mirrors the item's own /tape|ttr/compare/:id page (itemCompare.ejs)
   // field-for-field, minus the Vendor column (this page never shows vendor data).
   // Fairtech values come from the item spec (row.tapeId); Client values come
   // from the client binding (row.tapeBinding) where one exists, otherwise they
@@ -308,46 +294,6 @@
         { field: "Rate Per Roll", orgValue: "-", clientValue: orDash(binding.tapeRatePerRoll) },
         { field: "Sale Cost", orgValue: "-", clientValue: orDash(binding.tapeSaleCost) },
         { field: "Meters Delivered", orgValue: "-", clientValue: orDash(binding.tapeMtrsDel) },
-        { field: "Binding Status", orgValue: "-", clientValue: orDash(binding.status) },
-      ];
-    }
-    if (row.onModel === "PosRoll") {
-      return [
-        { field: "Paper Code", orgValue: orDash(item.posPaperCode), clientValue: orDash(binding.posClientPaperCode) },
-        { field: "Paper Type", orgValue: orDash(item.posPaperType), clientValue: orDash(item.posPaperType) },
-        { field: "Color", orgValue: orDash(item.posColor), clientValue: orDash(item.posColor) },
-        { field: "GSM", orgValue: orDash(item.posGsm), clientValue: orDash(binding.clientPosGsm) },
-        { field: "Width", orgValue: orDash(item.posWidth), clientValue: orDash(item.posWidth) },
-        { field: "Meters", orgValue: orDash(item.posMtrs), clientValue: orDash(item.posMtrs) },
-        { field: "Core ID", orgValue: orDash(item.posCoreId), clientValue: orDash(item.posCoreId) },
-        { field: "Minimum Qty", orgValue: "-", clientValue: orDash(binding.posMinQty) },
-        { field: "Order Qty", orgValue: "-", clientValue: orDash(binding.posOdrQty) },
-        { field: "Order Frequency", orgValue: "-", clientValue: orDash(binding.posOdrFreq) },
-        { field: "Credit Term", orgValue: "-", clientValue: orDash(binding.posCreditTerm) },
-        { field: "Rate Per Roll", orgValue: "-", clientValue: orDash(binding.posRatePerRoll) },
-        { field: "Sale Cost", orgValue: "-", clientValue: orDash(binding.posSaleCost) },
-        { field: "Meters Delivered", orgValue: "-", clientValue: orDash(binding.posMtrsDel) },
-        { field: "Binding Status", orgValue: "-", clientValue: orDash(binding.status) },
-      ];
-    }
-    if (row.onModel === "Tafeta") {
-      return [
-        { field: "Material Code", orgValue: orDash(item.tafetaMaterialCode), clientValue: orDash(binding.tafetaClientMaterialCode) },
-        { field: "Material Type", orgValue: orDash(item.tafetaMaterialType), clientValue: orDash(binding.tafetaClientMaterialType) },
-        { field: "Color", orgValue: orDash(item.tafetaColor), clientValue: orDash(item.tafetaColor) },
-        { field: "GSM", orgValue: orDash(item.tafetaGsm), clientValue: orDash(binding.clientTafetaGsm) },
-        { field: "Width", orgValue: orDash(item.tafetaWidth), clientValue: orDash(item.tafetaWidth) },
-        { field: "Meters", orgValue: orDash(item.tafetaMtrs), clientValue: orDash(item.tafetaMtrs) },
-        { field: "Core Length", orgValue: orDash(item.tafetaCoreLen), clientValue: orDash(item.tafetaCoreLen) },
-        { field: "Notch", orgValue: orDash(item.tafetaNotch), clientValue: orDash(item.tafetaNotch) },
-        { field: "Core ID", orgValue: orDash(item.tafetaCoreId), clientValue: orDash(item.tafetaCoreId) },
-        { field: "Minimum Qty", orgValue: "-", clientValue: orDash(binding.tafetaMinQty) },
-        { field: "Order Qty", orgValue: "-", clientValue: orDash(binding.tafetaOdrQty) },
-        { field: "Order Frequency", orgValue: "-", clientValue: orDash(binding.tafetaOdrFreq) },
-        { field: "Credit Term", orgValue: "-", clientValue: orDash(binding.tafetaCreditTerm) },
-        { field: "Rate Per Roll", orgValue: "-", clientValue: orDash(binding.tafetaRatePerRoll) },
-        { field: "Sale Cost", orgValue: "-", clientValue: orDash(binding.tafetaSaleCost) },
-        { field: "Meters Delivered", orgValue: "-", clientValue: orDash(binding.tafetaMtrsDel) },
         { field: "Binding Status", orgValue: "-", clientValue: orDash(binding.status) },
       ];
     }
@@ -548,8 +494,6 @@
           const user = row.userId ? row.userId._id : "";
           const item = row.tapeBinding ? row.tapeBinding._id : "";
           let itemType = "TAPE";
-          if (row.onModel === "PosRoll") itemType = "POS_ROLL";
-          if (row.onModel === "Tafeta") itemType = "TAFETA";
           if (row.onModel === "Ttr") itemType = "TTR";
           if (row.onModel === "Label") itemType = "LABEL";
 
@@ -657,8 +601,6 @@
         headerFilterPlaceholder: "Search",
         formatter: (cell) => {
           const val = cell.getValue();
-          if (val === "PosRoll") return "POS Roll";
-          if (val === "Tafeta") return "Tafeta";
           if (val === "Ttr") return "TTR";
           if (val === "Label") return "Label";
           return "Tape";
@@ -818,9 +760,7 @@
           if (!itemId || !model) return val;
 
           let typeSlug = "tape";
-          if (model === "PosRoll") typeSlug = "pos-roll";
-          else if (model === "Tafeta") typeSlug = "tafeta";
-          else if (model === "Ttr") typeSlug = "ttr";
+          if (model === "Ttr") typeSlug = "ttr";
           else if (model === "Label") typeSlug = "label";
 
           const url = `/sachiko/${typeSlug}/profile/${itemId}`;
@@ -913,7 +853,7 @@
   const tableTotal = enrichedOrderData.reduce((sum, row) => sum + (Number(row.valueAmount) || 0), 0);
   const labelTotal = Number(labelTotals.labelTotal) || 0;
   const colorLabelTotal = Number(labelTotals.colorLabelTotal) || 0;
-  // Grand total = this table's pending value (Tape/POS/Tafeta/TTR) + Plain
+  // Grand total = this table's pending value (Tape/TTR) + Plain
   // Labels + Color Labels (those live on their own pending pages, so they're
   // never part of the table rows above).
   const grandTotal = tableTotal + labelTotal + colorLabelTotal;

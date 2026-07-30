@@ -139,8 +139,6 @@
       <select name="itemType" id="item-type" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Select Item Type</option>
         <option value="Tape">Tape</option>
-        <option value="PosRoll">POS Roll</option>
-        <option value="Tafeta">Tafeta</option>
         <option value="Ttr">TTR</option>
       </select>
     </div>
@@ -230,8 +228,6 @@
       <select id="item-type" class="form-control select-tag">
         <option value="" disabled selected hidden>Select Type</option>
         <option value="Tape">Tape</option>
-        <option value="PosRoll">POS Roll</option>
-        <option value="Tafeta">Tafeta</option>
         <option value="Ttr">TTR</option>
       </select>
     </div>
@@ -531,8 +527,6 @@
     const entries = [];
     const push = (l, v) => { if (v !== null && v !== undefined && String(v).trim()) entries.push([l, v]); };
     if (details.type === 'Tape')    { push('Product ID', details.productId); push('Paper Code', details.paperCode); push('GSM', details.gsm); push('Width', details.width); push('Meters', details.mtrs); push('Finish', details.finish); push('Vendor Paper Code', details.vendorPaperCode); push('Vendor GSM', details.vendorGsm); push('Min Qty', details.minQty); }
-    else if (details.type === 'PosRoll') { push('Product ID', details.productId); push('Paper Code', details.paperCode); push('GSM', details.gsm); push('Width', details.width); push('Meters', details.mtrs); push('Vendor Paper Code', details.vendorPaperCode); push('Min Qty', details.minQty); }
-    else if (details.type === 'Tafeta')  { push('Product ID', details.productId); push('Material Code', details.materialCode); push('GSM', details.gsm); push('Width', details.width); push('Meters', details.mtrs); push('Vendor Material Code', details.vendorPaperCode); push('Min Qty', details.minQty); }
     else if (details.type === 'Ttr')     { push('Product ID', details.productId); push('Type', details.ttrType); push('Width', details.width); push('Meters', details.mtrs); push('Color', details.color); push('Ink Face', details.inkFace); push('Min Qty', details.minQty); }
     el.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:4px 8px;">
       ${entries.map(([l,v]) => `<div style="display:grid; grid-template-columns:140px 1fr; gap:6px; padding:4px 6px; border-bottom:1px solid #eef2f7;">
@@ -791,7 +785,7 @@
     }
 
     // type badge colours
-    const typeColors = { Tape:'#0369a1', PosRoll:'#7c3aed', Tafeta:'#065f46', Ttr:'#92400e' };
+    const typeColors = { Tape:'#0369a1', Ttr:'#92400e' };
 
     cart.forEach((item, idx) => {
       const row = document.createElement('div');

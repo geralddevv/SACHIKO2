@@ -543,104 +543,10 @@
                         </div>
                       <% } %>
 
-                      <!-- POS Rolls -->
-                      <% if ((user.posRoll || []).length > 0) { %>
-                        <div class="item-category-group">
-                          <div class="item-category-header">
-                            <span class="item-type-label">POS Rolls</span>
-                            <span class="item-count-badge"><%= user.posRoll.length %></span>
-                          </div>
-                          <table class="inner-spec-table">
-                            <thead>
-                              <tr>
-                                <th style="width: 15%;">Item</th>
-                                <th>GSM</th>
-                                <th>Type</th>
-                                <th>Color</th>
-                                <th>Width</th>
-                                <th>Mtrs</th>
-                                <th>Core</th>
-                                <th>Min</th>
-                                <th>Odr</th>
-                                <th>Freq</th>
-                                <th>Credit</th>
-                                <th>Rate</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <% user.posRoll.forEach(i => { %>
-                                <tr>
-                                  <td class="item-name-cell"><%= i.vendorPosPaperCode %></td>
-                                  <td><%= i.vendorPosGsm || (i.posRollId ? i.posRollId.posGsm : '-') %></td>
-                                  <td><%= i.vendorPosPaperType || (i.posRollId ? i.posRollId.posPaperType : '-') %></td>
-                                  <td><%= i.posRollId ? i.posRollId.posColor : '-' %></td>
-                                  <td><%= i.posRollId ? i.posRollId.posWidth : '-' %></td>
-                                  <td><%= i.posMtrsDel %></td>
-                                  <td><%= i.posRollId ? i.posRollId.posCoreId : '-' %></td>
-                                  <td><%= i.posMinQty %></td>
-                                  <td><%= i.posOdrQty || '-' %></td>
-                                  <td><%= i.posOdrFreq || '-' %></td>
-                                  <td><%= i.posCreditTerm || '-' %></td>
-                                  <td style="font-weight:600;">₹<%= i.posRatePerRoll %></td>
-                                </tr>
-                              <% }) %>
-                            </tbody>
-                          </table>
-                        </div>
-                      <% } %>
-
-                      <!-- Tafeta -->
-                      <% if ((user.tafeta || []).length > 0) { %>
-                        <div class="item-category-group">
-                          <div class="item-category-header">
-                            <span class="item-type-label">Tafeta</span>
-                            <span class="item-count-badge"><%= user.tafeta.length %></span>
-                          </div>
-                          <table class="inner-spec-table">
-                            <thead>
-                              <tr>
-                                <th style="width: 15%;">Item</th>
-                                <th>Type</th>
-                                <th>GSM</th>
-                                <th>Color</th>
-                                <th>Width</th>
-                                <th>Mtrs</th>
-                                <th>Core</th>
-                                <th>Min</th>
-                                <th>Odr</th>
-                                <th>Freq</th>
-                                <th>Credit</th>
-                                <th>Rate</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <% user.tafeta.forEach(i => { %>
-                                <tr>
-                                  <td class="item-name-cell"><%= i.vendorTafetaMaterialCode %></td>
-                                  <td><%= i.vendorTafetaMaterialType || (i.tafetaId ? i.tafetaId.tafetaMaterialType : '-') %></td>
-                                  <td><%= i.vendorTafetaGsm || (i.tafetaId ? i.tafetaId.tafetaGsm : '-') %></td>
-                                  <td><%= i.tafetaId ? i.tafetaId.tafetaColor : '-' %></td>
-                                  <td><%= i.tafetaId ? i.tafetaId.tafetaWidth : '-' %></td>
-                                  <td><%= i.tafetaMtrsDel %></td>
-                                  <td><%= i.tafetaId ? i.tafetaId.tafetaCoreId : '-' %></td>
-                                  <td><%= i.tafetaMinQty || '-' %></td>
-                                  <td><%= i.tafetaOdrQty || '-' %></td>
-                                  <td><%= i.tafetaOdrFreq || '-' %></td>
-                                  <td><%= i.tafetaCreditTerm || '-' %></td>
-                                  <td style="font-weight:600;">₹<%= i.tafetaRatePerRoll %></td>
-                                </tr>
-                              <% }) %>
-                            </tbody>
-                          </table>
-                        </div>
-                      <% } %>
-
                       <% if (
                         (user.label || []).length === 0 &&
                         (user.ttr || []).length === 0 &&
-                        (user.tape || []).length === 0 &&
-                        (user.posRoll || []).length === 0 &&
-                        (user.tafeta || []).length === 0
+                        (user.tape || []).length === 0
                       ) { %>
                         <div style="padding: 15px; color: #94a3b8; font-style: italic; font-size: 13px;">
                           No items associated with this coordinator.

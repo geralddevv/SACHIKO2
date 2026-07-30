@@ -24,7 +24,7 @@
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
   <form
-    action="/sachiko/datasheet/form?_csrf=<%= encodeURIComponent(csrfToken) %>"
+    action="/sachiko/sl/form?_csrf=<%= encodeURIComponent(csrfToken) %>"
     method="POST"
     enctype="multipart/form-data"
     class="needs-validation"
@@ -34,7 +34,7 @@
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
 
     <div class="span-full form-heading">
-      <h1>Product Datasheet</h1>
+      <h1>Product SL</h1>
     </div>
 
     <!-- Product Code -->
@@ -184,7 +184,7 @@
     </div>
 
     <div class="btn-grp span-full">
-      <button type="submit">Save Datasheet</button>
+      <button type="submit">Save SL</button>
     </div>
   </form>
 </div>

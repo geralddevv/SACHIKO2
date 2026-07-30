@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 
-const sachikoDatasheetSchema = new mongoose.Schema(
+const sachikoSLSchema = new mongoose.Schema(
   {
-    datasheetId: { type: String, required: true, unique: true },
+    slId: { type: String, required: true, unique: true },
     productCode: { type: String, required: true, trim: true },
     wordFile: { type: String },
     wordFileOriginalName: { type: String },
@@ -25,10 +25,10 @@ const sachikoDatasheetSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-const SachikoDatasheet = mongoose.model(
-  "SachikoDatasheet",
-  sachikoDatasheetSchema,
-  "datasheets",
+const SachikoSL = mongoose.model(
+  "SachikoSL",
+  sachikoSLSchema,
+  "sls",
 );
 
-export default SachikoDatasheet;
+export default SachikoSL;

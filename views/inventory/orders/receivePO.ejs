@@ -59,7 +59,7 @@
     <!-- Row 1: Purchase Context -->
     <div class="span-five">
       <label>Item Type</label>
-      <input type="text" class="form-control" value="<%= order.onModel === 'PosRoll' ? 'POS Roll' : order.onModel %>" readonly style="background:#f8fafc;" />
+      <input type="text" class="form-control" value="<%= order.onModel %>" readonly style="background:#f8fafc;" />
     </div>
 
     <div class="span-seven">
@@ -108,24 +108,6 @@
             specs.push(["Core Length", d.ttrCoreLength]);
             specs.push(["Notch", d.ttrNotch]);
             specs.push(["Winding", d.ttrWinding]);
-          } else if (order.onModel === "PosRoll") {
-            specs.push(["Paper Code", d.posPaperCode]);
-            specs.push(["Paper Type", d.posPaperType]);
-            specs.push(["GSM", d.posGsm]);
-            specs.push(["Color", d.posColor]);
-            specs.push(["Width", d.posWidth]);
-            specs.push(["Meters", d.posMtrs]);
-            specs.push(["Core ID", d.posCoreId]);
-          } else if (order.onModel === "Tafeta") {
-            specs.push(["Material Code", d.tafetaMaterialCode]);
-            specs.push(["Material Type", d.tafetaMaterialType]);
-            specs.push(["GSM", d.tafetaGsm]);
-            specs.push(["Color", d.tafetaColor]);
-            specs.push(["Width", d.tafetaWidth]);
-            specs.push(["Meters", d.tafetaMtrs]);
-            specs.push(["Core Length", d.tafetaCoreLength]);
-            specs.push(["Notch", d.tafetaNotch]);
-            specs.push(["Core ID", d.tafetaCoreId]);
           }
         %>
 

@@ -104,12 +104,6 @@
     if (row.onModel === "Tape") {
       return `${item.tapePaperCode || ""} ${item.tapeGsm || ""}gsm`.trim() || item.tapeProductId;
     }
-    if (row.onModel === "PosRoll") {
-      return `${item.posPaperCode || ""} ${item.posGsm || ""}gsm`.trim() || item.posProductId;
-    }
-    if (row.onModel === "Tafeta") {
-      return `${item.tafetaMaterialCode || ""} ${item.tafetaGsm || ""}gsm`.trim() || item.tafetaProductId;
-    }
     if (row.onModel === "Ttr") {
       return `${item.ttrType || ""} ${item.ttrWidth || ""}x${item.ttrMtrs || ""}`.trim() || item.ttrProductId;
     }
@@ -183,13 +177,11 @@
         title: "Item Type",
         field: "onModel",
         width: 120,
-        formatter: (cell) => cell.getValue() === "PosRoll" ? "POS Roll" : cell.getValue(),
+        formatter: (cell) => cell.getValue(),
       }, {
         "": "All",
         "Tape": "Tape",
-        "Ttr": "TTR",
-        "PosRoll": "POS Roll",
-        "Tafeta": "Tafeta"
+        "Ttr": "TTR"
       }),
       withTextFilter({
         title: "Item Details",

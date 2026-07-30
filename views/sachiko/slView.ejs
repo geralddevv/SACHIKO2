@@ -19,9 +19,9 @@
   </style>
 
   <div class="indi-head">
-    <h1>Datasheet View</h1>
+    <h1>SL View</h1>
     <div style="display: flex; gap: 10px; align-items: center">
-      <button class="header-action-btn" onclick="window.location.href='/sachiko/datasheet/form'">
+      <button class="header-action-btn" onclick="window.location.href='/sachiko/sl/form'">
         <i class="fa-solid fa-plus" style="margin-right: 4px"></i> New
       </button>
       <div class="download-selector" id="downloadSelector">
@@ -52,7 +52,7 @@
   triggerBtn.addEventListener("click", (e) => { e.stopPropagation(); downloadSelector.classList.toggle("download-selector--active"); });
   document.addEventListener("click", () => downloadSelector.classList.remove("download-selector--active"));
 
-  /* ── Flatten nested datasheet docs for Tabulator ── */
+  /* ── Flatten nested SL docs for Tabulator ── */
   const raw = <%- safeJson(jsonData) %>;
 
   const tableData = raw.map(ds => {
@@ -73,7 +73,7 @@
 
     return {
       _id: String(ds._id),
-      datasheetId: ds.datasheetId || "",
+      slId: ds.slId || "",
       productCode: ds.productCode,
       wordFileOriginalName: ds.wordFileOriginalName || "",
       product,
@@ -97,7 +97,7 @@
     data: tableData,
     height: "100%",
     initialSort: [{ column: "productCode", dir: "asc" }],
-    placeholder: "No datasheets found",
+    placeholder: "No SLs found",
     columns: [
       {
         title: "Actions",
@@ -108,19 +108,19 @@
           const row = cell.getRow().getData();
           return `
             <div style="display:flex;gap:5px;justify-content:center;align-items:center;white-space:nowrap;">
-              <button onclick="viewDatasheet('${row._id}')"
+              <button onclick="viewSL('${row._id}')"
                 style="height:24px;padding:2px 9px;background:#111827;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:3px;font-weight:600;"
                 onmouseover="this.style.background='#374151'" onmouseout="this.style.background='#111827'"
                 title="View">
                 <i class="fa-solid fa-eye"></i>
               </button>
-              <a href="/sachiko/datasheet/edit/${row._id}"
+              <a href="/sachiko/sl/edit/${row._id}"
                 style="height:24px;padding:2px 9px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:3px;font-weight:600;text-decoration:none;"
                 onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'"
                 title="Edit">
                 <i class="fa-solid fa-pencil"></i>
               </a>
-              <button onclick="deleteDatasheet('${row._id}','${row.productCode}')"
+              <button onclick="deleteSL('${row._id}','${row.productCode}')"
                 style="height:24px;padding:2px 9px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:3px;font-weight:600;"
                 onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'"
                 title="Delete">
@@ -148,23 +148,23 @@
       { title: "Word File", field: "wordFile", minWidth: 110, headerFilter: false, hozAlign: "center", headerHozAlign: "center",
         formatter: (cell) => {
           const v = cell.getValue();
-          return v ? `<a href="/sachiko/datasheet/file/${v}" style="color:#044a78;font-weight:600;text-decoration:none;" title="Download file"><i class="fa-solid fa-file-word" style="margin-right:4px;"></i>Download</a>` : `<span style="color:#aaa;">—</span>`;
+          return v ? `<a href="/sachiko/sl/file/${v}" style="color:#044a78;font-weight:600;text-decoration:none;" title="Download file"><i class="fa-solid fa-file-word" style="margin-right:4px;"></i>Download</a>` : `<span style="color:#aaa;">—</span>`;
         }
       },
     ],
   });
 
   document.getElementById("download-pdf").addEventListener("click", () =>
-    table.download("pdf", "sachiko-datasheets.pdf", { orientation: "landscape", title: "Sachiko Datasheets", autoTable: { styles: { fillColor: [4, 74, 120] } } }));
+    table.download("pdf", "sachiko-sl.pdf", { orientation: "landscape", title: "Sachiko SLs", autoTable: { styles: { fillColor: [4, 74, 120] } } }));
   document.getElementById("download-xlsx").addEventListener("click", () =>
-    table.download("xlsx", "sachiko-datasheets.xlsx", { sheetName: "Datasheets" }));
+    table.download("xlsx", "sachiko-sl.xlsx", { sheetName: "SLs" }));
 
   /* ── View Modal ── */
   function esc(v) {
     return String(v ?? "—").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
 
-  window.viewDatasheet = function(id) {
+  window.viewSL = function(id) {
     const ds = raw.find(d => String(d._id) === id);
     if (!ds) return;
     const modal = document.getElementById("ds-view-modal");
@@ -172,7 +172,7 @@
       <div style="background:linear-gradient(135deg,#044a78 0%,#03365a 100%);padding:22px 24px 20px;color:#fff;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
         <div>
           <h2 style="margin:0;font-size:20px;font-weight:700;">${esc(ds.productCode)}</h2>
-          <p style="margin:6px 0 0;font-size:13px;opacity:0.85;">${esc(ds.datasheetId)}</p>
+          <p style="margin:6px 0 0;font-size:13px;opacity:0.85;">${esc(ds.slId)}</p>
         </div>
         <button onclick="document.getElementById('ds-view-modal').style.display='none'"
           style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:700;">
@@ -196,7 +196,7 @@
             <span style="font-size:13px;color:#03365a;font-weight:700;">${esc(r.value)}</span>
           </div>`).join("")}
         ${ds.wordFile ? `
-          <a href="/sachiko/datasheet/file/${esc(ds.wordFile)}"
+          <a href="/sachiko/sl/file/${esc(ds.wordFile)}"
             style="display:inline-flex;align-items:center;gap:6px;margin-top:4px;color:#044a78;font-weight:600;text-decoration:none;font-size:13px;">
             <i class="fa-solid fa-file-word"></i> ${esc(ds.wordFileOriginalName || ds.wordFile)}
           </a>` : ""}
@@ -209,21 +209,21 @@
   });
 
   /* ── Delete ── */
-  window.deleteDatasheet = function(id, code) {
+  window.deleteSL = function(id, code) {
     const dialog = document.getElementById("ds-delete-dialog");
-    document.getElementById("ds-delete-msg").textContent = `Delete datasheet "${code}"? This cannot be undone.`;
+    document.getElementById("ds-delete-msg").textContent = `Delete SL "${code}"? This cannot be undone.`;
     dialog.style.display = "flex";
     document.getElementById("ds-delete-confirm").onclick = async () => {
       dialog.style.display = "none";
       try {
-        const resp = await fetch(`/sachiko/datasheet/${id}`, {
+        const resp = await fetch(`/sachiko/sl/${id}`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
         });
         const data = await resp.json();
         if (data.success) {
           table.deleteRow(table.getRows().find(r => r.getData()._id === id));
-          if (typeof showToast === "function") showToast("Datasheet deleted", "success");
+          if (typeof showToast === "function") showToast("SL deleted", "success");
         } else {
           if (typeof showToast === "function") showToast(data.message || "Delete failed", "error");
         }

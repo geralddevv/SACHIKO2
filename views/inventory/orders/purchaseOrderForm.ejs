@@ -69,8 +69,6 @@
       <select name="itemType" id="item-type" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Select Item Type</option>
         <option value="TAPE">Tape</option>
-        <option value="POS_ROLL">POS Roll</option>
-        <option value="TAFETA">Tafeta</option>
         <option value="TTR">TTR</option>
       </select>
     </div>
@@ -401,14 +399,6 @@
        html += `<div><strong>Finish:</strong> ${details.tapeFinish}</div>`;
        html += `<div><strong>Size:</strong> ${details.tapeWidth}x${details.tapeMtrs}</div>`;
        html += `<div><strong>Vendor Ref:</strong> ${details.vendorPaperCode} / ${details.vendorGsm}gsm</div>`;
-    } else if (type === "POS_ROLL") {
-       html += `<div><strong>POS:</strong> ${details.posPaperCode} ${details.posGsm}gsm</div>`;
-       html += `<div><strong>Size:</strong> ${details.posWidth}x${details.posMtrs}</div>`;
-       html += `<div><strong>Vendor Ref:</strong> ${details.vendorPaperCode} / ${details.vendorGsm}gsm</div>`;
-    } else if (type === "TAFETA") {
-       html += `<div><strong>Taffeta:</strong> ${details.tafetaMaterialCode} ${details.tafetaGsm}gsm</div>`;
-       html += `<div><strong>Size:</strong> ${details.tafetaWidth}x${details.tafetaMtrs}</div>`;
-       html += `<div><strong>Vendor Ref:</strong> ${details.vendorPaperCode}</div>`;
     } else if (type === "TTR") {
        html += `<div><strong>TTR Type:</strong> ${details.ttrType}</div>`;
        html += `<div><strong>Size:</strong> ${details.ttrWidth}x${details.ttrMtrs}</div>`;
@@ -422,7 +412,7 @@
   async function initEditMode() {
     // This part is complex due to nested async loads. 
     // Usually handled by setting values and dispatching events or calling functions sequentially.
-    const itype = orderToEdit.onModel.toUpperCase() === "POSROLL" ? "POS_ROLL" : orderToEdit.onModel.toUpperCase();
+    const itype = orderToEdit.onModel.toUpperCase();
     itemTypeChoices.setChoiceByValue(itype);
     
     await loadVendors(itype);

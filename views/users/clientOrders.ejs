@@ -41,8 +41,6 @@
 
   const ITEM_TYPE_LABELS = {
     Tape: "TAPE",
-    PosRoll: "POS ROLL",
-    Tafeta: "TAFETA",
     Ttr: "TTR",
     Label: "PLAIN LABEL",
     ColorLabel: "COLOR LABEL",
@@ -54,10 +52,6 @@
     switch (row.onModel) {
       case "Tape":
         return item.tapePaperCode || item.tapeProductId || "N/A";
-      case "PosRoll":
-        return item.posPaperCode ? `${item.posPaperCode} ${item.posGsm ?? ""}gsm`.trim() : (item.posProductId || "N/A");
-      case "Tafeta":
-        return item.tafetaMaterialCode ? `${item.tafetaMaterialCode} ${item.tafetaGsm ?? ""}gsm`.trim() : (item.tafetaProductId || "N/A");
       case "Ttr":
         return item.ttrType || item.ttrProductId || "N/A";
       case "Label":
