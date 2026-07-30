@@ -1,13 +1,13 @@
 <% layout('/layout/boilerplate') %>
 <style>
-  .sl-id-success {
+  .label-stock-id-success {
     border: 2px solid #28a745 !important;
     background-color: #f3fff6;
     color: #155724;
     font-weight: 600;
   }
 
-  .sl-id-error {
+  .label-stock-id-error {
     border: 2px solid #dc3545 !important;
     background-color: #fff5f5;
     color: #721c24;
@@ -17,19 +17,19 @@
 
 <!-- The main content -->
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form action="/sachiko/form/sl-binding" method="post" onsubmit="return validateSlBeforeSubmit()" class="needs-validation" autocomplete="off" novalidate>
+  <form action="/sachiko/form/label-stock-binding" method="post" onsubmit="return validateLabelStockBeforeSubmit()" class="needs-validation" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <div class="span-full form-heading">
-      <h1>Client SL</h1>
+      <h1>Client Label Stock</h1>
     </div>
 
     <div class="span-full form-subheading">
       <h1>User Info</h1>
     </div>
 
-    <div id="sl-id-div" class="span-seven">
-      <label for="sl-id">SKU Code</label>
-      <input type="text" id="sl-id" class="form-control" name="skuCode" placeholder="Will appear here" readonly required />
+    <div id="label-stock-id-div" class="span-seven">
+      <label for="label-stock-id">SKU Code</label>
+      <input type="text" id="label-stock-id" class="form-control" name="skuCode" placeholder="Will appear here" readonly required />
     </div>
 
     <div id="client-name-div" class="span-six">
@@ -60,7 +60,7 @@
     </div>
 
     <div class="span-full form-subheading" style="display: flex; justify-content: space-between; align-items: center;">
-      <h1>SL Specifications</h1>
+      <h1>Label Stock Specifications</h1>
       <button type="button" id="reset-specs-btn" style="padding: 4px 12px; border-radius: 4px; background-color: #dc3545; color: white; border: none; cursor: pointer; font-size: 14px;">
         Reset
       </button>
@@ -174,11 +174,11 @@
       </div>
     </div>
 
-    <input type="hidden" name="slId" id="resolved-sl-id">
+    <input type="hidden" name="labelStockId" id="resolved-label-stock-id">
     <input type="hidden" name="userId" id="user-id">
 
     <div class="btn-grp span-full">
-      <button type="submit">Save SL Binding</button>
+      <button type="submit">Save Label Stock Binding</button>
     </div>
   </form>
 </div>
@@ -195,8 +195,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const userContactInput = document.getElementById("user-contact");
   const locationSelect = document.getElementById("client-location");
 
-  const slIdInput = document.getElementById("resolved-sl-id");
-  const slIdDisplay = document.getElementById("sl-id");
+  const labelStockIdInput = document.getElementById("resolved-label-stock-id");
+  const labelStockIdDisplay = document.getElementById("label-stock-id");
 
   const specFields = ["fs-family", "fs-type", "fs-gsm", "fs-micron", "ad-type", "ad-gsm", "rl-type", "rl-color", "rl-gsm"];
 
@@ -302,11 +302,11 @@ document.addEventListener("DOMContentLoaded", () => {
     resetUserFields();
   }
 
-  function resetResolvedSl() {
-    slIdInput.value = "";
-    slIdDisplay.value = "";
+  function resetResolvedLabelStock() {
+    labelStockIdInput.value = "";
+    labelStockIdDisplay.value = "";
     submitBtn.disabled = true;
-    slIdDisplay.classList.remove("sl-id-success", "sl-id-error");
+    labelStockIdDisplay.classList.remove("label-stock-id-success", "label-stock-id-error");
   }
 
   /* ================= SMART FILTER ================= */
@@ -320,7 +320,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     try {
-      const res = await fetch(`/sachiko/form/sl-binding/filter-specs?${params}`);
+      const res = await fetch(`/sachiko/form/label-stock-binding/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -357,7 +357,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (autoSelected.length > 0) {
         await filterSpecs(autoSelected[0]);
-        resolveSl();
+        resolveLabelStock();
       }
     } catch (err) {
       console.error("Filter specs error:", err);
@@ -370,7 +370,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     hardResetUserSelection();
 
-    const res = await fetch(`/sachiko/form/sl-binding/client/${clientName}`);
+    const res = await fetch(`/sachiko/form/label-stock-binding/client/${clientName}`);
     const clientData = await res.json();
     if (!clientData || !clientData.users) return;
 
@@ -426,9 +426,9 @@ document.addEventListener("DOMContentLoaded", () => {
     populateLocationChoices(selectedUser || { userLocation: choice.customProperties?.location || "" });
   });
 
-  /* ================= SL RESOLVE ================= */
-  async function resolveSl() {
-    resetResolvedSl();
+  /* ================= LABEL STOCK RESOLVE ================= */
+  async function resolveLabelStock() {
+    resetResolvedLabelStock();
 
     const values = {};
     for (let id of specFields) {
@@ -440,19 +440,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams();
     specFields.forEach(id => params.set(fieldToKey[id], values[id]));
 
-    const res = await fetch(`/sachiko/form/sl-binding/resolve-sl?${params}`);
+    const res = await fetch(`/sachiko/form/label-stock-binding/resolve-label-stock?${params}`);
 
     if (!res.ok) {
-      slIdDisplay.value = "No matching SL found";
-      slIdDisplay.classList.add("sl-id-error");
+      labelStockIdDisplay.value = "No matching Label Stock found";
+      labelStockIdDisplay.classList.add("label-stock-id-error");
       return;
     }
 
     const data = await res.json();
 
-    slIdInput.value = data.slId;
-    slIdDisplay.value = data.skuCode;
-    slIdDisplay.classList.add("sl-id-success");
+    labelStockIdInput.value = data.labelStockId;
+    labelStockIdDisplay.value = data.skuCode;
+    labelStockIdDisplay.classList.add("label-stock-id-success");
     submitBtn.disabled = false;
   }
 
@@ -460,7 +460,7 @@ document.addEventListener("DOMContentLoaded", () => {
   specFields.forEach(id => {
     document.getElementById(id)?.addEventListener("change", async () => {
       await filterSpecs(id);
-      resolveSl();
+      resolveLabelStock();
     });
   });
 
@@ -474,7 +474,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (specChoices[id]) specChoices[id].setChoiceByValue("");
       });
 
-      resetResolvedSl();
+      resetResolvedLabelStock();
 
       if (typeof clientChoices !== "undefined") {
         clientChoices.setChoiceByValue("");
@@ -510,10 +510,10 @@ function showClientToast(message, isError = true) {
 }
 
 /* ================= FORM GUARD ================= */
-function validateSlBeforeSubmit() {
-  const slId = document.getElementById("resolved-sl-id").value;
-  if (!slId) {
-    showClientToast("Please select a valid SL specification.", true);
+function validateLabelStockBeforeSubmit() {
+  const labelStockId = document.getElementById("resolved-label-stock-id").value;
+  if (!labelStockId) {
+    showClientToast("Please select a valid Label Stock specification.", true);
     return false;
   }
   return true;

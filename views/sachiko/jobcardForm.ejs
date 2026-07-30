@@ -142,17 +142,17 @@
       <label for="productCode">Product Code</label>
       <select id="productCode" name="productCode" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Select product code</option>
-        <% sls.forEach(sl => { %>
+        <% labelStocks.forEach(labelStock => { %>
         <option
-          value="<%= sl.productCode %>"
-          data-fs-type="<%= sl.facestock?.facestockType || '' %>"
-          data-fs-gsm="<%= sl.facestock?.facestockGsm != null ? sl.facestock.facestockGsm + ' GSM' : '' %>"
-          data-fs-mic="<%= sl.facestock?.facestockMicron != null ? sl.facestock.facestockMicron + ' MIC' : '' %>"
-          data-ad-type="<%= sl.adhesive?.adhesiveType || '' %>"
-          data-ad-gsm="<%= sl.adhesive?.adhesiveGsm != null ? sl.adhesive.adhesiveGsm + ' GSM' : '' %>"
-          data-rl-type="<%= sl.releaseLiner?.releaseLinerType || '' %>"
-          data-rl-gsm="<%= sl.releaseLiner?.releaseLinerGsm != null ? sl.releaseLiner.releaseLinerGsm + ' GSM' : '' %>"
-        ><%= sl.productCode %></option>
+          value="<%= labelStock.productCode %>"
+          data-fs-type="<%= labelStock.facestock?.facestockType || '' %>"
+          data-fs-gsm="<%= labelStock.facestock?.facestockGsm != null ? labelStock.facestock.facestockGsm + ' GSM' : '' %>"
+          data-fs-mic="<%= labelStock.facestock?.facestockMicron != null ? labelStock.facestock.facestockMicron + ' MIC' : '' %>"
+          data-ad-type="<%= labelStock.adhesive?.adhesiveType || '' %>"
+          data-ad-gsm="<%= labelStock.adhesive?.adhesiveGsm != null ? labelStock.adhesive.adhesiveGsm + ' GSM' : '' %>"
+          data-rl-type="<%= labelStock.releaseLiner?.releaseLinerType || '' %>"
+          data-rl-gsm="<%= labelStock.releaseLiner?.releaseLinerGsm != null ? labelStock.releaseLiner.releaseLinerGsm + ' GSM' : '' %>"
+        ><%= labelStock.productCode %></option>
         <% }) %>
       </select>
     </div>

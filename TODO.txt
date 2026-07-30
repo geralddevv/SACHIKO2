@@ -5,4 +5,21 @@ datasheet -> sl
 orders before job card
 binding (paper width and sl)
 
-paper re order -> Indent request (IR) in FS
+paper re order -> Indent request (IR) in FS 
+pre close
+full family from fs -> sp
+gsm to micron in product sl
+
+double release, double facestock
+by def dont show the inacive in client list
+
+keep loc and machine in masters tab
+
+sku, client list, rem hr, stock, job card down, purchase last, 
+deckle calc, tape calc, costing calc, label stock calc
+remove task and daybook ()
+
+sales order like paper inward in fs
+family first in paper reorder in fs
+
+add live status in pending orders in fs

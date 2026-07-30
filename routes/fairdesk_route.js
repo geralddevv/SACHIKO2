@@ -14,8 +14,8 @@ import Employee from "../models/hr/employee_model.js";
 import Label from "../models/inventory/labels.js";
 import Tape from "../models/inventory/tape.js";
 import TapeBinding from "../models/inventory/tapeBinding.js";
-import SLBinding from "../models/sachiko/slBinding.js";
-import SachikoSL from "../models/sachiko/sachikoSL.js";
+import LabelStockBinding from "../models/sachiko/labelStockBinding.js";
+import SachikoLabelStock from "../models/sachiko/sachikoLabelStock.js";
 import TapeSalesOrder from "../models/inventory/TapeSalesOrder.js";
 import PurchaseOrder from "../models/inventory/PurchaseOrder.js";
 import SystemId from "../models/system/systemId.js";
@@ -2517,8 +2517,8 @@ router.get("/sales/items/:type/:userId", async (req, res) => {
         populate: { path: "tapeId" },
       })
       .populate({
-        path: "sl",
-        populate: { path: "sl", model: "SachikoSL" },
+        path: "labelStock",
+        populate: { path: "labelStock", model: "SachikoLabelStock" },
       })
       .lean();
 
@@ -2566,12 +2566,12 @@ router.get("/sales/items/:type/:userId", async (req, res) => {
           };
         }),
       );
-    } else if (type === "SL") {
-      const bindings = (user.sl || []).filter((b) => matchesLocation(b.location));
+    } else if (type === "LABEL_STOCK") {
+      const bindings = (user.labelStock || []).filter((b) => matchesLocation(b.location));
       items = bindings.map((binding) => {
-        if (!binding.sl) return null;
+        if (!binding.labelStock) return null;
         if (binding.status === "INACTIVE") return null; // disabled binding: not orderable
-        const s = binding.sl;
+        const s = binding.labelStock;
         return {
           _id: binding._id,
           location: binding.location || "",
@@ -2580,7 +2580,7 @@ router.get("/sales/items/:type/:userId", async (req, res) => {
           rate: null,
           stock: null,
           details: {
-            type: "SL",
+            type: "LABEL_STOCK",
             skuCode: s.skuCode || "",
             productCode: s.productCode || "",
             fsFamily: s.facestock?.facestockFamily || "",
@@ -2617,7 +2617,7 @@ async function describeSalesOrder({ itemTypeLabel, userId, quantity, poNumber, i
 // Submit Sales Order (Create or Update)
 router.post("/sales/order", async (req, res) => {
   try {
-    const { orderId, itemType, userId, itemId, quantity, estimatedDate, remarks, sourceLocation, locationRadio, userLocation, poNumber, poDate, orderRate, submissionToken } = req.body;
+    const { orderId, itemType, userId, itemId, quantity, estimatedDate, remarks, sourceLocation, locationRadio, userLocation, poNumber, poDate, orderRate, submissionToken, paperSize, runningMeters, noOfRolls } = req.body;
     const createdByUser = req.user?.username || "SYSTEM";
 
     if (["TAPE"].includes(itemType) && canonicalizeLocationName(locationRadio) === "ALL") {
@@ -2730,8 +2730,8 @@ router.post("/sales/order", async (req, res) => {
         // Redirect to pending orders
         res.json({ success: true, redirect: "/sachiko/sales/pending" });
       }
-    } else if (itemType === "SL") {
-      const binding = await SLBinding.findById(itemId);
+    } else if (itemType === "LABEL_STOCK") {
+      const binding = await LabelStockBinding.findById(itemId);
       if (!binding) {
         return res.status(400).json({ success: false, message: "Invalid item selected" });
       }
@@ -2739,10 +2739,15 @@ router.post("/sales/order", async (req, res) => {
         return res.status(400).json({ success: false, message: "This item is disabled for the selected client and cannot be ordered." });
       }
 
+      const trimmedPaperSize = String(paperSize || "").trim();
+      if (!trimmedPaperSize || !runningMeters || !noOfRolls) {
+        return res.status(400).json({ success: false, message: "Paper Size, Running Meters, and No of Rolls are required for Label Stock orders." });
+      }
+
       const data = {
         tapeBinding: itemId,
         userId: binding.userId,
-        tapeId: binding.sl,
+        tapeId: binding.labelStock,
         sourceLocation: canonicalizeLocationName(binding.location),
         poDate: poDate ? new Date(poDate) : undefined,
         poNumber,
@@ -2750,16 +2755,19 @@ router.post("/sales/order", async (req, res) => {
         quantity: Number(quantity),
         estimatedDate: new Date(estimatedDate),
         remarks,
+        paperSize: trimmedPaperSize,
+        runningMeters: Number(runningMeters),
+        noOfRolls: Number(noOfRolls),
         status: "PENDING",
-        onModel: "SachikoSL",
-        onBindingModel: "SLBinding",
+        onModel: "SachikoLabelStock",
+        onBindingModel: "LabelStockBinding",
       };
 
       if (orderId) {
         // UPDATE existing order
         await TapeSalesOrder.findByIdAndUpdate(orderId, data);
         res.locals.auditDescription = await describeSalesOrder({
-          itemTypeLabel: "SL", userId: binding.userId,
+          itemTypeLabel: "Label Stock", userId: binding.userId,
           quantity: data.quantity, poNumber: data.poNumber, isUpdate: true,
         });
         req.flash("notification", "Sales order updated successfully!");
@@ -2793,7 +2801,7 @@ router.post("/sales/order", async (req, res) => {
         });
 
         res.locals.auditDescription = await describeSalesOrder({
-          itemTypeLabel: "SL", userId: binding.userId,
+          itemTypeLabel: "Label Stock", userId: binding.userId,
           quantity: data.quantity, poNumber: data.poNumber, isUpdate: false,
         });
         req.flash("notification", "Sales order created successfully!");
@@ -2831,7 +2839,7 @@ router.get("/sales/pending", async (req, res) => {
   try {
     const pendingOrders = await TapeSalesOrder.find({ status: "PENDING" })
       .select(
-        "tapeId tapeBinding userId quantity dispatchedQuantity estimatedDate poDate createdAt sourceLocation poNumber orderRate remarks status onModel onBindingModel",
+        "tapeId tapeBinding userId quantity dispatchedQuantity estimatedDate poDate createdAt sourceLocation poNumber orderRate remarks status onModel onBindingModel paperSize runningMeters noOfRolls",
       )
       .populate({ path: "userId", select: "clientName userName clientType" })
       .populate({
@@ -2841,7 +2849,7 @@ router.get("/sales/pending", async (req, res) => {
         // minus the vendor column) has every spec field it displays.
         // Mongoose ignores field names that don't exist on whichever model a
         // given document's onModel actually resolves to, so Tape and
-        // SachikoSL fields can share one select string safely.
+        // SachikoLabelStock fields can share one select string safely.
         select:
           "tapeProductId tapePaperCode tapePaperType tapeGsm tapeWidth tapeMtrs tapeCoreId tapeFinish tapeAdhesiveGsm productCode skuCode facestock adhesive releaseLiner",
       })
@@ -3434,9 +3442,10 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
         return res.redirect(confirmRedirectUrl);
       }
 
-      // SL has no stock concept at all -- confirming just logs delivery and
-      // updates the dispatched quantity below, skipping every stock read/write.
-      if (order.onModel !== "SachikoSL") {
+      // Label Stock has no stock concept at all -- confirming just logs
+      // delivery and updates the dispatched quantity below, skipping every
+      // stock read/write.
+      if (order.onModel !== "SachikoLabelStock") {
         const tapeObjectId = new mongoose.Types.ObjectId(order.tapeId._id);
         const location = canonicalizeLocationName(sourceLocation || order.sourceLocation);
 
@@ -3579,9 +3588,9 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
       // If it's PENDING but partially dispatched, and we cancel... we should reverse dispatchedQuantity.
       const qtyToReverse = order.dispatchedQuantity > 0 ? order.dispatchedQuantity : order.quantity;
 
-      // SL has no stock to reverse -- just log the cancellation and reset
-      // dispatched qty below, skipping every stock read/write.
-      if (order.onModel !== "SachikoSL") {
+      // Label Stock has no stock to reverse -- just log the cancellation and
+      // reset dispatched qty below, skipping every stock read/write.
+      if (order.onModel !== "SachikoLabelStock") {
         const tapeObjectId = new mongoose.Types.ObjectId(order.tapeId._id);
         const location = order.sourceLocation;
         const tape = order.tapeId;
@@ -4429,10 +4438,10 @@ router.get("/edit/user/:id", async (req, res) => {
 // route for details page.
 router.get("/master/view", async (req, res) => {
   let jsonData = await Username.find()
-    .select("clientName clientType accountHead userName userLocation userDepartment locationDetails label tape sl")
+    .select("clientName clientType accountHead userName userLocation userDepartment locationDetails label tape labelStock")
     .populate({ path: "label", select: "location" })
     .populate({ path: "tape", select: "location" })
-    .populate({ path: "sl", select: "location" })
+    .populate({ path: "labelStock", select: "location" })
     .sort({ clientName: 1, userName: 1 })
     .lean();
 

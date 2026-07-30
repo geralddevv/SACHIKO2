@@ -61,10 +61,10 @@ const userSchema = new mongoose.Schema({
       ref: "TapeBinding",
     },
   ],
-  sl: [
+  labelStock: [
     {
       type: Schema.Types.ObjectId,
-      ref: "SLBinding",
+      ref: "LabelStockBinding",
     },
   ],
 });

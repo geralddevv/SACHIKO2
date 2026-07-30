@@ -6,7 +6,7 @@ import { randomBytes } from "crypto";
 import Client from "../../models/users/client.js";
 import Username from "../../models/users/username.js";
 import Counter from "../../models/system/counter.js";
-import SachikoSL from "../../models/sachiko/sachikoSL.js";
+import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import SachikoJobcard from "../../models/sachiko/sachikoJobcard.js";
 import SachikoSalesOrder from "../../models/sachiko/sachikoSalesOrder.js";
 import { requireAuth } from "../../middleware/auth.js";
@@ -14,12 +14,12 @@ import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiter
 
 const router = express.Router();
 
-/* ================= FILE UPLOAD (SL WORD FILE) ================= */
-const SL_UPLOAD_DIR = path.resolve("uploads/sachiko/sls");
-fs.mkdirSync(SL_UPLOAD_DIR, { recursive: true });
+/* ================= FILE UPLOAD (LABEL STOCK WORD FILE) ================= */
+const LABEL_STOCK_UPLOAD_DIR = path.resolve("uploads/sachiko/labelstocks");
+fs.mkdirSync(LABEL_STOCK_UPLOAD_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, SL_UPLOAD_DIR),
+  destination: (req, file, cb) => cb(null, LABEL_STOCK_UPLOAD_DIR),
   filename: (req, file, cb) => {
     cb(null, randomBytes(16).toString("hex") + path.extname(file.originalname));
   },
@@ -79,20 +79,20 @@ const toArray = (value) => {
 };
 
 // SKU code format mirrors the Tape master's Product ID (routes/fairdesk_route.js
-// formatTapeId): `FS | SL | 000001`. Scanned/incremented directly against the
+// formatTapeId): `FS | LS | 000001`. Scanned/incremented directly against the
 // highest existing skuCode, same as Tape, rather than the shared Counter used
-// by slId/jobCardId/lotNo above -- this is a separate, human-facing SKU, not
-// the row's own generated identifier.
-const formatSkuCode = (n) => `FS | SL | ${String(n).padStart(6, "0")}`;
+// by labelStockId/jobCardId/lotNo above -- this is a separate, human-facing
+// SKU, not the row's own generated identifier.
+const formatSkuCode = (n) => `FS | LS | ${String(n).padStart(6, "0")}`;
 const parseSkuSeq = (skuCode) => {
   const match = String(skuCode || "").match(/(\d{6})$/);
   return match ? Number(match[1]) : 0;
 };
 
 async function previewNextSkuCode() {
-  const latest = await SachikoSL.findOne().sort({ skuCode: -1 }).select("skuCode").lean();
+  const latest = await SachikoLabelStock.findOne().sort({ skuCode: -1 }).select("skuCode").lean();
   let nextSeq = parseSkuSeq(latest?.skuCode) + 1;
-  while (await SachikoSL.exists({ skuCode: formatSkuCode(nextSeq) })) {
+  while (await SachikoLabelStock.exists({ skuCode: formatSkuCode(nextSeq) })) {
     nextSeq += 1;
   }
   return formatSkuCode(nextSeq);
@@ -100,23 +100,23 @@ async function previewNextSkuCode() {
 
 async function generateSkuCode() {
   let nextSeq = parseSkuSeq(
-    (await SachikoSL.findOne().sort({ skuCode: -1 }).select("skuCode").lean())?.skuCode,
+    (await SachikoLabelStock.findOne().sort({ skuCode: -1 }).select("skuCode").lean())?.skuCode,
   ) + 1;
 
   const maxAttempts = 10000;
   for (let i = 0; i < maxAttempts; i++) {
     const candidate = formatSkuCode(nextSeq);
-    if (!(await SachikoSL.exists({ skuCode: candidate }))) return candidate;
+    if (!(await SachikoLabelStock.exists({ skuCode: candidate }))) return candidate;
     nextSeq += 1;
   }
-  throw new Error("Unable to generate unique SL SKU code");
+  throw new Error("Unable to generate unique Label Stock SKU code");
 }
 
-/* ================= SL ================= */
-router.get("/sl/view", async (req, res) => {
-  const jsonData = await SachikoSL.find().sort({ productCode: 1 }).lean();
-  res.render("sachiko/slView.ejs", {
-    title: "SL View",
+/* ================= LABEL STOCK ================= */
+router.get("/label-stock/view", async (req, res) => {
+  const jsonData = await SachikoLabelStock.find().sort({ productCode: 1 }).lean();
+  res.render("sachiko/labelStockView.ejs", {
+    title: "Label Stock View",
     CSS: "tableDisp.css",
     JS: false,
     jsonData,
@@ -124,10 +124,10 @@ router.get("/sl/view", async (req, res) => {
   });
 });
 
-router.get("/sl/form", async (req, res) => {
+router.get("/label-stock/form", async (req, res) => {
   const previewSkuCode = await previewNextSkuCode();
-  res.render("sachiko/slForm.ejs", {
-    title: "SL Form",
+  res.render("sachiko/labelStockForm.ejs", {
+    title: "Label Stock Form",
     CSS: false,
     JS: false,
     previewSkuCode,
@@ -135,9 +135,14 @@ router.get("/sl/form", async (req, res) => {
   });
 });
 
-function buildSLPayload(body) {
-  return {
+// DOUBLE FACESTOCK carries a second facestock+adhesive pair (one release
+// liner); DOUBLE RELEASE carries a second adhesive+release-liner pair (one
+// facestock) -- see the field comments on the SachikoLabelStock schema.
+function buildLabelStockPayload(body) {
+  const rollType = trim(body.rollType) || "NORMAL";
+  const payload = {
     productCode: trim(body.productCode),
+    rollType,
     facestock: {
       facestockFamily: trim(body.facestockFamily),
       facestockType: trim(body.facestockType),
@@ -154,36 +159,61 @@ function buildSLPayload(body) {
       releaseLinerGsm: numOrUndef(body.releaseLinerGsm),
     },
   };
+
+  if (rollType === "DOUBLE FACESTOCK") {
+    payload.facestock2 = {
+      facestockFamily: trim(body.facestockFamily2),
+      facestockType: trim(body.facestockType2),
+      facestockGsm: numOrUndef(body.facestockGsm2),
+      facestockMicron: numOrUndef(body.facestockMicron2),
+    };
+    payload.adhesive2 = {
+      adhesiveType: trim(body.adhesiveType2),
+      adhesiveGsm: numOrUndef(body.adhesiveGsm2),
+    };
+  } else if (rollType === "DOUBLE RELEASE") {
+    payload.adhesive2 = {
+      adhesiveType: trim(body.adhesiveType2),
+      adhesiveGsm: numOrUndef(body.adhesiveGsm2),
+    };
+    payload.releaseLiner2 = {
+      releaseLinerType: trim(body.releaseLinerType2),
+      releaseLinerColor: trim(body.releaseLinerColor2) || "WHITE",
+      releaseLinerGsm: numOrUndef(body.releaseLinerGsm2),
+    };
+  }
+
+  return payload;
 }
 
-router.post("/sl/form", requireAuth, createLimiter, handleWordUpload, async (req, res) => {
+router.post("/label-stock/form", requireAuth, createLimiter, handleWordUpload, async (req, res) => {
   try {
-    const slId = await generateId("sachikoSLId", "SL");
+    const labelStockId = await generateId("sachikoLabelStockId", "LS");
     const skuCode = await generateSkuCode();
-    const payload = buildSLPayload(req.body);
+    const payload = buildLabelStockPayload(req.body);
     if (req.file) {
       payload.wordFile = req.file.filename;
       payload.wordFileOriginalName = req.file.originalname;
     }
-    await SachikoSL.create({ slId, skuCode, ...payload });
-    req.flash("notification", "SL created successfully!");
-    res.redirect("/sachiko/sl/view");
+    await SachikoLabelStock.create({ labelStockId, skuCode, ...payload });
+    req.flash("notification", "Label Stock created successfully!");
+    res.redirect("/sachiko/label-stock/view");
   } catch (err) {
-    console.error("SACHIKO SL CREATE ERROR:", err);
-    if (req.file) fs.existsSync(path.join(SL_UPLOAD_DIR, req.file.filename)) && fs.unlinkSync(path.join(SL_UPLOAD_DIR, req.file.filename));
-    req.flash("notification", "Failed to create SL");
-    res.redirect("/sachiko/sl/form");
+    console.error("SACHIKO LABEL STOCK CREATE ERROR:", err);
+    if (req.file) fs.existsSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename)) && fs.unlinkSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename));
+    req.flash("notification", "Failed to create Label Stock");
+    res.redirect("/sachiko/label-stock/form");
   }
 });
 
-router.get("/sl/edit/:id", async (req, res) => {
-  const ds = await SachikoSL.findById(req.params.id).lean();
+router.get("/label-stock/edit/:id", async (req, res) => {
+  const ds = await SachikoLabelStock.findById(req.params.id).lean();
   if (!ds) {
-    req.flash("notification", "SL not found");
-    return res.redirect("/sachiko/sl/view");
+    req.flash("notification", "Label Stock not found");
+    return res.redirect("/sachiko/label-stock/view");
   }
-  res.render("sachiko/slEdit.ejs", {
-    title: "Edit SL",
+  res.render("sachiko/labelStockEdit.ejs", {
+    title: "Edit Label Stock",
     CSS: false,
     JS: false,
     ds,
@@ -191,60 +221,69 @@ router.get("/sl/edit/:id", async (req, res) => {
   });
 });
 
-router.post("/sl/edit/:id", requireAuth, updateLimiter, handleWordUpload, async (req, res) => {
+router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUpload, async (req, res) => {
   try {
-    const existing = await SachikoSL.findById(req.params.id);
+    const existing = await SachikoLabelStock.findById(req.params.id);
     if (!existing) {
-      req.flash("notification", "SL not found");
-      return res.redirect("/sachiko/sl/view");
+      req.flash("notification", "Label Stock not found");
+      return res.redirect("/sachiko/label-stock/view");
     }
 
-    const payload = buildSLPayload(req.body);
+    const payload = buildLabelStockPayload(req.body);
 
     if (req.file) {
       // Remove the previous file before swapping in the new one.
       if (existing.wordFile) {
-        const oldPath = path.join(SL_UPLOAD_DIR, existing.wordFile);
+        const oldPath = path.join(LABEL_STOCK_UPLOAD_DIR, existing.wordFile);
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
       payload.wordFile = req.file.filename;
       payload.wordFileOriginalName = req.file.originalname;
     }
 
-    await SachikoSL.findByIdAndUpdate(req.params.id, payload);
-    req.flash("notification", "SL updated successfully!");
-    res.redirect("/sachiko/sl/view");
+    // Clear whichever second-layer fields the new rollType no longer calls
+    // for, so switching a roll back to NORMAL (or between the two double
+    // modes) doesn't leave a stale facestock2/adhesive2/releaseLiner2 behind.
+    const unset = {};
+    for (const key of ["facestock2", "adhesive2", "releaseLiner2"]) {
+      if (!(key in payload)) unset[key] = "";
+    }
+
+    const update = Object.keys(unset).length ? { $set: payload, $unset: unset } : payload;
+    await SachikoLabelStock.findByIdAndUpdate(req.params.id, update);
+    req.flash("notification", "Label Stock updated successfully!");
+    res.redirect("/sachiko/label-stock/view");
   } catch (err) {
-    console.error("SACHIKO SL UPDATE ERROR:", err);
-    req.flash("notification", "Failed to update SL");
-    res.redirect(`/sachiko/sl/edit/${req.params.id}`);
+    console.error("SACHIKO LABEL STOCK UPDATE ERROR:", err);
+    req.flash("notification", "Failed to update Label Stock");
+    res.redirect(`/sachiko/label-stock/edit/${req.params.id}`);
   }
 });
 
-router.get("/sl/file/:filename", async (req, res) => {
+router.get("/label-stock/file/:filename", async (req, res) => {
   const filename = path.basename(req.params.filename);
-  const filePath = path.join(SL_UPLOAD_DIR, filename);
+  const filePath = path.join(LABEL_STOCK_UPLOAD_DIR, filename);
   if (!fs.existsSync(filePath)) {
     return res.status(404).send("File not found");
   }
-  const ds = await SachikoSL.findOne({ wordFile: filename }).select("wordFileOriginalName").lean();
+  const ds = await SachikoLabelStock.findOne({ wordFile: filename }).select("wordFileOriginalName").lean();
   res.download(filePath, ds?.wordFileOriginalName || filename);
 });
 
-router.delete("/sl/:id", requireAuth, deleteLimiter, async (req, res) => {
+router.delete("/label-stock/:id", requireAuth, deleteLimiter, async (req, res) => {
   try {
-    const ds = await SachikoSL.findByIdAndDelete(req.params.id);
+    const ds = await SachikoLabelStock.findByIdAndDelete(req.params.id);
     if (!ds) {
-      return res.status(404).json({ success: false, message: "SL not found" });
+      return res.status(404).json({ success: false, message: "Label Stock not found" });
     }
     if (ds.wordFile) {
-      const filePath = path.join(SL_UPLOAD_DIR, ds.wordFile);
+      const filePath = path.join(LABEL_STOCK_UPLOAD_DIR, ds.wordFile);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
     res.json({ success: true });
   } catch (err) {
-    console.error("SACHIKO SL DELETE ERROR:", err);
-    res.status(500).json({ success: false, message: "Failed to delete SL" });
+    console.error("SACHIKO LABEL STOCK DELETE ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to delete Label Stock" });
   }
 });
 
@@ -261,13 +300,13 @@ router.get("/jobcard/view", async (req, res) => {
 });
 
 router.get("/jobcard/form", async (req, res) => {
-  const sls = await SachikoSL.find().sort({ productCode: 1 }).lean();
+  const labelStocks = await SachikoLabelStock.find().sort({ productCode: 1 }).lean();
   const previewLotNo = await previewId("sachikoLotNo", "LOT");
   res.render("sachiko/jobcardForm.ejs", {
     title: "Job Card Form",
     CSS: false,
     JS: false,
-    sls,
+    labelStocks,
     previewLotNo,
     notification: req.flash("notification"),
   });
@@ -356,10 +395,10 @@ router.post("/jobcard/form", requireAuth, createLimiter, async (req, res) => {
 
 /* ================= SALES ORDER ================= */
 router.get("/sales/order", async (req, res) => {
-  const [clients, clientUsers, sls] = await Promise.all([
+  const [clients, clientUsers, labelStocks] = await Promise.all([
     Client.find().select("clientId clientName").sort({ clientName: 1 }).lean(),
     Username.find().select("clientId userName").lean(),
-    SachikoSL.find().sort({ productCode: 1 }).lean(),
+    SachikoLabelStock.find().sort({ productCode: 1 }).lean(),
   ]);
   const previewSalesOrderId = await previewId("sachikoSalesOrderId", "SO");
   res.render("sachiko/salesOrderForm.ejs", {
@@ -368,7 +407,7 @@ router.get("/sales/order", async (req, res) => {
     JS: false,
     clients,
     clientUsers,
-    sls,
+    labelStocks,
     previewSalesOrderId,
     notification: req.flash("notification"),
   });

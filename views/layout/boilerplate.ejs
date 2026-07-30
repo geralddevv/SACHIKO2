@@ -753,9 +753,9 @@
 
           <div class="nav-labels-opt">
             <% if (isAdmin || isHod) { %>
-            <div title="SL View" class="<%= (title === 'SL View' || title === 'SL Form' || title === 'Edit SL') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/sl/view'" style="border-top: 2px solid #ffffff9d;">
+            <div title="Label Stock View" class="<%= (title === 'Label Stock View' || title === 'Label Stock Form' || title === 'Edit Label Stock') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/label-stock/view'" style="border-top: 2px solid #ffffff9d;">
               <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
-              <p class="nav-items-para">SL</p>
+              <p class="nav-items-para">Label Stock</p>
             </div>
             <% } %>
             <div title="Tape View" class="<%= title === 'Tape View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tape/view'" style="<%= (isAdmin || isHod) ? '' : 'border-top: 2px solid #ffffff9d;' %> border-bottom: 2px solid #ffffff9d;">
@@ -792,70 +792,11 @@
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
             </div>
 
-            <div title="Client SL" class="<%= title === 'Client SL' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/sl-binding'" style="border-top: 2px solid #ffffff9d; margin-bottom: 2px;">
+            <div title="Client Label Stock" class="<%= title === 'Client Label Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/label-stock-binding'" style="border-top: 2px solid #ffffff9d; margin-bottom: 2px;">
               <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
-              <p class="nav-items-para">SL</p>
+              <p class="nav-items-para">Label Stock</p>
             </div>
             <div title="Client Tape" class="<%= title === 'Client Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/tape-binding'" style="border-bottom: 2px solid #ffffff9d;">
-              <i class="fa-solid fa-tape" style="color: #ffffff"></i>
-              <p class="nav-items-para">Tape</p>
-            </div>
-          </div>
-        </div>
-        <% } %>
-
-        <% if (canView && !isSales) { %>
-        <div class="nav-opt-wrap">
-          <div title="Vendor" class="view-toggle nav-items">
-            <i class="fa-solid fa-shop" style="color: #ffffff"></i>
-            <p class="nav-items-para">Purchase</p>
-            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
-          </div>
-          
-          <div class="nav-labels-opt">
-            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
-              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">View</p>
-            </div>          
-            <div title="Vendor List" class="<%= title === 'Vendor Details' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/vendor/view'">
-              <i class="fa-solid fa-eye" style="color: #ffffff"></i>
-              <p class="nav-items-para">Vendor List</p>
-            </div>
-            <div title="Vendor Details" class="<%= (title === 'Vendor Coordinator View' || title === 'Edit Vendor Coordinator') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/vendor/coordinator/view'">
-              <i class="fa-solid fa-eye" style="color: #ffffff"></i>
-              <p class="nav-items-para">Vendor Details</p>
-            </div>
-            <div title="Stock View" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/stocks/view'" >
-              <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
-              <p class="nav-items-para">Summary</p>
-            </div>            
-            <div title="Re-Order" class="<%= title === 'Reorder List' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/inventory/reorder'">
-              <i class="fa-solid fa-cart-flatbed" style="color: #ffffff"></i>
-              <p class="nav-items-para">Re-Order</p>
-            </div>
-            <div title="Pending PO" class="<%= title === 'Pending Purchase Orders' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/purchase/pending'">
-              <i class="fa-solid fa-clock-rotate-left" style="color: #ffffff"></i>
-              <p class="nav-items-para">Pending PO</p>
-            </div>
-
-            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
-              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Entry</p>
-            </div>   
-          
-            <div title="Purchase Order" class="<%= title === 'Purchase Order' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/inventory/purchase/order'">
-              <i class="fa-solid fa-file-invoice" style="color: #ffffff"></i>
-              <p class="nav-items-para">Purchase Order</p>
-            </div>
-
-            <div title="Vendor Create" class="<%= title === 'Vendor Form' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor'">
-              <i class="fa-solid fa-shop" style="color: #ffffff"></i>
-              <p class="nav-items-para">Vendor Create</p>
-            </div>
-
-            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
-              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
-            </div>
-
-            <div title="Vendor Tape" class="<%= title === 'Vendor Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor-item-binding/tape'" style="border-bottom: 2px solid #ffffff9d;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
             </div>
@@ -887,38 +828,25 @@
           </div>
 
           <div class="nav-labels-opt">
-            <div title="Samples" class="<%= title === 'Samples' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/samples'" style="border-top: 2px solid #ffffff9d;" >
-              <i class="fa-solid fa-vials" style="color: #ffffff"></i>
-              <p class="nav-items-para">Samples</p>
-            </div>
-
-            <div title="Location Master" class="<%= title === 'Location Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/location'" >
+            <div title="Location Master" class="<%= title === 'Location Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/location'" style="border-top: 2px solid #ffffff9d;" >
               <i class="fa-solid fa-location-dot" style="color: #ffffff"></i>
               <p class="nav-items-para">Location</p>
             </div>
 
-            <div title="Block" class="<%= title === 'Block' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/block'" >
-              <i class="fa-solid fa-cube" style="color: #ffffff"></i>
-              <p class="nav-items-para">Block</p>
-            </div>
-            <div title="Die" class="<%= title === 'Die Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/die/view'" >
-              <i class="fa-solid fa-brush" style="color: #ffffff"></i>
-              <p class="nav-items-para">Die</p>
-            </div>
             <div title="Machine Master" class="<%= title === 'Machine Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/machine'" style="border-bottom: 2px solid #ffffff9d">
               <i class="fa-solid fa-gears" style="color: #ffffff"></i>
               <p class="nav-items-para">Machine</p>
             </div>
           </div>
         </div>
-        
+
         <% } %>
 
 
         <% if ((canAccounting || canHr) && !isSales) { %>
         <%# HR staff have nothing else in the sidebar, so their one group starts
             expanded instead of making them open it on every page. %>
-        <div class="nav-opt-wrap" <%= isHr ? 'data-open-default' : '' %>>
+        <div class="nav-opt-wrap" style="display: none;" <%= isHr ? 'data-open-default' : '' %>>
           <div title="Masters" class="masters-toggle nav-items">
             <i class="fa-solid fa-users-gear" style="color: #ffffff"></i>
             <p class="nav-items-para">HR</p>
@@ -1025,7 +953,7 @@
         <% } %>
 
         <% if (isSales) { %>
-        <div class="nav-opt-wrap">
+        <div class="nav-opt-wrap" style="display: none;">
           <div title="HR" class="view-toggle nav-items">
             <i class="fa-solid fa-users-gear" style="color: #ffffff"></i>
             <p class="nav-items-para">HR</p>
@@ -1039,6 +967,65 @@
           </div>
         </div>
         <% } %>
+
+<% if (canView && !isSales) { %>
+        <div class="nav-opt-wrap">
+          <div title="Vendor" class="view-toggle nav-items">
+            <i class="fa-solid fa-shop" style="color: #ffffff"></i>
+            <p class="nav-items-para">Purchase</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          
+          <div class="nav-labels-opt">
+            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
+              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">View</p>
+            </div>          
+            <div title="Vendor List" class="<%= title === 'Vendor Details' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/vendor/view'">
+              <i class="fa-solid fa-eye" style="color: #ffffff"></i>
+              <p class="nav-items-para">Vendor List</p>
+            </div>
+            <div title="Vendor Details" class="<%= (title === 'Vendor Coordinator View' || title === 'Edit Vendor Coordinator') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/vendor/coordinator/view'">
+              <i class="fa-solid fa-eye" style="color: #ffffff"></i>
+              <p class="nav-items-para">Vendor Details</p>
+            </div>
+            <div title="Stock View" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/stocks/view'" >
+              <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
+              <p class="nav-items-para">Summary</p>
+            </div>            
+            <div title="Re-Order" class="<%= title === 'Reorder List' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/inventory/reorder'">
+              <i class="fa-solid fa-cart-flatbed" style="color: #ffffff"></i>
+              <p class="nav-items-para">Re-Order</p>
+            </div>
+            <div title="Pending PO" class="<%= title === 'Pending Purchase Orders' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/purchase/pending'">
+              <i class="fa-solid fa-clock-rotate-left" style="color: #ffffff"></i>
+              <p class="nav-items-para">Pending PO</p>
+            </div>
+
+            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
+              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Entry</p>
+            </div>   
+          
+            <div title="Purchase Order" class="<%= title === 'Purchase Order' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/inventory/purchase/order'">
+              <i class="fa-solid fa-file-invoice" style="color: #ffffff"></i>
+              <p class="nav-items-para">Purchase Order</p>
+            </div>
+
+            <div title="Vendor Create" class="<%= title === 'Vendor Form' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor'">
+              <i class="fa-solid fa-shop" style="color: #ffffff"></i>
+              <p class="nav-items-para">Vendor Create</p>
+            </div>
+
+            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
+              <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
+            </div>
+
+            <div title="Vendor Tape" class="<%= title === 'Vendor Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor-item-binding/tape'" style="border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-tape" style="color: #ffffff"></i>
+              <p class="nav-items-para">Tape</p>
+            </div>
+          </div>
+        </div>
+        <% } %>        
 
         <% if (isAdmin || isHod) { %>
         <div class="nav-opt-wrap">
@@ -1062,12 +1049,12 @@
 
         <% } %>
 
-        <div title="Company Tasks" class="<%= title === 'Company Tasks' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tasks'">
+        <div title="Company Tasks" style="display: none;" class="<%= title === 'Company Tasks' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tasks'">
           <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
           <p class="nav-items-para">Tasks</p>
         </div>
 
-        <div title="Daybook" class="<%= title === 'Daybook' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/daybook'">
+        <div title="Daybook" style="display: none;" class="<%= title === 'Daybook' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/daybook'">
           <i class="fa-solid fa-book-open" style="color: #ffffff"></i>
           <p class="nav-items-para">Daybook</p>
         </div>

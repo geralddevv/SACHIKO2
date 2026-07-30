@@ -82,7 +82,7 @@
       <select name="itemType" id="item-type" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Select Item Type</option>
         <option value="TAPE">Tape</option>
-        <option value="SL">SL</option>
+        <option value="LABEL_STOCK">Label Stock</option>
       </select>
     </div>
 
@@ -140,17 +140,27 @@
       <input type="text" inputmode="numeric" id="quantity" name="quantity" class="form-control" placeholder="Enter quantity" required />
     </div>
 
-    <div class="span-three" id="no-of-rolls-div" style="display:none;">
-      <label for="no-of-rolls">No of Rolls</label>
-      <input type="text" id="no-of-rolls" class="form-control" placeholder="-" readonly />
+    <div class="span-three" id="paper-size-div" style="display:none;">
+      <label for="paper-size">Paper Size</label>
+      <input type="text" id="paper-size" name="paperSize" class="form-control" placeholder="Enter paper size" />
     </div>
 
-    <div class="span-three">
+    <div class="span-three" id="running-meters-div" style="display:none;">
+      <label for="running-meters">RM</label>
+      <input type="text" inputmode="numeric" id="running-meters" name="runningMeters" class="form-control" placeholder="Enter RM" />
+    </div>
+
+    <div class="span-three" id="no-of-rolls-div" style="display:none;">
+      <label for="no-of-rolls">No of Rolls</label>
+      <input type="text" inputmode="numeric" id="no-of-rolls" name="noOfRolls" class="form-control" placeholder="Enter no of rolls" />
+    </div>
+
+    <div class="span-three" id="item-rate-div">
       <label for="item-rate">Rate</label>
       <input type="text" id="item-rate" class="form-control" placeholder="Rate" readonly />
     </div>
 
-    <div class="span-three">
+    <div class="span-three" id="order-rate-div">
       <label for="order-rate">Curr Rate</label>
       <input type="text" id="order-rate" name="orderRate" class="form-control" placeholder="Enter current rate" inputmode="decimal" />
     </div>
@@ -570,7 +580,7 @@
     const bindingModel = String(order?.onBindingModel || "").toUpperCase();
 
     if (model === "TAPE" || bindingModel.includes("TAPEBINDING")) return "TAPE";
-    if (model === "SACHIKOSL" || bindingModel.includes("SLBINDING")) return "SL";
+    if (model === "SACHIKOLABELSTOCK" || bindingModel.includes("LABELSTOCKBINDING")) return "LABEL_STOCK";
 
     return "";
   }
@@ -962,18 +972,33 @@
   // table can be re-rendered when the quantity changes.
   let currentSelectedDetails = null;
 
-  // "No of Rolls" was Label/Color Label-only and neither Tape nor SL uses it,
-  // so Remarks always takes the full span.
+  // Paper Size/Running Meters/No of Rolls (span 3 each) only show for Label
+  // Stock items; when hidden, Remarks grows to fill the freed columns so the
+  // row still totals 32 instead of leaving a trailing gap.
   function syncRemarksWidth() {
     const remarksWrap = document.getElementById("remarks-wrap");
     if (!remarksWrap) return;
-    remarksWrap.style.gridColumn = "span 10";
+    const labelStockFieldsVisible = document.getElementById("no-of-rolls-div")?.style.display !== "none";
+    remarksWrap.style.gridColumn = labelStockFieldsVisible ? "span 7" : "span 10";
+  }
+
+  // Show Paper Size/Running Meters/No of Rolls only for Label Stock (they
+  // have no rate concept, so Rate/Curr Rate swap out to make room).
+  function updateLabelStockFieldsVisibility() {
+    const isLabelStock = itemTypeSelect.value === "LABEL_STOCK";
+    ["paper-size-div", "running-meters-div", "no-of-rolls-div"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = isLabelStock ? "" : "none";
+    });
+    ["item-rate-div", "order-rate-div"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = isLabelStock ? "none" : "";
+    });
+    syncRemarksWidth();
   }
 
   function renderSelectedItemDetailsTable() {
     const detailsBox = document.getElementById("selected-item-details");
-    const rollsDiv = document.getElementById("no-of-rolls-div");
-    if (rollsDiv) rollsDiv.style.display = "none";
     if (!currentSelectedDetails) {
       detailsBox.style.display = "none";
       detailsBox.innerHTML = "";
@@ -1017,7 +1042,7 @@
       pushIf("Meters", d.mtrs);
       pushIf("Core ID", d.coreId);
       pushIf("Finish", d.finish);
-    } else if (type === "SL") {
+    } else if (type === "LABEL_STOCK") {
       pushIf("SKU Code", d.skuCode);
       pushIf("Product Code", d.productCode);
       pushIf("Facestock Family", d.fsFamily);
@@ -1046,12 +1071,13 @@
     sourceLocationInput.value = "";
     hideStockWarning();
 
-    // SL has no real stock model -- but still show the same stock-location
-    // bar Tape uses when it has no stock data yet: every known location as a
-    // selectable radio (not locked to just the binding's own one), Total/
-    // Booked/Balance shown as "-". The bound item's own location is
-    // pre-checked, but the person can still pick a different one.
-    if (itemTypeSelect.value === "SL") {
+    // Label Stock has no real stock model -- but still show the same
+    // stock-location bar Tape uses when it has no stock data yet: every
+    // known location as a selectable radio (not locked to just the
+    // binding's own one), Total/Booked/Balance shown as "-". The bound
+    // item's own location is pre-checked, but the person can still pick a
+    // different one.
+    if (itemTypeSelect.value === "LABEL_STOCK") {
       if (selectedOption && selectedOption.customProperties) {
         try {
           currentSelectedDetails = JSON.parse(selectedOption.customProperties.details || "{}");
@@ -1108,7 +1134,7 @@
 
         syncSourceLocation(itemLocation);
       } catch (e) {
-        console.error("Failed to build SL location display", e);
+        console.error("Failed to build Label Stock location display", e);
       }
 
       return;
@@ -1394,6 +1420,7 @@
   // 1. Item Type → filter clients, reset everything downstream
   itemTypeSelect.addEventListener("change", () => {
     const itemType = itemTypeSelect.value;
+    updateLabelStockFieldsVisibility();
     if (itemType) loadClients(itemType);
   });
 
@@ -1624,8 +1651,8 @@
     }
 
     const dispatchQty = confirmMode ? (parseInt(confirmQuantityInput?.value) || 0) : qty;
-    // Only Tape has physical stock (matches the backend's onModel !== "SachikoSL"
-    // bypass in POST /sales/order/status) — skip the physical-stock check for SL.
+    // Only Tape has physical stock (matches the backend's onModel !== "SachikoLabelStock"
+    // bypass in POST /sales/order/status) — skip the physical-stock check for Label Stock.
     if (confirmMode && itemType === "TAPE") {
       const confirmLocation = normalizeLocationName(sourceLocationInput.value || currentSourceLocation || selectedLocation || selectedRadio?.value || "");
       // Validate against physical stock (qty) instead of available balance during dispatch
@@ -1634,6 +1661,18 @@
         showToast("cannot dispatch, not enough stocks", "error");
         setSubmittingState(false);
         return;
+      }
+    }
+
+    // Label Stock orders need Paper Size, RM, and No of Rolls filled in.
+    if (itemType === "LABEL_STOCK") {
+      const paperSizeVal = document.getElementById("paper-size")?.value.trim();
+      const runningMetersVal = document.getElementById("running-meters")?.value;
+      const noOfRollsVal = document.getElementById("no-of-rolls")?.value;
+      if (!paperSizeVal || !runningMetersVal || !noOfRollsVal) {
+        showToast("Paper Size, RM, and No of Rolls are required for Label Stock orders.", "error");
+        setSubmittingState(false);
+        return false;
       }
     }
 
@@ -1764,6 +1803,7 @@
     if (type) {
       console.log(`DEBUG: Setting type ${type}`);
       setChoiceValue(itemTypeChoices, itemTypeSelect, type);
+      updateLabelStockFieldsVisibility();
       await loadClients(type, client); // Pass client here to ensure it's not filtered out
     }
 
@@ -1803,6 +1843,10 @@
       
       if (orderToEdit.quantity) { quantityInput.value = formatQtyWithCommas(orderToEdit.quantity); renderSelectedItemDetailsTable(); }
       if (orderToEdit.remarks) remarksInput.value = orderToEdit.remarks;
+
+      if (orderToEdit.paperSize) document.getElementById("paper-size").value = orderToEdit.paperSize;
+      if (orderToEdit.runningMeters != null) document.getElementById("running-meters").value = orderToEdit.runningMeters;
+      if (orderToEdit.noOfRolls != null) document.getElementById("no-of-rolls").value = orderToEdit.noOfRolls;
       
       if (orderToEdit.estimatedDate) {
         const d = new Date(orderToEdit.estimatedDate);
@@ -1825,6 +1869,7 @@
       if (client) {
          // 1. Set Client & Type
          if (type) itemTypeChoices.setChoiceByValue(type);
+         updateLabelStockFieldsVisibility();
          clientChoices.setChoiceByValue(client);
          
          // 2. Set User (Manually create option)
@@ -1843,9 +1888,9 @@
 
          // 3. Set Item (Manually create option with injected stock)
          let tapeName = "Item";
-         // SL orders reference a SachikoSL doc, which carries its own
-         // `productCode` field (Tape uses tapePaperCode/tapeGsm instead) —
-         // a reliable discriminator.
+         // Label Stock orders reference a SachikoLabelStock doc, which carries
+         // its own `productCode` field (Tape uses tapePaperCode/tapeGsm
+         // instead) — a reliable discriminator.
          const t = orderToEdit.tapeId || null;
          if (t) {
             if (t.tapePaperCode) tapeName = t.tapePaperCode + " " + t.tapeGsm + "gsm";
@@ -1866,9 +1911,9 @@
              detailsObj.adhesiveGsm = t.tapeAdhesiveGsm || "";
              detailsObj.minQty = t.tapeMinQty || "";
 
-             // SL docs carry their own spec fields directly on `t` — there's
-             // no separate commercial binding doc for these (SLBinding only
-             // has location/status).
+             // Label Stock docs carry their own spec fields directly on `t` —
+             // there's no separate commercial binding doc for these
+             // (LabelStockBinding only has location/status).
              if (t.productCode) {
                detailsObj.skuCode = t.skuCode || "";
                detailsObj.productCode = t.productCode || "";
@@ -1955,6 +2000,9 @@
          }
          if (orderToEdit.quantity) { quantityInput.value = formatQtyWithCommas(orderToEdit.quantity); renderSelectedItemDetailsTable(); }
          if (orderToEdit.remarks) remarksInput.value = orderToEdit.remarks;
+         if (orderToEdit.paperSize) document.getElementById("paper-size").value = orderToEdit.paperSize;
+         if (orderToEdit.runningMeters != null) document.getElementById("running-meters").value = orderToEdit.runningMeters;
+         if (orderToEdit.noOfRolls != null) document.getElementById("no-of-rolls").value = orderToEdit.noOfRolls;
          if (orderToEdit.estimatedDate) {
             const d = new Date(orderToEdit.estimatedDate);
             const yyyy = d.getFullYear();

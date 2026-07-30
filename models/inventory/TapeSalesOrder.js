@@ -6,7 +6,7 @@ const tapeSalesOrderSchema = new mongoose.Schema(
     onBindingModel: {
       type: String,
       required: true,
-      enum: ["TapeBinding", "TtrBinding", "LabelBinding", "Label", "SLBinding"],
+      enum: ["TapeBinding", "TtrBinding", "LabelBinding", "Label", "LabelStockBinding"],
       default: "TapeBinding",
     },
     tapeBinding: {
@@ -26,7 +26,7 @@ const tapeSalesOrderSchema = new mongoose.Schema(
     onModel: {
       type: String,
       required: true,
-      enum: ["Tape", "Ttr", "Label", "SachikoSL"],
+      enum: ["Tape", "Ttr", "Label", "SachikoLabelStock"],
       default: "Tape",
     },
     tapeId: {
@@ -83,6 +83,19 @@ const tapeSalesOrderSchema = new mongoose.Schema(
     remarks: {
       type: String,
       trim: true,
+    },
+
+    // Label Stock-only order details -- no equivalent for Tape (which tracks
+    // its own width/mtrs on the item master and physical stock separately).
+    paperSize: {
+      type: String,
+      trim: true,
+    },
+    runningMeters: {
+      type: Number,
+    },
+    noOfRolls: {
+      type: Number,
     },
 
     /* ================= AUDIT ================= */

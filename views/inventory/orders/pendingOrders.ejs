@@ -208,7 +208,7 @@
 
   function getItemType(row) {
     let itemType = "TAPE";
-    if (row.onModel === "SachikoSL") itemType = "SL";
+    if (row.onModel === "SachikoLabelStock") itemType = "LABEL_STOCK";
     return itemType;
   }
 
@@ -219,7 +219,7 @@
       if (tape.tapePaperCode) return tape.tapePaperCode;
       if (tape.tapeProductId) return String(tape.tapeProductId);
     }
-    if (row.onModel === "SachikoSL") {
+    if (row.onModel === "SachikoLabelStock") {
       if (tape.productCode) return `${tape.productCode} (${tape.skuCode || ""})`;
     }
     return "Unknown Item";
@@ -289,7 +289,7 @@
         { field: "Binding Status", orgValue: "-", clientValue: orDash(binding.status) },
       ];
     }
-    if (row.onModel === "SachikoSL") {
+    if (row.onModel === "SachikoLabelStock") {
       return [
         { field: "SKU Code", orgValue: orDash(item.skuCode), clientValue: orDash(item.skuCode) },
         { field: "Product Code", orgValue: orDash(item.productCode), clientValue: orDash(item.productCode) },
@@ -481,7 +481,7 @@
           const user = row.userId ? row.userId._id : "";
           const item = row.tapeBinding ? row.tapeBinding._id : "";
           let itemType = "TAPE";
-          if (row.onModel === "SachikoSL") itemType = "SL";
+          if (row.onModel === "SachikoLabelStock") itemType = "LABEL_STOCK";
 
           const confirmUrl = `/sachiko/sales/order/confirm?orderId=${row._id}&type=${itemType}&client=${encodeURIComponent(client)}&user=${user}&item=${item}`;
           const editUrl = `/sachiko/sales/order?orderId=${row._id}&type=${itemType}&client=${encodeURIComponent(client)}&user=${user}&item=${item}`;
@@ -587,7 +587,7 @@
         headerFilterPlaceholder: "Search",
         formatter: (cell) => {
           const val = cell.getValue();
-          if (val === "SachikoSL") return "SL";
+          if (val === "SachikoLabelStock") return "Label Stock";
           return "Tape";
         },
       },
@@ -742,8 +742,8 @@
           const itemId = row.tapeId?._id || row.tapeId;
           const model = row.onModel;
 
-          // SL has no stock concept -- no profile link, no stock coloring.
-          if (model === "SachikoSL") return "-";
+          // Label Stock has no stock concept -- no profile link, no stock coloring.
+          if (model === "SachikoLabelStock") return "-";
 
           if (!itemId || !model) return val;
 

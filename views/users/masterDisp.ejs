@@ -191,7 +191,7 @@
           ...user,
           userLocation: loc,
           tapeCount: countAtLoc(user.tape, loc),
-          slCount: countAtLoc(user.sl, loc),
+          labelStockCount: countAtLoc(user.labelStock, loc),
           dispatchType: user.SelfDispatch ? "Self Dispatch" : "Transport",
         });
       });
@@ -308,9 +308,9 @@
             },
           }),
           withTextFilter({
-            title: "SL",
-            field: "slCount",
-            width: 80,
+            title: "Label Stock",
+            field: "labelStockCount",
+            width: 100,
             widthGrow: 0,
             widthShrink: 0,
             hozAlign: "center",
@@ -319,12 +319,12 @@
             cssClass: "col-count-center",
             formatter: (cell) => {
               const row = cell.getRow().getData();
-              if (!row.slCount) return "";
-              return `<span style="cursor:pointer;text-decoration:underline;">${row.slCount}</span>`;
+              if (!row.labelStockCount) return "";
+              return `<span style="cursor:pointer;text-decoration:underline;">${row.labelStockCount}</span>`;
             },
             cellClick: (e, cell) => {
               const row = cell.getRow().getData();
-              window.location.href = `/sachiko/sl-binding/view/${row._id}`;
+              window.location.href = `/sachiko/label-stock-binding/view/${row._id}`;
             },
           }),
         ],

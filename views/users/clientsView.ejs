@@ -62,6 +62,11 @@
           <div class="download-selector__option" id="download-xlsx"><i class="fas fa-file-excel"></i> Excel</div>
         </div>
       </div>
+
+      <label class="header-action-btn" style="cursor: pointer; gap: 6px;">
+        <input type="checkbox" id="showInactiveToggle" style="margin: 0;" />
+        Show Inactive
+      </label>
     </div>
   </div>
 
@@ -308,6 +313,23 @@
         },
       }),
     ],
+  });
+
+  /* ===== Hide inactive clients by default ===== */
+  function hideInactiveFilter(data) {
+    return normalizeStatus(data.clientStatus) !== "INACTIVE";
+  }
+
+  table.on("tableBuilt", () => {
+    table.addFilter(hideInactiveFilter);
+  });
+
+  document.getElementById("showInactiveToggle").addEventListener("change", (e) => {
+    if (e.target.checked) {
+      table.removeFilter(hideInactiveFilter);
+    } else {
+      table.addFilter(hideInactiveFilter);
+    }
   });
 
   /* ===== POPUP LOGIC ===== */

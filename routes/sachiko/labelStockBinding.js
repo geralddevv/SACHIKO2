@@ -1,0 +1,335 @@
+import express from "express";
+import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
+import LabelStockBinding from "../../models/sachiko/labelStockBinding.js";
+import Client from "../../models/users/client.js";
+import Username from "../../models/users/username.js";
+import { requireAuth } from "../../middleware/auth.js";
+import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
+import { getUserLocationNames } from "../../utils/locations.js";
+
+const router = express.Router();
+
+// Flat field id (used by the form/JS) -> the SachikoLabelStock document path it matches.
+const SPEC_FIELDS = {
+  fsFamily: "facestock.facestockFamily",
+  fsType: "facestock.facestockType",
+  fsGsm: "facestock.facestockGsm",
+  fsMicron: "facestock.facestockMicron",
+  adType: "adhesive.adhesiveType",
+  adGsm: "adhesive.adhesiveGsm",
+  rlType: "releaseLiner.releaseLinerType",
+  rlColor: "releaseLiner.releaseLinerColor",
+  rlGsm: "releaseLiner.releaseLinerGsm",
+};
+
+// Tolerate a value coming in as either a string or a number (GSM/Micron are
+// stored as Numbers on SachikoLabelStock, but query params always arrive as strings).
+const flex = (val) => {
+  if (!val && val !== 0) return val;
+  const arr = [val];
+  if (typeof val === "string") {
+    const t = val.trim();
+    if (t !== val) arr.push(t);
+    const n = Number(t);
+    if (t !== "" && !isNaN(n)) arr.push(n);
+  } else {
+    arr.push(String(val));
+  }
+  return { $in: arr };
+};
+
+/* GET : Load Label Stock Binding Form */
+router.get("/form/label-stock-binding", async (req, res) => {
+  try {
+    const [clients, fsFamilies, fsTypes, fsGsms, fsMicrons, adTypes, adGsms, rlTypes, rlColors, rlGsms] = await Promise.all([
+      Client.distinct("clientName"),
+      SachikoLabelStock.distinct("facestock.facestockFamily"),
+      SachikoLabelStock.distinct("facestock.facestockType"),
+      SachikoLabelStock.distinct("facestock.facestockGsm"),
+      SachikoLabelStock.distinct("facestock.facestockMicron"),
+      SachikoLabelStock.distinct("adhesive.adhesiveType"),
+      SachikoLabelStock.distinct("adhesive.adhesiveGsm"),
+      SachikoLabelStock.distinct("releaseLiner.releaseLinerType"),
+      SachikoLabelStock.distinct("releaseLiner.releaseLinerColor"),
+      SachikoLabelStock.distinct("releaseLiner.releaseLinerGsm"),
+    ]);
+
+    res.render("sachiko/labelStockBindingForm.ejs", {
+      title: "Client Label Stock",
+      clients,
+      CSS: false,
+      JS: false,
+      notification: req.flash("notification"),
+      fsFamilies,
+      fsTypes,
+      fsGsms,
+      fsMicrons,
+      adTypes,
+      adGsms,
+      rlTypes,
+      rlColors,
+      rlGsms,
+    });
+  } catch (err) {
+    console.error(err);
+    req.flash("notification", "Failed to load Label Stock Binding");
+    res.redirect(req.get("Referrer") || "/");
+  }
+});
+
+/* POST : Save Label Stock Binding */
+router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req, res) => {
+  try {
+    const { userId, labelStockId } = req.body;
+    const location = String(req.body.location || "").trim();
+
+    const user = await Username.findById(userId);
+    if (!user) {
+      return res.status(400).json({ success: false, message: "Invalid user selected" });
+    }
+
+    if (!location) {
+      return res.status(400).json({ success: false, message: "Please select a location" });
+    }
+
+    if (!labelStockId) {
+      return res.status(400).json({ success: false, message: "Please resolve a valid Label Stock before saving" });
+    }
+
+    const existingBinding = await LabelStockBinding.exists({ userId, labelStock: labelStockId, location });
+    if (existingBinding) {
+      return res.status(400).json({ success: false, message: "This Label Stock is already bound to this user at this location." });
+    }
+
+    const binding = await LabelStockBinding.create({ labelStock: labelStockId, userId, location });
+
+    user.labelStock.push(binding._id);
+    await user.save();
+
+    res.locals.auditDescription = `Created Label Stock binding for "${user.userName}"`;
+    req.flash("notification", "Label Stock binding created successfully!");
+    res.json({ success: true, redirect: "/sachiko/client/details/" + userId });
+  } catch (err) {
+    console.error("LABEL STOCK BINDING ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to create Label Stock binding." });
+  }
+});
+
+/* GET : Display a client's bound Label Stocks */
+router.get("/label-stock-binding/view/:id", async (req, res) => {
+  try {
+    const user = await Username.findById(req.params.id)
+      .populate({ path: "labelStock", populate: { path: "labelStock", model: "SachikoLabelStock" } })
+      .lean();
+
+    if (!user) {
+      req.flash("notification", "User not found");
+      return res.redirect(req.get("Referrer") || "/");
+    }
+
+    res.render("sachiko/labelStockBindingDisp.ejs", {
+      jsonData: user.labelStock || [],
+      userId: String(user._id),
+      clientName: user.clientName || "",
+      CSS: "tableDisp.css",
+      JS: false,
+      title: "Label Stock Binding Display",
+      notification: req.flash("notification"),
+    });
+  } catch (err) {
+    console.error("LABEL STOCK BINDING VIEW ERROR:", err);
+    res.redirect(req.get("Referrer") || "/");
+  }
+});
+
+/* POST : Delete a Label Stock binding */
+router.post("/label-stock-binding/delete/:id", requireAuth, deleteLimiter, async (req, res) => {
+  try {
+    const binding = await LabelStockBinding.findById(req.params.id).select("userId").lean();
+    if (!binding) {
+      req.flash("notification", "Label Stock binding not found");
+      return res.redirect(req.get("Referrer") || "/");
+    }
+
+    await LabelStockBinding.deleteOne({ _id: req.params.id });
+    await Username.updateOne({ _id: binding.userId }, { $pull: { labelStock: req.params.id } });
+
+    res.locals.auditDescription = `Deleted Label Stock binding for user ${binding.userId}`;
+    req.flash("notification", "Label Stock binding removed successfully!");
+    return res.redirect(`/sachiko/label-stock-binding/view/${binding.userId}`);
+  } catch (err) {
+    console.error("LABEL STOCK BINDING DELETE ERROR:", err);
+    req.flash("notification", "Failed to remove Label Stock binding");
+    return res.redirect("back");
+  }
+});
+
+/* GET : Load Label Stock Binding Edit Form */
+router.get("/label-stock-binding/edit/:id", async (req, res) => {
+  try {
+    const binding = await LabelStockBinding.findById(req.params.id).populate("labelStock").populate("userId");
+    if (!binding) {
+      req.flash("notification", "Label Stock binding not found");
+      return res.redirect(req.get("Referrer") || "/");
+    }
+
+    const [fsFamilies, fsTypes, fsGsms, fsMicrons, adTypes, adGsms, rlTypes, rlColors, rlGsms] = await Promise.all([
+      SachikoLabelStock.distinct("facestock.facestockFamily"),
+      SachikoLabelStock.distinct("facestock.facestockType"),
+      SachikoLabelStock.distinct("facestock.facestockGsm"),
+      SachikoLabelStock.distinct("facestock.facestockMicron"),
+      SachikoLabelStock.distinct("adhesive.adhesiveType"),
+      SachikoLabelStock.distinct("adhesive.adhesiveGsm"),
+      SachikoLabelStock.distinct("releaseLiner.releaseLinerType"),
+      SachikoLabelStock.distinct("releaseLiner.releaseLinerColor"),
+      SachikoLabelStock.distinct("releaseLiner.releaseLinerGsm"),
+    ]);
+
+    res.render("sachiko/labelStockBindingEdit.ejs", {
+      title: "Edit Label Stock Binding",
+      binding,
+      userLocations: getUserLocationNames(binding.userId, binding.location),
+      fsFamilies, fsTypes, fsGsms, fsMicrons, adTypes, adGsms, rlTypes, rlColors, rlGsms,
+      CSS: false,
+      JS: false,
+      notification: req.flash("notification"),
+    });
+  } catch (err) {
+    console.error("LABEL STOCK BINDING EDIT GET ERROR:", err);
+    req.flash("notification", "Failed to load Label Stock Binding Edit");
+    res.redirect(req.get("Referrer") || "/");
+  }
+});
+
+/* POST : Update Label Stock Binding */
+router.post("/label-stock-binding/edit/:id", requireAuth, updateLimiter, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { labelStockId: newLabelStock } = req.body;
+
+    const binding = await LabelStockBinding.findById(id);
+    if (!binding) {
+      req.flash("notification", "Label Stock binding not found");
+      return res.redirect(req.get("Referrer") || "/");
+    }
+
+    const location = String(req.body.location || "").trim() || binding.location;
+    if (!location) {
+      req.flash("notification", "Please select a location");
+      return res.redirect(req.get("Referrer") || "/");
+    }
+
+    const targetLabelStock = newLabelStock && /^[a-f\d]{24}$/i.test(newLabelStock) ? newLabelStock : binding.labelStock;
+
+    const duplicate = await LabelStockBinding.exists({
+      _id: { $ne: id },
+      userId: binding.userId,
+      labelStock: targetLabelStock,
+      location,
+    });
+    if (duplicate) {
+      req.flash("notification", "This Label Stock is already bound to this user at this location.");
+      return res.redirect(req.get("Referrer") || "/");
+    }
+
+    binding.labelStock = targetLabelStock;
+    binding.location = location;
+    await binding.save();
+
+    res.locals.auditDescription = `Updated Label Stock binding for user ${binding.userId}`;
+    req.flash("notification", "Label Stock binding updated successfully!");
+    res.redirect(`/sachiko/label-stock-binding/view/${binding.userId}`);
+  } catch (err) {
+    console.error("LABEL STOCK BINDING EDIT POST ERROR:", err);
+    req.flash("notification", "Failed to update Label Stock binding");
+    res.redirect(req.get("Referrer") || "/");
+  }
+});
+
+router.post("/label-stock-binding/set-inactive/:id", requireAuth, updateLimiter, async (req, res) => {
+  try {
+    const binding = await LabelStockBinding.findByIdAndUpdate(req.params.id, { status: "INACTIVE" }, { new: false });
+    if (!binding) return res.status(404).json({ success: false, message: "Not found" });
+    res.locals.auditDescription = `Set Label Stock binding "${binding._id}" inactive`;
+    res.json({ success: true });
+  } catch (err) {
+    console.error("LABEL STOCK BINDING SET INACTIVE ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+router.post("/label-stock-binding/set-active/:id", requireAuth, updateLimiter, async (req, res) => {
+  try {
+    const binding = await LabelStockBinding.findByIdAndUpdate(req.params.id, { status: "ACTIVE" }, { new: false });
+    if (!binding) return res.status(404).json({ success: false, message: "Not found" });
+    res.locals.auditDescription = `Set Label Stock binding "${binding._id}" active`;
+    res.json({ success: true });
+  } catch (err) {
+    console.error("LABEL STOCK BINDING SET ACTIVE ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+/* GET : Fetch Users by Client (AJAX) */
+router.get("/form/label-stock-binding/client/:name", async (req, res) => {
+  try {
+    const clientData = await Client.findOne({ clientName: req.params.name }).populate("users");
+    res.status(200).json(clientData);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json(null);
+  }
+});
+
+/* GET : Filter Label Stock Specs (cascading smart form) */
+router.get("/form/label-stock-binding/filter-specs", async (req, res) => {
+  try {
+    const query = req.query;
+
+    const buildFilter = (excludeKey) => {
+      const f = {};
+      Object.entries(SPEC_FIELDS).forEach(([key, path]) => {
+        if (query[key] && key !== excludeKey) f[path] = flex(query[key]);
+      });
+      return f;
+    };
+
+    const result = {};
+    for (const [key, path] of Object.entries(SPEC_FIELDS)) {
+      result[key] = await SachikoLabelStock.distinct(path, buildFilter(key));
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error("LABEL STOCK FILTER SPECS ERROR:", err);
+    res.status(500).json(null);
+  }
+});
+
+/* GET : Resolve Label Stock from Specifications */
+router.get("/form/label-stock-binding/resolve-label-stock", async (req, res) => {
+  try {
+    const query = req.query;
+    const filter = {};
+    for (const [key, path] of Object.entries(SPEC_FIELDS)) {
+      if (!query[key] && query[key] !== "0") return res.status(400).json(null);
+      filter[path] = flex(query[key]);
+    }
+
+    const labelStock = await SachikoLabelStock.findOne(filter).lean();
+    if (!labelStock) {
+      return res.status(404).json(null);
+    }
+
+    res.status(200).json({
+      labelStockId: labelStock._id,
+      productCode: labelStock.productCode,
+      skuCode: labelStock.skuCode,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json(null);
+  }
+});
+
+export default router;

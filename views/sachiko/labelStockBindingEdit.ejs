@@ -1,12 +1,12 @@
 <% layout('/layout/boilerplate') -%>
 <style>
-  .sl-id-success {
+  .label-stock-id-success {
     border: 2px solid #28a745 !important;
     background-color: #f3fff6;
     color: #155724;
     font-weight: 600;
   }
-  .sl-id-error {
+  .label-stock-id-error {
     border: 2px solid #dc3545 !important;
     background-color: #fff5f5;
     color: #721c24;
@@ -18,16 +18,16 @@
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
   <form
     class="needs-validation"
-    action="/sachiko/sl-binding/edit/<%= binding._id %>"
+    action="/sachiko/label-stock-binding/edit/<%= binding._id %>"
     method="post"
     onsubmit="return validateBeforeSubmit()"
     autocomplete="off"
     novalidate
   >
-    <input type="hidden" name="slId" id="resolved-sl-id" value="<%= binding.sl?._id || '' %>" />
+    <input type="hidden" name="labelStockId" id="resolved-label-stock-id" value="<%= binding.labelStock?._id || '' %>" />
 
     <div class="span-full form-heading">
-      <h1>Edit SL Binding</h1>
+      <h1>Edit Label Stock Binding</h1>
     </div>
 
     <!-- ================= USER INFO (READ-ONLY) ================= -->
@@ -38,12 +38,12 @@
     <div class="span-seven">
       <label>SKU ID</label>
       <input type="text" class="form-control input-tag"
-        value="<%= binding.sl?.slId || 'N/A' %>" readonly />
+        value="<%= binding.labelStock?.labelStockId || 'N/A' %>" readonly />
     </div>
     <div class="span-seven">
       <label>SKU Code</label>
-      <input type="text" id="sl-id-display" class="form-control input-tag"
-        value="<%= binding.sl?.skuCode || 'N/A' %>" readonly />
+      <input type="text" id="label-stock-id-display" class="form-control input-tag"
+        value="<%= binding.labelStock?.skuCode || 'N/A' %>" readonly />
     </div>
     <div class="span-six">
       <label>Client Name</label>
@@ -62,9 +62,9 @@
       </select>
     </div>
 
-    <!-- ================= SL SPECIFICATIONS ================= -->
+    <!-- ================= LABEL STOCK SPECIFICATIONS ================= -->
     <div class="span-full form-subheading" style="display: flex; justify-content: space-between; align-items: center;">
-      <h1>SL Specifications</h1>
+      <h1>Label Stock Specifications</h1>
       <button type="button" id="reset-specs-btn" style="padding: 4px 12px; border-radius: 4px; background-color: #dc3545; color: white; border: none; cursor: pointer; font-size: 14px;">Reset</button>
     </div>
 
@@ -160,7 +160,7 @@
 
     <!-- ================= BUTTONS ================= -->
     <div class="span-full btn-grp" style="flex-direction: row-reverse;">
-      <button class="submit-btn" type="submit">Update SL Binding</button>
+      <button class="submit-btn" type="submit">Update Label Stock Binding</button>
       <button type="button" id="cancelBtn">Cancel</button>
     </div>
   </form>
@@ -169,15 +169,15 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const CURRENT = {
-    fsFamily: "<%= binding.sl?.facestock?.facestockFamily || '' %>",
-    fsType:   "<%= binding.sl?.facestock?.facestockType || '' %>",
-    fsGsm:    "<%= binding.sl?.facestock?.facestockGsm ?? '' %>",
-    fsMicron: "<%= binding.sl?.facestock?.facestockMicron ?? '' %>",
-    adType:   "<%= binding.sl?.adhesive?.adhesiveType || '' %>",
-    adGsm:    "<%= binding.sl?.adhesive?.adhesiveGsm ?? '' %>",
-    rlType:   "<%= binding.sl?.releaseLiner?.releaseLinerType || '' %>",
-    rlColor:  "<%= binding.sl?.releaseLiner?.releaseLinerColor || '' %>",
-    rlGsm:    "<%= binding.sl?.releaseLiner?.releaseLinerGsm ?? '' %>",
+    fsFamily: "<%= binding.labelStock?.facestock?.facestockFamily || '' %>",
+    fsType:   "<%= binding.labelStock?.facestock?.facestockType || '' %>",
+    fsGsm:    "<%= binding.labelStock?.facestock?.facestockGsm ?? '' %>",
+    fsMicron: "<%= binding.labelStock?.facestock?.facestockMicron ?? '' %>",
+    adType:   "<%= binding.labelStock?.adhesive?.adhesiveType || '' %>",
+    adGsm:    "<%= binding.labelStock?.adhesive?.adhesiveGsm ?? '' %>",
+    rlType:   "<%= binding.labelStock?.releaseLiner?.releaseLinerType || '' %>",
+    rlColor:  "<%= binding.labelStock?.releaseLiner?.releaseLinerColor || '' %>",
+    rlGsm:    "<%= binding.labelStock?.releaseLiner?.releaseLinerGsm ?? '' %>",
   };
 
   const specFields = ["fs-family", "fs-type", "fs-gsm", "fs-micron", "ad-type", "ad-gsm", "rl-type", "rl-color", "rl-gsm"];
@@ -188,8 +188,8 @@ document.addEventListener("DOMContentLoaded", () => {
     "rl-type": "rlType", "rl-color": "rlColor", "rl-gsm": "rlGsm",
   };
 
-  const slIdInput = document.getElementById("resolved-sl-id");
-  const slIdDisplay = document.getElementById("sl-id-display");
+  const labelStockIdInput = document.getElementById("resolved-label-stock-id");
+  const labelStockIdDisplay = document.getElementById("label-stock-id-display");
 
   const specChoices = {};
   specFields.forEach(id => {
@@ -208,7 +208,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     try {
-      const res = await fetch(`/sachiko/form/sl-binding/filter-specs?${params}`);
+      const res = await fetch(`/sachiko/form/label-stock-binding/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -248,14 +248,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  async function resolveSl() {
+  async function resolveLabelStock() {
     const values = {};
     for (const id of specFields) {
       const el = document.getElementById(id);
       if (!el || !el.value) {
-        slIdInput.value = "";
-        slIdDisplay.value = "— select all specs —";
-        slIdDisplay.className = "form-control input-tag";
+        labelStockIdInput.value = "";
+        labelStockIdDisplay.value = "— select all specs —";
+        labelStockIdDisplay.className = "form-control input-tag";
         return;
       }
       values[id] = el.value;
@@ -265,26 +265,26 @@ document.addEventListener("DOMContentLoaded", () => {
     specFields.forEach(id => params.set(fieldToKey[id], values[id]));
 
     try {
-      const res = await fetch(`/sachiko/form/sl-binding/resolve-sl?${params}`);
+      const res = await fetch(`/sachiko/form/label-stock-binding/resolve-label-stock?${params}`);
       if (!res.ok) {
-        slIdInput.value = "";
-        slIdDisplay.value = "No matching SL found";
-        slIdDisplay.className = "form-control input-tag sl-id-error";
+        labelStockIdInput.value = "";
+        labelStockIdDisplay.value = "No matching Label Stock found";
+        labelStockIdDisplay.className = "form-control input-tag label-stock-id-error";
         return;
       }
       const data = await res.json();
-      slIdInput.value = data.slId;
-      slIdDisplay.value = data.skuCode;
-      slIdDisplay.className = "form-control input-tag sl-id-success";
+      labelStockIdInput.value = data.labelStockId;
+      labelStockIdDisplay.value = data.skuCode;
+      labelStockIdDisplay.className = "form-control input-tag label-stock-id-success";
     } catch (err) {
-      console.error("Resolve SL error:", err);
+      console.error("Resolve Label Stock error:", err);
     }
   }
 
   specFields.forEach(id => {
     document.getElementById(id)?.addEventListener("change", async () => {
       await filterSpecs(id);
-      await resolveSl();
+      await resolveLabelStock();
     });
   });
 
@@ -294,9 +294,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (el) el.value = "";
       specChoices[id]?.setChoiceByValue("");
     });
-    slIdInput.value = "";
-    slIdDisplay.value = "";
-    slIdDisplay.className = "form-control input-tag";
+    labelStockIdInput.value = "";
+    labelStockIdDisplay.value = "";
+    labelStockIdDisplay.className = "form-control input-tag";
     await filterSpecs("reset-all");
   });
 
@@ -317,14 +317,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (val && specChoices[id]) specChoices[id].setChoiceByValue(String(val));
     }
 
-    await resolveSl();
+    await resolveLabelStock();
   })();
 });
 
 function validateBeforeSubmit() {
-  const slId = document.getElementById("resolved-sl-id").value;
-  if (!slId) {
-    showToast("Please select valid SL specifications.", "error");
+  const labelStockId = document.getElementById("resolved-label-stock-id").value;
+  if (!labelStockId) {
+    showToast("Please select valid Label Stock specifications.", "error");
     return false;
   }
   return true;

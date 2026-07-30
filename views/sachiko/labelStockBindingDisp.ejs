@@ -6,14 +6,14 @@
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
   <style>
     #master-table { width: 100%; flex: 1 1 auto; min-height: 0; }
-    @keyframes slPopIn {
+    @keyframes labelStockPopIn {
       from { transform: scale(0.95); opacity: 0; }
       to   { transform: scale(1);    opacity: 1; }
     }
   </style>
 
   <div class="indi-head">
-    <h1>SL Bindings</h1>
+    <h1>Label Stock Bindings</h1>
   </div>
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
@@ -27,7 +27,7 @@
 <div class="logout-modal" id="deleteBindingModal" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteBindingTitle">
     <h2 class="logout-title" id="deleteBindingTitle">Remove binding?</h2>
-    <p class="logout-text">This will permanently remove this SL binding.</p>
+    <p class="logout-text">This will permanently remove this Label Stock binding.</p>
     <div class="logout-actions">
       <button class="logout-btn" type="button" id="deleteBindingCancel">Cancel</button>
       <button class="logout-btn primary" type="button" id="deleteBindingConfirm">Remove</button>
@@ -47,8 +47,8 @@
 </div>
 
 <!-- View Modal -->
-<div id="sl-view-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:10000;justify-content:center;align-items:center;padding:24px;backdrop-filter:blur(4px);">
-  <div id="sl-view-body" style="background:#fff;border-radius:14px;overflow:hidden;width:min(480px,95vw);box-shadow:0 20px 50px rgba(4,74,120,0.2);animation:slPopIn 0.2s ease-out;"></div>
+<div id="label-stock-view-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:10000;justify-content:center;align-items:center;padding:24px;backdrop-filter:blur(4px);">
+  <div id="label-stock-view-body" style="background:#fff;border-radius:14px;overflow:hidden;width:min(480px,95vw);box-shadow:0 20px 50px rgba(4,74,120,0.2);animation:labelStockPopIn 0.2s ease-out;"></div>
 </div>
 
 <script>
@@ -57,27 +57,27 @@
   const userId = <%- safeJson(userId) %>;
 
   const tableData = raw.map(binding => {
-    const sl = binding.sl || {};
-    const fsType   = sl.facestock?.facestockType    || "";
-    const fsMicron = sl.facestock?.facestockMicron != null ? sl.facestock.facestockMicron + " MIC" : "";
-    const adType   = sl.adhesive?.adhesiveType      || "";
-    const rlType   = sl.releaseLiner?.releaseLinerType || "";
+    const labelStock = binding.labelStock || {};
+    const fsType   = labelStock.facestock?.facestockType    || "";
+    const fsMicron = labelStock.facestock?.facestockMicron != null ? labelStock.facestock.facestockMicron + " MIC" : "";
+    const adType   = labelStock.adhesive?.adhesiveType      || "";
+    const rlType   = labelStock.releaseLiner?.releaseLinerType || "";
     const product  = [fsType, fsMicron, adType, rlType].filter(Boolean).join(" / ");
 
     return {
       _id: String(binding._id),
-      productCode: sl.productCode || "",
-      skuCode: sl.skuCode || "",
+      productCode: labelStock.productCode || "",
+      skuCode: labelStock.skuCode || "",
       product,
-      fsFamily: sl.facestock?.facestockFamily || "",
-      fsType: sl.facestock?.facestockType || "",
-      fsGsm: sl.facestock?.facestockGsm ?? "",
-      fsMicron: sl.facestock?.facestockMicron ?? "",
-      adType: sl.adhesive?.adhesiveType || "",
-      adGsm: sl.adhesive?.adhesiveGsm ?? "",
-      rlType: sl.releaseLiner?.releaseLinerType || "",
-      rlColor: sl.releaseLiner?.releaseLinerColor || "",
-      rlGsm: sl.releaseLiner?.releaseLinerGsm ?? "",
+      fsFamily: labelStock.facestock?.facestockFamily || "",
+      fsType: labelStock.facestock?.facestockType || "",
+      fsGsm: labelStock.facestock?.facestockGsm ?? "",
+      fsMicron: labelStock.facestock?.facestockMicron ?? "",
+      adType: labelStock.adhesive?.adhesiveType || "",
+      adGsm: labelStock.adhesive?.adhesiveGsm ?? "",
+      rlType: labelStock.releaseLiner?.releaseLinerType || "",
+      rlColor: labelStock.releaseLiner?.releaseLinerColor || "",
+      rlGsm: labelStock.releaseLiner?.releaseLinerGsm ?? "",
       location: binding.location || "",
       status: binding.status || "ACTIVE",
     };
@@ -90,7 +90,7 @@
     height: "100%",
     responsiveLayout: false,
     movableColumns: true,
-    placeholder: "No SL bindings for this client",
+    placeholder: "No Label Stock bindings for this client",
     columns: [
       {
         title: "Actions",
@@ -106,13 +106,13 @@
           return `
             <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
               <button
-                onclick="viewSlBinding('${row._id}')"
+                onclick="viewLabelStockBinding('${row._id}')"
                 style="padding:2px 7px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
                 title="View Binding">
                 <i class="fa-solid fa-eye"></i>
               </button>
               <button
-                onclick="window.location.href='/sachiko/sl-binding/edit/${row._id}'"
+                onclick="window.location.href='/sachiko/label-stock-binding/edit/${row._id}'"
                 style="padding:2px 7px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
                 title="Edit Binding">
                 <i class="fa-solid fa-pen-to-square"></i>
@@ -140,7 +140,7 @@
           const row = cell.getRow().getData();
           return `
             <button
-              onclick="window.location.href='/sachiko/sales/order?type=SL&client=${encodeURIComponent(clientName)}&user=${userId}&item=${row._id}'"
+              onclick="window.location.href='/sachiko/sales/order?type=LABEL_STOCK&client=${encodeURIComponent(clientName)}&user=${userId}&item=${row._id}'"
               style="padding:2px 10px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">
               <i class="fa-solid fa-cart-plus"></i>
             </button>
@@ -177,17 +177,17 @@
     return String(v ?? "—").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
 
-  window.viewSlBinding = function (id) {
+  window.viewLabelStockBinding = function (id) {
     const row = tableData.find(r => r._id === id);
     if (!row) return;
-    const modal = document.getElementById("sl-view-modal");
-    document.getElementById("sl-view-body").innerHTML = `
+    const modal = document.getElementById("label-stock-view-modal");
+    document.getElementById("label-stock-view-body").innerHTML = `
       <div style="background:linear-gradient(135deg,#044a78 0%,#03365a 100%);padding:22px 24px 20px;color:#fff;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
         <div>
           <h2 style="margin:0;font-size:20px;font-weight:700;">${esc(row.productCode)}</h2>
           <p style="margin:6px 0 0;font-size:13px;opacity:0.85;">${esc(row.skuCode)}</p>
         </div>
-        <button onclick="document.getElementById('sl-view-modal').style.display='none'"
+        <button onclick="document.getElementById('label-stock-view-modal').style.display='none'"
           style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:700;">
           <i class="fa-solid fa-xmark"></i>
         </button>
@@ -214,7 +214,7 @@
     modal.style.display = "flex";
   };
 
-  document.getElementById("sl-view-modal").addEventListener("click", function (e) {
+  document.getElementById("label-stock-view-modal").addEventListener("click", function (e) {
     if (e.target === this) this.style.display = "none";
   });
 
@@ -252,7 +252,7 @@
       deleteForm.appendChild(csrfInput);
     }
     csrfInput.value = getCsrfToken();
-    deleteForm.action = `/sachiko/sl-binding/delete/${bindingToDelete}`;
+    deleteForm.action = `/sachiko/label-stock-binding/delete/${bindingToDelete}`;
     deleteForm.submit();
   });
 
@@ -289,7 +289,7 @@
     statusConfirmBtn.disabled = true;
     const endpoint = statusTarget === "ACTIVE" ? "set-active" : "set-inactive";
     try {
-      const res = await fetch(`/sachiko/sl-binding/${endpoint}/${statusBindingId}`, {
+      const res = await fetch(`/sachiko/label-stock-binding/${endpoint}/${statusBindingId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-csrf-token": getCsrfToken() },
       });
