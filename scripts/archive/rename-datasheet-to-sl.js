@@ -3,10 +3,10 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 // Load .env from the project root regardless of the current working directory.
-dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".env") });
+dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", ".env") });
 import mongoose from "mongoose";
-import connectDB from "../config/db.js";
-import Counter from "../models/system/counter.js";
+import connectDB from "../../config/db.js";
+import Counter from "../../models/system/counter.js";
 
 // ---------------------------------------------------------------------------
 // One-time migration: rename the "Datasheet" feature to "SL" all the way down
