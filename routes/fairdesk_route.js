@@ -14,6 +14,8 @@ import Employee from "../models/hr/employee_model.js";
 import Label from "../models/inventory/labels.js";
 import Tape from "../models/inventory/tape.js";
 import TapeBinding from "../models/inventory/tapeBinding.js";
+import SLBinding from "../models/sachiko/slBinding.js";
+import SachikoSL from "../models/sachiko/sachikoSL.js";
 import TapeSalesOrder from "../models/inventory/TapeSalesOrder.js";
 import PurchaseOrder from "../models/inventory/PurchaseOrder.js";
 import SystemId from "../models/system/systemId.js";
@@ -2514,6 +2516,10 @@ router.get("/sales/items/:type/:userId", async (req, res) => {
         path: "tape",
         populate: { path: "tapeId" },
       })
+      .populate({
+        path: "sl",
+        populate: { path: "sl", model: "SachikoSL" },
+      })
       .lean();
 
     if (!user) return res.json([]);
@@ -2560,6 +2566,35 @@ router.get("/sales/items/:type/:userId", async (req, res) => {
           };
         }),
       );
+    } else if (type === "SL") {
+      const bindings = (user.sl || []).filter((b) => matchesLocation(b.location));
+      items = bindings.map((binding) => {
+        if (!binding.sl) return null;
+        if (binding.status === "INACTIVE") return null; // disabled binding: not orderable
+        const s = binding.sl;
+        return {
+          _id: binding._id,
+          location: binding.location || "",
+          displayName: `${s.productCode || ""} (${s.skuCode || ""})`,
+          minOrderQty: 0,
+          rate: null,
+          stock: null,
+          details: {
+            type: "SL",
+            skuCode: s.skuCode || "",
+            productCode: s.productCode || "",
+            fsFamily: s.facestock?.facestockFamily || "",
+            fsType: s.facestock?.facestockType || "",
+            fsGsm: s.facestock?.facestockGsm ?? "",
+            fsMicron: s.facestock?.facestockMicron ?? "",
+            adType: s.adhesive?.adhesiveType || "",
+            adGsm: s.adhesive?.adhesiveGsm ?? "",
+            rlType: s.releaseLiner?.releaseLinerType || "",
+            rlColor: s.releaseLiner?.releaseLinerColor || "",
+            rlGsm: s.releaseLiner?.releaseLinerGsm ?? "",
+          },
+        };
+      });
     }
 
     res.json(items.filter(Boolean));
@@ -2695,6 +2730,75 @@ router.post("/sales/order", async (req, res) => {
         // Redirect to pending orders
         res.json({ success: true, redirect: "/sachiko/sales/pending" });
       }
+    } else if (itemType === "SL") {
+      const binding = await SLBinding.findById(itemId);
+      if (!binding) {
+        return res.status(400).json({ success: false, message: "Invalid item selected" });
+      }
+      if (!orderId && binding.status === "INACTIVE") {
+        return res.status(400).json({ success: false, message: "This item is disabled for the selected client and cannot be ordered." });
+      }
+
+      const data = {
+        tapeBinding: itemId,
+        userId: binding.userId,
+        tapeId: binding.sl,
+        sourceLocation: canonicalizeLocationName(binding.location),
+        poDate: poDate ? new Date(poDate) : undefined,
+        poNumber,
+        orderRate: 0,
+        quantity: Number(quantity),
+        estimatedDate: new Date(estimatedDate),
+        remarks,
+        status: "PENDING",
+        onModel: "SachikoSL",
+        onBindingModel: "SLBinding",
+      };
+
+      if (orderId) {
+        // UPDATE existing order
+        await TapeSalesOrder.findByIdAndUpdate(orderId, data);
+        res.locals.auditDescription = await describeSalesOrder({
+          itemTypeLabel: "SL", userId: binding.userId,
+          quantity: data.quantity, poNumber: data.poNumber, isUpdate: true,
+        });
+        req.flash("notification", "Sales order updated successfully!");
+        res.json({ success: true, redirect: "/sachiko/sales/pending" });
+      } else {
+        // CREATE new order
+        data.createdBy = createdByUser;
+        data.orderSignature = buildSalesOrderSignature({
+          itemType,
+          itemId,
+          userId: binding.userId,
+          quantity: data.quantity,
+          estimatedDate,
+          poNumber,
+          sourceLocation: data.sourceLocation,
+          orderRate: 0,
+          createdBy: createdByUser,
+        });
+        data.submissionToken = String(submissionToken || "").trim() || undefined;
+        const existingOrder = await TapeSalesOrder.findOne({ orderSignature: data.orderSignature }).select("_id").lean();
+        if (existingOrder) {
+          return res.json({ success: true, redirect: "/sachiko/sales/pending", duplicate: true });
+        }
+        const newOrder = await TapeSalesOrder.create(data);
+
+        await SalesOrderLog.create({
+          orderId: newOrder._id,
+          action: "CREATED",
+          quantity: Number(quantity),
+          performedBy: createdByUser,
+        });
+
+        res.locals.auditDescription = await describeSalesOrder({
+          itemTypeLabel: "SL", userId: binding.userId,
+          quantity: data.quantity, poNumber: data.poNumber, isUpdate: false,
+        });
+        req.flash("notification", "Sales order created successfully!");
+        res.json({ success: true, redirect: "/sachiko/sales/pending" });
+      }
     } else {
       return res.status(400).json({ success: false, message: "Unsupported item type" });
     }
@@ -2735,25 +2839,30 @@ router.get("/sales/pending", async (req, res) => {
         // Widened beyond what the table itself needs so the "View" dialog's
         // Fairtech-vs-Client comparison (mirrors /tape/compare/:id,
         // minus the vendor column) has every spec field it displays.
+        // Mongoose ignores field names that don't exist on whichever model a
+        // given document's onModel actually resolves to, so Tape and
+        // SachikoSL fields can share one select string safely.
         select:
-          "tapeProductId tapePaperCode tapePaperType tapeGsm tapeWidth tapeMtrs tapeCoreId tapeFinish tapeAdhesiveGsm",
+          "tapeProductId tapePaperCode tapePaperType tapeGsm tapeWidth tapeMtrs tapeCoreId tapeFinish tapeAdhesiveGsm productCode skuCode facestock adhesive releaseLiner",
       })
       .populate({
         path: "tapeBinding",
         select:
-          "tapeClientPaperCode tapeRatePerRoll tapeOdrQty tapeOdrFreq tapeCreditTerm tapeSaleCost tapeMtrsDel tapeMinQty clientTapeGsm status",
+          "tapeClientPaperCode tapeRatePerRoll tapeOdrQty tapeOdrFreq tapeCreditTerm tapeSaleCost tapeMtrsDel tapeMinQty clientTapeGsm status location",
       })
       .sort({ createdAt: 1 })
       .lean();
 
-    // Group pending orders by model type and itemId to fetch total stock
+    // Group pending orders by model type and itemId to fetch total stock.
+    // Only Tape has a stock model at all -- SL rows just get totalStock: 0
+    // below without ever touching TapeStock.
     const itemIdsByModel = {
       Tape: new Set(),
     };
 
     pendingOrders.forEach(o => {
-      if (o.onModel && o.tapeId) {
-        itemIdsByModel[o.onModel].add(o.tapeId?._id?.toString());
+      if (o.onModel === "Tape" && o.tapeId) {
+        itemIdsByModel.Tape.add(o.tapeId?._id?.toString());
       }
     });
 
@@ -2960,12 +3069,12 @@ router.get("/sales/order/confirm", async (req, res) => {
       .populate({
         path: "tapeId",
         select:
-          "tapeProductId tapePaperCode tapeGsm tapeFinish tapePaperType tapeAdhesiveGsm tapeWidth tapeMtrs tapeCoreId ttrProductId ttrType ttrColor ttrMaterialCode ttrWidth ttrMtrs ttrInkFace ttrCoreId ttrCoreLength ttrNotch ttrWinding labelWidth labelHeight",
+          "tapeProductId tapePaperCode tapeGsm tapeFinish tapePaperType tapeAdhesiveGsm tapeWidth tapeMtrs tapeCoreId ttrProductId ttrType ttrColor ttrMaterialCode ttrWidth ttrMtrs ttrInkFace ttrCoreId ttrCoreLength ttrNotch ttrWinding labelWidth labelHeight productCode skuCode facestock adhesive releaseLiner",
       })
       .populate({
         path: "tapeBinding",
         select:
-          "tapeRatePerRoll tapeOdrQty tapeMinQty tapeClientMaterialCode clientTapeGsm ttrRatePerRoll ttrOdrQty ttrMinQty ttrClientMaterialCode clientTtrType",
+          "tapeRatePerRoll tapeOdrQty tapeMinQty tapeClientMaterialCode clientTapeGsm ttrRatePerRoll ttrOdrQty ttrMinQty ttrClientMaterialCode clientTtrType location status",
       })
       .lean();
 
@@ -3312,23 +3421,6 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
     let finalStatus = status;
 
     if (status === "CONFIRMED" && previousStatus === "PENDING") {
-      const tapeObjectId = new mongoose.Types.ObjectId(order.tapeId._id);
-      const location = canonicalizeLocationName(sourceLocation || order.sourceLocation);
-
-      let StockModel = TapeStock;
-      let StockLogModel = TapeStockLog;
-      let matchField = "tape";
-
-      if (!location) {
-        const message = "Cannot confirm: Source location missing on order";
-        if (wantsJson) {
-          return res.status(400).json({ success: false, message });
-        }
-        req.flash("notification", message);
-        return res.redirect(confirmRedirectUrl);
-      }
-
-      const tape = order.tapeId;
       const qty = Number(confirmQuantity) || order.quantity;
       const dispatchedSoFar = order.dispatchedQuantity || 0;
       const remaining = order.quantity - dispatchedSoFar;
@@ -3342,70 +3434,92 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
         return res.redirect(confirmRedirectUrl);
       }
 
-      // Match the confirm-page balance: physical stock minus other pending bookings at this location.
-      const [bal, bookedAgg] = await Promise.all([
-        StockModel.aggregate([
-          { $match: { [matchField]: tapeObjectId, location } },
-          { $group: { _id: null, qty: { $sum: "$quantity" } } },
-        ]),
-        TapeSalesOrder.aggregate([
-          {
-            $match: {
-              tapeId: tapeObjectId,
-              status: "PENDING",
-              sourceLocation: location,
-              _id: { $ne: new mongoose.Types.ObjectId(orderId) },
-            },
-          },
-          {
-            $group: {
-              _id: null,
-              bookedQty: {
-                $sum: { $subtract: ["$quantity", { $ifNull: ["$dispatchedQuantity", 0] }] },
+      // SL has no stock concept at all -- confirming just logs delivery and
+      // updates the dispatched quantity below, skipping every stock read/write.
+      if (order.onModel !== "SachikoSL") {
+        const tapeObjectId = new mongoose.Types.ObjectId(order.tapeId._id);
+        const location = canonicalizeLocationName(sourceLocation || order.sourceLocation);
+
+        let StockModel = TapeStock;
+        let StockLogModel = TapeStockLog;
+        let matchField = "tape";
+
+        if (!location) {
+          const message = "Cannot confirm: Source location missing on order";
+          if (wantsJson) {
+            return res.status(400).json({ success: false, message });
+          }
+          req.flash("notification", message);
+          return res.redirect(confirmRedirectUrl);
+        }
+
+        const tape = order.tapeId;
+
+        // Match the confirm-page balance: physical stock minus other pending bookings at this location.
+        const [bal, bookedAgg] = await Promise.all([
+          StockModel.aggregate([
+            { $match: { [matchField]: tapeObjectId, location } },
+            { $group: { _id: null, qty: { $sum: "$quantity" } } },
+          ]),
+          TapeSalesOrder.aggregate([
+            {
+              $match: {
+                tapeId: tapeObjectId,
+                status: "PENDING",
+                sourceLocation: location,
+                _id: { $ne: new mongoose.Types.ObjectId(orderId) },
               },
             },
-          },
-        ]),
-      ]);
-      const currentStock = bal[0]?.qty || 0;
-      const bookedQty = bookedAgg[0]?.bookedQty || 0;
+            {
+              $group: {
+                _id: null,
+                bookedQty: {
+                  $sum: { $subtract: ["$quantity", { $ifNull: ["$dispatchedQuantity", 0] }] },
+                },
+              },
+            },
+          ]),
+        ]);
+        const currentStock = bal[0]?.qty || 0;
+        const bookedQty = bookedAgg[0]?.bookedQty || 0;
 
-      // Validate sufficient stock against physical quantity
-      if (currentStock < qty) {
-        const message = currentStock <= 0
-          ? "cannot dispatch, not enough stocks"
-          : `Cannot dispatch ${qty}. Only ${currentStock} available at ${location}.`;
-        if (wantsJson) {
-          return res.status(400).json({ success: false, message });
+        // Validate sufficient stock against physical quantity
+        if (currentStock < qty) {
+          const message = currentStock <= 0
+            ? "cannot dispatch, not enough stocks"
+            : `Cannot dispatch ${qty}. Only ${currentStock} available at ${location}.`;
+          if (wantsJson) {
+            return res.status(400).json({ success: false, message });
+          }
+          req.flash("notification", message);
+          return res.redirect(confirmRedirectUrl);
         }
-        req.flash("notification", message);
-        return res.redirect(confirmRedirectUrl);
+
+        // Insert negative stock entry (outward)
+        const stockData = {
+          [matchField]: tapeObjectId,
+          location,
+          quantity: -qty,
+          remarks: `Sales Order Confirmed: ${orderId}`,
+        };
+        if (order.onModel === "Tape") stockData.tapeFinish = tape.tapeFinish;
+
+        await StockModel.create(stockData);
+
+        // Stock Log entry
+        const logData = {
+          [matchField]: tapeObjectId,
+          location,
+          openingStock: currentStock,
+          quantity: qty,
+          closingStock: currentStock - qty,
+          type: "OUTWARD",
+          source: "SYSTEM",
+          remarks: `Sales Order Confirmed: ${orderId}`,
+          createdBy: req.user?.username || "SYSTEM",
+        };
+        await StockLogModel.create(logData);
       }
-
-      // Insert negative stock entry (outward)
-      const stockData = {
-        [matchField]: tapeObjectId,
-        location,
-        quantity: -qty,
-        remarks: `Sales Order Confirmed: ${orderId}`,
-      };
-      if (order.onModel === "Tape") stockData.tapeFinish = tape.tapeFinish;
-
-      await StockModel.create(stockData);
-
-      // Stock Log entry
-      const logData = {
-        [matchField]: tapeObjectId,
-        location,
-        openingStock: currentStock,
-        quantity: qty,
-        closingStock: currentStock - qty,
-        type: "OUTWARD",
-        source: "SYSTEM",
-        remarks: `Sales Order Confirmed: ${orderId}`,
-        createdBy: req.user?.username || "SYSTEM",
-      };
-      await StockLogModel.create(logData);
 
       // Calculate action time: Use Confirm Date (for date) + Current Time (for time)
       const now = new Date();
@@ -3459,61 +3573,55 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
 
     // ========== CANCEL a CONFIRMED order: Reverse stock ==========
     if (status === "CANCELLED" && previousStatus === "CONFIRMED") {
-      const tapeObjectId = new mongoose.Types.ObjectId(order.tapeId._id);
-      const location = order.sourceLocation;
-      const tape = order.tapeId;
-
-      let StockModel = TapeStock;
-      let StockLogModel = TapeStockLog;
-      let matchField = "tape";
-
-      const qty = order.quantity; // TODO: Should this be dispatchedQuantity? For now assume cancelling full order if it was fully confirmed. Or partial?
+      // TODO: Should this be dispatchedQuantity? For now assume cancelling full order if it was fully confirmed. Or partial?
       // If partial dispatch was supported, we really need to know *what* to reverse.
       // But assuming CONFIRMED means *fully* dispatched for now (or at least that's the only state we reverse from).
       // If it's PENDING but partially dispatched, and we cancel... we should reverse dispatchedQuantity.
-
-      // Logic refinement for CANCEL:
-      // If PENDING and dispatchedQuantity > 0, we should reverse that amount?
-      // The current request didn't ask for generic cancel improvements, but I should probably handle it.
-      // However, sticking to the requested scope: "click dispatch order... select less qty... should not be removed from pending"
-
-      // Let's leave Cancel logic mostly as is, but maybe use dispatchedQuantity if available?
-      // If previousStatus == CONFIRMED, it means it was fully dispatched (by my new logic).
-      // So order.quantity is correct (or order.dispatchedQuantity which should be >= quantity).
-
       const qtyToReverse = order.dispatchedQuantity > 0 ? order.dispatchedQuantity : order.quantity;
 
-      // Get current stock at this location
-      const bal = await StockModel.aggregate([
-        { $match: { [matchField]: tapeObjectId, location } },
-        { $group: { _id: null, qty: { $sum: "$quantity" } } },
-      ]);
-      const currentStock = bal[0]?.qty || 0;
+      // SL has no stock to reverse -- just log the cancellation and reset
+      // dispatched qty below, skipping every stock read/write.
+      if (order.onModel !== "SachikoSL") {
+        const tapeObjectId = new mongoose.Types.ObjectId(order.tapeId._id);
+        const location = order.sourceLocation;
+        const tape = order.tapeId;
 
-      // Re-add stock (positive entry)
-      const stockData = {
-        [matchField]: tapeObjectId,
-        location,
-        quantity: qtyToReverse,
-        remarks: `Sales Order Cancelled (reversed): ${orderId}`,
-      };
-      if (order.onModel === "Tape") stockData.tapeFinish = tape.tapeFinish;
+        let StockModel = TapeStock;
+        let StockLogModel = TapeStockLog;
+        let matchField = "tape";
 
-      await StockModel.create(stockData);
+        // Get current stock at this location
+        const bal = await StockModel.aggregate([
+          { $match: { [matchField]: tapeObjectId, location } },
+          { $group: { _id: null, qty: { $sum: "$quantity" } } },
+        ]);
+        const currentStock = bal[0]?.qty || 0;
 
-      // Stock Log entry
-      const logData = {
-        [matchField]: tapeObjectId,
-        location,
-        openingStock: currentStock,
-        quantity: qtyToReverse,
-        closingStock: currentStock + qtyToReverse,
-        type: "INWARD",
-        source: "SYSTEM",
-        remarks: `Sales Order Cancelled (reversed): ${orderId}`,
-        createdBy: req.user?.username || "SYSTEM",
-      };
-      await StockLogModel.create(logData);
+        // Re-add stock (positive entry)
+        const stockData = {
+          [matchField]: tapeObjectId,
+          location,
+          quantity: qtyToReverse,
+          remarks: `Sales Order Cancelled (reversed): ${orderId}`,
+        };
+        if (order.onModel === "Tape") stockData.tapeFinish = tape.tapeFinish;
+
+        await StockModel.create(stockData);
+
+        // Stock Log entry
+        const logData = {
+          [matchField]: tapeObjectId,
+          location,
+          openingStock: currentStock,
+          quantity: qtyToReverse,
+          closingStock: currentStock + qtyToReverse,
+          type: "INWARD",
+          source: "SYSTEM",
+          remarks: `Sales Order Cancelled (reversed): ${orderId}`,
+          createdBy: req.user?.username || "SYSTEM",
+        };
+        await StockLogModel.create(logData);
+      }
 
       // Action Log entry for cancel from CONFIRMED
       await SalesOrderLog.create({

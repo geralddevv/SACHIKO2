@@ -208,8 +208,7 @@
 
   function getItemType(row) {
     let itemType = "TAPE";
-    if (row.onModel === "Ttr") itemType = "TTR";
-    if (row.onModel === "Label") itemType = "LABEL";
+    if (row.onModel === "SachikoSL") itemType = "SL";
     return itemType;
   }
 
@@ -220,18 +219,13 @@
       if (tape.tapePaperCode) return tape.tapePaperCode;
       if (tape.tapeProductId) return String(tape.tapeProductId);
     }
-    if (row.onModel === "Ttr") {
-      if (tape.ttrType) return tape.ttrType;
-      if (tape.ttrProductId) return String(tape.ttrProductId);
-    }
-    if (row.onModel === "Label") {
-      if (tape.labelWidth || tape.labelHeight) return `${tape.labelWidth || ""}x${tape.labelHeight || ""}`;
+    if (row.onModel === "SachikoSL") {
+      if (tape.productCode) return `${tape.productCode} (${tape.skuCode || ""})`;
     }
     return "Unknown Item";
   }
 
-  // GSM is only meaningful for Tape rows (TTR/Label have
-  // no GSM field at all) — shown as its own column, "-" when not applicable.
+  // GSM is only meaningful for Tape rows — shown as its own column, "-" when not applicable.
   function getItemGsm(row) {
     const tape = row.tapeId;
     if (!tape) return "";
@@ -241,7 +235,7 @@
 
   // Client GSM is the per-client-binding GSM (clientTapeGsm
   // on tapeBinding) — distinct from the item's own GSM above.
-  // TTR/Label bindings have no client GSM field.
+  // SL bindings have no client GSM field.
   function getClientGsm(row) {
     const binding = row.tapeBinding;
     if (!binding) return "";
@@ -249,13 +243,12 @@
     return "";
   }
 
-  // Width/Mtrs are only meaningful for Tape and TTR rows — broken out of
+  // Width/Mtrs are only meaningful for Tape rows — broken out of
   // getItemName() into their own table columns instead of a combined string.
   function getItemWidth(row) {
     const tape = row.tapeId;
     if (!tape) return "";
     if (row.onModel === "Tape") return tape.tapeWidth || "";
-    if (row.onModel === "Ttr") return tape.ttrWidth || "";
     return "";
   }
 
@@ -263,7 +256,6 @@
     const tape = row.tapeId;
     if (!tape) return "";
     if (row.onModel === "Tape") return tape.tapeMtrs || "";
-    if (row.onModel === "Ttr") return tape.ttrMtrs || "";
     return "";
   }
 
@@ -297,25 +289,20 @@
         { field: "Binding Status", orgValue: "-", clientValue: orDash(binding.status) },
       ];
     }
-    if (row.onModel === "Ttr") {
+    if (row.onModel === "SachikoSL") {
       return [
-        { field: "Material Code", orgValue: orDash(item.ttrMaterialCode), clientValue: orDash(binding.ttrClientMaterialCode) },
-        { field: "Type", orgValue: orDash(item.ttrType), clientValue: orDash(binding.clientTtrType) },
-        { field: "Color", orgValue: orDash(item.ttrColor), clientValue: orDash(item.ttrColor) },
-        { field: "Ink Face", orgValue: orDash(item.ttrInkFace), clientValue: orDash(item.ttrInkFace) },
-        { field: "Width", orgValue: orDash(item.ttrWidth), clientValue: orDash(item.ttrWidth) },
-        { field: "Meters", orgValue: orDash(item.ttrMtrs), clientValue: orDash(item.ttrMtrs) },
-        { field: "Core ID", orgValue: orDash(item.ttrCoreId), clientValue: orDash(item.ttrCoreId) },
-        { field: "Core Length", orgValue: orDash(item.ttrCoreLength), clientValue: orDash(item.ttrCoreLength) },
-        { field: "Notch", orgValue: orDash(item.ttrNotch), clientValue: orDash(item.ttrNotch) },
-        { field: "Winding", orgValue: orDash(item.ttrWinding), clientValue: orDash(item.ttrWinding) },
-        { field: "Minimum Qty", orgValue: "-", clientValue: orDash(binding.ttrMinQty) },
-        { field: "Minimum Order Qty", orgValue: "-", clientValue: orDash(binding.ttrOdrQty) },
-        { field: "Order Frequency", orgValue: "-", clientValue: orDash(binding.ttrOdrFreq) },
-        { field: "Credit Term", orgValue: "-", clientValue: orDash(binding.ttrCreditTerm) },
-        { field: "Rate Per Roll", orgValue: "-", clientValue: orDash(binding.ttrRatePerRoll) },
-        { field: "Sale Cost", orgValue: "-", clientValue: orDash(binding.ttrSaleCost) },
-        { field: "Meters Delivered", orgValue: "-", clientValue: orDash(binding.ttrMtrsDel) },
+        { field: "SKU Code", orgValue: orDash(item.skuCode), clientValue: orDash(item.skuCode) },
+        { field: "Product Code", orgValue: orDash(item.productCode), clientValue: orDash(item.productCode) },
+        { field: "Facestock Family", orgValue: orDash(item.facestock?.facestockFamily), clientValue: orDash(item.facestock?.facestockFamily) },
+        { field: "Facestock Type", orgValue: orDash(item.facestock?.facestockType), clientValue: orDash(item.facestock?.facestockType) },
+        { field: "Facestock GSM", orgValue: orDash(item.facestock?.facestockGsm), clientValue: orDash(item.facestock?.facestockGsm) },
+        { field: "Facestock Micron", orgValue: orDash(item.facestock?.facestockMicron), clientValue: orDash(item.facestock?.facestockMicron) },
+        { field: "Adhesive Type", orgValue: orDash(item.adhesive?.adhesiveType), clientValue: orDash(item.adhesive?.adhesiveType) },
+        { field: "Adhesive GSM", orgValue: orDash(item.adhesive?.adhesiveGsm), clientValue: orDash(item.adhesive?.adhesiveGsm) },
+        { field: "Release Liner Type", orgValue: orDash(item.releaseLiner?.releaseLinerType), clientValue: orDash(item.releaseLiner?.releaseLinerType) },
+        { field: "Release Liner Color", orgValue: orDash(item.releaseLiner?.releaseLinerColor), clientValue: orDash(item.releaseLiner?.releaseLinerColor) },
+        { field: "Release Liner GSM", orgValue: orDash(item.releaseLiner?.releaseLinerGsm), clientValue: orDash(item.releaseLiner?.releaseLinerGsm) },
+        { field: "Location", orgValue: "-", clientValue: orDash(binding.location) },
         { field: "Binding Status", orgValue: "-", clientValue: orDash(binding.status) },
       ];
     }
@@ -494,8 +481,7 @@
           const user = row.userId ? row.userId._id : "";
           const item = row.tapeBinding ? row.tapeBinding._id : "";
           let itemType = "TAPE";
-          if (row.onModel === "Ttr") itemType = "TTR";
-          if (row.onModel === "Label") itemType = "LABEL";
+          if (row.onModel === "SachikoSL") itemType = "SL";
 
           const confirmUrl = `/sachiko/sales/order/confirm?orderId=${row._id}&type=${itemType}&client=${encodeURIComponent(client)}&user=${user}&item=${item}`;
           const editUrl = `/sachiko/sales/order?orderId=${row._id}&type=${itemType}&client=${encodeURIComponent(client)}&user=${user}&item=${item}`;
@@ -601,8 +587,7 @@
         headerFilterPlaceholder: "Search",
         formatter: (cell) => {
           const val = cell.getValue();
-          if (val === "Ttr") return "TTR";
-          if (val === "Label") return "Label";
+          if (val === "SachikoSL") return "SL";
           return "Tape";
         },
       },
@@ -757,14 +742,13 @@
           const itemId = row.tapeId?._id || row.tapeId;
           const model = row.onModel;
 
+          // SL has no stock concept -- no profile link, no stock coloring.
+          if (model === "SachikoSL") return "-";
+
           if (!itemId || !model) return val;
 
-          let typeSlug = "tape";
-          if (model === "Ttr") typeSlug = "ttr";
-          else if (model === "Label") typeSlug = "label";
+          const url = `/sachiko/tape/profile/${itemId}`;
 
-          const url = `/sachiko/${typeSlug}/profile/${itemId}`;
-          
           let color = Number(val) < balance ? "#dc2626" : "#059669";
           if (row.hasPendingPo) color = "#d97706"; // Yellowish orange for pending PO
 
@@ -853,7 +837,7 @@
   const tableTotal = enrichedOrderData.reduce((sum, row) => sum + (Number(row.valueAmount) || 0), 0);
   const labelTotal = Number(labelTotals.labelTotal) || 0;
   const colorLabelTotal = Number(labelTotals.colorLabelTotal) || 0;
-  // Grand total = this table's pending value (Tape/TTR) + Plain
+  // Grand total = this table's pending value (Tape/SL) + Plain
   // Labels + Color Labels (those live on their own pending pages, so they're
   // never part of the table rows above).
   const grandTotal = tableTotal + labelTotal + colorLabelTotal;

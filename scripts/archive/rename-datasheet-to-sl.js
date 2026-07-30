@@ -8,23 +8,6 @@ import mongoose from "mongoose";
 import connectDB from "../../config/db.js";
 import Counter from "../../models/system/counter.js";
 
-// ---------------------------------------------------------------------------
-// One-time migration: rename the "Datasheet" feature to "SL" all the way down
-// to the database.
-//
-//   - collection "datasheets"      -> "sls"
-//   - field      datasheetId       -> slId (on every document)
-//   - unique index on datasheetId  -> rebuilt as a unique index on slId
-//   - Counter doc key "sachikoDatasheetId" -> "sachikoSLId" (keeps the running
-//     sequence number so new SL ids continue where Datasheet ids left off)
-//   - uploads/sachiko/datasheets/  -> uploads/sachiko/sls/ (word file uploads)
-//
-// Dry-run by default. Pass --apply to commit.
-//
-//   node scripts/rename-datasheet-to-sl.js           # preview
-//   node scripts/rename-datasheet-to-sl.js --apply   # commit
-// ---------------------------------------------------------------------------
-
 const APPLY = process.argv.includes("--apply");
 
 await connectDB();

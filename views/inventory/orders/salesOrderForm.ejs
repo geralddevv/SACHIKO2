@@ -82,9 +82,7 @@
       <select name="itemType" id="item-type" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Select Item Type</option>
         <option value="TAPE">Tape</option>
-        <option value="LABEL">Plain Label</option>
-        <option value="COLOR_LABEL">Color Label</option>
-        <option value="TTR">TTR</option>
+        <option value="SL">SL</option>
       </select>
     </div>
 
@@ -572,9 +570,7 @@
     const bindingModel = String(order?.onBindingModel || "").toUpperCase();
 
     if (model === "TAPE" || bindingModel.includes("TAPEBINDING")) return "TAPE";
-    if (model === "TTR" || bindingModel.includes("TTRBINDING")) return "TTR";
-    if (model === "COLORLABEL" || bindingModel === "COLORLABEL") return "COLOR_LABEL";
-    if (model === "LABEL" || bindingModel.includes("LABEL")) return "LABEL";
+    if (model === "SACHIKOSL" || bindingModel.includes("SLBINDING")) return "SL";
 
     return "";
   }
@@ -877,11 +873,12 @@
         label: item.displayName,
         selected: String(item._id) === String(targetItemId) || (items.length === 1 && !targetItemId),
         customProperties: {
-          stock: JSON.stringify(item.stock || { totalStock: 0, locations: [] }),
+          stock: item.stock ? JSON.stringify(item.stock) : "",
           minQty: item.minOrderQty || 0,
           perRollQty: item.perRollQty || 0,
           rate: typeof item.rate !== "undefined" ? item.rate : null,
-          details: JSON.stringify(item.details || {})
+          details: JSON.stringify(item.details || {}),
+          location: item.location || "",
         }
       }));
 
@@ -961,49 +958,30 @@
     return `<table class="ap-table"><tbody>${rows}</tbody></table>`;
   }
 
-  // Details of the currently selected item (LABEL/COLOR_LABEL carry
-  // perRollQty/perRoll) -- kept around so the details table can be
-  // re-rendered when the quantity changes (No of Rolls depends on it).
+  // Details of the currently selected item -- kept around so the details
+  // table can be re-rendered when the quantity changes.
   let currentSelectedDetails = null;
 
-  // No of Rolls (span 3) only shows for LABEL/COLOR_LABEL items; when it's
-  // hidden, Remarks grows from span 7 to span 10 to fill the freed columns
-  // so the row still totals 32 instead of leaving a trailing gap.
+  // "No of Rolls" was Label/Color Label-only and neither Tape nor SL uses it,
+  // so Remarks always takes the full span.
   function syncRemarksWidth() {
-    const rollsDiv = document.getElementById("no-of-rolls-div");
     const remarksWrap = document.getElementById("remarks-wrap");
     if (!remarksWrap) return;
-    const rollsVisible = !!rollsDiv && rollsDiv.style.display !== "none";
-    remarksWrap.style.gridColumn = rollsVisible ? "span 7" : "span 10";
+    remarksWrap.style.gridColumn = "span 10";
   }
 
   function renderSelectedItemDetailsTable() {
     const detailsBox = document.getElementById("selected-item-details");
     const rollsDiv = document.getElementById("no-of-rolls-div");
-    const rollsInput = document.getElementById("no-of-rolls");
+    if (rollsDiv) rollsDiv.style.display = "none";
     if (!currentSelectedDetails) {
       detailsBox.style.display = "none";
       detailsBox.innerHTML = "";
-      if (rollsDiv) rollsDiv.style.display = "none";
       syncRemarksWidth();
       return;
     }
 
     const entries = getProfileDetailEntries(currentSelectedDetails);
-    const isLabelType = currentSelectedDetails.type === "LABEL" || currentSelectedDetails.type === "COLOR_LABEL";
-    if (isLabelType) {
-      const perRollQty = Number(currentSelectedDetails.perRollQty) || 0;
-      const qty = Number(String(quantityInput?.value || "").replace(/,/g, "")) || 0;
-      let rollsText = "-";
-      if (perRollQty > 0 && qty > 0) {
-        const rolls = qty / perRollQty;
-        rollsText = Number.isInteger(rolls) ? String(rolls) : rolls.toFixed(2);
-      }
-      if (rollsDiv) rollsDiv.style.display = "";
-      if (rollsInput) rollsInput.value = rollsText;
-    } else if (rollsDiv) {
-      rollsDiv.style.display = "none";
-    }
 
     if (entries.length > 0) {
       detailsBox.innerHTML = `<div class="ap-table-wrap">${kvTable(entries)}</div>`;
@@ -1026,22 +1004,7 @@
       out.push(highlight ? [label, text, true] : [label, text]);
     };
 
-    if (type === "TTR") {
-      pushIf("Product ID", d.productId);
-      pushIf("Min Stock Qty", d.minQty);
-      pushIf("Client Material Code", d.clientMaterialCode);
-      pushIf("Material Code", d.materialCode);
-      pushIf("Client Type", d.clientType);
-      pushIf("Type", d.ttrType);
-      pushIf("Color", d.color);
-      pushIf("Ink Face", d.inkFace);
-      pushIf("Width", d.width);
-      pushIf("Meters", d.mtrs);
-      pushIf("Core ID", d.coreId);
-      pushIf("Core Length", d.coreLength);
-      pushIf("Notch", d.notch);
-      pushIf("Winding", d.winding);
-    } else if (type === "TAPE") {
+    if (type === "TAPE") {
       pushIf("Product ID", d.productId);
       pushIf("Min Stock Qty", d.minQty);
       pushIf("Client Paper Code", d.clientPaperCode);
@@ -1054,31 +1017,18 @@
       pushIf("Meters", d.mtrs);
       pushIf("Core ID", d.coreId);
       pushIf("Finish", d.finish);
-    } else if (type === "LABEL") {
-      pushIf("Product ID", d.productId);
-      pushIf("Width", d.width);
-      pushIf("Height", d.height);
-      pushIf("Job Type", d.jobType);
-      pushIf("Instructions", d.instructions);
-      pushIf("Paper Type", d.paperType);
-      pushIf("Gap", d.gap);
-      pushIf("Ups", d.ups);
-      pushIf("Core", d.core);
-      pushIf("Min Order Qty", d.minQty);
-      pushIf("Per Roll Qty", d.perRollQty, true);
-      pushIf("Per Roll Rate", d.perRoll, true);
-    } else if (type === "COLOR_LABEL") {
-      pushIf("Product ID", d.productId);
-      pushIf("Job Name", d.jobName);
-      pushIf("Paper Type", d.paperType);
-      pushIf("Width", d.width);
-      pushIf("Height", d.height);
-      pushIf("Gap", d.gap);
-      pushIf("Ups", d.ups);
-      pushIf("Core", d.core);
-      pushIf("Min Order Qty", d.minQty);
-      pushIf("Per Roll Qty", d.perRollQty, true);
-      pushIf("Per Roll Rate", d.perRoll, true);
+    } else if (type === "SL") {
+      pushIf("SKU Code", d.skuCode);
+      pushIf("Product Code", d.productCode);
+      pushIf("Facestock Family", d.fsFamily);
+      pushIf("Facestock Type", d.fsType);
+      pushIf("Facestock GSM", d.fsGsm);
+      pushIf("Facestock Micron", d.fsMicron);
+      pushIf("Adhesive Type", d.adType);
+      pushIf("Adhesive GSM", d.adGsm);
+      pushIf("Release Liner Type", d.rlType);
+      pushIf("Release Liner Color", d.rlColor);
+      pushIf("Release Liner GSM", d.rlGsm);
     }
 
     return out;
@@ -1095,6 +1045,74 @@
     // Reset location selection
     sourceLocationInput.value = "";
     hideStockWarning();
+
+    // SL has no real stock model -- but still show the same stock-location
+    // bar Tape uses when it has no stock data yet: every known location as a
+    // selectable radio (not locked to just the binding's own one), Total/
+    // Booked/Balance shown as "-". The bound item's own location is
+    // pre-checked, but the person can still pick a different one.
+    if (itemTypeSelect.value === "SL") {
+      if (selectedOption && selectedOption.customProperties) {
+        try {
+          currentSelectedDetails = JSON.parse(selectedOption.customProperties.details || "{}");
+        } catch (_) {
+          currentSelectedDetails = null;
+        }
+      } else {
+        currentSelectedDetails = null;
+      }
+      renderSelectedItemDetailsTable();
+
+      const itemLocation = normalizeLocationName(selectedOption?.customProperties?.location || "");
+
+      try {
+        const locRes = await fetch("/sachiko/api/locations");
+        const allLocations = await locRes.json();
+
+        const locationHtml = (Array.isArray(allLocations) ? allLocations : []).map((locName) => {
+          const isSelected = normalizeLocationName(locName) === itemLocation;
+          return `<label class="location-option${isSelected ? " selected" : ""}" data-location="${locName}" data-qty="-" data-booked="-" data-balance="-">
+              <input type="radio" name="locationRadio" class="location-radio" value="${locName}" data-qty="-" data-booked="-" data-balance="-" ${isSelected ? "checked" : ""} />
+              <span class="location-label">${locName}:</span>
+              <span class="location-qty">-</span>
+            </label>`;
+        }).join("");
+
+        stockDisplay.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 22px; flex-wrap: nowrap; width: max-content; min-width: 100%;">
+            <div style="display: inline-flex; flex-wrap: nowrap; align-items: center; white-space: nowrap;">
+              ${locationHtml}
+            </div>
+            <div id="stock-stats" style="display: inline-flex; gap: 14px; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
+              <div style="font-weight: 700; color: #044A78; font-size: 16px;">
+                <i class="fa-solid fa-box-open"></i> Total: <span id="stat-total">-</span>
+              </div>
+              <div style="font-weight: 700; color: #d97706; font-size: 16px;" title="Pending Orders">
+                <i class="fa-regular fa-clock"></i> Booked: <span id="stat-booked">-</span>
+              </div>
+              <div style="font-weight: 700; color: #059669; font-size: 16px;" title="Available for new orders">
+                <i class="fa-solid fa-scale-balanced"></i> Balance: <span id="stat-balance">-</span>
+              </div>
+            </div>
+          </div>
+        `;
+        stockDisplay.style.display = "block";
+
+        stockDisplay.querySelectorAll('input[name="locationRadio"]').forEach((radio) => {
+          radio.addEventListener("change", function () {
+            syncSourceLocation(this.value);
+            stockDisplay.querySelectorAll(".location-option").forEach((el) => el.classList.remove("selected"));
+            this.closest(".location-option").classList.add("selected");
+          });
+        });
+
+        syncSourceLocation(itemLocation);
+      } catch (e) {
+        console.error("Failed to build SL location display", e);
+      }
+
+      return;
+    }
 
     if (selectedOption && selectedOption.customProperties && selectedOption.customProperties.stock) {
       try {
@@ -1583,7 +1601,7 @@
     const { selectedRadio, radioLocation, selectedLocation } = getSelectedStockLocation();
     
     // Check Source Location - ALL is not allowed for stock-based items
-    if (itemType === "TAPE" || itemType === "TTR") {
+    if (itemType === "TAPE") {
       const effectiveLocation = normalizeLocationName(
         selectedLocation || sourceLocationInput.value || currentSourceLocation || locationSelect.value || "",
       );
@@ -1606,10 +1624,9 @@
     }
 
     const dispatchQty = confirmMode ? (parseInt(confirmQuantityInput?.value) || 0) : qty;
-    // TEMPORARY: Labels aren't stock-tracked (matches the backend's
-    // onModel === "Label" bypass in POST /sales/order/status) — skip the
-    // physical-stock check for them so they can dispatch without stock.
-    if (confirmMode && itemType !== "LABEL") {
+    // Only Tape has physical stock (matches the backend's onModel !== "SachikoSL"
+    // bypass in POST /sales/order/status) — skip the physical-stock check for SL.
+    if (confirmMode && itemType === "TAPE") {
       const confirmLocation = normalizeLocationName(sourceLocationInput.value || currentSourceLocation || selectedLocation || selectedRadio?.value || "");
       // Validate against physical stock (qty) instead of available balance during dispatch
       const physicalQty = getPhysicalStockForLocation(confirmLocation);
@@ -1739,8 +1756,6 @@
       if (!itemId) {
         if (orderToEdit.tapeBinding && orderToEdit.tapeBinding._id) itemId = String(orderToEdit.tapeBinding._id);
         else if (orderToEdit.tapeBinding) itemId = String(orderToEdit.tapeBinding);
-        else if (orderToEdit.labelId) itemId = String(orderToEdit.labelId);
-        else if (orderToEdit.colorLabelId) itemId = String(orderToEdit.colorLabelId);
         else if (orderToEdit.tapeId && orderToEdit.tapeId._id) itemId = String(orderToEdit.tapeId._id);
       }
     }
@@ -1828,71 +1843,51 @@
 
          // 3. Set Item (Manually create option with injected stock)
          let tapeName = "Item";
-         // Label/ColorLabel orders reference the client binding directly, so
-         // it carries its own `productId` field (Tape/Ttr use
-         // tapeProductId/ttrProductId/etc. instead) — a reliable discriminator.
+         // SL orders reference a SachikoSL doc, which carries its own
+         // `productCode` field (Tape uses tapePaperCode/tapeGsm instead) —
+         // a reliable discriminator.
          const t = orderToEdit.tapeId || null;
          if (t) {
             if (t.tapePaperCode) tapeName = t.tapePaperCode + " " + t.tapeGsm + "gsm";
-            else if (t.ttrProductId) {
-              const parts = [
-                t.ttrType,
-                t.ttrWidth ? `${t.ttrWidth}` : null,
-                t.ttrMtrs ? `${t.ttrMtrs}m` : null,
-              ].filter(Boolean);
-              tapeName = `${parts[0] || t.ttrProductId || "Item"} ${parts.slice(1).join(" ")}`.trim();
-            } else if (t.productId && type === "COLOR_LABEL") {
-              tapeName = `${t.labelWidth || ""} x ${t.labelHeight || ""} - ${t.labelFamily || ""} - COLOR`;
-            } else if (t.productId) {
-              tapeName = `${t.labelWidth || ""} x ${t.labelHeight || ""} - ${t.labelFamily || ""} - ${t.jobType || ""}`;
-            }
+            else if (t.productCode) tapeName = `${t.productCode} (${t.skuCode || ""})`;
          }
           // Construct details object for profile display
           const detailsObj = { type: type || "" };
           if (t) {
              detailsObj.type = type;
-             detailsObj.productId = t.tapeProductId || t.ttrProductId || t.productId || "";
+             detailsObj.productId = t.tapeProductId || "";
              detailsObj.paperCode = t.tapePaperCode || "";
-             detailsObj.materialCode = t.ttrMaterialCode || "";
              detailsObj.gsm = t.tapeGsm || "";
-             detailsObj.paperType = t.tapePaperType || t.paperType || "";
+             detailsObj.paperType = t.tapePaperType || "";
              detailsObj.finish = t.tapeFinish || "";
-             detailsObj.color = t.ttrColor || "";
-             detailsObj.width = t.tapeWidth || t.ttrWidth || t.labelWidth || "";
-             detailsObj.mtrs = t.tapeMtrs || t.ttrMtrs || "";
-             detailsObj.coreId = t.tapeCoreId || t.coreId || "";
-             detailsObj.coreLength = t.coreLength || "";
-             detailsObj.notch = t.notch || "";
-             detailsObj.winding = t.ttrWinding || "";
-             detailsObj.inkFace = t.ttrInkFace || "";
+             detailsObj.width = t.tapeWidth || "";
+             detailsObj.mtrs = t.tapeMtrs || "";
+             detailsObj.coreId = t.tapeCoreId || "";
              detailsObj.adhesiveGsm = t.tapeAdhesiveGsm || "";
-             detailsObj.minQty = t.tapeMinQty || t.ttrMinQty || "";
+             detailsObj.minQty = t.tapeMinQty || "";
 
-             // Label / Color Label bindings carry their own spec + rate fields
-             // directly on `t` — there's no separate tapeBinding doc for these.
-             if (t.productId) {
-               detailsObj.productId = t.productId;
-               detailsObj.jobType = t.jobType || "";
-               detailsObj.jobName = t.jobName || "";
-               detailsObj.instructions = t.instructions || "";
-               detailsObj.height = t.labelHeight || "";
-               detailsObj.gap = t.labelGap || "";
-               detailsObj.ups = t.labelUps || "";
-               detailsObj.core = t.labelCore || "";
-               detailsObj.perRollQty = t.perRollQty || "";
-               detailsObj.perRoll = t.perRoll || "";
-               detailsObj.minQty = t.moqUnit === "ROLLS"
-                 ? ((Number(t.minOrderQty) || 0) * (Number(t.perRollQty) || 0)) || t.minOrderQty || ""
-                 : (t.minOrderQty || "");
+             // SL docs carry their own spec fields directly on `t` — there's
+             // no separate commercial binding doc for these (SLBinding only
+             // has location/status).
+             if (t.productCode) {
+               detailsObj.skuCode = t.skuCode || "";
+               detailsObj.productCode = t.productCode || "";
+               detailsObj.fsFamily = t.facestock?.facestockFamily || "";
+               detailsObj.fsType = t.facestock?.facestockType || "";
+               detailsObj.fsGsm = t.facestock?.facestockGsm ?? "";
+               detailsObj.fsMicron = t.facestock?.facestockMicron ?? "";
+               detailsObj.adType = t.adhesive?.adhesiveType || "";
+               detailsObj.adGsm = t.adhesive?.adhesiveGsm ?? "";
+               detailsObj.rlType = t.releaseLiner?.releaseLinerType || "";
+               detailsObj.rlColor = t.releaseLiner?.releaseLinerColor || "";
+               detailsObj.rlGsm = t.releaseLiner?.releaseLinerGsm ?? "";
              }
 
              // Client specific fields (from populated binding)
              if (orderToEdit.tapeBinding) {
                 const b = orderToEdit.tapeBinding;
                 detailsObj.clientPaperCode = b.tapeClientPaperCode || "";
-                detailsObj.clientMaterialCode = b.ttrClientMaterialCode || "";
                 detailsObj.clientGsm = b.clientTapeGsm || "";
-                detailsObj.clientType = b.clientTtrType || "";
              }
           }
 
@@ -1904,21 +1899,8 @@
              customProperties: {
                 stock: stockInfo ? JSON.stringify(stockInfo) : JSON.stringify({ totalStock: 0, locations: [] }),
                 details: JSON.stringify(detailsObj),
-                minQty: orderToEdit.tapeBinding
-                  ? (orderToEdit.tapeBinding.tapeMinQty ??
-                    orderToEdit.tapeBinding.ttrMinQty ??
-                    0)
-                  // Orders are always placed in labels (qty) now -- older bindings that
-                  // predate the Rolls option's removal may still have MOQ stored in
-                  // rolls, so convert it to the label-equivalent here too.
-                  : (t?.moqUnit === "ROLLS"
-                      ? ((Number(t.minOrderQty) || 0) * (Number(t.perRollQty) || 0)) || t?.minOrderQty || 0
-                      : (t?.minOrderQty ?? 0)),
-                rate: orderToEdit.tapeBinding
-                  ? (orderToEdit.tapeBinding.tapeRatePerRoll ??
-                    orderToEdit.tapeBinding.ttrRatePerRoll ??
-                    0)
-                  : (t?.productId ? (t.ratePerLabel ?? 0) : null)
+                minQty: orderToEdit.tapeBinding?.tapeMinQty ?? 0,
+                rate: orderToEdit.tapeBinding?.tapeRatePerRoll ?? (t?.productCode ? null : 0)
              }
           }], "value", "label", true);
           setChoiceValue(itemChoices, itemSelect, itemId);

@@ -53,6 +53,8 @@
 
 <script>
   const raw = <%- safeJson(jsonData) %>;
+  const clientName = <%- safeJson(clientName) %>;
+  const userId = <%- safeJson(userId) %>;
 
   const tableData = raw.map(binding => {
     const sl = binding.sl || {};
@@ -130,6 +132,20 @@
             </div>
           `;
         },
+      },
+      {
+        title: "Order",
+        hozAlign: "center",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return `
+            <button
+              onclick="window.location.href='/sachiko/sales/order?type=SL&client=${encodeURIComponent(clientName)}&user=${userId}&item=${row._id}'"
+              style="padding:2px 10px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">
+              <i class="fa-solid fa-cart-plus"></i>
+            </button>
+          `;
+        }
       },
       {
         title: "Status",

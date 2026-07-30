@@ -129,6 +129,8 @@ router.get("/sl-binding/view/:id", async (req, res) => {
 
     res.render("sachiko/slBindingDisp.ejs", {
       jsonData: user.sl || [],
+      userId: String(user._id),
+      clientName: user.clientName || "",
       CSS: "tableDisp.css",
       JS: false,
       title: "SL Binding Display",
