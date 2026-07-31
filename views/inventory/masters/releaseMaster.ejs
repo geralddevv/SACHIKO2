@@ -1,0 +1,527 @@
+<% layout('/layout/boilerplate') %>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 2px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .header-action-btn:hover {
+      background-color: #e4e4e4;
+    }
+    #release-master-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .dialog-header {
+      background: #044A78;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .dialog-close-btn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 2px;
+      opacity: 0.8;
+      transition: opacity 0.15s;
+    }
+    .dialog-close-btn:hover {
+      opacity: 1;
+    }
+    .dialog-body {
+      padding: 24px;
+    }
+    .dialog-field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 8px;
+    }
+    .dialog-error {
+      color: #ef4444;
+      font-size: 12px;
+      margin-top: 5px;
+      display: none;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .dialog-field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    /* Match Choices.js selects to the .premium-input look used by the rest
+       of this dialog's fields. */
+    .dialog-body .choices__inner {
+      padding: 11px 14px !important;
+      border-radius: 10px !important;
+      border: 1.5px solid #e2e8f0 !important;
+      background-color: #f8fafc !important;
+      font-size: 14px !important;
+      min-height: 0 !important;
+      transition: all 0.2s ease !important;
+    }
+    .dialog-body .choices__list--single {
+      padding: 0 !important;
+    }
+    .dialog-body .choices.is-focused .choices__inner,
+    .dialog-body .choices.is-open .choices__inner {
+      border-color: #044a78 !important;
+      background-color: #ffffff !important;
+      box-shadow: 0 0 0 4px rgba(4, 74, 120, 0.1) !important;
+    }
+    .dialog-body .choices[data-type*="select-one"]::after {
+      display: block !important;
+      content: "" !important;
+      width: 12px !important;
+      height: 8px !important;
+      border-style: none !important;
+      border-width: 0 !important;
+      background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23044a78' stroke-width='2' fill='none'/%3E%3C/svg%3E") !important;
+      background-repeat: no-repeat !important;
+      background-size: contain !important;
+      position: absolute !important;
+      right: 14px !important;
+      top: 50% !important;
+      margin-top: 0 !important;
+      transform: translateY(-50%) !important;
+    }
+    .dialog-body .choices[data-type*="select-one"].is-open::after {
+      transform: translateY(-50%) rotate(180deg) !important;
+    }
+    /* Dropdown list must render above the dialog overlay (see CLAUDE.md
+       "Dialog / modal pattern" -- Choices.js in dialogs). */
+    .dialog-body .choices__list--dropdown {
+      border-radius: 10px !important;
+      border: 1.5px solid #e2e8f0 !important;
+      z-index: 99999 !important;
+    }
+  </style>
+
+  <div class="indi-head">
+    <h1>Release Master</h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <button class="header-action-btn" onclick="openAddDialog()">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Release
+      </button>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="release-master-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- ============ ADD RELEASE DIALOG ============ -->
+<div class="logout-modal" id="addDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
+    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="addDialogTitle">Add Release Liner</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <label class="dialog-field-label" for="addSkuIdPreview">SKU ID</label>
+      <input type="text" id="addSkuIdPreview" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="addTypeSelect">Type</label>
+          <select id="addTypeSelect">
+            <option value="" disabled selected hidden>Select type</option>
+            <option value="CCK">CCK</option>
+            <option value="GLASSINE">GLASSINE</option>
+            <option value="SCK">SCK</option>
+          </select>
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addColorSelect">Color</label>
+          <select id="addColorSelect">
+            <option value="WHITE" selected>WHITE</option>
+            <option value="YELLOW">YELLOW</option>
+            <option value="BLUE">BLUE</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="addSkuCodeInput">SKU Code</label>
+          <input type="text" id="addSkuCodeInput" class="form-control premium-input" placeholder="Enter SKU code" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addGsmInput">GSM</label>
+          <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+        </div>
+      </div>
+
+      <label class="dialog-field-label" for="addMtrsInput">Mtrs</label>
+      <input type="number" id="addMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
+
+      <div id="addReleaseError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Release Liner</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EDIT RELEASE DIALOG ============ -->
+<div class="logout-modal" id="editDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
+    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="editDialogTitle">Edit Release Liner</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <label class="dialog-field-label" for="editSkuIdDisplay">SKU ID</label>
+      <input type="text" id="editSkuIdDisplay" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editTypeSelect">Type</label>
+          <select id="editTypeSelect">
+            <option value="" disabled hidden>Select type</option>
+            <option value="CCK">CCK</option>
+            <option value="GLASSINE">GLASSINE</option>
+            <option value="SCK">SCK</option>
+          </select>
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editColorSelect">Color</label>
+          <select id="editColorSelect">
+            <option value="WHITE">WHITE</option>
+            <option value="YELLOW">YELLOW</option>
+            <option value="BLUE">BLUE</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editSkuCodeInput">SKU Code</label>
+          <input type="text" id="editSkuCodeInput" class="form-control premium-input" placeholder="Enter SKU code" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editGsmInput">GSM</label>
+          <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+        </div>
+      </div>
+
+      <label class="dialog-field-label" for="editMtrsInput">Mtrs</label>
+      <input type="number" id="editMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
+
+      <div id="editReleaseError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Release Liner</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DELETE CONFIRMATION DIALOG ============ -->
+<div class="logout-modal" id="deleteDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle"
+    style="width: min(400px, 95vw);">
+    <h2 class="logout-title" id="deleteDialogTitle">
+      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Delete Release Liner?
+    </h2>
+    <p class="logout-text">
+      Are you sure you want to delete <strong id="deleteSkuId"></strong>? This action cannot be undone.
+    </p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" onclick="closeDeleteDialog()">Cancel</button>
+      <button
+        class="logout-btn"
+        type="button"
+        id="deleteConfirmBtn"
+        onclick="submitDelete()"
+        style="background: #ef4444; color: #fff; border-color: #ef4444;">
+        Yes, Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+<script id="releases-data" type="application/json"><%- safeJson(releases) %></script>
+<script id="preview-skuid-data" type="application/json"><%- safeJson(previewSkuId) %></script>
+<script>
+  const releasesData = JSON.parse(document.getElementById("releases-data").textContent);
+  let previewSkuId = JSON.parse(document.getElementById("preview-skuid-data").textContent);
+
+  let addTypeChoices = null, addColorChoices = null;
+  let editTypeChoices = null, editColorChoices = null;
+
+  // ---- Table ----
+  const table = new Tabulator("#release-master-table", {
+    data: releasesData,
+    height: "100%",
+    responsiveLayout: false,
+    movableColumns: true,
+    placeholder: "No release liner masters added yet.",
+    columns: [
+      { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
+      { title: "SKU Code", field: "skuCode", headerFilter: "input", minWidth: 130 },
+      { title: "Type", field: "type", headerFilter: "input", minWidth: 120 },
+      { title: "Color", field: "color", minWidth: 100 },
+      { title: "GSM", field: "gsm", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Mtrs", field: "mtrs", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      {
+        title: "Actions",
+        width: 110,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: function (cell) {
+          const row = cell.getRow().getData();
+          const wrap = document.createElement("div");
+          wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "loc-btn";
+          editBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#e67e22;";
+          editBtn.title = "Edit Release Liner";
+          editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
+          editBtn.addEventListener("click", () => openEditDialog(row));
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "loc-btn";
+          deleteBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#d9534f;";
+          deleteBtn.title = "Delete Release Liner";
+          deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+          deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.skuId));
+
+          wrap.appendChild(editBtn);
+          wrap.appendChild(deleteBtn);
+          return wrap;
+        },
+      },
+    ],
+  });
+
+  // ---- Helpers ----
+  function openModal(id) {
+    const d = document.getElementById(id);
+    d.classList.add("show");
+    d.setAttribute("aria-hidden", "false");
+  }
+  function closeModal(id) {
+    const d = document.getElementById(id);
+    d.classList.remove("show");
+    d.setAttribute("aria-hidden", "true");
+  }
+  function showError(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+  function hideError(elId) {
+    document.getElementById(elId).style.display = "none";
+  }
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.style.opacity = loading ? "0.7" : "";
+  }
+
+  ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+    document.getElementById(id).addEventListener("click", function (e) {
+      if (e.target === this) closeModal(id);
+    });
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+      if (document.getElementById(id).classList.contains("show")) closeModal(id);
+    });
+  });
+
+  // ---- ADD ----
+  function openAddDialog() {
+    document.getElementById("addSkuIdPreview").value = previewSkuId;
+    document.getElementById("addSkuCodeInput").value = "";
+    document.getElementById("addGsmInput").value = "";
+    document.getElementById("addMtrsInput").value = "";
+
+    if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
+    document.getElementById("addTypeSelect").value = "";
+    addTypeChoices = new Choices("#addTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    if (addColorChoices) { addColorChoices.destroy(); addColorChoices = null; }
+    document.getElementById("addColorSelect").value = "WHITE";
+    addColorChoices = new Choices("#addColorSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    hideError("addReleaseError");
+    openModal("addDialog");
+    setTimeout(() => document.getElementById("addSkuCodeInput").focus(), 60);
+  }
+  function closeAddDialog() {
+    closeModal("addDialog");
+  }
+
+  async function submitAdd() {
+    const skuCode = document.getElementById("addSkuCodeInput").value.trim();
+    const type = document.getElementById("addTypeSelect").value;
+    if (!skuCode) return showError("addReleaseError", "SKU Code is required.");
+    if (!type) return showError("addReleaseError", "Type is required.");
+
+    hideError("addReleaseError");
+    setLoading("addSubmitBtn", true);
+    try {
+      const res = await fetch("/sachiko/form/release", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          skuCode,
+          type,
+          color: document.getElementById("addColorSelect").value,
+          gsm: document.getElementById("addGsmInput").value,
+          mtrs: document.getElementById("addMtrsInput").value,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = data.redirect || "/sachiko/form/release";
+      } else {
+        showError("addReleaseError", data.message || "Failed to add release liner.");
+      }
+    } catch {
+      showError("addReleaseError", "Server error. Please try again.");
+    } finally {
+      setLoading("addSubmitBtn", false);
+    }
+  }
+
+  // ---- EDIT ----
+  let editId = null;
+
+  function openEditDialog(row) {
+    editId = row._id;
+    document.getElementById("editSkuIdDisplay").value = row.skuId;
+    document.getElementById("editSkuCodeInput").value = row.skuCode || "";
+    document.getElementById("editGsmInput").value = row.gsm ?? "";
+    document.getElementById("editMtrsInput").value = row.mtrs ?? "";
+
+    if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
+    document.getElementById("editTypeSelect").value = row.type || "";
+    editTypeChoices = new Choices("#editTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    if (editColorChoices) { editColorChoices.destroy(); editColorChoices = null; }
+    document.getElementById("editColorSelect").value = row.color || "WHITE";
+    editColorChoices = new Choices("#editColorSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    hideError("editReleaseError");
+    openModal("editDialog");
+  }
+  function closeEditDialog() {
+    closeModal("editDialog");
+    editId = null;
+  }
+
+  async function submitEdit() {
+    const skuCode = document.getElementById("editSkuCodeInput").value.trim();
+    const type = document.getElementById("editTypeSelect").value;
+    if (!skuCode) return showError("editReleaseError", "SKU Code is required.");
+    if (!type) return showError("editReleaseError", "Type is required.");
+    if (!editId) return;
+
+    hideError("editReleaseError");
+    setLoading("editSubmitBtn", true);
+    try {
+      const res = await fetch(`/sachiko/api/release/${editId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          skuCode,
+          type,
+          color: document.getElementById("editColorSelect").value,
+          gsm: document.getElementById("editGsmInput").value,
+          mtrs: document.getElementById("editMtrsInput").value,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        showError("editReleaseError", data.message || "Failed to update release liner.");
+      }
+    } catch {
+      showError("editReleaseError", "Server error. Please try again.");
+    } finally {
+      setLoading("editSubmitBtn", false);
+    }
+  }
+
+  // ---- DELETE ----
+  let deleteId = null;
+
+  function openDeleteDialog(id, skuId) {
+    deleteId = id;
+    document.getElementById("deleteSkuId").textContent = skuId;
+    openModal("deleteDialog");
+  }
+  function closeDeleteDialog() {
+    closeModal("deleteDialog");
+    deleteId = null;
+  }
+
+  async function submitDelete() {
+    if (!deleteId) return;
+    setLoading("deleteConfirmBtn", true);
+    try {
+      const res = await fetch(`/sachiko/api/release/${deleteId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        closeDeleteDialog();
+        alert(data.message || "Failed to delete release liner.");
+      }
+    } catch {
+      closeDeleteDialog();
+      alert("Error deleting release liner.");
+    } finally {
+      setLoading("deleteConfirmBtn", false);
+    }
+  }
+</script>

@@ -6,6 +6,10 @@ import connectDB from "./config/db.js";
 import fairdeskRoute from "./routes/fairdesk_route.js";
 import sachikoRoute from "./routes/sachiko/sachiko_route.js";
 import machineRoutes from "./routes/system/machine.js";
+import facestockMasterRoutes from "./routes/system/facestockMaster.js";
+import coreMasterRoutes from "./routes/system/coreMaster.js";
+import adhesiveMasterRoutes from "./routes/system/adhesiveMaster.js";
+import releaseMasterRoutes from "./routes/system/releaseMaster.js";
 import payrollRoute from "./routes/acccounting/payroll.js";
 import loanRoute from "./routes/acccounting/loan.js";
 import advanceRoute from "./routes/acccounting/advance.js";
@@ -867,6 +871,10 @@ app.use(
 // pages before the request ever fell through. The roles are enforced per
 // route inside the router instead.
 app.use("/sachiko", requireAuth, machineRoutes);
+app.use("/sachiko", requireAuth, facestockMasterRoutes);
+app.use("/sachiko", requireAuth, coreMasterRoutes);
+app.use("/sachiko", requireAuth, adhesiveMasterRoutes);
+app.use("/sachiko", requireAuth, releaseMasterRoutes);
 
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales", "hr"]), fairdeskRoute);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeBindingRoutes);
