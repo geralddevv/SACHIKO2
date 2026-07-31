@@ -79,6 +79,7 @@
       rlColor: labelStock.releaseLiner?.releaseLinerColor || "",
       rlGsm: labelStock.releaseLiner?.releaseLinerGsm ?? "",
       location: binding.location || "",
+      rate: binding.rate ?? "",
       status: binding.status || "ACTIVE",
     };
   });
@@ -169,6 +170,7 @@
       withTextFilter({ title: "RL Color", field: "rlColor", minWidth: 100 }),
       withTextFilter({ title: "RL GSM", field: "rlGsm", minWidth: 100 }),
       withTextFilter({ title: "Location", field: "location", minWidth: 140 }),
+      withTextFilter({ title: "Rate", field: "rate", minWidth: 100 }),
     ],
   });
 
@@ -204,6 +206,7 @@
           { label: "Release Liner Color", value: row.rlColor },
           { label: "Release Liner GSM", value: row.rlGsm !== "" ? row.rlGsm + " GSM" : null },
           { label: "Location", value: row.location },
+          { label: "Rate", value: row.rate },
           { label: "Status", value: row.status },
         ].map(r => `
           <div style="display:flex;justify-content:space-between;border-bottom:1px solid #f1f5f9;padding-bottom:10px;">

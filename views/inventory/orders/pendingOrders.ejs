@@ -32,8 +32,8 @@
       <span id="filtered-value-display" class="order-highlight filtered" style="display: none">Filtered: ₹0.00</span>
     </h1>
     <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
-      <span id="color-label-value-display" class="order-highlight">Color Labels: ₹0.00</span>
-      <span id="plain-label-value-display" class="order-highlight">Plain Label: ₹0.00</span>
+      <span id="ls-value-display" class="order-highlight">LS: ₹0.00</span>
+      <span id="tape-value-display" class="order-highlight">Tape: ₹0.00</span>
       <span id="total-value-display" class="order-highlight active">Total: ₹0.00</span>
       <a
         href="/sachiko/sales/order/logs"
@@ -91,13 +91,9 @@
 <script id="order-data" type="application/json">
   <%- safeJson(orders || []) %>
 </script>
-<script id="label-totals-data" type="application/json">
-  <%- safeJson({ labelTotal: labelTotal || 0, colorLabelTotal: colorLabelTotal || 0 }) %>
-</script>
 <script>
   /* Safe JSON injection */
   const orderData = JSON.parse(document.getElementById("order-data").textContent);
-  const labelTotals = JSON.parse(document.getElementById("label-totals-data").textContent);
   const enrichedOrderData = orderData.map((row) => {
     const rate = Number(row.orderRate) || 0;
     const balance = Math.max((Number(row.quantity) || 0) - (Number(row.dispatchedQuantity) || 0), 0);
@@ -243,19 +239,20 @@
     return "";
   }
 
-  // Width/Mtrs are only meaningful for Tape rows — broken out of
-  // getItemName() into their own table columns instead of a combined string.
+  // Width/Mtrs -- broken out of getItemName() into their own table columns
+  // instead of a combined string. Tape rows carry these on the item spec
+  // (tapeId.tapeWidth/tapeMtrs); Label Stock orders collect the equivalent
+  // paperSize/runningMeters directly on the order itself instead (see the
+  // LABEL_STOCK branch of POST /sales/order/create), so fall back to those.
   function getItemWidth(row) {
-    const tape = row.tapeId;
-    if (!tape) return "";
-    if (row.onModel === "Tape") return tape.tapeWidth || "";
+    if (row.onModel === "Tape") return row.tapeId?.tapeWidth || "";
+    if (row.onModel === "SachikoLabelStock") return row.paperSize || "";
     return "";
   }
 
   function getItemMtrs(row) {
-    const tape = row.tapeId;
-    if (!tape) return "";
-    if (row.onModel === "Tape") return tape.tapeMtrs || "";
+    if (row.onModel === "Tape") return row.tapeId?.tapeMtrs || "";
+    if (row.onModel === "SachikoLabelStock") return row.runningMeters || "";
     return "";
   }
 
@@ -835,12 +832,8 @@
 
   // Pre-compute grand total from all rows (never changes)
   const tableTotal = enrichedOrderData.reduce((sum, row) => sum + (Number(row.valueAmount) || 0), 0);
-  const labelTotal = Number(labelTotals.labelTotal) || 0;
-  const colorLabelTotal = Number(labelTotals.colorLabelTotal) || 0;
-  // Grand total = this table's pending value (Tape/SL) + Plain
-  // Labels + Color Labels (those live on their own pending pages, so they're
-  // never part of the table rows above).
-  const grandTotal = tableTotal + labelTotal + colorLabelTotal;
+  const lsTotal = enrichedOrderData.reduce((sum, row) => sum + (row.onModel === "SachikoLabelStock" ? (Number(row.valueAmount) || 0) : 0), 0);
+  const tapeTotal = enrichedOrderData.reduce((sum, row) => sum + (row.onModel === "Tape" ? (Number(row.valueAmount) || 0) : 0), 0);
 
   function formatINR(value) {
     return "₹" + value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -849,12 +842,12 @@
   // Set the static totals on load
   const tableTotalDisplay = document.getElementById("table-total-display");
   if (tableTotalDisplay) tableTotalDisplay.textContent = "Pending Items: " + formatINR(tableTotal);
-  const colorLabelDisplay = document.getElementById("color-label-value-display");
-  if (colorLabelDisplay) colorLabelDisplay.textContent = "Color Labels: " + formatINR(colorLabelTotal);
-  const plainLabelDisplay = document.getElementById("plain-label-value-display");
-  if (plainLabelDisplay) plainLabelDisplay.textContent = "Plain Label: " + formatINR(labelTotal);
+  const lsDisplay = document.getElementById("ls-value-display");
+  if (lsDisplay) lsDisplay.textContent = "LS: " + formatINR(lsTotal);
+  const tapeDisplay = document.getElementById("tape-value-display");
+  if (tapeDisplay) tapeDisplay.textContent = "Tape: " + formatINR(tapeTotal);
   const totalDisplay = document.getElementById("total-value-display");
-  if (totalDisplay) totalDisplay.textContent = "Total: " + formatINR(grandTotal);
+  if (totalDisplay) totalDisplay.textContent = "Total: " + formatINR(tableTotal);
 
   // Update filtered value whenever filters change
   // dataFiltered passes (filters, rows) where rows = currently visible row components

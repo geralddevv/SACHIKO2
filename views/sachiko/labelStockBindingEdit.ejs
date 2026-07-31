@@ -1,4 +1,4 @@
-<% layout('/layout/boilerplate') -%>
+<% layout('/layout/boilerplate') %>
 <style>
   .label-stock-id-success {
     border: 2px solid #28a745 !important;
@@ -6,327 +6,248 @@
     color: #155724;
     font-weight: 600;
   }
+
   .label-stock-id-error {
     border: 2px solid #dc3545 !important;
     background-color: #fff5f5;
     color: #721c24;
     font-weight: 600;
   }
+
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+
   input[readonly] { background: #f1f5f9; cursor: not-allowed; }
 </style>
 
+<!-- The main content -->
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form
-    class="needs-validation"
-    action="/sachiko/label-stock-binding/edit/<%= binding._id %>"
-    method="post"
-    onsubmit="return validateBeforeSubmit()"
-    autocomplete="off"
-    novalidate
-  >
-    <input type="hidden" name="labelStockId" id="resolved-label-stock-id" value="<%= binding.labelStock?._id || '' %>" />
-
+  <form action="/sachiko/label-stock-binding/edit/<%= binding._id %>" method="post" onsubmit="return handleLabelStockBindingSubmit(event)" class="needs-validation" autocomplete="off" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <div class="span-full form-heading">
       <h1>Edit Label Stock Binding</h1>
     </div>
 
-    <!-- ================= USER INFO (READ-ONLY) ================= -->
     <div class="span-full form-subheading">
-      <h1>User Information</h1>
+      <h1>Binding Details</h1>
     </div>
 
-    <div class="span-seven">
-      <label>SKU ID</label>
-      <input type="text" class="form-control input-tag"
-        value="<%= binding.labelStock?.labelStockId || 'N/A' %>" readonly />
-    </div>
-    <div class="span-seven">
-      <label>SKU Code</label>
-      <input type="text" id="label-stock-id-display" class="form-control input-tag"
-        value="<%= binding.labelStock?.skuCode || 'N/A' %>" readonly />
-    </div>
-    <div class="span-six">
+    <div id="client-name-div" class="span-seven">
       <label>Client Name</label>
-      <input type="text" class="form-control input-tag" value="<%= binding.userId?.clientName || '' %>" readonly />
+      <input type="text" class="form-control" value="<%= binding.userId?.clientName || '' %>" readonly />
     </div>
-    <div class="span-six">
+
+    <div id="user-name-div" class="span-five">
       <label>User Name</label>
-      <input type="text" class="form-control input-tag" value="<%= binding.userId?.userName || '' %>" readonly />
+      <input type="text" class="form-control" value="<%= binding.userId?.userName || '' %>" readonly />
     </div>
-    <div class="span-six">
-      <label for="binding-location">Location</label>
-      <select name="location" id="binding-location" class="form-control select-tag" required>
+    <div id="user-name-contact-div" class="span-four">
+      <label>User Contact</label>
+      <input type="text" class="form-control" value="<%= binding.userId?.userContact || '' %>" readonly />
+    </div>
+    <div id="client-location-div" class="span-three">
+      <label for="client-location">Location</label>
+      <select name="location" id="client-location" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select</option>
         <% (userLocations || []).forEach(loc => { %>
           <option value="<%= loc %>" <%= (binding.location || '') === loc ? 'selected' : '' %>><%= loc %></option>
         <% }) %>
       </select>
     </div>
-
-    <!-- ================= LABEL STOCK SPECIFICATIONS ================= -->
-    <div class="span-full form-subheading" style="display: flex; justify-content: space-between; align-items: center;">
-      <h1>Label Stock Specifications</h1>
-      <button type="button" id="reset-specs-btn" style="padding: 4px 12px; border-radius: 4px; background-color: #dc3545; color: white; border: none; cursor: pointer; font-size: 14px;">Reset</button>
+    <div id="sku-code-select-div" class="span-five">
+      <label for="sku-code-select">SKU Code</label>
+      <select id="sku-code-select" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Search</option>
+        <% labelStocks?.forEach(ls => { %>
+          <option value="<%= ls._id %>" <%= String(binding.labelStock?._id) === String(ls._id) ? 'selected' : '' %>><%= ls.productCode %></option>
+        <% }) %>
+      </select>
     </div>
 
-    <!-- Facestock -->
-    <div style="grid-column: span 12; display: flex; flex-direction: column; gap: 1rem">
-      <div class="span-full form-subheading">
-        <h1>Facestock</h1>
-      </div>
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem">
-        <div class="span-six" style="grid-column: auto">
-          <label>Family</label>
-          <select id="fs-family" class="form-control select-tag" required>
-            <option value="" disabled selected hidden>Search</option>
-            <% fsFamilies?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
-          </select>
-        </div>
-        <div class="span-six" style="grid-column: auto">
-          <label>Type</label>
-          <select id="fs-type" class="form-control select-tag" required>
-            <option value="" disabled selected hidden>Search</option>
-            <% fsTypes?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
-          </select>
-        </div>
-        <div class="span-four" style="grid-column: auto">
-          <label>GSM</label>
-          <select id="fs-gsm" class="form-control select-tag" required>
-            <option value="" disabled selected hidden>Search</option>
-            <% fsGsms?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
-          </select>
-        </div>
-        <div class="span-four" style="grid-column: auto">
-          <label>Micron</label>
-          <select id="fs-micron" class="form-control select-tag" required>
-            <option value="" disabled selected hidden>Search</option>
-            <% fsMicrons?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
-          </select>
-        </div>
+    <div id="paper-size-div" class="span-four">
+      <label for="paper-size">Paper Width</label>
+      <input type="text" id="paper-size" name="paperSize" class="form-control" placeholder="Enter Paper Width" value="<%= binding.paperSize || '' %>" required />
+    </div>
+
+    <div id="running-meters-div" class="span-two">
+      <label for="running-meters">RM</label>
+      <input type="number" id="running-meters" name="runningMeters" class="form-control" placeholder="RM" value="<%= binding.runningMeters ?? '' %>" required min="0" step="any" />
+    </div>
+
+    <div id="rate-div" class="span-two">
+      <label for="rate">Rate</label>
+      <input type="number" id="rate" name="rate" class="form-control" placeholder="Rate" value="<%= binding.rate ?? '' %>" required min="0" step="any" />
+    </div>
+
+    <div id="sku-layer-preview" class="span-full" style="display:none;">
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;max-width:600px;margin:0 auto;">
+        <p id="sku-layer-title" style="margin:0 0 10px;font-size:13px;font-weight:700;color:#03365a;text-align:center;"></p>
+        <div id="sku-layer-stack" class="custom-scrollbar" style="display:flex;flex-direction:column;gap:2px;max-height:320px;overflow-y:auto;padding:2px;"></div>
       </div>
     </div>
 
-    <!-- Adhesive -->
-    <div style="grid-column: span 8; display: flex; flex-direction: column; gap: 1rem">
-      <div class="span-full form-subheading">
-        <h1>Adhesive</h1>
-      </div>
-      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem">
-        <div class="span-seven" style="grid-column: auto">
-          <label>Type</label>
-          <select id="ad-type" class="form-control select-tag" required>
-            <option value="" disabled selected hidden>Search</option>
-            <% adTypes?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
-          </select>
-        </div>
-        <div class="span-four" style="grid-column: auto">
-          <label>GSM</label>
-          <select id="ad-gsm" class="form-control select-tag" required>
-            <option value="" disabled selected hidden>Search</option>
-            <% adGsms?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
-          </select>
-        </div>
-      </div>
-    </div>
+    <input type="hidden" name="labelStockId" id="resolved-label-stock-id" value="<%= binding.labelStock?._id || '' %>">
 
-    <!-- Release Liner -->
-    <div style="grid-column: span 12; display: flex; flex-direction: column; gap: 1rem">
-      <div class="span-full form-subheading">
-        <h1>Release Liner</h1>
-      </div>
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem">
-        <div class="span-seven" style="grid-column: auto">
-          <label>Type</label>
-          <select id="rl-type" class="form-control select-tag" required>
-            <option value="" disabled selected hidden>Search</option>
-            <% rlTypes?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
-          </select>
-        </div>
-        <div class="span-four" style="grid-column: auto">
-          <label>Color</label>
-          <select id="rl-color" class="form-control select-tag" required>
-            <option value="" disabled selected hidden>Search</option>
-            <% rlColors?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
-          </select>
-        </div>
-        <div class="span-four" style="grid-column: auto">
-          <label>GSM</label>
-          <select id="rl-gsm" class="form-control select-tag" required>
-            <option value="" disabled selected hidden>Search</option>
-            <% rlGsms?.forEach(v => { %><option value="<%= v %>"><%= v %></option><% }) %>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <!-- ================= BUTTONS ================= -->
-    <div class="span-full btn-grp" style="flex-direction: row-reverse;">
-      <button class="submit-btn" type="submit">Update Label Stock Binding</button>
-      <button type="button" id="cancelBtn">Cancel</button>
+    <div class="btn-grp span-full" style="display:flex;flex-direction:row;gap:10px;">
+      <a href="/sachiko/label-stock-binding/view/<%= binding.userId?._id %>" style="width:50%;color:white;background-color:#044a78;font-size:1.25rem;font-weight:500;padding:0.5rem 1.5rem;border:2px solid #044a78;border-radius:0.5rem;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.3s ease-in-out;">Cancel</a>
+      <button type="submit">Update Label Stock Binding</button>
     </div>
   </form>
 </div>
 
 <script>
+  const labelStocksData = <%- safeJson(labelStocks || []) %>;
+
+  function escSku(v) {
+    return String(v ?? "—").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  /* ── Physical layer stack builder (same layer order used on the Label Stock View page) ── */
+  const SKU_LAYER_STYLE = {
+    facestock: { bg: "#ffffff", border: "#93c5fd", text: "#000000", label: "FACESTOCK" },
+    adhesive:  { bg: "#fffbeb", border: "#fcd34d", text: "#b45309", label: "ADHESIVE" },
+    release:   { bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", label: "RELEASE LINER" },
+  };
+
+  function skuLayerBlock(kind, title, parts) {
+    const s = SKU_LAYER_STYLE[kind];
+    const detail = parts.filter(Boolean).join(" · ");
+    return `
+      <div style="background:${s.bg};border:1.5px solid ${s.border};border-radius:6px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <span style="font-size:11px;font-weight:800;letter-spacing:0.04em;color:${s.text};">${s.label}</span>
+        <span style="font-size:12px;font-weight:600;color:#334155;text-align:right;">${detail ? escSku(detail) : "—"}${title ? ` <span style="color:${s.text};font-weight:700;">(${escSku(title)})</span>` : ""}</span>
+      </div>`;
+  }
+
+  function renderSkuLayerStack(ds) {
+    const rollType = ds.rollType || "NORMAL";
+    let layers = [
+      skuLayerBlock("facestock", null, [ds.facestock?.facestockFamily, ds.facestock?.facestockType, ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm + " GSM" : null, ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : null]),
+      skuLayerBlock("adhesive", null, [ds.adhesive?.adhesiveType, ds.adhesive?.adhesiveGsm != null ? ds.adhesive.adhesiveGsm + " GSM" : null]),
+    ];
+    if (rollType === "DOUBLE FACESTOCK") {
+      layers.push(
+        skuLayerBlock("facestock", "Layer 2", [ds.facestock2?.facestockFamily, ds.facestock2?.facestockType, ds.facestock2?.facestockGsm != null ? ds.facestock2.facestockGsm + " GSM" : null, ds.facestock2?.facestockMicron != null ? ds.facestock2.facestockMicron + " MIC" : null]),
+        skuLayerBlock("adhesive", "Layer 2", [ds.adhesive2?.adhesiveType, ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null]),
+        skuLayerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+      );
+    } else if (rollType === "DOUBLE RELEASE") {
+      layers.push(
+        skuLayerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+        skuLayerBlock("adhesive", "Layer 2", [ds.adhesive2?.adhesiveType, ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null]),
+        skuLayerBlock("release", "Layer 2", [ds.releaseLiner2?.releaseLinerType, ds.releaseLiner2?.releaseLinerColor, ds.releaseLiner2?.releaseLinerGsm != null ? ds.releaseLiner2.releaseLinerGsm + " GSM" : null]),
+      );
+    } else {
+      layers.push(
+        skuLayerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+      );
+    }
+
+    return `
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        ${layers.join(`
+        <div style="display:flex;justify-content:center;margin:-2px 0;"><i class="fa-solid fa-caret-down" style="color:#cbd5e1;font-size:11px;"></i></div>
+        `)}
+      </div>`;
+  }
+
 document.addEventListener("DOMContentLoaded", () => {
-  const CURRENT = {
-    fsFamily: "<%= binding.labelStock?.facestock?.facestockFamily || '' %>",
-    fsType:   "<%= binding.labelStock?.facestock?.facestockType || '' %>",
-    fsGsm:    "<%= binding.labelStock?.facestock?.facestockGsm ?? '' %>",
-    fsMicron: "<%= binding.labelStock?.facestock?.facestockMicron ?? '' %>",
-    adType:   "<%= binding.labelStock?.adhesive?.adhesiveType || '' %>",
-    adGsm:    "<%= binding.labelStock?.adhesive?.adhesiveGsm ?? '' %>",
-    rlType:   "<%= binding.labelStock?.releaseLiner?.releaseLinerType || '' %>",
-    rlColor:  "<%= binding.labelStock?.releaseLiner?.releaseLinerColor || '' %>",
-    rlGsm:    "<%= binding.labelStock?.releaseLiner?.releaseLinerGsm ?? '' %>",
-  };
+  /* ================= ELEMENTS ================= */
+  const submitBtn = document.querySelector("button[type='submit']");
 
-  const specFields = ["fs-family", "fs-type", "fs-gsm", "fs-micron", "ad-type", "ad-gsm", "rl-type", "rl-color", "rl-gsm"];
-
-  const fieldToKey = {
-    "fs-family": "fsFamily", "fs-type": "fsType", "fs-gsm": "fsGsm", "fs-micron": "fsMicron",
-    "ad-type": "adType", "ad-gsm": "adGsm",
-    "rl-type": "rlType", "rl-color": "rlColor", "rl-gsm": "rlGsm",
-  };
-
+  const locationSelect = document.getElementById("client-location");
   const labelStockIdInput = document.getElementById("resolved-label-stock-id");
-  const labelStockIdDisplay = document.getElementById("label-stock-id-display");
 
-  const specChoices = {};
-  specFields.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) specChoices[id] = new Choices(el, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-  });
+  const skuSelect = document.getElementById("sku-code-select");
+  const skuLayerPreview = document.getElementById("sku-layer-preview");
+  const skuLayerTitle = document.getElementById("sku-layer-title");
+  const skuLayerStack = document.getElementById("sku-layer-stack");
 
-  const locationEl = document.getElementById("binding-location");
-  if (locationEl) new Choices(locationEl, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+  /* ================= CHOICES INIT ================= */
+  new Choices(locationSelect, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+  const skuChoices = new Choices(skuSelect, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
-  async function filterSpecs(changedFieldId) {
-    const params = new URLSearchParams();
-    specFields.forEach(id => {
-      const el = document.getElementById(id);
-      if (el && el.value) params.set(fieldToKey[id], el.value);
-    });
-
-    try {
-      const res = await fetch(`/sachiko/form/label-stock-binding/filter-specs?${params}`);
-      const data = await res.json();
-      if (!data) return;
-
-      const autoSelected = [];
-      specFields.forEach(id => {
-        if (id === changedFieldId) return;
-        const inst = specChoices[id];
-        if (!inst) return;
-        const filteredValues = data[fieldToKey[id]] || [];
-        const currentValue = document.getElementById(id)?.value || "";
-
-        const newChoices = filteredValues.map(v => ({
-          value: String(v), label: String(v), selected: String(v) === currentValue,
-        }));
-
-        if (changedFieldId !== "reset-all" && filteredValues.length === 1 && !currentValue) {
-          newChoices[0].selected = true;
-          autoSelected.push(id);
-        }
-
-        inst.clearStore();
-        inst.setChoices(
-          [{ value: "", label: "Search", disabled: true, selected: !newChoices.some(c => c.selected) }, ...newChoices],
-          "value", "label", true
-        );
-
-        if (currentValue && filteredValues.map(String).includes(currentValue)) {
-          inst.setChoiceByValue(currentValue);
-        } else if (changedFieldId !== "reset-all" && filteredValues.length === 1 && !currentValue) {
-          inst.setChoiceByValue(String(filteredValues[0]));
-        }
-      });
-
-      if (autoSelected.length) await filterSpecs(autoSelected[0]);
-    } catch (err) {
-      console.error("Filter specs error:", err);
+  /* ================= SKU CODE -> LAYER PREVIEW ================= */
+  function showLayerPreview(id) {
+    const ds = labelStocksData.find(d => String(d._id) === String(id));
+    if (!ds) {
+      labelStockIdInput.value = "";
+      skuLayerPreview.style.display = "none";
+      submitBtn.disabled = true;
+      return;
     }
+
+    labelStockIdInput.value = ds._id;
+    skuLayerTitle.textContent = `${ds.productCode} · ${ds.skuCode}`;
+    skuLayerStack.innerHTML = renderSkuLayerStack(ds);
+    skuLayerPreview.style.display = "block";
+    submitBtn.disabled = false;
   }
 
-  async function resolveLabelStock() {
-    const values = {};
-    for (const id of specFields) {
-      const el = document.getElementById(id);
-      if (!el || !el.value) {
-        labelStockIdInput.value = "";
-        labelStockIdDisplay.value = "— select all specs —";
-        labelStockIdDisplay.className = "form-control input-tag";
-        return;
-      }
-      values[id] = el.value;
-    }
+  skuSelect.addEventListener("change", () => showLayerPreview(skuSelect.value));
 
-    const params = new URLSearchParams();
-    specFields.forEach(id => params.set(fieldToKey[id], values[id]));
-
-    try {
-      const res = await fetch(`/sachiko/form/label-stock-binding/resolve-label-stock?${params}`);
-      if (!res.ok) {
-        labelStockIdInput.value = "";
-        labelStockIdDisplay.value = "No matching Label Stock found";
-        labelStockIdDisplay.className = "form-control input-tag label-stock-id-error";
-        return;
-      }
-      const data = await res.json();
-      labelStockIdInput.value = data.labelStockId;
-      labelStockIdDisplay.value = data.skuCode;
-      labelStockIdDisplay.className = "form-control input-tag label-stock-id-success";
-    } catch (err) {
-      console.error("Resolve Label Stock error:", err);
-    }
-  }
-
-  specFields.forEach(id => {
-    document.getElementById(id)?.addEventListener("change", async () => {
-      await filterSpecs(id);
-      await resolveLabelStock();
-    });
-  });
-
-  document.getElementById("reset-specs-btn").addEventListener("click", async () => {
-    specFields.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = "";
-      specChoices[id]?.setChoiceByValue("");
-    });
-    labelStockIdInput.value = "";
-    labelStockIdDisplay.value = "";
-    labelStockIdDisplay.className = "form-control input-tag";
-    await filterSpecs("reset-all");
-  });
-
-  document.getElementById("cancelBtn").addEventListener("click", () => window.history.back());
-
-  (async () => {
-    await filterSpecs("init-none");
-
-    for (const [id, key] of Object.entries(fieldToKey)) {
-      const val = CURRENT[key];
-      if (val && specChoices[id]) specChoices[id].setChoiceByValue(String(val));
-    }
-
-    await filterSpecs("init-none");
-
-    for (const [id, key] of Object.entries(fieldToKey)) {
-      const val = CURRENT[key];
-      if (val && specChoices[id]) specChoices[id].setChoiceByValue(String(val));
-    }
-
-    await resolveLabelStock();
-  })();
+  // Show the layer preview for the SKU this binding already points to.
+  showLayerPreview(skuSelect.value);
 });
 
-function validateBeforeSubmit() {
+/* ================= CUSTOM TOAST ================= */
+function showClientToast(message, isError = true) {
+  const existingToast = document.getElementById("client-toast");
+  if (existingToast) existingToast.remove();
+
+  const toast = document.createElement("div");
+  toast.id = "client-toast";
+  toast.className = `toast-notification ${isError ? 'toast-error' : 'toast-success'}`;
+  toast.innerHTML = `
+    <span>${message}</span>
+    <span class="toast-close" onclick="this.parentElement.remove()">×</span>
+  `;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.style.animation = "slideOut 0.5s forwards";
+      setTimeout(() => toast.remove(), 500);
+    }
+  }, 5000);
+}
+
+/* ================= FORM SUBMIT ================= */
+// The route always responds with JSON (success+redirect, or an error
+// message -- e.g. the duplicate-binding check) rather than an HTML redirect,
+// so the submit has to go through fetch and act on that response itself
+// instead of letting the browser navigate natively.
+async function handleLabelStockBindingSubmit(event) {
+  event.preventDefault();
+
   const labelStockId = document.getElementById("resolved-label-stock-id").value;
   if (!labelStockId) {
-    showToast("Please select valid Label Stock specifications.", "error");
+    showClientToast("Please select a valid Label Stock specification.", true);
     return false;
   }
-  return true;
+
+  const form = event.target;
+  const submitBtn = form.querySelector("button[type='submit']");
+  submitBtn.disabled = true;
+
+  try {
+    const res = await fetch(form.action, { method: "POST", body: new FormData(form) });
+    const data = await res.json().catch(() => null);
+
+    if (data?.success) {
+      window.location.href = data.redirect || "/sachiko/client/view";
+    } else {
+      showClientToast(data?.message || "Failed to update Label Stock binding.", true);
+      submitBtn.disabled = false;
+    }
+  } catch {
+    showClientToast("Server error. Please try again.", true);
+    submitBtn.disabled = false;
+  }
+
+  return false;
 }
 </script>

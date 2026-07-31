@@ -115,6 +115,7 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
     const location = String(req.body.location || "").trim();
     const paperSize = String(req.body.paperSize || "").trim();
     const runningMeters = Number(req.body.runningMeters);
+    const rate = Number(req.body.rate);
 
     const user = await Username.findById(userId);
     if (!user) {
@@ -133,6 +134,10 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
       return res.status(400).json({ success: false, message: "Please enter running meters" });
     }
 
+    if (!rate && rate !== 0) {
+      return res.status(400).json({ success: false, message: "Please enter a rate" });
+    }
+
     if (!labelStockId) {
       return res.status(400).json({ success: false, message: "Please resolve a valid Label Stock before saving" });
     }
@@ -143,7 +148,7 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
       return res.status(400).json({ success: false, message: DUPLICATE_BINDING_MESSAGE });
     }
 
-    const binding = await LabelStockBinding.create({ labelStock: labelStockId, userId, location, paperSize, runningMeters, bindingSignature });
+    const binding = await LabelStockBinding.create({ labelStock: labelStockId, userId, location, paperSize, runningMeters, rate, bindingSignature });
 
     user.labelStock.push(binding._id);
     await user.save();
@@ -218,23 +223,16 @@ router.get("/label-stock-binding/edit/:id", async (req, res) => {
       return res.redirect(req.get("Referrer") || "/");
     }
 
-    const [fsFamilies, fsTypes, fsGsms, fsMicrons, adTypes, adGsms, rlTypes, rlColors, rlGsms] = await Promise.all([
-      SachikoLabelStock.distinct("facestock.facestockFamily"),
-      SachikoLabelStock.distinct("facestock.facestockType"),
-      SachikoLabelStock.distinct("facestock.facestockGsm"),
-      SachikoLabelStock.distinct("facestock.facestockMicron"),
-      SachikoLabelStock.distinct("adhesive.adhesiveType"),
-      SachikoLabelStock.distinct("adhesive.adhesiveGsm"),
-      SachikoLabelStock.distinct("releaseLiner.releaseLinerType"),
-      SachikoLabelStock.distinct("releaseLiner.releaseLinerColor"),
-      SachikoLabelStock.distinct("releaseLiner.releaseLinerGsm"),
-    ]);
+    const labelStocks = await SachikoLabelStock.find({}, {
+      skuCode: 1, productCode: 1, rollType: 1,
+      facestock: 1, facestock2: 1, adhesive: 1, adhesive2: 1, releaseLiner: 1, releaseLiner2: 1,
+    }).sort({ skuCode: 1 }).lean();
 
     res.render("sachiko/labelStockBindingEdit.ejs", {
       title: "Edit Label Stock Binding",
       binding,
       userLocations: getUserLocationNames(binding.userId, binding.location),
-      fsFamilies, fsTypes, fsGsms, fsMicrons, adTypes, adGsms, rlTypes, rlColors, rlGsms,
+      labelStocks,
       CSS: false,
       JS: false,
       notification: req.flash("notification"),
@@ -250,50 +248,62 @@ router.get("/label-stock-binding/edit/:id", async (req, res) => {
 router.post("/label-stock-binding/edit/:id", requireAuth, updateLimiter, async (req, res) => {
   try {
     const { id } = req.params;
-    const { labelStockId: newLabelStock } = req.body;
 
     const binding = await LabelStockBinding.findById(id);
     if (!binding) {
-      req.flash("notification", "Label Stock binding not found");
-      return res.redirect(req.get("Referrer") || "/");
+      return res.status(404).json({ success: false, message: "Label Stock binding not found." });
     }
 
-    const location = String(req.body.location || "").trim() || binding.location;
+    const location = String(req.body.location || "").trim();
+    const paperSize = String(req.body.paperSize || "").trim();
+    const runningMeters = Number(req.body.runningMeters);
+    const rate = Number(req.body.rate);
+    const labelStockId = req.body.labelStockId;
+
     if (!location) {
-      req.flash("notification", "Please select a location");
-      return res.redirect(req.get("Referrer") || "/");
+      return res.status(400).json({ success: false, message: "Please select a location" });
     }
-
-    const targetLabelStock = newLabelStock && /^[a-f\d]{24}$/i.test(newLabelStock) ? newLabelStock : binding.labelStock;
+    if (!paperSize) {
+      return res.status(400).json({ success: false, message: "Please enter a paper width" });
+    }
+    if (!runningMeters && runningMeters !== 0) {
+      return res.status(400).json({ success: false, message: "Please enter running meters" });
+    }
+    if (!rate && rate !== 0) {
+      return res.status(400).json({ success: false, message: "Please enter a rate" });
+    }
+    if (!labelStockId) {
+      return res.status(400).json({ success: false, message: "Please select a valid Label Stock" });
+    }
 
     const bindingSignature = buildBindingSignature({
-      labelStock: targetLabelStock,
+      labelStock: labelStockId,
       userId: binding.userId,
-      paperSize: binding.paperSize,
-      runningMeters: binding.runningMeters,
+      paperSize,
+      runningMeters,
     });
     const duplicate = await LabelStockBinding.findOne({ _id: { $ne: id }, bindingSignature }).select("_id").lean();
     if (duplicate) {
-      req.flash("notification", DUPLICATE_BINDING_MESSAGE);
-      return res.redirect(req.get("Referrer") || "/");
+      return res.status(400).json({ success: false, message: DUPLICATE_BINDING_MESSAGE });
     }
 
-    binding.labelStock = targetLabelStock;
+    binding.labelStock = labelStockId;
     binding.location = location;
+    binding.paperSize = paperSize;
+    binding.runningMeters = runningMeters;
+    binding.rate = rate;
     binding.bindingSignature = bindingSignature;
     await binding.save();
 
     res.locals.auditDescription = `Updated Label Stock binding for user ${binding.userId}`;
     req.flash("notification", "Label Stock binding updated successfully!");
-    res.redirect(`/sachiko/label-stock-binding/view/${binding.userId}`);
+    res.json({ success: true, redirect: `/sachiko/label-stock-binding/view/${binding.userId}` });
   } catch (err) {
     console.error("LABEL STOCK BINDING EDIT POST ERROR:", err);
     if (err?.code === 11000 && err?.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "bindingSignature")) {
-      req.flash("notification", DUPLICATE_BINDING_MESSAGE);
-      return res.redirect(req.get("Referrer") || "/");
+      return res.status(400).json({ success: false, message: DUPLICATE_BINDING_MESSAGE });
     }
-    req.flash("notification", "Failed to update Label Stock binding");
-    res.redirect(req.get("Referrer") || "/");
+    res.status(500).json({ success: false, message: "Failed to update Label Stock binding." });
   }
 });
 

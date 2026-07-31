@@ -84,18 +84,29 @@
     #machine-queue-cards::-webkit-scrollbar { width: 8px; }
     #machine-queue-cards::-webkit-scrollbar-track { background: #f0f2f5; }
     #machine-queue-cards::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
-    .mq-unit { display: flex; flex-direction: column; gap: 12px; }
+    .mq-unit { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; }
     .mq-unit-heading {
       font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
       color: #044a78; text-transform: uppercase;
       padding-bottom: 6px; border-bottom: 2px solid rgba(4, 74, 120, 0.18);
+      flex: 0 0 auto;
     }
-    .mq-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; }
+    /* 2 cards per row -- Sachiko only has 4 machines, so a 2x2 grid uses the
+       available width better than the 3-per-row layout FAIRTECH's larger
+       shopfloor needed. Grid (not flex-wrap) so grid-auto-rows: 1fr stretches
+       every row of cards to fill whatever vertical space is left, rather than
+       leaving the cards capped at a fixed height with empty space below. */
+    .mq-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      grid-auto-rows: 1fr;
+      gap: 14px;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
     .mq-card {
-      flex: 0 0 calc((100% - 28px) / 3);
-      max-width: calc((100% - 28px) / 3);
       min-width: 0;
-      height: 280px;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       border: 1px solid rgba(4, 74, 120, 0.16);
@@ -108,11 +119,8 @@
     .mq-card-body::-webkit-scrollbar-track { background: #f0f2f5; }
     .mq-card-body::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
     .mq-card-body { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
-    @media (max-width: 1100px) {
-      .mq-card { flex-basis: calc((100% - 14px) / 2); max-width: calc((100% - 14px) / 2); }
-    }
     @media (max-width: 700px) {
-      .mq-card { flex-basis: 100%; max-width: 100%; }
+      .mq-row { grid-template-columns: 1fr; }
     }
     .mq-card-head {
       flex: 0 0 auto;

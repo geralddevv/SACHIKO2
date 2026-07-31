@@ -7,6 +7,7 @@ const labelStockBindingSchema = new mongoose.Schema(
     location: { type: String, required: true },
     paperSize: { type: String },
     runningMeters: { type: Number },
+    rate: { type: Number, required: true },
     status: { type: String, enum: ["ACTIVE", "INACTIVE"], default: "ACTIVE" },
     // Identifies "the same binding" -- labelStock + userId + paperSize +
     // runningMeters, hashed the same way as Client/TapeSalesOrder's own

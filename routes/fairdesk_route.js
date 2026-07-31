@@ -2882,8 +2882,6 @@ router.get("/sales/pending", async (req, res) => {
       CSS: "tableDisp.css",
       JS: false,
       notification: req.flash("notification"),
-      labelTotal: 0,
-      colorLabelTotal: 0,
     });
   } catch (err) {
     console.error("PENDING ORDERS ERROR:", err);
