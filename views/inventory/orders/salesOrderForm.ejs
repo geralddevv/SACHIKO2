@@ -86,7 +86,7 @@
       </select>
     </div>
 
-    <div class="span-six">
+    <div class="span-six" id="client-name-div">
       <label for="client-name">Client Name</label>
       <select name="clientName" id="client-name" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Select Client</option>
@@ -135,7 +135,7 @@
       <input type="text" id="po-number" name="poNumber" class="form-control" placeholder="Enter PO number" required />
     </div>
 
-    <div class="span-four">
+    <div class="span-four" id="quantity-div">
       <label for="quantity">Order Quantity <span id="qty-unit-badge" style="display:none;font-size:11px;font-weight:600;color:#044A78;background:#eef0ff;padding:1px 8px;border-radius:20px;margin-left:4px;"></span></label>
       <input type="text" inputmode="numeric" id="quantity" name="quantity" class="form-control" placeholder="Enter quantity" required />
     </div>
@@ -330,6 +330,13 @@
     border-color: #044A78;
     box-shadow: 0 0 0 2px rgba(26, 26, 46, 0.1);
   }
+
+  #client-name-div .choices__list--dropdown .choices__item,
+  #client-name-div .choices__list--single .choices__item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 </style>
 
     <!-- ================= SUBMIT ================= -->
@@ -457,6 +464,11 @@
   .ap-table th.ap-hl, .ap-table td.ap-hl { background: #dbeafe; }
   .ap-table th.ap-hl { color: #044a78; }
   .ap-table td.ap-hl { color: #044a78; font-weight: 700; }
+
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
 </style>
 
 </script>
@@ -523,6 +535,17 @@
   if (quantityInput) {
     quantityInput.addEventListener("input", applyQtyCommaFormatting);
     quantityInput.addEventListener("input", renderSelectedItemDetailsTable);
+  }
+
+  // Label Stock has no separate Order Quantity field (see
+  // updateLabelStockFieldsVisibility) -- No of Rolls IS the quantity, kept
+  // in sync here so balance/remaining/dispatch logic downstream still works.
+  const noOfRollsInput = document.getElementById("no-of-rolls");
+  if (noOfRollsInput && quantityInput) {
+    noOfRollsInput.addEventListener("input", () => {
+      if (itemTypeSelect.value !== "LABEL_STOCK") return;
+      quantityInput.value = noOfRollsInput.value;
+    });
   }
 
   if (confirmMode) {
@@ -889,6 +912,8 @@
           rate: typeof item.rate !== "undefined" ? item.rate : null,
           details: JSON.stringify(item.details || {}),
           location: item.location || "",
+          paperSize: item.paperSize || "",
+          runningMeters: item.runningMeters != null ? item.runningMeters : "",
         }
       }));
 
@@ -968,22 +993,92 @@
     return `<table class="ap-table"><tbody>${rows}</tbody></table>`;
   }
 
+  function escOrderLayer(v) {
+    return String(v ?? "—").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  // ── Physical layer stack (top-to-bottom), same layer order/styling as the
+  // Label Stock Binding form (views/sachiko/labelStockBindingForm.ejs) and
+  // the Label Stock View page (views/sachiko/labelStockView.ejs) — kept in
+  // sync with both so the same SKU always renders the same stack everywhere.
+  const ORDER_LAYER_STYLE = {
+    facestock: { bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", label: "FACESTOCK" },
+    adhesive:  { bg: "#fffbeb", border: "#fcd34d", text: "#b45309", label: "ADHESIVE" },
+    release:   { bg: "#f8fafc", border: "#cbd5e1", text: "#475569", label: "RELEASE LINER" },
+  };
+
+  function orderLayerBlock(kind, title, parts) {
+    const s = ORDER_LAYER_STYLE[kind];
+    const detail = parts.filter(Boolean).join(" · ");
+    return `
+      <div style="background:${s.bg};border:1.5px solid ${s.border};border-radius:6px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <span style="font-size:11px;font-weight:800;letter-spacing:0.04em;color:${s.text};">${s.label}</span>
+        <span style="font-size:12px;font-weight:600;color:#334155;text-align:right;">${detail ? escOrderLayer(detail) : "—"}${title ? ` <span style="color:${s.text};font-weight:700;">(${escOrderLayer(title)})</span>` : ""}</span>
+      </div>`;
+  }
+
+  function renderOrderLabelStockLayerStack(d) {
+    const rollType = d.rollType || "NORMAL";
+    let layers = [
+      orderLayerBlock("facestock", null, [d.fsFamily, d.fsType, d.fsGsm != null && d.fsGsm !== "" ? d.fsGsm + " GSM" : null, d.fsMicron != null && d.fsMicron !== "" ? d.fsMicron + " MIC" : null]),
+      orderLayerBlock("adhesive", null, [d.adType, d.adGsm != null && d.adGsm !== "" ? d.adGsm + " GSM" : null]),
+    ];
+    if (rollType === "DOUBLE FACESTOCK") {
+      layers.push(
+        orderLayerBlock("facestock", "Layer 2", [d.fs2Family, d.fs2Type, d.fs2Gsm != null && d.fs2Gsm !== "" ? d.fs2Gsm + " GSM" : null, d.fs2Micron != null && d.fs2Micron !== "" ? d.fs2Micron + " MIC" : null]),
+        orderLayerBlock("adhesive", "Layer 2", [d.ad2Type, d.ad2Gsm != null && d.ad2Gsm !== "" ? d.ad2Gsm + " GSM" : null]),
+        orderLayerBlock("release", null, [d.rlType, d.rlColor, d.rlGsm != null && d.rlGsm !== "" ? d.rlGsm + " GSM" : null]),
+      );
+    } else if (rollType === "DOUBLE RELEASE") {
+      layers.push(
+        orderLayerBlock("release", null, [d.rlType, d.rlColor, d.rlGsm != null && d.rlGsm !== "" ? d.rlGsm + " GSM" : null]),
+        orderLayerBlock("adhesive", "Layer 2", [d.ad2Type, d.ad2Gsm != null && d.ad2Gsm !== "" ? d.ad2Gsm + " GSM" : null]),
+        orderLayerBlock("release", "Layer 2", [d.rl2Type, d.rl2Color, d.rl2Gsm != null && d.rl2Gsm !== "" ? d.rl2Gsm + " GSM" : null]),
+      );
+    } else {
+      layers.push(
+        orderLayerBlock("release", null, [d.rlType, d.rlColor, d.rlGsm != null && d.rlGsm !== "" ? d.rlGsm + " GSM" : null]),
+      );
+    }
+
+    return `
+      <div style="padding:14px 16px;background:#f8fafc;">
+        <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#03365a;">${escOrderLayer(d.productCode)}${d.skuCode ? ` · ${escOrderLayer(d.skuCode)}` : ""}</p>
+        <div class="custom-scrollbar" style="display:flex;flex-direction:column;gap:2px;max-height:320px;overflow-y:auto;padding:2px;">
+          ${layers.join(`
+          <div style="display:flex;justify-content:center;margin:-2px 0;"><i class="fa-solid fa-caret-down" style="color:#cbd5e1;font-size:11px;"></i></div>
+          `)}
+        </div>
+      </div>`;
+  }
+
   // Details of the currently selected item -- kept around so the details
   // table can be re-rendered when the quantity changes.
   let currentSelectedDetails = null;
 
   // Paper Size/Running Meters/No of Rolls (span 3 each) only show for Label
-  // Stock items; when hidden, Remarks grows to fill the freed columns so the
-  // row still totals 32 instead of leaving a trailing gap.
+  // Stock items, and Order Quantity (span 4) only shows for Tape (Label
+  // Stock has no separate quantity field -- see updateLabelStockFieldsVisibility).
+  // Remarks grows to fill whichever columns are freed so the row still
+  // totals 32 instead of leaving a trailing gap:
+  //   Tape:        po-date(3) + po-number(4) + quantity(4) + item-rate(3) + order-rate(3) + est-date(5) + remarks(10) = 32
+  //   Label Stock: po-date(3) + po-number(4) + paper-size(3) + rm(3) + no-of-rolls(3) + est-date(5) + remarks(11) = 32
   function syncRemarksWidth() {
     const remarksWrap = document.getElementById("remarks-wrap");
     if (!remarksWrap) return;
     const labelStockFieldsVisible = document.getElementById("no-of-rolls-div")?.style.display !== "none";
-    remarksWrap.style.gridColumn = labelStockFieldsVisible ? "span 7" : "span 10";
+    remarksWrap.style.gridColumn = labelStockFieldsVisible ? "span 11" : "span 10";
   }
 
   // Show Paper Size/Running Meters/No of Rolls only for Label Stock (they
   // have no rate concept, so Rate/Curr Rate swap out to make room).
+  //
+  // Label Stock has no separate "Order Quantity" concept -- its quantity IS
+  // the No of Rolls, so asking for both would just be double entry. The
+  // Order Quantity field is hidden and no longer required for Label Stock;
+  // its value is kept in sync with No of Rolls instead (see the "no-of-rolls"
+  // input listener below), since `quantity` is still what every downstream
+  // balance/remaining/dispatch calculation reads for every item type.
   function updateLabelStockFieldsVisibility() {
     const isLabelStock = itemTypeSelect.value === "LABEL_STOCK";
     ["paper-size-div", "running-meters-div", "no-of-rolls-div"].forEach((id) => {
@@ -994,6 +1089,12 @@
       const el = document.getElementById(id);
       if (el) el.style.display = isLabelStock ? "none" : "";
     });
+    const quantityDiv = document.getElementById("quantity-div");
+    if (quantityDiv) quantityDiv.style.display = isLabelStock ? "none" : "";
+    if (quantityInput) {
+      quantityInput.required = !isLabelStock;
+      if (isLabelStock) quantityInput.value = noOfRollsInput?.value || "";
+    }
     syncRemarksWidth();
   }
 
@@ -1002,6 +1103,13 @@
     if (!currentSelectedDetails) {
       detailsBox.style.display = "none";
       detailsBox.innerHTML = "";
+      syncRemarksWidth();
+      return;
+    }
+
+    if (String(currentSelectedDetails.type || "").toUpperCase() === "LABEL_STOCK") {
+      detailsBox.innerHTML = renderOrderLabelStockLayerStack(currentSelectedDetails);
+      detailsBox.style.display = "block";
       syncRemarksWidth();
       return;
     }
@@ -1042,21 +1150,20 @@
       pushIf("Meters", d.mtrs);
       pushIf("Core ID", d.coreId);
       pushIf("Finish", d.finish);
-    } else if (type === "LABEL_STOCK") {
-      pushIf("SKU Code", d.skuCode);
-      pushIf("Product Code", d.productCode);
-      pushIf("Facestock Family", d.fsFamily);
-      pushIf("Facestock Type", d.fsType);
-      pushIf("Facestock GSM", d.fsGsm);
-      pushIf("Facestock Micron", d.fsMicron);
-      pushIf("Adhesive Type", d.adType);
-      pushIf("Adhesive GSM", d.adGsm);
-      pushIf("Release Liner Type", d.rlType);
-      pushIf("Release Liner Color", d.rlColor);
-      pushIf("Release Liner GSM", d.rlGsm);
     }
 
     return out;
+  }
+
+  // Paper Size / Running Meters default from the client's Label Stock binding
+  // (LabelStockBinding.paperSize/runningMeters) when an item is picked, but
+  // are editable so an order can differ from the binding's stored spec.
+  function updateLabelStockSpecFields(selectedOption) {
+    const paperSizeInput = document.getElementById("paper-size");
+    const runningMetersInput = document.getElementById("running-meters");
+    const cp = selectedOption?.customProperties || {};
+    if (paperSizeInput) paperSizeInput.value = cp.paperSize || "";
+    if (runningMetersInput) runningMetersInput.value = cp.runningMeters != null && cp.runningMeters !== "" ? cp.runningMeters : "";
   }
 
   async function updateStockDisplay() {
@@ -1066,6 +1173,7 @@
     const detailsBox = document.getElementById("selected-item-details");
     updateRateDisplay(selectedOption);
     updateQtyUnitBadge(selectedOption);
+    if (itemTypeSelect.value === "LABEL_STOCK") updateLabelStockSpecFields(selectedOption);
     
     // Reset location selection
     sourceLocationInput.value = "";
@@ -1894,7 +2002,7 @@
          const t = orderToEdit.tapeId || null;
          if (t) {
             if (t.tapePaperCode) tapeName = t.tapePaperCode + " " + t.tapeGsm + "gsm";
-            else if (t.productCode) tapeName = `${t.productCode} (${t.skuCode || ""})`;
+            else if (t.productCode) tapeName = t.productCode;
          }
           // Construct details object for profile display
           const detailsObj = { type: type || "" };
@@ -1917,6 +2025,7 @@
              if (t.productCode) {
                detailsObj.skuCode = t.skuCode || "";
                detailsObj.productCode = t.productCode || "";
+               detailsObj.rollType = t.rollType || "NORMAL";
                detailsObj.fsFamily = t.facestock?.facestockFamily || "";
                detailsObj.fsType = t.facestock?.facestockType || "";
                detailsObj.fsGsm = t.facestock?.facestockGsm ?? "";
@@ -1926,6 +2035,15 @@
                detailsObj.rlType = t.releaseLiner?.releaseLinerType || "";
                detailsObj.rlColor = t.releaseLiner?.releaseLinerColor || "";
                detailsObj.rlGsm = t.releaseLiner?.releaseLinerGsm ?? "";
+               detailsObj.fs2Family = t.facestock2?.facestockFamily || "";
+               detailsObj.fs2Type = t.facestock2?.facestockType || "";
+               detailsObj.fs2Gsm = t.facestock2?.facestockGsm ?? "";
+               detailsObj.fs2Micron = t.facestock2?.facestockMicron ?? "";
+               detailsObj.ad2Type = t.adhesive2?.adhesiveType || "";
+               detailsObj.ad2Gsm = t.adhesive2?.adhesiveGsm ?? "";
+               detailsObj.rl2Type = t.releaseLiner2?.releaseLinerType || "";
+               detailsObj.rl2Color = t.releaseLiner2?.releaseLinerColor || "";
+               detailsObj.rl2Gsm = t.releaseLiner2?.releaseLinerGsm ?? "";
              }
 
              // Client specific fields (from populated binding)
@@ -1979,6 +2097,7 @@
            const endYear = startYear + 1;
            const finYearStr = `${String(startYear).slice(-2)}-${String(endYear).slice(-2)}`;
            let typePrefix = type || itemTypeChoices.getValue(true) || "";
+           if (typePrefix === "LABEL_STOCK") typePrefix = "LS";
            if (typePrefix) {
              invoiceInput.value = `TECH|IN|${finYearStr}|${typePrefix}|`;
            }

@@ -351,6 +351,7 @@ router.get("/profile/:id", async (req, res) => {
       populate: [
         { path: "label" },
         { path: "tape", populate: { path: "tapeId" } },
+        { path: "labelStock", populate: { path: "labelStock", model: "SachikoLabelStock" } },
       ],
     });
 
@@ -381,6 +382,10 @@ router.get("/details/:userId", async (req, res) => {
       .populate({
         path: "tape",
         populate: { path: "tapeId" },
+      })
+      .populate({
+        path: "labelStock",
+        populate: { path: "labelStock", model: "SachikoLabelStock" },
       });
 
     if (!user) {
@@ -414,6 +419,7 @@ router.get("/details/:userId", async (req, res) => {
     const stats = {
       labels: (user.label || []).length,
       tapes: (user.tape || []).length,
+      labelStocks: (user.labelStock || []).length,
     };
 
     res.render("users/clientDetails.ejs", {
@@ -423,6 +429,7 @@ router.get("/details/:userId", async (req, res) => {
       userData,
       labels: user.label || [],
       tapes: user.tape || [],
+      labelStocks: user.labelStock || [],
       stats,
       filterLocation: req.query.location ? String(req.query.location).trim() : "",
       notification: req.flash("notification"),

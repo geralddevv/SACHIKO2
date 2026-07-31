@@ -1,0 +1,1201 @@
+<% layout('/layout/boilerplate') %>
+
+<%
+  const jc = prefill || {};
+  const ref = jc.materialReference || {};
+  const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "") || v === "—";
+  const dash = (v) => (isEmpty(v) ? "—" : v);
+  const fmtQty = (v) => (Number.isFinite(Number(v)) && v !== "" && v != null)
+    ? Number(v).toLocaleString("en-IN")
+    : dash(v);
+  const today = new Date();
+  const dateDay = String(today.getDate()).padStart(2, "0");
+  const dateMonth = String(today.getMonth() + 1).padStart(2, "0");
+  const dateYear = today.getFullYear();
+  const dateInputValue = `${dateYear}-${dateMonth}-${dateDay}`;
+  const dateDisplayValue = `${dateDay}/${dateMonth}/${dateYear}`;
+%>
+
+<style>
+  .jc-info-wrap {
+    border: 2px solid #044a78;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(4,74,120,0.08);
+  }
+  .jc-info-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    table-layout: fixed;
+  }
+  .jc-info-table th,
+  .jc-info-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: middle;
+  }
+  .jc-info-table tr > *:last-child {
+    border-right: none;
+  }
+  .jc-info-table tr:last-child > * {
+    border-bottom: none;
+  }
+  .jc-info-table th {
+    width: 12%;
+    background: #f0f7ff;
+    color: #03365a;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .jc-info-table td {
+    color: #1f2a44;
+    font-size: 13px;
+    font-weight: 600;
+    word-break: break-word;
+  }
+  .jc-info-section {
+    background: #044a78 !important;
+    color: #ffffff !important;
+    text-align: left !important;
+    letter-spacing: 0.02em;
+  }
+  .jc-ref-row {
+    display: flex;
+  }
+  .jc-ref-item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    border-right: 1px solid #e2e8f0;
+  }
+  .jc-ref-item:last-child {
+    border-right: none;
+  }
+  .jc-ref-label {
+    background: #f0f7ff;
+    color: #03365a;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    padding: 8px 12px;
+  }
+  .jc-ref-value {
+    color: #1f2a44;
+    font-size: 13px;
+    font-weight: 600;
+    word-break: break-word;
+    padding: 8px 12px;
+    flex: 1;
+  }
+
+  .jc-log-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(4,74,120,0.08);
+  }
+  .jc-log-table th {
+    background: #044a78;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 10px;
+    text-align: center;
+    letter-spacing: 0.02em;
+    border-right: 1px solid rgba(255,255,255,0.25);
+  }
+  .jc-log-table th:last-child {
+    border-right: none;
+  }
+
+  .jc-hidden { display: none !important; }
+
+  .jc-start-prod-wrap {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    border: none;
+    padding: 6px 0;
+  }
+
+  .jc-log-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    vertical-align: middle;
+  }
+  .jc-log-table td:last-child {
+    border-right: none;
+  }
+  .jc-log-table tr:last-child td {
+    border-bottom: none;
+  }
+  .jc-log-table input.form-control {
+    padding: 6px 8px !important;
+    font-size: 13px !important;
+    height: auto !important;
+    min-width: 0;
+  }
+
+  .jc-log-table .js-start-display,
+  .jc-log-table .js-stop-display,
+  .jc-log-table .log-start-display,
+  .jc-log-table .log-stop-display {
+    display: inline-block;
+    min-width: 62px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .jc-roll-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    table-layout: fixed;
+  }
+  .jc-roll-table th {
+    background: #f0f7ff;
+    color: #03365a;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+    padding: 7px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    white-space: nowrap;
+  }
+  .jc-roll-table td {
+    color: #1f2a44;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    word-break: break-word;
+  }
+  .jc-roll-table th:last-child,
+  .jc-roll-table td:last-child { border-right: none; }
+  .jc-roll-table tr:last-child td { border-bottom: none; }
+  .jc-no-rolls {
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #92400e;
+    background: #fffbeb;
+  }
+
+  .jc-readonly {
+    background: #f0f7ff !important;
+    color: #044a78 !important;
+    font-weight: 700 !important;
+    cursor: default !important;
+  }
+
+  .roll-note {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+  .roll-note:empty { display: none; }
+  .roll-note.ok { color: #047857; }
+  .roll-note.warn { color: #b45309; }
+
+  .roll-id-field { display: flex; align-items: center; gap: 6px; }
+  .roll-scan-btn {
+    display: none;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 6px;
+    background: #044a78;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .roll-scan-btn:hover { opacity: 0.88; }
+
+  .dialog-header {
+    background: #044a78; padding: 18px 22px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-radius: 14px 14px 0 0;
+  }
+  .dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #fff; }
+  .dialog-close-btn {
+    background: none; border: none; color: #fff; font-size: 20px;
+    cursor: pointer; line-height: 1; padding: 0 2px; opacity: 0.8;
+  }
+  .dialog-close-btn:hover { opacity: 1; }
+  .dialog-body { padding: 18px 20px; background: #fff; border-radius: 0 0 14px 14px; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+  .btn-cancel {
+    border-radius: 8px; padding: 9px 18px; font-size: 13.5px; font-weight: 600;
+    cursor: pointer; border: none; background: #f1f5f9; color: #44506b;
+  }
+
+  .scan-video-wrap {
+    position: relative; width: 100%; aspect-ratio: 4 / 3;
+    background: #0b1220; border-radius: 10px; overflow: hidden;
+  }
+  .scan-video-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .scan-frame {
+    position: absolute; inset: 12% 18%;
+    border: 3px solid rgba(255, 255, 255, 0.85);
+    border-radius: 12px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+  }
+  .scan-status { margin-top: 10px; font-size: 12.5px; color: #5a6586; text-align: center; min-height: 18px; }
+  .scan-status.error { color: #b91c1c; font-weight: 600; }
+
+  @media screen and (max-width: 768px) {
+    .jc-info-table { table-layout: auto; }
+    .jc-info-table tbody { display: block; }
+    .jc-info-table tr { display: flex; flex-wrap: wrap; }
+    .jc-info-table th,
+    .jc-info-table td { display: block; padding: 7px 10px; }
+    .jc-info-table th { flex: 0 0 34%; width: auto; font-size: 12px; }
+    .jc-info-table td { flex: 1 1 60%; font-size: 12.5px; border-right: none; }
+    .jc-info-table th:empty,
+    .jc-info-table td:empty { display: none; }
+    .jc-info-table .jc-info-section,
+    .jc-info-table td[colspan] { flex: 1 1 100%; }
+
+    .jc-ref-row { flex-direction: column; }
+    .jc-ref-item { border-right: none; border-bottom: 1px solid #e2e8f0; }
+    .jc-ref-item:last-child { border-bottom: none; }
+    .jc-ref-label { flex: 0 0 34%; padding: 7px 10px; font-size: 12px; }
+    .jc-ref-value { padding: 7px 10px; font-size: 12.5px; }
+
+    .jc-roll-table { table-layout: auto; }
+    .jc-roll-table thead { display: none; }
+    .jc-roll-table tbody,
+    .jc-roll-table tr,
+    .jc-roll-table td { display: block; width: 100%; }
+    .jc-roll-table tbody tr { border-bottom: 2px solid #044a78; }
+    .jc-roll-table tbody tr:last-child { border-bottom: none; }
+    .jc-roll-table td {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 10px; border-right: none; font-size: 12.5px;
+      text-align: left !important;
+    }
+    .jc-roll-table td::before {
+      content: attr(data-label);
+      flex: 0 0 34%; color: #5a6586; font-weight: 700; font-size: 12px;
+    }
+    .jc-roll-table td:first-child { background: #f0f7ff; color: #03365a; font-weight: 700; }
+
+    .jc-log-table thead { display: none; }
+    .jc-log-table tbody,
+    .jc-log-table tfoot,
+    .jc-log-table tr,
+    .jc-log-table td { display: block; width: 100%; }
+    .jc-log-table tbody tr {
+      display: flex; flex-wrap: wrap; width: auto;
+      border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; margin-bottom: 10px;
+    }
+    .jc-log-table tbody tr:last-child { margin-bottom: 0; }
+    .jc-log-table tbody td { flex: 1 1 100%; }
+    .jc-log-table tbody td[data-label="Row"] {
+      flex: 0 0 44px; justify-content: center;
+      border-right: 1px solid #cbd5e1;
+      border-radius: 7px 0 0 0;
+    }
+    .jc-log-table tbody td[data-label="Row"],
+    .jc-log-table tbody td[data-label="Roll ID"] { border-bottom: 1px solid #cbd5e1; }
+    .jc-log-table tbody td[data-label="Row"]::before { content: none; }
+    .jc-log-table tbody td[data-label="Roll ID"] { flex: 1 1 60%; flex-wrap: wrap; }
+    .jc-log-table tbody td[data-label="Roll ID"]::before { flex: 0 0 auto; }
+    .jc-log-table tbody td[data-label="Roll ID"] .roll-note { flex: 1 1 100%; }
+    .jc-log-table tbody td[data-label="Mtrs"],
+    .jc-log-table tbody td[data-label="Start"],
+    .jc-log-table tbody td[data-label="Stop"] { flex: 1 1 40%; }
+    .jc-log-table tbody td[data-label="Mtrs"] { border-right: 1px solid #cbd5e1; }
+    .jc-log-table tbody td[data-label="Mtrs"]::before { flex: 0 0 auto; }
+    .jc-log-table tbody td[data-label="Start"]::before,
+    .jc-log-table tbody td[data-label="Stop"]::before { content: none; }
+    .jc-log-table td {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 10px; border-right: none; min-width: 0 !important;
+      white-space: normal !important; text-align: left !important;
+    }
+    .jc-log-table td::before {
+      content: attr(data-label);
+      flex: 0 0 34%; color: #5a6586; font-weight: 700; font-size: 12px;
+    }
+    .jc-log-table td:not([data-label])::before { content: none; }
+    .jc-log-table tbody td:first-child { background: #f0f7ff; }
+    .jc-log-table tbody td:last-child { border-bottom: none; }
+    .jc-log-table input.form-control { width: 100% !important; flex: 1 1 auto; }
+    .roll-scan-btn { display: inline-flex; width: 40px; height: 40px; font-size: 16px; }
+    .jc-log-table .js-start-btn,
+    .jc-log-table .js-stop-btn,
+    .jc-log-table .log-start-btn,
+    .jc-log-table .log-stop-btn {
+      flex: 1 1 auto;
+      width: auto !important;
+      height: 38px !important;
+      font-size: 15px !important;
+    }
+    .jc-log-table .js-start-display,
+    .jc-log-table .js-stop-display,
+    .jc-log-table .log-start-display,
+    .jc-log-table .log-stop-display { flex: 0 0 auto; margin-right: 0 !important; }
+
+    .jc-log-table .jc-total-row {
+      display: flex; flex-wrap: wrap; width: auto;
+      border-radius: 8px; overflow: hidden; margin-top: 10px;
+    }
+    .jc-log-table .jc-total-row .jc-total-label {
+      flex: 1 1 100%; width: auto; text-align: left !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    .jc-log-table .jc-total-row td {
+      flex: 1 1 0; width: auto; min-width: 0;
+      flex-direction: column; align-items: stretch; gap: 4px;
+    }
+    .jc-log-table .jc-total-row td::before { color: #ffffff; flex: 0 0 auto; }
+
+    .form-subheading { flex-wrap: wrap; }
+  }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
+  <form
+    action="/sachiko/machine/jobcard/form"
+    method="POST"
+    class="needs-validation"
+    autocomplete="off"
+    novalidate
+  >
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="submissionToken" value="<%= typeof submissionToken !== 'undefined' ? submissionToken : '' %>" />
+    <input type="hidden" name="pendingId" value="<%= pendingId %>" />
+    <input type="hidden" name="machineId" value="<%= machine ? machine._id : '' %>" />
+    <input type="hidden" name="date" value="<%= dateInputValue %>" />
+    <input type="hidden" name="machineNo" value="<%= machine ? machine.machineName : '' %>" />
+    <input type="hidden" name="lotNo" value="<%= isEmpty(jc.lotNo) ? '' : jc.lotNo %>" />
+    <input type="hidden" name="quantity" value="<%= isEmpty(jc.quantity) ? '' : jc.quantity %>" />
+    <input type="hidden" name="productCode" value="<%= isEmpty(jc.productCode) ? '' : jc.productCode %>" />
+    <input type="hidden" name="rolls" value="<%= isEmpty(jc.rolls) ? '' : jc.rolls %>" />
+    <input type="hidden" name="paperSize" value="<%= isEmpty(ref.paperSize || jc.paperSize) ? '' : (ref.paperSize || jc.paperSize) %>" />
+    <input type="hidden" name="operatorName" value="<%= isEmpty(jc.operatorName) ? '' : jc.operatorName %>" />
+    <input type="hidden" name="helperName" value="<%= isEmpty(jc.helperName) ? '' : jc.helperName %>" />
+
+    <div class="span-full form-heading">
+      <h1>Production Entry</h1>
+    </div>
+
+    <div class="span-full jc-info-wrap">
+      <table class="jc-info-table">
+        <tbody>
+          <tr>
+            <th>Date</th><td><%= dateDisplayValue %></td>
+            <th>Lot No</th><td><%= dash(jc.lotNo) %></td>
+            <th>Order Qty</th><td><%= fmtQty(jc.quantity) %></td>
+          </tr>
+          <tr>
+            <th>Balance Qty</th><td><%= fmtQty(jc.balanceQuantity) %></td>
+            <th>Running Mtrs</th><td><%= dash(ref.runningMeters) %></td>
+            <th>Machine</th><td><%= dash(machine ? machine.machineName : "") %></td>
+          </tr>
+          <tr>
+            <th>Product Code</th><td><%= dash(jc.productCode) %></td>
+            <th>No. of Rolls</th><td><%= dash(jc.rolls) %></td>
+            <th>Paper Size</th><td><%= dash(jc.paperSize) %></td>
+          </tr>
+          <tr>
+            <th colspan="6" class="jc-info-section">Material Details</th>
+          </tr>
+          <tr>
+            <td colspan="6" style="padding: 0;">
+              <div class="jc-ref-row">
+                <div class="jc-ref-item"><span class="jc-ref-label">Facestock Type</span><span class="jc-ref-value"><%= dash(ref.facestockType) %></span></div>
+                <div class="jc-ref-item"><span class="jc-ref-label">Facestock Family</span><span class="jc-ref-value"><%= dash(ref.facestockFamily) %></span></div>
+                <div class="jc-ref-item"><span class="jc-ref-label">Adhesive Type</span><span class="jc-ref-value"><%= dash(ref.adhesiveType) %></span></div>
+                <div class="jc-ref-item"><span class="jc-ref-label">Release Liner Type</span><span class="jc-ref-value"><%= dash(ref.releaseLinerType) %></span></div>
+                <div class="jc-ref-item"><span class="jc-ref-label">Running Meters</span><span class="jc-ref-value"><%= dash(ref.runningMeters) %></span></div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Allocated Paper — one row per facestock roll ticked on the Assign
+         Production form. The rolls come from PendingProduction.allottedRollIds,
+         so jobs assigned before those were recorded fall back to the notice
+         below. -->
+    <% const allocRolls = jc.allottedRollDetails || []; %>
+    <div class="span-full form-subheading">
+      <h1>Allocated Paper</h1>
+    </div>
+
+    <div class="span-full jc-info-wrap">
+      <% if (allocRolls.length) { %>
+        <table class="jc-roll-table">
+          <thead>
+            <tr>
+              <th style="width:44px; text-align:center;">#</th>
+              <th>Roll ID</th>
+              <th>Running Mtrs</th>
+              <th>Location</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% allocRolls.forEach((r, i) => { %>
+              <tr>
+                <td style="text-align:center;" data-label="#"><%= i + 1 %></td>
+                <td data-label="Roll ID"><%= dash(r.rollId) %></td>
+                <td data-label="Running Mtrs"><%= fmtQty(r.reelMtrs) %></td>
+                <td data-label="Location"><%= dash(r.location) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } else { %>
+        <div class="jc-no-rolls">
+          No rolls recorded for this job — pick them in the Rolls section of Assign Production.
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Roll IDs this job was allotted (from Assign Production). Both the Job
+         Setting and Production Log "Roll ID" inputs are normally filled by
+         scanning the QR label pasted on the reel; the datalist backs that up
+         for typing when a label is damaged, and the same list drives the
+         live match check beside each input (see checkRollId below). -->
+    <datalist id="allottedRollList">
+      <% (jc.allottedRollDetails || []).forEach((r) => { %>
+        <% if (r.rollId) { %><option value="<%= r.rollId %>"><%= fmtQty(r.reelMtrs) %> mtrs<%= r.location ? " · " + r.location : "" %></option><% } %>
+      <% }) %>
+    </datalist>
+    <script id="allotted-rolls-data" type="application/json"><%- safeJson(jc.allottedRollDetails || []) %></script>
+
+    <!-- Job Setting Table -->
+    <div class="span-full form-subheading" style="display: flex; align-items: center; gap: 12px;">
+      <h1>Job Setting</h1>
+      <div style="display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;">
+        <button type="button" id="jsMinus" style="width: 30px; height: 30px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 18px; line-height: 1; cursor: pointer;">-</button>
+        <input type="text" id="jsCount" style="width: 56px; height: 30px; text-align: center; border: 1px solid #044A78; border-radius: 4px; font-size: 14px;" class="form-control" value="1" readonly />
+        <button type="button" id="jsPlus" style="width: 30px; height: 30px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 18px; line-height: 1; cursor: pointer;">+</button>
+      </div>
+    </div>
+
+    <div class="span-full">
+      <table class="jc-log-table">
+        <thead>
+          <tr>
+            <th style="width:36px; text-align:center;">#</th>
+            <th style="width:240px;">Roll ID</th>
+            <th>Mtrs</th>
+            <th style="text-align:center;">Start</th>
+            <th>Mtrs</th>
+            <th style="text-align:center;">Stop</th>
+          </tr>
+        </thead>
+        <tbody id="jsTableBody">
+          <!-- rows injected by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Appears only once every Job Setting row has both Start and Stop
+         recorded; clicking it reveals the Production Log below. -->
+    <div class="span-full jc-start-prod-wrap jc-hidden" id="startProdWrap">
+      <button type="button" id="startProdBtn"
+        style="display:inline-flex; align-items:center; gap:8px; padding:10px 26px; border:none; border-radius:6px; background:#10b981; color:#fff; font-size:14px; font-weight:600; cursor:pointer;">
+        <i class="fa-solid fa-play"></i> Start Production
+      </button>
+    </div>
+
+    <!-- Production Log Table -->
+    <div class="span-full form-subheading jc-hidden" id="prodLogHead" style="display: flex; align-items: center; gap: 12px;">
+      <h1>Production Log</h1>
+      <div style="display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;">
+        <button type="button" id="logMinus" style="width: 30px; height: 30px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 18px; line-height: 1; cursor: pointer;">-</button>
+        <input type="text" id="logCount" style="width: 56px; height: 30px; text-align: center; border: 1px solid #044A78; border-radius: 4px; font-size: 14px;" class="form-control" value="1" readonly />
+        <button type="button" id="logPlus" style="width: 30px; height: 30px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 18px; line-height: 1; cursor: pointer;">+</button>
+      </div>
+    </div>
+
+    <div class="span-full jc-hidden" id="prodLogBody">
+      <table class="jc-log-table">
+        <thead>
+          <tr>
+            <th style="width:36px; text-align:center;">#</th>
+            <th style="width:240px;">Roll ID</th>
+            <th>Mtrs</th>
+            <th style="text-align:center;">Start</th>
+            <th>Mtrs</th>
+            <th style="text-align:center;">Stop</th>
+          </tr>
+        </thead>
+        <tbody id="logTableBody">
+          <!-- rows injected by JS -->
+        </tbody>
+        <tfoot>
+          <tr class="jc-total-row" style="background: #044a78;">
+            <td class="jc-total-label" style="text-align:center; font-size:12px; font-weight:700; color:#ffffff; white-space:nowrap; padding: 6px 8px;">Total</td>
+            <td colspan="3" style="padding: 6px 8px" data-label="RM">
+              <input type="text" name="totalMeter" class="form-control jc-readonly" readonly
+                     placeholder="RM" style="padding:6px 8px !important; font-size:13px !important; height:auto !important;" />
+            </td>
+            <td colspan="2" style="padding: 6px 8px" data-label="SQ Mtrs">
+              <input type="text" name="sqMtr" class="form-control jc-readonly" readonly
+                     placeholder="SQ Mtrs" style="padding:6px 8px !important; font-size:13px !important; height:auto !important;" />
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <div class="btn-grp span-full jc-hidden" id="saveBtnWrap">
+      <button type="submit">Save Production Entry</button>
+    </div>
+  </form>
+</div>
+
+<!-- ============ SCAN ROLL ID (CAMERA) DIALOG ============
+     Mobile-only affordance -- the button that opens this is hidden on desktop
+     (see .roll-scan-btn above), where the keyboard-wedge hardware scanner
+     already types straight into the Roll ID box. -->
+<div class="logout-modal" id="scanDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="scanDialogTitle"
+    style="width: min(420px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="scanDialogTitle">Scan Roll ID</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeScanDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <div class="scan-video-wrap">
+        <video id="scanVideo" playsinline muted autoplay></video>
+        <div class="scan-frame"></div>
+      </div>
+      <div class="scan-status" id="scanStatus">Point the camera at the QR code on the roll label.</div>
+      <div class="dialog-actions">
+        <button type="button" class="btn-cancel" onclick="closeScanDialog()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/jsQR.min.js" defer></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    /* ── Row gating (shared by Job Setting and Production Log) ──
+       An entry row unlocks left to right: naming the roll opens the start
+       Mtrs, the start Mtrs arms Start and opens the stop Mtrs, the stop Mtrs
+       arms Stop. Clearing a field re-locks and wipes everything downstream of
+       it, so a row can never end up holding a stop reading for a roll that was
+       never named. Both tables build identical rows apart from the js-/log-
+       class prefix, hence the prefix argument. */
+    const filled = (el) => Boolean(el && String(el.value).trim() !== "");
+
+    /* ── Roll ID scanning ──
+       The Roll ID is normally not typed at all: the operator scans the QR label
+       pasted on the reel and a keyboard-wedge scanner types it into whichever
+       box has focus. Three things follow.
+
+       First, scanners finish their payload with Enter, and Enter in a text
+       input submits the form -- which here would save a half-filled job card
+       and deduct against it. So Enter inside a Roll ID box is swallowed and
+       moves focus to the Mtrs box beside it, which is where the operator is
+       headed next anyway.
+
+       Second, the QR doesn't carry the Roll ID alone -- its payload is
+       "rollId vendorRollId paperSize reelMtrs" (utils/rollLabel.js's
+       buildQrPayload), so a scan lands the whole string in the box. The Roll
+       ID is always the first token; extractScannedRollId pulls just that out
+       for matching, and once Enter confirms the scan the box is tidied down
+       to that clean id too.
+
+       Third, only reels allotted to this job are deducted on save. Checking
+       the scan against that list here catches a reel off the wrong pallet
+       while it is still in the operator's hands, instead of in a note after
+       saving. */
+    const ALLOTTED_ROLLS = JSON.parse(document.getElementById("allotted-rolls-data")?.textContent || "[]");
+    // Must stay in step with normalizeRollId / extractScannedRollId in
+    // utils/rollId.js -- what matches here is what will match on save.
+    const normRollId = (v) => String(v ?? "").trim().replace(/\s+/g, "").toUpperCase();
+    const extractScannedRollId = (v) => normRollId(String(v ?? "").trim().split(/\s+/)[0] || "");
+    const rollById = new Map(ALLOTTED_ROLLS.filter((r) => r.rollId).map((r) => [normRollId(r.rollId), r]));
+    const fmtMtrs = (v) => Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
+    function checkRollId(row, p) {
+      const input = row?.querySelector(`.${p}-roll-id`);
+      const note = row?.querySelector(".roll-note");
+      if (!input || !note) return;
+      const key = extractScannedRollId(input.value);
+      if (!key) {
+        note.textContent = "";
+        note.className = "roll-note";
+        return;
+      }
+      const reel = rollById.get(key);
+      note.textContent = reel
+        ? `${fmtMtrs(reel.reelMtrs)} mtrs left${reel.location ? ` · ${reel.location}` : ""}`
+        : "Not allotted to this job — nothing will be deducted for it.";
+      note.className = `roll-note ${reel ? "ok" : "warn"}`;
+    }
+
+    function handleRollIdEnter(e, p) {
+      if (e.key !== "Enter" || !e.target.classList?.contains(`${p}-roll-id`)) return;
+      e.preventDefault();
+      const row = e.target.closest("tr");
+      checkRollId(row, p);
+      const cleanId = extractScannedRollId(e.target.value);
+      if (cleanId) e.target.value = cleanId;
+      const mtrs = row?.querySelector(`.${p}-mtrs1`);
+      if (mtrs && !mtrs.readOnly) mtrs.focus();
+    }
+
+    /* ── Roll ID scanning via the phone camera ── */
+    function openModal(id)  { const d = document.getElementById(id); if (!d) return; d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
+    function closeModal(id) { const d = document.getElementById(id); if (!d) return; d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
+
+    const scanDialog = document.getElementById("scanDialog");
+    const scanVideo = document.getElementById("scanVideo");
+    const scanStatus = document.getElementById("scanStatus");
+    const scanCanvas = document.createElement("canvas");
+
+    let scanStream = null;
+    let scanRafId = null;
+    let scanTargetRow = null;
+    let scanTargetPrefix = null;
+
+    function setScanStatus(text, isError) {
+      if (!scanStatus) return;
+      scanStatus.textContent = text;
+      scanStatus.classList.toggle("error", Boolean(isError));
+    }
+
+    function stopScanCamera() {
+      if (scanRafId) cancelAnimationFrame(scanRafId);
+      scanRafId = null;
+      if (scanStream) {
+        scanStream.getTracks().forEach((track) => track.stop());
+        scanStream = null;
+      }
+      if (scanVideo) scanVideo.srcObject = null;
+    }
+
+    function closeScanDialog() {
+      closeModal("scanDialog");
+      stopScanCamera();
+      scanTargetRow = null;
+      scanTargetPrefix = null;
+    }
+
+    function scanFrame() {
+      if (!scanStream) return; // dialog was closed mid-loop
+      if (scanVideo.readyState === scanVideo.HAVE_ENOUGH_DATA) {
+        const vw = scanVideo.videoWidth;
+        const vh = scanVideo.videoHeight;
+        if (vw && vh) {
+          const scale = Math.min(1, 640 / Math.max(vw, vh));
+          scanCanvas.width = Math.round(vw * scale);
+          scanCanvas.height = Math.round(vh * scale);
+          const ctx = scanCanvas.getContext("2d");
+          ctx.drawImage(scanVideo, 0, 0, scanCanvas.width, scanCanvas.height);
+          const frame = ctx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+          const code = window.jsQR
+            ? window.jsQR(frame.data, frame.width, frame.height, { inversionAttempts: "dontInvert" })
+            : null;
+          if (code && code.data) {
+            handleScanSuccess(code.data);
+            return;
+          }
+        }
+      }
+      scanRafId = requestAnimationFrame(scanFrame);
+    }
+
+    function handleScanSuccess(rawText) {
+      const row = scanTargetRow;
+      const p = scanTargetPrefix;
+      closeScanDialog();
+      if (!row || !p) return;
+
+      const cleanId = extractScannedRollId(rawText);
+      if (!cleanId) {
+        if (typeof showToast === "function") showToast("That QR code isn't a roll label.", "error");
+        return;
+      }
+
+      const input = row.querySelector(`.${p}-roll-id`);
+      if (!input) return;
+      input.value = cleanId;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+
+      const mtrs = row.querySelector(`.${p}-mtrs1`);
+      if (mtrs && !mtrs.readOnly) mtrs.focus();
+      if (typeof showToast === "function") showToast(`Scanned Roll ID: ${cleanId}`, "success");
+    }
+
+    async function openScanDialog(row, p) {
+      scanTargetRow = row;
+      scanTargetPrefix = p;
+      setScanStatus("Point the camera at the QR code on the roll label.");
+      openModal("scanDialog");
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setScanStatus("Camera scanning needs a secure (https) connection here. Please type the Roll ID instead.", true);
+        return;
+      }
+      if (typeof window.jsQR !== "function") {
+        setScanStatus("Scanner failed to load. Please type the Roll ID instead.", true);
+        return;
+      }
+
+      try {
+        scanStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+        scanVideo.srcObject = scanStream;
+        await scanVideo.play();
+        scanRafId = requestAnimationFrame(scanFrame);
+      } catch (err) {
+        setScanStatus("Couldn't open the camera. Please allow camera access, or type the Roll ID instead.", true);
+      }
+    }
+
+    scanDialog.addEventListener("click", (e) => { if (e.target === scanDialog) closeScanDialog(); });
+    document.addEventListener("visibilitychange", () => { if (document.hidden) closeScanDialog(); });
+
+    function setInputLocked(input, locked) {
+      if (!input) return;
+      input.readOnly = locked;
+      input.style.background = locked ? "#f1f5f9" : "";
+      input.style.cursor = locked ? "not-allowed" : "";
+      if (locked) input.value = "";
+    }
+
+    function setBtnArmed(btn, armed, color) {
+      if (!btn) return;
+      btn.disabled = !armed;
+      btn.style.background = armed ? color : "#d1d5db";
+      btn.style.cursor = armed ? "pointer" : "not-allowed";
+    }
+
+    function syncRowGating(row, p) {
+      if (!row) return;
+      const rollId = row.querySelector(`.${p}-roll-id`);
+      const mtrs1  = row.querySelector(`.${p}-mtrs1`);
+      const mtrs2  = row.querySelector(`.${p}-mtrs2`);
+      const started = filled(row.querySelector(`.${p}-start-input`));
+      const stopped = filled(row.querySelector(`.${p}-stop-input`));
+
+      if (!started) {
+        setInputLocked(mtrs1, !filled(rollId));
+        setBtnArmed(row.querySelector(`.${p}-start-btn`), filled(mtrs1), "#10b981");
+      }
+      if (!stopped) {
+        setInputLocked(mtrs2, !filled(mtrs1));
+        setBtnArmed(row.querySelector(`.${p}-stop-btn`), filled(mtrs2), "#ef4444");
+      }
+    }
+
+    /* ── Job Setting dynamic rows ── */
+    const jsBody  = document.getElementById("jsTableBody");
+    const jsCount = document.getElementById("jsCount");
+    const jsPlus  = document.getElementById("jsPlus");
+    const jsMinus = document.getElementById("jsMinus");
+
+    function jsRenumber() {
+      Array.from(jsBody.rows).forEach((row, i) => { row.cells[0].textContent = i + 1; });
+      jsCount.value = jsBody.rows.length;
+    }
+
+    function createJsRow() {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="text-align:center; font-weight:600; color:#03365a; background:#f0f7ff;" data-label="Row"></td>
+        <td data-label="Roll ID">
+          <div class="roll-id-field">
+            <input type="text" name="jsRollId" class="form-control js-roll-id" list="allottedRollList"
+                   placeholder="Scan Roll ID" autocomplete="off" style="width:240px;" />
+            <button type="button" class="roll-scan-btn js-roll-scan-btn" aria-label="Scan Roll ID with camera" title="Scan QR with camera">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+          <span class="roll-note"></span>
+        </td>
+        <td data-label="Mtrs"><input type="number" name="jsMtrs1" class="form-control js-mtrs1" placeholder="Mtrs" min="0" step="any" required /></td>
+        <td style="text-align:center; white-space:nowrap; min-width:110px;" data-label="Start">
+          <span class="js-start-display" style="font-size:12px; font-weight:700; color:#03365a; margin-right:4px;">—</span>
+          <input type="hidden" name="jsStart" class="js-start-input" />
+          <button type="button" class="js-start-btn" disabled
+            style="width:32px; height:26px; padding:0; font-size:12px; border:none; border-radius:4px; cursor:not-allowed; background:#d1d5db; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <i class="fa-solid fa-play"></i>
+          </button>
+        </td>
+        <td data-label="Mtrs"><input type="number" name="jsMtrs2" class="form-control js-mtrs2" placeholder="Mtrs" min="0" step="any" /></td>
+        <td style="text-align:center; white-space:nowrap; min-width:110px;" data-label="Stop">
+          <span class="js-stop-display" style="font-size:12px; font-weight:700; color:#dc2626; margin-right:4px;">—</span>
+          <input type="hidden" name="jsStop" class="js-stop-input" />
+          <button type="button" class="js-stop-btn" disabled
+            style="width:32px; height:26px; padding:0; font-size:12px; border:none; border-radius:4px; cursor:not-allowed; background:#d1d5db; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <i class="fa-solid fa-stop"></i>
+          </button>
+        </td>`;
+      syncRowGating(tr, "js");
+      return tr;
+    }
+
+    jsBody.addEventListener("input", (e) => {
+      const row = e.target.closest("tr");
+      syncRowGating(row, "js");
+      checkRollId(row, "js");
+    });
+
+    jsBody.addEventListener("keydown", (e) => handleRollIdEnter(e, "js"));
+
+    jsBody.addEventListener("click", (e) => {
+      const scanBtn = e.target.closest(".js-roll-scan-btn");
+      if (scanBtn) { openScanDialog(scanBtn.closest("tr"), "js"); return; }
+      const startBtn = e.target.closest(".js-start-btn");
+      if (startBtn && !startBtn.disabled) {
+        const row = startBtn.closest("tr");
+        const time = nowHHMM();
+        row.querySelector(".js-start-input").value = time;
+        row.querySelector(".js-start-display").textContent = time;
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        startBtn.style.background = "#6b7280";
+        startBtn.style.cursor = "default";
+        refreshStartProdBtn();
+        return;
+      }
+      const stopBtn = e.target.closest(".js-stop-btn");
+      if (stopBtn && !stopBtn.disabled) {
+        const row = stopBtn.closest("tr");
+        const time = nowHHMM();
+        row.querySelector(".js-stop-input").value = time;
+        row.querySelector(".js-stop-display").textContent = time;
+        stopBtn.disabled = true;
+        stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        stopBtn.style.background = "#6b7280";
+        stopBtn.style.cursor = "default";
+        refreshStartProdBtn();
+      }
+    });
+
+    /* ── Start Production gate ── */
+    const startProdWrap = document.getElementById("startProdWrap");
+    const startProdBtn  = document.getElementById("startProdBtn");
+    const prodLogHead   = document.getElementById("prodLogHead");
+    const prodLogBody   = document.getElementById("prodLogBody");
+    const saveBtnWrap   = document.getElementById("saveBtnWrap");
+    let productionStarted = false;
+
+    function jobSettingComplete() {
+      const rows = Array.from(jsBody.rows);
+      if (!rows.length) return false;
+      return rows.every((row) => {
+        const start = row.querySelector(".js-start-input");
+        const stop  = row.querySelector(".js-stop-input");
+        return start && stop && start.value.trim() !== "" && stop.value.trim() !== "";
+      });
+    }
+
+    function refreshStartProdBtn() {
+      if (productionStarted) return;
+      startProdWrap.classList.toggle("jc-hidden", !jobSettingComplete());
+    }
+
+    startProdBtn.addEventListener("click", () => {
+      productionStarted = true;
+      startProdWrap.classList.add("jc-hidden");
+      prodLogHead.classList.remove("jc-hidden");
+      prodLogBody.classList.remove("jc-hidden");
+      saveBtnWrap.classList.remove("jc-hidden");
+      prodLogHead.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+
+    jsPlus.addEventListener("click", () => { jsBody.appendChild(createJsRow()); jsRenumber(); refreshStartProdBtn(); });
+    jsMinus.addEventListener("click", () => { if (jsBody.rows.length > 1) { jsBody.removeChild(jsBody.lastElementChild); jsRenumber(); refreshStartProdBtn(); } });
+    jsBody.appendChild(createJsRow());
+    jsRenumber();
+    refreshStartProdBtn();
+
+    /* ── Production Log dynamic rows ── */
+    const logBody   = document.getElementById("logTableBody");
+    const logCount  = document.getElementById("logCount");
+    const logPlus   = document.getElementById("logPlus");
+    const logMinus  = document.getElementById("logMinus");
+
+    function renumber() {
+      Array.from(logBody.rows).forEach((row, i) => {
+        row.cells[0].textContent = i + 1;
+      });
+      logCount.value = logBody.rows.length;
+    }
+
+    function createLogRow() {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="text-align:center; font-weight:600; color:#03365a; background:#f0f7ff;" data-label="Row"></td>
+        <td data-label="Roll ID">
+          <div class="roll-id-field">
+            <input type="text" name="rollId" class="form-control log-roll-id" list="allottedRollList"
+                   placeholder="Scan Roll ID" autocomplete="off" style="width:240px;" />
+            <button type="button" class="roll-scan-btn log-roll-scan-btn" aria-label="Scan Roll ID with camera" title="Scan QR with camera">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+          <span class="roll-note"></span>
+        </td>
+        <td data-label="Mtrs"><input type="number" name="logMtrs1" class="form-control log-mtrs1" placeholder="Mtrs" min="0" step="any" /></td>
+        <td style="text-align:center; white-space:nowrap; min-width:110px;" data-label="Start">
+          <span class="log-start-display" style="font-size:12px; font-weight:700; color:#03365a; margin-right:4px;">—</span>
+          <input type="hidden" name="logStart" class="log-start-input" />
+          <button type="button" class="log-start-btn" disabled
+            style="width:32px; height:26px; padding:0; font-size:12px; border:none; border-radius:4px; cursor:not-allowed; background:#d1d5db; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <i class="fa-solid fa-play"></i>
+          </button>
+        </td>
+        <td data-label="Mtrs"><input type="number" name="logMtrs2" class="form-control log-mtrs2" placeholder="Mtrs" min="0" step="any" /></td>
+        <td style="text-align:center; white-space:nowrap; min-width:110px;" data-label="Stop">
+          <span class="log-stop-display" style="font-size:12px; font-weight:700; color:#dc2626; margin-right:4px;">—</span>
+          <input type="hidden" name="logStop" class="log-stop-input" />
+          <button type="button" class="log-stop-btn" disabled
+            style="width:32px; height:26px; padding:0; font-size:12px; border:none; border-radius:4px; cursor:not-allowed; background:#d1d5db; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <i class="fa-solid fa-stop"></i>
+          </button>
+        </td>`;
+      syncRowGating(tr, "log");
+      return tr;
+    }
+
+    function nowHHMM() {
+      const d = new Date();
+      let h = d.getHours();
+      const m = String(d.getMinutes()).padStart(2,"0");
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12 || 12;
+      return `${h}:${m} ${ampm}`;
+    }
+
+    /* ── Production Log totals ── */
+    const totalMeterInput = document.querySelector('input[name="totalMeter"]');
+    const sqMtrInput = document.querySelector('input[name="sqMtr"]');
+    const paperSizeVal = Number(document.querySelector('input[name="paperSize"]')?.value) || 0;
+    const round2 = (n) => String(Math.round(n * 100) / 100);
+
+    function recalcLogTotals() {
+      let runningMtrs = 0;
+      Array.from(logBody.rows).forEach((row) => {
+        const from = parseFloat(row.querySelector(".log-mtrs1")?.value);
+        const to = parseFloat(row.querySelector(".log-mtrs2")?.value);
+        if (Number.isFinite(from) && Number.isFinite(to) && to > from) runningMtrs += to - from;
+      });
+
+      if (totalMeterInput) totalMeterInput.value = runningMtrs ? round2(runningMtrs) : "";
+      if (sqMtrInput) sqMtrInput.value = runningMtrs ? round2(paperSizeVal * (runningMtrs / 100)) : "";
+    }
+
+    logBody.addEventListener("input", (e) => {
+      const row = e.target.closest("tr");
+      syncRowGating(row, "log");
+      checkRollId(row, "log");
+      recalcLogTotals();
+    });
+
+    logBody.addEventListener("keydown", (e) => handleRollIdEnter(e, "log"));
+
+    logBody.addEventListener("click", (e) => {
+      const scanBtn = e.target.closest(".log-roll-scan-btn");
+      if (scanBtn) { openScanDialog(scanBtn.closest("tr"), "log"); return; }
+      const startBtn = e.target.closest(".log-start-btn");
+      if (startBtn && !startBtn.disabled) {
+        const row = startBtn.closest("tr");
+        const time = nowHHMM();
+        row.querySelector(".log-start-input").value = time;
+        row.querySelector(".log-start-display").textContent = time;
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        startBtn.style.background = "#6b7280";
+        startBtn.style.cursor = "default";
+        return;
+      }
+      const stopBtn = e.target.closest(".log-stop-btn");
+      if (stopBtn && !stopBtn.disabled) {
+        const row = stopBtn.closest("tr");
+        const time = nowHHMM();
+        row.querySelector(".log-stop-input").value = time;
+        row.querySelector(".log-stop-display").textContent = time;
+        stopBtn.disabled = true;
+        stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        stopBtn.style.background = "#6b7280";
+        stopBtn.style.cursor = "default";
+      }
+    });
+
+    logPlus.addEventListener("click", () => {
+      logBody.appendChild(createLogRow());
+      renumber();
+      recalcLogTotals();
+    });
+
+    logMinus.addEventListener("click", () => {
+      if (logBody.rows.length > 1) {
+        logBody.removeChild(logBody.lastElementChild);
+        renumber();
+        recalcLogTotals();
+      }
+    });
+
+    logBody.appendChild(createLogRow());
+    renumber();
+    recalcLogTotals();
+
+    /* ── Draft autosave ── */
+    const DRAFT_KEY = `jc-draft:${document.querySelector('input[name="pendingId"]')?.value || "new"}`;
+
+    function readDraft() {
+      try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); } catch (e) { return null; }
+    }
+    function writeDraft(draft) {
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch (e) { /* ignore */ }
+    }
+    function dropDraft() {
+      try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* ignore */ }
+    }
+
+    const readRows = (body, p) => Array.from(body.rows).map((row) => ({
+      rollId: row.querySelector(`.${p}-roll-id`)?.value || "",
+      mtrs1: row.querySelector(`.${p}-mtrs1`)?.value || "",
+      start: row.querySelector(`.${p}-start-input`)?.value || "",
+      mtrs2: row.querySelector(`.${p}-mtrs2`)?.value || "",
+      stop: row.querySelector(`.${p}-stop-input`)?.value || "",
+    }));
+
+    const anyEntry = (rows) => rows.some((r) => r.rollId || r.mtrs1 || r.mtrs2 || r.start || r.stop);
+
+    function saveDraft() {
+      const draft = {
+        jsRows: readRows(jsBody, "js"),
+        logRows: readRows(logBody, "log"),
+        productionStarted,
+        savedAt: Date.now(),
+      };
+      if (!anyEntry(draft.jsRows) && !anyEntry(draft.logRows)) { dropDraft(); return; }
+      writeDraft(draft);
+    }
+
+    let draftTimer = null;
+    function scheduleSave() { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 400); }
+
+    function markPunched(btn, display, input, time) {
+      if (!btn || !input || !time) return;
+      input.value = time;
+      if (display) display.textContent = time;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+      btn.style.background = "#6b7280";
+      btn.style.cursor = "default";
+    }
+
+    function applyRows(body, p, rows, makeRow, renumberFn) {
+      while (body.rows.length < rows.length) body.appendChild(makeRow());
+      while (body.rows.length > rows.length && body.rows.length > 1) body.removeChild(body.lastElementChild);
+      rows.forEach((data, i) => {
+        const row = body.rows[i];
+        if (!row) return;
+        const put = (sel, value) => {
+          const el = row.querySelector(sel);
+          if (!el) return;
+          el.readOnly = false;
+          el.value = value;
+        };
+        put(`.${p}-roll-id`, data.rollId);
+        put(`.${p}-mtrs1`, data.mtrs1);
+        put(`.${p}-mtrs2`, data.mtrs2);
+        markPunched(
+          row.querySelector(`.${p}-start-btn`),
+          row.querySelector(`.${p}-start-display`),
+          row.querySelector(`.${p}-start-input`),
+          data.start,
+        );
+        markPunched(
+          row.querySelector(`.${p}-stop-btn`),
+          row.querySelector(`.${p}-stop-display`),
+          row.querySelector(`.${p}-stop-input`),
+          data.stop,
+        );
+        syncRowGating(row, p);
+        checkRollId(row, p);
+      });
+      renumberFn();
+    }
+
+    function restoreDraft() {
+      const draft = readDraft();
+      if (!draft) return;
+
+      if (Array.isArray(draft.jsRows) && draft.jsRows.length) {
+        applyRows(jsBody, "js", draft.jsRows, createJsRow, jsRenumber);
+      }
+      if (Array.isArray(draft.logRows) && draft.logRows.length) {
+        applyRows(logBody, "log", draft.logRows, createLogRow, renumber);
+      }
+      if (draft.productionStarted) {
+        productionStarted = true;
+        startProdWrap.classList.add("jc-hidden");
+        prodLogHead.classList.remove("jc-hidden");
+        prodLogBody.classList.remove("jc-hidden");
+        saveBtnWrap.classList.remove("jc-hidden");
+      }
+      refreshStartProdBtn();
+      recalcLogTotals();
+      if (typeof showToast === "function") showToast("Restored your unsaved entry", "success");
+    }
+
+    const jcForm = document.querySelector("form.needs-validation");
+    if (jcForm) {
+      ["input", "change", "click"].forEach((evt) => jcForm.addEventListener(evt, scheduleSave));
+      let jcSubmitting = false;
+      jcForm.addEventListener("submit", (e) => {
+        if (jcSubmitting) { e.preventDefault(); return; }
+        jcSubmitting = true;
+        clearTimeout(draftTimer);
+        saveDraft();
+        const saveBtn = jcForm.querySelector('button[type="submit"]');
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.textContent = "Saving…";
+        }
+      });
+    }
+    window.addEventListener("pagehide", () => { clearTimeout(draftTimer); saveDraft(); });
+
+    restoreDraft();
+  });
+</script>
+
+<% if (notification && notification.length) { %>
+<script>
+  const jcFlash = <%- safeJson(notification[0]) %>;
+  const jcFlashType = /failed|not found|error/i.test(String(jcFlash)) ? "error" : "success";
+  const showJcFlash = () => {
+    if (typeof hideStaticToast === "function") hideStaticToast();
+    if (typeof showToast === "function") showToast(jcFlash, jcFlashType);
+  };
+  document.readyState === "loading"
+    ? document.addEventListener("DOMContentLoaded", showJcFlash, { once: true })
+    : showJcFlash();
+</script>
+<% } %>

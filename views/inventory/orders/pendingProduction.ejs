@@ -1,0 +1,417 @@
+<% layout('/layout/boilerplate') %>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<style>
+  @keyframes detailsPopIn {
+    0% { transform: scale(0.96); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes popIn {
+    0% { transform: scale(0.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .tape-details-card {
+    position: relative;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 18px 42px rgba(4, 74, 120, 0.14);
+    border: none;
+    overflow: hidden;
+  }
+  .details-scroll-area { max-height: calc(100vh - 48px); overflow-y: auto; padding-bottom: 20px; }
+  .tape-details-header {
+    display: flex; justify-content: space-between; gap: 16px; align-items: flex-start;
+    padding: 26px 26px 24px;
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.16), transparent 34%),
+      linear-gradient(135deg, #044a78 0%, #03365a 100%);
+    color: #fff;
+  }
+  .tape-details-header h1 { margin: 0; font-size: 27px; font-weight: 700; letter-spacing: 0.2px; line-height: 1.15; }
+  .header-subtitle { margin-top: 10px; font-size: 14px; opacity: 0.92; line-height: 1.5; }
+  .header-actions { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .header-action-link {
+    display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff; text-decoration: none; font-weight: 700; font-size: 13px; letter-spacing: 0.2px;
+    backdrop-filter: blur(8px); transition: background 0.18s ease;
+  }
+  .tape-details-body { padding: 20px 26px; }
+  .section-title { margin: 0 0 14px; color: #044a78; font-size: 17px; font-weight: 700; }
+  .diff-table { width: 100%; border-collapse: collapse; border: 1px solid #e6eaf2; border-radius: 12px; overflow: hidden; }
+  .diff-table th, .diff-table td { padding: 10px 12px; border-bottom: 1px solid #e6eaf2; text-align: left; font-size: 13px; vertical-align: top; }
+  .diff-table .key-col { width: 32%; color: #5a6586; font-weight: 600; }
+  .diff-table .resolved { font-weight: 700; color: #1f2a44; }
+
+  .btn-action {
+    height: 24px; padding: 2px 10px; color: white; border: none; border-radius: 4px; cursor: pointer;
+    font-size: 11px; transition: opacity 0.2s; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;
+  }
+  .btn-action:hover { opacity: 0.85; }
+  #custom-dialog-no:hover { background: #f3f4f6; }
+  #custom-dialog-yes:hover { opacity: 0.9; }
+  #cancel-reason-input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 2px rgba(26, 26, 46, 0.1); }
+</style>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <div class="indi-head">
+    <h1><%= initialTab === 'wip' ? 'Work In Progress' : 'Pending Production' %></h1>
+    <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+      <a
+        href="/sachiko/sales/order"
+        style="padding: 6px 14px; background: #044a78; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
+        onmouseover="this.style.opacity = '0.85'" onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-plus"></i><span>New Label Stock Order</span>
+      </a>
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span><i class="fa-solid fa-file-arrow-down"></i><span class="download-typo">Download</span></span>
+          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+        </button>
+        <div class="download-selector__menu" id="downloads">
+          <span class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel download-selector__option-icon"></i><span>Excel</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <% if (initialTab === 'wip') { %>
+    <div id="wip-table" class="tabulator tabulator-modern"></div>
+  <% } else { %>
+    <div id="master-table" class="tabulator tabulator-modern"></div>
+  <% } %>
+</div>
+
+<!-- Cancel confirmation dialog -->
+<div id="custom-confirm-dialog" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 9999; justify-content: center; align-items: center;">
+  <div style="background: white; border-radius: 8px; width: 440px; max-width: 90%; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); overflow: hidden; animation: popIn 0.2s ease-out;">
+    <div style="padding: 25px 20px; text-align: center">
+      <p id="custom-dialog-message" style="margin: 0; color: #333; font-size: 16px; line-height: 1.5">Are you sure?</p>
+      <div id="cancel-reason-wrap" style="display: none; margin-top: 15px; text-align: left">
+        <label for="cancel-reason-input" style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 6px; display: block">Reason for Cancellation <span style="color: #ef4444">*</span></label>
+        <textarea id="cancel-reason-input" rows="3" placeholder="Enter reason for cancellation..." style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; resize: none; font-family: inherit; box-sizing: border-box;"></textarea>
+      </div>
+    </div>
+    <div style="padding: 15px 20px; background: #f9fafb; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e5e7eb;">
+      <button id="custom-dialog-no" onclick="closeCustomDialog()" style="padding: 8px 16px; border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 6px; cursor: pointer; font-weight: 500;">Go Back</button>
+      <button id="custom-dialog-yes" style="padding: 8px 16px; border: none; background: #ef4444; color: white; border-radius: 6px; cursor: pointer; font-weight: 500;">Yes, Cancel Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- Details dialog -->
+<div id="pending-order-details-dialog" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.54); z-index: 10000; justify-content: center; align-items: center; padding: 24px; backdrop-filter: blur(6px);">
+  <div id="pending-order-details-body" style="width: min(1180px, 100%); animation: detailsPopIn 0.2s ease-out"></div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script id="order-data" type="application/json">
+  <%- safeJson(orders || []) %>
+</script>
+<script id="wip-order-data" type="application/json">
+  <%- safeJson(wipOrders || []) %>
+</script>
+
+<script>
+  const orderData = JSON.parse(document.getElementById("order-data").textContent);
+  const wipData = JSON.parse(document.getElementById("wip-order-data").textContent);
+  const allOrderData = orderData.concat(wipData);
+  // Pending vs WIP are separate side-nav destinations (?tab=wip) now, not
+  // in-page tabs -- only the table for the page actually rendered gets built.
+  const INITIAL_TAB = "<%= initialTab %>";
+
+  /* ----- Details dialog ----- */
+  window.viewProduction = function (orderId) {
+    const order = allOrderData.find((row) => String(row._id) === String(orderId));
+    if (!order) return;
+
+    const qty = Number(order.quantity) || 0;
+    const produced = Number(order.balance != null ? qty - order.balance : 0) || 0;
+    const remaining = order.balance ?? qty;
+
+    document.getElementById("pending-order-details-body").innerHTML = `
+      <div class="tape-details-card">
+        <div class="details-scroll-area">
+          <div class="tape-details-header">
+            <div class="header-copy">
+              <h1>${order.productCode || "Label Stock"}</h1>
+              <div class="header-subtitle">${order.clientName || "N/A"}${order.userName ? " | " + order.userName : ""}</div>
+            </div>
+            <div class="header-actions">
+              <span class="header-action-link" style="pointer-events: none;"><i class="fa-solid fa-file-invoice"></i> PO: ${order.poNumber || "N/A"}</span>
+              <button onclick="closeOrderDetailsDialog()" class="header-action-link" style="border: none; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          </div>
+          <div class="tape-details-body">
+            <h3 class="section-title">Production Details</h3>
+            <table class="diff-table">
+              <tbody>
+                <tr><td class="key-col">Client</td><td class="resolved">${order.clientName || "N/A"}</td></tr>
+                <tr><td class="key-col">User</td><td class="resolved">${order.userName || "N/A"}</td></tr>
+                <tr><td class="key-col">Product Code</td><td class="resolved">${order.productCode || "N/A"}</td></tr>
+                <tr><td class="key-col">Paper Size</td><td class="resolved">${order.paperSize || "N/A"}</td></tr>
+                <tr><td class="key-col">No. of Rolls</td><td class="resolved">${order.noOfRolls || "N/A"}</td></tr>
+                <tr><td class="key-col">Order Quantity</td><td class="resolved">${qty}</td></tr>
+                <tr><td class="key-col">Produced</td><td class="resolved">${produced}</td></tr>
+                <tr><td class="key-col">Remaining</td><td class="resolved">${remaining}</td></tr>
+                <tr><td class="key-col">PO Number</td><td class="resolved">${order.poNumber || "N/A"}</td></tr>
+                <tr><td class="key-col">Estimated Delivery</td><td class="resolved">${order.estimatedDate ? new Date(order.estimatedDate).toLocaleDateString("en-IN") : "N/A"}</td></tr>
+                <tr><td class="key-col">Remarks</td><td class="resolved">${order.remarks || "N/A"}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById("pending-order-details-dialog").style.display = "flex";
+  };
+  window.closeOrderDetailsDialog = () => (document.getElementById("pending-order-details-dialog").style.display = "none");
+
+  /* ----- Assign/start production ----- */
+  window.startProduction = function (orderId) {
+    window.location.href = `/sachiko/labels/production/assign/${orderId}`;
+  };
+
+  /* ----- Cancel ----- */
+  window.requestCancel = function (orderId) {
+    const dialog = document.getElementById("custom-confirm-dialog");
+    const yesBtn = document.getElementById("custom-dialog-yes");
+    const msg = document.getElementById("custom-dialog-message");
+    document.getElementById("cancel-reason-wrap").style.display = "block";
+    msg.textContent = "Are you sure you want to CANCEL this label stock order?";
+    yesBtn.textContent = "Yes, Cancel Order";
+    dialog.style.display = "flex";
+    yesBtn.onclick = () => {
+      const reason = document.getElementById("cancel-reason-input").value.trim();
+      if (!reason) { alert("Please provide a reason for cancellation."); return; }
+      submitStatusUpdate(orderId, "CANCELLED", reason);
+    };
+  };
+  window.closeCustomDialog = () => (document.getElementById("custom-confirm-dialog").style.display = "none");
+
+  /* ----- Send back to Pending (undo Assign Production, WIP tab only) ----- */
+  window.requestUnassign = function (orderId) {
+    const dialog = document.getElementById("custom-confirm-dialog");
+    const yesBtn = document.getElementById("custom-dialog-yes");
+    const msg = document.getElementById("custom-dialog-message");
+    document.getElementById("cancel-reason-wrap").style.display = "none";
+    msg.textContent = "Send this order back to Pending Production? It will be unassigned from its current machine, operator and helper, and will need to be assigned again.";
+    yesBtn.textContent = "Yes, Send Back";
+    dialog.style.display = "flex";
+    yesBtn.onclick = () => submitUnassign(orderId);
+  };
+
+  function submitUnassign(orderId) {
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = `/sachiko/labels/production/unassign/${orderId}`;
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "_csrf";
+    input.value = "<%= csrfToken %>";
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  function submitStatusUpdate(orderId, status, reason = "") {
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/sachiko/sales/order/status";
+    const inputs = { orderId, status, cancelReason: reason, _csrf: "<%= csrfToken %>" };
+    for (const [name, value] of Object.entries(inputs)) {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    }
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  /* ----- Table ----- */
+  let table = null;
+  if (INITIAL_TAB !== "wip") {
+  table = new Tabulator("#master-table", {
+    data: orderData,
+    placeholder: "No label stock pending production",
+    initialSort: [{ column: "createdAt", dir: "asc" }],
+    columns: [
+      {
+        title: "Actions",
+        hozAlign: "center",
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return `
+            <div style="display:flex; gap:6px; justify-content:center; align-items:center;">
+              <button onclick="viewProduction('${row._id}')" class="btn-action" style="background:#111827;" title="View Details"><i class="fa-solid fa-eye"></i></button>
+              <button onclick="startProduction('${row._id}')" class="btn-action" style="background:#10b981;" title="Assign Production"><i class="fa-solid fa-play"></i></button>
+              <button onclick="requestCancel('${row._id}')" class="btn-action" style="background:#ef4444;" title="Cancel Order"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          `;
+        },
+      },
+      { title: "Date", field: "createdAt", headerFilter: "input", headerFilterPlaceholder: "Filter date...", formatter: (cell) => new Date(cell.getValue()).toLocaleDateString("en-IN") },
+      { title: "Client", field: "clientName", headerFilter: "input", headerFilterPlaceholder: "Filter client...", formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>` },
+      {
+        title: "Client Type",
+        field: "clientType",
+        width: 110,
+        hozAlign: "center",
+        headerFilter: "list",
+        headerFilterParams: { values: { "": "All", DEALER: "Dealer", CLIENT: "Client" } },
+        headerFilterPlaceholder: "All",
+        formatter: (cell) => {
+          const val = String(cell.getValue() || "").toUpperCase();
+          if (!val) return "";
+          const isDealer = val === "DEALER";
+          const color = isDealer ? "#dc2626" : "#059669";
+          return `<span style="color:${color}; font-weight:700;">${val}</span>`;
+        },
+      },
+      { title: "User", field: "userName", headerFilter: "input", headerFilterPlaceholder: "Filter user..." },
+      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter product...", formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>` },
+      { title: "Paper Size", field: "paperSize", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "Size" },
+      { title: "No. of Rolls", field: "noOfRolls", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#" },
+      { title: "Qty", field: "quantity", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#" },
+      {
+        title: "Bal",
+        hozAlign: "center",
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return `<span style="font-weight:700; color:#044A78;">${row.balance ?? row.quantity}</span>`;
+        },
+      },
+      { title: "PO Number", field: "poNumber", headerFilter: "input", headerFilterPlaceholder: "Filter PO..." },
+      { title: "Est. Delivery", field: "estimatedDate", headerFilter: "input", headerFilterPlaceholder: "Filter date...", formatter: (cell) => (cell.getValue() ? new Date(cell.getValue()).toLocaleDateString("en-IN") : "—") },
+      { title: "Remarks", field: "remarks", headerFilter: "input", headerFilterPlaceholder: "Filter remarks..." },
+    ],
+  });
+  }
+
+  /* ----- WIP Table (orders already sent through Assign Production) ----- */
+  let wipTable = null;
+  if (INITIAL_TAB === "wip") {
+  wipTable = new Tabulator("#wip-table", {
+    data: wipData,
+    index: "_id",
+    placeholder: "No label stock currently in production",
+    initialSort: [{ column: "assignedAt", dir: "desc" }],
+    columns: [
+      {
+        title: "Actions",
+        hozAlign: "center",
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const queueBtn = row.assignedMachineId?._id
+            ? `<button onclick="window.open('/sachiko/machine/${row.assignedMachineId._id}/queue', '_blank')" class="btn-action" style="background:#044A78;" title="View Machine Queue"><i class="fa-solid fa-list-check"></i></button>`
+            : "";
+          const unassignBtn = row.liveUpdate
+            ? `<button class="btn-action" disabled style="background:#9ca3af;cursor:not-allowed;" title="Job Card already filed — can't send back to Pending"><i class="fa-solid fa-rotate-left"></i></button>`
+            : `<button onclick="requestUnassign('${row._id}')" class="btn-action" style="background:#b45309;" title="Send Back to Pending"><i class="fa-solid fa-rotate-left"></i></button>`;
+          return `
+            <div style="display:flex; gap:6px; justify-content:center; align-items:center;">
+              <button onclick="viewProduction('${row._id}')" class="btn-action" style="background:#111827;" title="View Details"><i class="fa-solid fa-eye"></i></button>
+              ${queueBtn}
+              ${unassignBtn}
+            </div>
+          `;
+        },
+      },
+      { title: "Assigned", field: "assignedAt", headerFilter: "input", headerFilterPlaceholder: "Filter date...", formatter: (cell) => (cell.getValue() ? new Date(cell.getValue()).toLocaleDateString("en-IN") : "—") },
+      { title: "Client", field: "clientName", headerFilter: "input", headerFilterPlaceholder: "Filter client...", formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>` },
+      {
+        title: "Client Type",
+        field: "clientType",
+        width: 110,
+        hozAlign: "center",
+        headerFilter: "list",
+        headerFilterParams: { values: { "": "All", DEALER: "Dealer", CLIENT: "Client" } },
+        headerFilterPlaceholder: "All",
+        formatter: (cell) => {
+          const val = String(cell.getValue() || "").toUpperCase();
+          if (!val) return "";
+          const isDealer = val === "DEALER";
+          const color = isDealer ? "#dc2626" : "#059669";
+          return `<span style="color:${color}; font-weight:700;">${val}</span>`;
+        },
+      },
+      { title: "User", field: "userName", headerFilter: "input", headerFilterPlaceholder: "Filter user..." },
+      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter product...", formatter: (cell) => cell.getValue() || "—" },
+      { title: "Paper Size", field: "paperSize", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "Size", formatter: (cell) => cell.getValue() || "—" },
+      { title: "Qty", field: "quantity", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#" },
+      {
+        title: "Bal",
+        hozAlign: "center",
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return `<span style="font-weight:700; color:#044A78;">${row.balance ?? row.quantity}</span>`;
+        },
+      },
+      { title: "Machine", field: "machineName", headerFilter: "input", headerFilterPlaceholder: "Filter machine...", formatter: (cell) => cell.getValue() || "—" },
+      { title: "Operator", field: "operatorName", headerFilter: "input", headerFilterPlaceholder: "Filter...", formatter: (cell) => cell.getValue() || "—" },
+      { title: "Helper", field: "helperName", headerFilter: "input", headerFilterPlaceholder: "Filter...", formatter: (cell) => cell.getValue() || "—" },
+      {
+        title: "Live Update",
+        field: "liveUpdate",
+        headerSort: false,
+        formatter: (cell) => {
+          const val = cell.getValue();
+          if (!val) return `<span style="color:#9ca3af;">Not started</span>`;
+          const meter = val.totalMeter ? `${val.totalMeter} m` : "—";
+          const when = val.updatedAt ? new Date(val.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "";
+          return `
+            <span style="display:inline-flex; align-items:center; gap:6px;">
+              <span style="width:7px; height:7px; border-radius:50%; background:#16a34a; display:inline-block; flex-shrink:0;"></span>
+              <span style="font-weight:600; color:#1f2a44;">${meter}</span>
+              ${when ? `<span style="color:#9ca3af; font-size:11px;">@ ${when}</span>` : ""}
+            </span>
+          `;
+        },
+      },
+      { title: "Remarks", field: "remarks", headerFilter: "input", headerFilterPlaceholder: "Filter remarks..." },
+    ],
+  });
+
+  // Job Cards are filed once from the shop floor, not streamed -- this just
+  // polls periodically so a freshly-filed Job Card's total shows up here
+  // without the operator having to reload the page.
+  setInterval(async () => {
+    try {
+      const res = await fetch("/sachiko/labels/production/wip-progress");
+      if (!res.ok) return;
+      const updates = await res.json();
+      if (Array.isArray(updates) && updates.length) wipTable.updateData(updates);
+    } catch (err) {
+      console.error("WIP live update poll failed:", err);
+    }
+  }, 20000);
+  }
+
+  document.getElementById("download-xlsx").addEventListener("click", () => {
+    if (wipTable) {
+      wipTable.download("xlsx", "wip_production.xlsx", { sheetName: "WIP" });
+    } else if (table) {
+      table.download("xlsx", "pending_production.xlsx", { sheetName: "PendingProduction" });
+    }
+  });
+
+  const selector = document.getElementById("downloadSelector");
+  const trigger = selector.querySelector(".download-selector__trigger");
+  trigger.addEventListener("click", (e) => { e.stopPropagation(); selector.classList.toggle("download-selector--active"); });
+  document.addEventListener("click", () => selector.classList.remove("download-selector--active"));
+</script>

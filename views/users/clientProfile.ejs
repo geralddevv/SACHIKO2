@@ -410,6 +410,7 @@
                 const locLabel = (user.label || []).filter(i => sameLoc(i.location, loc.userLocation));
                 const locTtr = (user.ttr || []).filter(i => sameLoc(i.location, loc.userLocation));
                 const locTape = (user.tape || []).filter(i => sameLoc(i.location, loc.userLocation));
+                const locLabelStock = (user.labelStock || []).filter(i => sameLoc(i.location, loc.userLocation));
               %>
               <tr class="user-row expanded" onclick="toggleUserExpand(this)">
                 <td><i class="fa-solid fa-chevron-right toggle-icon"></i></td>
@@ -565,10 +566,43 @@
                         </div>
                       <% } %>
 
+                      <!-- Label Stock -->
+                      <% if (locLabelStock.length > 0) { %>
+                        <div class="item-category-group">
+                          <div class="item-category-header">
+                            <span class="item-type-label">Label Stock</span>
+                            <span class="item-count-badge"><%= locLabelStock.length %></span>
+                          </div>
+                          <table class="inner-spec-table">
+                            <thead>
+                              <tr>
+                                <th style="width: 12%;">SKU Code</th>
+                                <th>Product Code</th>
+                                <th>Paper Size</th>
+                                <th>RM</th>
+                                <th>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <% locLabelStock.forEach(i => { %>
+                                <tr>
+                                  <td class="item-name-cell"><%= i.labelStock ? i.labelStock.skuCode : '-' %></td>
+                                  <td><%= i.labelStock ? i.labelStock.productCode : '-' %></td>
+                                  <td><%= i.paperSize || '-' %></td>
+                                  <td><%= i.runningMeters != null ? i.runningMeters : '-' %></td>
+                                  <td><%= i.status || '-' %></td>
+                                </tr>
+                              <% }) %>
+                            </tbody>
+                          </table>
+                        </div>
+                      <% } %>
+
                       <% if (
                         locLabel.length === 0 &&
                         locTtr.length === 0 &&
-                        locTape.length === 0
+                        locTape.length === 0 &&
+                        locLabelStock.length === 0
                       ) { %>
                         <div style="padding: 15px; color: #94a3b8; font-style: italic; font-size: 13px;">
                           No items associated with this user at this location.

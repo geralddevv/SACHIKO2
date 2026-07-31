@@ -62,11 +62,6 @@
           <div class="download-selector__option" id="download-xlsx"><i class="fas fa-file-excel"></i> Excel</div>
         </div>
       </div>
-
-      <label class="header-action-btn" style="cursor: pointer; gap: 6px;">
-        <input type="checkbox" id="showInactiveToggle" style="margin: 0;" />
-        Show Inactive
-      </label>
     </div>
   </div>
 
@@ -315,21 +310,34 @@
     ],
   });
 
-  /* ===== Hide inactive clients by default ===== */
+  /* ===== Hide inactive clients by default, unless the Status column filter says otherwise ===== */
   function hideInactiveFilter(data) {
     return normalizeStatus(data.clientStatus) !== "INACTIVE";
   }
 
+  let hidingInactive = false;
+
+  function applyHideInactive(hide) {
+    if (hide === hidingInactive) return;
+    hidingInactive = hide;
+    if (hide) {
+      table.addFilter(hideInactiveFilter);
+    } else {
+      table.removeFilter(hideInactiveFilter);
+    }
+  }
+
+  function statusHeaderFilterValue() {
+    const filter = table.getHeaderFilters().find((f) => f.field === "clientStatus");
+    return filter ? filter.value : "";
+  }
+
   table.on("tableBuilt", () => {
-    table.addFilter(hideInactiveFilter);
+    applyHideInactive(true);
   });
 
-  document.getElementById("showInactiveToggle").addEventListener("change", (e) => {
-    if (e.target.checked) {
-      table.removeFilter(hideInactiveFilter);
-    } else {
-      table.addFilter(hideInactiveFilter);
-    }
+  table.on("dataFiltered", () => {
+    applyHideInactive(!normalizeStatus(statusHeaderFilterValue()));
   });
 
   /* ===== POPUP LOGIC ===== */

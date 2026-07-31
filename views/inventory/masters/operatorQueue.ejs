@@ -1,0 +1,306 @@
+<% layout('/layout/boilerplate') -%>
+
+<div class="contain mq-page" style="flex-direction: column; padding: 10px; gap: 14px;">
+  <style>
+    .mq-head h1 { font-size: 20px; color: #fff; margin: 0; }
+    .mq-head .mq-sub { font-size: 13px; color: rgba(255, 255, 255, 0.85); margin-top: 2px; }
+
+    .mq-head > div { flex: 1 1 auto; min-width: 0; }
+    .mq-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+    .mq-summary { display: none; }
+    .mq-sub-count { white-space: nowrap; }
+
+    .ap-card {
+      width: 100%;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .ap-card-title {
+      background: #044a78;
+      color: #fff; font-size: 14px; font-weight: 600; letter-spacing: 0.2px;
+      padding: 9px 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .ap-card-title .ap-machine-meta {
+      font-weight: 500; font-size: 12px; opacity: 0.85; margin-left: 8px;
+    }
+
+    .ap-table-wrap { overflow-x: hidden; }
+    .ap-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+    .ap-table th, .ap-table td {
+      padding: 8px 10px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;
+      text-align: left; vertical-align: middle;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ap-table tr > *:last-child { border-right: none; }
+    .ap-table th { background: #f8fafc; color: #044a78; font-weight: 700; }
+    .ap-table td { color: #1f2a44; font-weight: 600; }
+    .ap-table tbody tr:hover { background: #fbfdff; }
+
+    .ap-notice {
+      background: #fff8e1; border: 1px solid #f0c36d; color: #7a5b00; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px;
+    }
+
+    .mq-actions { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: nowrap; }
+    .mq-start-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #10b981; color: #fff;
+      border: none; border-radius: 6px; padding: 6px 10px; font-size: 12.5px; font-weight: 600;
+      cursor: pointer; text-decoration: none; white-space: nowrap; transition: opacity 0.2s;
+    }
+    .mq-start-btn:hover { opacity: 0.85; }
+    .mq-start-btn.mq-start-disabled { background: #9ca3af; cursor: not-allowed; pointer-events: none; }
+
+    .ap-table tbody tr.mq-row-match { background: #dcfce7; }
+    .ap-table tbody tr.mq-row-match:hover { background: #bbf7d0; }
+    .ap-table tbody tr.mq-row-short { background: #fee2e2; }
+    .ap-table tbody tr.mq-row-short:hover { background: #fecaca; }
+
+    .mq-rolls-cell {
+      cursor: pointer; color: #044a78; text-decoration: underline; text-decoration-style: dotted;
+      text-underline-offset: 3px;
+    }
+    .mq-rolls-cell:hover { color: #023654; }
+
+    .dialog-header {
+      background: #044A78; padding: 18px 22px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-radius: 14px 14px 0 0;
+    }
+    .dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #fff; }
+    .dialog-close-btn {
+      background: none; border: none; color: #fff; font-size: 20px;
+      cursor: pointer; line-height: 1; padding: 0 2px; opacity: 0.8; transition: opacity 0.15s;
+    }
+    .dialog-close-btn:hover { opacity: 1; }
+    .dialog-body { padding: 20px 22px; background: #fff; border-radius: 0 0 14px 14px; }
+    .rd-pairs { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .rd-pairs th, .rd-pairs td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    .rd-pairs th { width: 42%; color: #5a6586; font-weight: 600; }
+    .rd-pairs td { color: #1f2a44; font-weight: 700; }
+    .rd-pairs tr:last-child th, .rd-pairs tr:last-child td { border-bottom: none; }
+    .rd-section {
+      margin: 14px 0 6px; padding-top: 12px; border-top: 1px solid #e5e7eb;
+      color: #044a78; font-size: 13px; font-weight: 700;
+    }
+
+    .rd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .rd-table th, .rd-table td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    .rd-table th { color: #5a6586; font-weight: 600; white-space: nowrap; }
+    .rd-table thead th { background: #f0f7ff; color: #03365a; font-weight: 700; font-size: 12px; }
+    .rd-table td { color: #1f2a44; font-weight: 700; }
+    .rd-table tbody tr:last-child th, .rd-table tbody tr:last-child td { border-bottom: none; }
+
+    @media screen and (max-width: 768px) {
+      .mq-page { height: auto; min-height: 100%; padding: 8px; gap: 10px; }
+      .mq-head { padding: 0.5rem 0.7rem; }
+      .mq-head h1 { font-size: 17px; }
+      .mq-head .mq-sub { font-size: 12px; }
+      .mq-title-row { gap: 8px; }
+      .mq-sub-count { display: none; }
+      .mq-summary {
+        flex: 0 0 auto;
+        margin-left: auto;
+        display: inline-flex; align-items: center;
+        background: rgba(255, 255, 255, 0.16);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        color: #fff; font-weight: 600; white-space: nowrap;
+        font-size: 10px; padding: 3px 9px; border-radius: 999px;
+      }
+      .ap-card-title { font-size: 13px; padding: 8px 12px; flex-wrap: wrap; }
+      .ap-card-title .ap-machine-meta { margin-left: 0; flex-basis: 100%; }
+
+      .ap-table-wrap { overflow-x: visible; }
+      .ap-table thead { display: none; }
+      .ap-table, .ap-table tbody, .ap-table tr, .ap-table td { display: block; width: 100%; }
+      .ap-table tbody tr {
+        display: flex; flex-wrap: wrap;
+        border: 1px solid #dbe3ec; border-radius: 8px; overflow: hidden; margin: 10px;
+        width: auto;
+      }
+      .ap-table td {
+        display: flex; align-items: center; gap: 10px;
+        flex: 1 1 100%;
+        padding: 7px 12px; border-right: none; white-space: normal; font-size: 13px;
+      }
+      .ap-table td::before {
+        content: attr(data-label);
+        flex: 0 0 34%; min-width: 0;
+        color: #5a6586; font-weight: 700; font-size: 12px;
+      }
+      .ap-table td:last-child { border-bottom: none; justify-content: center; padding: 10px 12px; }
+      .ap-table td:last-child::before { content: none; }
+      .mq-actions { width: 100%; flex-direction: column; gap: 8px; }
+      .mq-start-btn { width: 100%; justify-content: center; padding: 11px 12px; font-size: 14px; }
+
+      .dialog-header { padding: 14px 16px; }
+      .dialog-body { padding: 14px 16px; }
+      .rd-table th, .rd-table td,
+      .rd-pairs th, .rd-pairs td { padding: 7px 6px; font-size: 12.5px; }
+    }
+  </style>
+
+  <div class="indi-head mq-head">
+    <div>
+      <div class="mq-title-row">
+        <h1>Work Queue</h1>
+        <span class="mq-summary"><%= totalJobs %> job<%= totalJobs === 1 ? "" : "s" %> · <%= groups.length %> machine<%= groups.length === 1 ? "" : "s" %></span>
+      </div>
+      <div class="mq-sub">
+        <i class="fa-solid fa-user"></i> <%= operatorName || "—" %><% if (operatorLocation) { %> / <%= operatorLocation %><% } %><span class="mq-sub-count">&nbsp;·&nbsp; <%= totalJobs %> job<%= totalJobs === 1 ? "" : "s" %> across <%= groups.length %> machine<%= groups.length === 1 ? "" : "s" %></span>
+      </div>
+    </div>
+  </div>
+
+  <% if (groups.length === 0) { %>
+    <div class="ap-card">
+      <div style="padding: 14px 16px;">
+        <div class="ap-notice">
+          <i class="fa-solid fa-circle-info"></i>
+          No orders are currently assigned to you. New work will appear here once it's assigned to your machine.
+        </div>
+      </div>
+    </div>
+  <% } else { %>
+    <% groups.forEach((group) => { %>
+      <div class="ap-card">
+        <div class="ap-card-title">
+          <span>
+            <i class="fa-solid fa-gears"></i> <%= group.machineName %>
+            <span class="ap-machine-meta"><%= group.machineType || "—" %><% if (group.locationName && group.locationName !== "—") { %> / <%= group.locationName %><% } %></span>
+          </span>
+          <span><%= group.jobs.length %> order<%= group.jobs.length === 1 ? "" : "s" %></span>
+        </div>
+
+        <div class="ap-table-wrap">
+          <table class="ap-table">
+            <colgroup>
+              <col style="width: 14%" />
+              <col style="width: 22%" />
+              <col style="width: 12%" />
+              <col style="width: 13%" />
+              <col style="width: 13%" />
+              <col style="width: 13%" />
+              <col style="width: 13%" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Lot No</th>
+                <th>Product Code</th>
+                <th>Paper Size</th>
+                <th>Required Rolls</th>
+                <th>Allotted Rolls</th>
+                <th>Balance Rolls</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% group.jobs.forEach((row) => { %>
+                <tr class="<%= row.rollsStatus === 'match' ? 'mq-row-match' : row.rollsStatus === 'short' ? 'mq-row-short' : '' %>">
+                  <td data-label="Lot No" title="<%= row.lotNo %>"><%= row.lotNo %></td>
+                  <td data-label="Product Code" title="<%= row.productCode %>"><%= row.productCode %></td>
+                  <td data-label="Paper Size"><%= row.paperSize %></td>
+                  <td data-label="Required Rolls"><%= row.rolls %></td>
+                  <td class="mq-rolls-cell" data-label="Allotted Rolls" data-id="<%= row._id %>" onclick="openRollDetails(this.dataset.id)" title="View roll allotment details"><%= row.allottedRolls %></td>
+                  <td data-label="Balance Rolls"><%= row.balanceRolls %></td>
+                  <td>
+                    <div class="mq-actions">
+                      <% const rollsAllotted = (row.allottedRollDetails || []).length > 0; %>
+                      <% if (rollsAllotted) { %>
+                      <a href="/sachiko/machine/jobcard/form?pendingId=<%= row._id %>" class="mq-start-btn" title="Initiate Production">
+                        <i class="fa-solid fa-play"></i> start
+                      </a>
+                      <% } else { %>
+                      <a href="javascript:void(0)" class="mq-start-btn mq-start-disabled" title="Assign facestock rolls before starting production" aria-disabled="true">
+                        <i class="fa-solid fa-play"></i> start
+                      </a>
+                      <% } %>
+                    </div>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% }) %>
+  <% } %>
+</div>
+
+<!-- ============ ROLL ALLOTMENT DETAILS DIALOG ============ -->
+<div class="logout-modal" id="rollDetailsDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="rollDetailsTitle"
+    style="width: min(480px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="rollDetailsTitle">Roll Allotment Details</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeModal('rollDetailsDialog')" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" id="rollDetailsBody"></div>
+  </div>
+</div>
+
+<script id="queue-rows-data" type="application/json"><%- safeJson(groups.flatMap((g) => g.jobs)) %></script>
+<script>
+  const QUEUE_ROWS = JSON.parse(document.getElementById("queue-rows-data").textContent);
+
+  function openModal(id)  { const d = document.getElementById(id); d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
+  function closeModal(id) { const d = document.getElementById(id); d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
+
+  function dash(v) { return v === undefined || v === null || v === "" ? "—" : v; }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function openRollDetails(id) {
+    const row = QUEUE_ROWS.find((r) => r._id === id);
+    if (!row) return;
+    const ref = row.materialReference || {};
+    const rolls = row.allottedRollDetails || [];
+
+    const statusLabel = row.rollsStatus === "match" ? "Fully allotted"
+      : row.rollsStatus === "short" ? "Short allotted"
+      : row.rollsStatus === "over" ? "Over allotted"
+      : "—";
+    const statusColor = row.rollsStatus === "match" ? "#16a34a"
+      : row.rollsStatus === "short" ? "#dc2626"
+      : row.rollsStatus === "over" ? "#d97706"
+      : "#1f2a44";
+
+    const pairs = [
+      ["Facestock Type", dash(ref.facestockType)],
+      ["Facestock Family", dash(ref.facestockFamily)],
+      ["Adhesive Type", dash(ref.adhesiveType)],
+      ["Release Liner Type", dash(ref.releaseLinerType)],
+      ["Paper Size", dash(ref.paperSize || row.paperSize)],
+    ];
+    const pairsHtml = pairs.map(([k, v]) => `<tr><th>${k}</th><td>${escapeHtml(v)}</td></tr>`).join("")
+      + `<tr><th>Status</th><td><span style="color:${statusColor};">${statusLabel}</span></td></tr>`;
+
+    const rollsHtml = rolls.length
+      ? `<table class="rd-table">` +
+        `<thead><tr><th style="width:36px; text-align:center;">#</th><th>Roll ID</th><th>Running Mtrs</th><th>Location</th></tr></thead>` +
+        `<tbody>` + rolls.map((r, i) => `<tr>` +
+          `<td style="text-align:center;">${i + 1}</td>` +
+          `<td>${escapeHtml(dash(r.rollId))}</td>` +
+          `<td>${escapeHtml(dash(r.reelMtrs))}</td>` +
+          `<td>${escapeHtml(dash(r.location))}</td>` +
+        `</tr>`).join("") + `</tbody></table>`
+      : `<div class="ap-notice"><i class="fa-solid fa-circle-info"></i> ` +
+        `No rolls recorded for this order — pick them in the Rolls section of Assign Production.</div>`;
+
+    document.getElementById("rollDetailsBody").innerHTML =
+      `<table class="rd-pairs"><tbody>${pairsHtml}</tbody></table>` +
+      `<div class="rd-section">Rolls</div>` +
+      rollsHtml;
+    openModal("rollDetailsDialog");
+  }
+
+  document.getElementById("rollDetailsDialog").addEventListener("click", (e) => {
+    if (e.target.id === "rollDetailsDialog") closeModal("rollDetailsDialog");
+  });
+</script>

@@ -1,0 +1,412 @@
+<% layout('/layout/boilerplate') -%>
+
+<%
+  const item = pp.itemId || {};
+  const owner = pp.userId || {};
+  const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+  const dash = (v) => (isEmpty(v) ? "—" : v);
+  const fmtDate = (v) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    if (isNaN(d)) return "—";
+    return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear();
+  };
+  const balance = Math.max((Number(pp.quantity) || 0) - (Number(pp.dispatchedQuantity) || 0), 0);
+  const fmtQty = (v) => (Number.isFinite(Number(v)) && v !== '' && v != null)
+    ? Number(v).toLocaleString('en-IN')
+    : (v || '—');
+%>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 14px;">
+  <style>
+    .ap-head h1 { font-size: 20px; color: #fff; margin: 0; }
+    .ap-head .ap-sub { font-size: 13px; color: rgba(255, 255, 255, 0.85); margin-top: 2px; }
+
+    .ap-card {
+      width: 100%;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: visible;
+    }
+    .ap-card-title {
+      background: #044a78;
+      color: #fff; font-size: 14px; font-weight: 600; letter-spacing: 0.2px;
+      padding: 9px 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      border-radius: 9px 9px 0 0;
+    }
+    .ap-card .choices__list--dropdown { z-index: 60; }
+
+    .ap-table-wrap { overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 8px; }
+    .ap-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+    .ap-table th, .ap-table td { padding: 8px 14px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; text-align: left; }
+    .ap-table tr > *:last-child { border-right: none; }
+    .ap-table th { background: #f8fafc; color: #044a78; font-weight: 700; white-space: nowrap; width: 10%; }
+    .ap-table td { color: #1f2a44; font-weight: 600; word-break: break-word; }
+
+    .ap-notice {
+      background: #fff8e1; border: 1px solid #f0c36d; color: #7a5b00; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px;
+    }
+
+    .ap-form-card {
+      width: 100%; background: #fff; border-radius: 10px;
+      border: 1px solid #e2e8f0; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;
+    }
+    .ap-submit-btn {
+      align-self: flex-start; background: #044a78; color: #fff; border: none; border-radius: 8px;
+      padding: 10px 22px; font-size: 14.5px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+    }
+    .ap-submit-btn:hover { opacity: 0.88; }
+
+    .jc-readonly {
+      background: #f0f7ff !important;
+      color: #044a78 !important;
+      font-weight: 700 !important;
+      cursor: default !important;
+    }
+
+    .span-three input.form-control, .span-four input.form-control, .span-five input.form-control,
+    .span-six input.form-control, .span-dual input.form-control,
+    .span-three select.form-control, .span-four select.form-control, .span-five select.form-control,
+    .span-six select.form-control, .span-dual select.form-control {
+      padding: 0.375rem 0.5rem !important;
+      font-size: 1rem !important;
+      height: auto !important;
+      width: 100%;
+    }
+    .span-three .choices__inner, .span-four .choices__inner, .span-five .choices__inner,
+    .span-six .choices__inner, .span-dual .choices__inner {
+      min-height: 2.3rem;
+      padding: 0.375rem 0.5rem !important;
+      display: flex;
+      align-items: center;
+    }
+    .span-three .choices__list--single, .span-four .choices__list--single,
+    .span-five .choices__list--single, .span-six .choices__list--single,
+    .span-dual .choices__list--single { padding: 0; }
+
+    #assign-form {
+      display: grid !important;
+      grid-template-columns: repeat(32, 1fr);
+      gap: 1rem;
+    }
+
+    .roll-table { table-layout: auto; }
+    .roll-table th { width: auto; font-size: 12.5px; }
+    .roll-table td { font-size: 13.5px; }
+    .roll-table tbody tr { cursor: pointer; user-select: none; }
+    .roll-table tbody tr:hover { background: #eff6ff; }
+    .roll-table .roll-check-cell { width: 56px; text-align: center; }
+    .roll-table th:not(.roll-fill), .roll-table td:not(.roll-fill) { white-space: nowrap; width: 1%; }
+    .roll-table .roll-fill { width: 100%; border-right: none; }
+    .roll-table input[type="checkbox"] {
+      width: 20px; height: 20px; margin: 0; vertical-align: middle;
+      cursor: pointer; accent-color: #044a78;
+    }
+    .roll-table tbody tr.roll-locked,
+    .roll-table tbody tr.roll-locked:hover { background: #f8fafc; cursor: not-allowed; }
+    .roll-table tbody tr.roll-locked td { color: #94a3b8; }
+    .roll-table tbody tr.roll-locked input[type="checkbox"] { cursor: not-allowed; }
+
+    .roll-mtr-stats { display: flex; align-items: center; margin-left: 22px; }
+    .roll-mtr-stat { display: flex; align-items: baseline; gap: 5px; padding: 0 14px; white-space: nowrap; line-height: 1; }
+    .roll-mtr-stat:first-child { padding-left: 0; }
+    .roll-mtr-stat:last-child { padding-right: 0; }
+    .roll-mtr-stat + .roll-mtr-stat { border-left: 1px solid rgba(255, 255, 255, 0.35); }
+    .roll-mtr-label { font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); }
+    .roll-mtr-value { font-size: 16px; font-weight: 700; color: #fff; }
+    .roll-mtr-unit { font-size: 11px; font-weight: 500; color: rgba(255, 255, 255, 0.65); }
+    #roll-mtr-selected { color: #fcd34d; }
+    #roll-mtr-selected.is-met { color: #6ee7b7; }
+    #roll-mtr-balance { color: #6ee7b7; }
+    #roll-mtr-balance.is-negative { color: #fca5a5; }
+  </style>
+
+  <div class="indi-head ap-head" style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
+    <div>
+      <h1>Assign Production</h1>
+      <div class="ap-sub">
+        <%= dash(owner.clientName) %><% if (owner.userName) { %> / <%= owner.userName %><% } %>
+      </div>
+    </div>
+    <div style="text-align:right; color:#fff; line-height:1.4;">
+      <div style="font-size:17px; font-weight:600;">Date: <%= fmtDate(new Date()) %></div>
+      <div style="font-size:22px; font-weight:700;">Lot No: <%= previewLotNo %></div>
+    </div>
+  </div>
+
+  <div class="ap-card">
+    <div class="ap-card-title"><span><i class="fa-solid fa-tag"></i> Order Details</span></div>
+    <div class="ap-table-wrap">
+      <table class="ap-table">
+        <tbody>
+          <tr>
+            <th>PO Number</th><td><%= dash(pp.poNumber) %></td>
+            <th>PO Date</th><td><%= fmtDate(poDate) %></td>
+            <th>Est. Delivery</th><td><%= fmtDate(pp.estimatedDate) %></td>
+          </tr>
+          <tr>
+            <th>Product Code</th><td><%= dash(item.productCode || item.skuCode) %></td>
+            <th>Paper Size</th><td><%= dash(pp.paperSize) %></td>
+            <th>No. of Rolls</th><td><%= dash(pp.noOfRolls) %></td>
+          </tr>
+          <tr>
+            <th>Quantity</th><td><%= fmtQty(pp.quantity) %></td>
+            <th>Dispatched</th><td><%= fmtQty(pp.dispatchedQuantity || 0) %></td>
+            <th>Balance</th><td><%= fmtQty(balance) %></td>
+          </tr>
+          <tr>
+            <th>Running Mtrs</th><td><%= fmtQty(pp.runningMeters) %></td>
+            <th colspan="1">Remarks</th><td colspan="3"><%= dash(pp.remarks) %></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="ap-card">
+    <div class="ap-card-title"><span><i class="fa-solid fa-layer-group"></i> Material Details</span></div>
+    <div class="ap-table-wrap">
+      <table class="ap-table">
+        <tbody>
+          <tr>
+            <th>Facestock Type</th><td><%= dash(item.facestock?.facestockType) %></td>
+            <th>Facestock Family</th><td><%= dash(item.facestock?.facestockFamily) %></td>
+          </tr>
+          <tr>
+            <th>Adhesive Type</th><td><%= dash(item.adhesive?.adhesiveType) %></td>
+            <th>Release Liner Type</th><td><%= dash(item.releaseLiner?.releaseLinerType) %></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <form id="assign-form" class="ap-form-card needs-validation" action="/sachiko/labels/production/assign/<%= pp._id %>" method="post" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+    <div class="span-dual" style="grid-column: span 11;">
+      <label for="machine-select">Machine</label>
+      <select id="machine-select" name="machineId" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Machine</option>
+      </select>
+    </div>
+
+    <div class="span-dual" style="grid-column: span 11;">
+      <label for="operator-select">Operator</label>
+      <select id="operator-select" name="operatorId" class="form-control select-tag">
+        <option value="" selected>Select Operator</option>
+        <% operatorEmployees.forEach((emp) => { %>
+          <option value="<%= emp._id %>" data-profilecode="<%= emp.empProfileCode || '' %>"><%= emp.empName %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="span-dual" style="grid-column: span 10;">
+      <label for="helper-select">Helper</label>
+      <select id="helper-select" name="helperId" class="form-control select-tag">
+        <option value="" selected>Select Helper</option>
+        <% helperEmployees.forEach((emp) => { %>
+          <option value="<%= emp._id %>" data-profilecode="<%= emp.empProfileCode || '' %>"><%= emp.empName %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <!-- Every pickable facestock roll in stock for this Label Stock item.
+         Rolls already ticked for another machine-assigned order are left out
+         (their count shows in the header tag). Tick the ones this run uses;
+         only the stock row ids are submitted (as selectedRolls). -->
+    <div class="span-full form-subheading" style="grid-column: 1 / -1; margin: 0; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px;">
+      <h1>Rolls</h1>
+      <span class="roll-allotted-note" id="roll-allotted-note" hidden></span>
+      <div class="roll-mtr-stats">
+        <div class="roll-mtr-stat" title="Running metres this job needs">
+          <span class="roll-mtr-label">Required</span>
+          <span class="roll-mtr-value" id="roll-mtr-required">—</span>
+          <span class="roll-mtr-unit">m</span>
+        </div>
+        <div class="roll-mtr-stat" title="Running metres on the rolls ticked below">
+          <span class="roll-mtr-label">Selected</span>
+          <span class="roll-mtr-value" id="roll-mtr-selected">0</span>
+          <span class="roll-mtr-unit">m</span>
+        </div>
+        <div class="roll-mtr-stat" title="Running metres left over once this job has been run">
+          <span class="roll-mtr-label">Balance</span>
+          <span class="roll-mtr-value" id="roll-mtr-balance">—</span>
+          <span class="roll-mtr-unit">m</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="roll-details" style="grid-column: 1 / -1;"></div>
+
+    <div class="btn-grp span-full">
+      <button type="submit" class="ap-submit-btn">Assign &amp; Continue</button>
+    </div>
+  </form>
+</div>
+
+<script id="all-machines-data" type="application/json"><%- safeJson(allMachines) %></script>
+<script src="/js/choices.min.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const ALL_MACHINES = JSON.parse(document.getElementById("all-machines-data").textContent);
+
+    const machineSelectEl = document.getElementById("machine-select");
+    const operatorSelectEl = document.getElementById("operator-select");
+    const helperSelectEl = document.getElementById("helper-select");
+    const submitBtn = document.querySelector(".ap-submit-btn");
+
+    const machineChoices = new Choices(machineSelectEl, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const operatorChoices = new Choices(operatorSelectEl, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const helperChoices = new Choices(helperSelectEl, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    // Each Operator/Helper's Profile Code mirrors the Machine name they run
+    // (e.g. Machine "R1" <-> Employee Profile Code "R1") -- picking a machine
+    // auto-selects whichever operator/helper shares that code.
+    function autoFillByMachineCode(machineName, selectEl, choicesInstance) {
+      const wanted = (machineName || "").trim().toUpperCase();
+      const match = wanted
+        ? Array.from(selectEl.options).find(
+            (o) => o.dataset.profilecode && o.dataset.profilecode.trim().toUpperCase() === wanted,
+          )
+        : null;
+      choicesInstance.setChoiceByValue(match ? match.value : "");
+    }
+
+    machineSelectEl.addEventListener("change", function () {
+      const machine = ALL_MACHINES.find((m) => String(m._id) === String(this.value));
+      autoFillByMachineCode(machine?.machineName, operatorSelectEl, operatorChoices);
+      autoFillByMachineCode(machine?.machineName, helperSelectEl, helperChoices);
+    });
+
+    const machineLabel = (m) => `${m.machineName} — ${m.location?.locationName || "?"}${m.machineType ? " (" + m.machineType + ")" : ""}`;
+    const options = ALL_MACHINES.map((m) => ({ value: m._id, label: machineLabel(m) }));
+    machineChoices.setChoices(
+      [{ value: "", label: "Select Machine", disabled: true, selected: true }, ...options],
+      "value", "label", true,
+    );
+
+    const fmtNum = (v) => (v === null || v === undefined || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
+    const escapeAttr = (value) => String(value ?? "")
+      .replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+      .replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    // Server-rendered once for this item's facestock -- no manual paper/die
+    // pick on this page (the material spec is fixed to the Label Stock item),
+    // so there's nothing that would change which rolls are eligible.
+    const AVAILABLE_ROLLS = <%- safeJson((materialStock && materialStock.rolls) ? materialStock.rolls : []) %>;
+    const INITIAL_ROLL_IDS = <%- safeJson((pp.allottedRollIds || []).map(String)) %>;
+    const REQUIRED_METERS = <%- JSON.stringify(Number(pp.runningMeters) || 0) %>;
+
+    const rollsContainer = document.getElementById("roll-details");
+    const allottedNoteEl = document.getElementById("roll-allotted-note");
+    const requiredEl = document.getElementById("roll-mtr-required");
+    const selectedEl = document.getElementById("roll-mtr-selected");
+    const balanceEl = document.getElementById("roll-mtr-balance");
+
+    function checkedStockIds() {
+      return Array.from(rollsContainer?.querySelectorAll("input[name='selectedRolls']:checked") || [])
+        .map((el) => el.value);
+    }
+
+    function syncRollSelection() {
+      if (!rollsContainer) return;
+      const boxes = Array.from(rollsContainer.querySelectorAll("input[name='selectedRolls']"));
+      const selected = boxes.reduce((sum, b) => (b.checked ? sum + (Number(b.dataset.mtrs) || 0) : sum), 0);
+      const satisfied = REQUIRED_METERS > 0 && selected >= REQUIRED_METERS;
+
+      boxes.forEach((box) => {
+        box.disabled = satisfied && !box.checked;
+        box.closest("tr")?.classList.toggle("roll-locked", box.disabled);
+      });
+
+      if (requiredEl) requiredEl.textContent = REQUIRED_METERS ? fmtNum(REQUIRED_METERS) : "—";
+      if (selectedEl) {
+        selectedEl.textContent = fmtNum(selected);
+        selectedEl.classList.toggle("is-met", satisfied);
+      }
+      if (balanceEl) {
+        balanceEl.textContent = REQUIRED_METERS ? fmtNum(selected - REQUIRED_METERS) : "—";
+        balanceEl.classList.toggle("is-negative", REQUIRED_METERS > 0 && selected < REQUIRED_METERS);
+      }
+    }
+
+    function renderRollRows() {
+      if (!rollsContainer) return;
+      const previouslyChecked = new Set(INITIAL_ROLL_IDS.map(String));
+
+      const allottedCount = AVAILABLE_ROLLS.filter((r) => r.takenBy).length;
+      const pickable = AVAILABLE_ROLLS.filter((r) => !r.takenBy);
+      if (allottedNoteEl) {
+        allottedNoteEl.hidden = allottedCount === 0;
+        allottedNoteEl.textContent = allottedCount
+          ? `${allottedCount} roll${allottedCount === 1 ? "" : "s"} allotted to other jobs`
+          : "";
+      }
+
+      if (!pickable.length) {
+        rollsContainer.innerHTML =
+          `<div class="ap-notice"><i class="fa-solid fa-triangle-exclamation"></i> ` +
+          (allottedCount
+            ? `Every facestock roll in stock for this item is allotted to another job.`
+            : `No facestock rolls in stock for this item.`) +
+          `</div>`;
+        syncRollSelection();
+        return;
+      }
+
+      const rows = pickable.map((r) => {
+        const id = escapeAttr(r.stockId);
+        const no = escapeAttr(r.rollId);
+        const checked = previouslyChecked.has(String(r.stockId)) ? " checked" : "";
+        return `<tr>` +
+          `<td class="roll-check-cell"><input type="checkbox" name="selectedRolls" value="${id}" data-mtrs="${Number(r.reelMtrs) || 0}"${checked} /></td>` +
+          `<td>${no}</td>` +
+          `<td>${fmtNum(r.reelMtrs)}</td>` +
+          `<td>${escapeAttr(r.location) || "—"}</td>` +
+          `<td class="roll-fill"></td>` +
+        `</tr>`;
+      }).join("");
+
+      rollsContainer.innerHTML =
+        `<div class="ap-table-wrap"><table class="ap-table roll-table">` +
+        `<thead><tr>` +
+          `<th class="roll-check-cell"></th><th>Roll ID</th><th>Running Mtrs</th><th>Location</th><th class="roll-fill"></th>` +
+        `</tr></thead>` +
+        `<tbody>${rows}</tbody></table></div>`;
+
+      syncRollSelection();
+    }
+
+    rollsContainer?.addEventListener("click", (e) => {
+      if (e.target.closest("input[name='selectedRolls']")) return;
+      const row = e.target.closest(".roll-table tbody tr");
+      if (!row) return;
+      const box = row.querySelector("input[name='selectedRolls']");
+      if (box && !box.disabled) {
+        box.checked = !box.checked;
+        syncRollSelection();
+      }
+    });
+
+    rollsContainer?.addEventListener("change", (e) => {
+      if (e.target.matches("input[name='selectedRolls']")) syncRollSelection();
+    });
+
+    renderRollRows();
+
+    // What this order already had assigned, so re-opening it to edit shows
+    // the previous machine/operator/helper instead of a blank form.
+    const ASSIGNED = <%- safeJson({
+      machineId: pp.assignedMachineId ? String(pp.assignedMachineId) : "",
+      operatorId: pp.operatorId ? String(pp.operatorId) : "",
+      helperId: pp.helperId ? String(pp.helperId) : "",
+    }) %>;
+
+    if (ASSIGNED.machineId) machineChoices.setChoiceByValue(String(ASSIGNED.machineId));
+    if (ASSIGNED.operatorId) operatorChoices.setChoiceByValue(String(ASSIGNED.operatorId));
+    if (ASSIGNED.helperId) helperChoices.setChoiceByValue(String(ASSIGNED.helperId));
+  });
+</script>

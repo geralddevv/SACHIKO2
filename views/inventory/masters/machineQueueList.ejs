@@ -1,0 +1,361 @@
+<% layout('/layout/boilerplate') -%>
+
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+<link href="https://unpkg.com/tabulator-tables@5.6.2/dist/css/tabulator_modern.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 14px;">
+  <style>
+    #machine-queue-table {
+      width: auto;
+      flex: 1 1 auto;
+      min-height: 0;
+      border: 1px solid rgba(4, 74, 120, 0.14);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    #machine-queue-table .tabulator { border-radius: inherit; overflow: hidden; }
+
+    .mq-count-badge {
+      display: inline-block;
+      min-width: 22px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+    }
+    .mq-count-badge.has-pending { background: #fff8e1; color: #7a5b00; border: 1px solid #f0c36d; }
+    .mq-count-badge.empty { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
+
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 4px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease-in-out;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .header-action-btn:hover { background-color: #e4e4e4; }
+    #viewToggleBtn { min-width: 150px; justify-content: center; }
+
+    .seg-toggle {
+      display: inline-flex;
+      background: #f0f0f0;
+      border-radius: 0.5rem;
+      padding: 3px;
+      gap: 2px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .seg-btn {
+      border: none;
+      background: transparent;
+      color: #044a78;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 4px 16px;
+      border-radius: 0.4rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .seg-btn:hover:not(.active) { background: #e4e4e4; }
+    .seg-btn.active { background: #044a78; color: #fff; font-weight: 600; }
+
+    #machine-queue-cards { display: none; }
+    #machine-queue-cards.mq-cards-shown {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+      flex: 1 1 auto;
+      min-height: 0;
+      padding-bottom: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: #044a78 #f0f2f5;
+    }
+    #machine-queue-cards::-webkit-scrollbar { width: 8px; }
+    #machine-queue-cards::-webkit-scrollbar-track { background: #f0f2f5; }
+    #machine-queue-cards::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+    .mq-unit { display: flex; flex-direction: column; gap: 12px; }
+    .mq-unit-heading {
+      font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
+      color: #044a78; text-transform: uppercase;
+      padding-bottom: 6px; border-bottom: 2px solid rgba(4, 74, 120, 0.18);
+    }
+    .mq-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; }
+    .mq-card {
+      flex: 0 0 calc((100% - 28px) / 3);
+      max-width: calc((100% - 28px) / 3);
+      min-width: 0;
+      height: 280px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(4, 74, 120, 0.16);
+      border-radius: 10px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .mq-card-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+    .mq-card-body::-webkit-scrollbar { width: 8px; }
+    .mq-card-body::-webkit-scrollbar-track { background: #f0f2f5; }
+    .mq-card-body::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+    .mq-card-body { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
+    @media (max-width: 1100px) {
+      .mq-card { flex-basis: calc((100% - 14px) / 2); max-width: calc((100% - 14px) / 2); }
+    }
+    @media (max-width: 700px) {
+      .mq-card { flex-basis: 100%; max-width: 100%; }
+    }
+    .mq-card-head {
+      flex: 0 0 auto;
+      background: #044a78;
+      color: #fff;
+      padding: 10px 14px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .mq-card-head:hover { background: #05598f; }
+    .mq-card-name { font-size: 15px; font-weight: 700; line-height: 1.3; }
+    .mq-card-meta { font-size: 11.5px; opacity: 0.85; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+    .mq-card-meta span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .mq-card-count {
+      flex: 0 0 auto;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .mq-job {
+      border-top: 1px solid #eef2f6;
+      padding: 8px 14px;
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: baseline;
+      gap: 0 6px;
+      font-size: 12.5px;
+      color: #334155;
+      text-decoration: none;
+      overflow: hidden;
+      transition: background 0.12s;
+    }
+    .mq-job:hover { background: #f8fafc; }
+    .mq-job-sep { color: #cbd5e1; font-style: normal; }
+    .mq-job > span, .mq-job > .mq-job-sep { flex: 0 0 auto; white-space: nowrap; }
+    .mq-job > .mq-job-rolls { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .mq-job > span:last-child { font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .mq-card-empty { padding: 16px 14px; font-size: 12.5px; color: #94a3b8; text-align: center; border-top: 1px solid #eef2f6; }
+  </style>
+
+  <div class="indi-head">
+    <h1>Machine Queues</h1>
+    <div style="display: flex; gap: 10px; align-items: stretch">
+      <div class="seg-toggle" id="locationSeg" role="group" aria-label="Filter by location"></div>
+      <button type="button" class="header-action-btn" id="viewToggleBtn" onclick="toggleView()">
+        <i class="fa-solid fa-table-cells-large" id="viewToggleIcon"></i>
+        <span id="viewToggleText">Card View</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="machine-queue-table" class="tabulator tabulator-modern"></div>
+  <div id="machine-queue-cards"></div>
+</div>
+
+<script id="machine-queue-data" type="application/json"><%- safeJson(rows) %></script>
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script>
+  const machineQueueRows = JSON.parse(document.getElementById("machine-queue-data").textContent);
+
+  const withTextFilter = col => ({ headerFilter: "input", headerFilterPlaceholder: "Search", ...col });
+
+  const typeValues = {};
+  machineQueueRows.forEach(r => { if (r.machineType) typeValues[r.machineType] = r.machineType; });
+
+  const locationValues = {};
+  machineQueueRows.forEach(r => { if (r.locationName) locationValues[r.locationName] = r.locationName; });
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  const table = new Tabulator("#machine-queue-table", {
+    data:             machineQueueRows,
+    height:           "100%",
+    responsiveLayout: false,
+    movableColumns:   true,
+    placeholder:      "No machines found.",
+    rowClick: (e, row) => { window.location.href = `/sachiko/machine/${row.getData()._id}/queue`; },
+    columns: [
+      {
+        title: "S. No", formatter: "rownum", hozAlign: "center", headerHozAlign: "center",
+        width: 70, headerSort: false,
+      },
+      withTextFilter({ title: "Machine Name", field: "machineName", minWidth: 200, sorter: "string" }),
+      {
+        title: "Type", field: "machineType", minWidth: 150, sorter: "string",
+        formatter: cell => cell.getValue() || "—",
+        headerFilter: "select",
+        headerFilterParams: { values: { "": "All", ...typeValues } },
+      },
+      {
+        title: "Location", field: "locationName", minWidth: 160, sorter: "string",
+        formatter: cell => cell.getValue() || "—",
+        headerFilter: "select",
+        headerFilterParams: { values: { "": "All", ...locationValues } },
+      },
+      withTextFilter({ title: "Operator", field: "operatorName", minWidth: 160, sorter: "string", formatter: cell => cell.getValue() || "—" }),
+      {
+        title: "Pending Orders", field: "pendingCount", minWidth: 150, hozAlign: "center", sorter: "number",
+        headerFilter: "input", headerFilterPlaceholder: "Search",
+        formatter(cell) {
+          const val = cell.getValue() || 0;
+          const rowId = cell.getRow().getData()._id;
+          const link = document.createElement("a");
+          link.href = `/sachiko/machine/${rowId}/queue`;
+          link.className = "mq-count-badge " + (val > 0 ? "has-pending" : "empty");
+          link.textContent = val;
+          return link;
+        },
+      },
+    ],
+  });
+
+  /* ─────────────────────────────────────────
+     Card view — the same machines, with each queued job spelled out instead
+     of collapsed into a count. Grouped dynamically by whatever locations are
+     actually in the data (not a hard-coded shopfloor layout, since Sachiko's
+     machine/unit arrangement isn't fixed the way FAIRTECH's is).
+  ───────────────────────────────────────── */
+  const dash = value => {
+    const text = String(value ?? "").trim();
+    return text && text !== "—" ? text : "";
+  };
+
+  // One line per job: product code - qty - roll qty - (roll ids) - client.
+  function jobHtml(machineId, job) {
+    const rollIds = Array.isArray(job.rollIds) ? job.rollIds : [];
+    const rollQty = rollIds.length ? String(rollIds.length) : dash(job.rolls);
+    const parts = [
+      dash(job.productCode) || "—",
+      Number(job.quantity || 0).toLocaleString("en-IN"),
+      rollQty ? `${rollQty} roll${rollQty === "1" ? "" : "s"}` : "— rolls",
+      rollIds.length ? `(${rollIds.join(", ")})` : "",
+      dash(job.clientName) || "—",
+    ].filter(Boolean);
+
+    return `
+      <a class="mq-job" href="/sachiko/machine/${encodeURIComponent(machineId)}/queue">
+        ${parts
+          .map(part => `<span${part.startsWith("(") ? ' class="mq-job-rolls"' : ""}>${escapeHtml(part)}</span>`)
+          .join('<i class="mq-job-sep">-</i>')}
+      </a>`;
+  }
+
+  function cardHtml(machine) {
+    const jobs = Array.isArray(machine.jobs) ? machine.jobs : [];
+    const meta = [
+      ["fa-gears", dash(machine.machineType)],
+      ["fa-user", dash(machine.operatorName)],
+    ].filter(([, value]) => value);
+
+    return `
+      <div class="mq-card">
+        <div class="mq-card-head" data-machine-id="${escapeHtml(machine._id)}"
+             onclick="window.location.href='/sachiko/machine/' + encodeURIComponent(this.dataset.machineId) + '/queue'">
+          <div style="min-width:0;">
+            <div class="mq-card-name">${escapeHtml(machine.machineName || "—")}</div>
+            <div class="mq-card-meta">
+              ${meta.map(([icon, value]) => `<span><i class="fa-solid ${icon}"></i>${escapeHtml(value)}</span>`).join("")}
+            </div>
+          </div>
+          <span class="mq-card-count">${jobs.length} job${jobs.length === 1 ? "" : "s"}</span>
+        </div>
+        <div class="mq-card-body custom-scrollbar">
+          ${jobs.length
+            ? jobs.map(job => jobHtml(machine._id, job)).join("")
+            : `<div class="mq-card-empty">Nothing queued on this machine.</div>`}
+        </div>
+      </div>`;
+  }
+
+  const cardsEl = document.getElementById("machine-queue-cards");
+  const tableEl = document.getElementById("machine-queue-table");
+  let showingCards = false;
+
+  // Units are whatever locations are actually present in the data, in the
+  // order they first appear -- no fixed shopfloor layout assumed.
+  const unitOrder = [];
+  machineQueueRows.forEach((m) => {
+    const loc = m.locationName || "—";
+    if (!unitOrder.includes(loc)) unitOrder.push(loc);
+  });
+
+  const locationSegEl = document.getElementById("locationSeg");
+  let currentLocation = "";
+
+  const segments = [{ value: "", label: "All" }, ...unitOrder.map((loc) => ({ value: loc, label: loc }))];
+  locationSegEl.innerHTML = segments
+    .map(
+      (s) =>
+        `<button type="button" class="seg-btn${s.value === currentLocation ? " active" : ""}" data-loc="${escapeHtml(s.value)}">${escapeHtml(s.label)}</button>`,
+    )
+    .join("");
+
+  locationSegEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".seg-btn");
+    if (!btn) return;
+    currentLocation = btn.dataset.loc || "";
+    locationSegEl.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    if (showingCards) renderCards();
+    table.setHeaderFilterValue("locationName", currentLocation);
+  });
+
+  function renderCards() {
+    const units = unitOrder.filter((loc) => !currentLocation || loc === currentLocation);
+    const html = units
+      .map((loc) => {
+        const machinesInUnit = machineQueueRows.filter((m) => (m.locationName || "—") === loc);
+        if (!machinesInUnit.length) return "";
+        return `<div class="mq-unit"><div class="mq-unit-heading">${escapeHtml(loc)}</div><div class="mq-row">${machinesInUnit.map(cardHtml).join("")}</div></div>`;
+      })
+      .filter(Boolean)
+      .join("");
+    cardsEl.innerHTML = html || `<div class="mq-card-empty" style="border:none;">No machines found.</div>`;
+  }
+
+  function toggleView() {
+    showingCards = !showingCards;
+
+    if (showingCards) renderCards();
+
+    cardsEl.classList.toggle("mq-cards-shown", showingCards);
+    tableEl.style.display = showingCards ? "none" : "";
+    document.getElementById("viewToggleText").textContent = showingCards ? "Table View" : "Card View";
+    document.getElementById("viewToggleIcon").className =
+      showingCards ? "fa-solid fa-table-list" : "fa-solid fa-table-cells-large";
+    if (!showingCards) table.redraw(true);
+  }
+
+  // Open on the card view by default; toggleView() flips showingCards false->true.
+  toggleView();
+</script>

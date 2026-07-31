@@ -1,112 +1,502 @@
 <% layout('/layout/boilerplate') %>
-<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form action="/sachiko/form/machine" method="post" class="needs-validation" autocomplete="off" novalidate>
-    <div class="span-full form-heading">
-      <h1>Machine Master</h1>
-    </div>
 
-    <div class="span-full form-subheading">
-      <h1>Add New Machine</h1>
-    </div>
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
 
-    <div class="span-eight">
-      <label for="machine-name">Machine Name</label>
-      <input
-        type="text"
-        id="machine-name"
-        class="form-control"
-        name="machineName"
-        placeholder="Enter Machine Name"
-        required
-      />
-    </div>
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 2px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .header-action-btn:hover {
+      background-color: #e4e4e4;
+    }
+    #machine-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .dialog-header {
+      background: #044A78;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .dialog-close-btn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 2px;
+      opacity: 0.8;
+      transition: opacity 0.15s;
+    }
+    .dialog-close-btn:hover {
+      opacity: 1;
+    }
+    .dialog-body {
+      padding: 24px;
+      background: #fff;
+    }
+    .dialog-field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 8px;
+    }
+    .dialog-error {
+      color: #ef4444;
+      font-size: 12px;
+      margin-top: 5px;
+      display: none;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+  </style>
 
-    <div class="btn-grp span-full" style="grid-column: span 24;">
-      <button type="submit">Save Machine</button>
+  <div class="indi-head">
+    <h1>Machine Master</h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <button class="header-action-btn" onclick="openAddDialog()">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Machine
+      </button>
     </div>
+  </div>
 
-    <!-- EXISTING MACHINES -->
-    <div class="span-full form-subheading">
-      <h1>Existing Machines</h1>
-    </div>
-
-    <div class="span-full" style="padding: 0.5rem;">
-      <% if (machines && machines.length > 0) { %>
-        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-          <% machines.forEach(machine => { %>
-            <span style="
-              display: inline-flex;
-              align-items: center;
-              gap: 8px;
-              padding: 6px 14px;
-              background: #e0f2fe;
-              color: #044A78;
-              border-radius: 6px;
-              font-weight: 600;
-              font-size: 14px;
-              border: 1px solid #bae6fd;
-            ">
-              <%= machine.machineName %>
-            </span>
-          <% }) %>
-        </div>
-      <% } else { %>
-        <p style="color: #6b7280; font-size: 14px; margin: 0px;">No machines added yet.</p>
-      <% } %>
-    </div>
-  </form>
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="machine-table" class="tabulator tabulator-modern"></div>
 </div>
 
-<!-- ================= DELETE CONFIRMATION DIALOG ================= -->
-<div id="delete-dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
-  <div style="background:white; border-radius:8px; width:400px; max-width:90%; box-shadow:0 4px 15px rgba(0,0,0,0.2); overflow:hidden; animation:dialogPop 0.2s ease-out;">
-    <div style="padding:25px 20px; text-align:center;">
-      <i class="fa-solid fa-triangle-exclamation" style="font-size:28px; color:#ef4444; margin-bottom:12px;"></i>
-      <p style="margin:0; color:#333; font-size:16px; line-height:1.5;">
-        Are you sure you want to delete <strong id="delete-machine-name"></strong>?
-      </p>
+<!-- ============ ADD MACHINE DIALOG ============ -->
+<div class="logout-modal" id="addDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
+    style="width: min(420px, 95vw); padding: 0; border-radius: 14px; overflow: hidden;">
+    <div class="dialog-header">
+      <h2 id="addDialogTitle">Add Machine</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
     </div>
-    <div style="padding:15px 20px; background:#f9fafb; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb;">
-      <button type="button" onclick="closeDeleteDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='white'">Cancel</button>
-      <button type="button" onclick="submitDelete()" style="padding:8px 16px; border:none; background:#ef4444; color:white; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Yes, Delete</button>
+    <div class="dialog-body">
+      <label class="dialog-field-label" for="addMachineNameInput">Machine Name</label>
+      <input
+        type="text"
+        id="addMachineNameInput"
+        class="form-control premium-input"
+        placeholder="Enter machine name"
+        autocomplete="off"
+        maxlength="100"
+        style="margin-bottom: 16px;"
+      />
+      <label class="dialog-field-label" for="addMachineWidthInput">Machine Width</label>
+      <input
+        type="number"
+        id="addMachineWidthInput"
+        class="form-control premium-input"
+        placeholder="Enter machine width"
+        autocomplete="off"
+        min="0"
+        step="any"
+        style="margin-bottom: 16px;"
+      />
+      <label class="dialog-field-label" for="addLocationSelect">Location</label>
+      <select id="addLocationSelect" style="margin-bottom: 16px;"></select>
+      <label class="dialog-field-label" for="addMachineTypeInput">Machine Type</label>
+      <input
+        type="text"
+        id="addMachineTypeInput"
+        class="form-control premium-input"
+        placeholder="e.g. Coating, Slitting"
+        autocomplete="off"
+      />
+      <div id="addMachineError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Machine</button>
+      </div>
     </div>
   </div>
 </div>
 
-<style>
-  @keyframes dialogPop {
-    0% { transform: scale(0.9); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
-  }
-</style>
+<!-- ============ EDIT MACHINE DIALOG ============ -->
+<div class="logout-modal" id="editDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
+    style="width: min(420px, 95vw); padding: 0; border-radius: 14px; overflow: hidden;">
+    <div class="dialog-header">
+      <h2 id="editDialogTitle">Edit Machine</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <label class="dialog-field-label" for="editMachineNameInput">Machine Name</label>
+      <input
+        type="text"
+        id="editMachineNameInput"
+        class="form-control premium-input"
+        placeholder="Enter machine name"
+        autocomplete="off"
+        maxlength="100"
+        style="margin-bottom: 16px;"
+      />
+      <label class="dialog-field-label" for="editMachineWidthInput">Machine Width</label>
+      <input
+        type="number"
+        id="editMachineWidthInput"
+        class="form-control premium-input"
+        placeholder="Enter machine width"
+        autocomplete="off"
+        min="0"
+        step="any"
+        style="margin-bottom: 16px;"
+      />
+      <label class="dialog-field-label" for="editLocationSelect">Location</label>
+      <select id="editLocationSelect" style="margin-bottom: 16px;"></select>
+      <label class="dialog-field-label" for="editMachineTypeInput">Machine Type</label>
+      <input
+        type="text"
+        id="editMachineTypeInput"
+        class="form-control premium-input"
+        placeholder="e.g. Coating, Slitting"
+        autocomplete="off"
+      />
+      <div id="editMachineError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Machine</button>
+      </div>
+    </div>
+  </div>
+</div>
 
+<!-- ============ DELETE CONFIRMATION DIALOG ============ -->
+<div class="logout-modal" id="deleteDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle"
+    style="width: min(400px, 95vw);">
+    <h2 class="logout-title" id="deleteDialogTitle">
+      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Delete Machine?
+    </h2>
+    <p class="logout-text">
+      Are you sure you want to delete <strong id="deleteMachineName"></strong>? This action cannot be undone.
+    </p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" onclick="closeDeleteDialog()">Cancel</button>
+      <button
+        class="logout-btn"
+        type="button"
+        id="deleteConfirmBtn"
+        onclick="submitDelete()"
+        style="background: #ef4444; color: #fff; border-color: #ef4444;">
+        Yes, Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+<script id="machines-data" type="application/json"><%- safeJson(machines) %></script>
+<script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
 <script>
+  const machinesData = JSON.parse(document.getElementById("machines-data").textContent);
+  const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
+
+  function locationOptionsHtml(selectedId) {
+    return locationsData
+      .map((l) => `<option value="${l._id}" ${String(l._id) === String(selectedId) ? "selected" : ""}>${l.locationName}</option>`)
+      .join("");
+  }
+
+  let addLocationChoices = null;
+  let editLocationChoices = null;
+
+  // ---- Table ----
+  const table = new Tabulator("#machine-table", {
+    data: machinesData,
+    height: "100%",
+    responsiveLayout: false,
+    movableColumns: true,
+    placeholder: "No machines added yet.",
+    columns: [
+      {
+        title: "Machine Name",
+        field: "machineName",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        minWidth: 200,
+      },
+      {
+        title: "Machine Width",
+        field: "machineWidth",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        minWidth: 160,
+        hozAlign: "left",
+        headerHozAlign: "left",
+      },
+      {
+        title: "Location",
+        field: "location.locationName",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        minWidth: 140,
+        formatter: (cell) => cell.getValue() || "—",
+      },
+      {
+        title: "Type",
+        field: "machineType",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        minWidth: 140,
+        formatter: (cell) => cell.getValue() || "—",
+      },
+      {
+        title: "Actions",
+        width: 110,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: function (cell) {
+          const row = cell.getRow().getData();
+          const wrap = document.createElement("div");
+          wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "loc-btn";
+          editBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#e67e22;";
+          editBtn.title = "Edit Machine";
+          editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
+          editBtn.addEventListener("click", () => openEditDialog(row._id, row.machineName, row.machineWidth, row.location ? row.location._id : "", row.machineType || ""));
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "loc-btn";
+          deleteBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#d9534f;";
+          deleteBtn.title = "Delete Machine";
+          deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+          deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.machineName));
+
+          wrap.appendChild(editBtn);
+          wrap.appendChild(deleteBtn);
+          return wrap;
+        },
+      },
+    ],
+  });
+
+  // ---- Helpers ----
+  function openModal(id) {
+    const d = document.getElementById(id);
+    d.classList.add("show");
+    d.setAttribute("aria-hidden", "false");
+  }
+  function closeModal(id) {
+    const d = document.getElementById(id);
+    d.classList.remove("show");
+    d.setAttribute("aria-hidden", "true");
+  }
+  function showError(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+  function hideError(elId) {
+    document.getElementById(elId).style.display = "none";
+  }
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.style.opacity = loading ? "0.7" : "";
+  }
+
+  // Dismiss on backdrop click
+  ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+    document.getElementById(id).addEventListener("click", function (e) {
+      if (e.target === this) closeModal(id);
+    });
+  });
+
+  // Dismiss on ESC
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+      if (document.getElementById(id).classList.contains("show")) closeModal(id);
+    });
+  });
+
+  // ---- ADD ----
+  function openAddDialog() {
+    document.getElementById("addMachineNameInput").value = "";
+    document.getElementById("addMachineWidthInput").value = "";
+    document.getElementById("addMachineTypeInput").value = "";
+    if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
+    const sel = document.getElementById("addLocationSelect");
+    sel.innerHTML = locationOptionsHtml("");
+    addLocationChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    hideError("addMachineError");
+    openModal("addDialog");
+    setTimeout(() => document.getElementById("addMachineNameInput").focus(), 60);
+  }
+  function closeAddDialog() {
+    closeModal("addDialog");
+  }
+
+  async function submitAdd() {
+    const name = document.getElementById("addMachineNameInput").value.trim();
+    const width = document.getElementById("addMachineWidthInput").value.trim();
+    const locationId = document.getElementById("addLocationSelect").value;
+    const machineType = document.getElementById("addMachineTypeInput").value.trim();
+    if (!name) {
+      showError("addMachineError", "Machine name is required.");
+      return;
+    }
+    if (!width || Number(width) <= 0) {
+      showError("addMachineError", "Machine width is required.");
+      return;
+    }
+    if (!locationId) {
+      showError("addMachineError", "Location is required.");
+      return;
+    }
+    hideError("addMachineError");
+    setLoading("addSubmitBtn", true);
+    try {
+      const res = await fetch("/sachiko/form/machine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ machineName: name, machineWidth: width, locationId, machineType }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = data.redirect || "/sachiko/form/machine";
+      } else {
+        showError("addMachineError", data.message || "Failed to add machine.");
+      }
+    } catch {
+      showError("addMachineError", "Server error. Please try again.");
+    } finally {
+      setLoading("addSubmitBtn", false);
+    }
+  }
+
+  // ---- EDIT ----
+  let editId = null;
+
+  function openEditDialog(id, name, width, locationId, machineType) {
+    editId = id;
+    document.getElementById("editMachineNameInput").value = name;
+    document.getElementById("editMachineWidthInput").value = width;
+    document.getElementById("editMachineTypeInput").value = machineType || "";
+    if (editLocationChoices) { editLocationChoices.destroy(); editLocationChoices = null; }
+    const sel = document.getElementById("editLocationSelect");
+    sel.innerHTML = locationOptionsHtml(locationId);
+    editLocationChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    hideError("editMachineError");
+    openModal("editDialog");
+    setTimeout(() => {
+      const inp = document.getElementById("editMachineNameInput");
+      inp.focus();
+      inp.select();
+    }, 60);
+  }
+  function closeEditDialog() {
+    closeModal("editDialog");
+    editId = null;
+  }
+
+  async function submitEdit() {
+    const name = document.getElementById("editMachineNameInput").value.trim();
+    const width = document.getElementById("editMachineWidthInput").value.trim();
+    const locationId = document.getElementById("editLocationSelect").value;
+    const machineType = document.getElementById("editMachineTypeInput").value.trim();
+    if (!name) {
+      showError("editMachineError", "Machine name is required.");
+      return;
+    }
+    if (!width || Number(width) <= 0) {
+      showError("editMachineError", "Machine width is required.");
+      return;
+    }
+    if (!locationId) {
+      showError("editMachineError", "Location is required.");
+      return;
+    }
+    if (!editId) return;
+    hideError("editMachineError");
+    setLoading("editSubmitBtn", true);
+    try {
+      const res = await fetch(`/sachiko/api/machines/${editId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ machineName: name, machineWidth: width, locationId, machineType }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        showError("editMachineError", data.message || "Failed to update machine.");
+      }
+    } catch {
+      showError("editMachineError", "Server error. Please try again.");
+    } finally {
+      setLoading("editSubmitBtn", false);
+    }
+  }
+
+  // ---- DELETE ----
   let deleteId = null;
 
-  function confirmDelete(id, name) {
+  function openDeleteDialog(id, name) {
     deleteId = id;
-    document.getElementById("delete-machine-name").textContent = name;
-    document.getElementById("delete-dialog").style.display = "flex";
+    document.getElementById("deleteMachineName").textContent = name;
+    openModal("deleteDialog");
   }
-
   function closeDeleteDialog() {
-    document.getElementById("delete-dialog").style.display = "none";
+    closeModal("deleteDialog");
     deleteId = null;
   }
 
   async function submitDelete() {
     if (!deleteId) return;
+    setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/machines/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/sachiko/api/machines/${deleteId}`, {
+        method: "DELETE",
+      });
       const data = await res.json();
       if (data.success) {
         window.location.reload();
       } else {
-        alert(data.message || "Failed to delete machine");
+        closeDeleteDialog();
+        alert(data.message || "Failed to delete machine.");
       }
-    } catch (err) {
-      alert("Error deleting machine");
+    } catch {
+      closeDeleteDialog();
+      alert("Error deleting machine.");
+    } finally {
+      setLoading("deleteConfirmBtn", false);
     }
-    closeDeleteDialog();
   }
 </script>

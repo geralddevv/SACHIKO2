@@ -1,0 +1,50 @@
+<% layout('/layout/boilerplate') -%>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .pcd-card {
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;
+    }
+    .pcd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .pcd-table th, .pcd-table td { padding: 9px 14px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    .pcd-table th { width: 32%; background: #f8fafc; color: #044a78; font-weight: 700; }
+    .pcd-table td { color: #1f2a44; font-weight: 600; word-break: break-word; }
+    .pcd-table tr:last-child th, .pcd-table tr:last-child td { border-bottom: none; }
+    .header-action-btn {
+      background-color: #f0f0f0; color: #044a78;
+      padding: 4px 14px; font-size: 14px; font-weight: 500;
+      border: none; cursor: pointer; border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,.1);
+      display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+    }
+  </style>
+
+  <div class="indi-head">
+    <h1>Production Binding Details</h1>
+    <a href="/sachiko/prodcalc/view" class="header-action-btn"><i class="fa-solid fa-arrow-left"></i> Back to List</a>
+  </div>
+
+  <div class="pcd-card">
+    <table class="pcd-table">
+      <tbody>
+        <% Object.keys(binding).filter((k) => !["_id", "__v"].includes(k) && binding[k] !== null && binding[k] !== undefined && binding[k] !== "").forEach((key) => { %>
+          <tr>
+            <th><%= key %></th>
+            <td>
+              <%
+                let val = binding[key];
+                if (key === "createdAt" || /Date$/.test(key)) {
+                  const d = new Date(val);
+                  val = isNaN(d) ? val : d.toLocaleString("en-IN");
+                } else if (typeof val === "object") {
+                  val = JSON.stringify(val);
+                }
+              %>
+              <%= val %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>

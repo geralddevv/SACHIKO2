@@ -481,7 +481,8 @@
     const inPageLocs = (loc) => pageLocs.some((pl) => sameLocPage(pl, loc));
     const grandTotal =
       (labels || []).filter((i) => inPageLocs(i.location)).length +
-      (tapes || []).filter((i) => inPageLocs(i.location)).length;
+      (tapes || []).filter((i) => inPageLocs(i.location)).length +
+      (labelStocks || []).filter((i) => inPageLocs(i.location)).length;
   %>
 
   <!-- Item Details Card -->
@@ -497,7 +498,8 @@
       <% pageLocs.forEach(loc => {
         const locLabels = (labels || []).filter(i => sameLocPage(i.location, loc));
         const locTapes = (tapes || []).filter(i => sameLocPage(i.location, loc));
-        const locTotal = locLabels.length + locTapes.length;
+        const locLabelStocks = (labelStocks || []).filter(i => sameLocPage(i.location, loc));
+        const locTotal = locLabels.length + locTapes.length + locLabelStocks.length;
       %>
         <div class="location-group">
           <div class="location-group-header">
@@ -588,6 +590,38 @@
                         <td><%= i.tapeOdrFreq || '-' %></td>
                         <td><%= i.tapeCreditTerm || '-' %></td>
                         <td style="font-weight:600;">₹<%= i.tapeRatePerRoll %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+
+            <!-- Label Stock -->
+            <% if (locLabelStocks.length > 0) { %>
+              <div class="item-category-group">
+                <div class="item-category-header">
+                  <span class="item-type-label">Label Stock</span>
+                  <span class="item-count-badge"><%= locLabelStocks.length %></span>
+                </div>
+                <table class="inner-spec-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 12%;">SKU Code</th>
+                      <th>Product Code</th>
+                      <th>Paper Size</th>
+                      <th>RM</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% locLabelStocks.forEach(i => { %>
+                      <tr>
+                        <td class="item-name-cell"><%= i.labelStock ? i.labelStock.skuCode : '-' %></td>
+                        <td><%= i.labelStock ? i.labelStock.productCode : '-' %></td>
+                        <td><%= i.paperSize || '-' %></td>
+                        <td><%= i.runningMeters != null ? i.runningMeters : '-' %></td>
+                        <td><%= i.status || '-' %></td>
                       </tr>
                     <% }) %>
                   </tbody>

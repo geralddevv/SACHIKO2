@@ -20,6 +20,32 @@
   .choices[data-type*="select-one"].is-open::after {
     transform: translateY(-50%) rotate(180deg) !important;
   }
+
+  .ls-tabs-wrap {
+    grid-column: span 32;
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .ls-tab-btn {
+    flex: 1 1 160px;
+    padding: 0.55rem 1rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    border: 1.8px solid var(--primary-color);
+    background: #fff;
+    color: var(--primary-color);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+  }
+  .ls-tab-btn.active {
+    background-color: var(--primary-color);
+    color: #fff;
+  }
+  .ls-tab-btn:hover {
+    opacity: 0.88;
+  }
 </style>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
@@ -78,8 +104,15 @@
       </select>
     </div>
 
+    <!-- Material Tabs -->
+    <div class="ls-tabs-wrap">
+      <button type="button" class="ls-tab-btn active" data-tab="facestock">Facestock</button>
+      <button type="button" class="ls-tab-btn" data-tab="adhesive">Adhesive</button>
+      <button type="button" class="ls-tab-btn" data-tab="release">Release Liner</button>
+    </div>
+
     <!-- Facestock -->
-    <div class="ls-block" data-block="facestock1" style="display: contents">
+    <div class="ls-block" data-block="facestock1" data-tab="facestock" style="display: contents">
       <div class="span-full form-subheading">
         <h1>Facestock</h1>
       </div>
@@ -132,7 +165,7 @@
     </div>
 
     <!-- Adhesive -->
-    <div class="ls-block" data-block="adhesive1" style="display: contents">
+    <div class="ls-block" data-block="adhesive1" data-tab="adhesive" style="display: contents">
       <div class="span-full form-subheading">
         <h1>Adhesive</h1>
       </div>
@@ -156,7 +189,7 @@
     </div>
 
     <!-- Facestock (Layer 2) -- only for DOUBLE FACESTOCK -->
-    <div class="ls-block" data-block="facestock2" style="display: none">
+    <div class="ls-block" data-block="facestock2" data-tab="facestock" style="display: none">
       <div class="span-full form-subheading">
         <h1>Facestock <span style="opacity:0.7;">(Layer 2)</span></h1>
       </div>
@@ -209,7 +242,7 @@
     </div>
 
     <!-- Adhesive (Layer 2) -- for DOUBLE FACESTOCK and DOUBLE RELEASE -->
-    <div class="ls-block" data-block="adhesive2" style="display: none">
+    <div class="ls-block" data-block="adhesive2" data-tab="adhesive" style="display: none">
       <div class="span-full form-subheading">
         <h1>Adhesive <span style="opacity:0.7;">(Layer 2)</span></h1>
       </div>
@@ -233,7 +266,7 @@
     </div>
 
     <!-- Release Liner -->
-    <div class="ls-block" data-block="release1" style="display: contents">
+    <div class="ls-block" data-block="release1" data-tab="release" style="display: contents">
       <div class="span-full form-subheading">
         <h1>Release Liner</h1>
       </div>
@@ -262,7 +295,7 @@
     </div>
 
     <!-- Release Liner (Layer 2) -- only for DOUBLE RELEASE -->
-    <div class="ls-block" data-block="release2" style="display: none">
+    <div class="ls-block" data-block="release2" data-tab="release" style="display: none">
       <div class="span-full form-subheading">
         <h1>Release Liner <span style="opacity:0.7;">(Layer 2)</span></h1>
       </div>
@@ -336,15 +369,23 @@
     const blocks = {};
     document.querySelectorAll(".ls-block").forEach((el) => { blocks[el.dataset.block] = el; });
 
-    function applyRollType(rollType) {
+    // Facestock / Adhesive / Release Liner tabs -- each tab holds that
+    // material's layer-1 block, plus its layer-2 block when Roll Type calls
+    // for one (see ROLL_TYPE_ORDER below).
+    const tabBtns = Array.from(document.querySelectorAll(".ls-tab-btn"));
+    let activeTab = "facestock";
+
+    function applyState() {
+      const rollType = rollTypeSelect.value || "NORMAL";
       const order = ROLL_TYPE_ORDER[rollType] || ROLL_TYPE_ORDER.NORMAL;
 
       Object.keys(blocks).forEach((key) => {
         const el = blocks[key];
-        const visible = order.includes(key);
+        const enabledByRollType = order.includes(key);
+        const visible = enabledByRollType && el.dataset.tab === activeTab;
         el.style.display = visible ? "contents" : "none";
         el.querySelectorAll("[data-required-when-visible]").forEach((field) => {
-          field.required = visible;
+          field.required = enabledByRollType;
         });
       });
 
@@ -352,10 +393,19 @@
         const el = blocks[key];
         if (el) form.insertBefore(el, btnGrp);
       });
+
+      tabBtns.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === activeTab));
     }
 
+    tabBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        activeTab = btn.dataset.tab;
+        applyState();
+      });
+    });
+
     const rollTypeSelect = document.getElementById("rollType");
-    rollTypeSelect.addEventListener("change", () => applyRollType(rollTypeSelect.value));
-    applyRollType(rollTypeSelect.value || "NORMAL");
+    rollTypeSelect.addEventListener("change", () => applyState());
+    applyState();
   });
 </script>

@@ -1,0 +1,175 @@
+<% layout('/layout/auth') -%>
+
+<section class="login-shell" id="loginShell" data-brand="sachiko">
+  <div class="login-accent" id="loginAccent"></div>
+  <div class="login-card">
+
+    <div class="login-header">
+      <div class="login-mark">
+        <img src="/assets/sachikofavicon.png" alt="Sachiko Packaging" />
+      </div>
+      <div>
+        <h2>Operator Login</h2>
+        <p>Sign in to your work queue</p>
+      </div>
+    </div>
+
+  <% if (typeof error !== 'undefined' && error.length) { %>
+    <div class="login-alert">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span><%= error[0] %></span>
+    </div>
+  <% } %>
+
+    <form class="login-form" action="/sachiko/operator/login" method="post" autocomplete="off">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+      <label for="op-operator-nick">Nick Name</label>
+      <input
+        id="op-operator-nick"
+        name="operatorNick"
+        type="text"
+        class="form-control"
+        placeholder="Enter your nick name"
+        value="<%= typeof operatorNick !== 'undefined' ? operatorNick : '' %>"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="characters"
+        spellcheck="false"
+        readonly
+        required
+      />
+
+      <label for="op-location">Location</label>
+      <select id="op-location" name="location" class="form-control" required>
+        <% const picked = typeof selectedLocation !== 'undefined' ? selectedLocation : ''; %>
+        <option value="" disabled <%= picked ? '' : 'selected' %>>Select location</option>
+        <% (locations || []).forEach((loc) => { %>
+          <option value="<%= loc.locationName %>" <%= picked === loc.locationName ? 'selected' : '' %>><%= loc.locationName %></option>
+        <% }) %>
+      </select>
+
+      <label for="op-password">Password</label>
+      <div class="password-field">
+        <input
+          id="op-password"
+          name="password"
+          type="password"
+          class="form-control"
+          placeholder="Enter your password"
+          autocomplete="new-password"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          readonly
+          required
+        />
+        <button class="password-toggle" type="button" id="togglePassword" aria-label="Show password">
+          <i class="fa-regular fa-eye" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <button class="btn btn-primary w-100 login-submit" type="submit">
+        Sign in
+        <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </form>
+  </div>
+</section>
+
+<script>
+  (function () {
+    // Same autofill guard as the staff login: fields render `readonly` (which
+    // password managers skip) and unlock on first interaction.
+    document.querySelectorAll('.login-form input[readonly]').forEach((el) => {
+      const unlock = () => el.removeAttribute("readonly");
+      el.addEventListener("focus", unlock, { once: true });
+      el.addEventListener("pointerdown", unlock, { once: true });
+    });
+
+    // Suppress Chrome's "Save password?" prompt by swapping the password field
+    // for a plain hidden input carrying the same value just before submit.
+    const form = document.querySelector(".login-form");
+    if (form) {
+      form.addEventListener("submit", () => {
+        const pw = document.getElementById("op-password");
+        if (!pw) return;
+        const hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = pw.name || "password";
+        hidden.value = pw.value;
+        pw.removeAttribute("name");
+        pw.disabled = true;
+        form.appendChild(hidden);
+      });
+    }
+  })();
+
+  (function () {
+    const toggle = document.getElementById("togglePassword");
+    const input = document.getElementById("op-password");
+    if (!toggle || !input) return;
+
+    toggle.addEventListener("click", () => {
+      const isPassword = input.type === "password";
+      input.type = isPassword ? "text" : "password";
+      toggle.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
+      toggle.innerHTML = isPassword
+        ? '<i class="fa-regular fa-eye-slash" aria-hidden="true"></i>'
+        : '<i class="fa-regular fa-eye" aria-hidden="true"></i>';
+    });
+  })();
+
+  (function () {
+    const operatorNick = document.getElementById('op-operator-nick');
+    const locationSelect = document.getElementById('op-location');
+    const password = document.getElementById('op-password');
+    if (!operatorNick || !locationSelect || !password) return;
+
+    // Employee names are stored uppercase -- this page is not under
+    // boilerplate.ejs, so common.js's uppercase handler isn't loaded.
+    operatorNick.addEventListener('input', () => {
+      operatorNick.value = operatorNick.value.toUpperCase();
+    });
+
+    const hasError = <%= (typeof error !== 'undefined' && error.length) ? 'true' : 'false' %>;
+    if (hasError) {
+      // Nick name and location are pre-filled after a failed attempt; put the
+      // cursor on the password, the field most likely needing a retype.
+      password.removeAttribute('readonly');
+      password.focus();
+    } else {
+      operatorNick.focus();
+    }
+
+    operatorNick.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        locationSelect.focus();
+      }
+    });
+
+    // Auto-select Location once the nick name resolves to exactly one unit
+    // (GET /sachiko/operator/login/lookup -- most operators only ever work
+    // one location). A nick name shared across units, or matching none, is
+    // left for the operator to pick themselves rather than guessed at.
+    let lastLookedUp = '';
+    async function autoSelectLocation() {
+      const nick = operatorNick.value.trim();
+      if (!nick || nick === lastLookedUp) return;
+      lastLookedUp = nick;
+      try {
+        const res = await fetch(`/sachiko/operator/login/lookup?nick=${encodeURIComponent(nick)}`);
+        const data = await res.json();
+        const locations = Array.isArray(data?.locations) ? data.locations : [];
+        if (locations.length === 1 && !locationSelect.value) {
+          locationSelect.value = locations[0];
+        }
+      } catch (err) {
+        console.error('Location lookup error:', err);
+      }
+    }
+    operatorNick.addEventListener('keydown', (e) => { if (e.key === 'Enter') autoSelectLocation(); });
+    operatorNick.addEventListener('blur', autoSelectLocation);
+  })();
+</script>

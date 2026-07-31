@@ -41,7 +41,7 @@ const flex = (val) => {
 /* GET : Load Label Stock Binding Form */
 router.get("/form/label-stock-binding", async (req, res) => {
   try {
-    const [clients, fsFamilies, fsTypes, fsGsms, fsMicrons, adTypes, adGsms, rlTypes, rlColors, rlGsms] = await Promise.all([
+    const [clients, fsFamilies, fsTypes, fsGsms, fsMicrons, adTypes, adGsms, rlTypes, rlColors, rlGsms, labelStocks] = await Promise.all([
       Client.distinct("clientName"),
       SachikoLabelStock.distinct("facestock.facestockFamily"),
       SachikoLabelStock.distinct("facestock.facestockType"),
@@ -52,6 +52,10 @@ router.get("/form/label-stock-binding", async (req, res) => {
       SachikoLabelStock.distinct("releaseLiner.releaseLinerType"),
       SachikoLabelStock.distinct("releaseLiner.releaseLinerColor"),
       SachikoLabelStock.distinct("releaseLiner.releaseLinerGsm"),
+      SachikoLabelStock.find({}, {
+        skuCode: 1, productCode: 1, rollType: 1,
+        facestock: 1, facestock2: 1, adhesive: 1, adhesive2: 1, releaseLiner: 1, releaseLiner2: 1,
+      }).sort({ skuCode: 1 }).lean(),
     ]);
 
     res.render("sachiko/labelStockBindingForm.ejs", {
@@ -69,6 +73,7 @@ router.get("/form/label-stock-binding", async (req, res) => {
       rlTypes,
       rlColors,
       rlGsms,
+      labelStocks,
     });
   } catch (err) {
     console.error(err);
@@ -82,6 +87,8 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
   try {
     const { userId, labelStockId } = req.body;
     const location = String(req.body.location || "").trim();
+    const paperSize = String(req.body.paperSize || "").trim();
+    const runningMeters = Number(req.body.runningMeters);
 
     const user = await Username.findById(userId);
     if (!user) {
@@ -90,6 +97,14 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
 
     if (!location) {
       return res.status(400).json({ success: false, message: "Please select a location" });
+    }
+
+    if (!paperSize) {
+      return res.status(400).json({ success: false, message: "Please enter a paper size" });
+    }
+
+    if (!runningMeters && runningMeters !== 0) {
+      return res.status(400).json({ success: false, message: "Please enter running meters" });
     }
 
     if (!labelStockId) {
@@ -101,7 +116,7 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
       return res.status(400).json({ success: false, message: "This Label Stock is already bound to this user at this location." });
     }
 
-    const binding = await LabelStockBinding.create({ labelStock: labelStockId, userId, location });
+    const binding = await LabelStockBinding.create({ labelStock: labelStockId, userId, location, paperSize, runningMeters });
 
     user.labelStock.push(binding._id);
     await user.save();

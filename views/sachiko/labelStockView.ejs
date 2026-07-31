@@ -16,6 +16,12 @@
       display: flex; align-items: center; justify-content: center;
     }
     .header-action-btn:hover { background-color: #e4e4e4; }
+
+    /* Custom Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
   </style>
 
   <div class="indi-head">
@@ -98,7 +104,7 @@
   const table = new Tabulator("#master-table", {
     data: tableData,
     height: "100%",
-    initialSort: [{ column: "productCode", dir: "asc" }],
+    initialSort: [{ column: "skuCode", dir: "asc" }],
     placeholder: "No Label Stocks found",
     columns: [
       {
@@ -138,8 +144,7 @@
         formatter: (cell) => {
           const v = cell.getValue() || "NORMAL";
           const color = v === "NORMAL" ? "#475569" : "#b45309";
-          const bg = v === "NORMAL" ? "#f1f5f9" : "#fff7ed";
-          return `<span style="font-weight:600;color:${color};background:${bg};padding:2px 8px;border-radius:999px;font-size:11px;">${v}</span>`;
+          return `<span style="font-weight:600;color:${color};">${v}</span>`;
         } },
         { "": "All", "NORMAL": "NORMAL", "DOUBLE RELEASE": "DOUBLE RELEASE", "DOUBLE FACESTOCK": "DOUBLE FACESTOCK" }),
       withSelectFilter({ title: "FS Family",  field: "fsFamily",  minWidth: 120 },
@@ -221,6 +226,52 @@
       rows = [...baseRows, ...release1Rows];
     }
 
+    /* ── Physical layer stack (top-to-bottom, same order as `rows`) ── */
+    const LAYER_STYLE = {
+      facestock: { bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", label: "FACESTOCK" },
+      adhesive:  { bg: "#fffbeb", border: "#fcd34d", text: "#b45309", label: "ADHESIVE" },
+      release:   { bg: "#f8fafc", border: "#cbd5e1", text: "#475569", label: "RELEASE LINER" },
+    };
+
+    function layerBlock(kind, title, parts) {
+      const s = LAYER_STYLE[kind];
+      const detail = parts.filter(Boolean).join(" · ");
+      return `
+        <div style="background:${s.bg};border:1.5px solid ${s.border};border-radius:6px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+          <span style="font-size:11px;font-weight:800;letter-spacing:0.04em;color:${s.text};">${s.label}</span>
+          <span style="font-size:12px;font-weight:600;color:#334155;text-align:right;">${detail ? esc(detail) : "—"}${title ? ` <span style="color:${s.text};font-weight:700;">(${esc(title)})</span>` : ""}</span>
+        </div>`;
+    }
+
+    let layers = [
+      layerBlock("facestock", null, [ds.facestock?.facestockFamily, ds.facestock?.facestockType, ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm + " GSM" : null, ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : null]),
+      layerBlock("adhesive", null, [ds.adhesive?.adhesiveType, ds.adhesive?.adhesiveGsm != null ? ds.adhesive.adhesiveGsm + " GSM" : null]),
+    ];
+    if (rollType === "DOUBLE FACESTOCK") {
+      layers.push(
+        layerBlock("facestock", "Layer 2", [ds.facestock2?.facestockFamily, ds.facestock2?.facestockType, ds.facestock2?.facestockGsm != null ? ds.facestock2.facestockGsm + " GSM" : null, ds.facestock2?.facestockMicron != null ? ds.facestock2.facestockMicron + " MIC" : null]),
+        layerBlock("adhesive", "Layer 2", [ds.adhesive2?.adhesiveType, ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null]),
+        layerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+      );
+    } else if (rollType === "DOUBLE RELEASE") {
+      layers.push(
+        layerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+        layerBlock("adhesive", "Layer 2", [ds.adhesive2?.adhesiveType, ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null]),
+        layerBlock("release", "Layer 2", [ds.releaseLiner2?.releaseLinerType, ds.releaseLiner2?.releaseLinerColor, ds.releaseLiner2?.releaseLinerGsm != null ? ds.releaseLiner2.releaseLinerGsm + " GSM" : null]),
+      );
+    } else {
+      layers.push(
+        layerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+      );
+    }
+
+    const layerStackHtml = `
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        ${layers.join(`
+        <div style="display:flex;justify-content:center;margin:-2px 0;"><i class="fa-solid fa-caret-down" style="color:#cbd5e1;font-size:11px;"></i></div>
+        `)}
+      </div>`;
+
     document.getElementById("ds-view-body").innerHTML = `
       <div style="background:linear-gradient(135deg,#044a78 0%,#03365a 100%);padding:22px 24px 20px;color:#fff;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
         <div>
@@ -232,7 +283,11 @@
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-      <div style="padding:20px 24px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;max-height:calc(90vh - 120px);">
+      <div class="custom-scrollbar" style="padding:20px 24px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;max-height:calc(90vh - 120px);">
+        <div>
+          <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:0.05em;">LAYER STACK (TOP &rarr; BOTTOM)</p>
+          ${layerStackHtml}
+        </div>
         ${rows.map(r => `
           <div style="display:flex;justify-content:space-between;border-bottom:1px solid #f1f5f9;padding-bottom:10px;">
             <span style="font-size:13px;color:#64748b;font-weight:600;">${r.label}</span>
@@ -280,7 +335,7 @@
 
 <!-- View Modal -->
 <div id="ds-view-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:10000;justify-content:center;align-items:center;padding:24px;backdrop-filter:blur(4px);">
-  <div id="ds-view-body" style="background:#fff;border-radius:14px;overflow:hidden;width:min(480px,95vw);box-shadow:0 20px 50px rgba(4,74,120,0.2);animation:dsPopIn 0.2s ease-out;"></div>
+  <div id="ds-view-body" style="background:#fff;border-radius:14px;overflow:hidden;width:min(620px,95vw);box-shadow:0 20px 50px rgba(4,74,120,0.2);animation:dsPopIn 0.2s ease-out;"></div>
 </div>
 
 <!-- Delete Confirm Dialog -->

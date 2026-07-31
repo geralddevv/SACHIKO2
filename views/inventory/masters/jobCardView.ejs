@@ -1,0 +1,142 @@
+<% layout('/layout/boilerplate') -%>
+
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    #master-table { width: 100%; flex: 1 1 auto; min-height: 0; }
+    .tabulator-edit-list { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+    .tabulator-edit-list::-webkit-scrollbar { display: none !important; }
+    .header-action-btn {
+      background-color: #f0f0f0; color: #044a78;
+      padding: 2px 14px; font-size: 14px; font-weight: 500;
+      border: none; cursor: pointer; border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,.1);
+      transition: all 0.2s ease-in-out;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .header-action-btn:hover { background-color: #e4e4e4; }
+  </style>
+
+  <div class="indi-head">
+    <h1>Production Records</h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span><i class="fa-solid fa-file-arrow-down"></i> Download</span>
+          <i class="fas fa-chevron-down"></i>
+        </button>
+        <div class="download-selector__menu">
+          <div class="download-selector__option" id="download-xlsx"><i class="fas fa-file-excel"></i> Excel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table"></div>
+
+  <script>
+    // Landing here with ?saved=<pendingId> is the only proof a production entry
+    // actually reached the server, so it's where the entry form's local draft
+    // is dropped (see the autosave block in jobCardForm.ejs). Clearing it on
+    // submit instead would throw the entry away on exactly the failures the
+    // draft exists for -- a dead network, an expired session.
+    (() => {
+      const savedFor = new URLSearchParams(window.location.search).get("saved");
+      if (!savedFor) return;
+      try { localStorage.removeItem(`jc-draft:${savedFor}`); } catch (e) { /* ignore */ }
+      // Keep the address bar clean so a refresh doesn't repeat the cleanup.
+      window.history.replaceState({}, "", window.location.pathname);
+    })();
+  </script>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script>
+  const downloadSelector = document.getElementById("downloadSelector");
+  const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
+  triggerBtn.addEventListener("click", (e) => { e.stopPropagation(); downloadSelector.classList.toggle("download-selector--active"); });
+  document.addEventListener("click", () => downloadSelector.classList.remove("download-selector--active"));
+
+  const raw = <%- safeJson(jsonData) %>;
+
+  // Roll(s) actually used in the work: the distinct, non-empty Roll IDs
+  // entered on the Production Log rows (falling back to Job Setting when the log
+  // named none), joined for display.
+  const rollsUsed = (jc) => {
+    const ids = []
+      .concat(Array.isArray(jc.productionLog) ? jc.productionLog : [])
+      .concat(Array.isArray(jc.jobSetting) ? jc.jobSetting : [])
+      .map((r) => String(r?.rollId || "").trim())
+      .filter(Boolean);
+    const seen = new Set();
+    const uniq = ids.filter((id) => {
+      const key = id.toUpperCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return uniq.length ? uniq.join(", ") : "-";
+  };
+
+  const tableData = raw.map(jc => ({
+    jobCardId:    jc.jobCardId,
+    date:         jc.date ? new Date(jc.date).toLocaleDateString("en-GB") : "-",
+    machineName:  jc.machineName || "-",
+    productCode:  jc.productCode || "-",
+    quantity:     jc.quantity ?? "-",
+    lotNo:        jc.lotNo || "-",
+    paperSize:    jc.paperSize || "-",
+    rolls:        jc.rolls || "-",
+    rollIdUsed:   rollsUsed(jc),
+    operatorName: jc.operatorName || "-",
+    helperName:   jc.helperName || "-",
+    totalMeter:   jc.totalMeter || "-",
+    sqMtr:        jc.sqMtr || "-",
+  }));
+
+  const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, ...col });
+
+  const table = new Tabulator("#master-table", {
+    data: tableData,
+    height: "100%",
+    initialSort: [{ column: "date", dir: "desc" }],
+    placeholder: "No production entries found",
+    columns: [
+      withTextFilter({ title: "Production ID", field: "jobCardId",    width: 160, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
+      withTextFilter({ title: "Date",          field: "date",         width: 110 }),
+      withTextFilter({ title: "Machine",       field: "machineName",  minWidth: 120 }),
+      withTextFilter({ title: "Product Code",  field: "productCode",  minWidth: 140, formatter: (cell) => `<span style="font-weight:600;color:#03365a;">${cell.getValue()}</span>` }),
+      withTextFilter({ title: "Quantity",      field: "quantity",     width: 100 }),
+      withTextFilter({ title: "Lot No",        field: "lotNo",        minWidth: 110 }),
+      withTextFilter({ title: "Paper Size",    field: "paperSize",    minWidth: 110 }),
+      withTextFilter({ title: "Rolls",         field: "rolls",        width: 90 }),
+      withTextFilter({ title: "Roll ID Used", field: "rollIdUsed",   minWidth: 150 }),
+      withTextFilter({ title: "Operator",      field: "operatorName", minWidth: 120 }),
+      withTextFilter({ title: "Helper",        field: "helperName",   minWidth: 120 }),
+      withTextFilter({ title: "Running Meters", field: "totalMeter",  minWidth: 120 }),
+      withTextFilter({ title: "SQ Mtr",        field: "sqMtr",        minWidth: 100 }),
+    ],
+  });
+
+  document.getElementById("download-xlsx").addEventListener("click", () =>
+    table.download("xlsx", "sachiko-production-records.xlsx", { sheetName: "Production Records" }));
+</script>
+
+<% if (notification && notification.length) { %>
+<script>
+  const jcFlash = <%- safeJson(notification[0]) %>;
+  const jcFlashType = /failed|not found|error/i.test(String(jcFlash)) ? "error" : "success";
+  const showJcFlash = () => {
+    if (typeof hideStaticToast === "function") hideStaticToast();
+    if (typeof showToast === "function") showToast(jcFlash, jcFlashType);
+  };
+  document.readyState === "loading"
+    ? document.addEventListener("DOMContentLoaded", showJcFlash, { once: true })
+    : showJcFlash();
+</script>
+<% } %>

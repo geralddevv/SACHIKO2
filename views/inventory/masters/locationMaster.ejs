@@ -1,5 +1,8 @@
 <% layout('/layout/boilerplate') %>
 
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
   <style>
     .header-action-btn {
@@ -20,39 +23,10 @@
     .header-action-btn:hover {
       background-color: #e4e4e4;
     }
-    .location-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-      gap: 12px;
-    }
-    .location-card {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 14px;
-      color: #03365a;
-      transition: box-shadow 0.15s ease;
-    }
-    .location-card:hover {
-      box-shadow: 0 2px 8px rgba(4, 74, 120, 0.1);
-    }
-    .location-card-name {
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .location-actions {
-      display: flex;
-      gap: 5px;
-      flex-shrink: 0;
-      margin-left: 10px;
+    #location-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
     }
     .loc-btn {
       padding: 3px 8px;
@@ -127,42 +101,8 @@
     </div>
   </div>
 
-  <div style="padding: 4px 0;">
-    <% if (locations && locations.length > 0) { %>
-      <div class="location-grid">
-        <% locations.forEach(loc => { %>
-          <div class="location-card">
-            <span class="location-card-name"><%= loc.locationName %></span>
-            <div class="location-actions">
-              <button
-                class="loc-btn"
-                style="background: #e67e22;"
-                data-loc-id="<%= loc._id %>"
-                data-loc-name="<%= loc.locationName %>"
-                onclick="openEditDialog(this.dataset.locId, this.dataset.locName)"
-                title="Edit Location">
-                <i class="fa-solid fa-pen-to-square"></i>
-              </button>
-              <button
-                class="loc-btn"
-                style="background: #d9534f;"
-                data-loc-id="<%= loc._id %>"
-                data-loc-name="<%= loc.locationName %>"
-                onclick="openDeleteDialog(this.dataset.locId, this.dataset.locName)"
-                title="Delete Location">
-                <i class="fa-solid fa-trash"></i>
-              </button>
-            </div>
-          </div>
-        <% }) %>
-      </div>
-    <% } else { %>
-      <div style="text-align: center; padding: 40px 20px; color: #6b7280;">
-        <i class="fa-solid fa-location-dot" style="font-size: 36px; color: #cbd5e1; margin-bottom: 12px;"></i>
-        <p style="font-size: 14px; margin: 0;">No locations added yet. Click <strong>+ Location</strong> to add one.</p>
-      </div>
-    <% } %>
-  </div>
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="location-table" class="tabulator tabulator-modern"></div>
 </div>
 
 <!-- ============ ADD LOCATION DIALOG ============ -->
@@ -243,7 +183,60 @@
   </div>
 </div>
 
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+<script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
 <script>
+  const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
+
+  // ---- Table ----
+  const table = new Tabulator("#location-table", {
+    data: locationsData,
+    height: "100%",
+    responsiveLayout: false,
+    movableColumns: true,
+    placeholder: "No locations added yet.",
+    columns: [
+      {
+        title: "Location Name",
+        field: "locationName",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        minWidth: 200,
+      },
+      {
+        title: "Actions",
+        width: 110,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: function (cell) {
+          const row = cell.getRow().getData();
+          const wrap = document.createElement("div");
+          wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "loc-btn";
+          editBtn.style.background = "#e67e22";
+          editBtn.title = "Edit Location";
+          editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
+          editBtn.addEventListener("click", () => openEditDialog(row._id, row.locationName));
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "loc-btn";
+          deleteBtn.style.background = "#d9534f";
+          deleteBtn.title = "Delete Location";
+          deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+          deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.locationName));
+
+          wrap.appendChild(editBtn);
+          wrap.appendChild(deleteBtn);
+          return wrap;
+        },
+      },
+    ],
+  });
+
   // ---- Helpers ----
   function openModal(id) {
     const d = document.getElementById(id);

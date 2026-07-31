@@ -5,6 +5,7 @@ import ejsMate from "ejs-mate";
 import connectDB from "./config/db.js";
 import fairdeskRoute from "./routes/fairdesk_route.js";
 import sachikoRoute from "./routes/sachiko/sachiko_route.js";
+import machineRoutes from "./routes/system/machine.js";
 import payrollRoute from "./routes/acccounting/payroll.js";
 import loanRoute from "./routes/acccounting/loan.js";
 import advanceRoute from "./routes/acccounting/advance.js";
@@ -14,6 +15,9 @@ import tapeBindingRoutes from "./routes/inventory/tapeBinding.js";
 import labelStockBindingRoutes from "./routes/sachiko/labelStockBinding.js";
 import tapeStockRoutes from "./routes/stock/tapeStock.js";
 import stockViewRoutes from "./routes/stock/stockView.js";
+import facestockStockRoutes from "./routes/stock/facestockStock.js";
+import adhesiveStockRoutes from "./routes/stock/adhesiveStock.js";
+import releaseLinerStockRoutes from "./routes/stock/releaseLinerStock.js";
 import clientFormRoute from "./routes/users/clients.js";
 import vendorItemBindingRoutes from "./routes/inventory/vendorItemBinding.js";
 import reorderRoutes from "./routes/inventory/reorder.js";
@@ -26,7 +30,9 @@ import fs from "fs";
 import sharp from "sharp";
 import bcrypt from "bcrypt";
 import { escapeRegex } from "./utils/security.js";
+import { normalizeLocationName } from "./utils/locations.js";
 import Employee from "./models/hr/employee_model.js";
+import Location from "./models/system/location.js";
 import crypto from "crypto";
 
 import session from "express-session";
@@ -459,8 +465,14 @@ const redirectByRole = (role) => {
   return "/sachiko/login";
 };
 
+// Operators sign in through their own portal and land straight on their work
+// queue (resolved from PendingProduction.operatorId at login), so they never
+// have to navigate the main menus.
 const landingForUser = (authUser) => {
   if (!authUser) return "/sachiko/login";
+  if (authUser.role === "operator") {
+    return "/sachiko/operator/queue";
+  }
   return redirectByRole(authUser.role);
 };
 
@@ -652,12 +664,148 @@ app.post("/sachiko/login", loginLimiter, async (req, res) => {
   });
 });
 
+/* OPERATOR PORTAL
+   Shopfloor operators sign in with the three things they know -- their nick
+   name, their location and their password -- and land on their own work queue:
+   every order assigned to them, grouped by machine. Kept separate from the
+   staff login so the terminal on the floor never shows the full portal. */
+app.get("/sachiko/operator/login", async (req, res) => {
+  if (req.session?.authUser) {
+    return res.redirect(landingForUser(req.session.authUser));
+  }
+  const locations = await Location.find({}).sort({ locationName: 1 }).lean();
+  res.render("auth/operatorLogin", { title: "Operator Login", CSS: "login.css", locations });
+});
+
+// Nick name -> location lookup, so the login form can auto-select Location
+// once the operator types their nick name. Rate-limited the same as the
+// login POST itself, since this is otherwise an easy oracle for "does this
+// nick name exist, and where" without a password.
+app.get("/sachiko/operator/login/lookup", loginLimiter, async (req, res) => {
+  try {
+    const operatorNick = String(req.query.nick || "").trim();
+    if (!operatorNick) return res.json({ locations: [] });
+
+    const nickCollapsed = operatorNick.replace(/\s+/g, " ");
+    const nickPattern = `^\\s*${escapeRegex(nickCollapsed).replace(/ /g, "\\s+")}\\s*$`;
+    const candidates = await Employee.find({
+      empNickName: { $regex: new RegExp(nickPattern, "i") },
+      isActive: true,
+    }).select("empProfile empLoc");
+
+    const locations = [
+      ...new Set(
+        candidates
+          .filter((emp) => String(emp.empProfile || "").trim().toUpperCase() === "OPERATOR")
+          .map((emp) => normalizeLocationName(emp.empLoc))
+          .filter(Boolean),
+      ),
+    ];
+    res.json({ locations });
+  } catch (err) {
+    console.error("Operator nick lookup error:", err);
+    res.json({ locations: [] });
+  }
+});
+
+app.post("/sachiko/operator/login", loginLimiter, async (req, res) => {
+  const operatorNick = String(req.body.operatorNick || "").trim();
+  const locationName = normalizeLocationName(req.body.location);
+  const password = String(req.body.password || "").trim();
+
+  const fail = async (message, status = 401) => {
+    const locations = await Location.find({}).sort({ locationName: 1 }).lean();
+    return res.status(status).render("auth/operatorLogin", {
+      title: "Operator Login",
+      CSS: "login.css",
+      locations,
+      operatorNick,
+      selectedLocation: locationName,
+      error: [message],
+    });
+  };
+
+  if (!operatorNick || !locationName || !password) {
+    return fail("Please fill in all three fields.", 400);
+  }
+
+  try {
+    // Operators sign in with their nick name (empNickName), not the full
+    // name that's tedious to type on a floor terminal. A nick name isn't
+    // unique on its own, so match on nick name + location; where several
+    // operators at one unit share one, the password decides between them.
+    const nickCollapsed = operatorNick.replace(/\s+/g, " ");
+    const nickPattern = `^\\s*${escapeRegex(nickCollapsed).replace(/ /g, "\\s+")}\\s*$`;
+    const candidates = await Employee.find({
+      empNickName: { $regex: new RegExp(nickPattern, "i") },
+      isActive: true,
+    });
+    const isOperatorProfile = (emp) => String(emp.empProfile || "").trim().toUpperCase() === "OPERATOR";
+    // Operators first, so an operator sharing a nick name with a staff member
+    // at the same unit still gets in.
+    const atLocation = candidates
+      .filter((emp) => normalizeLocationName(emp.empLoc) === locationName)
+      .sort((a, b) => Number(isOperatorProfile(b)) - Number(isOperatorProfile(a)));
+
+    let employee = null;
+    for (const candidate of atLocation) {
+      if (await candidate.comparePassword(password)) {
+        employee = candidate;
+        break;
+      }
+    }
+
+    if (!employee) {
+      return fail("Invalid nick name, location or password.");
+    }
+    // The profile itself is the gate here -- operators carry role "none" (no
+    // staff-portal access), which is exactly why this portal exists.
+    if (String(employee.empProfile || "").trim().toUpperCase() !== "OPERATOR") {
+      return fail("This login is for operators only. Please use the staff login.", 403);
+    }
+
+    const authUser = {
+      username: employee.empName,
+      empName: employee.empName,
+      profileCode: employee.empProfileCode,
+      role: "operator",
+      permissions: employee.permissions,
+      empId: employee.empId,
+      // The employee document _id, used to pull this operator's assigned jobs
+      // (PendingProduction.operatorId) on the work-queue landing page.
+      empObjId: String(employee._id),
+      empPhoto: employee.empPhoto,
+      empLoc: employee.empLoc,
+    };
+
+    req.session.authUser = authUser;
+    return req.session.save((err) => {
+      if (err) {
+        console.error("Failed to persist session on operator login:", err);
+        return fail("Unable to start session. Please try again.", 500);
+      }
+      logAuthEvent(authUser, "LOGIN", req);
+      return res.redirect(landingForUser(authUser));
+    });
+  } catch (err) {
+    console.error("Operator login error:", err);
+    return fail("Something went wrong. Please try again.", 500);
+  }
+});
+
 app.get("/logout", (req, res) => {
   const authUser = req.session?.authUser;
   if (authUser) logAuthEvent(authUser, "LOGOUT", req);
+  // Send operators back to their own portal, not the staff login they have no
+  // account for. A shopfloor terminal is often left sitting until the session
+  // has already expired, and by then the role is gone -- so fall back to the
+  // page the Logout link was clicked from.
+  const fromOperatorPortal = String(req.get("referer") || "").includes("/sachiko/operator");
+  const isOperator = authUser ? authUser.role === "operator" : fromOperatorPortal;
+  const loginUrl = isOperator ? "/sachiko/operator/login" : "/sachiko/login";
   req.session.destroy(() => {
     res.clearCookie("sachiko.sid");
-    res.redirect("/sachiko/login");
+    res.redirect(loginUrl);
   });
 });
 app.use("/sachiko/payroll", requireAuth, requireRole(["proprietor", "admin", "hr"]), payrollRoute);
@@ -711,11 +859,23 @@ app.use(
   clientFormRoute,
 );
 
+// Mounted ahead of the other /sachiko routers, with no requireRole, so
+// operators reach their machine queue before fairdeskRoute's requireRole
+// turns them away. Because a path-prefixed app.use runs its middleware for
+// EVERY /sachiko/* request -- not just the paths this router handles --
+// there must be no requireRole here: it would 403 sales/hr/hod on their own
+// pages before the request ever fell through. The roles are enforced per
+// route inside the router instead.
+app.use("/sachiko", requireAuth, machineRoutes);
+
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales", "hr"]), fairdeskRoute);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeBindingRoutes);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), vendorItemBindingRoutes);
 app.use("/sachiko/tapestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeStockRoutes);
 app.use("/sachiko/stocks", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), stockViewRoutes);
+app.use("/sachiko/facestockstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), facestockStockRoutes);
+app.use("/sachiko/adhesivestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), adhesiveStockRoutes);
+app.use("/sachiko/releaselinerstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), releaseLinerStockRoutes);
 app.use("/sachiko/inventory", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), reorderRoutes);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod"]), sachikoRoute);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockBindingRoutes);

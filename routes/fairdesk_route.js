@@ -34,12 +34,16 @@ import Location from "../models/system/location.js";
 import Counter from "../models/system/counter.js";
 import AuditLog from "../models/system/auditLog.js";
 import Sample from "../models/inventory/sample.js";
+import PendingProduction from "../models/inventory/pendingProduction.js";
+import MaterialStock from "../models/inventory/materialStock.js";
+import MachineJobCard from "../models/inventory/machineJobCard.js";
 import { escapeRegex } from "../utils/security.js";
 import { getUserLocationNames, normalizeLocationName } from "../utils/locations.js";
 import {
   reconcileUserBindingLocations,
   syncLabelBindingIdentity,
 } from "../utils/reconcileBindingLocations.js";
+import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 
@@ -1720,58 +1724,10 @@ router.delete("/api/locations/:id", requireAuth, deleteLimiter, async (req, res)
   }
 });
 
-// ----------------------------------Machine Master---------------------------------->
-router.get("/form/machine", async (req, res) => {
-  const machines = await Machine.find().sort({ machineName: 1 }).lean();
-
-  res.render("inventory/masters/machineMaster.ejs", {
-    JS: false,
-    CSS: false,
-    title: "Machine Master",
-    machines,
-    notification: req.flash("notification"),
-  });
-});
-
-router.post("/form/machine", requireAuth, createLimiter, async (req, res) => {
-  try {
-    const machineName = String(req.body.machineName || "").trim().toUpperCase();
-
-    const alreadyExists = await Machine.exists({ machineName });
-    if (alreadyExists) {
-      return res.status(400).json({ success: false, message: "machine already exist" });
-    }
-
-    await Machine.create({ machineName });
-    res.locals.auditDescription = `Created machine "${machineName}"`;
-    req.flash("notification", "Machine created successfully!");
-    res.json({ success: true, redirect: "/sachiko/form/machine" });
-  } catch (err) {
-    console.error(err);
-    const msg = err.code === 11000 ? "machine already exist" : err.message;
-    res.status(400).json({ success: false, message: msg });
-  }
-});
-
-router.get("/api/machines", async (req, res) => {
-  const machines = await Machine.distinct("machineName");
-  const normalizedMachines = [...new Set(
-    machines.map((machine) => canonicalizeLocationName(machine)).filter(Boolean)
-  )].sort();
-  res.json(normalizedMachines);
-});
-
-router.delete("/api/machines/:id", requireAuth, deleteLimiter, async (req, res) => {
-  try {
-    const existing = await Machine.findById(req.params.id).select("machineName").lean();
-    await Machine.findByIdAndDelete(req.params.id);
-    res.locals.auditDescription = `Deleted machine "${existing?.machineName || req.params.id}"`;
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(400).json({ success: false, message: err.message });
-  }
-});
+// Machine Master CRUD (/form/machine, /api/machines) moved to
+// routes/system/machine.js, alongside the machine queue / job card pipeline
+// it now feeds -- see server.js for why that router is mounted ahead of this
+// one.
 
 // ================= TAPE MASTER LIST VIEW =================
 router.get("/tape/view", async (req, res) => {
@@ -2484,6 +2440,7 @@ router.get("/sales/clients/:itemType", async (req, res) => {
     const { itemType } = req.params;
     let bindingModel;
     if (itemType === "TAPE") bindingModel = TapeBinding;
+    else if (itemType === "LABEL_STOCK") bindingModel = LabelStockBinding;
     else {
       const clients = await Client.distinct("clientName");
       return res.json(clients.sort());
@@ -2575,14 +2532,17 @@ router.get("/sales/items/:type/:userId", async (req, res) => {
         return {
           _id: binding._id,
           location: binding.location || "",
-          displayName: `${s.productCode || ""} (${s.skuCode || ""})`,
+          displayName: s.productCode || "",
           minOrderQty: 0,
           rate: null,
           stock: null,
+          paperSize: binding.paperSize || "",
+          runningMeters: binding.runningMeters ?? null,
           details: {
             type: "LABEL_STOCK",
             skuCode: s.skuCode || "",
             productCode: s.productCode || "",
+            rollType: s.rollType || "NORMAL",
             fsFamily: s.facestock?.facestockFamily || "",
             fsType: s.facestock?.facestockType || "",
             fsGsm: s.facestock?.facestockGsm ?? "",
@@ -2592,6 +2552,15 @@ router.get("/sales/items/:type/:userId", async (req, res) => {
             rlType: s.releaseLiner?.releaseLinerType || "",
             rlColor: s.releaseLiner?.releaseLinerColor || "",
             rlGsm: s.releaseLiner?.releaseLinerGsm ?? "",
+            fs2Family: s.facestock2?.facestockFamily || "",
+            fs2Type: s.facestock2?.facestockType || "",
+            fs2Gsm: s.facestock2?.facestockGsm ?? "",
+            fs2Micron: s.facestock2?.facestockMicron ?? "",
+            ad2Type: s.adhesive2?.adhesiveType || "",
+            ad2Gsm: s.adhesive2?.adhesiveGsm ?? "",
+            rl2Type: s.releaseLiner2?.releaseLinerType || "",
+            rl2Color: s.releaseLiner2?.releaseLinerColor || "",
+            rl2Gsm: s.releaseLiner2?.releaseLinerGsm ?? "",
           },
         };
       });
@@ -2766,6 +2735,7 @@ router.post("/sales/order", async (req, res) => {
       if (orderId) {
         // UPDATE existing order
         await TapeSalesOrder.findByIdAndUpdate(orderId, data);
+        await upsertPendingProduction({ _id: orderId, ...data });
         res.locals.auditDescription = await describeSalesOrder({
           itemTypeLabel: "Label Stock", userId: binding.userId,
           quantity: data.quantity, poNumber: data.poNumber, isUpdate: true,
@@ -2792,6 +2762,7 @@ router.post("/sales/order", async (req, res) => {
           return res.json({ success: true, redirect: "/sachiko/sales/pending", duplicate: true });
         }
         const newOrder = await TapeSalesOrder.create(data);
+        await upsertPendingProduction(newOrder);
 
         await SalesOrderLog.create({
           orderId: newOrder._id,
@@ -2911,6 +2882,8 @@ router.get("/sales/pending", async (req, res) => {
       CSS: "tableDisp.css",
       JS: false,
       notification: req.flash("notification"),
+      labelTotal: 0,
+      colorLabelTotal: 0,
     });
   } catch (err) {
     console.error("PENDING ORDERS ERROR:", err);
@@ -3077,7 +3050,7 @@ router.get("/sales/order/confirm", async (req, res) => {
       .populate({
         path: "tapeId",
         select:
-          "tapeProductId tapePaperCode tapeGsm tapeFinish tapePaperType tapeAdhesiveGsm tapeWidth tapeMtrs tapeCoreId ttrProductId ttrType ttrColor ttrMaterialCode ttrWidth ttrMtrs ttrInkFace ttrCoreId ttrCoreLength ttrNotch ttrWinding labelWidth labelHeight productCode skuCode facestock adhesive releaseLiner",
+          "tapeProductId tapePaperCode tapeGsm tapeFinish tapePaperType tapeAdhesiveGsm tapeWidth tapeMtrs tapeCoreId ttrProductId ttrType ttrColor ttrMaterialCode ttrWidth ttrMtrs ttrInkFace ttrCoreId ttrCoreLength ttrNotch ttrWinding labelWidth labelHeight productCode skuCode rollType facestock adhesive releaseLiner facestock2 adhesive2 releaseLiner2",
       })
       .populate({
         path: "tapeBinding",
@@ -3136,7 +3109,7 @@ router.get("/sales/order/logs", async (req, res) => {
     // Step 2: Collect all orderId values that need to be resolved
     const allOrderIds = [...new Set(rawLogs.map((l) => String(l.orderId)).filter(Boolean))];
 
-    const ITEM_SELECT = "tapeProductId tapePaperCode tapeGsm tapeFinish clientSkuCode";
+    const ITEM_SELECT = "tapeProductId tapePaperCode tapeGsm tapeFinish clientSkuCode productCode skuCode";
     const USER_SELECT = "clientName userName";
 
     // Step 3: Query the order collection
@@ -3653,6 +3626,20 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
     }
     await ActiveOrderModel.findByIdAndUpdate(orderId, updateData);
 
+    // Keep the Production queue in sync: a Label Stock order re-entering
+    // PENDING (partial dispatch) gets upserted back in; anything else
+    // (fully confirmed/dispatched, or cancelled) comes off the queue. Plain
+    // Tape orders are untouched -- upsertPendingProduction/removePendingProduction
+    // no-op for anything that isn't onModel "SachikoLabelStock".
+    if (order.onModel === "SachikoLabelStock") {
+      if (finalStatus === "PENDING") {
+        const freshOrder = await TapeSalesOrder.findById(orderId).lean();
+        await upsertPendingProduction(freshOrder);
+      } else {
+        await removePendingProduction(orderId);
+      }
+    }
+
     const orderUser = await Username.findById(order.userId).select("clientName").lean();
     res.locals.auditDescription = `Updated ${order.onModel} sales order to "${finalStatus}" for "${orderUser?.clientName || "Unknown Client"}" (order ${orderId})`;
 
@@ -3926,6 +3913,412 @@ router.post("/form/prodcalc", requireAuth, createLimiter, async (req, res) => {
 
   await Calculator.create(formData);
   res.send("Production Calculation created successfully!");
+});
+
+// ----------------------------------Production Binding View---------------------------------->
+// "Prod Bind View" -- a read-only browse of what's been saved via Prod
+// Binding above. FAIRTECH split a dedicated ProductionBinding entity (with
+// die/block/vendor-paper matching) out of this same calculator collection;
+// that entity models FAIRTECH's die-cut label production and has no
+// equivalent here (Sachiko's Label Stock orders carry their own material
+// spec already -- see CLAUDE.md's Assign Production section), so this stays
+// a plain list/detail view over the schemaless Calculator collection instead.
+router.get("/prodcalc/view", async (req, res) => {
+  const entries = await Calculator.find({}).sort({ _id: -1 }).lean();
+  const jsonData = entries.map((e) => ({
+    ...e,
+    _id: String(e._id),
+    createdAt: e._id.getTimestamp(),
+  }));
+
+  res.render("utilities/prodCalcView.ejs", {
+    title: "Production Binding View",
+    CSS: "tableDisp.css",
+    JS: false,
+    jsonData,
+    notification: req.flash("notification"),
+  });
+});
+
+router.get("/prodcalc/details/:id", async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    req.flash("notification", "Invalid production binding id.");
+    return res.redirect("/sachiko/prodcalc/view");
+  }
+
+  const doc = await Calculator.findById(req.params.id).lean();
+  if (!doc) {
+    req.flash("notification", "Production binding not found.");
+    return res.redirect("/sachiko/prodcalc/view");
+  }
+
+  const binding = { ...doc, _id: String(doc._id), createdAt: doc._id.getTimestamp() };
+
+  res.render("utilities/prodCalcDetail.ejs", {
+    title: "Production Binding Details",
+    CSS: "tableDisp.css",
+    JS: false,
+    binding,
+    notification: req.flash("notification"),
+  });
+});
+
+// ----------------------------------Pending / WIP Production---------------------------------->
+// Live-synced off Label Stock orders by utils/pendingProduction.js -- see
+// CLAUDE.md's "Production pipeline" section for the full order -> assign ->
+// job card lifecycle.
+
+// Every JobCard is write-once, so "live" here just means "poll and pick up
+// the fact a card now exists" -- see GET /labels/production/wip-progress.
+async function buildJobCardProgressMap(pendingIds) {
+  if (!pendingIds.length) return new Map();
+  const cards = await MachineJobCard.find({ pendingProductionId: { $in: pendingIds } })
+    .select("pendingProductionId jobCardId totalMeter updatedAt")
+    .sort({ updatedAt: -1 })
+    .lean();
+  const map = new Map();
+  cards.forEach((card) => {
+    const key = String(card.pendingProductionId);
+    if (!map.has(key)) map.set(key, { jobCardId: card.jobCardId, totalMeter: card.totalMeter, updatedAt: card.updatedAt });
+  });
+  return map;
+}
+
+router.get("/labels/production/pending", async (req, res) => {
+  const initialTab = req.query.tab === "wip" ? "wip" : "pending";
+
+  const all = await PendingProduction.find({})
+    .populate("userId", "clientName userName clientType")
+    .populate("itemId", "productCode skuCode")
+    .populate("assignedMachineId", "machineName machineType")
+    .populate("operatorId", "empName")
+    .populate("helperId", "empName")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  let jobCardProgress = new Map();
+  if (initialTab === "wip") {
+    const wipIds = all.filter((r) => r.assignedMachineId).map((r) => r._id);
+    jobCardProgress = await buildJobCardProgressMap(wipIds);
+  }
+
+  const mapped = all.map((r) => {
+    const item = r.itemId || {};
+    return {
+      _id: String(r._id),
+      productCode: item.productCode || item.skuCode || "—",
+      clientName: r.userId?.clientName || r.userId?.userName || "—",
+      userName: r.userId?.userName || "—",
+      clientType: r.userId?.clientType || "",
+      paperSize: r.paperSize || "—",
+      noOfRolls: r.noOfRolls ?? "—",
+      quantity: r.quantity,
+      balance: Math.max((Number(r.quantity) || 0) - (Number(r.dispatchedQuantity) || 0), 0),
+      machineName: r.assignedMachineId?.machineName || "",
+      assignedMachineId: r.assignedMachineId ? { _id: String(r.assignedMachineId._id) } : null,
+      operatorName: r.operatorId?.empName || "",
+      helperName: r.helperId?.empName || "",
+      poNumber: r.poNumber || "—",
+      estimatedDate: r.estimatedDate,
+      remarks: r.remarks || "",
+      producedAt: r.producedAt || null,
+      createdAt: r.createdAt,
+      assignedAt: r.assignedAt || null,
+      liveUpdate: jobCardProgress.get(String(r._id)) || null,
+    };
+  });
+
+  // A row leaves Pending the moment assignedMachineId is set (Assign
+  // Production), and only leaves this page entirely once removePendingProduction
+  // deletes it after confirm/dispatch/cancel.
+  const orders = mapped.filter((r) => !r.assignedMachineId);
+  const wipOrders = mapped
+    .filter((r) => r.assignedMachineId)
+    .sort((a, b) => new Date(b.estimatedDate || 0) - new Date(a.estimatedDate || 0));
+
+  res.render("inventory/orders/pendingProduction.ejs", {
+    title: initialTab === "wip" ? "WIP Production" : "Pending Production",
+    CSS: "tableDisp.css",
+    JS: false,
+    orders,
+    wipOrders,
+    initialTab,
+    notification: req.flash("notification"),
+  });
+});
+
+// Polled by the WIP table to refresh the "Live Update" column without a
+// full reload.
+router.get("/labels/production/wip-progress", async (req, res) => {
+  try {
+    const wipIds = await PendingProduction.find({ assignedMachineId: { $ne: null } }).distinct("_id");
+    const progress = await buildJobCardProgressMap(wipIds);
+    res.json(wipIds.map((id) => ({ _id: String(id), liveUpdate: progress.get(String(id)) || null })));
+  } catch (err) {
+    console.error("WIP PROGRESS ERROR:", err);
+    res.status(500).json([]);
+  }
+});
+
+// Live facestock roll-availability lookup backing the Assign Production
+// form's roll picker.
+router.get("/labels/production/material-stock", async (req, res) => {
+  try {
+    const materialId = req.query.materialId;
+    const excludePendingId = req.query.excludeId;
+    if (!materialId || !mongoose.isValidObjectId(materialId)) {
+      return res.json({ available: null, balance: null, rolls: [] });
+    }
+
+    const rollDocs = await MaterialStock.find({ material: materialId, quantity: { $gt: 0 } })
+      .select("rollId quantity reelMtrs location")
+      .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
+      .lean();
+
+    // Rolls already ticked on another machine-assigned order aren't offered
+    // again here.
+    const takenAgg = await PendingProduction.find({
+      allottedRollIds: { $in: rollDocs.map((r) => r._id) },
+      assignedMachineId: { $ne: null },
+      ...(excludePendingId && mongoose.isValidObjectId(excludePendingId) ? { _id: { $ne: excludePendingId } } : {}),
+    })
+      .select("allottedRollIds")
+      .lean();
+    const takenSet = new Set(takenAgg.flatMap((p) => (p.allottedRollIds || []).map(String)));
+
+    const rolls = rollDocs
+      .filter((r) => !takenSet.has(String(r._id)))
+      .map((r) => ({ stockId: String(r._id), rollId: r.rollId, qty: r.quantity, reelMtrs: r.reelMtrs, location: r.location }));
+
+    const available = rolls.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
+    res.json({ available, balance: available, rolls });
+  } catch (err) {
+    console.error("MATERIAL STOCK LOOKUP ERROR:", err);
+    res.status(500).json({ available: null, balance: null, rolls: [] });
+  }
+});
+
+const formatLotNo = (seq) => `SP | LOT | ${String(seq).padStart(4, "0")}`;
+
+// Read-only preview of the next lot no -- the number isn't consumed until an
+// order is actually assigned.
+async function previewNextLotNo() {
+  const counter = await Counter.findOne({ key: "sachikoProductionLotNo" }).select("seq").lean();
+  return formatLotNo(Number(counter?.seq || 0) + 1);
+}
+
+// Claims the next lot no for real, skipping any candidate already held by an
+// order or a job card (guards against a pre-existing manually-assigned lot
+// no colliding with the counter).
+async function generateLotNo() {
+  const maxAttempts = 10000;
+  for (let i = 0; i < maxAttempts; i++) {
+    const counter = await Counter.findOneAndUpdate(
+      { key: "sachikoProductionLotNo" },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    ).lean();
+    const candidate = formatLotNo(counter.seq);
+    const [heldByOrder, onJobCard] = await Promise.all([
+      PendingProduction.exists({ lotNo: candidate }),
+      MachineJobCard.exists({ lotNo: candidate }),
+    ]);
+    if (!heldByOrder && !onJobCard) return candidate;
+  }
+  throw new Error("Unable to generate a unique lot no");
+}
+
+// ----------------------------------Assign Production---------------------------------->
+// No ProductionBinding/die gate here (see the Prod Bind View comment above) --
+// this goes straight from Pending Production to machine/operator/roll
+// assignment, budgeted against the order's own paperSize/runningMeters/
+// noOfRolls (collected at Sales Order entry for Label Stock orders).
+router.get("/labels/production/assign/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      req.flash("notification", "Invalid order id.");
+      return res.redirect("/sachiko/labels/production/pending");
+    }
+
+    const pendingProduction = await PendingProduction.findById(id)
+      .populate("userId", "clientName userName userContact")
+      .populate("itemId")
+      .lean();
+
+    if (!pendingProduction) {
+      req.flash("notification", "Order not found.");
+      return res.redirect("/sachiko/labels/production/pending");
+    }
+
+    const order = await TapeSalesOrder.findById(id).select("poDate").lean();
+
+    const [allMachines, operatorEmployees, helperEmployees] = await Promise.all([
+      Machine.find().populate("location").sort({ machineName: 1 }).lean(),
+      Employee.find({ isActive: true, empProfile: "OPERATOR" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
+      Employee.find({ isActive: true, empProfile: "HELPER" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
+    ]);
+
+    const previewLotNo = pendingProduction.lotNo || (await previewNextLotNo());
+
+    const materialId = pendingProduction.itemId?._id;
+    let materialStock = { available: 0, balance: 0, rolls: [] };
+    if (materialId) {
+      const rollDocs = await MaterialStock.find({ material: materialId, quantity: { $gt: 0 } })
+        .select("rollId quantity reelMtrs location")
+        .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
+        .lean();
+      const takenAgg = await PendingProduction.find({
+        allottedRollIds: { $in: rollDocs.map((r) => r._id) },
+        assignedMachineId: { $ne: null },
+        _id: { $ne: pendingProduction._id },
+      })
+        .select("allottedRollIds")
+        .lean();
+      const takenSet = new Set(takenAgg.flatMap((p) => (p.allottedRollIds || []).map(String)));
+      const rolls = rollDocs
+        .filter((r) => !takenSet.has(String(r._id)))
+        .map((r) => ({ stockId: String(r._id), rollId: r.rollId, qty: r.quantity, reelMtrs: r.reelMtrs, location: r.location }));
+      const available = rolls.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
+      materialStock = { available, balance: available, rolls };
+    }
+
+    res.render("inventory/orders/assignProduction.ejs", {
+      title: "Assign Production",
+      CSS: "tableDisp.css",
+      JS: false,
+      pp: pendingProduction,
+      poDate: order?.poDate || null,
+      allMachines,
+      operatorEmployees,
+      helperEmployees,
+      previewLotNo,
+      materialStock,
+      notification: req.flash("notification"),
+    });
+  } catch (err) {
+    console.error("ASSIGN PRODUCTION LOAD ERROR:", err);
+    req.flash("notification", "Failed to load Assign Production.");
+    res.redirect("/sachiko/labels/production/pending");
+  }
+});
+
+router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      req.flash("notification", "Invalid order id.");
+      return res.redirect("/sachiko/labels/production/pending");
+    }
+
+    const pendingProduction = await PendingProduction.findById(id);
+    if (!pendingProduction) {
+      req.flash("notification", "Order not found.");
+      return res.redirect("/sachiko/labels/production/pending");
+    }
+
+    const { machineId, operatorId, helperId, selectedRolls } = req.body;
+
+    if (!machineId || !mongoose.isValidObjectId(machineId) || !(await Machine.exists({ _id: machineId }))) {
+      req.flash("notification", "Please select a valid machine.");
+      return res.redirect(`/sachiko/labels/production/assign/${id}`);
+    }
+
+    let operator = null;
+    if (operatorId) {
+      if (!mongoose.isValidObjectId(operatorId) || !(operator = await Employee.findById(operatorId).select("_id").lean())) {
+        req.flash("notification", "Please select a valid operator.");
+        return res.redirect(`/sachiko/labels/production/assign/${id}`);
+      }
+    }
+    let helper = null;
+    if (helperId) {
+      if (!mongoose.isValidObjectId(helperId) || !(helper = await Employee.findById(helperId).select("_id").lean())) {
+        req.flash("notification", "Please select a valid helper.");
+        return res.redirect(`/sachiko/labels/production/assign/${id}`);
+      }
+    }
+
+    // Re-verify each ticked roll is real, in-stock, and not already claimed by
+    // another machine-assigned order (race-guard against stale page state).
+    const submittedRollIds = (Array.isArray(selectedRolls) ? selectedRolls : selectedRolls ? [selectedRolls] : [])
+      .filter((rid) => mongoose.isValidObjectId(rid));
+    const validRollIds = submittedRollIds.length
+      ? await MaterialStock.find({ _id: { $in: submittedRollIds }, quantity: { $gt: 0 } }).distinct("_id")
+      : [];
+    const takenAgg = validRollIds.length
+      ? await PendingProduction.find({
+          allottedRollIds: { $in: validRollIds },
+          assignedMachineId: { $ne: null },
+          _id: { $ne: pendingProduction._id },
+        }).select("allottedRollIds").lean()
+      : [];
+    const takenSet = new Set(takenAgg.flatMap((p) => (p.allottedRollIds || []).map(String)));
+    const allottedRollIds = validRollIds.filter((rid) => !takenSet.has(String(rid)));
+
+    const lotNo = pendingProduction.lotNo || (await generateLotNo());
+
+    await PendingProduction.findByIdAndUpdate(id, {
+      $set: {
+        assignedMachineId: machineId,
+        operatorId: operator ? operatorId : null,
+        helperId: helper ? helperId : null,
+        allottedRolls: allottedRollIds.length,
+        allottedRollIds,
+        lotNo,
+        assignedAt: new Date(),
+      },
+    });
+
+    res.locals.auditDescription = `Assigned production order ${id} to machine ${machineId}`;
+    req.flash("notification", "Machine assigned successfully.");
+    res.redirect("/sachiko/machine/queue");
+  } catch (err) {
+    console.error("ASSIGN PRODUCTION SAVE ERROR:", err);
+    req.flash("notification", "Failed to assign production.");
+    res.redirect(`/sachiko/labels/production/assign/${req.params.id}`);
+  }
+});
+
+router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      req.flash("notification", "Invalid order id.");
+      return res.redirect("/sachiko/labels/production/pending?tab=wip");
+    }
+
+    const pendingProduction = await PendingProduction.findById(id).lean();
+    if (!pendingProduction) {
+      req.flash("notification", "Order not found.");
+      return res.redirect("/sachiko/labels/production/pending?tab=wip");
+    }
+    if (!pendingProduction.assignedMachineId) {
+      req.flash("notification", "This order isn't assigned to a machine.");
+      return res.redirect("/sachiko/labels/production/pending?tab=wip");
+    }
+    // Paper is only deducted when a Job Card is filed -- as long as producedAt
+    // is unset nothing physical needs reversing.
+    if (pendingProduction.producedAt) {
+      req.flash("notification", "A Job Card has already been filed for this order — it can't be sent back to Pending. Cancel it instead if it needs to stop.");
+      return res.redirect("/sachiko/labels/production/pending?tab=wip");
+    }
+
+    // lotNo is deliberately kept -- it's tied to the order's life, not the
+    // assignment, so a re-assignment reuses it.
+    await PendingProduction.findByIdAndUpdate(id, {
+      $set: { assignedMachineId: null, operatorId: null, helperId: null, allottedRollIds: [] },
+      $unset: { allottedRolls: "", assignedAt: "" },
+    });
+
+    res.locals.auditDescription = `Sent production order ${id} back to Pending`;
+    req.flash("notification", "Order sent back to Pending Production.");
+    res.redirect("/sachiko/labels/production/pending");
+  } catch (err) {
+    console.error("UNASSIGN PRODUCTION ERROR:", err);
+    req.flash("notification", "Failed to send order back to Pending.");
+    res.redirect("/sachiko/labels/production/pending?tab=wip");
+  }
 });
 
 // Admin/HOD only — records of every mutating action + login/logout across the app.

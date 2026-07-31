@@ -76,6 +76,7 @@
     if (order.onModel === "Ttr") itemTypeLabel = "TTR";
     else if (order.onModel === "Label") itemTypeLabel = "Label";
     else if (order.onModel === "ColorLabel") itemTypeLabel = "Color Label";
+    else if (order.onModel === "SachikoLabelStock") itemTypeLabel = "Label Stock";
 
     let itemName = "";
     if (order.onModel === "Tape" || !order.onModel) {
@@ -93,6 +94,8 @@
         .filter(Boolean)
         .join(" · ");
       if (!itemName && item.clientSkuCode) itemName = String(item.clientSkuCode);
+    } else if (order.onModel === "SachikoLabelStock") {
+      itemName = item.productCode || item.skuCode || "";
     }
     if (!itemName) itemName = order.onModel ? `${itemTypeLabel} Item` : "N/A";
 

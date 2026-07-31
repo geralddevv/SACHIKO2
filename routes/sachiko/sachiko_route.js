@@ -114,7 +114,7 @@ async function generateSkuCode() {
 
 /* ================= LABEL STOCK ================= */
 router.get("/label-stock/view", async (req, res) => {
-  const jsonData = await SachikoLabelStock.find().sort({ productCode: 1 }).lean();
+  const jsonData = await SachikoLabelStock.find().sort({ skuCode: 1 }).lean();
   res.render("sachiko/labelStockView.ejs", {
     title: "Label Stock View",
     CSS: "tableDisp.css",

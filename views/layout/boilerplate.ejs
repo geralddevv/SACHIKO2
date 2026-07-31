@@ -634,7 +634,7 @@
         </div>
       </div>
       <a href="<%= typeof homeUrl !== 'undefined' ? homeUrl : '/sachiko/welcome' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center; margin-right: auto; margin-left: 20px;">
-        <h1 style="margin: 0;">Fairtech Systems</h1>
+        <h1 style="margin: 0;">Sachiko Packaging</h1>
       </a>
     </nav>    <div class="logout-modal" id="logoutModal" aria-hidden="true">
       <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="logoutTitle">
@@ -916,6 +916,18 @@
               <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Stock Summary</p>
             </div>
+            <div title="Facestock Stock" class="<%= title === 'Facestock Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/facestockstock'">
+              <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
+              <p class="nav-items-para">Facestock</p>
+            </div>
+            <div title="Adhesive Stock" class="<%= title === 'Adhesive Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/adhesivestock'">
+              <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
+              <p class="nav-items-para">Adhesive</p>
+            </div>
+            <div title="Release Liner Stock" class="<%= title === 'Release Liner Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/releaselinerstock'">
+              <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
+              <p class="nav-items-para">Release Liner</p>
+            </div>
             <div title="Tape Stock" class="<%= title === 'Tape Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tapestock'" style="border-bottom: 2px solid #ffffff9d;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
@@ -1043,6 +1055,48 @@
             <div title="Sales Calculator" class="nav-items" onclick="window.location.href = '/sachiko/form/salescalc'">
               <i class="fa-solid fa-money-bill-transfer" style="color: #ffffff"></i>
               <p class="nav-items-para">Sales Calculator</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-opt-wrap">
+          <div title="Production" class="production-toggle nav-items">
+            <i class="fa-solid fa-industry" style="color: #ffffff"></i>
+            <p class="nav-items-para">Production</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+
+          <div class="nav-labels-opt">
+            <div title="Production Binding View" class="<%= title === 'Production Binding View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/prodcalc/view'" style="border-top: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-eye" style="color: #ffffff"></i>
+              <p class="nav-items-para">Prod Bind View</p>
+            </div>
+            <div title="Production Binding" class="<%= title === 'Production Calculator' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/prodcalc'">
+              <i class="fa-solid fa-industry" style="color: #ffffff"></i>
+              <p class="nav-items-para">Prod Binding</p>
+            </div>
+            <div title="Pending Production" class="<%= title === 'Pending Production' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/labels/production/pending'">
+              <i class="fa-solid fa-industry" style="color: #ffffff"></i>
+              <p class="nav-items-para">Pending Production</p>
+            </div>
+            <div title="WIP Production" class="<%= title === 'WIP Production' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/labels/production/pending?tab=wip'">
+              <i class="fa-solid fa-gears" style="color: #ffffff"></i>
+              <p class="nav-items-para">WIP Production</p>
+            </div>
+            <div title="Machine Queues" class="<%= title === 'Machine Queues' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/machine/queue'">
+              <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
+              <p class="nav-items-para">Machine Queues</p>
+            </div>
+            <div title="Production Records" class="<%= title === 'Production Records' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/machine/jobcard/view'">
+              <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
+              <p class="nav-items-para">Production Records</p>
+            </div>
+            <!-- Sachiko's pre-existing manual Job Card (no machine/stock linkage) --
+                 kept alongside the machine-queue-driven "Production Records" above,
+                 not replaced by it. -->
+            <div title="Job Card View" class="<%= title === 'Job Card View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/jobcard/view'" style="border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
+              <p class="nav-items-para">Job Card View</p>
             </div>
           </div>
         </div>

@@ -5,6 +5,8 @@ const labelStockBindingSchema = new mongoose.Schema(
     labelStock: { type: mongoose.Schema.Types.ObjectId, ref: "SachikoLabelStock", required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "Username", required: true },
     location: { type: String, required: true },
+    paperSize: { type: String },
+    runningMeters: { type: Number },
     status: { type: String, enum: ["ACTIVE", "INACTIVE"], default: "ACTIVE" },
   },
   { timestamps: true },

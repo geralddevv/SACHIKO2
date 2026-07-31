@@ -13,6 +13,18 @@
     color: #721c24;
     font-weight: 600;
   }
+
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+
+  #client-name-div .choices__list--dropdown .choices__item,
+  #client-name-div .choices__list--single .choices__item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 </style>
 
 <!-- The main content -->
@@ -24,15 +36,15 @@
     </div>
 
     <div class="span-full form-subheading">
-      <h1>User Info</h1>
+      <h1>Binding Details</h1>
     </div>
 
-    <div id="label-stock-id-div" class="span-seven">
+    <div id="label-stock-id-div" class="span-seven" style="display:none;">
       <label for="label-stock-id">SKU Code</label>
-      <input type="text" id="label-stock-id" class="form-control" name="skuCode" placeholder="Will appear here" readonly required />
+      <input type="text" id="label-stock-id" class="form-control" name="skuCode" placeholder="Will appear here" readonly />
     </div>
 
-    <div id="client-name-div" class="span-six">
+    <div id="client-name-div" class="span-eight">
       <div class="clientName-label"><label for="client-name">Client Name</label><span class="asterisk" style="font-size: 14px;"></span></div>
       <select name="clientName" id="client-name" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Search</option>
@@ -42,23 +54,43 @@
       </select>
     </div>
 
-    <div id="user-name-div" class="span-six">
+    <div id="user-name-div" class="span-five">
       <label>User Name</label>
       <select id="client-user-name" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Search</option>
       </select>
     </div>
-    <div id="user-name-contact-div" class="span-six">
+    <div id="user-name-contact-div" class="span-five">
       <label for="user-contact">User Contact</label>
-      <input type="text" id="user-contact" class="form-control" placeholder="Enter User Contact" required readonly />
+      <input type="text" id="user-contact" class="form-control" placeholder="Will appear here" required readonly />
     </div>
-    <div id="client-location-div" class="span-seven">
+    <div id="client-location-div" class="span-three">
       <label for="client-location">Location</label>
       <select name="location" id="client-location" class="form-control select-tag" required>
-        <option value="" disabled selected hidden>Select location</option>
+        <option value="" disabled selected hidden>Select</option>
+      </select>
+    </div>
+    <div id="paper-size-div" class="span-four">
+      <label for="paper-size">Paper Size</label>
+      <input type="text" id="paper-size" name="paperSize" class="form-control" placeholder="Enter Paper Size" required />
+    </div>
+
+    <div id="running-meters-div" class="span-three">
+      <label for="running-meters">RM</label>
+      <input type="number" id="running-meters" name="runningMeters" class="form-control" placeholder="RM" required min="0" step="any" />
+    </div>
+
+    <div id="sku-code-select-div" class="span-four">
+      <label for="sku-code-select">SKU Code</label>
+      <select id="sku-code-select" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Search</option>
+        <% labelStocks?.forEach(ls => { %>
+          <option value="<%= ls._id %>"><%= ls.productCode %></option>
+        <% }) %>
       </select>
     </div>
 
+    <div id="spec-blocks-section" style="display:none;">
     <div class="span-full form-subheading" style="display: flex; justify-content: space-between; align-items: center;">
       <h1>Label Stock Specifications</h1>
       <button type="button" id="reset-specs-btn" style="padding: 4px 12px; border-radius: 4px; background-color: #dc3545; color: white; border: none; cursor: pointer; font-size: 14px;">
@@ -74,7 +106,7 @@
       <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem">
         <div class="span-six" style="grid-column: auto">
           <label>Family</label>
-          <select id="fs-family" class="form-control select-tag" required>
+          <select id="fs-family" class="form-control select-tag">
             <option value="" disabled selected hidden>Search</option>
             <% fsFamilies?.forEach(v => { %>
               <option value="<%= v %>"><%= v %></option>
@@ -83,7 +115,7 @@
         </div>
         <div class="span-six" style="grid-column: auto">
           <label>Type</label>
-          <select id="fs-type" class="form-control select-tag" required>
+          <select id="fs-type" class="form-control select-tag">
             <option value="" disabled selected hidden>Search</option>
             <% fsTypes?.forEach(v => { %>
               <option value="<%= v %>"><%= v %></option>
@@ -92,7 +124,7 @@
         </div>
         <div class="span-four" style="grid-column: auto">
           <label>GSM</label>
-          <select id="fs-gsm" class="form-control select-tag" required>
+          <select id="fs-gsm" class="form-control select-tag">
             <option value="" disabled selected hidden>Search</option>
             <% fsGsms?.forEach(v => { %>
               <option value="<%= v %>"><%= v %></option>
@@ -101,7 +133,7 @@
         </div>
         <div class="span-four" style="grid-column: auto">
           <label>Micron</label>
-          <select id="fs-micron" class="form-control select-tag" required>
+          <select id="fs-micron" class="form-control select-tag">
             <option value="" disabled selected hidden>Search</option>
             <% fsMicrons?.forEach(v => { %>
               <option value="<%= v %>"><%= v %></option>
@@ -119,7 +151,7 @@
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem">
         <div class="span-seven" style="grid-column: auto">
           <label>Type</label>
-          <select id="ad-type" class="form-control select-tag" required>
+          <select id="ad-type" class="form-control select-tag">
             <option value="" disabled selected hidden>Search</option>
             <% adTypes?.forEach(v => { %>
               <option value="<%= v %>"><%= v %></option>
@@ -128,7 +160,7 @@
         </div>
         <div class="span-four" style="grid-column: auto">
           <label>GSM</label>
-          <select id="ad-gsm" class="form-control select-tag" required>
+          <select id="ad-gsm" class="form-control select-tag">
             <option value="" disabled selected hidden>Search</option>
             <% adGsms?.forEach(v => { %>
               <option value="<%= v %>"><%= v %></option>
@@ -146,7 +178,7 @@
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem">
         <div class="span-seven" style="grid-column: auto">
           <label>Type</label>
-          <select id="rl-type" class="form-control select-tag" required>
+          <select id="rl-type" class="form-control select-tag">
             <option value="" disabled selected hidden>Search</option>
             <% rlTypes?.forEach(v => { %>
               <option value="<%= v %>"><%= v %></option>
@@ -155,7 +187,7 @@
         </div>
         <div class="span-four" style="grid-column: auto">
           <label>Color</label>
-          <select id="rl-color" class="form-control select-tag" required>
+          <select id="rl-color" class="form-control select-tag">
             <option value="" disabled selected hidden>Search</option>
             <% rlColors?.forEach(v => { %>
               <option value="<%= v %>"><%= v %></option>
@@ -164,13 +196,21 @@
         </div>
         <div class="span-four" style="grid-column: auto">
           <label>GSM</label>
-          <select id="rl-gsm" class="form-control select-tag" required>
+          <select id="rl-gsm" class="form-control select-tag">
             <option value="" disabled selected hidden>Search</option>
             <% rlGsms?.forEach(v => { %>
               <option value="<%= v %>"><%= v %></option>
             <% }) %>
           </select>
         </div>
+      </div>
+    </div>
+    </div><!-- /#spec-blocks-section -->
+
+    <div id="sku-layer-preview" class="span-full" style="display:none;">
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;">
+        <p id="sku-layer-title" style="margin:0 0 10px;font-size:13px;font-weight:700;color:#03365a;"></p>
+        <div id="sku-layer-stack" class="custom-scrollbar" style="display:flex;flex-direction:column;gap:2px;max-height:320px;overflow-y:auto;padding:2px;"></div>
       </div>
     </div>
 
@@ -184,6 +224,61 @@
 </div>
 
 <script>
+  const labelStocksData = <%- safeJson(labelStocks || []) %>;
+
+  function escSku(v) {
+    return String(v ?? "—").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  /* ── Physical layer stack builder (same layer order used on the Label Stock View page) ── */
+  const SKU_LAYER_STYLE = {
+    facestock: { bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", label: "FACESTOCK" },
+    adhesive:  { bg: "#fffbeb", border: "#fcd34d", text: "#b45309", label: "ADHESIVE" },
+    release:   { bg: "#f8fafc", border: "#cbd5e1", text: "#475569", label: "RELEASE LINER" },
+  };
+
+  function skuLayerBlock(kind, title, parts) {
+    const s = SKU_LAYER_STYLE[kind];
+    const detail = parts.filter(Boolean).join(" · ");
+    return `
+      <div style="background:${s.bg};border:1.5px solid ${s.border};border-radius:6px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <span style="font-size:11px;font-weight:800;letter-spacing:0.04em;color:${s.text};">${s.label}</span>
+        <span style="font-size:12px;font-weight:600;color:#334155;text-align:right;">${detail ? escSku(detail) : "—"}${title ? ` <span style="color:${s.text};font-weight:700;">(${escSku(title)})</span>` : ""}</span>
+      </div>`;
+  }
+
+  function renderSkuLayerStack(ds) {
+    const rollType = ds.rollType || "NORMAL";
+    let layers = [
+      skuLayerBlock("facestock", null, [ds.facestock?.facestockFamily, ds.facestock?.facestockType, ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm + " GSM" : null, ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : null]),
+      skuLayerBlock("adhesive", null, [ds.adhesive?.adhesiveType, ds.adhesive?.adhesiveGsm != null ? ds.adhesive.adhesiveGsm + " GSM" : null]),
+    ];
+    if (rollType === "DOUBLE FACESTOCK") {
+      layers.push(
+        skuLayerBlock("facestock", "Layer 2", [ds.facestock2?.facestockFamily, ds.facestock2?.facestockType, ds.facestock2?.facestockGsm != null ? ds.facestock2.facestockGsm + " GSM" : null, ds.facestock2?.facestockMicron != null ? ds.facestock2.facestockMicron + " MIC" : null]),
+        skuLayerBlock("adhesive", "Layer 2", [ds.adhesive2?.adhesiveType, ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null]),
+        skuLayerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+      );
+    } else if (rollType === "DOUBLE RELEASE") {
+      layers.push(
+        skuLayerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+        skuLayerBlock("adhesive", "Layer 2", [ds.adhesive2?.adhesiveType, ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null]),
+        skuLayerBlock("release", "Layer 2", [ds.releaseLiner2?.releaseLinerType, ds.releaseLiner2?.releaseLinerColor, ds.releaseLiner2?.releaseLinerGsm != null ? ds.releaseLiner2.releaseLinerGsm + " GSM" : null]),
+      );
+    } else {
+      layers.push(
+        skuLayerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+      );
+    }
+
+    return `
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        ${layers.join(`
+        <div style="display:flex;justify-content:center;margin:-2px 0;"><i class="fa-solid fa-caret-down" style="color:#cbd5e1;font-size:11px;"></i></div>
+        `)}
+      </div>`;
+  }
+
 document.addEventListener("DOMContentLoaded", () => {
   /* ================= ELEMENTS ================= */
   const submitBtn = document.querySelector("button[type='submit']");
@@ -197,6 +292,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const labelStockIdInput = document.getElementById("resolved-label-stock-id");
   const labelStockIdDisplay = document.getElementById("label-stock-id");
+
+  const skuSelect = document.getElementById("sku-code-select");
+  const skuLayerPreview = document.getElementById("sku-layer-preview");
+  const skuLayerTitle = document.getElementById("sku-layer-title");
+  const skuLayerStack = document.getElementById("sku-layer-stack");
 
   const specFields = ["fs-family", "fs-type", "fs-gsm", "fs-micron", "ad-type", "ad-gsm", "rl-type", "rl-color", "rl-gsm"];
 
@@ -219,6 +319,26 @@ document.addEventListener("DOMContentLoaded", () => {
   const clientChoices = new Choices(clientSelect, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
   const userChoices = new Choices(userSelect, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
   const locationChoices = new Choices(locationSelect, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+  const skuChoices = new Choices(skuSelect, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+  /* ================= SKU CODE -> LAYER PREVIEW ================= */
+  skuSelect.addEventListener("change", () => {
+    const id = skuSelect.value;
+    const ds = labelStocksData.find(d => String(d._id) === String(id));
+
+    if (!ds) {
+      labelStockIdInput.value = "";
+      skuLayerPreview.style.display = "none";
+      submitBtn.disabled = true;
+      return;
+    }
+
+    labelStockIdInput.value = ds._id;
+    skuLayerTitle.textContent = `${ds.productCode} · ${ds.skuCode}`;
+    skuLayerStack.innerHTML = renderSkuLayerStack(ds);
+    skuLayerPreview.style.display = "block";
+    submitBtn.disabled = false;
+  });
 
   // Full user docs for the selected client (kept for locationDetails lookup)
   let currentUsers = [];

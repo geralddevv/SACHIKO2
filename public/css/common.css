@@ -397,6 +397,20 @@ select {
   border-radius: 0.5rem;
 }
 
+.span-two {
+  grid-column: span 2;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  flex-direction: column;
+  padding: 10px;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 500;
+  border: 1px solid var(--primary-color);
+  border-radius: 0.5rem;
+}
+
 .span-three {
   grid-column: span 3;
   display: flex;
@@ -481,6 +495,20 @@ select {
   border-radius: 0.5rem;
 }
 
+.span-nine {
+  grid-column: span 9;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  flex-direction: column;
+  padding: 10px;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 500;
+  border: 1px solid var(--primary-color);
+  border-radius: 0.5rem;
+}
+
 .span-full input {
   border: 1px solid var(--primary-color);
   border-radius: 0.5rem;
@@ -502,6 +530,11 @@ select {
 }
 
 .span-dual input {
+  border: 1px solid var(--primary-color);
+  border-radius: 0.5rem;
+}
+
+.span-two input {
   border: 1px solid var(--primary-color);
   border-radius: 0.5rem;
 }
@@ -532,6 +565,11 @@ select {
 }
 
 .span-eight input {
+  border: 1px solid var(--primary-color);
+  border-radius: 0.5rem;
+}
+
+.span-nine input {
   border: 1px solid var(--primary-color);
   border-radius: 0.5rem;
 }
@@ -791,12 +829,14 @@ input::-webkit-inner-spin-button {
 
 /* Tablet: 769px — 1024px */
 @media screen and (max-width: 1024px) {
+  .span-two,
   .span-three,
   .span-four,
   .span-five,
   .span-six,
   .span-seven,
   .span-eight,
+  .span-nine,
   .span-dual,
   .span-penta,
   .span-hexa {
@@ -827,12 +867,14 @@ input::-webkit-inner-spin-button {
 
   .span-full,
   .span-half,
+  .span-two,
   .span-three,
   .span-four,
   .span-five,
   .span-six,
   .span-seven,
   .span-eight,
+  .span-nine,
   .span-dual,
   .span-penta,
   .span-hexa {

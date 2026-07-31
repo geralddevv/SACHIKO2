@@ -1,0 +1,70 @@
+import mongoose from "mongoose";
+
+// One doc = one physical reel of raw Facestock material. Unlike MaterialStock
+// (a reel of the finished, pre-laminated Label Stock matching one specific
+// SachikoLabelStock SKU), this is generic raw-material inventory -- its own
+// Family/Type/GSM/Micron is entered directly at inward, same fields as the
+// facestock sub-schema on SachikoLabelStock, since Sachiko has no separate
+// facestock master to reference.
+const facestockStockSchema = new mongoose.Schema(
+  {
+    family: {
+      type: String,
+      trim: true,
+    },
+    type: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    gsm: {
+      type: Number,
+    },
+    micron: {
+      type: Number,
+    },
+    location: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    // Rolls -- always 1 here; no consumption pipeline deducts this stock yet.
+    quantity: {
+      type: Number,
+      required: true,
+      default: 1,
+    },
+    reelMtrs: {
+      type: Number,
+      required: true,
+    },
+    rate: {
+      type: Number,
+    },
+    // System-generated FACESTOCK/YY-YY/NNN -- see utils/materialRollId.js.
+    rollId: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+      unique: true,
+    },
+    vendorRollId: {
+      type: String,
+      trim: true,
+    },
+    invoiceNo: {
+      type: String,
+      trim: true,
+    },
+    remarks: {
+      type: String,
+      trim: true,
+    },
+  },
+  { timestamps: true },
+);
+
+facestockStockSchema.index({ family: 1, type: 1, location: 1 });
+
+export default mongoose.models.FacestockStock || mongoose.model("FacestockStock", facestockStockSchema);
