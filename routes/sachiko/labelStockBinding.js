@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import LabelStockBinding from "../../models/sachiko/labelStockBinding.js";
 import Client from "../../models/users/client.js";
@@ -8,6 +9,31 @@ import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiter
 import { getUserLocationNames } from "../../utils/locations.js";
 
 const router = express.Router();
+
+// Same sha256 signature scheme used for Client/TapeSalesOrder duplicate
+// prevention (see routes/users/clients.js, routes/fairdesk_route.js) --
+// applied here to "same SKU, same paper size, same RM, same client and user".
+function hashSignature(rawSignature) {
+  return `sha256:${crypto.createHash("sha256").update(String(rawSignature ?? "")).digest("hex")}`;
+}
+
+function canonicalizePaperSize(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function buildBindingSignature({ labelStock, userId, paperSize, runningMeters }) {
+  return hashSignature(
+    [
+      String(labelStock || ""),
+      String(userId || ""),
+      canonicalizePaperSize(paperSize),
+      String(Number(runningMeters ?? "")),
+    ].join("||"),
+  );
+}
+
+const DUPLICATE_BINDING_MESSAGE =
+  "This Label Stock binding already exists (same SKU Code, Paper Size, RM, Client and User).";
 
 // Flat field id (used by the form/JS) -> the SachikoLabelStock document path it matches.
 const SPEC_FIELDS = {
@@ -111,12 +137,13 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
       return res.status(400).json({ success: false, message: "Please resolve a valid Label Stock before saving" });
     }
 
-    const existingBinding = await LabelStockBinding.exists({ userId, labelStock: labelStockId, location });
+    const bindingSignature = buildBindingSignature({ labelStock: labelStockId, userId, paperSize, runningMeters });
+    const existingBinding = await LabelStockBinding.findOne({ bindingSignature }).select("_id").lean();
     if (existingBinding) {
-      return res.status(400).json({ success: false, message: "This Label Stock is already bound to this user at this location." });
+      return res.status(400).json({ success: false, message: DUPLICATE_BINDING_MESSAGE });
     }
 
-    const binding = await LabelStockBinding.create({ labelStock: labelStockId, userId, location, paperSize, runningMeters });
+    const binding = await LabelStockBinding.create({ labelStock: labelStockId, userId, location, paperSize, runningMeters, bindingSignature });
 
     user.labelStock.push(binding._id);
     await user.save();
@@ -126,6 +153,9 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
     res.json({ success: true, redirect: "/sachiko/client/details/" + userId });
   } catch (err) {
     console.error("LABEL STOCK BINDING ERROR:", err);
+    if (err?.code === 11000 && err?.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "bindingSignature")) {
+      return res.status(400).json({ success: false, message: DUPLICATE_BINDING_MESSAGE });
+    }
     res.status(500).json({ success: false, message: "Failed to create Label Stock binding." });
   }
 });
@@ -236,19 +266,21 @@ router.post("/label-stock-binding/edit/:id", requireAuth, updateLimiter, async (
 
     const targetLabelStock = newLabelStock && /^[a-f\d]{24}$/i.test(newLabelStock) ? newLabelStock : binding.labelStock;
 
-    const duplicate = await LabelStockBinding.exists({
-      _id: { $ne: id },
-      userId: binding.userId,
+    const bindingSignature = buildBindingSignature({
       labelStock: targetLabelStock,
-      location,
+      userId: binding.userId,
+      paperSize: binding.paperSize,
+      runningMeters: binding.runningMeters,
     });
+    const duplicate = await LabelStockBinding.findOne({ _id: { $ne: id }, bindingSignature }).select("_id").lean();
     if (duplicate) {
-      req.flash("notification", "This Label Stock is already bound to this user at this location.");
+      req.flash("notification", DUPLICATE_BINDING_MESSAGE);
       return res.redirect(req.get("Referrer") || "/");
     }
 
     binding.labelStock = targetLabelStock;
     binding.location = location;
+    binding.bindingSignature = bindingSignature;
     await binding.save();
 
     res.locals.auditDescription = `Updated Label Stock binding for user ${binding.userId}`;
@@ -256,6 +288,10 @@ router.post("/label-stock-binding/edit/:id", requireAuth, updateLimiter, async (
     res.redirect(`/sachiko/label-stock-binding/view/${binding.userId}`);
   } catch (err) {
     console.error("LABEL STOCK BINDING EDIT POST ERROR:", err);
+    if (err?.code === 11000 && err?.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "bindingSignature")) {
+      req.flash("notification", DUPLICATE_BINDING_MESSAGE);
+      return res.redirect(req.get("Referrer") || "/");
+    }
     req.flash("notification", "Failed to update Label Stock binding");
     res.redirect(req.get("Referrer") || "/");
   }

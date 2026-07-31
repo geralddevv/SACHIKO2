@@ -29,7 +29,7 @@
 
 <!-- The main content -->
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form action="/sachiko/form/label-stock-binding" method="post" onsubmit="return validateLabelStockBeforeSubmit()" class="needs-validation" autocomplete="off" novalidate>
+  <form action="/sachiko/form/label-stock-binding" method="post" onsubmit="return handleLabelStockBindingSubmit(event)" class="needs-validation" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <div class="span-full form-heading">
       <h1>Client Label Stock</h1>
@@ -70,16 +70,6 @@
         <option value="" disabled selected hidden>Select</option>
       </select>
     </div>
-    <div id="paper-size-div" class="span-four">
-      <label for="paper-size">Paper Size</label>
-      <input type="text" id="paper-size" name="paperSize" class="form-control" placeholder="Enter Paper Size" required />
-    </div>
-
-    <div id="running-meters-div" class="span-three">
-      <label for="running-meters">RM</label>
-      <input type="number" id="running-meters" name="runningMeters" class="form-control" placeholder="RM" required min="0" step="any" />
-    </div>
-
     <div id="sku-code-select-div" class="span-four">
       <label for="sku-code-select">SKU Code</label>
       <select id="sku-code-select" class="form-control select-tag" required>
@@ -88,6 +78,16 @@
           <option value="<%= ls._id %>"><%= ls.productCode %></option>
         <% }) %>
       </select>
+    </div>
+
+    <div id="paper-size-div" class="span-four">
+      <label for="paper-size">Paper Size</label>
+      <input type="text" id="paper-size" name="paperSize" class="form-control" placeholder="Enter Paper Size" required />
+    </div>
+
+    <div id="running-meters-div" class="span-three">
+      <label for="running-meters">RM</label>
+      <input type="number" id="running-meters" name="runningMeters" class="form-control" placeholder="RM" required min="0" step="any" />
     </div>
 
     <div id="spec-blocks-section" style="display:none;">
@@ -208,8 +208,8 @@
     </div><!-- /#spec-blocks-section -->
 
     <div id="sku-layer-preview" class="span-full" style="display:none;">
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;">
-        <p id="sku-layer-title" style="margin:0 0 10px;font-size:13px;font-weight:700;color:#03365a;"></p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;max-width:600px;margin:0 auto;">
+        <p id="sku-layer-title" style="margin:0 0 10px;font-size:13px;font-weight:700;color:#03365a;text-align:center;"></p>
         <div id="sku-layer-stack" class="custom-scrollbar" style="display:flex;flex-direction:column;gap:2px;max-height:320px;overflow-y:auto;padding:2px;"></div>
       </div>
     </div>
@@ -232,9 +232,9 @@
 
   /* ── Physical layer stack builder (same layer order used on the Label Stock View page) ── */
   const SKU_LAYER_STYLE = {
-    facestock: { bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", label: "FACESTOCK" },
+    facestock: { bg: "#ffffff", border: "#93c5fd", text: "#000000", label: "FACESTOCK" },
     adhesive:  { bg: "#fffbeb", border: "#fcd34d", text: "#b45309", label: "ADHESIVE" },
-    release:   { bg: "#f8fafc", border: "#cbd5e1", text: "#475569", label: "RELEASE LINER" },
+    release:   { bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", label: "RELEASE LINER" },
   };
 
   function skuLayerBlock(kind, title, parts) {
@@ -629,13 +629,39 @@ function showClientToast(message, isError = true) {
   }, 5000);
 }
 
-/* ================= FORM GUARD ================= */
-function validateLabelStockBeforeSubmit() {
+/* ================= FORM SUBMIT ================= */
+// The route always responds with JSON (success+redirect, or an error
+// message -- e.g. the duplicate-binding check) rather than an HTML redirect,
+// so the submit has to go through fetch and act on that response itself
+// instead of letting the browser navigate natively.
+async function handleLabelStockBindingSubmit(event) {
+  event.preventDefault();
+
   const labelStockId = document.getElementById("resolved-label-stock-id").value;
   if (!labelStockId) {
     showClientToast("Please select a valid Label Stock specification.", true);
     return false;
   }
-  return true;
+
+  const form = event.target;
+  const submitBtn = form.querySelector("button[type='submit']");
+  submitBtn.disabled = true;
+
+  try {
+    const res = await fetch(form.action, { method: "POST", body: new FormData(form) });
+    const data = await res.json().catch(() => null);
+
+    if (data?.success) {
+      window.location.href = data.redirect || "/sachiko/client/view";
+    } else {
+      showClientToast(data?.message || "Failed to save Label Stock binding.", true);
+      submitBtn.disabled = false;
+    }
+  } catch {
+    showClientToast("Server error. Please try again.", true);
+    submitBtn.disabled = false;
+  }
+
+  return false;
 }
 </script>
