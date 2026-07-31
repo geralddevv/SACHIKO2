@@ -159,30 +159,55 @@
 
       <div class="dialog-field-row">
         <div>
+          <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
+          <select id="addVendorSelect">
+            <option value="" disabled selected hidden>Select vendor</option>
+            <% vendors?.forEach(v => { %>
+              <option value="<%= v._id %>"><%= v.vendorName %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
           <label class="dialog-field-label" for="addTypeSelect">Type</label>
           <select id="addTypeSelect">
             <option value="" disabled selected hidden>Select type</option>
             <option value="ACRYLIC">ACRYLIC</option>
             <option value="HOTMELT">HOTMELT</option>
-            <option value="HT">HT</option>
-            <option value="STAIN FREE">STAIN FREE</option>
             <option value="WATERBASE">WATERBASE</option>
           </select>
-        </div>
-        <div>
-          <label class="dialog-field-label" for="addSkuCodeInput">SKU Code</label>
-          <input type="text" id="addSkuCodeInput" class="form-control premium-input" placeholder="Enter SKU code" />
         </div>
       </div>
 
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="addGsmInput">GSM</label>
-          <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+          <label class="dialog-field-label" for="addVendorSkuCodeInput">Vendor SKU Code</label>
+          <input type="text" id="addVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
         </div>
         <div>
-          <label class="dialog-field-label" for="addMtrsInput">Mtrs</label>
-          <input type="number" id="addMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
+          <label class="dialog-field-label" for="addShelfLifeInput">Shelf Life</label>
+          <input type="text" id="addShelfLifeInput" class="form-control premium-input" placeholder="e.g. 12 Months" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="addViscosityInput">Viscosity (Optional)</label>
+          <input type="number" id="addViscosityInput" class="form-control premium-input" placeholder="Enter viscosity" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addCohesionInput">Cohesion (Optional)</label>
+          <input type="number" id="addCohesionInput" class="form-control premium-input" placeholder="Enter cohesion" min="0" step="any" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="addShearInput">Shear (Optional)</label>
+          <input type="number" id="addShearInput" class="form-control premium-input" placeholder="Enter shear" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addDensityInput">Density (Optional)</label>
+          <input type="number" id="addDensityInput" class="form-control premium-input" placeholder="Enter density" min="0" step="any" />
         </div>
       </div>
 
@@ -209,30 +234,55 @@
 
       <div class="dialog-field-row">
         <div>
+          <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
+          <select id="editVendorSelect">
+            <option value="" disabled hidden>Select vendor</option>
+            <% vendors?.forEach(v => { %>
+              <option value="<%= v._id %>"><%= v.vendorName %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
           <label class="dialog-field-label" for="editTypeSelect">Type</label>
           <select id="editTypeSelect">
             <option value="" disabled hidden>Select type</option>
             <option value="ACRYLIC">ACRYLIC</option>
             <option value="HOTMELT">HOTMELT</option>
-            <option value="HT">HT</option>
-            <option value="STAIN FREE">STAIN FREE</option>
             <option value="WATERBASE">WATERBASE</option>
           </select>
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editSkuCodeInput">SKU Code</label>
-          <input type="text" id="editSkuCodeInput" class="form-control premium-input" placeholder="Enter SKU code" />
         </div>
       </div>
 
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="editGsmInput">GSM</label>
-          <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+          <label class="dialog-field-label" for="editVendorSkuCodeInput">Vendor SKU Code</label>
+          <input type="text" id="editVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
         </div>
         <div>
-          <label class="dialog-field-label" for="editMtrsInput">Mtrs</label>
-          <input type="number" id="editMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
+          <label class="dialog-field-label" for="editShelfLifeInput">Shelf Life</label>
+          <input type="text" id="editShelfLifeInput" class="form-control premium-input" placeholder="e.g. 12 Months" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editViscosityInput">Viscosity (Optional)</label>
+          <input type="number" id="editViscosityInput" class="form-control premium-input" placeholder="Enter viscosity" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editCohesionInput">Cohesion (Optional)</label>
+          <input type="number" id="editCohesionInput" class="form-control premium-input" placeholder="Enter cohesion" min="0" step="any" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editShearInput">Shear (Optional)</label>
+          <input type="number" id="editShearInput" class="form-control premium-input" placeholder="Enter shear" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editDensityInput">Density (Optional)</label>
+          <input type="number" id="editDensityInput" class="form-control premium-input" placeholder="Enter density" min="0" step="any" />
         </div>
       </div>
 
@@ -280,6 +330,8 @@
 
   let addTypeChoices = null;
   let editTypeChoices = null;
+  let addVendorChoices = null;
+  let editVendorChoices = null;
 
   // ---- Table ----
   const table = new Tabulator("#adhesive-master-table", {
@@ -290,10 +342,14 @@
     placeholder: "No adhesive masters added yet.",
     columns: [
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
-      { title: "SKU Code", field: "skuCode", headerFilter: "input", minWidth: 130 },
-      { title: "Type", field: "type", headerFilter: "input", minWidth: 130 },
-      { title: "GSM", field: "gsm", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Mtrs", field: "mtrs", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
+      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
+      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", minWidth: 150 },
+      { title: "Shelf Life", field: "shelfLife", minWidth: 110 },
+      { title: "Viscosity", field: "viscosity", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Cohesion", field: "cohesion", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Shear", field: "shear", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Density", field: "density", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Actions",
         width: 110,
@@ -368,27 +424,37 @@
   // ---- ADD ----
   function openAddDialog() {
     document.getElementById("addSkuIdPreview").value = previewSkuId;
-    document.getElementById("addSkuCodeInput").value = "";
-    document.getElementById("addGsmInput").value = "";
-    document.getElementById("addMtrsInput").value = "";
+    document.getElementById("addVendorSkuCodeInput").value = "";
+    document.getElementById("addShelfLifeInput").value = "";
+    document.getElementById("addViscosityInput").value = "";
+    document.getElementById("addCohesionInput").value = "";
+    document.getElementById("addShearInput").value = "";
+    document.getElementById("addDensityInput").value = "";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
     document.getElementById("addTypeSelect").value = "";
     addTypeChoices = new Choices("#addTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
+    if (addVendorChoices) { addVendorChoices.destroy(); addVendorChoices = null; }
+    document.getElementById("addVendorSelect").value = "";
+    addVendorChoices = new Choices("#addVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
     hideError("addAdhesiveError");
     openModal("addDialog");
-    setTimeout(() => document.getElementById("addSkuCodeInput").focus(), 60);
   }
   function closeAddDialog() {
     closeModal("addDialog");
   }
 
   async function submitAdd() {
-    const skuCode = document.getElementById("addSkuCodeInput").value.trim();
+    const vendorId = document.getElementById("addVendorSelect").value;
     const type = document.getElementById("addTypeSelect").value;
-    if (!skuCode) return showError("addAdhesiveError", "SKU Code is required.");
+    const vendorSkuCode = document.getElementById("addVendorSkuCodeInput").value.trim();
+    const shelfLife = document.getElementById("addShelfLifeInput").value.trim();
+    if (!vendorId) return showError("addAdhesiveError", "Vendor Name is required.");
     if (!type) return showError("addAdhesiveError", "Type is required.");
+    if (!vendorSkuCode) return showError("addAdhesiveError", "Vendor SKU Code is required.");
+    if (!shelfLife) return showError("addAdhesiveError", "Shelf Life is required.");
 
     hideError("addAdhesiveError");
     setLoading("addSubmitBtn", true);
@@ -397,10 +463,14 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          skuCode,
+          vendorId,
           type,
-          gsm: document.getElementById("addGsmInput").value,
-          mtrs: document.getElementById("addMtrsInput").value,
+          vendorSkuCode,
+          shelfLife,
+          viscosity: document.getElementById("addViscosityInput").value,
+          cohesion: document.getElementById("addCohesionInput").value,
+          shear: document.getElementById("addShearInput").value,
+          density: document.getElementById("addDensityInput").value,
         }),
       });
       const data = await res.json();
@@ -422,13 +492,20 @@
   function openEditDialog(row) {
     editId = row._id;
     document.getElementById("editSkuIdDisplay").value = row.skuId;
-    document.getElementById("editSkuCodeInput").value = row.skuCode || "";
-    document.getElementById("editGsmInput").value = row.gsm ?? "";
-    document.getElementById("editMtrsInput").value = row.mtrs ?? "";
+    document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
+    document.getElementById("editShelfLifeInput").value = row.shelfLife || "";
+    document.getElementById("editViscosityInput").value = row.viscosity ?? "";
+    document.getElementById("editCohesionInput").value = row.cohesion ?? "";
+    document.getElementById("editShearInput").value = row.shear ?? "";
+    document.getElementById("editDensityInput").value = row.density ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
     document.getElementById("editTypeSelect").value = row.type || "";
     editTypeChoices = new Choices("#editTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    if (editVendorChoices) { editVendorChoices.destroy(); editVendorChoices = null; }
+    document.getElementById("editVendorSelect").value = row.vendorId || "";
+    editVendorChoices = new Choices("#editVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     hideError("editAdhesiveError");
     openModal("editDialog");
@@ -439,10 +516,14 @@
   }
 
   async function submitEdit() {
-    const skuCode = document.getElementById("editSkuCodeInput").value.trim();
+    const vendorId = document.getElementById("editVendorSelect").value;
     const type = document.getElementById("editTypeSelect").value;
-    if (!skuCode) return showError("editAdhesiveError", "SKU Code is required.");
+    const vendorSkuCode = document.getElementById("editVendorSkuCodeInput").value.trim();
+    const shelfLife = document.getElementById("editShelfLifeInput").value.trim();
+    if (!vendorId) return showError("editAdhesiveError", "Vendor Name is required.");
     if (!type) return showError("editAdhesiveError", "Type is required.");
+    if (!vendorSkuCode) return showError("editAdhesiveError", "Vendor SKU Code is required.");
+    if (!shelfLife) return showError("editAdhesiveError", "Shelf Life is required.");
     if (!editId) return;
 
     hideError("editAdhesiveError");
@@ -452,10 +533,14 @@
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          skuCode,
+          vendorId,
           type,
-          gsm: document.getElementById("editGsmInput").value,
-          mtrs: document.getElementById("editMtrsInput").value,
+          vendorSkuCode,
+          shelfLife,
+          viscosity: document.getElementById("editViscosityInput").value,
+          cohesion: document.getElementById("editCohesionInput").value,
+          shear: document.getElementById("editShearInput").value,
+          density: document.getElementById("editDensityInput").value,
         }),
       });
       const data = await res.json();

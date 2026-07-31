@@ -13,10 +13,18 @@ const coreMasterSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
-    skuCode: {
+    // The vendor who supplies this core (Vendor master, filtered to
+    // commodities: "CORE"). vendorName is a denormalized copy of
+    // Vendor.vendorName for display without a populate, matching the
+    // clientId/clientName pairing on models/users/username.js.
+    vendorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
+      required: true,
+    },
+    vendorName: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     type: {
@@ -24,14 +32,16 @@ const coreMasterSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    // Core inner diameter in inches -- same values as Tape's own
-    // tapeCoreId (models/inventory/tape.js).
-    size: {
-      type: Number,
-      enum: [0.5, 1, 2, 3],
+    // Printed vs. plain core surface.
+    printType: {
+      type: String,
+      required: true,
+      trim: true,
     },
-    mtrs: {
+    // Wall thickness in millimetres.
+    thickness: {
       type: Number,
+      required: true,
     },
   },
   { timestamps: true },

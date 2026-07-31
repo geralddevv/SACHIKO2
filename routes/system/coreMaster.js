@@ -1,5 +1,6 @@
 import express from "express";
 import CoreMaster from "../../models/inventory/coreMaster.js";
+import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -31,25 +32,36 @@ const numOrUndef = (value) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-function buildPayload(body) {
-  return {
-    skuCode: String(body.skuCode || "").trim(),
+async function buildPayload(body) {
+  const vendorId = String(body.vendorId || "").trim();
+  const payload = {
+    vendorId,
     type: String(body.type || "").trim(),
-    size: numOrUndef(body.size),
-    mtrs: numOrUndef(body.mtrs),
+    printType: String(body.printType || "").trim(),
+    thickness: numOrUndef(body.thickness),
   };
+
+  if (vendorId) {
+    const vendor = await Vendor.findById(vendorId).select("vendorName").lean();
+    payload.vendorName = vendor?.vendorName || "";
+  }
+
+  return payload;
 }
 
 function validatePayload(payload) {
-  if (!payload.skuCode) return "SKU Code is required.";
+  if (!payload.vendorId || !payload.vendorName) return "Vendor Name is required.";
   if (!payload.type) return "Type is required.";
+  if (!payload.printType) return "Print Type is required.";
+  if (payload.thickness === undefined) return "Thickness is required.";
   return null;
 }
 
 router.get("/form/core", requireCoreMaster, async (req, res) => {
-  const [cores, previewSkuId] = await Promise.all([
+  const [cores, previewSkuId, vendors] = await Promise.all([
     CoreMaster.find().sort({ createdAt: -1 }).lean(),
     previewId("coreMasterSkuId", "COR"),
+    Vendor.find({ commodities: "CORE" }, { vendorName: 1 }).sort({ vendorName: 1 }).lean(),
   ]);
   res.render("inventory/masters/coreMaster.ejs", {
     JS: false,
@@ -57,44 +69,34 @@ router.get("/form/core", requireCoreMaster, async (req, res) => {
     title: "Core Master",
     cores,
     previewSkuId,
+    vendors,
     notification: req.flash("notification"),
   });
 });
 
 router.post("/form/core", requireAuth, requireCoreMaster, createLimiter, async (req, res) => {
   try {
-    const payload = buildPayload(req.body);
+    const payload = await buildPayload(req.body);
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
-
-    const duplicateSkuCode = await CoreMaster.exists({ skuCode: payload.skuCode });
-    if (duplicateSkuCode) {
-      return res.status(400).json({ success: false, message: "This SKU Code already exists." });
-    }
 
     const skuId = await generateId("coreMasterSkuId", "COR");
     await CoreMaster.create({ ...payload, skuId });
 
-    res.locals.auditDescription = `Created core master "${skuId}" (${payload.skuCode})`;
+    res.locals.auditDescription = `Created core master "${skuId}" (${payload.vendorName})`;
     req.flash("notification", "Core master created successfully!");
     res.json({ success: true, redirect: "/sachiko/form/core" });
   } catch (err) {
     console.error("CORE MASTER CREATE ERROR:", err);
-    const msg = err.code === 11000 ? "This SKU Code already exists." : "Failed to create core master.";
-    res.status(400).json({ success: false, message: msg });
+    res.status(400).json({ success: false, message: "Failed to create core master." });
   }
 });
 
 router.put("/api/core/:id", requireAuth, requireCoreMaster, updateLimiter, async (req, res) => {
   try {
-    const payload = buildPayload(req.body);
+    const payload = await buildPayload(req.body);
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
-
-    const duplicateSkuCode = await CoreMaster.exists({ skuCode: payload.skuCode, _id: { $ne: req.params.id } });
-    if (duplicateSkuCode) {
-      return res.status(400).json({ success: false, message: "This SKU Code already exists." });
-    }
 
     const updated = await CoreMaster.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
     if (!updated) {
@@ -105,8 +107,7 @@ router.put("/api/core/:id", requireAuth, requireCoreMaster, updateLimiter, async
     res.json({ success: true });
   } catch (err) {
     console.error("CORE MASTER UPDATE ERROR:", err);
-    const msg = err.code === 11000 ? "This SKU Code already exists." : "Failed to update core master.";
-    res.status(400).json({ success: false, message: msg });
+    res.status(400).json({ success: false, message: "Failed to update core master." });
   }
 });
 

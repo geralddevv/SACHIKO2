@@ -1102,19 +1102,24 @@
   // Paper Size/Running Meters/No of Rolls (span 3 each) only show for Label
   // Stock items, and Order Quantity (span 4) only shows for Tape (Label
   // Stock has no separate quantity field -- see updateLabelStockFieldsVisibility).
-  // Remarks grows to fill whichever columns are freed so the row still
-  // totals 32 instead of leaving a trailing gap:
+  // Rate (span 3, read-only, auto-filled from the binding) shows for both
+  // item types; Curr Rate (span 3, editable) is Tape-only. Remarks grows to
+  // fill whichever columns are freed so the row still totals 32 instead of
+  // leaving a trailing gap:
   //   Tape:        po-date(3) + po-number(4) + quantity(4) + item-rate(3) + order-rate(3) + est-date(5) + remarks(10) = 32
-  //   Label Stock: po-date(3) + po-number(4) + paper-size(3) + rm(3) + no-of-rolls(3) + est-date(5) + remarks(11) = 32
+  //   Label Stock: po-date(3) + po-number(4) + paper-size(3) + rm(3) + no-of-rolls(3) + item-rate(3) + est-date(5) + remarks(8) = 32
   function syncRemarksWidth() {
     const remarksWrap = document.getElementById("remarks-wrap");
     if (!remarksWrap) return;
     const labelStockFieldsVisible = document.getElementById("no-of-rolls-div")?.style.display !== "none";
-    remarksWrap.style.gridColumn = labelStockFieldsVisible ? "span 11" : "span 10";
+    remarksWrap.style.gridColumn = labelStockFieldsVisible ? "span 8" : "span 10";
   }
 
-  // Show Paper Size/Running Meters/No of Rolls only for Label Stock (they
-  // have no rate concept, so Rate/Curr Rate swap out to make room).
+  // Show Paper Size/Running Meters/No of Rolls only for Label Stock. Rate
+  // (read-only, auto-filled from the binding's own rate) shows for both item
+  // types; Curr Rate (user-editable, what actually gets submitted as
+  // orderRate) stays Tape-only -- Label Stock orders always save at the
+  // binding's rate as-is (see the LABEL_STOCK branch of POST /sales/order).
   //
   // Label Stock has no separate "Order Quantity" concept -- its quantity IS
   // the No of Rolls, so asking for both would just be double entry. The
@@ -1128,10 +1133,8 @@
       const el = document.getElementById(id);
       if (el) el.style.display = isLabelStock ? "" : "none";
     });
-    ["item-rate-div", "order-rate-div"].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = isLabelStock ? "none" : "";
-    });
+    const orderRateDiv = document.getElementById("order-rate-div");
+    if (orderRateDiv) orderRateDiv.style.display = isLabelStock ? "none" : "";
     const quantityDiv = document.getElementById("quantity-div");
     if (quantityDiv) quantityDiv.style.display = isLabelStock ? "none" : "";
     if (quantityInput) {

@@ -159,9 +159,18 @@
 
       <div class="dialog-field-row">
         <div>
+          <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
+          <select id="addVendorSelect">
+            <option value="" disabled selected hidden>Select vendor</option>
+            <% vendors?.forEach(v => { %>
+              <option value="<%= v._id %>"><%= v.vendorName %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
           <label class="dialog-field-label" for="addFamilySelect">Family</label>
           <select id="addFamilySelect">
-            <option value="">— None —</option>
+            <option value="" disabled selected hidden>Select family</option>
             <option value="CHROMO">CHROMO</option>
             <option value="CHROMO (D. R)">CHROMO (D. R)</option>
             <option value="CLEAR PP">CLEAR PP</option>
@@ -181,13 +190,13 @@
             <option value="SUPER HOTMELT">SUPER HOTMELT</option>
           </select>
         </div>
-        <div>
-          <label class="dialog-field-label" for="addSkuCodeInput">SKU Code</label>
-          <input type="text" id="addSkuCodeInput" class="form-control premium-input" placeholder="Enter SKU code" />
-        </div>
       </div>
 
       <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="addVendorSkuCodeInput">Vendor SKU Code</label>
+          <input type="text" id="addVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
+        </div>
         <div>
           <label class="dialog-field-label" for="addTypeSelect">Type</label>
           <select id="addTypeSelect">
@@ -198,14 +207,10 @@
             <option value="SEMI GLOSSY">SEMI GLOSSY</option>
           </select>
         </div>
-        <div>
-          <label class="dialog-field-label" for="addGsmInput">GSM</label>
-          <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
-        </div>
       </div>
 
-      <label class="dialog-field-label" for="addMtrsInput">Mtrs</label>
-      <input type="number" id="addMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
+      <label class="dialog-field-label" for="addGsmInput">GSM</label>
+      <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
 
       <div id="addFacestockError" class="dialog-error"></div>
       <div class="dialog-actions">
@@ -230,9 +235,18 @@
 
       <div class="dialog-field-row">
         <div>
+          <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
+          <select id="editVendorSelect">
+            <option value="" disabled hidden>Select vendor</option>
+            <% vendors?.forEach(v => { %>
+              <option value="<%= v._id %>"><%= v.vendorName %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
           <label class="dialog-field-label" for="editFamilySelect">Family</label>
           <select id="editFamilySelect">
-            <option value="">— None —</option>
+            <option value="" disabled hidden>Select family</option>
             <option value="CHROMO">CHROMO</option>
             <option value="CHROMO (D. R)">CHROMO (D. R)</option>
             <option value="CLEAR PP">CLEAR PP</option>
@@ -252,13 +266,13 @@
             <option value="SUPER HOTMELT">SUPER HOTMELT</option>
           </select>
         </div>
-        <div>
-          <label class="dialog-field-label" for="editSkuCodeInput">SKU Code</label>
-          <input type="text" id="editSkuCodeInput" class="form-control premium-input" placeholder="Enter SKU code" />
-        </div>
       </div>
 
       <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editVendorSkuCodeInput">Vendor SKU Code</label>
+          <input type="text" id="editVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
+        </div>
         <div>
           <label class="dialog-field-label" for="editTypeSelect">Type</label>
           <select id="editTypeSelect">
@@ -269,14 +283,10 @@
             <option value="SEMI GLOSSY">SEMI GLOSSY</option>
           </select>
         </div>
-        <div>
-          <label class="dialog-field-label" for="editGsmInput">GSM</label>
-          <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
-        </div>
       </div>
 
-      <label class="dialog-field-label" for="editMtrsInput">Mtrs</label>
-      <input type="number" id="editMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
+      <label class="dialog-field-label" for="editGsmInput">GSM</label>
+      <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
 
       <div id="editFacestockError" class="dialog-error"></div>
       <div class="dialog-actions">
@@ -320,8 +330,8 @@
   const facestocksData = JSON.parse(document.getElementById("facestocks-data").textContent);
   let previewSkuId = JSON.parse(document.getElementById("preview-skuid-data").textContent);
 
-  let addFamilyChoices = null, addTypeChoices = null;
-  let editFamilyChoices = null, editTypeChoices = null;
+  let addFamilyChoices = null, addTypeChoices = null, addVendorChoices = null;
+  let editFamilyChoices = null, editTypeChoices = null, editVendorChoices = null;
 
   // ---- Table ----
   const table = new Tabulator("#facestock-master-table", {
@@ -332,11 +342,11 @@
     placeholder: "No facestock masters added yet.",
     columns: [
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
       { title: "Family", field: "family", headerFilter: "input", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
-      { title: "SKU Code", field: "skuCode", headerFilter: "input", minWidth: 130 },
-      { title: "Type", field: "type", headerFilter: "input", minWidth: 120 },
+      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", minWidth: 150 },
+      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
       { title: "GSM", field: "gsm", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Mtrs", field: "mtrs", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Actions",
         width: 110,
@@ -411,9 +421,8 @@
   // ---- ADD ----
   function openAddDialog() {
     document.getElementById("addSkuIdPreview").value = previewSkuId;
-    document.getElementById("addSkuCodeInput").value = "";
+    document.getElementById("addVendorSkuCodeInput").value = "";
     document.getElementById("addGsmInput").value = "";
-    document.getElementById("addMtrsInput").value = "";
 
     if (addFamilyChoices) { addFamilyChoices.destroy(); addFamilyChoices = null; }
     document.getElementById("addFamilySelect").value = "";
@@ -423,18 +432,25 @@
     document.getElementById("addTypeSelect").value = "";
     addTypeChoices = new Choices("#addTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
+    if (addVendorChoices) { addVendorChoices.destroy(); addVendorChoices = null; }
+    document.getElementById("addVendorSelect").value = "";
+    addVendorChoices = new Choices("#addVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
     hideError("addFacestockError");
     openModal("addDialog");
-    setTimeout(() => document.getElementById("addSkuCodeInput").focus(), 60);
   }
   function closeAddDialog() {
     closeModal("addDialog");
   }
 
   async function submitAdd() {
-    const skuCode = document.getElementById("addSkuCodeInput").value.trim();
+    const vendorId = document.getElementById("addVendorSelect").value;
+    const family = document.getElementById("addFamilySelect").value;
+    const vendorSkuCode = document.getElementById("addVendorSkuCodeInput").value.trim();
     const type = document.getElementById("addTypeSelect").value;
-    if (!skuCode) return showError("addFacestockError", "SKU Code is required.");
+    if (!vendorId) return showError("addFacestockError", "Vendor Name is required.");
+    if (!family) return showError("addFacestockError", "Family is required.");
+    if (!vendorSkuCode) return showError("addFacestockError", "Vendor SKU Code is required.");
     if (!type) return showError("addFacestockError", "Type is required.");
 
     hideError("addFacestockError");
@@ -444,11 +460,11 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          family: document.getElementById("addFamilySelect").value,
-          skuCode,
+          vendorId,
+          family,
+          vendorSkuCode,
           type,
           gsm: document.getElementById("addGsmInput").value,
-          mtrs: document.getElementById("addMtrsInput").value,
         }),
       });
       const data = await res.json();
@@ -470,9 +486,8 @@
   function openEditDialog(row) {
     editId = row._id;
     document.getElementById("editSkuIdDisplay").value = row.skuId;
-    document.getElementById("editSkuCodeInput").value = row.skuCode || "";
+    document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
     document.getElementById("editGsmInput").value = row.gsm ?? "";
-    document.getElementById("editMtrsInput").value = row.mtrs ?? "";
 
     if (editFamilyChoices) { editFamilyChoices.destroy(); editFamilyChoices = null; }
     document.getElementById("editFamilySelect").value = row.family || "";
@@ -481,6 +496,10 @@
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
     document.getElementById("editTypeSelect").value = row.type || "";
     editTypeChoices = new Choices("#editTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    if (editVendorChoices) { editVendorChoices.destroy(); editVendorChoices = null; }
+    document.getElementById("editVendorSelect").value = row.vendorId || "";
+    editVendorChoices = new Choices("#editVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     hideError("editFacestockError");
     openModal("editDialog");
@@ -491,9 +510,13 @@
   }
 
   async function submitEdit() {
-    const skuCode = document.getElementById("editSkuCodeInput").value.trim();
+    const vendorId = document.getElementById("editVendorSelect").value;
+    const family = document.getElementById("editFamilySelect").value;
+    const vendorSkuCode = document.getElementById("editVendorSkuCodeInput").value.trim();
     const type = document.getElementById("editTypeSelect").value;
-    if (!skuCode) return showError("editFacestockError", "SKU Code is required.");
+    if (!vendorId) return showError("editFacestockError", "Vendor Name is required.");
+    if (!family) return showError("editFacestockError", "Family is required.");
+    if (!vendorSkuCode) return showError("editFacestockError", "Vendor SKU Code is required.");
     if (!type) return showError("editFacestockError", "Type is required.");
     if (!editId) return;
 
@@ -504,11 +527,11 @@
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          family: document.getElementById("editFamilySelect").value,
-          skuCode,
+          vendorId,
+          family,
+          vendorSkuCode,
           type,
           gsm: document.getElementById("editGsmInput").value,
-          mtrs: document.getElementById("editMtrsInput").value,
         }),
       });
       const data = await res.json();

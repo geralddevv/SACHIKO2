@@ -13,14 +13,31 @@ const facestockMasterSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
-    family: {
-      type: String,
-      trim: true,
+    // The vendor who sells this facestock (Vendor master, filtered to
+    // commodities: "FACE PAPER"). vendorName is a denormalized copy of
+    // Vendor.vendorName for display without a populate, matching the
+    // clientId/clientName pairing on models/users/username.js.
+    vendorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
+      required: true,
     },
-    skuCode: {
+    vendorName: {
       type: String,
       required: true,
-      unique: true,
+      trim: true,
+    },
+    family: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    // The vendor's own code for this spec -- unique per vendor (different
+    // vendors can coincidentally use the same code), see the compound index
+    // below.
+    vendorSkuCode: {
+      type: String,
+      required: true,
       trim: true,
     },
     type: {
@@ -31,11 +48,10 @@ const facestockMasterSchema = new mongoose.Schema(
     gsm: {
       type: Number,
     },
-    mtrs: {
-      type: Number,
-    },
   },
   { timestamps: true },
 );
+
+facestockMasterSchema.index({ vendorId: 1, vendorSkuCode: 1 }, { unique: true });
 
 export default mongoose.models.FacestockMaster || mongoose.model("FacestockMaster", facestockMasterSchema);

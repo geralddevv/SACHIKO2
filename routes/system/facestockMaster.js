@@ -1,5 +1,6 @@
 import express from "express";
 import FacestockMaster from "../../models/inventory/facestockMaster.js";
+import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -31,26 +32,37 @@ const numOrUndef = (value) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-function buildPayload(body) {
-  return {
+async function buildPayload(body) {
+  const vendorId = String(body.vendorId || "").trim();
+  const payload = {
+    vendorId,
     family: String(body.family || "").trim(),
-    skuCode: String(body.skuCode || "").trim(),
+    vendorSkuCode: String(body.vendorSkuCode || "").trim(),
     type: String(body.type || "").trim(),
     gsm: numOrUndef(body.gsm),
-    mtrs: numOrUndef(body.mtrs),
   };
+
+  if (vendorId) {
+    const vendor = await Vendor.findById(vendorId).select("vendorName").lean();
+    payload.vendorName = vendor?.vendorName || "";
+  }
+
+  return payload;
 }
 
 function validatePayload(payload) {
-  if (!payload.skuCode) return "SKU Code is required.";
+  if (!payload.vendorId || !payload.vendorName) return "Vendor Name is required.";
+  if (!payload.family) return "Family is required.";
+  if (!payload.vendorSkuCode) return "Vendor SKU Code is required.";
   if (!payload.type) return "Type is required.";
   return null;
 }
 
 router.get("/form/facestock", requireFacestockMaster, async (req, res) => {
-  const [facestocks, previewSkuId] = await Promise.all([
+  const [facestocks, previewSkuId, vendors] = await Promise.all([
     FacestockMaster.find().sort({ createdAt: -1 }).lean(),
     previewId("facestockMasterSkuId", "FCS"),
+    Vendor.find({ commodities: "FACE PAPER" }, { vendorName: 1 }).sort({ vendorName: 1 }).lean(),
   ]);
   res.render("inventory/masters/facestockMaster.ejs", {
     JS: false,
@@ -58,43 +70,48 @@ router.get("/form/facestock", requireFacestockMaster, async (req, res) => {
     title: "Facestock Master",
     facestocks,
     previewSkuId,
+    vendors,
     notification: req.flash("notification"),
   });
 });
 
 router.post("/form/facestock", requireAuth, requireFacestockMaster, createLimiter, async (req, res) => {
   try {
-    const payload = buildPayload(req.body);
+    const payload = await buildPayload(req.body);
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const duplicateSkuCode = await FacestockMaster.exists({ skuCode: payload.skuCode });
-    if (duplicateSkuCode) {
-      return res.status(400).json({ success: false, message: "This SKU Code already exists." });
+    const duplicateVendorSkuCode = await FacestockMaster.exists({ vendorId: payload.vendorId, vendorSkuCode: payload.vendorSkuCode });
+    if (duplicateVendorSkuCode) {
+      return res.status(400).json({ success: false, message: "This Vendor SKU Code already exists for this vendor." });
     }
 
     const skuId = await generateId("facestockMasterSkuId", "FCS");
     await FacestockMaster.create({ ...payload, skuId });
 
-    res.locals.auditDescription = `Created facestock master "${skuId}" (${payload.skuCode})`;
+    res.locals.auditDescription = `Created facestock master "${skuId}" (${payload.vendorSkuCode})`;
     req.flash("notification", "Facestock master created successfully!");
     res.json({ success: true, redirect: "/sachiko/form/facestock" });
   } catch (err) {
     console.error("FACESTOCK MASTER CREATE ERROR:", err);
-    const msg = err.code === 11000 ? "This SKU Code already exists." : "Failed to create facestock master.";
+    const msg = err.code === 11000 ? "This Vendor SKU Code already exists for this vendor." : "Failed to create facestock master.";
     res.status(400).json({ success: false, message: msg });
   }
 });
 
 router.put("/api/facestock/:id", requireAuth, requireFacestockMaster, updateLimiter, async (req, res) => {
   try {
-    const payload = buildPayload(req.body);
+    const payload = await buildPayload(req.body);
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const duplicateSkuCode = await FacestockMaster.exists({ skuCode: payload.skuCode, _id: { $ne: req.params.id } });
-    if (duplicateSkuCode) {
-      return res.status(400).json({ success: false, message: "This SKU Code already exists." });
+    const duplicateVendorSkuCode = await FacestockMaster.exists({
+      vendorId: payload.vendorId,
+      vendorSkuCode: payload.vendorSkuCode,
+      _id: { $ne: req.params.id },
+    });
+    if (duplicateVendorSkuCode) {
+      return res.status(400).json({ success: false, message: "This Vendor SKU Code already exists for this vendor." });
     }
 
     const updated = await FacestockMaster.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
@@ -106,7 +123,7 @@ router.put("/api/facestock/:id", requireAuth, requireFacestockMaster, updateLimi
     res.json({ success: true });
   } catch (err) {
     console.error("FACESTOCK MASTER UPDATE ERROR:", err);
-    const msg = err.code === 11000 ? "This SKU Code already exists." : "Failed to update facestock master.";
+    const msg = err.code === 11000 ? "This Vendor SKU Code already exists for this vendor." : "Failed to update facestock master.";
     res.status(400).json({ success: false, message: msg });
   }
 });

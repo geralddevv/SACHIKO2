@@ -13,15 +13,29 @@ const releaseMasterSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
-    skuCode: {
+    // The vendor who supplies this release liner (Vendor master, filtered to
+    // commodities: "RELEASE PAPER"). vendorName is a denormalized copy of
+    // Vendor.vendorName for display without a populate, matching the
+    // clientId/clientName pairing on models/users/username.js.
+    vendorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
+      required: true,
+    },
+    vendorName: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     type: {
       type: String,
       required: true,
+      trim: true,
+    },
+    // The vendor's own code for this spec -- optional, purely a
+    // cross-reference against the vendor's own paperwork.
+    vendorSkuCode: {
+      type: String,
       trim: true,
     },
     color: {
@@ -30,9 +44,6 @@ const releaseMasterSchema = new mongoose.Schema(
       default: "WHITE",
     },
     gsm: {
-      type: Number,
-    },
-    mtrs: {
       type: Number,
     },
   },

@@ -1,5 +1,6 @@
 import express from "express";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
+import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -31,25 +32,40 @@ const numOrUndef = (value) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-function buildPayload(body) {
-  return {
-    skuCode: String(body.skuCode || "").trim(),
+async function buildPayload(body) {
+  const vendorId = String(body.vendorId || "").trim();
+  const payload = {
+    vendorId,
     type: String(body.type || "").trim(),
-    gsm: numOrUndef(body.gsm),
-    mtrs: numOrUndef(body.mtrs),
+    vendorSkuCode: String(body.vendorSkuCode || "").trim(),
+    shelfLife: String(body.shelfLife || "").trim(),
+    viscosity: numOrUndef(body.viscosity),
+    cohesion: numOrUndef(body.cohesion),
+    shear: numOrUndef(body.shear),
+    density: numOrUndef(body.density),
   };
+
+  if (vendorId) {
+    const vendor = await Vendor.findById(vendorId).select("vendorName").lean();
+    payload.vendorName = vendor?.vendorName || "";
+  }
+
+  return payload;
 }
 
 function validatePayload(payload) {
-  if (!payload.skuCode) return "SKU Code is required.";
+  if (!payload.vendorId || !payload.vendorName) return "Vendor Name is required.";
   if (!payload.type) return "Type is required.";
+  if (!payload.vendorSkuCode) return "Vendor SKU Code is required.";
+  if (!payload.shelfLife) return "Shelf Life is required.";
   return null;
 }
 
 router.get("/form/adhesive", requireAdhesiveMaster, async (req, res) => {
-  const [adhesives, previewSkuId] = await Promise.all([
+  const [adhesives, previewSkuId, vendors] = await Promise.all([
     AdhesiveMaster.find().sort({ createdAt: -1 }).lean(),
     previewId("adhesiveMasterSkuId", "ADH"),
+    Vendor.find({ commodities: "ADHESIVE" }, { vendorName: 1 }).sort({ vendorName: 1 }).lean(),
   ]);
   res.render("inventory/masters/adhesiveMaster.ejs", {
     JS: false,
@@ -57,43 +73,48 @@ router.get("/form/adhesive", requireAdhesiveMaster, async (req, res) => {
     title: "Adhesive Master",
     adhesives,
     previewSkuId,
+    vendors,
     notification: req.flash("notification"),
   });
 });
 
 router.post("/form/adhesive", requireAuth, requireAdhesiveMaster, createLimiter, async (req, res) => {
   try {
-    const payload = buildPayload(req.body);
+    const payload = await buildPayload(req.body);
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const duplicateSkuCode = await AdhesiveMaster.exists({ skuCode: payload.skuCode });
-    if (duplicateSkuCode) {
-      return res.status(400).json({ success: false, message: "This SKU Code already exists." });
+    const duplicateVendorSkuCode = await AdhesiveMaster.exists({ vendorId: payload.vendorId, vendorSkuCode: payload.vendorSkuCode });
+    if (duplicateVendorSkuCode) {
+      return res.status(400).json({ success: false, message: "This Vendor SKU Code already exists for this vendor." });
     }
 
     const skuId = await generateId("adhesiveMasterSkuId", "ADH");
     await AdhesiveMaster.create({ ...payload, skuId });
 
-    res.locals.auditDescription = `Created adhesive master "${skuId}" (${payload.skuCode})`;
+    res.locals.auditDescription = `Created adhesive master "${skuId}" (${payload.vendorSkuCode})`;
     req.flash("notification", "Adhesive master created successfully!");
     res.json({ success: true, redirect: "/sachiko/form/adhesive" });
   } catch (err) {
     console.error("ADHESIVE MASTER CREATE ERROR:", err);
-    const msg = err.code === 11000 ? "This SKU Code already exists." : "Failed to create adhesive master.";
+    const msg = err.code === 11000 ? "This Vendor SKU Code already exists for this vendor." : "Failed to create adhesive master.";
     res.status(400).json({ success: false, message: msg });
   }
 });
 
 router.put("/api/adhesive/:id", requireAuth, requireAdhesiveMaster, updateLimiter, async (req, res) => {
   try {
-    const payload = buildPayload(req.body);
+    const payload = await buildPayload(req.body);
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const duplicateSkuCode = await AdhesiveMaster.exists({ skuCode: payload.skuCode, _id: { $ne: req.params.id } });
-    if (duplicateSkuCode) {
-      return res.status(400).json({ success: false, message: "This SKU Code already exists." });
+    const duplicateVendorSkuCode = await AdhesiveMaster.exists({
+      vendorId: payload.vendorId,
+      vendorSkuCode: payload.vendorSkuCode,
+      _id: { $ne: req.params.id },
+    });
+    if (duplicateVendorSkuCode) {
+      return res.status(400).json({ success: false, message: "This Vendor SKU Code already exists for this vendor." });
     }
 
     const updated = await AdhesiveMaster.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
@@ -105,7 +126,7 @@ router.put("/api/adhesive/:id", requireAuth, requireAdhesiveMaster, updateLimite
     res.json({ success: true });
   } catch (err) {
     console.error("ADHESIVE MASTER UPDATE ERROR:", err);
-    const msg = err.code === 11000 ? "This SKU Code already exists." : "Failed to update adhesive master.";
+    const msg = err.code === 11000 ? "This Vendor SKU Code already exists for this vendor." : "Failed to update adhesive master.";
     res.status(400).json({ success: false, message: msg });
   }
 });

@@ -159,33 +159,36 @@
 
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="addTypeSelect">Type</label>
-          <select id="addTypeSelect">
-            <option value="" disabled selected hidden>Select type</option>
-            <option value="PAPER CORE">PAPER CORE</option>
-            <option value="PLASTIC CORE">PLASTIC CORE</option>
+          <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
+          <select id="addVendorSelect">
+            <option value="" disabled selected hidden>Select vendor</option>
+            <% vendors?.forEach(v => { %>
+              <option value="<%= v._id %>"><%= v.vendorName %></option>
+            <% }) %>
           </select>
         </div>
         <div>
-          <label class="dialog-field-label" for="addSkuCodeInput">SKU Code</label>
-          <input type="text" id="addSkuCodeInput" class="form-control premium-input" placeholder="Enter SKU code" />
+          <label class="dialog-field-label" for="addTypeSelect">Type</label>
+          <select id="addTypeSelect">
+            <option value="" disabled selected hidden>Select type</option>
+            <option value="PAPER">PAPER</option>
+            <option value="PLASTIC">PLASTIC</option>
+          </select>
         </div>
       </div>
 
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="addSizeSelect">Size (inch)</label>
-          <select id="addSizeSelect">
-            <option value="" disabled selected hidden>Select size</option>
-            <option value="0.5">0.5"</option>
-            <option value="1">1"</option>
-            <option value="2">2"</option>
-            <option value="3">3"</option>
+          <label class="dialog-field-label" for="addPrintTypeSelect">Print Type</label>
+          <select id="addPrintTypeSelect">
+            <option value="" disabled selected hidden>Select print type</option>
+            <option value="PRINTED">PRINTED</option>
+            <option value="PLAIN">PLAIN</option>
           </select>
         </div>
         <div>
-          <label class="dialog-field-label" for="addMtrsInput">Mtrs</label>
-          <input type="number" id="addMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
+          <label class="dialog-field-label" for="addThicknessInput">Thickness (mm)</label>
+          <input type="number" id="addThicknessInput" class="form-control premium-input" placeholder="Enter thickness" min="0" step="any" />
         </div>
       </div>
 
@@ -212,33 +215,36 @@
 
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="editTypeSelect">Type</label>
-          <select id="editTypeSelect">
-            <option value="" disabled hidden>Select type</option>
-            <option value="PAPER CORE">PAPER CORE</option>
-            <option value="PLASTIC CORE">PLASTIC CORE</option>
+          <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
+          <select id="editVendorSelect">
+            <option value="" disabled hidden>Select vendor</option>
+            <% vendors?.forEach(v => { %>
+              <option value="<%= v._id %>"><%= v.vendorName %></option>
+            <% }) %>
           </select>
         </div>
         <div>
-          <label class="dialog-field-label" for="editSkuCodeInput">SKU Code</label>
-          <input type="text" id="editSkuCodeInput" class="form-control premium-input" placeholder="Enter SKU code" />
+          <label class="dialog-field-label" for="editTypeSelect">Type</label>
+          <select id="editTypeSelect">
+            <option value="" disabled hidden>Select type</option>
+            <option value="PAPER">PAPER</option>
+            <option value="PLASTIC">PLASTIC</option>
+          </select>
         </div>
       </div>
 
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="editSizeSelect">Size (inch)</label>
-          <select id="editSizeSelect">
-            <option value="" disabled hidden>Select size</option>
-            <option value="0.5">0.5"</option>
-            <option value="1">1"</option>
-            <option value="2">2"</option>
-            <option value="3">3"</option>
+          <label class="dialog-field-label" for="editPrintTypeSelect">Print Type</label>
+          <select id="editPrintTypeSelect">
+            <option value="" disabled hidden>Select print type</option>
+            <option value="PRINTED">PRINTED</option>
+            <option value="PLAIN">PLAIN</option>
           </select>
         </div>
         <div>
-          <label class="dialog-field-label" for="editMtrsInput">Mtrs</label>
-          <input type="number" id="editMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
+          <label class="dialog-field-label" for="editThicknessInput">Thickness (mm)</label>
+          <input type="number" id="editThicknessInput" class="form-control premium-input" placeholder="Enter thickness" min="0" step="any" />
         </div>
       </div>
 
@@ -284,8 +290,8 @@
   const coresData = JSON.parse(document.getElementById("cores-data").textContent);
   let previewSkuId = JSON.parse(document.getElementById("preview-skuid-data").textContent);
 
-  let addTypeChoices = null, addSizeChoices = null;
-  let editTypeChoices = null, editSizeChoices = null;
+  let addTypeChoices = null, addPrintTypeChoices = null, addVendorChoices = null;
+  let editTypeChoices = null, editPrintTypeChoices = null, editVendorChoices = null;
 
   // ---- Table ----
   const table = new Tabulator("#core-master-table", {
@@ -296,10 +302,10 @@
     placeholder: "No core masters added yet.",
     columns: [
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
-      { title: "SKU Code", field: "skuCode", headerFilter: "input", minWidth: 130 },
-      { title: "Type", field: "type", headerFilter: "input", minWidth: 140 },
-      { title: "Size (inch)", field: "size", minWidth: 100, formatter: (cell) => cell.getValue() != null ? cell.getValue() + '"' : "—" },
-      { title: "Mtrs", field: "mtrs", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
+      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
+      { title: "Print Type", field: "printType", headerFilter: "input", minWidth: 110 },
+      { title: "Thickness (mm)", field: "thickness", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Actions",
         width: 110,
@@ -374,30 +380,36 @@
   // ---- ADD ----
   function openAddDialog() {
     document.getElementById("addSkuIdPreview").value = previewSkuId;
-    document.getElementById("addSkuCodeInput").value = "";
-    document.getElementById("addMtrsInput").value = "";
+    document.getElementById("addThicknessInput").value = "";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
     document.getElementById("addTypeSelect").value = "";
     addTypeChoices = new Choices("#addTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
-    if (addSizeChoices) { addSizeChoices.destroy(); addSizeChoices = null; }
-    document.getElementById("addSizeSelect").value = "";
-    addSizeChoices = new Choices("#addSizeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+    if (addPrintTypeChoices) { addPrintTypeChoices.destroy(); addPrintTypeChoices = null; }
+    document.getElementById("addPrintTypeSelect").value = "";
+    addPrintTypeChoices = new Choices("#addPrintTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    if (addVendorChoices) { addVendorChoices.destroy(); addVendorChoices = null; }
+    document.getElementById("addVendorSelect").value = "";
+    addVendorChoices = new Choices("#addVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     hideError("addCoreError");
     openModal("addDialog");
-    setTimeout(() => document.getElementById("addSkuCodeInput").focus(), 60);
   }
   function closeAddDialog() {
     closeModal("addDialog");
   }
 
   async function submitAdd() {
-    const skuCode = document.getElementById("addSkuCodeInput").value.trim();
+    const vendorId = document.getElementById("addVendorSelect").value;
     const type = document.getElementById("addTypeSelect").value;
-    if (!skuCode) return showError("addCoreError", "SKU Code is required.");
+    const printType = document.getElementById("addPrintTypeSelect").value;
+    const thickness = document.getElementById("addThicknessInput").value;
+    if (!vendorId) return showError("addCoreError", "Vendor Name is required.");
     if (!type) return showError("addCoreError", "Type is required.");
+    if (!printType) return showError("addCoreError", "Print Type is required.");
+    if (!thickness) return showError("addCoreError", "Thickness is required.");
 
     hideError("addCoreError");
     setLoading("addSubmitBtn", true);
@@ -406,10 +418,10 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          skuCode,
+          vendorId,
           type,
-          size: document.getElementById("addSizeSelect").value,
-          mtrs: document.getElementById("addMtrsInput").value,
+          printType,
+          thickness,
         }),
       });
       const data = await res.json();
@@ -431,16 +443,19 @@
   function openEditDialog(row) {
     editId = row._id;
     document.getElementById("editSkuIdDisplay").value = row.skuId;
-    document.getElementById("editSkuCodeInput").value = row.skuCode || "";
-    document.getElementById("editMtrsInput").value = row.mtrs ?? "";
+    document.getElementById("editThicknessInput").value = row.thickness ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
     document.getElementById("editTypeSelect").value = row.type || "";
     editTypeChoices = new Choices("#editTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
-    if (editSizeChoices) { editSizeChoices.destroy(); editSizeChoices = null; }
-    document.getElementById("editSizeSelect").value = row.size != null ? String(row.size) : "";
-    editSizeChoices = new Choices("#editSizeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+    if (editPrintTypeChoices) { editPrintTypeChoices.destroy(); editPrintTypeChoices = null; }
+    document.getElementById("editPrintTypeSelect").value = row.printType || "";
+    editPrintTypeChoices = new Choices("#editPrintTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    if (editVendorChoices) { editVendorChoices.destroy(); editVendorChoices = null; }
+    document.getElementById("editVendorSelect").value = row.vendorId || "";
+    editVendorChoices = new Choices("#editVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     hideError("editCoreError");
     openModal("editDialog");
@@ -451,10 +466,14 @@
   }
 
   async function submitEdit() {
-    const skuCode = document.getElementById("editSkuCodeInput").value.trim();
+    const vendorId = document.getElementById("editVendorSelect").value;
     const type = document.getElementById("editTypeSelect").value;
-    if (!skuCode) return showError("editCoreError", "SKU Code is required.");
+    const printType = document.getElementById("editPrintTypeSelect").value;
+    const thickness = document.getElementById("editThicknessInput").value;
+    if (!vendorId) return showError("editCoreError", "Vendor Name is required.");
     if (!type) return showError("editCoreError", "Type is required.");
+    if (!printType) return showError("editCoreError", "Print Type is required.");
+    if (!thickness) return showError("editCoreError", "Thickness is required.");
     if (!editId) return;
 
     hideError("editCoreError");
@@ -464,10 +483,10 @@
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          skuCode,
+          vendorId,
           type,
-          size: document.getElementById("editSizeSelect").value,
-          mtrs: document.getElementById("editMtrsInput").value,
+          printType,
+          thickness,
         }),
       });
       const data = await res.json();

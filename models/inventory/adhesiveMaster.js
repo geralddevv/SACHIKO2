@@ -13,10 +13,18 @@ const adhesiveMasterSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
-    skuCode: {
+    // The vendor who supplies this adhesive (Vendor master, filtered to
+    // commodities: "ADHESIVE"). vendorName is a denormalized copy of
+    // Vendor.vendorName for display without a populate, matching the
+    // clientId/clientName pairing on models/users/username.js.
+    vendorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
+      required: true,
+    },
+    vendorName: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
     type: {
@@ -24,14 +32,35 @@ const adhesiveMasterSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    gsm: {
+    // The vendor's own code for this spec -- not globally unique (different
+    // vendors can coincidentally use the same code), only unique per vendor
+    // (see the compound index below).
+    vendorSkuCode: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    shelfLife: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    viscosity: {
       type: Number,
     },
-    mtrs: {
+    cohesion: {
+      type: Number,
+    },
+    shear: {
+      type: Number,
+    },
+    density: {
       type: Number,
     },
   },
   { timestamps: true },
 );
+
+adhesiveMasterSchema.index({ vendorId: 1, vendorSkuCode: 1 }, { unique: true });
 
 export default mongoose.models.AdhesiveMaster || mongoose.model("AdhesiveMaster", adhesiveMasterSchema);

@@ -25,3 +25,7 @@ family first in paper reorder in fs
 add live status in pending orders in fs
 pap size and running mtrs in ls bind
 machine name and width in machine master
+
+edit sales order after dispatch also
+
+client acc head track log

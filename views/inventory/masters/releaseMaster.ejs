@@ -159,6 +159,15 @@
 
       <div class="dialog-field-row">
         <div>
+          <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
+          <select id="addVendorSelect">
+            <option value="" disabled selected hidden>Select vendor</option>
+            <% vendors?.forEach(v => { %>
+              <option value="<%= v._id %>"><%= v.vendorName %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
           <label class="dialog-field-label" for="addTypeSelect">Type</label>
           <select id="addTypeSelect">
             <option value="" disabled selected hidden>Select type</option>
@@ -166,6 +175,13 @@
             <option value="GLASSINE">GLASSINE</option>
             <option value="SCK">SCK</option>
           </select>
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="addVendorSkuCodeInput">Vendor SKU Code (Optional)</label>
+          <input type="text" id="addVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
         </div>
         <div>
           <label class="dialog-field-label" for="addColorSelect">Color</label>
@@ -177,19 +193,9 @@
         </div>
       </div>
 
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="addSkuCodeInput">SKU Code</label>
-          <input type="text" id="addSkuCodeInput" class="form-control premium-input" placeholder="Enter SKU code" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="addGsmInput">GSM</label>
-          <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
-        </div>
-      </div>
+      <label class="dialog-field-label" for="addGsmInput">GSM</label>
+      <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
 
-      <label class="dialog-field-label" for="addMtrsInput">Mtrs</label>
-      <input type="number" id="addMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
 
       <div id="addReleaseError" class="dialog-error"></div>
       <div class="dialog-actions">
@@ -214,6 +220,15 @@
 
       <div class="dialog-field-row">
         <div>
+          <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
+          <select id="editVendorSelect">
+            <option value="" disabled hidden>Select vendor</option>
+            <% vendors?.forEach(v => { %>
+              <option value="<%= v._id %>"><%= v.vendorName %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div>
           <label class="dialog-field-label" for="editTypeSelect">Type</label>
           <select id="editTypeSelect">
             <option value="" disabled hidden>Select type</option>
@@ -221,6 +236,13 @@
             <option value="GLASSINE">GLASSINE</option>
             <option value="SCK">SCK</option>
           </select>
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editVendorSkuCodeInput">Vendor SKU Code (Optional)</label>
+          <input type="text" id="editVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
         </div>
         <div>
           <label class="dialog-field-label" for="editColorSelect">Color</label>
@@ -232,19 +254,8 @@
         </div>
       </div>
 
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editSkuCodeInput">SKU Code</label>
-          <input type="text" id="editSkuCodeInput" class="form-control premium-input" placeholder="Enter SKU code" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editGsmInput">GSM</label>
-          <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
-        </div>
-      </div>
-
-      <label class="dialog-field-label" for="editMtrsInput">Mtrs</label>
-      <input type="number" id="editMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
+      <label class="dialog-field-label" for="editGsmInput">GSM</label>
+      <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
 
       <div id="editReleaseError" class="dialog-error"></div>
       <div class="dialog-actions">
@@ -288,8 +299,8 @@
   const releasesData = JSON.parse(document.getElementById("releases-data").textContent);
   let previewSkuId = JSON.parse(document.getElementById("preview-skuid-data").textContent);
 
-  let addTypeChoices = null, addColorChoices = null;
-  let editTypeChoices = null, editColorChoices = null;
+  let addTypeChoices = null, addColorChoices = null, addVendorChoices = null;
+  let editTypeChoices = null, editColorChoices = null, editVendorChoices = null;
 
   // ---- Table ----
   const table = new Tabulator("#release-master-table", {
@@ -300,11 +311,11 @@
     placeholder: "No release liner masters added yet.",
     columns: [
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
-      { title: "SKU Code", field: "skuCode", headerFilter: "input", minWidth: 130 },
-      { title: "Type", field: "type", headerFilter: "input", minWidth: 120 },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
+      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
+      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
       { title: "Color", field: "color", minWidth: 100 },
       { title: "GSM", field: "gsm", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Mtrs", field: "mtrs", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Actions",
         width: 110,
@@ -379,9 +390,8 @@
   // ---- ADD ----
   function openAddDialog() {
     document.getElementById("addSkuIdPreview").value = previewSkuId;
-    document.getElementById("addSkuCodeInput").value = "";
+    document.getElementById("addVendorSkuCodeInput").value = "";
     document.getElementById("addGsmInput").value = "";
-    document.getElementById("addMtrsInput").value = "";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
     document.getElementById("addTypeSelect").value = "";
@@ -391,18 +401,21 @@
     document.getElementById("addColorSelect").value = "WHITE";
     addColorChoices = new Choices("#addColorSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
+    if (addVendorChoices) { addVendorChoices.destroy(); addVendorChoices = null; }
+    document.getElementById("addVendorSelect").value = "";
+    addVendorChoices = new Choices("#addVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
     hideError("addReleaseError");
     openModal("addDialog");
-    setTimeout(() => document.getElementById("addSkuCodeInput").focus(), 60);
   }
   function closeAddDialog() {
     closeModal("addDialog");
   }
 
   async function submitAdd() {
-    const skuCode = document.getElementById("addSkuCodeInput").value.trim();
+    const vendorId = document.getElementById("addVendorSelect").value;
     const type = document.getElementById("addTypeSelect").value;
-    if (!skuCode) return showError("addReleaseError", "SKU Code is required.");
+    if (!vendorId) return showError("addReleaseError", "Vendor Name is required.");
     if (!type) return showError("addReleaseError", "Type is required.");
 
     hideError("addReleaseError");
@@ -412,11 +425,11 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          skuCode,
+          vendorId,
           type,
+          vendorSkuCode: document.getElementById("addVendorSkuCodeInput").value.trim(),
           color: document.getElementById("addColorSelect").value,
           gsm: document.getElementById("addGsmInput").value,
-          mtrs: document.getElementById("addMtrsInput").value,
         }),
       });
       const data = await res.json();
@@ -438,9 +451,8 @@
   function openEditDialog(row) {
     editId = row._id;
     document.getElementById("editSkuIdDisplay").value = row.skuId;
-    document.getElementById("editSkuCodeInput").value = row.skuCode || "";
+    document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
     document.getElementById("editGsmInput").value = row.gsm ?? "";
-    document.getElementById("editMtrsInput").value = row.mtrs ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
     document.getElementById("editTypeSelect").value = row.type || "";
@@ -449,6 +461,10 @@
     if (editColorChoices) { editColorChoices.destroy(); editColorChoices = null; }
     document.getElementById("editColorSelect").value = row.color || "WHITE";
     editColorChoices = new Choices("#editColorSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    if (editVendorChoices) { editVendorChoices.destroy(); editVendorChoices = null; }
+    document.getElementById("editVendorSelect").value = row.vendorId || "";
+    editVendorChoices = new Choices("#editVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     hideError("editReleaseError");
     openModal("editDialog");
@@ -459,9 +475,9 @@
   }
 
   async function submitEdit() {
-    const skuCode = document.getElementById("editSkuCodeInput").value.trim();
+    const vendorId = document.getElementById("editVendorSelect").value;
     const type = document.getElementById("editTypeSelect").value;
-    if (!skuCode) return showError("editReleaseError", "SKU Code is required.");
+    if (!vendorId) return showError("editReleaseError", "Vendor Name is required.");
     if (!type) return showError("editReleaseError", "Type is required.");
     if (!editId) return;
 
@@ -472,11 +488,11 @@
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          skuCode,
+          vendorId,
           type,
+          vendorSkuCode: document.getElementById("editVendorSkuCodeInput").value.trim(),
           color: document.getElementById("editColorSelect").value,
           gsm: document.getElementById("editGsmInput").value,
-          mtrs: document.getElementById("editMtrsInput").value,
         }),
       });
       const data = await res.json();

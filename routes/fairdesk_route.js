@@ -2534,7 +2534,7 @@ router.get("/sales/items/:type/:userId", async (req, res) => {
           location: binding.location || "",
           displayName: s.productCode || "",
           minOrderQty: 0,
-          rate: null,
+          rate: binding.rate ?? 0,
           stock: null,
           paperSize: binding.paperSize || "",
           runningMeters: binding.runningMeters ?? null,
@@ -2713,6 +2713,11 @@ router.post("/sales/order", async (req, res) => {
         return res.status(400).json({ success: false, message: "Paper Size, Running Meters, and No of Rolls are required for Label Stock orders." });
       }
 
+      // Rate isn't user-entered for Label Stock orders (see the Rate field on
+      // the form -- read-only, auto-filled) -- it's always the binding's own
+      // rate, same as how the binding's paperSize/location are used as-is.
+      const labelStockRate = Number(binding.rate) || 0;
+
       const data = {
         tapeBinding: itemId,
         userId: binding.userId,
@@ -2720,7 +2725,7 @@ router.post("/sales/order", async (req, res) => {
         sourceLocation: canonicalizeLocationName(binding.location),
         poDate: poDate ? new Date(poDate) : undefined,
         poNumber,
-        orderRate: 0,
+        orderRate: labelStockRate,
         quantity: Number(quantity),
         estimatedDate: new Date(estimatedDate),
         remarks,
@@ -2753,7 +2758,7 @@ router.post("/sales/order", async (req, res) => {
           estimatedDate,
           poNumber,
           sourceLocation: data.sourceLocation,
-          orderRate: 0,
+          orderRate: labelStockRate,
           createdBy: createdByUser,
         });
         data.submissionToken = String(submissionToken || "").trim() || undefined;
