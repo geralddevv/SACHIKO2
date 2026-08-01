@@ -32,6 +32,10 @@ const coreMasterSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    make: {
+      type: String,
+      trim: true,
+    },
     // Printed vs. plain core surface.
     printType: {
       type: String,

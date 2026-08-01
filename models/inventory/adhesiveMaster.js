@@ -32,6 +32,10 @@ const adhesiveMasterSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    make: {
+      type: String,
+      trim: true,
+    },
     // The vendor's own code for this spec -- not globally unique (different
     // vendors can coincidentally use the same code), only unique per vendor
     // (see the compound index below).

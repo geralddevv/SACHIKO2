@@ -37,6 +37,7 @@ async function buildPayload(body) {
   const payload = {
     vendorId,
     type: String(body.type || "").trim(),
+    make: String(body.make || "").trim(),
     vendorSkuCode: String(body.vendorSkuCode || "").trim(),
     color: String(body.color || "WHITE").trim() || "WHITE",
     gsm: numOrUndef(body.gsm),

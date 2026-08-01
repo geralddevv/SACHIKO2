@@ -178,6 +178,9 @@
         </div>
       </div>
 
+      <label class="dialog-field-label" for="addMakeInput">Make</label>
+      <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
+
       <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="addVendorSkuCodeInput">Vendor SKU Code</label>
@@ -253,6 +256,9 @@
         </div>
       </div>
 
+      <label class="dialog-field-label" for="editMakeInput">Make</label>
+      <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
+
       <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="editVendorSkuCodeInput">Vendor SKU Code</label>
@@ -291,6 +297,20 @@
         <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
         <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Adhesive</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VIEW ADHESIVE DIALOG ============ -->
+<div class="logout-modal" id="viewDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="viewDialogTitle"
+    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="viewDialogTitle">Adhesive Details</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeViewDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div id="viewBody"></div>
     </div>
   </div>
 </div>
@@ -341,24 +361,22 @@
     movableColumns: true,
     placeholder: "No adhesive masters added yet.",
     columns: [
-      { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
-      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
-      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
-      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", minWidth: 150 },
-      { title: "Shelf Life", field: "shelfLife", minWidth: 110 },
-      { title: "Viscosity", field: "viscosity", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Cohesion", field: "cohesion", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Shear", field: "shear", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Density", field: "density", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Actions",
-        width: 110,
+        width: 140,
         hozAlign: "center",
         headerSort: false,
         formatter: function (cell) {
           const row = cell.getRow().getData();
           const wrap = document.createElement("div");
           wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const viewBtn = document.createElement("button");
+          viewBtn.className = "loc-btn";
+          viewBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#044a78;";
+          viewBtn.title = "View Adhesive";
+          viewBtn.innerHTML = '<i class="fa-solid fa-eye"></i>';
+          viewBtn.addEventListener("click", () => openViewDialog(row));
 
           const editBtn = document.createElement("button");
           editBtn.className = "loc-btn";
@@ -374,11 +392,22 @@
           deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
           deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.skuId));
 
+          wrap.appendChild(viewBtn);
           wrap.appendChild(editBtn);
           wrap.appendChild(deleteBtn);
           return wrap;
         },
       },
+      { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
+      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
+      { title: "Make", field: "make", headerFilter: "input", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", minWidth: 150 },
+      { title: "Shelf Life", field: "shelfLife", minWidth: 110 },
+      { title: "Viscosity", field: "viscosity", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Cohesion", field: "cohesion", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Shear", field: "shear", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Density", field: "density", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
     ],
   });
 
@@ -408,7 +437,36 @@
     btn.style.opacity = loading ? "0.7" : "";
   }
 
-  ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+  function detailRow(label, value) {
+    return `
+      <div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid #f1f5f9;">
+        <span style="color:#64748b; font-size:13px;">${label}</span>
+        <span style="color:#0f172a; font-weight:600; font-size:13px;">${value}</span>
+      </div>
+    `;
+  }
+
+  // ---- VIEW ----
+  function openViewDialog(row) {
+    document.getElementById("viewBody").innerHTML = [
+      detailRow("SKU ID", row.skuId),
+      detailRow("Vendor Name", row.vendorName || "—"),
+      detailRow("Type", row.type || "—"),
+      detailRow("Make", row.make || "—"),
+      detailRow("Vendor SKU Code", row.vendorSkuCode || "—"),
+      detailRow("Shelf Life", row.shelfLife || "—"),
+      detailRow("Viscosity", row.viscosity ?? "—"),
+      detailRow("Cohesion", row.cohesion ?? "—"),
+      detailRow("Shear", row.shear ?? "—"),
+      detailRow("Density", row.density ?? "—"),
+    ].join("");
+    openModal("viewDialog");
+  }
+  function closeViewDialog() {
+    closeModal("viewDialog");
+  }
+
+  ["addDialog", "editDialog", "viewDialog", "deleteDialog"].forEach(id => {
     document.getElementById(id).addEventListener("click", function (e) {
       if (e.target === this) closeModal(id);
     });
@@ -416,7 +474,7 @@
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+    ["addDialog", "editDialog", "viewDialog", "deleteDialog"].forEach(id => {
       if (document.getElementById(id).classList.contains("show")) closeModal(id);
     });
   });
@@ -424,6 +482,7 @@
   // ---- ADD ----
   function openAddDialog() {
     document.getElementById("addSkuIdPreview").value = previewSkuId;
+    document.getElementById("addMakeInput").value = "";
     document.getElementById("addVendorSkuCodeInput").value = "";
     document.getElementById("addShelfLifeInput").value = "";
     document.getElementById("addViscosityInput").value = "";
@@ -465,6 +524,7 @@
         body: JSON.stringify({
           vendorId,
           type,
+          make: document.getElementById("addMakeInput").value.trim(),
           vendorSkuCode,
           shelfLife,
           viscosity: document.getElementById("addViscosityInput").value,
@@ -492,6 +552,7 @@
   function openEditDialog(row) {
     editId = row._id;
     document.getElementById("editSkuIdDisplay").value = row.skuId;
+    document.getElementById("editMakeInput").value = row.make || "";
     document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
     document.getElementById("editShelfLifeInput").value = row.shelfLife || "";
     document.getElementById("editViscosityInput").value = row.viscosity ?? "";
@@ -535,6 +596,7 @@
         body: JSON.stringify({
           vendorId,
           type,
+          make: document.getElementById("editMakeInput").value.trim(),
           vendorSkuCode,
           shelfLife,
           viscosity: document.getElementById("editViscosityInput").value,

@@ -177,6 +177,9 @@
         </div>
       </div>
 
+      <label class="dialog-field-label" for="addMakeInput">Make</label>
+      <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
+
       <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="addPrintTypeSelect">Print Type</label>
@@ -233,6 +236,9 @@
         </div>
       </div>
 
+      <label class="dialog-field-label" for="editMakeInput">Make</label>
+      <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
+
       <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="editPrintTypeSelect">Print Type</label>
@@ -253,6 +259,20 @@
         <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
         <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Core</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VIEW CORE DIALOG ============ -->
+<div class="logout-modal" id="viewDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="viewDialogTitle"
+    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="viewDialogTitle">Core Details</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeViewDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div id="viewBody"></div>
     </div>
   </div>
 </div>
@@ -301,20 +321,22 @@
     movableColumns: true,
     placeholder: "No core masters added yet.",
     columns: [
-      { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
-      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
-      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
-      { title: "Print Type", field: "printType", headerFilter: "input", minWidth: 110 },
-      { title: "Thickness (mm)", field: "thickness", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Actions",
-        width: 110,
+        width: 140,
         hozAlign: "center",
         headerSort: false,
         formatter: function (cell) {
           const row = cell.getRow().getData();
           const wrap = document.createElement("div");
           wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const viewBtn = document.createElement("button");
+          viewBtn.className = "loc-btn";
+          viewBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#044a78;";
+          viewBtn.title = "View Core";
+          viewBtn.innerHTML = '<i class="fa-solid fa-eye"></i>';
+          viewBtn.addEventListener("click", () => openViewDialog(row));
 
           const editBtn = document.createElement("button");
           editBtn.className = "loc-btn";
@@ -330,11 +352,18 @@
           deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
           deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.skuId));
 
+          wrap.appendChild(viewBtn);
           wrap.appendChild(editBtn);
           wrap.appendChild(deleteBtn);
           return wrap;
         },
       },
+      { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
+      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
+      { title: "Make", field: "make", headerFilter: "input", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Print Type", field: "printType", headerFilter: "input", minWidth: 110 },
+      { title: "Thickness (mm)", field: "thickness", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
     ],
   });
 
@@ -364,7 +393,32 @@
     btn.style.opacity = loading ? "0.7" : "";
   }
 
-  ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+  function detailRow(label, value) {
+    return `
+      <div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid #f1f5f9;">
+        <span style="color:#64748b; font-size:13px;">${label}</span>
+        <span style="color:#0f172a; font-weight:600; font-size:13px;">${value}</span>
+      </div>
+    `;
+  }
+
+  // ---- VIEW ----
+  function openViewDialog(row) {
+    document.getElementById("viewBody").innerHTML = [
+      detailRow("SKU ID", row.skuId),
+      detailRow("Vendor Name", row.vendorName || "—"),
+      detailRow("Type", row.type || "—"),
+      detailRow("Make", row.make || "—"),
+      detailRow("Print Type", row.printType || "—"),
+      detailRow("Thickness (mm)", row.thickness ?? "—"),
+    ].join("");
+    openModal("viewDialog");
+  }
+  function closeViewDialog() {
+    closeModal("viewDialog");
+  }
+
+  ["addDialog", "editDialog", "viewDialog", "deleteDialog"].forEach(id => {
     document.getElementById(id).addEventListener("click", function (e) {
       if (e.target === this) closeModal(id);
     });
@@ -372,7 +426,7 @@
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+    ["addDialog", "editDialog", "viewDialog", "deleteDialog"].forEach(id => {
       if (document.getElementById(id).classList.contains("show")) closeModal(id);
     });
   });
@@ -380,6 +434,7 @@
   // ---- ADD ----
   function openAddDialog() {
     document.getElementById("addSkuIdPreview").value = previewSkuId;
+    document.getElementById("addMakeInput").value = "";
     document.getElementById("addThicknessInput").value = "";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
@@ -420,6 +475,7 @@
         body: JSON.stringify({
           vendorId,
           type,
+          make: document.getElementById("addMakeInput").value.trim(),
           printType,
           thickness,
         }),
@@ -443,6 +499,7 @@
   function openEditDialog(row) {
     editId = row._id;
     document.getElementById("editSkuIdDisplay").value = row.skuId;
+    document.getElementById("editMakeInput").value = row.make || "";
     document.getElementById("editThicknessInput").value = row.thickness ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
@@ -485,6 +542,7 @@
         body: JSON.stringify({
           vendorId,
           type,
+          make: document.getElementById("editMakeInput").value.trim(),
           printType,
           thickness,
         }),

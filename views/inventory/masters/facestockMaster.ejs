@@ -192,6 +192,9 @@
         </div>
       </div>
 
+      <label class="dialog-field-label" for="addMakeInput">Make</label>
+      <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
+
       <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="addVendorSkuCodeInput">Vendor SKU Code</label>
@@ -209,8 +212,16 @@
         </div>
       </div>
 
-      <label class="dialog-field-label" for="addGsmInput">GSM</label>
-      <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="addGsmInput">GSM</label>
+          <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addMicronInput">Micron</label>
+          <input type="number" id="addMicronInput" class="form-control premium-input" placeholder="Enter micron" min="0" step="any" />
+        </div>
+      </div>
 
       <div id="addFacestockError" class="dialog-error"></div>
       <div class="dialog-actions">
@@ -268,6 +279,9 @@
         </div>
       </div>
 
+      <label class="dialog-field-label" for="editMakeInput">Make</label>
+      <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
+
       <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="editVendorSkuCodeInput">Vendor SKU Code</label>
@@ -285,14 +299,36 @@
         </div>
       </div>
 
-      <label class="dialog-field-label" for="editGsmInput">GSM</label>
-      <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editGsmInput">GSM</label>
+          <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editMicronInput">Micron</label>
+          <input type="number" id="editMicronInput" class="form-control premium-input" placeholder="Enter micron" min="0" step="any" />
+        </div>
+      </div>
 
       <div id="editFacestockError" class="dialog-error"></div>
       <div class="dialog-actions">
         <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
         <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Facestock</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VIEW FACESTOCK DIALOG ============ -->
+<div class="logout-modal" id="viewDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="viewDialogTitle"
+    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="viewDialogTitle">Facestock Details</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeViewDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div id="viewBody"></div>
     </div>
   </div>
 </div>
@@ -341,21 +377,22 @@
     movableColumns: true,
     placeholder: "No facestock masters added yet.",
     columns: [
-      { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
-      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
-      { title: "Family", field: "family", headerFilter: "input", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
-      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", minWidth: 150 },
-      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
-      { title: "GSM", field: "gsm", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Actions",
-        width: 110,
+        width: 140,
         hozAlign: "center",
         headerSort: false,
         formatter: function (cell) {
           const row = cell.getRow().getData();
           const wrap = document.createElement("div");
           wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const viewBtn = document.createElement("button");
+          viewBtn.className = "loc-btn";
+          viewBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#044a78;";
+          viewBtn.title = "View Facestock";
+          viewBtn.innerHTML = '<i class="fa-solid fa-eye"></i>';
+          viewBtn.addEventListener("click", () => openViewDialog(row));
 
           const editBtn = document.createElement("button");
           editBtn.className = "loc-btn";
@@ -364,6 +401,7 @@
           editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
           editBtn.addEventListener("click", () => openEditDialog(row));
 
+          wrap.appendChild(viewBtn);
           const deleteBtn = document.createElement("button");
           deleteBtn.className = "loc-btn";
           deleteBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#d9534f;";
@@ -376,6 +414,14 @@
           return wrap;
         },
       },
+      { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
+      { title: "Family", field: "family", headerFilter: "input", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Make", field: "make", headerFilter: "input", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", minWidth: 150 },
+      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
+      { title: "GSM", field: "gsm", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Micron", field: "micron", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
     ],
   });
 
@@ -405,7 +451,34 @@
     btn.style.opacity = loading ? "0.7" : "";
   }
 
-  ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+  function detailRow(label, value) {
+    return `
+      <div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid #f1f5f9;">
+        <span style="color:#64748b; font-size:13px;">${label}</span>
+        <span style="color:#0f172a; font-weight:600; font-size:13px;">${value}</span>
+      </div>
+    `;
+  }
+
+  // ---- VIEW ----
+  function openViewDialog(row) {
+    document.getElementById("viewBody").innerHTML = [
+      detailRow("SKU ID", row.skuId),
+      detailRow("Vendor Name", row.vendorName || "—"),
+      detailRow("Family", row.family || "—"),
+      detailRow("Make", row.make || "—"),
+      detailRow("Vendor SKU Code", row.vendorSkuCode || "—"),
+      detailRow("Type", row.type || "—"),
+      detailRow("GSM", row.gsm ?? "—"),
+      detailRow("Micron", row.micron ?? "—"),
+    ].join("");
+    openModal("viewDialog");
+  }
+  function closeViewDialog() {
+    closeModal("viewDialog");
+  }
+
+  ["addDialog", "editDialog", "viewDialog", "deleteDialog"].forEach(id => {
     document.getElementById(id).addEventListener("click", function (e) {
       if (e.target === this) closeModal(id);
     });
@@ -413,16 +486,31 @@
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+    ["addDialog", "editDialog", "viewDialog", "deleteDialog"].forEach(id => {
       if (document.getElementById(id).classList.contains("show")) closeModal(id);
     });
+  });
+
+  // ---- GSM / Micron mutual exclusivity ----
+  function syncGsmMicron(prefix) {
+    const gsmEl = document.getElementById(prefix + "GsmInput");
+    const micronEl = document.getElementById(prefix + "MicronInput");
+    gsmEl.disabled = micronEl.value.trim() !== "";
+    micronEl.disabled = gsmEl.value.trim() !== "";
+  }
+  ["add", "edit"].forEach(prefix => {
+    document.getElementById(prefix + "GsmInput").addEventListener("input", () => syncGsmMicron(prefix));
+    document.getElementById(prefix + "MicronInput").addEventListener("input", () => syncGsmMicron(prefix));
   });
 
   // ---- ADD ----
   function openAddDialog() {
     document.getElementById("addSkuIdPreview").value = previewSkuId;
+    document.getElementById("addMakeInput").value = "";
     document.getElementById("addVendorSkuCodeInput").value = "";
     document.getElementById("addGsmInput").value = "";
+    document.getElementById("addMicronInput").value = "";
+    syncGsmMicron("add");
 
     if (addFamilyChoices) { addFamilyChoices.destroy(); addFamilyChoices = null; }
     document.getElementById("addFamilySelect").value = "";
@@ -462,9 +550,11 @@
         body: JSON.stringify({
           vendorId,
           family,
+          make: document.getElementById("addMakeInput").value.trim(),
           vendorSkuCode,
           type,
           gsm: document.getElementById("addGsmInput").value,
+          micron: document.getElementById("addMicronInput").value,
         }),
       });
       const data = await res.json();
@@ -486,8 +576,11 @@
   function openEditDialog(row) {
     editId = row._id;
     document.getElementById("editSkuIdDisplay").value = row.skuId;
+    document.getElementById("editMakeInput").value = row.make || "";
     document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
     document.getElementById("editGsmInput").value = row.gsm ?? "";
+    document.getElementById("editMicronInput").value = row.micron ?? "";
+    syncGsmMicron("edit");
 
     if (editFamilyChoices) { editFamilyChoices.destroy(); editFamilyChoices = null; }
     document.getElementById("editFamilySelect").value = row.family || "";
@@ -529,9 +622,11 @@
         body: JSON.stringify({
           vendorId,
           family,
+          make: document.getElementById("editMakeInput").value.trim(),
           vendorSkuCode,
           type,
           gsm: document.getElementById("editGsmInput").value,
+          micron: document.getElementById("editMicronInput").value,
         }),
       });
       const data = await res.json();

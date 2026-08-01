@@ -37,6 +37,7 @@ async function buildPayload(body) {
   const payload = {
     vendorId,
     type: String(body.type || "").trim(),
+    make: String(body.make || "").trim(),
     printType: String(body.printType || "").trim(),
     thickness: numOrUndef(body.thickness),
   };

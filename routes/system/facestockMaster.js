@@ -37,9 +37,11 @@ async function buildPayload(body) {
   const payload = {
     vendorId,
     family: String(body.family || "").trim(),
+    make: String(body.make || "").trim(),
     vendorSkuCode: String(body.vendorSkuCode || "").trim(),
     type: String(body.type || "").trim(),
     gsm: numOrUndef(body.gsm),
+    micron: numOrUndef(body.micron),
   };
 
   if (vendorId) {

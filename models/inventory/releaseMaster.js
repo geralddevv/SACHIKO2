@@ -32,6 +32,10 @@ const releaseMasterSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    make: {
+      type: String,
+      trim: true,
+    },
     // The vendor's own code for this spec -- optional, purely a
     // cross-reference against the vendor's own paperwork.
     vendorSkuCode: {
