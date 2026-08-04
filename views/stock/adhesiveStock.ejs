@@ -285,12 +285,12 @@
     placeholder: "No adhesive stock added yet.",
     columns: [
       { title: "Roll ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
-      { title: "Type", field: "type", headerFilter: "input", minWidth: 130 },
-      { title: "GSM", field: "gsm", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Mtrs", field: "reelMtrs", minWidth: 100 },
-      { title: "Rate", field: "rate", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Location", field: "location", headerFilter: "input", minWidth: 130 },
-      { title: "Vendor Roll ID", field: "vendorRollId", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
+      { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Mtrs", field: "reelMtrs", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
+      { title: "Rate", field: "rate", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Location", field: "location", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
+      { title: "Vendor Roll ID", field: "vendorRollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
       {
         title: "Actions",
         width: 110,

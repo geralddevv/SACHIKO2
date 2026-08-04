@@ -138,6 +138,26 @@
       <button class="header-action-btn" onclick="openAddDialog()">
         <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Release
       </button>
+
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span>
+            <i class="fa-solid fa-file-arrow-down"></i>
+            <span class="download-typo">Download</span>
+          </span>
+          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
+        </button>
+        <div class="download-selector__menu" id="downloads">
+          <span class="download-selector__option" id="download-pdf">
+            <i class="fas fa-file-pdf download-selector__option-icon"></i>
+            <span>PDF</span>
+          </span>
+          <span class="download-selector__option" id="download-xlsx">
+            <i class="fas fa-file-excel download-selector__option-icon"></i>
+            <span>Excel</span>
+          </span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -154,18 +174,10 @@
       <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
     </div>
     <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
-      <label class="dialog-field-label" for="addSkuIdPreview">SKU ID</label>
-      <input type="text" id="addSkuIdPreview" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
-
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
-          <select id="addVendorSelect">
-            <option value="" disabled selected hidden>Select vendor</option>
-            <% vendors?.forEach(v => { %>
-              <option value="<%= v._id %>"><%= v.vendorName %></option>
-            <% }) %>
-          </select>
+          <label class="dialog-field-label" for="addSkuIdPreview">SKU ID</label>
+          <input type="text" id="addSkuIdPreview" class="form-control premium-input" readonly style="background: #f1f5f9;" />
         </div>
         <div>
           <label class="dialog-field-label" for="addTypeSelect">Type</label>
@@ -177,6 +189,14 @@
           </select>
         </div>
       </div>
+
+      <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
+      <select id="addVendorSelect" style="margin-bottom: 16px;">
+        <option value="" disabled selected hidden>Select vendor</option>
+        <% vendors?.forEach(v => { %>
+          <option value="<%= v._id %>"><%= v.vendorName %></option>
+        <% }) %>
+      </select>
 
       <label class="dialog-field-label" for="addMakeInput">Make</label>
       <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
@@ -218,18 +238,10 @@
       <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
     </div>
     <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
-      <label class="dialog-field-label" for="editSkuIdDisplay">SKU ID</label>
-      <input type="text" id="editSkuIdDisplay" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
-
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
-          <select id="editVendorSelect">
-            <option value="" disabled hidden>Select vendor</option>
-            <% vendors?.forEach(v => { %>
-              <option value="<%= v._id %>"><%= v.vendorName %></option>
-            <% }) %>
-          </select>
+          <label class="dialog-field-label" for="editSkuIdDisplay">SKU ID</label>
+          <input type="text" id="editSkuIdDisplay" class="form-control premium-input" readonly style="background: #f1f5f9;" />
         </div>
         <div>
           <label class="dialog-field-label" for="editTypeSelect">Type</label>
@@ -241,6 +253,14 @@
           </select>
         </div>
       </div>
+
+      <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
+      <select id="editVendorSelect" style="margin-bottom: 16px;">
+        <option value="" disabled hidden>Select vendor</option>
+        <% vendors?.forEach(v => { %>
+          <option value="<%= v._id %>"><%= v.vendorName %></option>
+        <% }) %>
+      </select>
 
       <label class="dialog-field-label" for="editMakeInput">Make</label>
       <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
@@ -312,6 +332,10 @@
 
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
 <script id="releases-data" type="application/json"><%- safeJson(releases) %></script>
 <script id="preview-skuid-data" type="application/json"><%- safeJson(previewSkuId) %></script>
@@ -368,13 +392,32 @@
         },
       },
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
-      { title: "Vendor Name", field: "vendorName", headerFilter: "input", minWidth: 150 },
-      { title: "Type", field: "type", headerFilter: "input", minWidth: 110 },
-      { title: "Make", field: "make", headerFilter: "input", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
-      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
-      { title: "Color", field: "color", minWidth: 100 },
-      { title: "GSM", field: "gsm", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
+      { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
+      { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Color", field: "color", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
+      { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
     ],
+  });
+
+  // ---- Download dropdown ----
+  const downloadSelector = document.getElementById("downloadSelector");
+  const downloadTrigger = downloadSelector.querySelector(".download-selector__trigger");
+  downloadTrigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    downloadSelector.classList.toggle("download-selector--active");
+  });
+  document.addEventListener("click", () => downloadSelector.classList.remove("download-selector--active"));
+  downloadSelector.querySelector(".download-selector__menu").addEventListener("click", (e) => e.stopPropagation());
+
+  document.getElementById("download-pdf").addEventListener("click", () => {
+    table.download("pdf", "release-master.pdf", { orientation: "landscape", title: "Release Master" });
+    downloadSelector.classList.remove("download-selector--active");
+  });
+  document.getElementById("download-xlsx").addEventListener("click", () => {
+    table.download("xlsx", "release-master.xlsx", { sheetName: "Release Master" });
+    downloadSelector.classList.remove("download-selector--active");
   });
 
   // ---- Helpers ----

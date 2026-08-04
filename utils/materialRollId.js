@@ -43,12 +43,22 @@ export async function generateMaterialRollId(prefix, Model) {
   throw new Error("Unable to generate a unique roll id");
 }
 
-// What the next reel for this prefix would be called, without consuming a
-// sequence number -- the inward dialog shows it in the (read-only) Roll ID
-// field as soon as it opens.
-export async function previewMaterialRollId(prefix) {
+// What the next `count` reels for this prefix would be called, without
+// consuming any sequence numbers -- the batch inward dialog shows these in
+// the (read-only) Roll ID field of each roll row as soon as the row count
+// changes. Not reserved, so two dialogs open at once can preview the same
+// ids; only generateMaterialRollId() above actually claims one.
+export async function previewMaterialRollIds(prefix, count = 1) {
   const fy = financialYearLabel();
   const key = counterKey(prefix, fy);
   const counter = await Counter.findOne({ key }).select("seq").lean();
-  return formatMaterialRollId(prefix, fy, Number(counter?.seq || 0) + 1);
+  const start = Number(counter?.seq || 0) + 1;
+  return Array.from({ length: count }, (_, i) => formatMaterialRollId(prefix, fy, start + i));
+}
+
+// What the next reel for this prefix would be called -- single-id form of
+// previewMaterialRollIds(), for callers that only ever add one reel at a time.
+export async function previewMaterialRollId(prefix) {
+  const [id] = await previewMaterialRollIds(prefix, 1);
+  return id;
 }
