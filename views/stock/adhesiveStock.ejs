@@ -81,7 +81,79 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 14px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
+    }
+
+    /* Match Choices.js selects to the .premium-input look used by the rest
+       of this dialog's fields. */
+    .dialog-body .choices__inner {
+      padding: 11px 14px !important;
+      border-radius: 10px !important;
+      border: 1.5px solid #e2e8f0 !important;
+      background-color: #f8fafc !important;
+      font-size: 14px !important;
+      min-height: 0 !important;
+      transition: all 0.2s ease !important;
+    }
+    .dialog-body .choices__list--single {
+      padding: 0 !important;
+    }
+    .dialog-body .choices.is-focused .choices__inner,
+    .dialog-body .choices.is-open .choices__inner {
+      border-color: #044a78 !important;
+      background-color: #ffffff !important;
+      box-shadow: 0 0 0 4px rgba(4, 74, 120, 0.1) !important;
+    }
+    .dialog-body .choices[data-type*="select-one"]::after {
+      display: block !important;
+      content: "" !important;
+      width: 12px !important;
+      height: 8px !important;
+      border-style: none !important;
+      border-width: 0 !important;
+      background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23044a78' stroke-width='2' fill='none'/%3E%3C/svg%3E") !important;
+      background-repeat: no-repeat !important;
+      background-size: contain !important;
+      position: absolute !important;
+      right: 14px !important;
+      top: 50% !important;
+      margin-top: 0 !important;
+      transform: translateY(-50%) !important;
+    }
+    .dialog-body .choices[data-type*="select-one"].is-open::after {
+      transform: translateY(-50%) rotate(180deg) !important;
+    }
+    /* Dropdown list must render above the dialog overlay (see CLAUDE.md
+       "Dialog / modal pattern" -- Choices.js in dialogs). */
+    .dialog-body .choices__list--dropdown {
+      border-radius: 10px !important;
+      border: 1.5px solid #e2e8f0 !important;
+      z-index: 99999 !important;
+    }
+
+    .dialog-section-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: #044a78;
+      text-transform: uppercase;
+      margin: 0 0 10px;
+      flex: 0 0 auto;
+    }
+    .drum-row {
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      background: #f8fafc;
+    }
+    .drum-row-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #044a78;
+      margin-bottom: 8px;
     }
   </style>
 
@@ -89,7 +161,7 @@
     <h1>Adhesive Stock</h1>
     <div style="display: flex; gap: 10px; align-items: center">
       <button class="header-action-btn" onclick="openAddDialog()">
-        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Adhesive Reel
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Adhesive Drum
       </button>
     </div>
   </div>
@@ -98,68 +170,86 @@
   <div id="adhesive-stock-table" class="tabulator tabulator-modern"></div>
 </div>
 
-<!-- ============ ADD ADHESIVE DIALOG ============ -->
+<!-- ============ ADD ADHESIVE DIALOG (batch inward, landscape) ============ -->
 <div class="logout-modal" id="addDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
-    style="width: min(480px, 95vw); padding: 0; border-radius: 14px;">
-    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
-      <h2 id="addDialogTitle">Add Adhesive Reel</h2>
+    style="width: min(1100px, 92vw); height: min(680px, 85vh); padding: 0; border-radius: 14px; display: flex; flex-direction: column;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0; flex: 0 0 auto;">
+      <div style="display: flex; align-items: center; gap: 20px;">
+        <h2 id="addDialogTitle">Add Adhesive Drums</h2>
+        <div style="display: flex; align-items: center; gap: 16px; font-size: 13px; color: rgba(255, 255, 255, 0.8);">
+          <span>Drums: <strong id="summaryDrumCount" style="color: #fff; font-size: 15px;">1</strong></span>
+          <span>Total Mtrs: <strong id="summaryTotalMtrs" style="color: #fff; font-size: 15px;">0</strong></span>
+        </div>
+      </div>
       <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
     </div>
-    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
-      <label class="dialog-field-label" for="addRollIdPreview">Roll ID</label>
-      <input type="text" id="addRollIdPreview" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 24px;">
+      <div style="display: flex; gap: 28px; flex: 1 1 auto; min-height: 0;">
 
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="addTypeSelect">Type</label>
-          <select id="addTypeSelect">
-            <option value="" disabled selected hidden>Select type</option>
-            <option value="ACRYLIC">ACRYLIC</option>
-            <option value="HOTMELT">HOTMELT</option>
-            <option value="HT">HT</option>
-            <option value="STAIN FREE">STAIN FREE</option>
-            <option value="WATERBASE">WATERBASE</option>
-          </select>
+        <!-- ---- Left: shared spec for this batch ---- -->
+        <!-- overflow-y: auto is a safety net only (see updateBatchSummary --
+             this column's content is sized to fit without scrolling in the
+             normal case); Choices.js dropdowns for Type/Location open
+             downward from fields that always have room below them here, so
+             clipping in practice shouldn't come up (CLAUDE.md "Dialog /
+             modal pattern"). -->
+        <div style="flex: 1 1 340px; min-width: 340px; padding-right: 6px; overflow-y: auto;">
+          <div class="dialog-field-row">
+            <div>
+              <label class="dialog-field-label" for="addTypeSelect">Type</label>
+              <select id="addTypeSelect">
+                <option value="" disabled selected hidden>Select type</option>
+                <option value="ACRYLIC">ACRYLIC</option>
+                <option value="HOTMELT">HOTMELT</option>
+                <option value="HT">HT</option>
+                <option value="STAIN FREE">STAIN FREE</option>
+                <option value="WATERBASE">WATERBASE</option>
+              </select>
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addGsmInput">GSM</label>
+              <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+            </div>
+          </div>
+
+          <div class="dialog-field-row">
+            <div>
+              <label class="dialog-field-label" for="addRateInput">Rate</label>
+              <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addLocationSelect">Location</label>
+              <select id="addLocationSelect"></select>
+            </div>
+          </div>
+
+          <div class="dialog-field-row">
+            <div>
+              <label class="dialog-field-label" for="addInvoiceNoInput">Invoice No</label>
+              <input type="text" id="addInvoiceNoInput" class="form-control premium-input" placeholder="Enter invoice no" />
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addDrumCountInput">No of Drums</label>
+              <input type="number" id="addDrumCountInput" class="form-control premium-input" min="1" max="100" step="1" value="1" />
+            </div>
+          </div>
+
+          <label class="dialog-field-label" for="addRemarksInput">Remarks</label>
+          <input type="text" id="addRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
         </div>
-        <div>
-          <label class="dialog-field-label" for="addGsmInput">GSM</label>
-          <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+
+        <!-- ---- Right: one card per physical drum ---- -->
+        <div style="flex: 1 1 auto; min-width: 0; max-width: 600px; display: flex; flex-direction: column;">
+          <div class="dialog-section-label"><span>Drums</span></div>
+          <div id="addDrumsContainer" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start; gap: 14px; padding-right: 6px;"></div>
         </div>
       </div>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="addMtrsInput">Mtrs</label>
-          <input type="number" id="addMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="addRateInput">Rate</label>
-          <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
-        </div>
-      </div>
-
-      <label class="dialog-field-label" for="addLocationSelect">Location</label>
-      <select id="addLocationSelect" style="margin-bottom: 16px;"></select>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="addVendorRollIdInput">Vendor Roll ID</label>
-          <input type="text" id="addVendorRollIdInput" class="form-control premium-input" placeholder="Vendor's own roll no" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="addInvoiceNoInput">Invoice No</label>
-          <input type="text" id="addInvoiceNoInput" class="form-control premium-input" placeholder="Enter invoice no" />
-        </div>
-      </div>
-
-      <label class="dialog-field-label" for="addRemarksInput">Remarks</label>
-      <input type="text" id="addRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
 
       <div id="addAdhesiveError" class="dialog-error"></div>
-      <div class="dialog-actions">
+      <div class="dialog-actions" style="flex: 0 0 auto;">
         <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
-        <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Reel</button>
+        <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Drums</button>
       </div>
     </div>
   </div>
@@ -170,11 +260,11 @@
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
     style="width: min(480px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
-      <h2 id="editDialogTitle">Edit Adhesive Reel</h2>
+      <h2 id="editDialogTitle">Edit Adhesive Drum</h2>
       <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
     </div>
     <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
-      <label class="dialog-field-label" for="editRollIdDisplay">Roll ID</label>
+      <label class="dialog-field-label" for="editRollIdDisplay">Drum ID</label>
       <input type="text" id="editRollIdDisplay" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
 
       <div class="dialog-field-row">
@@ -211,8 +301,8 @@
 
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="editVendorRollIdInput">Vendor Roll ID</label>
-          <input type="text" id="editVendorRollIdInput" class="form-control premium-input" placeholder="Vendor's own roll no" />
+          <label class="dialog-field-label" for="editVendorRollIdInput">Vendor Drum ID</label>
+          <input type="text" id="editVendorRollIdInput" class="form-control premium-input" placeholder="Vendor's own drum no" />
         </div>
         <div>
           <label class="dialog-field-label" for="editInvoiceNoInput">Invoice No</label>
@@ -226,7 +316,7 @@
       <div id="editAdhesiveError" class="dialog-error"></div>
       <div class="dialog-actions">
         <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
-        <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Reel</button>
+        <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Drum</button>
       </div>
     </div>
   </div>
@@ -237,7 +327,7 @@
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle"
     style="width: min(400px, 95vw);">
     <h2 class="logout-title" id="deleteDialogTitle">
-      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Delete Reel?
+      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Delete Drum?
     </h2>
     <p class="logout-text">
       Are you sure you want to delete <strong id="deleteRollId"></strong>? This action cannot be undone.
@@ -261,11 +351,9 @@
 
 <script id="stock-data" type="application/json"><%- safeJson(stock) %></script>
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
-<script id="preview-rollid-data" type="application/json"><%- safeJson(previewRollId) %></script>
 <script>
   const stockData = JSON.parse(document.getElementById("stock-data").textContent);
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
-  let previewRollId = JSON.parse(document.getElementById("preview-rollid-data").textContent);
 
   function locationOptionsHtml(selectedName) {
     return locationsData
@@ -284,13 +372,13 @@
     movableColumns: true,
     placeholder: "No adhesive stock added yet.",
     columns: [
-      { title: "Roll ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
+      { title: "Drum ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
       { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Mtrs", field: "reelMtrs", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
       { title: "Rate", field: "rate", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Location", field: "location", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
-      { title: "Vendor Roll ID", field: "vendorRollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Vendor Drum ID", field: "vendorRollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
       {
         title: "Actions",
         width: 110,
@@ -304,14 +392,14 @@
           const editBtn = document.createElement("button");
           editBtn.className = "loc-btn";
           editBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#e67e22;";
-          editBtn.title = "Edit Reel";
+          editBtn.title = "Edit Drum";
           editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
           editBtn.addEventListener("click", () => openEditDialog(row));
 
           const deleteBtn = document.createElement("button");
           deleteBtn.className = "loc-btn";
           deleteBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#d9534f;";
-          deleteBtn.title = "Delete Reel";
+          deleteBtn.title = "Delete Drum";
           deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
           deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.rollId));
 
@@ -362,15 +450,79 @@
     });
   });
 
-  // ---- ADD ----
+  // ---- ADD (batch inward) ----
+
+  // Row group markup for one physical drum of the batch's shared spec --
+  // Drum ID is filled in after the fact by refreshRollIdPreviews(), never typed.
+  function drumRowHtml(index, prev) {
+    return `
+      <div class="drum-row" data-index="${index}">
+        <div class="drum-row-title">Drum ${index + 1}</div>
+        <label class="dialog-field-label">Drum ID</label>
+        <input type="text" class="form-control premium-input drum-id-preview" readonly style="margin-bottom: 10px; background: #f1f5f9;" />
+        <label class="dialog-field-label">Vendor Drum ID</label>
+        <input type="text" class="form-control premium-input drum-vendor-id" placeholder="Vendor's own drum no" value="${prev.vendorRollId || ""}" style="margin-bottom: 10px;" />
+        <label class="dialog-field-label">Mtrs</label>
+        <input type="number" class="form-control premium-input drum-mtrs" min="0" step="any" placeholder="Enter Mtrs" value="${prev.mtrs || ""}" />
+      </div>`;
+  }
+
+  // Rebuilds the drum rows for the given count, keeping whatever the user
+  // already typed into rows that are still present -- only rows past the
+  // new count are dropped, and new rows are always appended at the end so an
+  // existing row's index never shifts while it's on screen.
+  function renderDrumRows(count, preserveValues) {
+    const container = document.getElementById("addDrumsContainer");
+    const existing = preserveValues
+      ? Array.from(container.querySelectorAll(".drum-row")).map((row) => ({
+          vendorRollId: row.querySelector(".drum-vendor-id").value,
+          mtrs: row.querySelector(".drum-mtrs").value,
+        }))
+      : [];
+    container.innerHTML = Array.from({ length: count }, (_, i) => drumRowHtml(i, existing[i] || {})).join("");
+    refreshRollIdPreviews();
+    updateBatchSummary();
+  }
+
+  // Live drum count / total mtrs shown in the dialog header as rows are
+  // added/removed and Mtrs values are typed.
+  function updateBatchSummary() {
+    const rows = document.querySelectorAll("#addDrumsContainer .drum-row");
+    const totalMtrs = Array.from(rows).reduce((sum, row) => sum + (Number(row.querySelector(".drum-mtrs").value) || 0), 0);
+    document.getElementById("summaryDrumCount").textContent = rows.length;
+    document.getElementById("summaryTotalMtrs").textContent = Number.isInteger(totalMtrs) ? totalMtrs : totalMtrs.toFixed(1);
+  }
+  document.getElementById("addDrumsContainer").addEventListener("input", (e) => {
+    if (e.target.classList.contains("drum-mtrs")) updateBatchSummary();
+  });
+
+  async function refreshRollIdPreviews() {
+    const rows = document.querySelectorAll("#addDrumsContainer .drum-row");
+    if (!rows.length) return;
+    try {
+      const res = await fetch(`/sachiko/adhesivestock/preview-roll-ids?count=${rows.length}`);
+      const data = await res.json();
+      const ids = data.rollIds || [];
+      rows.forEach((row, i) => {
+        row.querySelector(".drum-id-preview").value = ids[i] || "";
+      });
+    } catch {
+      // Preview is cosmetic only -- the server assigns the real id on save.
+    }
+  }
+
+  document.getElementById("addDrumCountInput").addEventListener("change", function () {
+    const count = Math.min(Math.max(parseInt(this.value, 10) || 1, 1), 100);
+    this.value = count;
+    renderDrumRows(count, true);
+  });
+
   function openAddDialog() {
-    document.getElementById("addRollIdPreview").value = previewRollId;
     document.getElementById("addGsmInput").value = "";
-    document.getElementById("addMtrsInput").value = "";
     document.getElementById("addRateInput").value = "";
-    document.getElementById("addVendorRollIdInput").value = "";
     document.getElementById("addInvoiceNoInput").value = "";
     document.getElementById("addRemarksInput").value = "";
+    document.getElementById("addDrumCountInput").value = "1";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
     document.getElementById("addTypeSelect").value = "";
@@ -380,6 +532,8 @@
     const locSel = document.getElementById("addLocationSelect");
     locSel.innerHTML = locationOptionsHtml("");
     addLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    renderDrumRows(1, false);
 
     hideError("addAdhesiveError");
     openModal("addDialog");
@@ -391,10 +545,16 @@
   async function submitAdd() {
     const type = document.getElementById("addTypeSelect").value;
     const location = document.getElementById("addLocationSelect").value;
-    const reelMtrs = document.getElementById("addMtrsInput").value;
     if (!type) return showError("addAdhesiveError", "Type is required.");
     if (!location) return showError("addAdhesiveError", "Location is required.");
-    if (!reelMtrs || Number(reelMtrs) <= 0) return showError("addAdhesiveError", "Mtrs is required.");
+
+    const drumRows = Array.from(document.querySelectorAll("#addDrumsContainer .drum-row"));
+    const rolls = drumRows.map((row) => ({
+      reelMtrs: row.querySelector(".drum-mtrs").value,
+      vendorRollId: row.querySelector(".drum-vendor-id").value,
+    }));
+    const emptyIndex = rolls.findIndex((r) => !r.reelMtrs || Number(r.reelMtrs) <= 0);
+    if (emptyIndex !== -1) return showError("addAdhesiveError", `Mtrs is required for drum ${emptyIndex + 1}.`);
 
     hideError("addAdhesiveError");
     setLoading("addSubmitBtn", true);
@@ -405,12 +565,11 @@
         body: JSON.stringify({
           type,
           gsm: document.getElementById("addGsmInput").value,
-          reelMtrs,
           rate: document.getElementById("addRateInput").value,
           location,
-          vendorRollId: document.getElementById("addVendorRollIdInput").value,
           invoiceNo: document.getElementById("addInvoiceNoInput").value,
           remarks: document.getElementById("addRemarksInput").value,
+          rolls,
         }),
       });
       const data = await res.json();
@@ -518,11 +677,11 @@
         window.location.reload();
       } else {
         closeDeleteDialog();
-        alert(data.message || "Failed to delete reel.");
+        alert(data.message || "Failed to delete drum.");
       }
     } catch {
       closeDeleteDialog();
-      alert("Error deleting reel.");
+      alert("Error deleting drum.");
     } finally {
       setLoading("deleteConfirmBtn", false);
     }
