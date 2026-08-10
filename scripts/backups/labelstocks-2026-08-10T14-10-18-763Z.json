@@ -1,0 +1,579 @@
+[
+  {
+    "_id": "6a354238bef63046b70fe6e5",
+    "productCode": "ASDASD",
+    "facestock": {
+      "facestockFamily": "DT",
+      "facestockType": "GLOSSY",
+      "facestockGsm": 213,
+      "facestockMicron": 3124
+    },
+    "adhesive": {
+      "adhesiveType": "HOTMELT",
+      "adhesiveGsm": 34
+    },
+    "releaseLiner": {
+      "releaseLinerType": "GLASSINE",
+      "releaseLinerColor": "WHITE",
+      "releaseLinerGsm": 5234
+    },
+    "createdAt": "2026-06-19T13:20:56.032Z",
+    "updatedAt": "2026-07-30T08:34:21.799Z",
+    "__v": 0,
+    "skuCode": "FS | LS | 000001",
+    "labelStockId": "SP | DS | 000001"
+  },
+  {
+    "_id": "6a6c3b2e7f6b2e5b7cbdfa3c",
+    "labelStockId": "SP | LS | 000002",
+    "skuCode": "FS | LS | 000002",
+    "productCode": "AB112",
+    "rollType": "DOUBLE RELEASE",
+    "facestock": {
+      "facestockFamily": "CHROMO",
+      "facestockType": "CLEAR",
+      "facestockGsm": 123,
+      "facestockMicron": 133.7
+    },
+    "adhesive": {
+      "adhesiveType": "ACRYLIC",
+      "adhesiveGsm": 213
+    },
+    "releaseLiner": {
+      "releaseLinerType": "CCK",
+      "releaseLinerColor": "WHITE",
+      "releaseLinerGsm": 123
+    },
+    "adhesive2": {
+      "adhesiveType": "HT",
+      "adhesiveGsm": 231
+    },
+    "releaseLiner2": {
+      "releaseLinerType": "GLASSINE",
+      "releaseLinerColor": "WHITE",
+      "releaseLinerGsm": 123
+    },
+    "createdAt": "2026-07-31T06:05:34.048Z",
+    "updatedAt": "2026-07-31T06:05:34.048Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a6c3b6c7f6b2e5b7cbdfa53",
+    "labelStockId": "SP | LS | 000003",
+    "skuCode": "FS | LS | 000003",
+    "productCode": "BA112",
+    "rollType": "DOUBLE FACESTOCK",
+    "facestock": {
+      "facestockFamily": "CHROMO",
+      "facestockType": "GLOSSY",
+      "facestockGsm": 13,
+      "facestockMicron": 14.1
+    },
+    "adhesive": {
+      "adhesiveType": "ACRYLIC",
+      "adhesiveGsm": 123
+    },
+    "releaseLiner": {
+      "releaseLinerType": "GLASSINE",
+      "releaseLinerColor": "WHITE",
+      "releaseLinerGsm": 123
+    },
+    "facestock2": {
+      "facestockFamily": "CHROMO",
+      "facestockType": "CLEAR",
+      "facestockGsm": 123,
+      "facestockMicron": 133.7
+    },
+    "adhesive2": {
+      "adhesiveType": "HOTMELT",
+      "adhesiveGsm": 123
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-07-31T06:06:36.780Z",
+    "updatedAt": "2026-07-31T06:06:36.780Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c670db46b75e07ccd9ad",
+    "labelStockId": "SP | LS | 000007",
+    "skuCode": "FS | LS | 000004",
+    "productCode": "P002WB",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "GLOSSY PP",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:12.952Z",
+    "updatedAt": "2026-08-10T12:39:12.952Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c670db46b75e07ccd9b2",
+    "labelStockId": "SP | LS | 000008",
+    "skuCode": "FS | LS | 000005",
+    "productCode": "P003WB",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "MATT PP",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:12.986Z",
+    "updatedAt": "2026-08-10T12:39:12.986Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c670db46b75e07ccd9b7",
+    "labelStockId": "SP | LS | 000009",
+    "skuCode": "FS | LS | 000006",
+    "productCode": "C011",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "CHROMO",
+      "facestockType": "GLOSSY",
+      "facestockGsm": 80,
+      "facestockMicron": 87
+    },
+    "adhesive": {
+      "adhesiveType": "ACRYLIC",
+      "adhesiveGsm": 24
+    },
+    "releaseLiner": {
+      "releaseLinerType": "CCK",
+      "releaseLinerColor": "WHITE",
+      "releaseLinerGsm": 67
+    },
+    "createdAt": "2026-08-10T12:39:12.994Z",
+    "updatedAt": "2026-08-10T13:21:24.883Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9bc",
+    "labelStockId": "SP | LS | 000010",
+    "skuCode": "FS | LS | 000007",
+    "productCode": "BW8011",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "GLOSSY PP",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.003Z",
+    "updatedAt": "2026-08-10T12:39:13.003Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9c1",
+    "labelStockId": "SP | LS | 000011",
+    "skuCode": "FS | LS | 000008",
+    "productCode": "TR P1",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "CHROMO",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.012Z",
+    "updatedAt": "2026-08-10T12:39:13.012Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9c6",
+    "labelStockId": "SP | LS | 000012",
+    "skuCode": "FS | LS | 000009",
+    "productCode": "AW2439",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "CHROMO",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.020Z",
+    "updatedAt": "2026-08-10T12:39:13.020Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9cb",
+    "labelStockId": "SP | LS | 000013",
+    "skuCode": "FS | LS | 000010",
+    "productCode": "AM04240",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "CHROMO",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.027Z",
+    "updatedAt": "2026-08-10T12:39:13.027Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9d0",
+    "labelStockId": "SP | LS | 000014",
+    "skuCode": "FS | LS | 000011",
+    "productCode": "LMBP2960",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "MATT PP",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.038Z",
+    "updatedAt": "2026-08-10T12:39:13.038Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9d5",
+    "labelStockId": "SP | LS | 000015",
+    "skuCode": "FS | LS | 000012",
+    "productCode": "NA",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "GLOSSY PP",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.048Z",
+    "updatedAt": "2026-08-10T12:39:13.048Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9da",
+    "labelStockId": "SP | LS | 000016",
+    "skuCode": "FS | LS | 000013",
+    "productCode": "NA",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "SUPER HOTMELT",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.056Z",
+    "updatedAt": "2026-08-10T12:39:13.056Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9df",
+    "labelStockId": "SP | LS | 000017",
+    "skuCode": "FS | LS | 000014",
+    "productCode": "NA",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "REMOVABLE",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.062Z",
+    "updatedAt": "2026-08-10T12:39:13.062Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9e4",
+    "labelStockId": "SP | LS | 000018",
+    "skuCode": "FS | LS | 000015",
+    "productCode": "P003HT",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "MATT PP (HT)",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.070Z",
+    "updatedAt": "2026-08-10T12:39:13.070Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9e9",
+    "labelStockId": "SP | LS | 000019",
+    "skuCode": "FS | LS | 000016",
+    "productCode": "P004WB",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "CLEAR PP",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.078Z",
+    "updatedAt": "2026-08-10T12:39:13.078Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9ee",
+    "labelStockId": "SP | LS | 000020",
+    "skuCode": "FS | LS | 000017",
+    "productCode": "P007WBP",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "MATT PP PARTIAL",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.086Z",
+    "updatedAt": "2026-08-10T12:39:13.086Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9f3",
+    "labelStockId": "SP | LS | 000021",
+    "skuCode": "FS | LS | 000018",
+    "productCode": "P005WBP",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "GLOSSY PP PARTIAL",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.091Z",
+    "updatedAt": "2026-08-10T12:39:13.091Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9f8",
+    "labelStockId": "SP | LS | 000022",
+    "skuCode": "FS | LS | 000019",
+    "productCode": "C010DR",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "CHROMO (D. R)",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.099Z",
+    "updatedAt": "2026-08-10T12:39:13.099Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccd9fd",
+    "labelStockId": "SP | LS | 000023",
+    "skuCode": "FS | LS | 000020",
+    "productCode": "P009DTP",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "DT. PP",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.106Z",
+    "updatedAt": "2026-08-10T12:39:13.106Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccda02",
+    "labelStockId": "SP | LS | 000024",
+    "skuCode": "FS | LS | 000021",
+    "productCode": "OZ2120",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "MATT PP",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.113Z",
+    "updatedAt": "2026-08-10T12:39:13.113Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccda07",
+    "labelStockId": "SP | LS | 000025",
+    "skuCode": "FS | LS | 000022",
+    "productCode": "PPW(TC)61/W130/SWB-R",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "MATT PP",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.120Z",
+    "updatedAt": "2026-08-10T12:39:13.120Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a79c671db46b75e07ccda0c",
+    "labelStockId": "SP | LS | 000026",
+    "skuCode": "FS | LS | 000023",
+    "productCode": "C019",
+    "rollType": "NORMAL",
+    "facestock": {
+      "facestockFamily": "CHROMO",
+      "facestockType": "TBD"
+    },
+    "adhesive": {
+      "adhesiveType": "TBD"
+    },
+    "releaseLiner": {
+      "releaseLinerType": "TBD",
+      "releaseLinerColor": "WHITE"
+    },
+    "releaseLiner2": {
+      "releaseLinerColor": "WHITE"
+    },
+    "createdAt": "2026-08-10T12:39:13.125Z",
+    "updatedAt": "2026-08-10T12:39:13.125Z",
+    "__v": 0
+  }
+]

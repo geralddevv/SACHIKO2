@@ -50,6 +50,17 @@ const releaseMasterSchema = new mongoose.Schema(
     gsm: {
       type: Number,
     },
+    // Identifies "the exact same release liner spec" -- every field hashed
+    // together (see buildReleaseSignature in routes/system/releaseMaster.js),
+    // so create/edit is blocked only on a full duplicate, not a partial
+    // match. Sparse so legacy rows without one don't collide with each
+    // other as "duplicates" (see scripts/backfill-release-signatures.js).
+    releaseSignature: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
   },
   { timestamps: true },
 );

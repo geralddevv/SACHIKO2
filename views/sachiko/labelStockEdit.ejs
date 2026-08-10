@@ -20,6 +20,90 @@
   .choices[data-type*="select-one"].is-open::after {
     transform: translateY(-50%) rotate(180deg) !important;
   }
+
+  /* Layer cards -- the actual input surface for each physical layer, styled
+     to match the read-only layer-stack shown on the View/Binding pages. */
+  .layer-card {
+    grid-column: span 32;
+    border-radius: 10px;
+    border: 1.5px solid;
+    padding: 14px 18px 18px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+  .layer-card__label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    margin-bottom: 14px;
+  }
+  .layer-card__label::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    flex: 0 0 auto;
+  }
+  .layer-card__fields {
+    display: grid;
+    gap: 14px;
+  }
+  .layer-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .layer-field label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #64748b;
+    text-transform: uppercase;
+  }
+  .layer-field input.form-control,
+  .layer-field select.form-control {
+    height: 2.3rem;
+    padding: 0.3rem 0.7rem;
+    border: 1.6px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1e293b;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .layer-field input.form-control::placeholder { color: #94a3b8; font-weight: 500; }
+  .layer-field input.form-control:hover,
+  .layer-field select.form-control:hover { border-color: #94a3b8; }
+  .layer-field input.form-control:focus,
+  .layer-field select.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12);
+  }
+  .layer-card--facestock { background: #ffffff; border-color: #93c5fd; }
+  .layer-card--facestock .layer-card__label { color: #000000; }
+  .layer-card--adhesive { background: #fffbeb; border-color: #fcd34d; }
+  .layer-card--adhesive .layer-card__label { color: #b45309; }
+  .layer-card--adhesive .layer-field input.form-control,
+  .layer-card--adhesive .layer-field select.form-control { border-color: #fbbf24; }
+  .layer-card--release { background: #eff6ff; border-color: #93c5fd; }
+  .layer-card--release .layer-card__label { color: #1d4ed8; }
+
+  .layer-arrow {
+    grid-column: span 32;
+    display: flex;
+    justify-content: center;
+    margin: -6px 0;
+  }
+  .layer-arrow i { color: #cbd5e1; font-size: 16px; }
+
+  @media (max-width: 768px) {
+    .layer-card__fields { grid-template-columns: 1fr !important; }
+  }
 </style>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
@@ -78,213 +162,227 @@
       </select>
     </div>
 
+    <div class="span-full form-subheading">
+      <h1>Layer Stack (Top &rarr; Bottom)</h1>
+    </div>
+
     <!-- Facestock -->
-    <div class="ls-block" data-block="facestock1" style="display: contents">
-      <div class="span-full form-subheading">
-        <h1>Facestock</h1>
-      </div>
-      <div class="span-six">
-        <label for="facestockFamily">Family</label>
-        <select id="facestockFamily" name="facestockFamily" class="form-control select-tag">
-          <option value="" <%= !ds.facestock?.facestockFamily ? 'selected' : '' %>>— None —</option>
-          <option value="CHROMO"              <%= ds.facestock?.facestockFamily === 'CHROMO'              ? 'selected' : '' %>>CHROMO</option>
-          <option value="CHROMO (D. R)"       <%= ds.facestock?.facestockFamily === 'CHROMO (D. R)'       ? 'selected' : '' %>>CHROMO (D. R)</option>
-          <option value="CLEAR PP"            <%= ds.facestock?.facestockFamily === 'CLEAR PP'            ? 'selected' : '' %>>CLEAR PP</option>
-          <option value="DOUBLE RELEASE"      <%= ds.facestock?.facestockFamily === 'DOUBLE RELEASE'      ? 'selected' : '' %>>DOUBLE RELEASE</option>
-          <option value="DT"                  <%= ds.facestock?.facestockFamily === 'DT'                  ? 'selected' : '' %>>DT</option>
-          <option value="DT. PP"              <%= ds.facestock?.facestockFamily === 'DT. PP'              ? 'selected' : '' %>>DT. PP</option>
-          <option value="GLOSSY PP"           <%= ds.facestock?.facestockFamily === 'GLOSSY PP'           ? 'selected' : '' %>>GLOSSY PP</option>
-          <option value="GLOSSY PP PARTIAL"   <%= ds.facestock?.facestockFamily === 'GLOSSY PP PARTIAL'   ? 'selected' : '' %>>GLOSSY PP PARTIAL</option>
-          <option value="INKJET MATT FILM"    <%= ds.facestock?.facestockFamily === 'INKJET MATT FILM'    ? 'selected' : '' %>>INKJET MATT FILM</option>
-          <option value="MAPLITO"             <%= ds.facestock?.facestockFamily === 'MAPLITO'             ? 'selected' : '' %>>MAPLITO</option>
-          <option value="MATT PP"             <%= ds.facestock?.facestockFamily === 'MATT PP'             ? 'selected' : '' %>>MATT PP</option>
-          <option value="MATT PP (HT)"        <%= ds.facestock?.facestockFamily === 'MATT PP (HT)'        ? 'selected' : '' %>>MATT PP (HT)</option>
-          <option value="MATT PP PARTIAL"     <%= ds.facestock?.facestockFamily === 'MATT PP PARTIAL'     ? 'selected' : '' %>>MATT PP PARTIAL</option>
-          <option value="PP"                  <%= ds.facestock?.facestockFamily === 'PP'                  ? 'selected' : '' %>>PP</option>
-          <option value="REMOVABLE"           <%= ds.facestock?.facestockFamily === 'REMOVABLE'           ? 'selected' : '' %>>REMOVABLE</option>
-          <option value="SILVER VOID"         <%= ds.facestock?.facestockFamily === 'SILVER VOID'         ? 'selected' : '' %>>SILVER VOID</option>
-          <option value="SUPER HOTMELT"       <%= ds.facestock?.facestockFamily === 'SUPER HOTMELT'       ? 'selected' : '' %>>SUPER HOTMELT</option>
-        </select>
-      </div>
-      <div class="span-six">
-        <label for="facestockType">Type</label>
-        <select id="facestockType" name="facestockType" class="form-control select-tag" required>
-          <option value="" disabled <%= !ds.facestock?.facestockType ? 'selected' : '' %> hidden>Select type</option>
-          <option value="CLEAR"      <%= ds.facestock?.facestockType === 'CLEAR'      ? 'selected' : '' %>>CLEAR</option>
-          <option value="GLOSSY"     <%= ds.facestock?.facestockType === 'GLOSSY'     ? 'selected' : '' %>>GLOSSY</option>
-          <option value="MATT"       <%= ds.facestock?.facestockType === 'MATT'       ? 'selected' : '' %>>MATT</option>
-          <option value="SEMI GLOSSY"<%= ds.facestock?.facestockType === 'SEMI GLOSSY'? 'selected' : '' %>>SEMI GLOSSY</option>
-        </select>
-      </div>
-      <div class="span-four">
-        <label for="facestockGsm">GSM</label>
-        <input type="number" id="facestockGsm" name="facestockGsm" class="form-control"
-          placeholder="Enter GSM" min="0" step="any"
-          value="<%= ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm : '' %>" />
-      </div>
-      <div class="span-four">
-        <label for="facestockMicron">Micron</label>
-        <input type="number" id="facestockMicron" name="facestockMicron" class="form-control"
-          placeholder="Enter Micron" min="0" step="any"
-          value="<%= ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron : '' %>" />
+    <div class="ls-block layer-card layer-card--facestock" data-block="facestock1">
+      <span class="layer-card__label">FACESTOCK</span>
+      <div class="layer-card__fields" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="layer-field">
+          <label for="facestockFamily">Family</label>
+          <select id="facestockFamily" name="facestockFamily" class="form-control select-tag">
+            <option value="" <%= !ds.facestock?.facestockFamily ? 'selected' : '' %>>— None —</option>
+            <option value="CHROMO"              <%= ds.facestock?.facestockFamily === 'CHROMO'              ? 'selected' : '' %>>CHROMO</option>
+            <option value="CHROMO (D. R)"       <%= ds.facestock?.facestockFamily === 'CHROMO (D. R)'       ? 'selected' : '' %>>CHROMO (D. R)</option>
+            <option value="CLEAR PP"            <%= ds.facestock?.facestockFamily === 'CLEAR PP'            ? 'selected' : '' %>>CLEAR PP</option>
+            <option value="DOUBLE RELEASE"      <%= ds.facestock?.facestockFamily === 'DOUBLE RELEASE'      ? 'selected' : '' %>>DOUBLE RELEASE</option>
+            <option value="DT"                  <%= ds.facestock?.facestockFamily === 'DT'                  ? 'selected' : '' %>>DT</option>
+            <option value="DT. PP"              <%= ds.facestock?.facestockFamily === 'DT. PP'              ? 'selected' : '' %>>DT. PP</option>
+            <option value="GLOSSY PP"           <%= ds.facestock?.facestockFamily === 'GLOSSY PP'           ? 'selected' : '' %>>GLOSSY PP</option>
+            <option value="GLOSSY PP PARTIAL"   <%= ds.facestock?.facestockFamily === 'GLOSSY PP PARTIAL'   ? 'selected' : '' %>>GLOSSY PP PARTIAL</option>
+            <option value="INKJET MATT FILM"    <%= ds.facestock?.facestockFamily === 'INKJET MATT FILM'    ? 'selected' : '' %>>INKJET MATT FILM</option>
+            <option value="MAPLITO"             <%= ds.facestock?.facestockFamily === 'MAPLITO'             ? 'selected' : '' %>>MAPLITO</option>
+            <option value="MATT PP"             <%= ds.facestock?.facestockFamily === 'MATT PP'             ? 'selected' : '' %>>MATT PP</option>
+            <option value="MATT PP (HT)"        <%= ds.facestock?.facestockFamily === 'MATT PP (HT)'        ? 'selected' : '' %>>MATT PP (HT)</option>
+            <option value="MATT PP PARTIAL"     <%= ds.facestock?.facestockFamily === 'MATT PP PARTIAL'     ? 'selected' : '' %>>MATT PP PARTIAL</option>
+            <option value="PP"                  <%= ds.facestock?.facestockFamily === 'PP'                  ? 'selected' : '' %>>PP</option>
+            <option value="REMOVABLE"           <%= ds.facestock?.facestockFamily === 'REMOVABLE'           ? 'selected' : '' %>>REMOVABLE</option>
+            <option value="SILVER VOID"         <%= ds.facestock?.facestockFamily === 'SILVER VOID'         ? 'selected' : '' %>>SILVER VOID</option>
+            <option value="SUPER HOTMELT"       <%= ds.facestock?.facestockFamily === 'SUPER HOTMELT'       ? 'selected' : '' %>>SUPER HOTMELT</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="facestockType">Type</label>
+          <select id="facestockType" name="facestockType" class="form-control select-tag" required>
+            <option value="" disabled <%= !ds.facestock?.facestockType ? 'selected' : '' %> hidden>Select type</option>
+            <option value="CLEAR"      <%= ds.facestock?.facestockType === 'CLEAR'      ? 'selected' : '' %>>CLEAR</option>
+            <option value="GLOSSY"     <%= ds.facestock?.facestockType === 'GLOSSY'     ? 'selected' : '' %>>GLOSSY</option>
+            <option value="MATT"       <%= ds.facestock?.facestockType === 'MATT'       ? 'selected' : '' %>>MATT</option>
+            <option value="SEMI GLOSSY"<%= ds.facestock?.facestockType === 'SEMI GLOSSY'? 'selected' : '' %>>SEMI GLOSSY</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="facestockGsm">GSM</label>
+          <input type="number" id="facestockGsm" name="facestockGsm" class="form-control"
+            placeholder="Enter GSM" min="0" step="any"
+            value="<%= ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm : '' %>" />
+        </div>
+        <div class="layer-field">
+          <label for="facestockMicron">Micron</label>
+          <input type="number" id="facestockMicron" name="facestockMicron" class="form-control"
+            placeholder="Enter Micron" min="0" step="any"
+            value="<%= ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron : '' %>" />
+        </div>
       </div>
     </div>
+
+    <div class="layer-arrow" data-arrow-after="facestock1"><i class="fa-solid fa-caret-down"></i></div>
 
     <!-- Adhesive -->
-    <div class="ls-block" data-block="adhesive1" style="display: contents">
-      <div class="span-full form-subheading">
-        <h1>Adhesive</h1>
-      </div>
-      <div class="span-seven">
-        <label for="adhesiveType">Type</label>
-        <select id="adhesiveType" name="adhesiveType" class="form-control select-tag" required>
-          <option value="" disabled <%= !ds.adhesive?.adhesiveType ? 'selected' : '' %> hidden>Select type</option>
-          <option value="ACRYLIC"    <%= ds.adhesive?.adhesiveType === 'ACRYLIC'    ? 'selected' : '' %>>ACRYLIC</option>
-          <option value="HOTMELT"    <%= ds.adhesive?.adhesiveType === 'HOTMELT'    ? 'selected' : '' %>>HOTMELT</option>
-          <option value="HT"         <%= ds.adhesive?.adhesiveType === 'HT'         ? 'selected' : '' %>>HT</option>
-          <option value="STAIN FREE" <%= ds.adhesive?.adhesiveType === 'STAIN FREE' ? 'selected' : '' %>>STAIN FREE</option>
-          <option value="WATERBASE"  <%= ds.adhesive?.adhesiveType === 'WATERBASE'  ? 'selected' : '' %>>WATERBASE</option>
-        </select>
-      </div>
-      <div class="span-four">
-        <label for="adhesiveGsm">GSM</label>
-        <input type="number" id="adhesiveGsm" name="adhesiveGsm" class="form-control"
-          placeholder="Enter GSM" min="0" step="any"
-          value="<%= ds.adhesive?.adhesiveGsm != null ? ds.adhesive.adhesiveGsm : '' %>" />
+    <div class="ls-block layer-card layer-card--adhesive" data-block="adhesive1">
+      <span class="layer-card__label">ADHESIVE</span>
+      <div class="layer-card__fields" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="layer-field">
+          <label for="adhesiveType">Type</label>
+          <select id="adhesiveType" name="adhesiveType" class="form-control select-tag" required>
+            <option value="" disabled <%= !ds.adhesive?.adhesiveType ? 'selected' : '' %> hidden>Select type</option>
+            <option value="ACRYLIC"    <%= ds.adhesive?.adhesiveType === 'ACRYLIC'    ? 'selected' : '' %>>ACRYLIC</option>
+            <option value="HOTMELT"    <%= ds.adhesive?.adhesiveType === 'HOTMELT'    ? 'selected' : '' %>>HOTMELT</option>
+            <option value="HT"         <%= ds.adhesive?.adhesiveType === 'HT'         ? 'selected' : '' %>>HT</option>
+            <option value="STAIN FREE" <%= ds.adhesive?.adhesiveType === 'STAIN FREE' ? 'selected' : '' %>>STAIN FREE</option>
+            <option value="WATERBASE"  <%= ds.adhesive?.adhesiveType === 'WATERBASE'  ? 'selected' : '' %>>WATERBASE</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="adhesiveGsm">GSM</label>
+          <input type="number" id="adhesiveGsm" name="adhesiveGsm" class="form-control"
+            placeholder="Enter GSM" min="0" step="any"
+            value="<%= ds.adhesive?.adhesiveGsm != null ? ds.adhesive.adhesiveGsm : '' %>" />
+        </div>
       </div>
     </div>
+
+    <div class="layer-arrow" data-arrow-after="adhesive1"><i class="fa-solid fa-caret-down"></i></div>
 
     <!-- Facestock (Layer 2) -- only for DOUBLE FACESTOCK -->
-    <div class="ls-block" data-block="facestock2" style="display: none">
-      <div class="span-full form-subheading">
-        <h1>Facestock <span style="opacity:0.7;">(Layer 2)</span></h1>
-      </div>
-      <div class="span-six">
-        <label for="facestockFamily2">Family</label>
-        <select id="facestockFamily2" name="facestockFamily2" class="form-control select-tag">
-          <option value="" <%= !ds.facestock2?.facestockFamily ? 'selected' : '' %>>— None —</option>
-          <option value="CHROMO"              <%= ds.facestock2?.facestockFamily === 'CHROMO'              ? 'selected' : '' %>>CHROMO</option>
-          <option value="CHROMO (D. R)"       <%= ds.facestock2?.facestockFamily === 'CHROMO (D. R)'       ? 'selected' : '' %>>CHROMO (D. R)</option>
-          <option value="CLEAR PP"            <%= ds.facestock2?.facestockFamily === 'CLEAR PP'            ? 'selected' : '' %>>CLEAR PP</option>
-          <option value="DOUBLE RELEASE"      <%= ds.facestock2?.facestockFamily === 'DOUBLE RELEASE'      ? 'selected' : '' %>>DOUBLE RELEASE</option>
-          <option value="DT"                  <%= ds.facestock2?.facestockFamily === 'DT'                  ? 'selected' : '' %>>DT</option>
-          <option value="DT. PP"              <%= ds.facestock2?.facestockFamily === 'DT. PP'              ? 'selected' : '' %>>DT. PP</option>
-          <option value="GLOSSY PP"           <%= ds.facestock2?.facestockFamily === 'GLOSSY PP'           ? 'selected' : '' %>>GLOSSY PP</option>
-          <option value="GLOSSY PP PARTIAL"   <%= ds.facestock2?.facestockFamily === 'GLOSSY PP PARTIAL'   ? 'selected' : '' %>>GLOSSY PP PARTIAL</option>
-          <option value="INKJET MATT FILM"    <%= ds.facestock2?.facestockFamily === 'INKJET MATT FILM'    ? 'selected' : '' %>>INKJET MATT FILM</option>
-          <option value="MAPLITO"             <%= ds.facestock2?.facestockFamily === 'MAPLITO'             ? 'selected' : '' %>>MAPLITO</option>
-          <option value="MATT PP"             <%= ds.facestock2?.facestockFamily === 'MATT PP'             ? 'selected' : '' %>>MATT PP</option>
-          <option value="MATT PP (HT)"        <%= ds.facestock2?.facestockFamily === 'MATT PP (HT)'        ? 'selected' : '' %>>MATT PP (HT)</option>
-          <option value="MATT PP PARTIAL"     <%= ds.facestock2?.facestockFamily === 'MATT PP PARTIAL'     ? 'selected' : '' %>>MATT PP PARTIAL</option>
-          <option value="PP"                  <%= ds.facestock2?.facestockFamily === 'PP'                  ? 'selected' : '' %>>PP</option>
-          <option value="REMOVABLE"           <%= ds.facestock2?.facestockFamily === 'REMOVABLE'           ? 'selected' : '' %>>REMOVABLE</option>
-          <option value="SILVER VOID"         <%= ds.facestock2?.facestockFamily === 'SILVER VOID'         ? 'selected' : '' %>>SILVER VOID</option>
-          <option value="SUPER HOTMELT"       <%= ds.facestock2?.facestockFamily === 'SUPER HOTMELT'       ? 'selected' : '' %>>SUPER HOTMELT</option>
-        </select>
-      </div>
-      <div class="span-six">
-        <label for="facestockType2">Type</label>
-        <select id="facestockType2" name="facestockType2" class="form-control select-tag" data-required-when-visible>
-          <option value="" disabled <%= !ds.facestock2?.facestockType ? 'selected' : '' %> hidden>Select type</option>
-          <option value="CLEAR"      <%= ds.facestock2?.facestockType === 'CLEAR'      ? 'selected' : '' %>>CLEAR</option>
-          <option value="GLOSSY"     <%= ds.facestock2?.facestockType === 'GLOSSY'     ? 'selected' : '' %>>GLOSSY</option>
-          <option value="MATT"       <%= ds.facestock2?.facestockType === 'MATT'       ? 'selected' : '' %>>MATT</option>
-          <option value="SEMI GLOSSY"<%= ds.facestock2?.facestockType === 'SEMI GLOSSY'? 'selected' : '' %>>SEMI GLOSSY</option>
-        </select>
-      </div>
-      <div class="span-four">
-        <label for="facestockGsm2">GSM</label>
-        <input type="number" id="facestockGsm2" name="facestockGsm2" class="form-control"
-          placeholder="Enter GSM" min="0" step="any"
-          value="<%= ds.facestock2?.facestockGsm != null ? ds.facestock2.facestockGsm : '' %>" />
-      </div>
-      <div class="span-four">
-        <label for="facestockMicron2">Micron</label>
-        <input type="number" id="facestockMicron2" name="facestockMicron2" class="form-control"
-          placeholder="Enter Micron" min="0" step="any"
-          value="<%= ds.facestock2?.facestockMicron != null ? ds.facestock2.facestockMicron : '' %>" />
+    <div class="ls-block layer-card layer-card--facestock" data-block="facestock2" style="display: none">
+      <span class="layer-card__label">FACESTOCK <span style="opacity:0.7;">(Layer 2)</span></span>
+      <div class="layer-card__fields" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="layer-field">
+          <label for="facestockFamily2">Family</label>
+          <select id="facestockFamily2" name="facestockFamily2" class="form-control select-tag">
+            <option value="" <%= !ds.facestock2?.facestockFamily ? 'selected' : '' %>>— None —</option>
+            <option value="CHROMO"              <%= ds.facestock2?.facestockFamily === 'CHROMO'              ? 'selected' : '' %>>CHROMO</option>
+            <option value="CHROMO (D. R)"       <%= ds.facestock2?.facestockFamily === 'CHROMO (D. R)'       ? 'selected' : '' %>>CHROMO (D. R)</option>
+            <option value="CLEAR PP"            <%= ds.facestock2?.facestockFamily === 'CLEAR PP'            ? 'selected' : '' %>>CLEAR PP</option>
+            <option value="DOUBLE RELEASE"      <%= ds.facestock2?.facestockFamily === 'DOUBLE RELEASE'      ? 'selected' : '' %>>DOUBLE RELEASE</option>
+            <option value="DT"                  <%= ds.facestock2?.facestockFamily === 'DT'                  ? 'selected' : '' %>>DT</option>
+            <option value="DT. PP"              <%= ds.facestock2?.facestockFamily === 'DT. PP'              ? 'selected' : '' %>>DT. PP</option>
+            <option value="GLOSSY PP"           <%= ds.facestock2?.facestockFamily === 'GLOSSY PP'           ? 'selected' : '' %>>GLOSSY PP</option>
+            <option value="GLOSSY PP PARTIAL"   <%= ds.facestock2?.facestockFamily === 'GLOSSY PP PARTIAL'   ? 'selected' : '' %>>GLOSSY PP PARTIAL</option>
+            <option value="INKJET MATT FILM"    <%= ds.facestock2?.facestockFamily === 'INKJET MATT FILM'    ? 'selected' : '' %>>INKJET MATT FILM</option>
+            <option value="MAPLITO"             <%= ds.facestock2?.facestockFamily === 'MAPLITO'             ? 'selected' : '' %>>MAPLITO</option>
+            <option value="MATT PP"             <%= ds.facestock2?.facestockFamily === 'MATT PP'             ? 'selected' : '' %>>MATT PP</option>
+            <option value="MATT PP (HT)"        <%= ds.facestock2?.facestockFamily === 'MATT PP (HT)'        ? 'selected' : '' %>>MATT PP (HT)</option>
+            <option value="MATT PP PARTIAL"     <%= ds.facestock2?.facestockFamily === 'MATT PP PARTIAL'     ? 'selected' : '' %>>MATT PP PARTIAL</option>
+            <option value="PP"                  <%= ds.facestock2?.facestockFamily === 'PP'                  ? 'selected' : '' %>>PP</option>
+            <option value="REMOVABLE"           <%= ds.facestock2?.facestockFamily === 'REMOVABLE'           ? 'selected' : '' %>>REMOVABLE</option>
+            <option value="SILVER VOID"         <%= ds.facestock2?.facestockFamily === 'SILVER VOID'         ? 'selected' : '' %>>SILVER VOID</option>
+            <option value="SUPER HOTMELT"       <%= ds.facestock2?.facestockFamily === 'SUPER HOTMELT'       ? 'selected' : '' %>>SUPER HOTMELT</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="facestockType2">Type</label>
+          <select id="facestockType2" name="facestockType2" class="form-control select-tag" data-required-when-visible>
+            <option value="" disabled <%= !ds.facestock2?.facestockType ? 'selected' : '' %> hidden>Select type</option>
+            <option value="CLEAR"      <%= ds.facestock2?.facestockType === 'CLEAR'      ? 'selected' : '' %>>CLEAR</option>
+            <option value="GLOSSY"     <%= ds.facestock2?.facestockType === 'GLOSSY'     ? 'selected' : '' %>>GLOSSY</option>
+            <option value="MATT"       <%= ds.facestock2?.facestockType === 'MATT'       ? 'selected' : '' %>>MATT</option>
+            <option value="SEMI GLOSSY"<%= ds.facestock2?.facestockType === 'SEMI GLOSSY'? 'selected' : '' %>>SEMI GLOSSY</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="facestockGsm2">GSM</label>
+          <input type="number" id="facestockGsm2" name="facestockGsm2" class="form-control"
+            placeholder="Enter GSM" min="0" step="any"
+            value="<%= ds.facestock2?.facestockGsm != null ? ds.facestock2.facestockGsm : '' %>" />
+        </div>
+        <div class="layer-field">
+          <label for="facestockMicron2">Micron</label>
+          <input type="number" id="facestockMicron2" name="facestockMicron2" class="form-control"
+            placeholder="Enter Micron" min="0" step="any"
+            value="<%= ds.facestock2?.facestockMicron != null ? ds.facestock2.facestockMicron : '' %>" />
+        </div>
       </div>
     </div>
+
+    <div class="layer-arrow" data-arrow-after="facestock2" style="display: none"><i class="fa-solid fa-caret-down"></i></div>
 
     <!-- Adhesive (Layer 2) -- for DOUBLE FACESTOCK and DOUBLE RELEASE -->
-    <div class="ls-block" data-block="adhesive2" style="display: none">
-      <div class="span-full form-subheading">
-        <h1>Adhesive <span style="opacity:0.7;">(Layer 2)</span></h1>
-      </div>
-      <div class="span-seven">
-        <label for="adhesiveType2">Type</label>
-        <select id="adhesiveType2" name="adhesiveType2" class="form-control select-tag" data-required-when-visible>
-          <option value="" disabled <%= !ds.adhesive2?.adhesiveType ? 'selected' : '' %> hidden>Select type</option>
-          <option value="ACRYLIC"    <%= ds.adhesive2?.adhesiveType === 'ACRYLIC'    ? 'selected' : '' %>>ACRYLIC</option>
-          <option value="HOTMELT"    <%= ds.adhesive2?.adhesiveType === 'HOTMELT'    ? 'selected' : '' %>>HOTMELT</option>
-          <option value="HT"         <%= ds.adhesive2?.adhesiveType === 'HT'         ? 'selected' : '' %>>HT</option>
-          <option value="STAIN FREE" <%= ds.adhesive2?.adhesiveType === 'STAIN FREE' ? 'selected' : '' %>>STAIN FREE</option>
-          <option value="WATERBASE"  <%= ds.adhesive2?.adhesiveType === 'WATERBASE'  ? 'selected' : '' %>>WATERBASE</option>
-        </select>
-      </div>
-      <div class="span-four">
-        <label for="adhesiveGsm2">GSM</label>
-        <input type="number" id="adhesiveGsm2" name="adhesiveGsm2" class="form-control"
-          placeholder="Enter GSM" min="0" step="any"
-          value="<%= ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm : '' %>" />
+    <div class="ls-block layer-card layer-card--adhesive" data-block="adhesive2" style="display: none">
+      <span class="layer-card__label">ADHESIVE <span style="opacity:0.7;">(Layer 2)</span></span>
+      <div class="layer-card__fields" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="layer-field">
+          <label for="adhesiveType2">Type</label>
+          <select id="adhesiveType2" name="adhesiveType2" class="form-control select-tag" data-required-when-visible>
+            <option value="" disabled <%= !ds.adhesive2?.adhesiveType ? 'selected' : '' %> hidden>Select type</option>
+            <option value="ACRYLIC"    <%= ds.adhesive2?.adhesiveType === 'ACRYLIC'    ? 'selected' : '' %>>ACRYLIC</option>
+            <option value="HOTMELT"    <%= ds.adhesive2?.adhesiveType === 'HOTMELT'    ? 'selected' : '' %>>HOTMELT</option>
+            <option value="HT"         <%= ds.adhesive2?.adhesiveType === 'HT'         ? 'selected' : '' %>>HT</option>
+            <option value="STAIN FREE" <%= ds.adhesive2?.adhesiveType === 'STAIN FREE' ? 'selected' : '' %>>STAIN FREE</option>
+            <option value="WATERBASE"  <%= ds.adhesive2?.adhesiveType === 'WATERBASE'  ? 'selected' : '' %>>WATERBASE</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="adhesiveGsm2">GSM</label>
+          <input type="number" id="adhesiveGsm2" name="adhesiveGsm2" class="form-control"
+            placeholder="Enter GSM" min="0" step="any"
+            value="<%= ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm : '' %>" />
+        </div>
       </div>
     </div>
+
+    <div class="layer-arrow" data-arrow-after="adhesive2" style="display: none"><i class="fa-solid fa-caret-down"></i></div>
 
     <!-- Release Liner -->
-    <div class="ls-block" data-block="release1" style="display: contents">
-      <div class="span-full form-subheading">
-        <h1>Release Liner</h1>
-      </div>
-      <div class="span-seven">
-        <label for="releaseLinerType">Type</label>
-        <select id="releaseLinerType" name="releaseLinerType" class="form-control select-tag" required>
-          <option value="" disabled <%= !ds.releaseLiner?.releaseLinerType ? 'selected' : '' %> hidden>Select type</option>
-          <option value="CCK"      <%= ds.releaseLiner?.releaseLinerType === 'CCK'      ? 'selected' : '' %>>CCK</option>
-          <option value="GLASSINE" <%= ds.releaseLiner?.releaseLinerType === 'GLASSINE' ? 'selected' : '' %>>GLASSINE</option>
-          <option value="SCK"      <%= ds.releaseLiner?.releaseLinerType === 'SCK'      ? 'selected' : '' %>>SCK</option>
-        </select>
-      </div>
-      <div class="span-four">
-        <label for="releaseLinerColor">Color</label>
-        <select id="releaseLinerColor" name="releaseLinerColor" class="form-control select-tag">
-          <option value="WHITE"  <%= (ds.releaseLiner?.releaseLinerColor || 'WHITE') === 'WHITE'  ? 'selected' : '' %>>WHITE</option>
-          <option value="YELLOW" <%= ds.releaseLiner?.releaseLinerColor === 'YELLOW' ? 'selected' : '' %>>YELLOW</option>
-        </select>
-      </div>
-      <div class="span-four">
-        <label for="releaseLinerGsm">GSM</label>
-        <input type="number" id="releaseLinerGsm" name="releaseLinerGsm" class="form-control"
-          placeholder="Enter GSM" min="0" step="any"
-          value="<%= ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm : '' %>" />
+    <div class="ls-block layer-card layer-card--release" data-block="release1">
+      <span class="layer-card__label">RELEASE LINER</span>
+      <div class="layer-card__fields" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="layer-field">
+          <label for="releaseLinerType">Type</label>
+          <select id="releaseLinerType" name="releaseLinerType" class="form-control select-tag" required>
+            <option value="" disabled <%= !ds.releaseLiner?.releaseLinerType ? 'selected' : '' %> hidden>Select type</option>
+            <option value="CCK"      <%= ds.releaseLiner?.releaseLinerType === 'CCK'      ? 'selected' : '' %>>CCK</option>
+            <option value="GLASSINE" <%= ds.releaseLiner?.releaseLinerType === 'GLASSINE' ? 'selected' : '' %>>GLASSINE</option>
+            <option value="SCK"      <%= ds.releaseLiner?.releaseLinerType === 'SCK'      ? 'selected' : '' %>>SCK</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="releaseLinerColor">Color</label>
+          <select id="releaseLinerColor" name="releaseLinerColor" class="form-control select-tag">
+            <option value="WHITE"  <%= (ds.releaseLiner?.releaseLinerColor || 'WHITE') === 'WHITE'  ? 'selected' : '' %>>WHITE</option>
+            <option value="YELLOW" <%= ds.releaseLiner?.releaseLinerColor === 'YELLOW' ? 'selected' : '' %>>YELLOW</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="releaseLinerGsm">GSM</label>
+          <input type="number" id="releaseLinerGsm" name="releaseLinerGsm" class="form-control"
+            placeholder="Enter GSM" min="0" step="any"
+            value="<%= ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm : '' %>" />
+        </div>
       </div>
     </div>
 
+    <div class="layer-arrow" data-arrow-after="release1" style="display: none"><i class="fa-solid fa-caret-down"></i></div>
+
     <!-- Release Liner (Layer 2) -- only for DOUBLE RELEASE -->
-    <div class="ls-block" data-block="release2" style="display: none">
-      <div class="span-full form-subheading">
-        <h1>Release Liner <span style="opacity:0.7;">(Layer 2)</span></h1>
-      </div>
-      <div class="span-seven">
-        <label for="releaseLinerType2">Type</label>
-        <select id="releaseLinerType2" name="releaseLinerType2" class="form-control select-tag" data-required-when-visible>
-          <option value="" disabled <%= !ds.releaseLiner2?.releaseLinerType ? 'selected' : '' %> hidden>Select type</option>
-          <option value="CCK"      <%= ds.releaseLiner2?.releaseLinerType === 'CCK'      ? 'selected' : '' %>>CCK</option>
-          <option value="GLASSINE" <%= ds.releaseLiner2?.releaseLinerType === 'GLASSINE' ? 'selected' : '' %>>GLASSINE</option>
-          <option value="SCK"      <%= ds.releaseLiner2?.releaseLinerType === 'SCK'      ? 'selected' : '' %>>SCK</option>
-        </select>
-      </div>
-      <div class="span-four">
-        <label for="releaseLinerColor2">Color</label>
-        <select id="releaseLinerColor2" name="releaseLinerColor2" class="form-control select-tag">
-          <option value="WHITE"  <%= (ds.releaseLiner2?.releaseLinerColor || 'WHITE') === 'WHITE'  ? 'selected' : '' %>>WHITE</option>
-          <option value="YELLOW" <%= ds.releaseLiner2?.releaseLinerColor === 'YELLOW' ? 'selected' : '' %>>YELLOW</option>
-        </select>
-      </div>
-      <div class="span-four">
-        <label for="releaseLinerGsm2">GSM</label>
-        <input type="number" id="releaseLinerGsm2" name="releaseLinerGsm2" class="form-control"
-          placeholder="Enter GSM" min="0" step="any"
-          value="<%= ds.releaseLiner2?.releaseLinerGsm != null ? ds.releaseLiner2.releaseLinerGsm : '' %>" />
+    <div class="ls-block layer-card layer-card--release" data-block="release2" style="display: none">
+      <span class="layer-card__label">RELEASE LINER <span style="opacity:0.7;">(Layer 2)</span></span>
+      <div class="layer-card__fields" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="layer-field">
+          <label for="releaseLinerType2">Type</label>
+          <select id="releaseLinerType2" name="releaseLinerType2" class="form-control select-tag" data-required-when-visible>
+            <option value="" disabled <%= !ds.releaseLiner2?.releaseLinerType ? 'selected' : '' %> hidden>Select type</option>
+            <option value="CCK"      <%= ds.releaseLiner2?.releaseLinerType === 'CCK'      ? 'selected' : '' %>>CCK</option>
+            <option value="GLASSINE" <%= ds.releaseLiner2?.releaseLinerType === 'GLASSINE' ? 'selected' : '' %>>GLASSINE</option>
+            <option value="SCK"      <%= ds.releaseLiner2?.releaseLinerType === 'SCK'      ? 'selected' : '' %>>SCK</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="releaseLinerColor2">Color</label>
+          <select id="releaseLinerColor2" name="releaseLinerColor2" class="form-control select-tag">
+            <option value="WHITE"  <%= (ds.releaseLiner2?.releaseLinerColor || 'WHITE') === 'WHITE'  ? 'selected' : '' %>>WHITE</option>
+            <option value="YELLOW" <%= ds.releaseLiner2?.releaseLinerColor === 'YELLOW' ? 'selected' : '' %>>YELLOW</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="releaseLinerGsm2">GSM</label>
+          <input type="number" id="releaseLinerGsm2" name="releaseLinerGsm2" class="form-control"
+            placeholder="Enter GSM" min="0" step="any"
+            value="<%= ds.releaseLiner2?.releaseLinerGsm != null ? ds.releaseLiner2.releaseLinerGsm : '' %>" />
+        </div>
       </div>
     </div>
 
@@ -333,6 +431,8 @@
     const btnGrp = document.querySelector(".btn-grp");
     const blocks = {};
     document.querySelectorAll(".ls-block").forEach((el) => { blocks[el.dataset.block] = el; });
+    const arrows = {};
+    document.querySelectorAll(".layer-arrow[data-arrow-after]").forEach((el) => { arrows[el.dataset.arrowAfter] = el; });
 
     function applyRollType(rollType) {
       const order = ROLL_TYPE_ORDER[rollType] || ROLL_TYPE_ORDER.NORMAL;
@@ -340,15 +440,23 @@
       Object.keys(blocks).forEach((key) => {
         const el = blocks[key];
         const visible = order.includes(key);
-        el.style.display = visible ? "contents" : "none";
+        el.style.display = visible ? "" : "none";
         el.querySelectorAll("[data-required-when-visible]").forEach((field) => {
           field.required = visible;
         });
       });
 
+      // Every block but the last in the current order gets a caret after it.
+      Object.keys(arrows).forEach((key) => {
+        const idx = order.indexOf(key);
+        arrows[key].style.display = idx !== -1 && idx < order.length - 1 ? "flex" : "none";
+      });
+
       order.forEach((key) => {
         const el = blocks[key];
         if (el) form.insertBefore(el, btnGrp);
+        const arrow = arrows[key];
+        if (arrow) form.insertBefore(arrow, btnGrp);
       });
     }
 

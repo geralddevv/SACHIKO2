@@ -141,6 +141,13 @@
       </select>
     </div>
 
+    <div id="sku-layer-preview" class="span-full" style="display:none;">
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;max-width:600px;margin:0 auto;">
+        <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:0.05em;text-align:center;">LAYER STACK (TOP &rarr; BOTTOM)</p>
+        <div id="sku-layer-stack" style="display:flex;flex-direction:column;gap:2px;"></div>
+      </div>
+    </div>
+
     <!-- Materials Table -->
     <div class="span-full">
       <table class="jc-table deckle-free-mode" style="table-layout:fixed;">
@@ -218,6 +225,60 @@
 
 <script>
   const allClientUsers = <%- JSON.stringify(clientUsers) %>;
+  const labelStocksData = <%- safeJson(labelStocks || []) %>;
+
+  function escSku(v) {
+    return String(v ?? "—").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  /* ── Physical layer stack builder (same layer order/styling used on the Label Stock View page) ── */
+  const SKU_LAYER_STYLE = {
+    facestock: { bg: "#ffffff", border: "#93c5fd", text: "#000000", label: "FACESTOCK" },
+    adhesive:  { bg: "#fffbeb", border: "#fcd34d", text: "#b45309", label: "ADHESIVE" },
+    release:   { bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8", label: "RELEASE LINER" },
+  };
+
+  function skuLayerBlock(kind, title, parts) {
+    const s = SKU_LAYER_STYLE[kind];
+    const detail = parts.filter(Boolean).join(" · ");
+    return `
+      <div style="background:${s.bg};border:1.5px solid ${s.border};border-radius:6px;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <span style="font-size:11px;font-weight:800;letter-spacing:0.04em;color:${s.text};">${s.label}</span>
+        <span style="font-size:12px;font-weight:600;color:#334155;text-align:right;">${detail ? escSku(detail) : "—"}${title ? ` <span style="color:${s.text};font-weight:700;">(${escSku(title)})</span>` : ""}</span>
+      </div>`;
+  }
+
+  function renderSkuLayerStack(ds) {
+    const rollType = ds.rollType || "NORMAL";
+    let layers = [
+      skuLayerBlock("facestock", null, [ds.facestock?.facestockFamily, ds.facestock?.facestockType, ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm + " GSM" : null, ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : null]),
+      skuLayerBlock("adhesive", null, [ds.adhesive?.adhesiveType, ds.adhesive?.adhesiveGsm != null ? ds.adhesive.adhesiveGsm + " GSM" : null]),
+    ];
+    if (rollType === "DOUBLE FACESTOCK") {
+      layers.push(
+        skuLayerBlock("facestock", "Layer 2", [ds.facestock2?.facestockFamily, ds.facestock2?.facestockType, ds.facestock2?.facestockGsm != null ? ds.facestock2.facestockGsm + " GSM" : null, ds.facestock2?.facestockMicron != null ? ds.facestock2.facestockMicron + " MIC" : null]),
+        skuLayerBlock("adhesive", "Layer 2", [ds.adhesive2?.adhesiveType, ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null]),
+        skuLayerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+      );
+    } else if (rollType === "DOUBLE RELEASE") {
+      layers.push(
+        skuLayerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+        skuLayerBlock("adhesive", "Layer 2", [ds.adhesive2?.adhesiveType, ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null]),
+        skuLayerBlock("release", "Layer 2", [ds.releaseLiner2?.releaseLinerType, ds.releaseLiner2?.releaseLinerColor, ds.releaseLiner2?.releaseLinerGsm != null ? ds.releaseLiner2.releaseLinerGsm + " GSM" : null]),
+      );
+    } else {
+      layers.push(
+        skuLayerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+      );
+    }
+
+    return `
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        ${layers.join(`
+        <div style="display:flex;justify-content:center;margin:-2px 0;"><i class="fa-solid fa-caret-down" style="color:#cbd5e1;font-size:11px;"></i></div>
+        `)}
+      </div>`;
+  }
 
   document.addEventListener("DOMContentLoaded", () => {
     const productSelect    = document.getElementById("productCode");
@@ -266,6 +327,9 @@
       }
     });
 
+    const skuLayerPreview = document.getElementById("sku-layer-preview");
+    const skuLayerStack = document.getElementById("sku-layer-stack");
+
     function autofillFromSelection() {
       const sel = productSelect.options[productSelect.selectedIndex];
       if (!sel || !sel.value) return;
@@ -284,6 +348,14 @@
       document.getElementById("adGsmMic").value = adGsmVal;
       document.getElementById("rlCode").value   = rlType;
       document.getElementById("rlGsmMic").value = rlGsmVal;
+
+      const ds = labelStocksData.find(d => d.productCode === sel.value);
+      if (ds) {
+        skuLayerStack.innerHTML = renderSkuLayerStack(ds);
+        skuLayerPreview.style.display = "block";
+      } else {
+        skuLayerPreview.style.display = "none";
+      }
     }
 
     productSelect.addEventListener("change", autofillFromSelection);

@@ -36,9 +36,10 @@ const adhesiveMasterSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    // The vendor's own code for this spec -- not globally unique (different
-    // vendors can coincidentally use the same code), only unique per vendor
-    // (see the compound index below).
+    // The vendor's own code for this spec -- not unique by itself (a vendor
+    // can supply several distinct specs under the same code, or two vendors
+    // can coincidentally use the same code); duplicate protection is by
+    // adhesiveSignature below instead.
     vendorSkuCode: {
       type: String,
       required: true,
@@ -61,10 +62,19 @@ const adhesiveMasterSchema = new mongoose.Schema(
     density: {
       type: Number,
     },
+    // Identifies "the exact same adhesive spec" -- every field hashed
+    // together (see buildAdhesiveSignature in routes/system/adhesiveMaster.js),
+    // so create/edit is blocked only on a full duplicate, not a partial
+    // match. Sparse so legacy rows without one don't collide with each
+    // other as "duplicates" (see scripts/backfill-adhesive-signatures.js).
+    adhesiveSignature: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
   },
   { timestamps: true },
 );
-
-adhesiveMasterSchema.index({ vendorId: 1, vendorSkuCode: 1 }, { unique: true });
 
 export default mongoose.models.AdhesiveMaster || mongoose.model("AdhesiveMaster", adhesiveMasterSchema);

@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
 import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
@@ -6,6 +7,36 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 
 const router = express.Router();
+
+// Same sha256 signature scheme used for Client/TapeSalesOrder/Label Stock
+// Binding duplicate prevention (see routes/users/clients.js,
+// routes/fairdesk_route.js, routes/sachiko/labelStockBinding.js) -- blocks
+// create/edit only when every field matches an existing record exactly.
+function hashSignature(rawSignature) {
+  return `sha256:${crypto.createHash("sha256").update(String(rawSignature ?? "")).digest("hex")}`;
+}
+
+function canonStr(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function buildAdhesiveSignature(payload) {
+  return hashSignature(
+    [
+      String(payload.vendorId || ""),
+      canonStr(payload.type),
+      canonStr(payload.make),
+      canonStr(payload.vendorSkuCode),
+      canonStr(payload.shelfLife),
+      String(Number(payload.viscosity ?? "")),
+      String(Number(payload.cohesion ?? "")),
+      String(Number(payload.shear ?? "")),
+      String(Number(payload.density ?? "")),
+    ].join("||"),
+  );
+}
+
+const DUPLICATE_ADHESIVE_MESSAGE = "This adhesive already exists (every field matches an existing record).";
 
 // Same "SP | <CODE> | 000001" id scheme used for Machine/Label Stock/Job Card
 // ids elsewhere (see routes/system/machine.js, routes/sachiko/sachiko_route.js).
@@ -85,21 +116,22 @@ router.post("/form/adhesive", requireAuth, requireAdhesiveMaster, createLimiter,
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const duplicateVendorSkuCode = await AdhesiveMaster.exists({ vendorId: payload.vendorId, vendorSkuCode: payload.vendorSkuCode });
-    if (duplicateVendorSkuCode) {
-      return res.status(400).json({ success: false, message: "This Vendor SKU Code already exists for this vendor." });
+    const adhesiveSignature = buildAdhesiveSignature(payload);
+    const duplicate = await AdhesiveMaster.exists({ adhesiveSignature });
+    if (duplicate) {
+      return res.status(400).json({ success: false, message: DUPLICATE_ADHESIVE_MESSAGE });
     }
 
     const skuId = await generateId("adhesiveMasterSkuId", "ADH");
-    await AdhesiveMaster.create({ ...payload, skuId });
+    await AdhesiveMaster.create({ ...payload, skuId, adhesiveSignature });
 
     res.locals.auditDescription = `Created adhesive master "${skuId}" (${payload.vendorSkuCode})`;
     req.flash("notification", "Adhesive master created successfully!");
     res.json({ success: true, redirect: "/sachiko/form/adhesive" });
   } catch (err) {
     console.error("ADHESIVE MASTER CREATE ERROR:", err);
-    const msg = err.code === 11000 ? "This Vendor SKU Code already exists for this vendor." : "Failed to create adhesive master.";
-    res.status(400).json({ success: false, message: msg });
+    const isDup = err.code === 11000 && err.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "adhesiveSignature");
+    res.status(400).json({ success: false, message: isDup ? DUPLICATE_ADHESIVE_MESSAGE : "Failed to create adhesive master." });
   }
 });
 
@@ -109,16 +141,13 @@ router.put("/api/adhesive/:id", requireAuth, requireAdhesiveMaster, updateLimite
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const duplicateVendorSkuCode = await AdhesiveMaster.exists({
-      vendorId: payload.vendorId,
-      vendorSkuCode: payload.vendorSkuCode,
-      _id: { $ne: req.params.id },
-    });
-    if (duplicateVendorSkuCode) {
-      return res.status(400).json({ success: false, message: "This Vendor SKU Code already exists for this vendor." });
+    const adhesiveSignature = buildAdhesiveSignature(payload);
+    const duplicate = await AdhesiveMaster.exists({ adhesiveSignature, _id: { $ne: req.params.id } });
+    if (duplicate) {
+      return res.status(400).json({ success: false, message: DUPLICATE_ADHESIVE_MESSAGE });
     }
 
-    const updated = await AdhesiveMaster.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
+    const updated = await AdhesiveMaster.findByIdAndUpdate(req.params.id, { ...payload, adhesiveSignature }, { new: true, runValidators: true });
     if (!updated) {
       return res.status(404).json({ success: false, message: "Adhesive master not found." });
     }
@@ -127,8 +156,8 @@ router.put("/api/adhesive/:id", requireAuth, requireAdhesiveMaster, updateLimite
     res.json({ success: true });
   } catch (err) {
     console.error("ADHESIVE MASTER UPDATE ERROR:", err);
-    const msg = err.code === 11000 ? "This Vendor SKU Code already exists for this vendor." : "Failed to update adhesive master.";
-    res.status(400).json({ success: false, message: msg });
+    const isDup = err.code === 11000 && err.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "adhesiveSignature");
+    res.status(400).json({ success: false, message: isDup ? DUPLICATE_ADHESIVE_MESSAGE : "Failed to update adhesive master." });
   }
 });
 

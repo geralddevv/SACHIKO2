@@ -22,6 +22,7 @@ import stockViewRoutes from "./routes/stock/stockView.js";
 import facestockStockRoutes from "./routes/stock/facestockStock.js";
 import adhesiveStockRoutes from "./routes/stock/adhesiveStock.js";
 import releaseLinerStockRoutes from "./routes/stock/releaseLinerStock.js";
+import labelStockProductionRoutes from "./routes/sachiko/labelStockProduction.js";
 import clientFormRoute from "./routes/users/clients.js";
 import vendorItemBindingRoutes from "./routes/inventory/vendorItemBinding.js";
 import reorderRoutes from "./routes/inventory/reorder.js";
@@ -884,6 +885,7 @@ app.use("/sachiko/stocks", requireAuth, requireRole(["proprietor", "admin", "hod
 app.use("/sachiko/facestockstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), facestockStockRoutes);
 app.use("/sachiko/adhesivestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), adhesiveStockRoutes);
 app.use("/sachiko/releaselinerstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), releaseLinerStockRoutes);
+app.use("/sachiko/labelstockproduction", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockProductionRoutes);
 app.use("/sachiko/inventory", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), reorderRoutes);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod"]), sachikoRoute);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockBindingRoutes);

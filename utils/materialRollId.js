@@ -3,11 +3,15 @@ import Counter from "../models/system/counter.js";
 // ---------------------------------------------------------------------------
 // Roll ID generation for the raw-material stock pools (Facestock/Adhesive/
 // Release Liner stock -- see models/inventory/facestockStock.js etc.).
-// Separate from utils/rollId.js, which is wired to MaterialStock's own
-// finished-label-stock reels and its production-consumption pipeline; these
-// pools don't feed that pipeline and have no per-item product code to key
-// off, so the sequence is scoped by a fixed category prefix + financial year
-// instead (e.g. FACESTOCK/26-27/001), rather than per spec/type.
+// Separate from utils/rollId.js, which mints MaterialStock's own Deckle IDs
+// for finished label stock. Label Stock Production (routes/sachiko/
+// labelStockProduction.js) does draw these pools down to make a Deckle, but
+// their own reels never get a *new* id out of that -- an existing reel just
+// loses mtrs -- so this generator only ever runs at raw-material inward.
+// These pools also have no per-item product code to key off (unlike a
+// finished SKU's productCode), so the sequence is scoped by a fixed category
+// prefix + financial year instead (e.g. FACESTOCK/26-27/001), rather than
+// per spec/type.
 // ---------------------------------------------------------------------------
 
 // Indian financial year, April-March. Evaluated at generation time -- a reel

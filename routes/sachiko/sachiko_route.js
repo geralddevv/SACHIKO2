@@ -46,6 +46,18 @@ const handleWordUpload = (req, res, next) => {
   });
 };
 
+// Same upload handling as handleWordUpload, but for the label-stock create
+// dialog, which submits via fetch and needs a JSON error response instead of
+// a redirect.
+const handleWordUploadJson = (req, res, next) => {
+  upload.single("wordFile")(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    next();
+  });
+};
+
 /* ================= HELPERS ================= */
 // Generate a sequential id of the form `SP | <CODE> | 000001`.
 async function generateId(key, code) {
@@ -114,12 +126,16 @@ async function generateSkuCode() {
 
 /* ================= LABEL STOCK ================= */
 router.get("/label-stock/view", async (req, res) => {
-  const jsonData = await SachikoLabelStock.find().sort({ skuCode: 1 }).lean();
+  const [jsonData, previewSkuCode] = await Promise.all([
+    SachikoLabelStock.find().sort({ skuCode: 1 }).lean(),
+    previewNextSkuCode(),
+  ]);
   res.render("sachiko/labelStockView.ejs", {
     title: "Label Stock View",
     CSS: "tableDisp.css",
     JS: false,
     jsonData,
+    previewSkuCode,
     notification: req.flash("notification"),
   });
 });
@@ -186,23 +202,25 @@ function buildLabelStockPayload(body) {
   return payload;
 }
 
-router.post("/label-stock/form", requireAuth, createLimiter, handleWordUpload, async (req, res) => {
+router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJson, async (req, res) => {
   try {
     const labelStockId = await generateId("sachikoLabelStockId", "LS");
     const skuCode = await generateSkuCode();
     const payload = buildLabelStockPayload(req.body);
+    if (!payload.productCode) {
+      throw Object.assign(new Error("Product Code is required"), { userMessage: "Product Code is required" });
+    }
     if (req.file) {
       payload.wordFile = req.file.filename;
       payload.wordFileOriginalName = req.file.originalname;
     }
     await SachikoLabelStock.create({ labelStockId, skuCode, ...payload });
     req.flash("notification", "Label Stock created successfully!");
-    res.redirect("/sachiko/label-stock/view");
+    res.json({ success: true, redirect: "/sachiko/label-stock/view" });
   } catch (err) {
     console.error("SACHIKO LABEL STOCK CREATE ERROR:", err);
     if (req.file) fs.existsSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename)) && fs.unlinkSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename));
-    req.flash("notification", "Failed to create Label Stock");
-    res.redirect("/sachiko/label-stock/form");
+    res.status(400).json({ success: false, message: err.userMessage || "Failed to create Label Stock" });
   }
 });
 

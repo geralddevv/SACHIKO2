@@ -19,7 +19,8 @@ const adhesiveStockSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    // Rolls -- always 1 here; no consumption pipeline deducts this stock yet.
+    // Rolls -- 1 at inward, or 0 once Label Stock Production
+    // (routes/sachiko/labelStockProduction.js) empties the reel.
     quantity: {
       type: Number,
       required: true,

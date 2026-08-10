@@ -23,6 +23,10 @@ node scripts/backfill-paper-invoice-no.js        # PaperStock invoiceNo <- "LEGA
 node scripts/backfill-paper-min-rate.js          # Paper minRate <- rate, where missing
 node scripts/backfill-paper-max-rate.js          # Paper maxRate <- rate, where missing
 node scripts/backfill-paper-stock-rate.js        # PaperStock/PaperStockLog rate <- Paper.rate, where missing
+node scripts/backfill-facestock-signatures.js    # repair Facestock Master dup protection (also drops old vendor+SKU index)
+node scripts/backfill-adhesive-signatures.js     # repair Adhesive Master dup protection (also drops old vendor+SKU index)
+node scripts/backfill-release-signatures.js      # repair Release Master dup protection
+node scripts/backfill-core-signatures.js         # repair Core Master dup protection
 node scripts/send-back-to-pending.js <orderId>   # unassign one WIP order back to Pending (CLI form of the UI button)
 ```
 

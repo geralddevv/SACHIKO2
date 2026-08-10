@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import CoreMaster from "../../models/inventory/coreMaster.js";
 import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
@@ -6,6 +7,32 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 
 const router = express.Router();
+
+// Same sha256 signature scheme used for Client/TapeSalesOrder/Label Stock
+// Binding duplicate prevention (see routes/users/clients.js,
+// routes/fairdesk_route.js, routes/sachiko/labelStockBinding.js) -- blocks
+// create/edit only when every field matches an existing record exactly.
+function hashSignature(rawSignature) {
+  return `sha256:${crypto.createHash("sha256").update(String(rawSignature ?? "")).digest("hex")}`;
+}
+
+function canonStr(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function buildCoreSignature(payload) {
+  return hashSignature(
+    [
+      String(payload.vendorId || ""),
+      canonStr(payload.type),
+      canonStr(payload.make),
+      canonStr(payload.printType),
+      String(Number(payload.thickness ?? "")),
+    ].join("||"),
+  );
+}
+
+const DUPLICATE_CORE_MESSAGE = "This core already exists (every field matches an existing record).";
 
 // Same "SP | <CODE> | 000001" id scheme used for Machine/Label Stock/Job Card
 // ids elsewhere (see routes/system/machine.js, routes/sachiko/sachiko_route.js).
@@ -81,15 +108,22 @@ router.post("/form/core", requireAuth, requireCoreMaster, createLimiter, async (
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 
+    const coreSignature = buildCoreSignature(payload);
+    const duplicate = await CoreMaster.exists({ coreSignature });
+    if (duplicate) {
+      return res.status(400).json({ success: false, message: DUPLICATE_CORE_MESSAGE });
+    }
+
     const skuId = await generateId("coreMasterSkuId", "COR");
-    await CoreMaster.create({ ...payload, skuId });
+    await CoreMaster.create({ ...payload, skuId, coreSignature });
 
     res.locals.auditDescription = `Created core master "${skuId}" (${payload.vendorName})`;
     req.flash("notification", "Core master created successfully!");
     res.json({ success: true, redirect: "/sachiko/form/core" });
   } catch (err) {
     console.error("CORE MASTER CREATE ERROR:", err);
-    res.status(400).json({ success: false, message: "Failed to create core master." });
+    const isDup = err.code === 11000 && err.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "coreSignature");
+    res.status(400).json({ success: false, message: isDup ? DUPLICATE_CORE_MESSAGE : "Failed to create core master." });
   }
 });
 
@@ -99,7 +133,13 @@ router.put("/api/core/:id", requireAuth, requireCoreMaster, updateLimiter, async
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const updated = await CoreMaster.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
+    const coreSignature = buildCoreSignature(payload);
+    const duplicate = await CoreMaster.exists({ coreSignature, _id: { $ne: req.params.id } });
+    if (duplicate) {
+      return res.status(400).json({ success: false, message: DUPLICATE_CORE_MESSAGE });
+    }
+
+    const updated = await CoreMaster.findByIdAndUpdate(req.params.id, { ...payload, coreSignature }, { new: true, runValidators: true });
     if (!updated) {
       return res.status(404).json({ success: false, message: "Core master not found." });
     }
@@ -108,7 +148,8 @@ router.put("/api/core/:id", requireAuth, requireCoreMaster, updateLimiter, async
     res.json({ success: true });
   } catch (err) {
     console.error("CORE MASTER UPDATE ERROR:", err);
-    res.status(400).json({ success: false, message: "Failed to update core master." });
+    const isDup = err.code === 11000 && err.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "coreSignature");
+    res.status(400).json({ success: false, message: isDup ? DUPLICATE_CORE_MESSAGE : "Failed to update core master." });
   }
 });
 

@@ -22,12 +22,100 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+
+    /* ── Create Label Stock dialog ── */
+    .dialog-field-label {
+      display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+      color: #64748b; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .dialog-field { display: flex; flex-direction: column; gap: 6px; }
+    #ls-create-form .choices[data-type*="select-one"]::after {
+      display: block !important; content: "" !important; width: 12px !important; height: 8px !important;
+      border-style: none !important; border-width: 0 !important;
+      background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23044a78' stroke-width='2' fill='none'/%3E%3C/svg%3E") !important;
+      background-repeat: no-repeat !important; background-size: contain !important;
+      position: absolute !important; right: 11.5px !important; top: 50% !important; margin-top: 0 !important;
+      transform: translateY(-50%) !important;
+    }
+    #ls-create-form .choices[data-type*="select-one"].is-open::after { transform: translateY(-50%) rotate(180deg) !important; }
+    /* Dropdown list must render above the dialog overlay. */
+    #ls-create-form .choices__list--dropdown { z-index: 99999 !important; }
+
+    /* Every select becomes a Choices.js widget once the dialog opens, which
+       replaces the plain <select> with its own `.choices__inner` box -- so
+       that's the element that actually needs to match the plain inputs'
+       look (global .choices__inner otherwise renders a 1px black border
+       with no fixed height, which is what read as "inconsistent"). */
+    #ls-create-form .choices__inner {
+      min-height: 2.3rem !important; height: 2.3rem !important; display: flex !important; align-items: center;
+      padding: 0.3rem 0.7rem !important; border: 1.6px solid #cbd5e1 !important; border-radius: 8px !important;
+      background: #ffffff !important; font-size: 0.95rem !important;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    #ls-create-form .choices__list--single { padding: 0 !important; }
+    #ls-create-form .choices__list--single .choices__item { font-size: 0.95rem; font-weight: 600; color: #1e293b; }
+    #ls-create-form .choices:hover .choices__inner { border-color: #94a3b8 !important; }
+    #ls-create-form .choices.is-focused .choices__inner,
+    #ls-create-form .choices.is-open .choices__inner {
+      border-color: #044a78 !important; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12) !important;
+    }
+    .layer-card--adhesive .choices__inner { border-color: #fbbf24 !important; }
+
+    /* Every field in the dialog -- the top Product row as well as the layer
+       cards below -- shares this one look, so nothing reads as a different
+       control halfway down the form. */
+    #ls-create-form input.form-control,
+    #ls-create-form select.form-control,
+    #ls-create-form .dialog-field select {
+      width: 100%; height: 2.3rem; padding: 0.3rem 0.7rem; border: 1.6px solid #cbd5e1; border-radius: 8px;
+      background: #ffffff; font-size: 0.95rem; font-weight: 600; color: #1e293b;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease; box-sizing: border-box;
+    }
+    #ls-create-form input.form-control::placeholder { color: #94a3b8; font-weight: 500; }
+    #ls-create-form input.form-control:hover,
+    #ls-create-form select.form-control:hover,
+    #ls-create-form .dialog-field select:hover { border-color: #94a3b8; }
+    #ls-create-form input.form-control:focus,
+    #ls-create-form select.form-control:focus,
+    #ls-create-form .dialog-field select:focus {
+      outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12);
+    }
+    #ls-create-form input.form-control[readonly] {
+      background: #eef1f5; color: #64748b; cursor: not-allowed;
+    }
+    /* File inputs can't take height/padding the same way -- match border/radius only. */
+    #ls-create-form input[type="file"].form-control {
+      height: auto; padding: 0.45rem 0.7rem; border: 1.6px solid #cbd5e1; border-radius: 8px;
+      background: #ffffff; font-size: 0.85rem; font-weight: 500; color: #475569; box-sizing: border-box;
+    }
+
+    .layer-card { border-radius: 10px; border: 1.5px solid; padding: 14px 18px 18px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06); }
+    .layer-card__label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; margin-bottom: 14px; }
+    .layer-card__label::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+    .layer-card__fields { display: grid; gap: 14px; }
+    .layer-field { display: flex; flex-direction: column; gap: 6px; }
+    .layer-field label { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; color: #64748b; text-transform: uppercase; }
+    .layer-card--facestock { background: #ffffff; border-color: #93c5fd; }
+    .layer-card--facestock .layer-card__label { color: #000000; }
+    .layer-card--adhesive { background: #fffbeb; border-color: #fcd34d; }
+    .layer-card--adhesive .layer-card__label { color: #b45309; }
+    .layer-card--adhesive .layer-field input.form-control,
+    .layer-card--adhesive .layer-field select.form-control { border-color: #fbbf24; }
+    .layer-card--release { background: #eff6ff; border-color: #93c5fd; }
+    .layer-card--release .layer-card__label { color: #1d4ed8; }
+
+    .layer-arrow { display: flex; justify-content: center; margin: -6px 0; }
+    .layer-arrow i { color: #cbd5e1; font-size: 16px; }
+
+    @media (max-width: 768px) {
+      .layer-card__fields { grid-template-columns: 1fr !important; }
+    }
   </style>
 
   <div class="indi-head">
     <h1>Label Stock View</h1>
     <div style="display: flex; gap: 10px; align-items: center">
-      <button class="header-action-btn" onclick="window.location.href='/sachiko/label-stock/form'">
+      <button class="header-action-btn" onclick="openCreateLabelStockDialog()">
         <i class="fa-solid fa-plus" style="margin-right: 4px"></i> New
       </button>
       <div class="download-selector" id="downloadSelector">
@@ -302,8 +390,12 @@
     modal.style.display = "flex";
   };
 
-  document.getElementById("ds-view-modal").addEventListener("click", function(e) {
-    if (e.target === this) this.style.display = "none";
+  // Deferred to DOMContentLoaded: the dialog markup below is later in the
+  // document than this script tag, so it doesn't exist yet at this point.
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("ds-view-modal").addEventListener("click", function(e) {
+      if (e.target === this) this.style.display = "none";
+    });
   });
 
   /* ── Delete ── */
@@ -331,6 +423,123 @@
     };
     document.getElementById("ds-delete-cancel").onclick = () => { dialog.style.display = "none"; };
   };
+
+  /* ── Create Label Stock Dialog ──
+     Deferred to DOMContentLoaded: the dialog markup lives later in the
+     document than this script tag, so it doesn't exist yet at this point. */
+  document.addEventListener("DOMContentLoaded", () => {
+    const lsPreviewSkuCode = <%- safeJson(previewSkuCode) %>;
+
+    const LS_ROLL_TYPE_ORDER = {
+      "NORMAL": ["facestock1", "adhesive1", "release1"],
+      "DOUBLE RELEASE": ["facestock1", "adhesive1", "release1", "adhesive2", "release2"],
+      "DOUBLE FACESTOCK": ["facestock1", "adhesive1", "facestock2", "adhesive2", "release1"],
+    };
+
+    const lsForm = document.getElementById("ls-create-form");
+    const lsFieldsEnd = document.getElementById("ls-fields-end");
+    const lsBlocks = {};
+    lsForm.querySelectorAll(".ls-block").forEach((el) => { lsBlocks[el.dataset.block] = el; });
+    const lsArrows = {};
+    lsForm.querySelectorAll(".layer-arrow[data-arrow-after]").forEach((el) => { lsArrows[el.dataset.arrowAfter] = el; });
+
+    function lsApplyRollType(rollType) {
+      const order = LS_ROLL_TYPE_ORDER[rollType] || LS_ROLL_TYPE_ORDER.NORMAL;
+
+      Object.keys(lsBlocks).forEach((key) => {
+        const el = lsBlocks[key];
+        const visible = order.includes(key);
+        el.style.display = visible ? "" : "none";
+        el.querySelectorAll("[data-required-when-visible]").forEach((field) => { field.required = visible; });
+      });
+
+      Object.keys(lsArrows).forEach((key) => {
+        const idx = order.indexOf(key);
+        lsArrows[key].style.display = idx !== -1 && idx < order.length - 1 ? "flex" : "none";
+      });
+
+      order.forEach((key) => {
+        const el = lsBlocks[key];
+        if (el) lsForm.insertBefore(el, lsFieldsEnd);
+        const arrow = lsArrows[key];
+        if (arrow) lsForm.insertBefore(arrow, lsFieldsEnd);
+      });
+    }
+
+    // Auto-calculate Facestock Micron from GSM (micron = gsm / density) for both layers.
+    const LS_FACESTOCK_DENSITY = 0.92;
+    [["lsFacestockGsm", "lsFacestockMicron"], ["lsFacestockGsm2", "lsFacestockMicron2"]].forEach(([gsmId, micronId]) => {
+      const gsmInput = document.getElementById(gsmId);
+      const micronInput = document.getElementById(micronId);
+      gsmInput?.addEventListener("input", () => {
+        const gsm = Number(gsmInput.value);
+        micronInput.value = gsmInput.value !== "" && Number.isFinite(gsm)
+          ? (gsm / LS_FACESTOCK_DENSITY).toFixed(1)
+          : "";
+      });
+    });
+
+    const lsRollTypeSelect = document.getElementById("lsRollType");
+    lsRollTypeSelect.addEventListener("change", () => lsApplyRollType(lsRollTypeSelect.value));
+
+    // Choices.js instances -- destroyed and rebuilt every time the dialog opens
+    // (CLAUDE.md dialog pattern: destroy/reinit rather than reuse across opens).
+    let lsChoices = {};
+    function lsInitChoices(id, opts) {
+      if (lsChoices[id]) { lsChoices[id].destroy(); delete lsChoices[id]; }
+      const el = document.getElementById(id);
+      if (el) lsChoices[id] = new Choices(el, opts || { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+    }
+
+    function showLsError(msg) {
+      document.getElementById("ls-create-error").textContent = msg;
+    }
+    function hideLsError() {
+      document.getElementById("ls-create-error").textContent = "";
+    }
+
+    window.openCreateLabelStockDialog = function () {
+      lsForm.reset();
+      document.getElementById("lsSkuCode").value = lsPreviewSkuCode;
+      hideLsError();
+
+      ["lsRollType", "lsFacestockFamily", "lsFacestockType", "lsAdhesiveType", "lsReleaseLinerType", "lsReleaseLinerColor",
+        "lsFacestockFamily2", "lsFacestockType2", "lsAdhesiveType2", "lsReleaseLinerType2", "lsReleaseLinerColor2",
+      ].forEach((id) => lsInitChoices(id));
+
+      lsApplyRollType("NORMAL");
+      document.getElementById("ls-create-modal").style.display = "flex";
+    };
+
+    window.closeCreateLabelStockDialog = function () {
+      document.getElementById("ls-create-modal").style.display = "none";
+    };
+
+    document.getElementById("ls-create-modal").addEventListener("click", function (e) {
+      if (e.target === this) closeCreateLabelStockDialog();
+    });
+
+    window.submitCreateLabelStock = async function () {
+      if (!lsForm.reportValidity()) return;
+
+      const btn = document.getElementById("ls-create-submit-btn");
+      btn.disabled = true;
+      hideLsError();
+      try {
+        const res = await fetch("/sachiko/label-stock/form", { method: "POST", body: new FormData(lsForm) });
+        const data = await res.json().catch(() => null);
+        if (data?.success) {
+          window.location.href = data.redirect || "/sachiko/label-stock/view";
+        } else {
+          showLsError(data?.message || "Failed to create Label Stock.");
+        }
+      } catch {
+        showLsError("Server error. Please try again.");
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  });
 </script>
 
 <!-- View Modal -->
@@ -347,6 +556,267 @@
     <div style="padding:12px 20px 16px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #f1f5f9;">
       <button id="ds-delete-cancel" style="padding:8px 16px;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:6px;cursor:pointer;font-weight:500;">Cancel</button>
       <button id="ds-delete-confirm" style="padding:8px 16px;border:none;background:#ef4444;color:#fff;border-radius:6px;cursor:pointer;font-weight:600;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Label Stock Dialog -->
+<div id="ls-create-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:10000;justify-content:center;align-items:center;padding:24px;backdrop-filter:blur(4px);">
+  <div style="background:#fff;border-radius:14px;overflow:hidden;width:min(880px,96vw);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(4,74,120,0.2);animation:dsPopIn 0.2s ease-out;">
+    <div style="background:linear-gradient(135deg,#044a78 0%,#03365a 100%);padding:20px 24px;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:12px;flex:0 0 auto;">
+      <h2 style="margin:0;font-size:19px;font-weight:700;">New Label Stock</h2>
+      <button type="button" onclick="closeCreateLabelStockDialog()"
+        style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:700;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <form id="ls-create-form" class="custom-scrollbar" style="padding:22px 24px;overflow-y:auto;flex:1 1 auto;display:flex;flex-direction:column;gap:16px;" novalidate>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="dialog-field">
+          <label class="dialog-field-label" for="lsSkuCode">SKU Code</label>
+          <input type="text" id="lsSkuCode" class="form-control" readonly />
+        </div>
+        <div class="dialog-field">
+          <label class="dialog-field-label" for="lsProductCode">Product Code</label>
+          <input type="text" id="lsProductCode" name="productCode" class="form-control" placeholder="Enter product code" required />
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="dialog-field">
+          <label class="dialog-field-label" for="lsWordFile">Attach Word File</label>
+          <input type="file" id="lsWordFile" name="wordFile" class="form-control" accept=".doc,.docx" />
+        </div>
+        <div class="dialog-field">
+          <label class="dialog-field-label" for="lsRollType">Type</label>
+          <select id="lsRollType" name="rollType" class="form-control select-tag">
+            <option value="NORMAL" selected>NORMAL</option>
+            <option value="DOUBLE RELEASE">DOUBLE RELEASE</option>
+            <option value="DOUBLE FACESTOCK">DOUBLE FACESTOCK</option>
+          </select>
+        </div>
+      </div>
+
+      <p style="margin:4px 0 -6px;font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:0.05em;">LAYER STACK (TOP &rarr; BOTTOM)</p>
+
+      <!-- Facestock -->
+      <div class="ls-block layer-card layer-card--facestock" data-block="facestock1">
+        <span class="layer-card__label">FACESTOCK</span>
+        <div class="layer-card__fields" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="layer-field">
+            <label for="lsFacestockFamily">Family</label>
+            <select id="lsFacestockFamily" name="facestockFamily" class="form-control select-tag">
+              <option value="" disabled selected hidden>Select family</option>
+              <option value="CHROMO">CHROMO</option>
+              <option value="CHROMO (D. R)">CHROMO (D. R)</option>
+              <option value="CLEAR PP">CLEAR PP</option>
+              <option value="DOUBLE RELEASE">DOUBLE RELEASE</option>
+              <option value="DT">DT</option>
+              <option value="DT. PP">DT. PP</option>
+              <option value="GLOSSY PP">GLOSSY PP</option>
+              <option value="GLOSSY PP PARTIAL">GLOSSY PP PARTIAL</option>
+              <option value="INKJET MATT FILM">INKJET MATT FILM</option>
+              <option value="MAPLITO">MAPLITO</option>
+              <option value="MATT PP">MATT PP</option>
+              <option value="MATT PP (HT)">MATT PP (HT)</option>
+              <option value="MATT PP PARTIAL">MATT PP PARTIAL</option>
+              <option value="PP">PP</option>
+              <option value="REMOVABLE">REMOVABLE</option>
+              <option value="SILVER VOID">SILVER VOID</option>
+              <option value="SUPER HOTMELT">SUPER HOTMELT</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsFacestockType">Type</label>
+            <select id="lsFacestockType" name="facestockType" class="form-control select-tag" required>
+              <option value="" disabled selected hidden>Select type</option>
+              <option value="CLEAR">CLEAR</option>
+              <option value="GLOSSY">GLOSSY</option>
+              <option value="MATT">MATT</option>
+              <option value="SEMI GLOSSY">SEMI GLOSSY</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsFacestockGsm">GSM</label>
+            <input type="number" id="lsFacestockGsm" name="facestockGsm" class="form-control" placeholder="Enter GSM" min="0" step="any" />
+          </div>
+          <div class="layer-field">
+            <label for="lsFacestockMicron">Micron</label>
+            <input type="number" id="lsFacestockMicron" name="facestockMicron" class="form-control" placeholder="Enter Micron" min="0" step="any" />
+          </div>
+        </div>
+      </div>
+
+      <div class="layer-arrow" data-arrow-after="facestock1"><i class="fa-solid fa-caret-down"></i></div>
+
+      <!-- Adhesive -->
+      <div class="ls-block layer-card layer-card--adhesive" data-block="adhesive1">
+        <span class="layer-card__label">ADHESIVE</span>
+        <div class="layer-card__fields" style="grid-template-columns: repeat(2, 1fr);">
+          <div class="layer-field">
+            <label for="lsAdhesiveType">Type</label>
+            <select id="lsAdhesiveType" name="adhesiveType" class="form-control select-tag" required>
+              <option value="" disabled selected hidden>Select type</option>
+              <option value="ACRYLIC">ACRYLIC</option>
+              <option value="HOTMELT">HOTMELT</option>
+              <option value="HT">HT</option>
+              <option value="STAIN FREE">STAIN FREE</option>
+              <option value="WATERBASE">WATERBASE</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsAdhesiveGsm">GSM</label>
+            <input type="number" id="lsAdhesiveGsm" name="adhesiveGsm" class="form-control" placeholder="Enter GSM" min="0" step="any" />
+          </div>
+        </div>
+      </div>
+
+      <div class="layer-arrow" data-arrow-after="adhesive1"><i class="fa-solid fa-caret-down"></i></div>
+
+      <!-- Facestock (Layer 2) -- only for DOUBLE FACESTOCK -->
+      <div class="ls-block layer-card layer-card--facestock" data-block="facestock2" style="display:none">
+        <span class="layer-card__label">FACESTOCK <span style="opacity:0.7;">(Layer 2)</span></span>
+        <div class="layer-card__fields" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="layer-field">
+            <label for="lsFacestockFamily2">Family</label>
+            <select id="lsFacestockFamily2" name="facestockFamily2" class="form-control select-tag">
+              <option value="" disabled selected hidden>Select family</option>
+              <option value="CHROMO">CHROMO</option>
+              <option value="CHROMO (D. R)">CHROMO (D. R)</option>
+              <option value="CLEAR PP">CLEAR PP</option>
+              <option value="DOUBLE RELEASE">DOUBLE RELEASE</option>
+              <option value="DT">DT</option>
+              <option value="DT. PP">DT. PP</option>
+              <option value="GLOSSY PP">GLOSSY PP</option>
+              <option value="GLOSSY PP PARTIAL">GLOSSY PP PARTIAL</option>
+              <option value="INKJET MATT FILM">INKJET MATT FILM</option>
+              <option value="MAPLITO">MAPLITO</option>
+              <option value="MATT PP">MATT PP</option>
+              <option value="MATT PP (HT)">MATT PP (HT)</option>
+              <option value="MATT PP PARTIAL">MATT PP PARTIAL</option>
+              <option value="PP">PP</option>
+              <option value="REMOVABLE">REMOVABLE</option>
+              <option value="SILVER VOID">SILVER VOID</option>
+              <option value="SUPER HOTMELT">SUPER HOTMELT</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsFacestockType2">Type</label>
+            <select id="lsFacestockType2" name="facestockType2" class="form-control select-tag" data-required-when-visible>
+              <option value="" disabled selected hidden>Select type</option>
+              <option value="CLEAR">CLEAR</option>
+              <option value="GLOSSY">GLOSSY</option>
+              <option value="MATT">MATT</option>
+              <option value="SEMI GLOSSY">SEMI GLOSSY</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsFacestockGsm2">GSM</label>
+            <input type="number" id="lsFacestockGsm2" name="facestockGsm2" class="form-control" placeholder="Enter GSM" min="0" step="any" />
+          </div>
+          <div class="layer-field">
+            <label for="lsFacestockMicron2">Micron</label>
+            <input type="number" id="lsFacestockMicron2" name="facestockMicron2" class="form-control" placeholder="Enter Micron" min="0" step="any" />
+          </div>
+        </div>
+      </div>
+
+      <div class="layer-arrow" data-arrow-after="facestock2" style="display:none"><i class="fa-solid fa-caret-down"></i></div>
+
+      <!-- Adhesive (Layer 2) -- for DOUBLE FACESTOCK and DOUBLE RELEASE -->
+      <div class="ls-block layer-card layer-card--adhesive" data-block="adhesive2" style="display:none">
+        <span class="layer-card__label">ADHESIVE <span style="opacity:0.7;">(Layer 2)</span></span>
+        <div class="layer-card__fields" style="grid-template-columns: repeat(2, 1fr);">
+          <div class="layer-field">
+            <label for="lsAdhesiveType2">Type</label>
+            <select id="lsAdhesiveType2" name="adhesiveType2" class="form-control select-tag" data-required-when-visible>
+              <option value="" disabled selected hidden>Select type</option>
+              <option value="ACRYLIC">ACRYLIC</option>
+              <option value="HOTMELT">HOTMELT</option>
+              <option value="HT">HT</option>
+              <option value="STAIN FREE">STAIN FREE</option>
+              <option value="WATERBASE">WATERBASE</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsAdhesiveGsm2">GSM</label>
+            <input type="number" id="lsAdhesiveGsm2" name="adhesiveGsm2" class="form-control" placeholder="Enter GSM" min="0" step="any" />
+          </div>
+        </div>
+      </div>
+
+      <div class="layer-arrow" data-arrow-after="adhesive2" style="display:none"><i class="fa-solid fa-caret-down"></i></div>
+
+      <!-- Release Liner -->
+      <div class="ls-block layer-card layer-card--release" data-block="release1">
+        <span class="layer-card__label">RELEASE LINER</span>
+        <div class="layer-card__fields" style="grid-template-columns: repeat(3, 1fr);">
+          <div class="layer-field">
+            <label for="lsReleaseLinerType">Type</label>
+            <select id="lsReleaseLinerType" name="releaseLinerType" class="form-control select-tag" required>
+              <option value="" disabled selected hidden>Select type</option>
+              <option value="CCK">CCK</option>
+              <option value="GLASSINE">GLASSINE</option>
+              <option value="SCK">SCK</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsReleaseLinerColor">Color</label>
+            <select id="lsReleaseLinerColor" name="releaseLinerColor" class="form-control select-tag">
+              <option value="WHITE" selected>WHITE</option>
+              <option value="YELLOW">YELLOW</option>
+              <option value="BLUE">BLUE</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsReleaseLinerGsm">GSM</label>
+            <input type="number" id="lsReleaseLinerGsm" name="releaseLinerGsm" class="form-control" placeholder="Enter GSM" min="0" step="any" />
+          </div>
+        </div>
+      </div>
+
+      <div class="layer-arrow" data-arrow-after="release1" style="display:none"><i class="fa-solid fa-caret-down"></i></div>
+
+      <!-- Release Liner (Layer 2) -- only for DOUBLE RELEASE -->
+      <div class="ls-block layer-card layer-card--release" data-block="release2" style="display:none">
+        <span class="layer-card__label">RELEASE LINER <span style="opacity:0.7;">(Layer 2)</span></span>
+        <div class="layer-card__fields" style="grid-template-columns: repeat(3, 1fr);">
+          <div class="layer-field">
+            <label for="lsReleaseLinerType2">Type</label>
+            <select id="lsReleaseLinerType2" name="releaseLinerType2" class="form-control select-tag" data-required-when-visible>
+              <option value="" disabled selected hidden>Select type</option>
+              <option value="CCK">CCK</option>
+              <option value="GLASSINE">GLASSINE</option>
+              <option value="SCK">SCK</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsReleaseLinerColor2">Color</label>
+            <select id="lsReleaseLinerColor2" name="releaseLinerColor2" class="form-control select-tag">
+              <option value="WHITE" selected>WHITE</option>
+              <option value="YELLOW">YELLOW</option>
+              <option value="BLUE">BLUE</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsReleaseLinerGsm2">GSM</label>
+            <input type="number" id="lsReleaseLinerGsm2" name="releaseLinerGsm2" class="form-control" placeholder="Enter GSM" min="0" step="any" />
+          </div>
+        </div>
+      </div>
+
+      <div id="ls-fields-end"></div>
+    </form>
+
+    <div style="padding:14px 24px;border-top:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;gap:10px;flex:0 0 auto;">
+      <div id="ls-create-error" style="color:#ef4444;font-size:13px;font-weight:600;"></div>
+      <div style="display:flex;gap:10px;">
+        <button type="button" onclick="closeCreateLabelStockDialog()"
+          style="padding:8px 16px;border:1px solid #d1d5db;background:#fff;color:#374151;border-radius:6px;cursor:pointer;font-weight:500;">Cancel</button>
+        <button type="button" id="ls-create-submit-btn" onclick="submitCreateLabelStock()"
+          style="padding:8px 18px;border:none;background:#044a78;color:#fff;border-radius:6px;cursor:pointer;font-weight:600;">Save Label Stock</button>
+      </div>
     </div>
   </div>
 </div>

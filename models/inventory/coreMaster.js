@@ -47,6 +47,17 @@ const coreMasterSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    // Identifies "the exact same core spec" -- every field hashed together
+    // (see buildCoreSignature in routes/system/coreMaster.js), so create/edit
+    // is blocked only on a full duplicate, not a partial match. Sparse so
+    // legacy rows without one don't collide with each other as "duplicates"
+    // (see scripts/backfill-core-signatures.js).
+    coreSignature: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
   },
   { timestamps: true },
 );

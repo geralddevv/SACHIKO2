@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import ReleaseMaster from "../../models/inventory/releaseMaster.js";
 import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
@@ -6,6 +7,33 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 
 const router = express.Router();
+
+// Same sha256 signature scheme used for Client/TapeSalesOrder/Label Stock
+// Binding duplicate prevention (see routes/users/clients.js,
+// routes/fairdesk_route.js, routes/sachiko/labelStockBinding.js) -- blocks
+// create/edit only when every field matches an existing record exactly.
+function hashSignature(rawSignature) {
+  return `sha256:${crypto.createHash("sha256").update(String(rawSignature ?? "")).digest("hex")}`;
+}
+
+function canonStr(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function buildReleaseSignature(payload) {
+  return hashSignature(
+    [
+      String(payload.vendorId || ""),
+      canonStr(payload.type),
+      canonStr(payload.make),
+      canonStr(payload.vendorSkuCode),
+      canonStr(payload.color),
+      String(Number(payload.gsm ?? "")),
+    ].join("||"),
+  );
+}
+
+const DUPLICATE_RELEASE_MESSAGE = "This release liner already exists (every field matches an existing record).";
 
 // Same "SP | <CODE> | 000001" id scheme used for Machine/Label Stock/Job Card
 // ids elsewhere (see routes/system/machine.js, routes/sachiko/sachiko_route.js).
@@ -80,15 +108,22 @@ router.post("/form/release", requireAuth, requireReleaseMaster, createLimiter, a
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 
+    const releaseSignature = buildReleaseSignature(payload);
+    const duplicate = await ReleaseMaster.exists({ releaseSignature });
+    if (duplicate) {
+      return res.status(400).json({ success: false, message: DUPLICATE_RELEASE_MESSAGE });
+    }
+
     const skuId = await generateId("releaseMasterSkuId", "REL");
-    await ReleaseMaster.create({ ...payload, skuId });
+    await ReleaseMaster.create({ ...payload, skuId, releaseSignature });
 
     res.locals.auditDescription = `Created release master "${skuId}" (${payload.vendorName})`;
     req.flash("notification", "Release master created successfully!");
     res.json({ success: true, redirect: "/sachiko/form/release" });
   } catch (err) {
     console.error("RELEASE MASTER CREATE ERROR:", err);
-    res.status(400).json({ success: false, message: "Failed to create release master." });
+    const isDup = err.code === 11000 && err.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "releaseSignature");
+    res.status(400).json({ success: false, message: isDup ? DUPLICATE_RELEASE_MESSAGE : "Failed to create release master." });
   }
 });
 
@@ -98,7 +133,13 @@ router.put("/api/release/:id", requireAuth, requireReleaseMaster, updateLimiter,
     const error = validatePayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const updated = await ReleaseMaster.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
+    const releaseSignature = buildReleaseSignature(payload);
+    const duplicate = await ReleaseMaster.exists({ releaseSignature, _id: { $ne: req.params.id } });
+    if (duplicate) {
+      return res.status(400).json({ success: false, message: DUPLICATE_RELEASE_MESSAGE });
+    }
+
+    const updated = await ReleaseMaster.findByIdAndUpdate(req.params.id, { ...payload, releaseSignature }, { new: true, runValidators: true });
     if (!updated) {
       return res.status(404).json({ success: false, message: "Release master not found." });
     }
@@ -107,7 +148,8 @@ router.put("/api/release/:id", requireAuth, requireReleaseMaster, updateLimiter,
     res.json({ success: true });
   } catch (err) {
     console.error("RELEASE MASTER UPDATE ERROR:", err);
-    res.status(400).json({ success: false, message: "Failed to update release master." });
+    const isDup = err.code === 11000 && err.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "releaseSignature");
+    res.status(400).json({ success: false, message: isDup ? DUPLICATE_RELEASE_MESSAGE : "Failed to update release master." });
   }
 });
 

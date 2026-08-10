@@ -36,9 +36,10 @@ const facestockMasterSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    // The vendor's own code for this spec -- unique per vendor (different
-    // vendors can coincidentally use the same code), see the compound index
-    // below.
+    // The vendor's own code for this spec -- not unique by itself (a vendor
+    // can supply several distinct specs under the same code, or two vendors
+    // can coincidentally use the same code); duplicate protection is by
+    // facestockSignature below instead.
     vendorSkuCode: {
       type: String,
       required: true,
@@ -58,10 +59,19 @@ const facestockMasterSchema = new mongoose.Schema(
     micron: {
       type: Number,
     },
+    // Identifies "the exact same facestock spec" -- every field hashed
+    // together (see buildFacestockSignature in routes/system/facestockMaster.js),
+    // so create/edit is blocked only on a full duplicate, not a partial
+    // match. Sparse so legacy rows without one don't collide with each
+    // other as "duplicates" (see scripts/backfill-facestock-signatures.js).
+    facestockSignature: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
   },
   { timestamps: true },
 );
-
-facestockMasterSchema.index({ vendorId: 1, vendorSkuCode: 1 }, { unique: true });
 
 export default mongoose.models.FacestockMaster || mongoose.model("FacestockMaster", facestockMasterSchema);

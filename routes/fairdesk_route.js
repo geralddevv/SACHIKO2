@@ -44,6 +44,7 @@ import {
   syncLabelBindingIdentity,
 } from "../utils/reconcileBindingLocations.js";
 import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
+import { produceDeckle, requiredLayersFor } from "../utils/labelStockProduction.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 
@@ -4063,44 +4064,6 @@ router.get("/labels/production/wip-progress", async (req, res) => {
   }
 });
 
-// Live facestock roll-availability lookup backing the Assign Production
-// form's roll picker.
-router.get("/labels/production/material-stock", async (req, res) => {
-  try {
-    const materialId = req.query.materialId;
-    const excludePendingId = req.query.excludeId;
-    if (!materialId || !mongoose.isValidObjectId(materialId)) {
-      return res.json({ available: null, balance: null, rolls: [] });
-    }
-
-    const rollDocs = await MaterialStock.find({ material: materialId, quantity: { $gt: 0 } })
-      .select("rollId quantity reelMtrs location")
-      .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
-      .lean();
-
-    // Rolls already ticked on another machine-assigned order aren't offered
-    // again here.
-    const takenAgg = await PendingProduction.find({
-      allottedRollIds: { $in: rollDocs.map((r) => r._id) },
-      assignedMachineId: { $ne: null },
-      ...(excludePendingId && mongoose.isValidObjectId(excludePendingId) ? { _id: { $ne: excludePendingId } } : {}),
-    })
-      .select("allottedRollIds")
-      .lean();
-    const takenSet = new Set(takenAgg.flatMap((p) => (p.allottedRollIds || []).map(String)));
-
-    const rolls = rollDocs
-      .filter((r) => !takenSet.has(String(r._id)))
-      .map((r) => ({ stockId: String(r._id), rollId: r.rollId, qty: r.quantity, reelMtrs: r.reelMtrs, location: r.location }));
-
-    const available = rolls.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
-    res.json({ available, balance: available, rolls });
-  } catch (err) {
-    console.error("MATERIAL STOCK LOOKUP ERROR:", err);
-    res.status(500).json({ available: null, balance: null, rolls: [] });
-  }
-});
-
 const formatLotNo = (seq) => `SP | LOT | ${String(seq).padStart(4, "0")}`;
 
 // Read-only preview of the next lot no -- the number isn't consumed until an
@@ -4164,28 +4127,6 @@ router.get("/labels/production/assign/:id", async (req, res) => {
 
     const previewLotNo = pendingProduction.lotNo || (await previewNextLotNo());
 
-    const materialId = pendingProduction.itemId?._id;
-    let materialStock = { available: 0, balance: 0, rolls: [] };
-    if (materialId) {
-      const rollDocs = await MaterialStock.find({ material: materialId, quantity: { $gt: 0 } })
-        .select("rollId quantity reelMtrs location")
-        .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
-        .lean();
-      const takenAgg = await PendingProduction.find({
-        allottedRollIds: { $in: rollDocs.map((r) => r._id) },
-        assignedMachineId: { $ne: null },
-        _id: { $ne: pendingProduction._id },
-      })
-        .select("allottedRollIds")
-        .lean();
-      const takenSet = new Set(takenAgg.flatMap((p) => (p.allottedRollIds || []).map(String)));
-      const rolls = rollDocs
-        .filter((r) => !takenSet.has(String(r._id)))
-        .map((r) => ({ stockId: String(r._id), rollId: r.rollId, qty: r.quantity, reelMtrs: r.reelMtrs, location: r.location }));
-      const available = rolls.reduce((sum, r) => sum + (Number(r.qty) || 0), 0);
-      materialStock = { available, balance: available, rolls };
-    }
-
     res.render("inventory/orders/assignProduction.ejs", {
       title: "Assign Production",
       CSS: "tableDisp.css",
@@ -4196,7 +4137,6 @@ router.get("/labels/production/assign/:id", async (req, res) => {
       operatorEmployees,
       helperEmployees,
       previewLotNo,
-      materialStock,
       notification: req.flash("notification"),
     });
   } catch (err) {
@@ -4220,9 +4160,15 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       return res.redirect("/sachiko/labels/production/pending");
     }
 
-    const { machineId, operatorId, helperId, selectedRolls } = req.body;
+    const { machineId, operatorId, helperId, selectedRolls, rawLayers } = req.body;
+    const rawProduceMtrs = Number(req.body.rawProduceMtrs);
 
-    if (!machineId || !mongoose.isValidObjectId(machineId) || !(await Machine.exists({ _id: machineId }))) {
+    if (!machineId || !mongoose.isValidObjectId(machineId)) {
+      req.flash("notification", "Please select a valid machine.");
+      return res.redirect(`/sachiko/labels/production/assign/${id}`);
+    }
+    const machine = await Machine.findById(machineId).populate("location").lean();
+    if (!machine) {
       req.flash("notification", "Please select a valid machine.");
       return res.redirect(`/sachiko/labels/production/assign/${id}`);
     }
@@ -4259,6 +4205,43 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     const takenSet = new Set(takenAgg.flatMap((p) => (p.allottedRollIds || []).map(String)));
     const allottedRollIds = validRollIds.filter((rid) => !takenSet.has(String(rid)));
 
+    // Facestock/Adhesive/Release Liner columns on the assign form let the
+    // operator pick raw-material reels straight from this page (see
+    // assignProduction.ejs) -- if any were picked, laminate them into a new
+    // Deckle now, at the machine's own location, for exactly the mtrs
+    // submitted, then fold that new reel in with whatever existing Deckle
+    // stock was ticked above.
+    let deckleId = null;
+    if (rawProduceMtrs > 0) {
+      const location = machine.location?.locationName;
+      if (!location) {
+        req.flash("notification", "The selected machine has no location set — cannot produce label stock there.");
+        return res.redirect(`/sachiko/labels/production/assign/${id}`);
+      }
+
+      const labelStock = await SachikoLabelStock.findById(pendingProduction.itemId).lean();
+      const required = requiredLayersFor(labelStock?.rollType);
+      if (required.some((key) => !rawLayers || !rawLayers[key])) {
+        req.flash("notification", "Select a reel for every layer this recipe needs before producing.");
+        return res.redirect(`/sachiko/labels/production/assign/${id}`);
+      }
+
+      try {
+        const produced = await produceDeckle({
+          labelStock,
+          location,
+          reelMtrs: rawProduceMtrs,
+          layers: rawLayers,
+          createdBy: req.user?.username || "SYSTEM",
+        });
+        deckleId = produced.deckleId;
+        allottedRollIds.push(new mongoose.Types.ObjectId(produced.stockId));
+      } catch (produceErr) {
+        req.flash("notification", produceErr.message || "Failed to produce label stock.");
+        return res.redirect(`/sachiko/labels/production/assign/${id}`);
+      }
+    }
+
     const lotNo = pendingProduction.lotNo || (await generateLotNo());
 
     await PendingProduction.findByIdAndUpdate(id, {
@@ -4273,8 +4256,9 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       },
     });
 
-    res.locals.auditDescription = `Assigned production order ${id} to machine ${machineId}`;
-    req.flash("notification", "Machine assigned successfully.");
+    res.locals.auditDescription = `Assigned production order ${id} to machine ${machineId}`
+      + (deckleId ? ` (produced Deckle ${deckleId})` : "");
+    req.flash("notification", deckleId ? `Machine assigned — Deckle ${deckleId} produced.` : "Machine assigned successfully.");
     res.redirect("/sachiko/machine/queue");
   } catch (err) {
     console.error("ASSIGN PRODUCTION SAVE ERROR:", err);
