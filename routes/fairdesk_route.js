@@ -2776,6 +2776,13 @@ router.post("/sales/order", async (req, res) => {
             rate: bindingRate,
             bindingSignature: newBindingSignature,
           });
+          // Same linkage step the manual Label Stock Binding form does (see
+          // POST /form/label-stock-binding in routes/sachiko/labelStockBinding.js)
+          // -- without it the binding exists but is invisible on
+          // /label-stock-binding/view/:id and to /sales/items, which both
+          // resolve a user's bindings via Username.labelStock rather than by
+          // querying LabelStockBinding directly.
+          await Username.updateOne({ _id: userId }, { $addToSet: { labelStock: binding._id } });
         }
       }
 

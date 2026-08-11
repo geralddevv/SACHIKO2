@@ -165,57 +165,24 @@
   /* ── Flatten nested Label Stock docs for Tabulator ── */
   const raw = <%- safeJson(jsonData) %>;
 
+  // Table stays to bare identity columns -- the full spec (Family, Roll/Sheet,
+  // Printing Technology, every FS/AD/RL Family/Type/Make/Vendor/GSM/Micron/
+  // Color/Shelf-Life field) lives in the View button's modal (viewLabelStock
+  // below, reading straight from `raw`) instead of being duplicated here.
   const tableData = raw.map(ds => {
-    const fsGsm    = ds.facestock?.facestockGsm    != null ? ds.facestock.facestockGsm    + " GSM ± 5%" : "-";
-    const fsMicron = ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC ± 5%" : "-";
-    const adGsm    = ds.adhesive?.adhesiveGsm      != null ? ds.adhesive.adhesiveGsm      + " GSM ± 5%" : "-";
-    const rlGsm    = ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM ± 5%" : "-";
-
-    const fsFamily = ds.facestock?.facestockFamily  || "";
-    const fsType   = ds.facestock?.facestockType    || "";
-    const fsMake   = ds.facestock?.facestockMake    || "";
-    const fsVendor = ds.facestock?.facestockVendorName || "";
-    const adType   = ds.adhesive?.adhesiveType      || "";
-    const adMake   = ds.adhesive?.adhesiveMake      || "";
-    const adVendor = ds.adhesive?.adhesiveVendorName || "";
-    const adShelfLife = ds.adhesive?.adhesiveShelfLife || "";
-    const rlType   = ds.releaseLiner?.releaseLinerType  || "";
-    const rlMake   = ds.releaseLiner?.releaseLinerMake  || "";
-    const rlVendor = ds.releaseLiner?.releaseLinerVendorName || "";
-    const rlColor  = ds.releaseLiner?.releaseLinerColor || "";
-    const wordFile = ds.wordFile || "";
-
+    const fsType = ds.facestock?.facestockType || "";
+    const adType = ds.adhesive?.adhesiveType   || "";
+    const rlType = ds.releaseLiner?.releaseLinerType || "";
     const micPart = ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : "";
     const product = [fsType, micPart, adType, rlType].filter(Boolean).join(" / ");
 
     return {
       _id: String(ds._id),
-      labelStockId: ds.labelStockId || "",
       skuCode: ds.skuCode || "",
       productCode: ds.productCode,
       rollType: ds.rollType || "NORMAL",
-      family: ds.family || "",
-      rollOrSheet: ds.rollOrSheet || "",
-      printingTechnology: [ds.printingTechnology, ds.digitalPrintType].filter(Boolean).join(" / "),
-      wordFileOriginalName: ds.wordFileOriginalName || "",
       product,
-      fsFamily,
-      fsType,
-      fsMake,
-      fsVendor,
-      fsGsm,
-      fsMicron,
-      adType,
-      adMake,
-      adVendor,
-      adShelfLife,
-      adGsm,
-      rlType,
-      rlMake,
-      rlVendor,
-      rlColor,
-      rlGsm,
-      wordFile,
+      wordFile: ds.wordFile || "",
     };
   });
 
@@ -269,35 +236,6 @@
           return `<span style="font-weight:600;color:${color};">${label}</span>`;
         } },
         { "": "All", "NORMAL": "STANDARD", "DOUBLE RELEASE": "DOUBLE RELEASE", "DOUBLE FACESTOCK": "DOUBLE FACESTOCK" }),
-      withSelectFilter({ title: "Family",  field: "family",  minWidth: 130 },
-        (() => { const d = [...new Set(tableData.map(r => r.family))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
-      withSelectFilter({ title: "Roll / Sheet", field: "rollOrSheet", minWidth: 120 },
-        { "": "All", "ROLL": "ROLL", "SHEET": "SHEET" }),
-      withTextFilter({ title: "Printing Technology", field: "printingTechnology", minWidth: 170 }),
-      withSelectFilter({ title: "FS Family",  field: "fsFamily",  minWidth: 120 },
-        (() => { const d = [...new Set(tableData.map(r => r.fsFamily))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
-      withSelectFilter({ title: "FS Type",    field: "fsType",    minWidth: 120 },
-        (() => { const d = [...new Set(tableData.map(r => r.fsType))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
-      withTextFilter({ title: "FS Make",      field: "fsMake",    minWidth: 120 }),
-      withSelectFilter({ title: "FS Vendor",  field: "fsVendor",  minWidth: 140 },
-        (() => { const d = [...new Set(tableData.map(r => r.fsVendor))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
-      withTextFilter({ title: "FS GSM",       field: "fsGsm",     minWidth: 130 }),
-      withTextFilter({ title: "FS Micron",    field: "fsMicron",  minWidth: 130 }),
-      withSelectFilter({ title: "AD Type",    field: "adType",    minWidth: 130 },
-        (() => { const d = [...new Set(tableData.map(r => r.adType))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
-      withTextFilter({ title: "AD Make",      field: "adMake",    minWidth: 120 }),
-      withSelectFilter({ title: "AD Vendor",  field: "adVendor",  minWidth: 140 },
-        (() => { const d = [...new Set(tableData.map(r => r.adVendor))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
-      withTextFilter({ title: "AD Shelf Life", field: "adShelfLife", minWidth: 120 }),
-      withTextFilter({ title: "AD GSM",       field: "adGsm",     minWidth: 130 }),
-      withSelectFilter({ title: "RL Type",    field: "rlType",    minWidth: 120 },
-        (() => { const d = [...new Set(tableData.map(r => r.rlType))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
-      withTextFilter({ title: "RL Make",      field: "rlMake",    minWidth: 120 }),
-      withSelectFilter({ title: "RL Vendor",  field: "rlVendor",  minWidth: 140 },
-        (() => { const d = [...new Set(tableData.map(r => r.rlVendor))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
-      withSelectFilter({ title: "RL Color",   field: "rlColor",   minWidth: 110 },
-        (() => { const d = [...new Set(tableData.map(r => r.rlColor))].filter(Boolean).sort(); const o = {"":"All"}; d.forEach(v => o[v]=v); return o; })()),
-      withTextFilter({ title: "RL GSM",       field: "rlGsm",     minWidth: 130 }),
       { title: "Word File", field: "wordFile", minWidth: 110, headerFilter: false, hozAlign: "center", headerHozAlign: "center",
         formatter: (cell) => {
           const v = cell.getValue();
