@@ -352,6 +352,23 @@ function buildSalesOrderSignature({
   );
 }
 
+// Same duplicate-prevention scheme as routes/sachiko/labelStockBinding.js'
+// buildBindingSignature -- reproduced here since a Label Stock order for a
+// product with no existing binding auto-creates one (see the LABEL_STOCK
+// branch of POST /sales/order) and must land on the identical signature a
+// manually-created binding for the same labelStock+user+paperSize+RM would,
+// so it's found instead of duplicated on a second such order.
+function buildLabelStockBindingSignature({ labelStock, userId, paperSize, runningMeters }) {
+  return hashSignature(
+    [
+      String(labelStock || ""),
+      String(userId || ""),
+      String(paperSize || "").trim().toUpperCase().replace(/\s+/g, " "),
+      String(Number(runningMeters ?? "")),
+    ].join("||"),
+  );
+}
+
 function isTemplateOnlyInvoice(invoiceNumber) {
   const value = String(invoiceNumber || "").trim();
   if (!value) return true;
@@ -2394,6 +2411,11 @@ router.get("/sales/order", async (req, res) => {
   const { orderId } = req.query;
   const clientsPromise = Client.distinct("clientName");
   const locationsPromise = Location.distinct("locationName");
+  // Full Label Stock master catalog (see /sachiko/label-stock/view) -- the
+  // Product Code picker lists every master product, not just ones already
+  // bound to the selected client (see onLabelStockProductChange / the
+  // labelStockMasterId fallback in POST /sales/order below).
+  const labelStocksPromise = SachikoLabelStock.find({}, { skuCode: 1, productCode: 1 }).sort({ productCode: 1 }).lean();
   const submissionToken = crypto.randomUUID();
 
   const orderPromise = orderId
@@ -2404,9 +2426,10 @@ router.get("/sales/order", async (req, res) => {
     ? SalesOrderLog.find({ orderId, action: "DELIVERED" }).sort({ performedAt: -1 }).lean()
     : Promise.resolve([]);
 
-  const [clients, locations, orderToEdit, logs] = await Promise.all([
+  const [clients, locations, labelStocks, orderToEdit, logs] = await Promise.all([
     clientsPromise,
     locationsPromise,
+    labelStocksPromise,
     orderPromise,
     logsPromise,
   ]);
@@ -2423,6 +2446,7 @@ router.get("/sales/order", async (req, res) => {
   res.render("inventory/orders/salesOrderForm.ejs", {
     clients,
     locations: (locations || []).filter(Boolean).sort(),
+    labelStocks,
     orderToEdit,
     stockInfo,
     logs,
@@ -2587,7 +2611,7 @@ async function describeSalesOrder({ itemTypeLabel, userId, quantity, poNumber, i
 // Submit Sales Order (Create or Update)
 router.post("/sales/order", async (req, res) => {
   try {
-    const { orderId, itemType, userId, itemId, quantity, estimatedDate, remarks, sourceLocation, locationRadio, userLocation, poNumber, poDate, orderRate, submissionToken, paperSize, runningMeters, noOfRolls } = req.body;
+    const { orderId, itemType, userId, itemId, quantity, estimatedDate, remarks, sourceLocation, locationRadio, userLocation, poNumber, poDate, orderRate, submissionToken, paperSize, runningMeters, noOfRolls, labelStockMasterId, itemRate } = req.body;
     const createdByUser = req.user?.username || "SYSTEM";
 
     if (["TAPE"].includes(itemType) && canonicalizeLocationName(locationRadio) === "ALL") {
@@ -2701,26 +2725,72 @@ router.post("/sales/order", async (req, res) => {
         res.json({ success: true, redirect: "/sachiko/sales/pending" });
       }
     } else if (itemType === "LABEL_STOCK") {
-      const binding = await LabelStockBinding.findById(itemId);
-      if (!binding) {
-        return res.status(400).json({ success: false, message: "Invalid item selected" });
-      }
-      if (!orderId && binding.status === "INACTIVE") {
-        return res.status(400).json({ success: false, message: "This item is disabled for the selected client and cannot be ordered." });
-      }
-
+      // Validated up front (rather than after binding resolution) so an
+      // auto-created binding (below) never gets a blank paperSize/runningMeters.
       const trimmedPaperSize = String(paperSize || "").trim();
       if (!trimmedPaperSize || !runningMeters || !noOfRolls) {
         return res.status(400).json({ success: false, message: "Paper Size, Running Meters, and No of Rolls are required for Label Stock orders." });
       }
 
-      // Rate isn't user-entered for Label Stock orders (see the Rate field on
-      // the form -- read-only, auto-filled) -- it's always the binding's own
-      // rate, same as how the binding's paperSize/location are used as-is.
+      let binding = itemId ? await LabelStockBinding.findById(itemId) : null;
+
+      if (!binding) {
+        // The Product Code picker lists every Label Stock master product
+        // (see /sachiko/label-stock/view), not just ones already bound to
+        // this client -- so itemId can come back empty when the picked
+        // product has no binding yet. Auto-create one from the master id
+        // plus what the order form collected for Rate/Paper Size/RM/Location,
+        // the same inputs a manually-created binding would need, and reuse
+        // an existing binding instead of duplicating it if one already
+        // matches (same labelStock+user+paperSize+RM signature).
+        const masterId = String(labelStockMasterId || "").trim();
+        if (!masterId) {
+          return res.status(400).json({ success: false, message: "Invalid item selected" });
+        }
+        const master = await SachikoLabelStock.findById(masterId).select("_id").lean();
+        if (!master) {
+          return res.status(400).json({ success: false, message: "Invalid item selected" });
+        }
+        const bindingRate = Number(itemRate);
+        if (!Number.isFinite(bindingRate) || bindingRate <= 0) {
+          return res.status(400).json({ success: false, message: "Rate is required to bind this product to the client." });
+        }
+        const bindingLocation = canonicalizeLocationName(sourceLocation || locationRadio || userLocation);
+        if (!bindingLocation || bindingLocation === "ALL") {
+          return res.status(400).json({ success: false, message: "Select a location for this product." });
+        }
+        const newBindingSignature = buildLabelStockBindingSignature({
+          labelStock: masterId,
+          userId,
+          paperSize: trimmedPaperSize,
+          runningMeters,
+        });
+        binding = await LabelStockBinding.findOne({ bindingSignature: newBindingSignature });
+        if (!binding) {
+          binding = await LabelStockBinding.create({
+            labelStock: masterId,
+            userId,
+            location: bindingLocation,
+            paperSize: trimmedPaperSize,
+            runningMeters: Number(runningMeters),
+            rate: bindingRate,
+            bindingSignature: newBindingSignature,
+          });
+        }
+      }
+
+      if (!orderId && binding.status === "INACTIVE") {
+        return res.status(400).json({ success: false, message: "This item is disabled for the selected client and cannot be ordered." });
+      }
+
+      // The order always saves at the (now-resolved) binding's own rate --
+      // read-only and auto-filled from an existing binding, or whatever was
+      // typed to create a new one above -- same as how the binding's
+      // paperSize/location are used as-is.
       const labelStockRate = Number(binding.rate) || 0;
 
       const data = {
-        tapeBinding: itemId,
+        tapeBinding: binding._id,
         userId: binding.userId,
         tapeId: binding.labelStock,
         sourceLocation: canonicalizeLocationName(binding.location),
@@ -2753,7 +2823,7 @@ router.post("/sales/order", async (req, res) => {
         data.createdBy = createdByUser;
         data.orderSignature = buildSalesOrderSignature({
           itemType,
-          itemId,
+          itemId: String(binding._id),
           userId: binding.userId,
           quantity: data.quantity,
           estimatedDate,

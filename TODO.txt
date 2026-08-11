@@ -29,3 +29,5 @@ machine name and width in machine master
 edit sales order after dispatch also
 
 client acc head track log
+
+vendor finish in tape sp

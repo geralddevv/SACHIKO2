@@ -47,6 +47,18 @@
     background: currentColor;
     flex: 0 0 auto;
   }
+  /* Shown once every field in a layer card resolves to exactly one master
+     row -- that row's own skuId, so the operator can see which master
+     spec was picked. Plain text, not a pill/capsule. */
+  .layer-card__sku-badge {
+    font-family: monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    margin-left: 6px;
+    opacity: 0.75;
+  }
   .layer-card__fields {
     display: grid;
     gap: 14px;
@@ -55,6 +67,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    min-width: 0;
   }
   .layer-field label {
     font-size: 12px;
@@ -74,6 +87,23 @@
     font-weight: 600;
     color: #1e293b;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Overflowing selected text (long vendor names, "GLOSSY PP PARTIAL", etc.)
+     truncates with an ellipsis instead of overflowing the field. */
+  .layer-field .choices__list--single .choices__item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+    max-width: 100%;
+  }
+  .layer-field .choices__list--dropdown .choices__item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .layer-field input.form-control::placeholder { color: #94a3b8; font-weight: 500; }
   .layer-field input.form-control:hover,
@@ -92,6 +122,36 @@
   .layer-card--adhesive .layer-field select.form-control { border-color: #fbbf24; }
   .layer-card--release { background: #eff6ff; border-color: #93c5fd; }
   .layer-card--release .layer-card__label { color: #1d4ed8; }
+
+  /* Same ellipsis truncation as the layer cards, for the top-row fields
+     (SKU Code, Product Code, Family, Roll/Sheet, Printing Technology, ...). */
+  .span-five input.form-control, .span-five select.form-control,
+  .span-six input.form-control, .span-six select.form-control,
+  .span-seven input.form-control, .span-seven select.form-control,
+  .span-eight input.form-control, .span-eight select.form-control {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .span-five .choices__list--single .choices__item,
+  .span-six .choices__list--single .choices__item,
+  .span-seven .choices__list--single .choices__item,
+  .span-eight .choices__list--single .choices__item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+    max-width: 100%;
+  }
+  .span-five .choices__list--dropdown .choices__item,
+  .span-six .choices__list--dropdown .choices__item,
+  .span-seven .choices__list--dropdown .choices__item,
+  .span-eight .choices__list--dropdown .choices__item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .layer-arrow {
     grid-column: span 32;
@@ -125,11 +185,11 @@
     <div class="span-full form-subheading">
       <h1>Product</h1>
     </div>
-    <div class="span-five">
+    <div class="span-eight">
       <label for="skuCode">SKU Code</label>
       <input type="text" id="skuCode" class="form-control" value="<%= ds.skuCode || '' %>" readonly />
     </div>
-    <div class="span-six">
+    <div class="span-eight">
       <label for="productCode">Product Code</label>
       <input
         type="text"
@@ -141,7 +201,7 @@
         required
       />
     </div>
-    <div class="span-seven">
+    <div class="span-eight">
       <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
         <label for="wordFile" style="margin:0;">Attach Word File</label>
         <% if (ds.wordFile) { %>
@@ -153,12 +213,66 @@
       </div>
       <input type="file" id="wordFile" name="wordFile" class="form-control" accept=".doc,.docx" />
     </div>
-    <div class="span-five">
+    <div class="span-eight">
       <label for="rollType">Type</label>
       <select id="rollType" name="rollType" class="form-control select-tag">
-        <option value="NORMAL"           <%= (ds.rollType || 'NORMAL') === 'NORMAL'           ? 'selected' : '' %>>NORMAL</option>
+        <option value="NORMAL"           <%= (ds.rollType || 'NORMAL') === 'NORMAL'           ? 'selected' : '' %>>STANDARD</option>
         <option value="DOUBLE RELEASE"   <%= ds.rollType === 'DOUBLE RELEASE'                 ? 'selected' : '' %>>DOUBLE RELEASE</option>
         <option value="DOUBLE FACESTOCK" <%= ds.rollType === 'DOUBLE FACESTOCK'                ? 'selected' : '' %>>DOUBLE FACESTOCK</option>
+      </select>
+    </div>
+
+    <div class="span-eight">
+      <label for="family">Family</label>
+      <select id="family" name="family" class="form-control select-tag" required>
+        <option value="" disabled <%= !ds.family ? 'selected' : '' %> hidden>Select family</option>
+        <option value="CHROMO"              <%= ds.family === 'CHROMO'              ? 'selected' : '' %>>CHROMO</option>
+        <option value="CHROMO (D. R)"       <%= ds.family === 'CHROMO (D. R)'       ? 'selected' : '' %>>CHROMO (D. R)</option>
+        <option value="CLEAR PP"            <%= ds.family === 'CLEAR PP'            ? 'selected' : '' %>>CLEAR PP</option>
+        <option value="DOUBLE RELEASE"      <%= ds.family === 'DOUBLE RELEASE'      ? 'selected' : '' %>>DOUBLE RELEASE</option>
+        <option value="DT"                  <%= ds.family === 'DT'                  ? 'selected' : '' %>>DT</option>
+        <option value="DT. PP"              <%= ds.family === 'DT. PP'              ? 'selected' : '' %>>DT. PP</option>
+        <option value="GLOSSY PP"           <%= ds.family === 'GLOSSY PP'           ? 'selected' : '' %>>GLOSSY PP</option>
+        <option value="GLOSSY PP PARTIAL"   <%= ds.family === 'GLOSSY PP PARTIAL'   ? 'selected' : '' %>>GLOSSY PP PARTIAL</option>
+        <option value="INKJET MATT FILM"    <%= ds.family === 'INKJET MATT FILM'    ? 'selected' : '' %>>INKJET MATT FILM</option>
+        <option value="MAPLITO"             <%= ds.family === 'MAPLITO'             ? 'selected' : '' %>>MAPLITO</option>
+        <option value="MATT PP"             <%= ds.family === 'MATT PP'             ? 'selected' : '' %>>MATT PP</option>
+        <option value="MATT PP (HT)"        <%= ds.family === 'MATT PP (HT)'        ? 'selected' : '' %>>MATT PP (HT)</option>
+        <option value="MATT PP PARTIAL"     <%= ds.family === 'MATT PP PARTIAL'     ? 'selected' : '' %>>MATT PP PARTIAL</option>
+        <option value="PP"                  <%= ds.family === 'PP'                  ? 'selected' : '' %>>PP</option>
+        <option value="REMOVABLE"           <%= ds.family === 'REMOVABLE'           ? 'selected' : '' %>>REMOVABLE</option>
+        <option value="SILVER VOID"         <%= ds.family === 'SILVER VOID'         ? 'selected' : '' %>>SILVER VOID</option>
+        <option value="SUPER HOTMELT"       <%= ds.family === 'SUPER HOTMELT'       ? 'selected' : '' %>>SUPER HOTMELT</option>
+      </select>
+    </div>
+    <div class="span-eight">
+      <label for="rollOrSheet">Roll / Sheet</label>
+      <select id="rollOrSheet" name="rollOrSheet" class="form-control select-tag" required>
+        <option value="" disabled <%= !ds.rollOrSheet ? 'selected' : '' %> hidden>Select roll or sheet</option>
+        <option value="ROLL"  <%= ds.rollOrSheet === 'ROLL'  ? 'selected' : '' %>>ROLL</option>
+        <option value="SHEET" <%= ds.rollOrSheet === 'SHEET' ? 'selected' : '' %>>SHEET</option>
+      </select>
+    </div>
+    <div class="span-eight">
+      <label for="printingTechnology">Printing Technology</label>
+      <select id="printingTechnology" name="printingTechnology" class="form-control select-tag" required>
+        <option value="" disabled <%= !ds.printingTechnology ? 'selected' : '' %> hidden>Select roll / sheet first</option>
+        <% if (ds.rollOrSheet === 'SHEET') { %>
+          <option value="DIGITAL" <%= ds.printingTechnology === 'DIGITAL' ? 'selected' : '' %>>DIGITAL</option>
+          <option value="OFFSET"  <%= ds.printingTechnology === 'OFFSET'  ? 'selected' : '' %>>OFFSET</option>
+        <% } else if (ds.rollOrSheet === 'ROLL') { %>
+          <option value="FLEXOGRAPHIC" <%= ds.printingTechnology === 'FLEXOGRAPHIC' ? 'selected' : '' %>>FLEXOGRAPHIC</option>
+          <option value="GRAVURE"      <%= ds.printingTechnology === 'GRAVURE'      ? 'selected' : '' %>>GRAVURE</option>
+          <option value="LETTER PRESS" <%= ds.printingTechnology === 'LETTER PRESS' ? 'selected' : '' %>>LETTER PRESS</option>
+        <% } %>
+      </select>
+    </div>
+    <div class="span-eight" id="digitalPrintTypeWrap" style="<%= (ds.rollOrSheet === 'SHEET' && ds.printingTechnology === 'DIGITAL') ? '' : 'display:none;' %>">
+      <label for="digitalPrintType">Laser / Ink</label>
+      <select id="digitalPrintType" name="digitalPrintType" class="form-control select-tag" <%= (ds.rollOrSheet === 'SHEET' && ds.printingTechnology === 'DIGITAL') ? 'required' : '' %>>
+        <option value="" disabled <%= !ds.digitalPrintType ? 'selected' : '' %> hidden>Select laser or ink</option>
+        <option value="LASER" <%= ds.digitalPrintType === 'LASER' ? 'selected' : '' %>>LASER</option>
+        <option value="INK"   <%= ds.digitalPrintType === 'INK'   ? 'selected' : '' %>>INK</option>
       </select>
     </div>
 
@@ -168,52 +282,49 @@
 
     <!-- Facestock -->
     <div class="ls-block layer-card layer-card--facestock" data-block="facestock1">
-      <span class="layer-card__label">FACESTOCK</span>
-      <div class="layer-card__fields" style="grid-template-columns: repeat(4, 1fr);">
+      <span class="layer-card__label">FACESTOCK<span id="facestockSkuId" class="layer-card__sku-badge" style="display:none;"></span></span>
+      <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1fr 1.6fr 1fr 0.8fr 0.8fr;">
         <div class="layer-field">
           <label for="facestockFamily">Family</label>
-          <select id="facestockFamily" name="facestockFamily" class="form-control select-tag">
-            <option value="" <%= !ds.facestock?.facestockFamily ? 'selected' : '' %>>— None —</option>
-            <option value="CHROMO"              <%= ds.facestock?.facestockFamily === 'CHROMO'              ? 'selected' : '' %>>CHROMO</option>
-            <option value="CHROMO (D. R)"       <%= ds.facestock?.facestockFamily === 'CHROMO (D. R)'       ? 'selected' : '' %>>CHROMO (D. R)</option>
-            <option value="CLEAR PP"            <%= ds.facestock?.facestockFamily === 'CLEAR PP'            ? 'selected' : '' %>>CLEAR PP</option>
-            <option value="DOUBLE RELEASE"      <%= ds.facestock?.facestockFamily === 'DOUBLE RELEASE'      ? 'selected' : '' %>>DOUBLE RELEASE</option>
-            <option value="DT"                  <%= ds.facestock?.facestockFamily === 'DT'                  ? 'selected' : '' %>>DT</option>
-            <option value="DT. PP"              <%= ds.facestock?.facestockFamily === 'DT. PP'              ? 'selected' : '' %>>DT. PP</option>
-            <option value="GLOSSY PP"           <%= ds.facestock?.facestockFamily === 'GLOSSY PP'           ? 'selected' : '' %>>GLOSSY PP</option>
-            <option value="GLOSSY PP PARTIAL"   <%= ds.facestock?.facestockFamily === 'GLOSSY PP PARTIAL'   ? 'selected' : '' %>>GLOSSY PP PARTIAL</option>
-            <option value="INKJET MATT FILM"    <%= ds.facestock?.facestockFamily === 'INKJET MATT FILM'    ? 'selected' : '' %>>INKJET MATT FILM</option>
-            <option value="MAPLITO"             <%= ds.facestock?.facestockFamily === 'MAPLITO'             ? 'selected' : '' %>>MAPLITO</option>
-            <option value="MATT PP"             <%= ds.facestock?.facestockFamily === 'MATT PP'             ? 'selected' : '' %>>MATT PP</option>
-            <option value="MATT PP (HT)"        <%= ds.facestock?.facestockFamily === 'MATT PP (HT)'        ? 'selected' : '' %>>MATT PP (HT)</option>
-            <option value="MATT PP PARTIAL"     <%= ds.facestock?.facestockFamily === 'MATT PP PARTIAL'     ? 'selected' : '' %>>MATT PP PARTIAL</option>
-            <option value="PP"                  <%= ds.facestock?.facestockFamily === 'PP'                  ? 'selected' : '' %>>PP</option>
-            <option value="REMOVABLE"           <%= ds.facestock?.facestockFamily === 'REMOVABLE'           ? 'selected' : '' %>>REMOVABLE</option>
-            <option value="SILVER VOID"         <%= ds.facestock?.facestockFamily === 'SILVER VOID'         ? 'selected' : '' %>>SILVER VOID</option>
-            <option value="SUPER HOTMELT"       <%= ds.facestock?.facestockFamily === 'SUPER HOTMELT'       ? 'selected' : '' %>>SUPER HOTMELT</option>
+          <select id="facestockFamily" name="facestockFamily" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Search</option>
           </select>
         </div>
         <div class="layer-field">
           <label for="facestockType">Type</label>
           <select id="facestockType" name="facestockType" class="form-control select-tag" required>
-            <option value="" disabled <%= !ds.facestock?.facestockType ? 'selected' : '' %> hidden>Select type</option>
-            <option value="CLEAR"      <%= ds.facestock?.facestockType === 'CLEAR'      ? 'selected' : '' %>>CLEAR</option>
-            <option value="GLOSSY"     <%= ds.facestock?.facestockType === 'GLOSSY'     ? 'selected' : '' %>>GLOSSY</option>
-            <option value="MATT"       <%= ds.facestock?.facestockType === 'MATT'       ? 'selected' : '' %>>MATT</option>
-            <option value="SEMI GLOSSY"<%= ds.facestock?.facestockType === 'SEMI GLOSSY'? 'selected' : '' %>>SEMI GLOSSY</option>
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="facestockMake">Make</label>
+          <select id="facestockMake" name="facestockMake" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="facestockVendorId">Vendor Name</label>
+          <select id="facestockVendorId" name="facestockVendorId" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="facestockVendorSkuCode">Vendor SKU Code</label>
+          <select id="facestockVendorSkuCode" name="facestockVendorSkuCode" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
           </select>
         </div>
         <div class="layer-field">
           <label for="facestockGsm">GSM</label>
-          <input type="number" id="facestockGsm" name="facestockGsm" class="form-control"
-            placeholder="Enter GSM" min="0" step="any"
-            value="<%= ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm : '' %>" />
+          <select id="facestockGsm" name="facestockGsm" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
         </div>
         <div class="layer-field">
           <label for="facestockMicron">Micron</label>
-          <input type="number" id="facestockMicron" name="facestockMicron" class="form-control"
-            placeholder="Enter Micron" min="0" step="any"
-            value="<%= ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron : '' %>" />
+          <select id="facestockMicron" name="facestockMicron" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
         </div>
       </div>
     </div>
@@ -222,17 +333,36 @@
 
     <!-- Adhesive -->
     <div class="ls-block layer-card layer-card--adhesive" data-block="adhesive1">
-      <span class="layer-card__label">ADHESIVE</span>
-      <div class="layer-card__fields" style="grid-template-columns: repeat(2, 1fr);">
+      <span class="layer-card__label">ADHESIVE<span id="adhesiveSkuId" class="layer-card__sku-badge" style="display:none;"></span></span>
+      <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 1fr 0.6fr;">
         <div class="layer-field">
           <label for="adhesiveType">Type</label>
           <select id="adhesiveType" name="adhesiveType" class="form-control select-tag" required>
-            <option value="" disabled <%= !ds.adhesive?.adhesiveType ? 'selected' : '' %> hidden>Select type</option>
-            <option value="ACRYLIC"    <%= ds.adhesive?.adhesiveType === 'ACRYLIC'    ? 'selected' : '' %>>ACRYLIC</option>
-            <option value="HOTMELT"    <%= ds.adhesive?.adhesiveType === 'HOTMELT'    ? 'selected' : '' %>>HOTMELT</option>
-            <option value="HT"         <%= ds.adhesive?.adhesiveType === 'HT'         ? 'selected' : '' %>>HT</option>
-            <option value="STAIN FREE" <%= ds.adhesive?.adhesiveType === 'STAIN FREE' ? 'selected' : '' %>>STAIN FREE</option>
-            <option value="WATERBASE"  <%= ds.adhesive?.adhesiveType === 'WATERBASE'  ? 'selected' : '' %>>WATERBASE</option>
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="adhesiveMake">Make</label>
+          <select id="adhesiveMake" name="adhesiveMake" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="adhesiveVendorId">Vendor Name</label>
+          <select id="adhesiveVendorId" name="adhesiveVendorId" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="adhesiveVendorSkuCode">Vendor SKU Code</label>
+          <select id="adhesiveVendorSkuCode" name="adhesiveVendorSkuCode" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="adhesiveShelfLife">Shelf Life</label>
+          <select id="adhesiveShelfLife" name="adhesiveShelfLife" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
           </select>
         </div>
         <div class="layer-field">
@@ -248,52 +378,49 @@
 
     <!-- Facestock (Layer 2) -- only for DOUBLE FACESTOCK -->
     <div class="ls-block layer-card layer-card--facestock" data-block="facestock2" style="display: none">
-      <span class="layer-card__label">FACESTOCK <span style="opacity:0.7;">(Layer 2)</span></span>
-      <div class="layer-card__fields" style="grid-template-columns: repeat(4, 1fr);">
+      <span class="layer-card__label">FACESTOCK <span style="opacity:0.7;">(Layer 2)</span><span id="facestockSkuId2" class="layer-card__sku-badge" style="display:none;"></span></span>
+      <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1fr 1.6fr 1fr 0.8fr 0.8fr;">
         <div class="layer-field">
           <label for="facestockFamily2">Family</label>
           <select id="facestockFamily2" name="facestockFamily2" class="form-control select-tag">
-            <option value="" <%= !ds.facestock2?.facestockFamily ? 'selected' : '' %>>— None —</option>
-            <option value="CHROMO"              <%= ds.facestock2?.facestockFamily === 'CHROMO'              ? 'selected' : '' %>>CHROMO</option>
-            <option value="CHROMO (D. R)"       <%= ds.facestock2?.facestockFamily === 'CHROMO (D. R)'       ? 'selected' : '' %>>CHROMO (D. R)</option>
-            <option value="CLEAR PP"            <%= ds.facestock2?.facestockFamily === 'CLEAR PP'            ? 'selected' : '' %>>CLEAR PP</option>
-            <option value="DOUBLE RELEASE"      <%= ds.facestock2?.facestockFamily === 'DOUBLE RELEASE'      ? 'selected' : '' %>>DOUBLE RELEASE</option>
-            <option value="DT"                  <%= ds.facestock2?.facestockFamily === 'DT'                  ? 'selected' : '' %>>DT</option>
-            <option value="DT. PP"              <%= ds.facestock2?.facestockFamily === 'DT. PP'              ? 'selected' : '' %>>DT. PP</option>
-            <option value="GLOSSY PP"           <%= ds.facestock2?.facestockFamily === 'GLOSSY PP'           ? 'selected' : '' %>>GLOSSY PP</option>
-            <option value="GLOSSY PP PARTIAL"   <%= ds.facestock2?.facestockFamily === 'GLOSSY PP PARTIAL'   ? 'selected' : '' %>>GLOSSY PP PARTIAL</option>
-            <option value="INKJET MATT FILM"    <%= ds.facestock2?.facestockFamily === 'INKJET MATT FILM'    ? 'selected' : '' %>>INKJET MATT FILM</option>
-            <option value="MAPLITO"             <%= ds.facestock2?.facestockFamily === 'MAPLITO'             ? 'selected' : '' %>>MAPLITO</option>
-            <option value="MATT PP"             <%= ds.facestock2?.facestockFamily === 'MATT PP'             ? 'selected' : '' %>>MATT PP</option>
-            <option value="MATT PP (HT)"        <%= ds.facestock2?.facestockFamily === 'MATT PP (HT)'        ? 'selected' : '' %>>MATT PP (HT)</option>
-            <option value="MATT PP PARTIAL"     <%= ds.facestock2?.facestockFamily === 'MATT PP PARTIAL'     ? 'selected' : '' %>>MATT PP PARTIAL</option>
-            <option value="PP"                  <%= ds.facestock2?.facestockFamily === 'PP'                  ? 'selected' : '' %>>PP</option>
-            <option value="REMOVABLE"           <%= ds.facestock2?.facestockFamily === 'REMOVABLE'           ? 'selected' : '' %>>REMOVABLE</option>
-            <option value="SILVER VOID"         <%= ds.facestock2?.facestockFamily === 'SILVER VOID'         ? 'selected' : '' %>>SILVER VOID</option>
-            <option value="SUPER HOTMELT"       <%= ds.facestock2?.facestockFamily === 'SUPER HOTMELT'       ? 'selected' : '' %>>SUPER HOTMELT</option>
+            <option value="" disabled selected hidden>Search</option>
           </select>
         </div>
         <div class="layer-field">
           <label for="facestockType2">Type</label>
           <select id="facestockType2" name="facestockType2" class="form-control select-tag" data-required-when-visible>
-            <option value="" disabled <%= !ds.facestock2?.facestockType ? 'selected' : '' %> hidden>Select type</option>
-            <option value="CLEAR"      <%= ds.facestock2?.facestockType === 'CLEAR'      ? 'selected' : '' %>>CLEAR</option>
-            <option value="GLOSSY"     <%= ds.facestock2?.facestockType === 'GLOSSY'     ? 'selected' : '' %>>GLOSSY</option>
-            <option value="MATT"       <%= ds.facestock2?.facestockType === 'MATT'       ? 'selected' : '' %>>MATT</option>
-            <option value="SEMI GLOSSY"<%= ds.facestock2?.facestockType === 'SEMI GLOSSY'? 'selected' : '' %>>SEMI GLOSSY</option>
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="facestockMake2">Make</label>
+          <select id="facestockMake2" name="facestockMake2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="facestockVendorId2">Vendor Name</label>
+          <select id="facestockVendorId2" name="facestockVendorId2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="facestockVendorSkuCode2">Vendor SKU Code</label>
+          <select id="facestockVendorSkuCode2" name="facestockVendorSkuCode2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
           </select>
         </div>
         <div class="layer-field">
           <label for="facestockGsm2">GSM</label>
-          <input type="number" id="facestockGsm2" name="facestockGsm2" class="form-control"
-            placeholder="Enter GSM" min="0" step="any"
-            value="<%= ds.facestock2?.facestockGsm != null ? ds.facestock2.facestockGsm : '' %>" />
+          <select id="facestockGsm2" name="facestockGsm2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
         </div>
         <div class="layer-field">
           <label for="facestockMicron2">Micron</label>
-          <input type="number" id="facestockMicron2" name="facestockMicron2" class="form-control"
-            placeholder="Enter Micron" min="0" step="any"
-            value="<%= ds.facestock2?.facestockMicron != null ? ds.facestock2.facestockMicron : '' %>" />
+          <select id="facestockMicron2" name="facestockMicron2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
         </div>
       </div>
     </div>
@@ -302,17 +429,36 @@
 
     <!-- Adhesive (Layer 2) -- for DOUBLE FACESTOCK and DOUBLE RELEASE -->
     <div class="ls-block layer-card layer-card--adhesive" data-block="adhesive2" style="display: none">
-      <span class="layer-card__label">ADHESIVE <span style="opacity:0.7;">(Layer 2)</span></span>
-      <div class="layer-card__fields" style="grid-template-columns: repeat(2, 1fr);">
+      <span class="layer-card__label">ADHESIVE <span style="opacity:0.7;">(Layer 2)</span><span id="adhesiveSkuId2" class="layer-card__sku-badge" style="display:none;"></span></span>
+      <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 1fr 0.6fr;">
         <div class="layer-field">
           <label for="adhesiveType2">Type</label>
           <select id="adhesiveType2" name="adhesiveType2" class="form-control select-tag" data-required-when-visible>
-            <option value="" disabled <%= !ds.adhesive2?.adhesiveType ? 'selected' : '' %> hidden>Select type</option>
-            <option value="ACRYLIC"    <%= ds.adhesive2?.adhesiveType === 'ACRYLIC'    ? 'selected' : '' %>>ACRYLIC</option>
-            <option value="HOTMELT"    <%= ds.adhesive2?.adhesiveType === 'HOTMELT'    ? 'selected' : '' %>>HOTMELT</option>
-            <option value="HT"         <%= ds.adhesive2?.adhesiveType === 'HT'         ? 'selected' : '' %>>HT</option>
-            <option value="STAIN FREE" <%= ds.adhesive2?.adhesiveType === 'STAIN FREE' ? 'selected' : '' %>>STAIN FREE</option>
-            <option value="WATERBASE"  <%= ds.adhesive2?.adhesiveType === 'WATERBASE'  ? 'selected' : '' %>>WATERBASE</option>
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="adhesiveMake2">Make</label>
+          <select id="adhesiveMake2" name="adhesiveMake2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="adhesiveVendorId2">Vendor Name</label>
+          <select id="adhesiveVendorId2" name="adhesiveVendorId2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="adhesiveVendorSkuCode2">Vendor SKU Code</label>
+          <select id="adhesiveVendorSkuCode2" name="adhesiveVendorSkuCode2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="adhesiveShelfLife2">Shelf Life</label>
+          <select id="adhesiveShelfLife2" name="adhesiveShelfLife2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
           </select>
         </div>
         <div class="layer-field">
@@ -328,29 +474,37 @@
 
     <!-- Release Liner -->
     <div class="ls-block layer-card layer-card--release" data-block="release1">
-      <span class="layer-card__label">RELEASE LINER</span>
-      <div class="layer-card__fields" style="grid-template-columns: repeat(3, 1fr);">
+      <span class="layer-card__label">RELEASE LINER<span id="releaseLinerSkuId" class="layer-card__sku-badge" style="display:none;"></span></span>
+      <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 0.6fr;">
         <div class="layer-field">
           <label for="releaseLinerType">Type</label>
           <select id="releaseLinerType" name="releaseLinerType" class="form-control select-tag" required>
-            <option value="" disabled <%= !ds.releaseLiner?.releaseLinerType ? 'selected' : '' %> hidden>Select type</option>
-            <option value="CCK"      <%= ds.releaseLiner?.releaseLinerType === 'CCK'      ? 'selected' : '' %>>CCK</option>
-            <option value="GLASSINE" <%= ds.releaseLiner?.releaseLinerType === 'GLASSINE' ? 'selected' : '' %>>GLASSINE</option>
-            <option value="SCK"      <%= ds.releaseLiner?.releaseLinerType === 'SCK'      ? 'selected' : '' %>>SCK</option>
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="releaseLinerMake">Make</label>
+          <select id="releaseLinerMake" name="releaseLinerMake" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="releaseLinerVendorId">Vendor Name</label>
+          <select id="releaseLinerVendorId" name="releaseLinerVendorId" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
           </select>
         </div>
         <div class="layer-field">
           <label for="releaseLinerColor">Color</label>
           <select id="releaseLinerColor" name="releaseLinerColor" class="form-control select-tag">
-            <option value="WHITE"  <%= (ds.releaseLiner?.releaseLinerColor || 'WHITE') === 'WHITE'  ? 'selected' : '' %>>WHITE</option>
-            <option value="YELLOW" <%= ds.releaseLiner?.releaseLinerColor === 'YELLOW' ? 'selected' : '' %>>YELLOW</option>
+            <option value="" disabled selected hidden>Search</option>
           </select>
         </div>
         <div class="layer-field">
           <label for="releaseLinerGsm">GSM</label>
-          <input type="number" id="releaseLinerGsm" name="releaseLinerGsm" class="form-control"
-            placeholder="Enter GSM" min="0" step="any"
-            value="<%= ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm : '' %>" />
+          <select id="releaseLinerGsm" name="releaseLinerGsm" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
         </div>
       </div>
     </div>
@@ -359,29 +513,37 @@
 
     <!-- Release Liner (Layer 2) -- only for DOUBLE RELEASE -->
     <div class="ls-block layer-card layer-card--release" data-block="release2" style="display: none">
-      <span class="layer-card__label">RELEASE LINER <span style="opacity:0.7;">(Layer 2)</span></span>
-      <div class="layer-card__fields" style="grid-template-columns: repeat(3, 1fr);">
+      <span class="layer-card__label">RELEASE LINER <span style="opacity:0.7;">(Layer 2)</span><span id="releaseLinerSkuId2" class="layer-card__sku-badge" style="display:none;"></span></span>
+      <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 0.6fr;">
         <div class="layer-field">
           <label for="releaseLinerType2">Type</label>
           <select id="releaseLinerType2" name="releaseLinerType2" class="form-control select-tag" data-required-when-visible>
-            <option value="" disabled <%= !ds.releaseLiner2?.releaseLinerType ? 'selected' : '' %> hidden>Select type</option>
-            <option value="CCK"      <%= ds.releaseLiner2?.releaseLinerType === 'CCK'      ? 'selected' : '' %>>CCK</option>
-            <option value="GLASSINE" <%= ds.releaseLiner2?.releaseLinerType === 'GLASSINE' ? 'selected' : '' %>>GLASSINE</option>
-            <option value="SCK"      <%= ds.releaseLiner2?.releaseLinerType === 'SCK'      ? 'selected' : '' %>>SCK</option>
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="releaseLinerMake2">Make</label>
+          <select id="releaseLinerMake2" name="releaseLinerMake2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
+        </div>
+        <div class="layer-field">
+          <label for="releaseLinerVendorId2">Vendor Name</label>
+          <select id="releaseLinerVendorId2" name="releaseLinerVendorId2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
           </select>
         </div>
         <div class="layer-field">
           <label for="releaseLinerColor2">Color</label>
           <select id="releaseLinerColor2" name="releaseLinerColor2" class="form-control select-tag">
-            <option value="WHITE"  <%= (ds.releaseLiner2?.releaseLinerColor || 'WHITE') === 'WHITE'  ? 'selected' : '' %>>WHITE</option>
-            <option value="YELLOW" <%= ds.releaseLiner2?.releaseLinerColor === 'YELLOW' ? 'selected' : '' %>>YELLOW</option>
+            <option value="" disabled selected hidden>Search</option>
           </select>
         </div>
         <div class="layer-field">
           <label for="releaseLinerGsm2">GSM</label>
-          <input type="number" id="releaseLinerGsm2" name="releaseLinerGsm2" class="form-control"
-            placeholder="Enter GSM" min="0" step="any"
-            value="<%= ds.releaseLiner2?.releaseLinerGsm != null ? ds.releaseLiner2.releaseLinerGsm : '' %>" />
+          <select id="releaseLinerGsm2" name="releaseLinerGsm2" class="form-control select-tag">
+            <option value="" disabled selected hidden>Search</option>
+          </select>
         </div>
       </div>
     </div>
@@ -395,27 +557,293 @@
 
 <script>
   document.addEventListener("DOMContentLoaded", () => {
+    const facestockMasters = <%- safeJson(facestockMasters) %>;
+    const adhesiveMasters = <%- safeJson(adhesiveMasters) %>;
+    const releaseMasters = <%- safeJson(releaseMasters) %>;
+    const dsLayers = <%- safeJson({ facestock: ds.facestock, facestock2: ds.facestock2, adhesive: ds.adhesive, adhesive2: ds.adhesive2, releaseLiner: ds.releaseLiner, releaseLiner2: ds.releaseLiner2 }) %>;
+
+    const editChoices = {};
+    function initChoices(id, opts) {
+      if (editChoices[id]) { editChoices[id].destroy(); delete editChoices[id]; }
+      const el = document.getElementById(id);
+      if (el) editChoices[id] = new Choices(el, opts || { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+    }
+
     [
       "rollType",
-      "facestockFamily", "facestockType", "adhesiveType", "releaseLinerType", "releaseLinerColor",
-      "facestockFamily2", "facestockType2", "adhesiveType2", "releaseLinerType2", "releaseLinerColor2",
-    ].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) new Choices(el, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+      "family", "rollOrSheet", "printingTechnology", "digitalPrintType",
+    ].forEach((id) => initChoices(id));
+
+    // Smart filter, any order -- mirrors the same mechanism on the Create
+    // dialog (views/sachiko/labelStockView.ejs), which mirrors
+    // /sachiko/form/tape-binding's Paper Code/Type/GSM/... fields: every
+    // field in a layer card is fillable from the start, none disabled
+    // waiting on an earlier pick. Picking any one field re-filters every
+    // OTHER field in its group down to the combinations that actually occur
+    // together in the master data given what's picked so far. If that
+    // narrows another field to exactly one option, it fills itself in,
+    // cascading until nothing more can be narrowed.
+    const FS_NONE = "__FS_NONE__";
+
+    function fsFieldOptions(pool, field) {
+      const seen = new Map();
+      let hasEmpty = false;
+      pool.forEach((r) => {
+        const raw = r[field];
+        const val = (raw === undefined || raw === null || String(raw).trim() === "") ? "" : String(raw).trim();
+        if (val === "") { hasEmpty = true; return; }
+        if (!seen.has(val)) seen.set(val, val);
+      });
+      const opts = [...seen.keys()]
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        .map((v) => ({ value: v, label: v }));
+      if (hasEmpty) opts.push({ value: FS_NONE, label: "— None —" });
+      return opts;
+    }
+
+    function fsVendorOptions(pool) {
+      const seen = new Map();
+      pool.forEach((r) => {
+        if (!r.vendorId) return;
+        const id = String(r.vendorId);
+        if (!seen.has(id)) seen.set(id, r.vendorName || id);
+      });
+      return [...seen.entries()]
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([value, label]) => ({ value, label }));
+    }
+
+    function fsMatch(recordVal, selected) {
+      if (selected === FS_NONE) return recordVal === undefined || recordVal === null || String(recordVal).trim() === "";
+      return String(recordVal ?? "").trim() === selected;
+    }
+
+    function fsDesiredValue(raw) {
+      return (raw === undefined || raw === null || String(raw).trim() === "") ? FS_NONE : String(raw).trim();
+    }
+
+    function fsSetSelectOptions(select, placeholder, options, keepValue) {
+      select.innerHTML = ['<option value="" disabled selected hidden>' + placeholder + '</option>']
+        .concat(options.map((o) => `<option value="${o.value}">${o.label}</option>`))
+        .join("");
+      select.value = keepValue && options.some((o) => o.value === keepValue) ? keepValue : "";
+      select.disabled = options.length === 0;
+    }
+
+    // Field key order per group -- drives both "what filters what" (every
+    // field is filtered by every OTHER field currently set, regardless of
+    // position) and the skuBadge's "all resolved" check. GSM has no Adhesive
+    // Master equivalent, so it's excluded there and stays a plain typed
+    // number.
+    const FS_ORDER = ["family", "type", "make", "vendorId", "vendorSkuCode", "gsm", "micron"];
+    const AD_ORDER = ["type", "make", "vendorId", "vendorSkuCode", "shelfLife"];
+    const RL_ORDER = ["type", "make", "vendorId", "color", "gsm"];
+
+    function fsFieldMatches(key, record, value) {
+      if (key === "vendorId") return String(record.vendorId ?? "") === value;
+      return fsMatch(record[key], value);
+    }
+
+    // `desired` seeds every field from the saved record instead of reading
+    // the live <select> values -- a plain <select> can't have its .value
+    // set to something that isn't yet one of its <option>s, so the seed
+    // pass has to supply the target values explicitly as the options are
+    // built. Because every desired value is known up front, seeding doesn't
+    // need an order either -- each field is just filtered by every other
+    // field's desired value.
+    function fsCurrentValue(key, els, desired) {
+      if (desired) return key === "vendorId" ? (desired.vendorId ? String(desired.vendorId) : "") : fsDesiredValue(desired[key]);
+      return els[key].value;
+    }
+
+    function fsOptionsForField(key, pool) {
+      return key === "vendorId" ? fsVendorOptions(pool) : fsFieldOptions(pool, key);
+    }
+
+    function fsKeyByElId(order, els) {
+      const map = {};
+      order.forEach((key) => { if (els[key]) map[els[key].id] = key; });
+      return map;
+    }
+
+    // `skip` leaves the field the user just picked untouched -- rebuilding
+    // it from its own new pool would be pointless (its value is what
+    // produced that pool) and would risk fighting the user's own click.
+    function fsRebuildGroup(order, masters, els, reinit, opts) {
+      opts = opts || {};
+      const desired = opts.desired || null;
+      const skip = opts.skip || null;
+
+      const current = {};
+      order.forEach((key) => { current[key] = fsCurrentValue(key, els, desired); });
+
+      const autoFilled = [];
+      order.forEach((key) => {
+        if (key === skip || !els[key]) return;
+        const pool = masters.filter((r) => order.every((k) => {
+          if (k === key) return true;
+          const v = current[k];
+          return !v || fsFieldMatches(k, r, v);
+        }));
+        const fieldOptions = fsOptionsForField(key, pool);
+        const priorValue = current[key];
+        let want = priorValue && fieldOptions.some((o) => o.value === priorValue) ? priorValue : "";
+        // Auto-fill only ever cascades from an actual user pick (`skip` set,
+        // meaning this call was triggered by a real field change) or a prior
+        // auto-fill within that same cascade -- never on the initial seed
+        // from the saved record, so a field that wasn't actually saved never
+        // shows up pre-filled just because some column happens to have a
+        // single value across the whole master.
+        if (!want && skip && fieldOptions.length === 1) want = fieldOptions[0].value;
+        fsSetSelectOptions(els[key], "Search", fieldOptions, want);
+        reinit(els[key].id);
+        current[key] = els[key].value;
+        if (skip && current[key] && current[key] !== priorValue) autoFilled.push(key);
+      });
+
+      // Once every field in the group has a value AND that combination
+      // resolves to exactly one master row, show that row's own skuId next
+      // to the card's heading. An unselected field is "no constraint" for
+      // narrowing OTHER fields' options, but here it must NOT be treated
+      // that way -- otherwise, with nothing picked yet, the whole unfiltered
+      // master pool counts, and if that master happens to hold only one row
+      // total the badge would show before any real selection.
+      const allSet = order.every((k) => !!current[k]);
+      const finalPool = allSet ? masters.filter((r) => order.every((k) => fsFieldMatches(k, r, current[k]))) : [];
+      if (els.skuBadge) {
+        if (finalPool.length === 1 && finalPool[0].skuId) {
+          els.skuBadge.textContent = finalPool[0].skuId;
+          els.skuBadge.style.display = "";
+        } else {
+          els.skuBadge.textContent = "";
+          els.skuBadge.style.display = "none";
+        }
+      }
+
+      // A field that just auto-filled may have narrowed the rest further --
+      // re-run (skipping only that field) until nothing more narrows. Not
+      // needed while seeding: every field's target value is already known.
+      if (!desired && autoFilled.length > 0) fsRebuildGroup(order, masters, els, reinit, { skip: autoFilled[0] });
+    }
+
+    function fsRebuildCascade(masters, els, reinit, opts) { fsRebuildGroup(FS_ORDER, masters, els, reinit, opts); }
+    function adRebuildCascade(masters, els, reinit, opts) { fsRebuildGroup(AD_ORDER, masters, els, reinit, opts); }
+    function rlRebuildCascade(masters, els, reinit, opts) { fsRebuildGroup(RL_ORDER, masters, els, reinit, opts); }
+
+    function fsFieldSet(suffix) {
+      return {
+        family: document.getElementById("facestockFamily" + suffix),
+        type: document.getElementById("facestockType" + suffix),
+        make: document.getElementById("facestockMake" + suffix),
+        vendorId: document.getElementById("facestockVendorId" + suffix),
+        vendorSkuCode: document.getElementById("facestockVendorSkuCode" + suffix),
+        skuBadge: document.getElementById("facestockSkuId" + suffix),
+        gsm: document.getElementById("facestockGsm" + suffix),
+        micron: document.getElementById("facestockMicron" + suffix),
+      };
+    }
+    function adFieldSet(suffix) {
+      return {
+        type: document.getElementById("adhesiveType" + suffix),
+        make: document.getElementById("adhesiveMake" + suffix),
+        vendorId: document.getElementById("adhesiveVendorId" + suffix),
+        vendorSkuCode: document.getElementById("adhesiveVendorSkuCode" + suffix),
+        shelfLife: document.getElementById("adhesiveShelfLife" + suffix),
+        skuBadge: document.getElementById("adhesiveSkuId" + suffix),
+      };
+    }
+    const fsEls1 = fsFieldSet("");
+    const fsEls2 = fsFieldSet("2");
+    const fsKeyById1 = fsKeyByElId(FS_ORDER, fsEls1);
+    const fsKeyById2 = fsKeyByElId(FS_ORDER, fsEls2);
+    const fsIds1 = new Set(Object.keys(fsKeyById1));
+    const fsIds2 = new Set(Object.keys(fsKeyById2));
+    const adEls1 = adFieldSet("");
+    const adEls2 = adFieldSet("2");
+    const adKeyById1 = fsKeyByElId(AD_ORDER, adEls1);
+    const adKeyById2 = fsKeyByElId(AD_ORDER, adEls2);
+    const adIds1 = new Set(Object.keys(adKeyById1));
+    const adIds2 = new Set(Object.keys(adKeyById2));
+
+    function rlFieldSet(suffix) {
+      return {
+        type: document.getElementById("releaseLinerType" + suffix),
+        make: document.getElementById("releaseLinerMake" + suffix),
+        vendorId: document.getElementById("releaseLinerVendorId" + suffix),
+        color: document.getElementById("releaseLinerColor" + suffix),
+        gsm: document.getElementById("releaseLinerGsm" + suffix),
+        skuBadge: document.getElementById("releaseLinerSkuId" + suffix),
+      };
+    }
+    const rlEls1 = rlFieldSet("");
+    const rlEls2 = rlFieldSet("2");
+    const rlKeyById1 = fsKeyByElId(RL_ORDER, rlEls1);
+    const rlKeyById2 = fsKeyByElId(RL_ORDER, rlEls2);
+    const rlIds1 = new Set(Object.keys(rlKeyById1));
+    const rlIds2 = new Set(Object.keys(rlKeyById2));
+
+    // Roll/Sheet -> Printing Technology options: SHEET opens Digital/Offset,
+    // ROLL opens Flexographic/Gravure/Letter Press. Digital (Sheet-only) opens
+    // a further Laser/Ink field. Mirrors the same cascade on the Create dialog
+    // (views/sachiko/labelStockView.ejs).
+    const PRINTING_TECH_OPTIONS = {
+      SHEET: ["DIGITAL", "OFFSET"],
+      ROLL: ["FLEXOGRAPHIC", "GRAVURE", "LETTER PRESS"],
+    };
+
+    function rebuildPrintingTechnology(rollOrSheet, selectedValue) {
+      const select = document.getElementById("printingTechnology");
+      const options = PRINTING_TECH_OPTIONS[rollOrSheet] || [];
+      select.innerHTML = options.length
+        ? '<option value="" disabled hidden>Select printing technology</option>' +
+          options.map((o) => `<option value="${o}" ${o === selectedValue ? "selected" : ""}>${o}</option>`).join("")
+        : '<option value="" disabled selected hidden>Select roll / sheet first</option>';
+      if (!options.includes(selectedValue)) select.value = "";
+      initChoices("printingTechnology");
+    }
+
+    function updateDigitalPrintTypeVisibility(rollOrSheet, printingTechnology, selectedValue) {
+      const wrap = document.getElementById("digitalPrintTypeWrap");
+      const select = document.getElementById("digitalPrintType");
+      const show = rollOrSheet === "SHEET" && printingTechnology === "DIGITAL";
+      wrap.style.display = show ? "" : "none";
+      select.required = show;
+      select.value = show && selectedValue ? selectedValue : "";
+      initChoices("digitalPrintType");
+    }
+
+    document.querySelector("form.needs-validation").addEventListener("change", function (e) {
+      if (e.target.id === "rollOrSheet") {
+        rebuildPrintingTechnology(e.target.value, "");
+        updateDigitalPrintTypeVisibility(e.target.value, "", "");
+      } else if (e.target.id === "printingTechnology") {
+        const rollOrSheet = document.getElementById("rollOrSheet").value;
+        updateDigitalPrintTypeVisibility(rollOrSheet, e.target.value, "");
+      } else if (fsIds1.has(e.target.id)) {
+        fsRebuildCascade(facestockMasters, fsEls1, initChoices, { skip: fsKeyById1[e.target.id] });
+      } else if (fsIds2.has(e.target.id)) {
+        fsRebuildCascade(facestockMasters, fsEls2, initChoices, { skip: fsKeyById2[e.target.id] });
+      } else if (adIds1.has(e.target.id)) {
+        adRebuildCascade(adhesiveMasters, adEls1, initChoices, { skip: adKeyById1[e.target.id] });
+      } else if (adIds2.has(e.target.id)) {
+        adRebuildCascade(adhesiveMasters, adEls2, initChoices, { skip: adKeyById2[e.target.id] });
+      } else if (rlIds1.has(e.target.id)) {
+        rlRebuildCascade(releaseMasters, rlEls1, initChoices, { skip: rlKeyById1[e.target.id] });
+      } else if (rlIds2.has(e.target.id)) {
+        rlRebuildCascade(releaseMasters, rlEls2, initChoices, { skip: rlKeyById2[e.target.id] });
+      }
     });
 
-    // Auto-calculate Facestock Micron from GSM (micron = gsm / density) for both layers.
-    const FACESTOCK_DENSITY = 0.92;
-    [["facestockGsm", "facestockMicron"], ["facestockGsm2", "facestockMicron2"]].forEach(([gsmId, micronId]) => {
-      const gsmInput = document.getElementById(gsmId);
-      const micronInput = document.getElementById(micronId);
-      gsmInput?.addEventListener("input", () => {
-        const gsm = Number(gsmInput.value);
-        micronInput.value = gsmInput.value !== "" && Number.isFinite(gsm)
-          ? (gsm / FACESTOCK_DENSITY).toFixed(1)
-          : "";
-      });
-    });
+    // Seed the Facestock/Adhesive/Release Liner cascades from the saved
+    // record -- the <select>s start out with only their placeholder
+    // <option>, so the saved values have to be supplied explicitly as
+    // `desired` rather than read off the (currently empty) live selects.
+    fsRebuildCascade(facestockMasters, fsEls1, initChoices, { desired: dsLayers.facestock });
+    fsRebuildCascade(facestockMasters, fsEls2, initChoices, { desired: dsLayers.facestock2 });
+    adRebuildCascade(adhesiveMasters, adEls1, initChoices, { desired: dsLayers.adhesive });
+    adRebuildCascade(adhesiveMasters, adEls2, initChoices, { desired: dsLayers.adhesive2 });
+    rlRebuildCascade(releaseMasters, rlEls1, initChoices, { desired: dsLayers.releaseLiner });
+    rlRebuildCascade(releaseMasters, rlEls2, initChoices, { desired: dsLayers.releaseLiner2 });
 
     // Roll Type controls which blocks show and in what order:
     //   NORMAL           -> facestock, adhesive, release

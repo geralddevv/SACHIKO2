@@ -54,32 +54,21 @@
 <script>
   const raw = <%- safeJson(jsonData) %>;
   const clientName = <%- safeJson(clientName) %>;
+  const userName = <%- safeJson(userName) %>;
   const userId = <%- safeJson(userId) %>;
 
+  // Just what's actually entered when the binding is created via the Sales
+  // Order form's Product Code/Paper Size/RM flow -- not the full label spec
+  // (that lives on the Label Stock master itself, see /sachiko/label-stock/view).
   const tableData = raw.map(binding => {
     const labelStock = binding.labelStock || {};
-    const fsType   = labelStock.facestock?.facestockType    || "";
-    const fsMicron = labelStock.facestock?.facestockMicron != null ? labelStock.facestock.facestockMicron + " MIC" : "";
-    const adType   = labelStock.adhesive?.adhesiveType      || "";
-    const rlType   = labelStock.releaseLiner?.releaseLinerType || "";
-    const product  = [fsType, fsMicron, adType, rlType].filter(Boolean).join(" / ");
-
     return {
       _id: String(binding._id),
+      clientName,
+      userName,
       productCode: labelStock.productCode || "",
-      skuCode: labelStock.skuCode || "",
-      product,
-      fsFamily: labelStock.facestock?.facestockFamily || "",
-      fsType: labelStock.facestock?.facestockType || "",
-      fsGsm: labelStock.facestock?.facestockGsm ?? "",
-      fsMicron: labelStock.facestock?.facestockMicron ?? "",
-      adType: labelStock.adhesive?.adhesiveType || "",
-      adGsm: labelStock.adhesive?.adhesiveGsm ?? "",
-      rlType: labelStock.releaseLiner?.releaseLinerType || "",
-      rlColor: labelStock.releaseLiner?.releaseLinerColor || "",
-      rlGsm: labelStock.releaseLiner?.releaseLinerGsm ?? "",
-      location: binding.location || "",
-      rate: binding.rate ?? "",
+      paperSize: binding.paperSize || "",
+      runningMeters: binding.runningMeters ?? "",
       status: binding.status || "ACTIVE",
     };
   });
@@ -161,16 +150,11 @@
           return `<span style="background:${bg};color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">${val}</span>`;
         },
       },
-      withTextFilter({ title: "SKU", field: "skuCode", minWidth: 170 }),
-      withTextFilter({ title: "Product Code", field: "productCode", width: 140, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
-      withTextFilter({ title: "Product", field: "product", minWidth: 220 }),
-      withTextFilter({ title: "FS Family", field: "fsFamily", minWidth: 110 }),
-      withTextFilter({ title: "FS GSM", field: "fsGsm", minWidth: 100 }),
-      withTextFilter({ title: "AD GSM", field: "adGsm", minWidth: 100 }),
-      withTextFilter({ title: "RL Color", field: "rlColor", minWidth: 100 }),
-      withTextFilter({ title: "RL GSM", field: "rlGsm", minWidth: 100 }),
-      withTextFilter({ title: "Location", field: "location", minWidth: 140 }),
-      withTextFilter({ title: "Rate", field: "rate", minWidth: 100 }),
+      withTextFilter({ title: "Client Name", field: "clientName", minWidth: 180 }),
+      withTextFilter({ title: "User Name", field: "userName", minWidth: 150 }),
+      withTextFilter({ title: "Product Code", field: "productCode", minWidth: 150, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
+      withTextFilter({ title: "Size", field: "paperSize", minWidth: 110 }),
+      withTextFilter({ title: "Running Mtrs", field: "runningMeters", minWidth: 130 }),
     ],
   });
 
@@ -187,7 +171,7 @@
       <div style="background:linear-gradient(135deg,#044a78 0%,#03365a 100%);padding:22px 24px 20px;color:#fff;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
         <div>
           <h2 style="margin:0;font-size:20px;font-weight:700;">${esc(row.productCode)}</h2>
-          <p style="margin:6px 0 0;font-size:13px;opacity:0.85;">${esc(row.skuCode)}</p>
+          <p style="margin:6px 0 0;font-size:13px;opacity:0.85;">${esc(row.clientName)} / ${esc(row.userName)}</p>
         </div>
         <button onclick="document.getElementById('label-stock-view-modal').style.display='none'"
           style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:700;">
@@ -196,17 +180,11 @@
       </div>
       <div style="padding:20px 24px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;max-height:calc(90vh - 120px);">
         ${[
-          { label: "Facestock Family", value: row.fsFamily },
-          { label: "Facestock Type", value: row.fsType },
-          { label: "Facestock GSM", value: row.fsGsm !== "" ? row.fsGsm + " GSM" : null },
-          { label: "Facestock Micron", value: row.fsMicron !== "" ? row.fsMicron + " MIC" : null },
-          { label: "Adhesive Type", value: row.adType },
-          { label: "Adhesive GSM", value: row.adGsm !== "" ? row.adGsm + " GSM" : null },
-          { label: "Release Liner Type", value: row.rlType },
-          { label: "Release Liner Color", value: row.rlColor },
-          { label: "Release Liner GSM", value: row.rlGsm !== "" ? row.rlGsm + " GSM" : null },
-          { label: "Location", value: row.location },
-          { label: "Rate", value: row.rate },
+          { label: "Client Name", value: row.clientName },
+          { label: "User Name", value: row.userName },
+          { label: "Product Code", value: row.productCode },
+          { label: "Size", value: row.paperSize },
+          { label: "Running Mtrs", value: row.runningMeters },
           { label: "Status", value: row.status },
         ].map(r => `
           <div style="display:flex;justify-content:space-between;border-bottom:1px solid #f1f5f9;padding-bottom:10px;">

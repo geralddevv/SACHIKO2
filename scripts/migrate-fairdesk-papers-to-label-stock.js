@@ -192,6 +192,11 @@ if (APPLY) {
       facestock: { facestockFamily: trim(p.family), facestockType: NO_SOURCE_DATA },
       adhesive: { adhesiveType: NO_SOURCE_DATA },
       releaseLiner: { releaseLinerType: NO_SOURCE_DATA },
+      // family/rollOrSheet/printingTechnology are also `required: true` --
+      // same TBD placeholder, same reason.
+      family: NO_SOURCE_DATA,
+      rollOrSheet: NO_SOURCE_DATA,
+      printingTechnology: NO_SOURCE_DATA,
     });
     console.log(`  CREATED ${labelStockId}  ${skuCode}  productCode="${trim(p.prodCode)}"`);
   }

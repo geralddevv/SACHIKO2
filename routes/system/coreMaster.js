@@ -28,6 +28,7 @@ function buildCoreSignature(payload) {
       canonStr(payload.make),
       canonStr(payload.printType),
       String(Number(payload.thickness ?? "")),
+      String(Number(payload.width ?? "")),
     ].join("||"),
   );
 }
@@ -67,6 +68,7 @@ async function buildPayload(body) {
     make: String(body.make || "").trim(),
     printType: String(body.printType || "").trim(),
     thickness: numOrUndef(body.thickness),
+    width: numOrUndef(body.width),
   };
 
   if (vendorId) {
@@ -82,6 +84,7 @@ function validatePayload(payload) {
   if (!payload.type) return "Type is required.";
   if (!payload.printType) return "Print Type is required.";
   if (payload.thickness === undefined) return "Thickness is required.";
+  if (payload.width === undefined) return "Width is required.";
   return null;
 }
 

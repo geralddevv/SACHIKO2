@@ -181,6 +181,7 @@ router.get("/label-stock-binding/view/:id", async (req, res) => {
       jsonData: user.labelStock || [],
       userId: String(user._id),
       clientName: user.clientName || "",
+      userName: user.userName || "",
       CSS: "tableDisp.css",
       JS: false,
       title: "Label Stock Binding Display",

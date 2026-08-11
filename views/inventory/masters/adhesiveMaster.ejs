@@ -190,6 +190,9 @@
         </div>
       </div>
 
+      <label class="dialog-field-label" for="addMakeInput">Make</label>
+      <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
+
       <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
       <select id="addVendorSelect" style="margin-bottom: 16px;">
         <option value="" disabled selected hidden>Select vendor</option>
@@ -197,9 +200,6 @@
           <option value="<%= v._id %>"><%= v.vendorName %></option>
         <% }) %>
       </select>
-
-      <label class="dialog-field-label" for="addMakeInput">Make</label>
-      <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
 
       <div class="dialog-field-row">
         <div>

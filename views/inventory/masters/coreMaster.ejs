@@ -189,6 +189,9 @@
         </div>
       </div>
 
+      <label class="dialog-field-label" for="addMakeInput">Make</label>
+      <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
+
       <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
       <select id="addVendorSelect" style="margin-bottom: 16px;">
         <option value="" disabled selected hidden>Select vendor</option>
@@ -197,10 +200,7 @@
         <% }) %>
       </select>
 
-      <label class="dialog-field-label" for="addMakeInput">Make</label>
-      <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
-
-      <div class="dialog-field-row">
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="addPrintTypeSelect">Print Type</label>
           <select id="addPrintTypeSelect">
@@ -212,6 +212,10 @@
         <div>
           <label class="dialog-field-label" for="addThicknessInput">Thickness (mm)</label>
           <input type="number" id="addThicknessInput" class="form-control premium-input" placeholder="Enter thickness" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addWidthInput">Width (inch)</label>
+          <input type="number" id="addWidthInput" class="form-control premium-input" placeholder="Enter width" min="0" step="any" />
         </div>
       </div>
 
@@ -259,7 +263,7 @@
       <label class="dialog-field-label" for="editMakeInput">Make</label>
       <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
 
-      <div class="dialog-field-row">
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="editPrintTypeSelect">Print Type</label>
           <select id="editPrintTypeSelect">
@@ -271,6 +275,10 @@
         <div>
           <label class="dialog-field-label" for="editThicknessInput">Thickness (mm)</label>
           <input type="number" id="editThicknessInput" class="form-control premium-input" placeholder="Enter thickness" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editWidthInput">Width (inch)</label>
+          <input type="number" id="editWidthInput" class="form-control premium-input" placeholder="Enter width" min="0" step="any" />
         </div>
       </div>
 
@@ -388,6 +396,7 @@
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Print Type", field: "printType", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Thickness (mm)", field: "thickness", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Width (inch)", field: "width", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
     ],
   });
 
@@ -454,6 +463,7 @@
       detailRow("Make", row.make || "—"),
       detailRow("Print Type", row.printType || "—"),
       detailRow("Thickness (mm)", row.thickness ?? "—"),
+      detailRow("Width (inch)", row.width ?? "—"),
     ].join("");
     openModal("viewDialog");
   }
@@ -479,6 +489,7 @@
     document.getElementById("addSkuIdPreview").value = previewSkuId;
     document.getElementById("addMakeInput").value = "";
     document.getElementById("addThicknessInput").value = "";
+    document.getElementById("addWidthInput").value = "";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
     document.getElementById("addTypeSelect").value = "";
@@ -504,10 +515,12 @@
     const type = document.getElementById("addTypeSelect").value;
     const printType = document.getElementById("addPrintTypeSelect").value;
     const thickness = document.getElementById("addThicknessInput").value;
+    const width = document.getElementById("addWidthInput").value;
     if (!vendorId) return showError("addCoreError", "Vendor Name is required.");
     if (!type) return showError("addCoreError", "Type is required.");
     if (!printType) return showError("addCoreError", "Print Type is required.");
     if (!thickness) return showError("addCoreError", "Thickness is required.");
+    if (!width) return showError("addCoreError", "Width is required.");
 
     hideError("addCoreError");
     setLoading("addSubmitBtn", true);
@@ -521,6 +534,7 @@
           make: document.getElementById("addMakeInput").value.trim(),
           printType,
           thickness,
+          width,
         }),
       });
       const data = await res.json();
@@ -544,6 +558,7 @@
     document.getElementById("editSkuIdDisplay").value = row.skuId;
     document.getElementById("editMakeInput").value = row.make || "";
     document.getElementById("editThicknessInput").value = row.thickness ?? "";
+    document.getElementById("editWidthInput").value = row.width ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
     document.getElementById("editTypeSelect").value = row.type || "";
@@ -570,10 +585,12 @@
     const type = document.getElementById("editTypeSelect").value;
     const printType = document.getElementById("editPrintTypeSelect").value;
     const thickness = document.getElementById("editThicknessInput").value;
+    const width = document.getElementById("editWidthInput").value;
     if (!vendorId) return showError("editCoreError", "Vendor Name is required.");
     if (!type) return showError("editCoreError", "Type is required.");
     if (!printType) return showError("editCoreError", "Print Type is required.");
     if (!thickness) return showError("editCoreError", "Thickness is required.");
+    if (!width) return showError("editCoreError", "Width is required.");
     if (!editId) return;
 
     hideError("editCoreError");
@@ -588,6 +605,7 @@
           make: document.getElementById("editMakeInput").value.trim(),
           printType,
           thickness,
+          width,
         }),
       });
       const data = await res.json();

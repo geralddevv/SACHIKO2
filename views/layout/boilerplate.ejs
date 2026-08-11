@@ -713,6 +713,13 @@
       .nav-opt-wrap.is-open .fa-chevron-down {
         transform: rotate(0deg);
       }
+
+      /* Distinguish an open tab's content from the collapsed header */
+      .nav-opt-wrap.is-open .nav-labels-opt {
+        background-color: rgba(2, 34, 56, 0.55);
+        border-radius: 0.4rem;
+        padding: 4px 0;
+      }
     </style>
     <% const isAdmin = authUser && (authUser.role === "admin" || authUser.role === "proprietor"); %>
     <% const isHr = authUser && authUser.role === "hr"; %>

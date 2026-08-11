@@ -96,7 +96,7 @@
       </select>
     </div>
 
-    <div class="span-six">
+    <div class="span-six" id="user-name-div">
       <label for="user-name">User Name</label>
       <select name="userId" id="user-name" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Select User</option>
@@ -118,32 +118,38 @@
       </select>
     </div>
 
-    <!-- Label Stock items can share the same SKU across several bindings that
-         only differ by paper size / running meters, so a single "Select Item"
-         dropdown (labelled just by product code) can't tell them apart. For
-         LABEL_STOCK these three cascading selects replace it and resolve down
-         to the one matching binding, which then drives the same hidden
-         #item-select (and therefore all the existing rate/stock/details
-         logic) exactly as a direct pick would. -->
-    <div class="span-four" id="label-stock-sku-div" style="display:none;">
-      <label for="label-stock-sku-select">SKU Code</label>
-      <select id="label-stock-sku-select" class="form-control select-tag">
-        <option value="" disabled selected hidden>Select SKU Code</option>
+    <!-- Label Stock items can share the same product code across several
+         bindings that only differ by paper size / running meters, so a single
+         "Select Item" dropdown (labelled just by product code) can't tell
+         them apart. For LABEL_STOCK this select replaces it and resolves down
+         to a matching binding (the first one found, if more than one shares
+         the code), which then drives the same hidden #item-select (and
+         therefore all the existing rate/stock/details logic) exactly as a
+         direct pick would. -->
+    <div class="span-four" id="label-stock-product-div" style="display:none;">
+      <label for="label-stock-product-select">Product Code</label>
+      <select id="label-stock-product-select" class="form-control select-tag">
+        <option value="" disabled selected hidden>Select Product Code</option>
       </select>
+      <!-- Set only when the picked product has no existing Label Stock
+           Binding for this client/user -- POST /sales/order auto-creates one
+           from this master id plus whatever's typed for Rate/Paper Size/RM,
+           instead of requiring the binding to already exist (itemId stays
+           empty in that case; see onLabelStockProductChange). -->
+      <input type="hidden" name="labelStockMasterId" id="label-stock-master-id" />
     </div>
 
-    <div class="span-four" id="label-stock-width-div" style="display:none;">
-      <label for="label-stock-width-select">Width</label>
-      <select id="label-stock-width-select" class="form-control select-tag">
-        <option value="" disabled selected hidden>Select Width</option>
-      </select>
+    <!-- Kept right next to Product Code (rather than down in Order Info with
+         the rest of Label Stock's extra fields) since they describe the item
+         being picked, not the order itself. -->
+    <div class="span-three" id="paper-size-div" style="display:none;">
+      <label for="paper-size">Paper Size</label>
+      <input type="text" id="paper-size" name="paperSize" class="form-control" placeholder="Enter paper size" />
     </div>
 
-    <div class="span-four" id="label-stock-mtrs-div" style="display:none;">
-      <label for="label-stock-mtrs-select">Mtrs</label>
-      <select id="label-stock-mtrs-select" class="form-control select-tag">
-        <option value="" disabled selected hidden>Select Mtrs</option>
-      </select>
+    <div class="span-three" id="running-meters-div" style="display:none;">
+      <label for="running-meters">RM</label>
+      <input type="text" inputmode="numeric" id="running-meters" name="runningMeters" class="form-control" placeholder="Enter RM" />
     </div>
 
     <div id="selected-item-details" class="span-full" style="padding:0;background:#fff;border:1px solid #044A78;border-radius:4px;display:none;"></div>
@@ -168,16 +174,6 @@
       <input type="text" inputmode="numeric" id="quantity" name="quantity" class="form-control" placeholder="Enter quantity" required />
     </div>
 
-    <div class="span-three" id="paper-size-div" style="display:none;">
-      <label for="paper-size">Paper Size</label>
-      <input type="text" id="paper-size" name="paperSize" class="form-control" placeholder="Enter paper size" />
-    </div>
-
-    <div class="span-three" id="running-meters-div" style="display:none;">
-      <label for="running-meters">RM</label>
-      <input type="text" inputmode="numeric" id="running-meters" name="runningMeters" class="form-control" placeholder="Enter RM" />
-    </div>
-
     <div class="span-three" id="no-of-rolls-div" style="display:none;">
       <label for="no-of-rolls">No of Rolls</label>
       <input type="text" inputmode="numeric" id="no-of-rolls" name="noOfRolls" class="form-control" placeholder="Enter no of rolls" />
@@ -185,7 +181,7 @@
 
     <div class="span-three" id="item-rate-div">
       <label for="item-rate">Rate</label>
-      <input type="text" id="item-rate" class="form-control" placeholder="Rate" readonly />
+      <input type="text" id="item-rate" name="itemRate" class="form-control" placeholder="Rate" inputmode="decimal" readonly />
     </div>
 
     <div class="span-three" id="order-rate-div">
@@ -507,11 +503,19 @@
 <script type="application/json" id="stock-info-data">
   <%- typeof stockInfo !== 'undefined' && stockInfo ? JSON.stringify(stockInfo) : 'null' %>
 </script>
+<script type="application/json" id="label-stocks-data">
+  <%- typeof labelStocks !== 'undefined' && labelStocks ? JSON.stringify(labelStocks) : '[]' %>
+</script>
 
 <script>
   // Safe JSON extraction
   const orderToEdit = JSON.parse(document.getElementById('order-to-edit-data')?.textContent || 'null');
   const stockInfo = JSON.parse(document.getElementById('stock-info-data')?.textContent || 'null');
+  // Full Label Stock master catalog (/sachiko/label-stock/view) -- the
+  // Product Code picker lists every master product, not just ones already
+  // bound to the selected client (see populateProductChoices /
+  // onLabelStockProductChange and the labelStockMasterId fallback below).
+  const allLabelStockMasters = JSON.parse(document.getElementById('label-stocks-data')?.textContent || '[]');
 
   const confirmModeStr = `<%= typeof confirmMode !== 'undefined' && confirmMode ? 'true' : 'false' %>`;
   const confirmMode = confirmModeStr === 'true';
@@ -764,9 +768,9 @@
   }
 
   let clientChoices, userChoices, locationChoices, itemTypeChoices, itemChoices;
-  let skuChoicesInst, widthChoicesInst, mtrsChoicesInst;
-  // Raw item list from the last /sales/items fetch -- the SKU/Width/Mtrs
-  // pickers filter this in-memory rather than re-fetching per pick.
+  let productChoicesInst;
+  // Raw item list from the last /sales/items fetch -- the Product Code
+  // picker filters this in-memory rather than re-fetching per pick.
   let latestLabelStockItems = [];
 
 
@@ -788,14 +792,19 @@
     itemChoices.setChoices([{ value: "", label: "Select Item", disabled: true, selected: true }], "value", "label", true);
     updateStockDisplay();
     syncSourceLocation("");
-    if (rateDisplayInput) rateDisplayInput.value = "";
+    if (rateDisplayInput) {
+      rateDisplayInput.value = "";
+      rateDisplayInput.readOnly = true;
+    }
     if (orderRateInput) {
       orderRateInput.value = "";
       delete orderRateInput.dataset.userEdited;
       delete orderRateInput.dataset.fromOrder;
     }
+    const labelStockMasterIdInput = document.getElementById("label-stock-master-id");
+    if (labelStockMasterIdInput) labelStockMasterIdInput.value = "";
     latestLabelStockItems = [];
-    resetLabelStockPickers();
+    resetLabelStockPicker();
   }
 
   // Load clients filtered by item type with an optional target to ensure it exists
@@ -919,7 +928,7 @@
       itemChoices.setChoices([{ value: "", label: "Select a location first", disabled: true, selected: true }], "value", "label", true);
       updateStockDisplay();
       latestLabelStockItems = [];
-      resetLabelStockPickers();
+      resetLabelStockPicker();
       return;
     }
 
@@ -936,11 +945,11 @@
       itemChoices.clearStore();
       if (items.length === 0) {
         itemChoices.setChoices([{ value: "", label: "No items found", disabled: true, selected: true }], "value", "label", true);
-        if (itemType === "LABEL_STOCK") resetLabelStockPickers();
+        if (itemType === "LABEL_STOCK") resetLabelStockPicker();
         return;
       }
 
-      if (itemType === "LABEL_STOCK") populateSkuChoices();
+      if (itemType === "LABEL_STOCK") populateProductChoices();
       
       const itemChoicesArray = items.map(item => ({
         value: item._id,
@@ -970,7 +979,7 @@
         // Prefill by item: align the location dropdown with the chosen item's
         // own location (it may differ from whatever was auto-selected).
         const selectedItem = items.find((it) => String(it._id) === String(targetItemId));
-        if (itemType === "LABEL_STOCK") syncLabelStockPickersFromItem(selectedItem);
+        if (itemType === "LABEL_STOCK") syncLabelStockPickerFromItem(selectedItem);
         const itemLoc = normalizeLocationName(selectedItem?.location || "");
         if (itemLoc && itemLoc !== loc) {
           programmaticLocationUpdate = true;
@@ -988,7 +997,7 @@
         }
       } else if (items.length === 1) {
         setChoiceValue(itemChoices, itemSelect, items[0]._id);
-        if (itemType === "LABEL_STOCK") syncLabelStockPickersFromItem(items[0]);
+        if (itemType === "LABEL_STOCK") syncLabelStockPickerFromItem(items[0]);
       }
 
       // Trigger change event to update stock display
@@ -1099,27 +1108,30 @@
   // table can be re-rendered when the quantity changes.
   let currentSelectedDetails = null;
 
-  // Paper Size/Running Meters/No of Rolls (span 3 each) only show for Label
-  // Stock items, and Order Quantity (span 4) only shows for Tape (Label
-  // Stock has no separate quantity field -- see updateLabelStockFieldsVisibility).
-  // Rate (span 3, read-only, auto-filled from the binding) shows for both
-  // item types; Curr Rate (span 3, editable) is Tape-only. Remarks grows to
-  // fill whichever columns are freed so the row still totals 32 instead of
-  // leaving a trailing gap:
+  // No of Rolls (span 3) only shows for Label Stock items, and Order
+  // Quantity (span 4) only shows for Tape (Label Stock has no separate
+  // quantity field -- see updateLabelStockFieldsVisibility). Paper
+  // Size/Running Meters live up in Order Details next to Product Code, not
+  // in this row. Rate (span 3, read-only, auto-filled from the binding)
+  // shows for both item types; Curr Rate (span 3, editable) is Tape-only.
+  // Remarks grows to fill whichever columns are freed so the row still
+  // totals 32 instead of leaving a trailing gap:
   //   Tape:        po-date(3) + po-number(4) + quantity(4) + item-rate(3) + order-rate(3) + est-date(5) + remarks(10) = 32
-  //   Label Stock: po-date(3) + po-number(4) + paper-size(3) + rm(3) + no-of-rolls(3) + item-rate(3) + est-date(5) + remarks(8) = 32
+  //   Label Stock: po-date(3) + po-number(4) + no-of-rolls(3) + item-rate(3) + est-date(5) + remarks(14) = 32
   function syncRemarksWidth() {
     const remarksWrap = document.getElementById("remarks-wrap");
     if (!remarksWrap) return;
     const labelStockFieldsVisible = document.getElementById("no-of-rolls-div")?.style.display !== "none";
-    remarksWrap.style.gridColumn = labelStockFieldsVisible ? "span 8" : "span 10";
+    remarksWrap.style.gridColumn = labelStockFieldsVisible ? "span 14" : "span 10";
   }
 
-  // Show Paper Size/Running Meters/No of Rolls only for Label Stock. Rate
-  // (read-only, auto-filled from the binding's own rate) shows for both item
-  // types; Curr Rate (user-editable, what actually gets submitted as
-  // orderRate) stays Tape-only -- Label Stock orders always save at the
-  // binding's rate as-is (see the LABEL_STOCK branch of POST /sales/order).
+  // Show No of Rolls only for Label Stock (Paper Size/Running Meters are
+  // toggled the same way, up next to Product Code -- see the ids array
+  // below). Rate (read-only, auto-filled from the binding's own rate) shows
+  // for both item types; Curr Rate (user-editable, what actually gets
+  // submitted as orderRate) stays Tape-only -- Label Stock orders always
+  // save at the binding's rate as-is (see the LABEL_STOCK branch of
+  // POST /sales/order).
   //
   // Label Stock has no separate "Order Quantity" concept -- its quantity IS
   // the No of Rolls, so asking for both would just be double entry. The
@@ -1142,28 +1154,44 @@
       if (isLabelStock) quantityInput.value = noOfRollsInput?.value || "";
     }
 
-    // Label Stock replaces the single "Select Item" dropdown with the SKU
-    // Code / Width / Mtrs cascade (see tryResolveLabelStockItem etc.) --
-    // except in confirm/dispatch mode, where the item is already fixed and
+    // Label Stock replaces the single "Select Item" dropdown with the Product
+    // Code picker (see onLabelStockProductChange etc.) -- except in
+    // confirm/dispatch mode, where the item is already fixed and
     // #item-select itself is disabled rather than re-pickable.
     const showPicker = isLabelStock && typeof confirmMode !== "undefined" && !confirmMode;
     const itemSelectWrap = document.getElementById("item-select-wrap");
     if (itemSelectWrap) itemSelectWrap.style.display = showPicker ? "none" : "";
-    ["label-stock-sku-div", "label-stock-width-div", "label-stock-mtrs-div"].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = showPicker ? "" : "none";
-    });
+    // #item-select carries `required`, but hiding its wrapper isn't enough to
+    // exempt it from :invalid -- Choices.js hides the original <select> via
+    // absolute-positioned/clipped CSS rather than display:none, so the
+    // browser still treats it as "rendered" and blocks submission with a
+    // false "Select Item is required" error even though it's the Product
+    // Code picker being used instead. Toggle required explicitly, same as
+    // quantityInput above.
+    if (itemSelect) itemSelect.required = !showPicker;
+    const productDiv = document.getElementById("label-stock-product-div");
+    if (productDiv) productDiv.style.display = showPicker ? "" : "none";
 
-    // Item Type/Location share this row with either the SKU/Width/Mtrs
-    // picker or the plain Select Item dropdown -- whichever set is actually
-    // visible, resize Item Type/Location to fill the row instead of leaving
-    // a trailing gap:
-    //   Picker visible:     item-type(4) + client(6) + user(6) + location(4) + sku(4) + width(4) + mtrs(4) = 32
-    //   Select Item visible: item-type(7) + client(6) + user(6) + location(6) + item-select(7)             = 32
+    // Item Type/Client/User/Location share this row with either the Product
+    // Code picker (plus Paper Size/RM, so the whole Label Stock identity row
+    // sits together) or the plain Select Item dropdown -- whichever is
+    // actually visible, resize them to fill the row instead of leaving a
+    // trailing gap or spilling onto a second line:
+    //   Picker visible:      item-type(4) + client(5) + user(5) + location(4) + product(6) + paper-size(4) + rm(4) = 32
+    //   Select Item visible: item-type(7) + client(6) + user(6) + location(6) + item-select(7) = 32
     const itemTypeDiv = document.getElementById("item-type-div");
     const locationDiv = document.getElementById("user-location-div");
+    const clientDiv = document.getElementById("client-name-div");
+    const userDiv = document.getElementById("user-name-div");
+    const paperSizeDiv = document.getElementById("paper-size-div");
+    const runningMetersDiv = document.getElementById("running-meters-div");
     if (itemTypeDiv) itemTypeDiv.style.gridColumn = showPicker ? "span 4" : "span 7";
+    if (clientDiv) clientDiv.style.gridColumn = showPicker ? "span 5" : "span 6";
+    if (userDiv) userDiv.style.gridColumn = showPicker ? "span 5" : "span 6";
     if (locationDiv) locationDiv.style.gridColumn = showPicker ? "span 4" : "span 6";
+    if (productDiv) productDiv.style.gridColumn = showPicker ? "span 6" : "";
+    if (paperSizeDiv) paperSizeDiv.style.gridColumn = showPicker ? "span 4" : "";
+    if (runningMetersDiv) runningMetersDiv.style.gridColumn = showPicker ? "span 4" : "";
 
     syncRemarksWidth();
   }
@@ -1236,24 +1264,25 @@
     if (runningMetersInput) runningMetersInput.value = cp.runningMeters != null && cp.runningMeters !== "" ? cp.runningMeters : "";
   }
 
-  // ================= LABEL STOCK: SKU CODE / WIDTH / MTRS PICKER =================
-  // Populates the SKU Code select from whatever items were last loaded for
-  // this user+location. Matches the rest of the app's convention (see
-  // views/sachiko/labelStockBindingForm.ejs) of labelling the "SKU Code"
-  // field with the item's productCode, not the longer skuCode string --
-  // the skuCode is still what's used internally to key the cascade.
-  function populateSkuChoices(selected = "") {
-    if (!skuChoicesInst) return [];
+  // ================= LABEL STOCK: PRODUCT CODE PICKER =================
+  // Populates the Product Code select from the full Label Stock master
+  // catalog (/sachiko/label-stock/view) -- every product, not just ones
+  // already bound to the selected client/user. Labelled by productCode;
+  // skuCode is still what's used internally to key the picker. Picking a
+  // product with no existing binding for this client falls through to the
+  // labelStockMasterId path in onLabelStockProductChange below.
+  function populateProductChoices(selected = "") {
+    if (!productChoicesInst) return [];
     const seen = new Map();
-    latestLabelStockItems.forEach((it) => {
-      const sku = it.details?.skuCode || "";
-      if (sku && !seen.has(sku)) seen.set(sku, it.details?.productCode || sku);
+    allLabelStockMasters.forEach((m) => {
+      const sku = m.skuCode || "";
+      if (sku && !seen.has(sku)) seen.set(sku, m.productCode || sku);
     });
     const values = [...seen.keys()];
-    skuChoicesInst.clearStore();
-    skuChoicesInst.setChoices(
+    productChoicesInst.clearStore();
+    productChoicesInst.setChoices(
       [
-        { value: "", label: "Select SKU Code", disabled: true, selected: !selected },
+        { value: "", label: "Select Product Code", disabled: true, selected: !selected },
         ...values.map((value) => ({ value, label: seen.get(value), selected: value === selected })),
       ],
       "value", "label", true,
@@ -1261,87 +1290,22 @@
     return values;
   }
 
-  // Older/legacy bindings can carry a blank paper size or running meters
-  // (both are optional on the LabelStockBinding schema itself -- only the
-  // create form requires them for new entries). A blank value still needs to
-  // be a selectable choice here, or that binding becomes permanently
-  // unreachable through this cascade even though it's a real, orderable
-  // record. LABEL_STOCK_BLANK is a stand-in option value for "" so it stays
-  // distinguishable from "" meaning no selection has been made yet.
-  const LABEL_STOCK_BLANK = "__blank__";
-
-  function populateWidthChoices(skuCode, selected = "") {
-    if (!widthChoicesInst) return [];
-    const raw = [...new Set(
-      latestLabelStockItems
-        .filter((it) => (it.details?.skuCode || "") === skuCode)
-        .map((it) => it.paperSize || ""),
-    )];
-    const values = raw.map((v) => (v === "" ? LABEL_STOCK_BLANK : v));
-    widthChoicesInst.clearStore();
-    widthChoicesInst.setChoices(
-      [
-        { value: "", label: "Select Width", disabled: true, selected: !selected },
-        ...values.map((value) => ({
-          value,
-          label: value === LABEL_STOCK_BLANK ? "(Not set)" : value,
-          selected: value === selected,
-        })),
-      ],
-      "value", "label", true,
-    );
-    return values;
-  }
-
-  function populateMtrsChoices(skuCode, width, selected = "") {
-    if (!mtrsChoicesInst) return [];
-    const matchWidth = width === LABEL_STOCK_BLANK ? "" : width;
-    const raw = [...new Set(
-      latestLabelStockItems
-        .filter((it) => (it.details?.skuCode || "") === skuCode && (it.paperSize || "") === matchWidth)
-        .map((it) => (it.runningMeters != null ? String(it.runningMeters) : "")),
-    )];
-    const values = raw.map((v) => (v === "" ? LABEL_STOCK_BLANK : v));
-    mtrsChoicesInst.clearStore();
-    mtrsChoicesInst.setChoices(
-      [
-        { value: "", label: "Select Mtrs", disabled: true, selected: !selected },
-        ...values.map((value) => ({
-          value,
-          label: value === LABEL_STOCK_BLANK ? "(Not set)" : value,
-          selected: value === selected,
-        })),
-      ],
-      "value", "label", true,
-    );
-    return values;
-  }
-
-  // Sets the three pickers to reflect an already-resolved item (edit mode, or
-  // the "only one item exists" auto-select path) without re-triggering the
-  // cascade's own change handlers.
-  function syncLabelStockPickersFromItem(item) {
+  // Sets the picker to reflect an already-resolved item (edit mode, or the
+  // "only one item exists" auto-select path).
+  function syncLabelStockPickerFromItem(item) {
     if (!item) return;
-    const sku = item.details?.skuCode || "";
-    const widthVal = item.paperSize ? item.paperSize : LABEL_STOCK_BLANK;
-    const mtrsVal = item.runningMeters != null ? String(item.runningMeters) : LABEL_STOCK_BLANK;
-    populateSkuChoices(sku);
-    populateWidthChoices(sku, widthVal);
-    populateMtrsChoices(sku, widthVal, mtrsVal);
+    populateProductChoices(item.details?.skuCode || "");
   }
 
-  function resetLabelStockPickers() {
-    populateSkuChoices("");
-    populateWidthChoices("", "");
-    populateMtrsChoices("", "", "");
+  function resetLabelStockPicker() {
+    populateProductChoices("");
   }
 
-  // Clears whatever item the cascade had resolved (without touching the
-  // picker selections themselves -- used while the user is still narrowing
-  // SKU -> Width -> Mtrs down to a new item). Deselects only -- must NOT
-  // rebuild itemChoices' option list down to a single placeholder, or the
-  // real item this cascade is about to resolve to next would no longer
-  // exist as a choosable option (see tryResolveLabelStockItem).
+  // Clears whatever item the picker had resolved (without touching the
+  // picker's own selection) -- used when the Product Code selection can't be
+  // resolved to a binding. Deselects only -- must NOT rebuild itemChoices'
+  // option list down to a single placeholder, or a real item the picker
+  // resolves to next would no longer exist as a choosable option.
   function clearResolvedLabelStockItem() {
     if (!itemChoices) return;
     itemChoices.removeActiveItems();
@@ -1349,40 +1313,37 @@
     updateStockDisplay();
   }
 
-  function tryResolveLabelStockItem() {
-    const sku = document.getElementById("label-stock-sku-select")?.value || "";
-    const widthRaw = document.getElementById("label-stock-width-select")?.value || "";
-    const mtrsRaw = document.getElementById("label-stock-mtrs-select")?.value || "";
-    if (!sku || !widthRaw || !mtrsRaw) return;
-    const width = widthRaw === LABEL_STOCK_BLANK ? "" : widthRaw;
-    const mtrs = mtrsRaw === LABEL_STOCK_BLANK ? "" : mtrsRaw;
-    const match = latestLabelStockItems.find(
-      (it) => (it.details?.skuCode || "") === sku && (it.paperSize || "") === width && String(it.runningMeters ?? "") === mtrs,
-    );
-    if (!match) return;
-    setChoiceValue(itemChoices, itemSelect, match._id);
-    updateStockDisplay();
-  }
+  // Multiple bindings can share the same product code (differing paper size
+  // / running meters) -- the first match is used; Paper Size / RM stay
+  // editable on the order itself if this one needs to differ.
+  //
+  // The picker now lists every Label Stock master product, not just ones
+  // already bound to this client -- so a pick may not resolve to a binding
+  // at all. When it doesn't, labelStockMasterId is set instead of itemId,
+  // Rate becomes editable, and POST /sales/order auto-creates the binding
+  // from labelStockMasterId + whatever's typed for Rate/Paper Size/RM/Location.
+  function onLabelStockProductChange() {
+    const sku = document.getElementById("label-stock-product-select")?.value || "";
+    const masterIdInput = document.getElementById("label-stock-master-id");
+    const match = sku ? latestLabelStockItems.find((it) => (it.details?.skuCode || "") === sku) : null;
 
-  function onLabelStockSkuChange() {
-    const sku = document.getElementById("label-stock-sku-select")?.value || "";
-    const widths = populateWidthChoices(sku, "");
-    populateMtrsChoices(sku, "", "");
-    clearResolvedLabelStockItem();
-    if (widths.length === 1) {
-      widthChoicesInst.setChoiceByValue(widths[0]);
-      onLabelStockWidthChange();
+    if (match) {
+      if (masterIdInput) masterIdInput.value = "";
+      if (rateDisplayInput) {
+        rateDisplayInput.readOnly = true;
+        rateDisplayInput.placeholder = "Rate";
+      }
+      setChoiceValue(itemChoices, itemSelect, match._id);
+      updateStockDisplay();
+      return;
     }
-  }
 
-  function onLabelStockWidthChange() {
-    const sku = document.getElementById("label-stock-sku-select")?.value || "";
-    const width = document.getElementById("label-stock-width-select")?.value || "";
-    const mtrsVals = populateMtrsChoices(sku, width, "");
     clearResolvedLabelStockItem();
-    if (mtrsVals.length === 1) {
-      mtrsChoicesInst.setChoiceByValue(mtrsVals[0]);
-      tryResolveLabelStockItem();
+    const master = sku ? allLabelStockMasters.find((m) => (m.skuCode || "") === sku) : null;
+    if (masterIdInput) masterIdInput.value = master?._id || "";
+    if (rateDisplayInput) {
+      rateDisplayInput.readOnly = !master;
+      rateDisplayInput.placeholder = master ? "Enter rate (new client binding)" : "Rate";
     }
   }
 
@@ -2002,6 +1963,32 @@
         setSubmittingState(false);
         return false;
       }
+
+      // No existing Label Stock Binding was resolved for the picked product
+      // (itemSelect stayed empty) -- POST /sales/order auto-creates one from
+      // labelStockMasterId, which needs a Rate and a Location the same way a
+      // manually-created binding would.
+      if (!itemSelect.value) {
+        const masterIdVal = document.getElementById("label-stock-master-id")?.value;
+        if (!masterIdVal) {
+          showToast("Select a Product Code.", "error");
+          setSubmittingState(false);
+          return false;
+        }
+        const rateVal = parseFloat(rateDisplayInput?.value);
+        if (!Number.isFinite(rateVal) || rateVal <= 0) {
+          showToast("Rate is required to bind this product to the client.", "error");
+          setSubmittingState(false);
+          return false;
+        }
+        const newBindingLocation = normalizeLocationName(selectedLocation || sourceLocationInput.value || locationSelect.value || "");
+        if (!newBindingLocation || newBindingLocation === "ALL") {
+          showToast("Select a location for this product.", "error");
+          setSubmittingState(false);
+          return false;
+        }
+        sourceLocationInput.value = newBindingLocation;
+      }
     }
 
     // Check Minimum Order Qty. Qty and MOQ are always in the same unit
@@ -2096,18 +2083,12 @@
     if (locationSelect) locationChoices = new Choices(locationSelect, { searchEnabled: false, itemSelectText: "", shouldSort: false });
     if (itemTypeSelect) itemTypeChoices = new Choices(itemTypeSelect, { searchEnabled: true, itemSelectText: "" });
     if (itemSelect) itemChoices = new Choices(itemSelect, { searchEnabled: true, itemSelectText: "" });
-    const skuSelectEl = document.getElementById("label-stock-sku-select");
-    const widthSelectEl = document.getElementById("label-stock-width-select");
-    const mtrsSelectEl = document.getElementById("label-stock-mtrs-select");
-    if (skuSelectEl) skuChoicesInst = new Choices(skuSelectEl, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-    if (widthSelectEl) widthChoicesInst = new Choices(widthSelectEl, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-    if (mtrsSelectEl) mtrsChoicesInst = new Choices(mtrsSelectEl, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-    skuSelectEl?.addEventListener("change", onLabelStockSkuChange);
-    widthSelectEl?.addEventListener("change", onLabelStockWidthChange);
-    mtrsSelectEl?.addEventListener("change", tryResolveLabelStockItem);
+    const productSelectEl = document.getElementById("label-stock-product-select");
+    if (productSelectEl) productChoicesInst = new Choices(productSelectEl, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    productSelectEl?.addEventListener("change", onLabelStockProductChange);
 
     // Sizes Item Type/Location to fill the row against whichever of
-    // Select Item vs. the SKU/Width/Mtrs picker is showing -- must run even
+    // Select Item vs. the Product Code picker is showing -- must run even
     // with no Item Type chosen yet (plain "Select Item" is the default,
     // unselected state), not only once a type ends up prefilled below.
     updateLabelStockFieldsVisibility();

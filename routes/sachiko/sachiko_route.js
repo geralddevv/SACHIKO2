@@ -5,7 +5,11 @@ import fs from "fs";
 import { randomBytes } from "crypto";
 import Client from "../../models/users/client.js";
 import Username from "../../models/users/username.js";
+import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
+import FacestockMaster from "../../models/inventory/facestockMaster.js";
+import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
+import ReleaseMaster from "../../models/inventory/releaseMaster.js";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import SachikoJobcard from "../../models/sachiko/sachikoJobcard.js";
 import SachikoSalesOrder from "../../models/sachiko/sachikoSalesOrder.js";
@@ -126,9 +130,12 @@ async function generateSkuCode() {
 
 /* ================= LABEL STOCK ================= */
 router.get("/label-stock/view", async (req, res) => {
-  const [jsonData, previewSkuCode] = await Promise.all([
+  const [jsonData, previewSkuCode, facestockMasters, adhesiveMasters, releaseMasters] = await Promise.all([
     SachikoLabelStock.find().sort({ skuCode: 1 }).lean(),
     previewNextSkuCode(),
+    FacestockMaster.find().select("skuId family type make vendorId vendorName vendorSkuCode gsm micron").lean(),
+    AdhesiveMaster.find().select("skuId type make vendorId vendorName vendorSkuCode shelfLife").lean(),
+    ReleaseMaster.find().select("skuId type make vendorId vendorName color gsm").lean(),
   ]);
   res.render("sachiko/labelStockView.ejs", {
     title: "Label Stock View",
@@ -136,6 +143,9 @@ router.get("/label-stock/view", async (req, res) => {
     JS: false,
     jsonData,
     previewSkuCode,
+    facestockMasters,
+    adhesiveMasters,
+    releaseMasters,
     notification: req.flash("notification"),
   });
 });
@@ -151,49 +161,104 @@ router.get("/label-stock/form", async (req, res) => {
   });
 });
 
+// vendorId is posted from the Facestock/Facestock (Layer 2) "Vendor Name"
+// select (Vendor master, filtered to commodities: "FACE PAPER"); vendorName
+// is denormalized onto the layer the same way Paper/Facestock Master pair
+// vendorId + vendorName (see CLAUDE.md).
+async function resolveVendorName(vendorId) {
+  if (!vendorId) return "";
+  const vendor = await Vendor.findById(vendorId).select("vendorName").lean();
+  return vendor?.vendorName || "";
+}
+
 // DOUBLE FACESTOCK carries a second facestock+adhesive pair (one release
 // liner); DOUBLE RELEASE carries a second adhesive+release-liner pair (one
 // facestock) -- see the field comments on the SachikoLabelStock schema.
-function buildLabelStockPayload(body) {
+async function buildLabelStockPayload(body) {
   const rollType = trim(body.rollType) || "NORMAL";
+  const rollOrSheet = trim(body.rollOrSheet);
+  const printingTechnology = trim(body.printingTechnology);
+  const facestockVendorId = trim(body.facestockVendorId);
+  const adhesiveVendorId = trim(body.adhesiveVendorId);
+  const releaseLinerVendorId = trim(body.releaseLinerVendorId);
   const payload = {
     productCode: trim(body.productCode),
     rollType,
+    family: trim(body.family),
+    rollOrSheet,
+    printingTechnology,
     facestock: {
       facestockFamily: trim(body.facestockFamily),
       facestockType: trim(body.facestockType),
+      facestockMake: trim(body.facestockMake),
+      facestockVendorId: facestockVendorId || undefined,
+      facestockVendorName: await resolveVendorName(facestockVendorId),
+      facestockVendorSkuCode: trim(body.facestockVendorSkuCode),
       facestockGsm: numOrUndef(body.facestockGsm),
       facestockMicron: numOrUndef(body.facestockMicron),
     },
     adhesive: {
       adhesiveType: trim(body.adhesiveType),
+      adhesiveMake: trim(body.adhesiveMake),
+      adhesiveVendorId: adhesiveVendorId || undefined,
+      adhesiveVendorName: await resolveVendorName(adhesiveVendorId),
+      adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode),
+      adhesiveShelfLife: trim(body.adhesiveShelfLife),
       adhesiveGsm: numOrUndef(body.adhesiveGsm),
     },
     releaseLiner: {
       releaseLinerType: trim(body.releaseLinerType),
+      releaseLinerMake: trim(body.releaseLinerMake),
+      releaseLinerVendorId: releaseLinerVendorId || undefined,
+      releaseLinerVendorName: await resolveVendorName(releaseLinerVendorId),
       releaseLinerColor: trim(body.releaseLinerColor) || "WHITE",
       releaseLinerGsm: numOrUndef(body.releaseLinerGsm),
     },
   };
 
+  if (rollOrSheet === "SHEET" && printingTechnology === "DIGITAL") {
+    payload.digitalPrintType = trim(body.digitalPrintType);
+  }
+
   if (rollType === "DOUBLE FACESTOCK") {
+    const facestockVendorId2 = trim(body.facestockVendorId2);
+    const adhesiveVendorId2 = trim(body.adhesiveVendorId2);
     payload.facestock2 = {
       facestockFamily: trim(body.facestockFamily2),
       facestockType: trim(body.facestockType2),
+      facestockMake: trim(body.facestockMake2),
+      facestockVendorId: facestockVendorId2 || undefined,
+      facestockVendorName: await resolveVendorName(facestockVendorId2),
+      facestockVendorSkuCode: trim(body.facestockVendorSkuCode2),
       facestockGsm: numOrUndef(body.facestockGsm2),
       facestockMicron: numOrUndef(body.facestockMicron2),
     };
     payload.adhesive2 = {
       adhesiveType: trim(body.adhesiveType2),
+      adhesiveMake: trim(body.adhesiveMake2),
+      adhesiveVendorId: adhesiveVendorId2 || undefined,
+      adhesiveVendorName: await resolveVendorName(adhesiveVendorId2),
+      adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode2),
+      adhesiveShelfLife: trim(body.adhesiveShelfLife2),
       adhesiveGsm: numOrUndef(body.adhesiveGsm2),
     };
   } else if (rollType === "DOUBLE RELEASE") {
+    const adhesiveVendorId2 = trim(body.adhesiveVendorId2);
+    const releaseLinerVendorId2 = trim(body.releaseLinerVendorId2);
     payload.adhesive2 = {
       adhesiveType: trim(body.adhesiveType2),
+      adhesiveMake: trim(body.adhesiveMake2),
+      adhesiveVendorId: adhesiveVendorId2 || undefined,
+      adhesiveVendorName: await resolveVendorName(adhesiveVendorId2),
+      adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode2),
+      adhesiveShelfLife: trim(body.adhesiveShelfLife2),
       adhesiveGsm: numOrUndef(body.adhesiveGsm2),
     };
     payload.releaseLiner2 = {
       releaseLinerType: trim(body.releaseLinerType2),
+      releaseLinerMake: trim(body.releaseLinerMake2),
+      releaseLinerVendorId: releaseLinerVendorId2 || undefined,
+      releaseLinerVendorName: await resolveVendorName(releaseLinerVendorId2),
       releaseLinerColor: trim(body.releaseLinerColor2) || "WHITE",
       releaseLinerGsm: numOrUndef(body.releaseLinerGsm2),
     };
@@ -206,9 +271,21 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
   try {
     const labelStockId = await generateId("sachikoLabelStockId", "LS");
     const skuCode = await generateSkuCode();
-    const payload = buildLabelStockPayload(req.body);
+    const payload = await buildLabelStockPayload(req.body);
     if (!payload.productCode) {
       throw Object.assign(new Error("Product Code is required"), { userMessage: "Product Code is required" });
+    }
+    if (!payload.family) {
+      throw Object.assign(new Error("Family is required"), { userMessage: "Family is required" });
+    }
+    if (!payload.rollOrSheet) {
+      throw Object.assign(new Error("Roll or Sheet is required"), { userMessage: "Roll or Sheet is required" });
+    }
+    if (!payload.printingTechnology) {
+      throw Object.assign(new Error("Printing Technology is required"), { userMessage: "Printing Technology is required" });
+    }
+    if (payload.rollOrSheet === "SHEET" && payload.printingTechnology === "DIGITAL" && !payload.digitalPrintType) {
+      throw Object.assign(new Error("Laser or Ink is required"), { userMessage: "Laser or Ink is required" });
     }
     if (req.file) {
       payload.wordFile = req.file.filename;
@@ -225,7 +302,12 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
 });
 
 router.get("/label-stock/edit/:id", async (req, res) => {
-  const ds = await SachikoLabelStock.findById(req.params.id).lean();
+  const [ds, facestockMasters, adhesiveMasters, releaseMasters] = await Promise.all([
+    SachikoLabelStock.findById(req.params.id).lean(),
+    FacestockMaster.find().select("skuId family type make vendorId vendorName vendorSkuCode gsm micron").lean(),
+    AdhesiveMaster.find().select("skuId type make vendorId vendorName vendorSkuCode shelfLife").lean(),
+    ReleaseMaster.find().select("skuId type make vendorId vendorName color gsm").lean(),
+  ]);
   if (!ds) {
     req.flash("notification", "Label Stock not found");
     return res.redirect("/sachiko/label-stock/view");
@@ -235,6 +317,9 @@ router.get("/label-stock/edit/:id", async (req, res) => {
     CSS: false,
     JS: false,
     ds,
+    facestockMasters,
+    adhesiveMasters,
+    releaseMasters,
     notification: req.flash("notification"),
   });
 });
@@ -247,7 +332,7 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
       return res.redirect("/sachiko/label-stock/view");
     }
 
-    const payload = buildLabelStockPayload(req.body);
+    const payload = await buildLabelStockPayload(req.body);
 
     if (req.file) {
       // Remove the previous file before swapping in the new one.
@@ -263,7 +348,7 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
     // for, so switching a roll back to NORMAL (or between the two double
     // modes) doesn't leave a stale facestock2/adhesive2/releaseLiner2 behind.
     const unset = {};
-    for (const key of ["facestock2", "adhesive2", "releaseLiner2"]) {
+    for (const key of ["facestock2", "adhesive2", "releaseLiner2", "digitalPrintType"]) {
       if (!(key in payload)) unset[key] = "";
     }
 
