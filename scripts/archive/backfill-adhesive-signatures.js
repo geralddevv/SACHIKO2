@@ -2,9 +2,9 @@ import { fileURLToPath } from "url";
 import path from "path";
 import dotenv from "dotenv";
 // Load .env from the project root regardless of the current working directory.
-dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".env") });
-import connectDB from "../config/db.js";
-import AdhesiveMaster from "../models/inventory/adhesiveMaster.js";
+dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", ".env") });
+import connectDB from "../../config/db.js";
+import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
 
 // ---------------------------------------------------------------------------
 // One-time repair for AdhesiveMaster's duplicate-prevention signature.

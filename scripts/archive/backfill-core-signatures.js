@@ -2,9 +2,9 @@ import { fileURLToPath } from "url";
 import path from "path";
 import dotenv from "dotenv";
 // Load .env from the project root regardless of the current working directory.
-dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".env") });
-import connectDB from "../config/db.js";
-import CoreMaster from "../models/inventory/coreMaster.js";
+dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", ".env") });
+import connectDB from "../../config/db.js";
+import CoreMaster from "../../models/inventory/coreMaster.js";
 
 // ---------------------------------------------------------------------------
 // One-time backfill for CoreMaster.coreSignature -- the duplicate-prevention

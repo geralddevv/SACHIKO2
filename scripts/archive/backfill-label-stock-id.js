@@ -2,10 +2,10 @@ import { fileURLToPath } from "url";
 import path from "path";
 import dotenv from "dotenv";
 // Load .env from the project root regardless of the current working directory.
-dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".env") });
-import connectDB from "../config/db.js";
-import Counter from "../models/system/counter.js";
-import SachikoLabelStock from "../models/sachiko/sachikoLabelStock.js";
+dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", ".env") });
+import connectDB from "../../config/db.js";
+import Counter from "../../models/system/counter.js";
+import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 
 // ---------------------------------------------------------------------------
 // One-time backfill for SachikoLabelStock.labelStockId ("SKU ID" in the UI --
