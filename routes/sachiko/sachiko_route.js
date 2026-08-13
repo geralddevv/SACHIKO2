@@ -85,11 +85,11 @@ const toArray = (value) => {
 };
 
 // SKU code format mirrors the Tape master's Product ID (routes/fairdesk_route.js
-// formatTapeId): `FS | LS | 000001`. Scanned/incremented directly against the
+// formatTapeId): `SP | LS | 000001`. Scanned/incremented directly against the
 // highest existing skuCode, same as Tape, rather than the shared Counter used
 // by labelStockId/jobCardId/lotNo above -- this is a separate, human-facing
 // SKU, not the row's own generated identifier.
-const formatSkuCode = (n) => `FS | LS | ${String(n).padStart(6, "0")}`;
+const formatSkuCode = (n) => `SP | LS | ${String(n).padStart(6, "0")}`;
 const parseSkuSeq = (skuCode) => {
   const match = String(skuCode || "").match(/(\d{6})$/);
   return match ? Number(match[1]) : 0;

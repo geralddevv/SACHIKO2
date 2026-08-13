@@ -16,7 +16,7 @@ import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 // rename, with no skuCode at all.
 //
 // Uses the exact same format/allocation the live app uses (formatSkuCode /
-// generateSkuCode in routes/sachiko/sachiko_route.js): "FS | LS | 000001",
+// generateSkuCode in routes/sachiko/sachiko_route.js): "SP | LS | 000001",
 // continuing from the highest existing skuCode and skipping any value
 // already taken, so a backfilled record is indistinguishable from one
 // created normally.
@@ -27,7 +27,7 @@ import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 //   node scripts/backfill-label-stock-sku-code.js --apply   # commit
 // ---------------------------------------------------------------------------
 
-const formatSkuCode = (n) => `FS | LS | ${String(n).padStart(6, "0")}`;
+const formatSkuCode = (n) => `SP | LS | ${String(n).padStart(6, "0")}`;
 const parseSkuSeq = (skuCode) => {
   const match = String(skuCode || "").match(/(\d{6})$/);
   return match ? Number(match[1]) : 0;

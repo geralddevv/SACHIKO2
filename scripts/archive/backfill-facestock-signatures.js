@@ -16,11 +16,18 @@ import FacestockMaster from "../../models/inventory/facestockMaster.js";
 //   1. Drops the old `vendorId_1_vendorSkuCode_1` index, if it still exists
 //      in MongoDB (removing the field from the Mongoose schema does not, by
 //      itself, drop an index already built on the collection).
-//   2. Backfills facestockSignature on any row missing one (pre-existing
-//      rows from before this field existed), using the same hash the live
-//      route computes. A row whose computed signature would collide with
-//      another row's is left alone and reported -- fix the data by hand,
-//      since this script won't try to modify existing field values.
+//   2. Resyncs facestockSignature on every row whose stored value doesn't
+//      match what buildFacestockSignature computes today -- covers both a
+//      row missing one entirely (pre-existing rows from before this field
+//      existed) AND a row whose signature was computed by an OLDER version
+//      of the formula (e.g. the `size` field was added to it after some
+//      rows were already signed -- their stored signature is now stale and
+//      won't match a new row with the same values, silently letting a real
+//      duplicate through). Re-run this any time buildFacestockSignature's
+//      field list changes, not just once. A row whose recomputed signature
+//      would collide with another row's is left alone and reported -- fix
+//      the data by hand, since this script won't try to modify existing
+//      field values.
 //
 // Dry-run by default. Pass --apply to write changes.
 //
@@ -72,18 +79,20 @@ if (oldIndex) {
   console.log(`Old index ${OLD_INDEX_NAME} not present -- nothing to drop.`);
 }
 
-const missing = await FacestockMaster.find({
-  $or: [{ facestockSignature: { $exists: false } }, { facestockSignature: null }, { facestockSignature: "" }],
-}).lean();
+const all = await FacestockMaster.find().lean();
+const stale = all.filter((doc) => buildFacestockSignature(doc) !== doc.facestockSignature);
 
-console.log(`\nFacestock masters missing a signature: ${missing.length}`);
+console.log(`\nFacestock masters checked: ${all.length}`);
+console.log(`Needing a signature update: ${stale.length}`);
 
 let filled = 0;
+let resynced = 0;
 let skipped = 0;
 
-for (const doc of missing) {
+for (const doc of stale) {
   const label = `${doc.skuId || "(no SKU ID)"} / ${doc.vendorSkuCode || "(no vendor SKU code)"} (_id ${doc._id})`;
   const signature = buildFacestockSignature(doc);
+  const wasMissing = !doc.facestockSignature;
 
   const collision = await FacestockMaster.findOne({ facestockSignature: signature, _id: { $ne: doc._id } })
     .select("_id skuId")
@@ -94,14 +103,16 @@ for (const doc of missing) {
     continue;
   }
 
-  console.log(`FILL     ${label}`);
+  console.log(`${wasMissing ? "FILL   " : "RESYNC "}  ${label}`);
   if (APPLY) await FacestockMaster.updateOne({ _id: doc._id }, { $set: { facestockSignature: signature } });
-  filled++;
+  if (wasMissing) filled++;
+  else resynced++;
 }
 
 console.log(`\n--- Summary ---`);
-console.log(`Filled:   ${filled}`);
-console.log(`Skipped:  ${skipped}`);
+console.log(`Filled (was missing):     ${filled}`);
+console.log(`Resynced (stale formula): ${resynced}`);
+console.log(`Skipped (collision):      ${skipped}`);
 console.log(APPLY ? "Changes committed." : "Dry-run only. Re-run with --apply to commit.");
 
 await FacestockMaster.db.close();

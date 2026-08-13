@@ -35,20 +35,36 @@ function buildCoreSignature(payload) {
 
 const DUPLICATE_CORE_MESSAGE = "This core already exists (every field matches an existing record).";
 
-// Same "SP | <CODE> | 000001" id scheme used for Machine/Label Stock/Job Card
-// ids elsewhere (see routes/system/machine.js, routes/sachiko/sachiko_route.js).
+const parseSkuSeq = (skuId) => {
+  const match = String(skuId || "").match(/(\d{6})$/);
+  return match ? Number(match[1]) : 0;
+};
+
+// Generate a sequential id of the form `SP | COR | 000001`.
 async function generateId(key, code) {
-  const counter = await Counter.findOneAndUpdate(
-    { key },
-    { $inc: { seq: 1 } },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
-  ).lean();
-  return `SP | ${code} | ${String(counter.seq).padStart(6, "0")}`;
+  const [latest, counter] = await Promise.all([
+    CoreMaster.findOne().sort({ skuId: -1 }).select("skuId").lean(),
+    Counter.findOne({ key }).select("seq").lean(),
+  ]);
+  const maxSeq = Math.max(parseSkuSeq(latest?.skuId), Number(counter?.seq || 0));
+  let nextSeq = maxSeq + 1;
+  while (await CoreMaster.exists({ skuId: `SP | ${code} | ${String(nextSeq).padStart(6, "0")}` })) {
+    nextSeq += 1;
+  }
+  await Counter.updateOne({ key }, { $set: { seq: nextSeq } }, { upsert: true });
+  return `SP | ${code} | ${String(nextSeq).padStart(6, "0")}`;
 }
 
 async function previewId(key, code) {
-  const counter = await Counter.findOne({ key }).select("seq").lean();
-  const nextSeq = Number(counter?.seq || 0) + 1;
+  const [latest, counter] = await Promise.all([
+    CoreMaster.findOne().sort({ skuId: -1 }).select("skuId").lean(),
+    Counter.findOne({ key }).select("seq").lean(),
+  ]);
+  const maxSeq = Math.max(parseSkuSeq(latest?.skuId), Number(counter?.seq || 0));
+  let nextSeq = maxSeq + 1;
+  while (await CoreMaster.exists({ skuId: `SP | ${code} | ${String(nextSeq).padStart(6, "0")}` })) {
+    nextSeq += 1;
+  }
   return `SP | ${code} | ${String(nextSeq).padStart(6, "0")}`;
 }
 
@@ -90,7 +106,7 @@ function validatePayload(payload) {
 
 router.get("/form/core", requireCoreMaster, async (req, res) => {
   const [cores, previewSkuId, vendors] = await Promise.all([
-    CoreMaster.find().sort({ createdAt: -1 }).lean(),
+    CoreMaster.find().sort({ skuId: 1 }).lean(),
     previewId("coreMasterSkuId", "COR"),
     Vendor.find({ commodities: "CORE" }, { vendorName: 1 }).sort({ vendorName: 1 }).lean(),
   ]);

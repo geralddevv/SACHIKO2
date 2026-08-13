@@ -113,7 +113,7 @@ async function generateLabelStockId() {
   return `SP | LS | ${String(counter.seq).padStart(6, "0")}`;
 }
 
-const formatSkuCode = (n) => `FS | LS | ${String(n).padStart(6, "0")}`;
+const formatSkuCode = (n) => `SP | LS | ${String(n).padStart(6, "0")}`;
 const parseSkuSeq = (skuCode) => {
   const match = String(skuCode || "").match(/(\d{6})$/);
   return match ? Number(match[1]) : 0;
