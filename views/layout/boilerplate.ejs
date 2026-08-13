@@ -817,24 +817,47 @@
         </div>
         <% } %>
 
-        <% if (isAdmin) { %>
+        <% if (isAdmin || isHod) { %>
         <div class="nav-opt-wrap">
-          <div title="Admin" class="view-toggle nav-items">
-            <i class="fa-solid fa-user-shield" style="color: #ffffff"></i>
-            <p class="nav-items-para">Admin Control</p>
+          <div title="Masters" class="masters-toggle nav-items">
+            <i class="fa-solid fa-database" style="color: #ffffff"></i>
+            <p class="nav-items-para">Masters</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
+
           <div class="nav-labels-opt">
-            <div title="Permission Dashboard" class="<%= title === 'Permission Dashboard' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/employee/admin/permissions'">
-              <i class="fa-solid fa-shield-halved" style="color: #ffffff"></i>
-              <p class="nav-items-para">Permissions</p>
+            <div title="Location Master" class="<%= title === 'Location Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/location'" style="border-top: 2px solid #ffffff9d;" >
+              <i class="fa-solid fa-location-dot" style="color: #ffffff"></i>
+              <p class="nav-items-para">Location</p>
             </div>
-            <div title="Audit Log" class="<%= title === 'Audit Log' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/audit/view'">
-              <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
-              <p class="nav-items-para">Audit Log</p>
+
+            <div title="Machine Master" class="<%= title === 'Machine Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/machine'">
+              <i class="fa-solid fa-gears" style="color: #ffffff"></i>
+              <p class="nav-items-para">Machine</p>
+            </div>
+
+            <div title="Facestock Master" class="<%= title === 'Facestock Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/facestock'">
+              <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
+              <p class="nav-items-para">Facestock</p>
+            </div>
+
+            <div title="Adhesive Master" class="<%= title === 'Adhesive Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/adhesive'">
+              <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
+              <p class="nav-items-para">Adhesive</p>
+            </div>
+
+            <div title="Release Master" class="<%= title === 'Release Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/release'">
+              <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
+              <p class="nav-items-para">Release</p>
+            </div>
+
+            <div title="Core Master" class="<%= title === 'Core Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/core'" style="border-bottom: 2px solid #ffffff9d">
+              <i class="fa-regular fa-circle" style="color: #ffffff"></i>
+              <p class="nav-items-para">Core</p>
             </div>
           </div>
         </div>
+
         <% } %>
 
         <% if (canOrders) { %>
@@ -880,49 +903,6 @@
         </div>
         <% } %>
 
-        <% if (isAdmin || isHod) { %>
-        <div class="nav-opt-wrap">
-          <div title="Masters" class="masters-toggle nav-items">
-            <i class="fa-solid fa-database" style="color: #ffffff"></i>
-            <p class="nav-items-para">Masters</p>
-            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
-          </div>
-
-          <div class="nav-labels-opt">
-            <div title="Location Master" class="<%= title === 'Location Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/location'" style="border-top: 2px solid #ffffff9d;" >
-              <i class="fa-solid fa-location-dot" style="color: #ffffff"></i>
-              <p class="nav-items-para">Location</p>
-            </div>
-
-            <div title="Machine Master" class="<%= title === 'Machine Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/machine'">
-              <i class="fa-solid fa-gears" style="color: #ffffff"></i>
-              <p class="nav-items-para">Machine</p>
-            </div>
-
-            <div title="Facestock Master" class="<%= title === 'Facestock Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/facestock'">
-              <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
-              <p class="nav-items-para">Facestock</p>
-            </div>
-
-            <div title="Adhesive Master" class="<%= title === 'Adhesive Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/adhesive'">
-              <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
-              <p class="nav-items-para">Adhesive</p>
-            </div>
-
-            <div title="Release Master" class="<%= title === 'Release Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/release'">
-              <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
-              <p class="nav-items-para">Release</p>
-            </div>
-
-            <div title="Core Master" class="<%= title === 'Core Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/core'" style="border-bottom: 2px solid #ffffff9d">
-              <i class="fa-regular fa-circle" style="color: #ffffff"></i>
-              <p class="nav-items-para">Core</p>
-            </div>            
-          </div>
-        </div>
-
-        <% } %>
-
         <% if (canStock && !isSales) { %>
         <div class="nav-opt-wrap">
           <div title="Stocks" class="view-toggle nav-items">
@@ -945,9 +925,17 @@
               <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
               <p class="nav-items-para">Adhesive</p>
             </div>
-            <div title="Release Liner Stock" class="<%= title === 'Release Liner Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/releaselinerstock'" style="border-bottom: 2px solid #ffffff9d;">
+            <div title="Release Liner Stock" class="<%= title === 'Release Liner Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/releaselinerstock'">
               <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
               <p class="nav-items-para">Release Liner</p>
+            </div>
+            <div title="Semi Finished Goods Stock" class="<%= title === 'Semi Finished Goods Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/semifinishedstock'">
+              <i class="fa-solid fa-cubes" style="color: #ffffff"></i>
+              <p class="nav-items-para">Semi Finished Goods</p>
+            </div>
+            <div title="Finished Goods Stock" class="<%= title === 'Finished Goods Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/finishedstock'" style="border-bottom: 2px solid #ffffff9d;">
+              <i class="fa-solid fa-box" style="color: #ffffff"></i>
+              <p class="nav-items-para">Finished</p>
             </div>
             <div title="Tape Stock" class="<%= title === 'Tape Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tapestock'" style="display:none;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
@@ -1063,6 +1051,26 @@
           </div>
         </div>
 
+        <% if (isAdmin) { %>
+        <div class="nav-opt-wrap">
+          <div title="Admin" class="view-toggle nav-items">
+            <i class="fa-solid fa-user-shield" style="color: #ffffff"></i>
+            <p class="nav-items-para">Admin Control</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          <div class="nav-labels-opt">
+            <div title="Permission Dashboard" class="<%= title === 'Permission Dashboard' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/employee/admin/permissions'">
+              <i class="fa-solid fa-shield-halved" style="color: #ffffff"></i>
+              <p class="nav-items-para">Permissions</p>
+            </div>
+            <div title="Audit Log" class="<%= title === 'Audit Log' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/audit/view'">
+              <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
+              <p class="nav-items-para">Audit Log</p>
+            </div>
+          </div>
+        </div>
+        <% } %>
+
         <div class="nav-opt-wrap">
           <div title="Rate Calculator" class="calc-toggle nav-items">
             <i class="fa-solid fa-calculator" style="color: #ffffff"></i>
@@ -1122,12 +1130,17 @@
         </div>
         <% } %>
 
-        <div title="Company Tasks" style="display: none;" class="<%= title === 'Company Tasks' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tasks'">
+        <div title="Maintenance Requests" class="<%= title === 'Maintenance Requests' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/maintenance'">
+          <i class="fa-solid fa-screwdriver-wrench" style="color: #ffffff"></i>
+          <p class="nav-items-para">Maintenance</p>
+        </div>
+
+        <div title="Company Tasks" class="<%= title === 'Company Tasks' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tasks'">
           <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
           <p class="nav-items-para">Tasks</p>
         </div>
 
-        <div title="Daybook" style="display: none;" class="<%= title === 'Daybook' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/daybook'">
+        <div title="Daybook" class="<%= title === 'Daybook' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/daybook'">
           <i class="fa-solid fa-book-open" style="color: #ffffff"></i>
           <p class="nav-items-para">Daybook</p>
         </div>

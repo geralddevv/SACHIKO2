@@ -6,6 +6,7 @@ import connectDB from "./config/db.js";
 import fairdeskRoute from "./routes/fairdesk_route.js";
 import sachikoRoute from "./routes/sachiko/sachiko_route.js";
 import machineRoutes from "./routes/system/machine.js";
+import maintenanceRoutes from "./routes/system/maintenance.js";
 import facestockMasterRoutes from "./routes/system/facestockMaster.js";
 import coreMasterRoutes from "./routes/system/coreMaster.js";
 import adhesiveMasterRoutes from "./routes/system/adhesiveMaster.js";
@@ -22,6 +23,8 @@ import stockViewRoutes from "./routes/stock/stockView.js";
 import facestockStockRoutes from "./routes/stock/facestockStock.js";
 import adhesiveStockRoutes from "./routes/stock/adhesiveStock.js";
 import releaseLinerStockRoutes from "./routes/stock/releaseLinerStock.js";
+import semiFinishedStockRoutes from "./routes/stock/semiFinishedStock.js";
+import finishedStockRoutes from "./routes/stock/finishedStock.js";
 import labelStockProductionRoutes from "./routes/sachiko/labelStockProduction.js";
 import clientFormRoute from "./routes/users/clients.js";
 import vendorItemBindingRoutes from "./routes/inventory/vendorItemBinding.js";
@@ -872,6 +875,11 @@ app.use(
 // pages before the request ever fell through. The roles are enforced per
 // route inside the router instead.
 app.use("/sachiko", requireAuth, machineRoutes);
+// Shopfloor maintenance tickets: raised by operators, actioned by management.
+// Also bare-mounted with no role gate -- operators need to reach
+// /sachiko/operator/maintenance before fairdeskRoute's requireRole below
+// would turn them away.
+app.use("/sachiko", requireAuth, maintenanceRoutes);
 app.use("/sachiko", requireAuth, facestockMasterRoutes);
 app.use("/sachiko", requireAuth, coreMasterRoutes);
 app.use("/sachiko", requireAuth, adhesiveMasterRoutes);
@@ -885,6 +893,8 @@ app.use("/sachiko/stocks", requireAuth, requireRole(["proprietor", "admin", "hod
 app.use("/sachiko/facestockstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), facestockStockRoutes);
 app.use("/sachiko/adhesivestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), adhesiveStockRoutes);
 app.use("/sachiko/releaselinerstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), releaseLinerStockRoutes);
+app.use("/sachiko/semifinishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), semiFinishedStockRoutes);
+app.use("/sachiko/finishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), finishedStockRoutes);
 app.use("/sachiko/labelstockproduction", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockProductionRoutes);
 app.use("/sachiko/inventory", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), reorderRoutes);
 app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod"]), sachikoRoute);

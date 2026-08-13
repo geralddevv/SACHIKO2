@@ -89,6 +89,7 @@ async function buildPayload(body) {
     size: String(body.size || "").trim(),
     gsm: numOrUndef(body.gsm),
     micron: numOrUndef(body.micron),
+    msq: numOrUndef(body.msq),
   };
 
   if (vendorId) {

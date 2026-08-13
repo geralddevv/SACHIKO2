@@ -23,10 +23,45 @@
     .header-action-btn:hover {
       background-color: #e4e4e4;
     }
-    #adhesive-stock-table {
+    #adhesive-masters-table {
       width: 100%;
       flex: 1 1 auto;
       min-height: 0;
+    }
+    .po-action-btn {
+      padding: 4px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+      background: #044a78;
+    }
+    .po-action-btn:hover {
+      background: #03365a;
+    }
+    .add-stock-btn {
+      padding: 4px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+      background: #15803d;
+    }
+    .add-stock-btn:hover {
+      background: #116531;
+    }
+    .po-pending-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #fef3c7;
+      color: #92400e;
     }
     .dialog-header {
       background: #044A78;
@@ -130,6 +165,24 @@
       border: 1.5px solid #e2e8f0 !important;
       z-index: 99999 !important;
     }
+    /* A long value (e.g. Vendor Name) shouldn't overflow its field or push
+       against the dropdown arrow -- truncate with an ellipsis instead, both
+       for the selected value shown in the closed field and for each option
+       in the open dropdown list. Applies to every Choices.js select in this
+       dialog, not just Vendor Name. */
+    .dialog-body .choices__list--single .choices__item {
+      display: block !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      max-width: 100% !important;
+      padding-right: 18px !important;
+    }
+    .dialog-body .choices__list--dropdown .choices__item {
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
 
     .dialog-section-label {
       display: flex;
@@ -162,6 +215,12 @@
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
   </style>
 
+  <!-- Adhesive Master rows are the only table here: current stock (total
+       mtrs still on non-empty drums, matched by the same fields Adhesive
+       Master's own duplicate-check signature hashes) sits right on the spec
+       it's stock of, alongside MSQ/shortage and the Inward/Create PO
+       actions -- see routes/stock/adhesiveStock.js's loadMastersWithStock.
+       Every master is listed here even with zero drums. -->
   <div class="indi-head">
     <h1>Adhesive Stock</h1>
     <div style="display: flex; gap: 10px; align-items: center">
@@ -172,7 +231,61 @@
   </div>
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
-  <div id="adhesive-stock-table" class="tabulator tabulator-modern"></div>
+  <div id="adhesive-masters-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- ============ CREATE PURCHASE ORDER DIALOG ============ -->
+<div class="logout-modal" id="poDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="poDialogTitle"
+    style="width: min(480px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="poDialogTitle">Create Purchase Order</h2>
+      <button class="dialog-close-btn" type="button" onclick="closePoDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="poSkuDisplay">SKU ID</label>
+          <input type="text" id="poSkuDisplay" class="form-control premium-input" readonly style="background: #f1f5f9;" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="poVendorDisplay">Vendor</label>
+          <input type="text" id="poVendorDisplay" class="form-control premium-input" readonly style="background: #f1f5f9;" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="poQtyInput">Quantity (Mtrs)</label>
+          <input type="number" id="poQtyInput" class="form-control premium-input" min="1" step="any" placeholder="Enter mtrs" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="poNumberInput">PO Number</label>
+          <input type="text" id="poNumberInput" class="form-control premium-input" placeholder="Enter PO number" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="poLocationSelect">Delivery Location</label>
+          <select id="poLocationSelect"></select>
+        </div>
+        <div>
+          <label class="dialog-field-label" for="poDateInput">Estimated Date</label>
+          <input type="date" id="poDateInput" class="form-control premium-input" />
+        </div>
+      </div>
+
+      <label class="dialog-field-label" for="poRemarksInput">Remarks</label>
+      <input type="text" id="poRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
+
+      <div id="poError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closePoDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="poSubmitBtn" onclick="submitPo()">Create PO</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ============ ADD ADHESIVE DIALOG (batch inward, landscape) ============ -->
@@ -350,145 +463,15 @@
   </div>
 </div>
 
-<!-- ============ EDIT ADHESIVE DIALOG ============ -->
-<div class="logout-modal" id="editDialog" aria-hidden="true">
-  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
-    style="width: min(480px, 95vw); padding: 0; border-radius: 14px;">
-    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
-      <h2 id="editDialogTitle">Edit Adhesive Drum</h2>
-      <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
-    </div>
-    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
-      <label class="dialog-field-label" for="editRollIdDisplay">Drum ID</label>
-      <input type="text" id="editRollIdDisplay" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editTypeSelect">Type</label>
-          <select id="editTypeSelect">
-            <option value="" disabled hidden>Select type</option>
-          </select>
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
-          <select id="editVendorSelect"></select>
-        </div>
-      </div>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editMakeInput">Make</label>
-          <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editVendorSkuCodeInput">Vendor SKU Code</label>
-          <input type="text" id="editVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
-        </div>
-      </div>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editShelfLifeInput">Shelf Life</label>
-          <input type="text" id="editShelfLifeInput" class="form-control premium-input" placeholder="Enter shelf life" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editGsmInput">GSM</label>
-          <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
-        </div>
-      </div>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editViscosityInput">Viscosity</label>
-          <input type="number" id="editViscosityInput" class="form-control premium-input" placeholder="Enter viscosity" min="0" step="any" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editCohesionInput">Cohesion</label>
-          <input type="number" id="editCohesionInput" class="form-control premium-input" placeholder="Enter cohesion" min="0" step="any" />
-        </div>
-      </div>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editShearInput">Shear</label>
-          <input type="number" id="editShearInput" class="form-control premium-input" placeholder="Enter shear" min="0" step="any" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editDensityInput">Density</label>
-          <input type="number" id="editDensityInput" class="form-control premium-input" placeholder="Enter density" min="0" step="any" />
-        </div>
-      </div>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editMtrsInput">Mtrs</label>
-          <input type="number" id="editMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editRateInput">Rate</label>
-          <input type="number" id="editRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
-        </div>
-      </div>
-
-      <label class="dialog-field-label" for="editLocationSelect">Location</label>
-      <select id="editLocationSelect" style="margin-bottom: 16px;"></select>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editVendorRollIdInput">Vendor Drum ID</label>
-          <input type="text" id="editVendorRollIdInput" class="form-control premium-input" placeholder="Vendor's own drum no" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editInvoiceNoInput">Invoice No</label>
-          <input type="text" id="editInvoiceNoInput" class="form-control premium-input" placeholder="Enter invoice no" />
-        </div>
-      </div>
-
-      <label class="dialog-field-label" for="editRemarksInput">Remarks</label>
-      <input type="text" id="editRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
-
-      <div id="editAdhesiveError" class="dialog-error"></div>
-      <div class="dialog-actions">
-        <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
-        <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Drum</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ============ DELETE CONFIRMATION DIALOG ============ -->
-<div class="logout-modal" id="deleteDialog" aria-hidden="true">
-  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle"
-    style="width: min(400px, 95vw);">
-    <h2 class="logout-title" id="deleteDialogTitle">
-      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Delete Drum?
-    </h2>
-    <p class="logout-text">
-      Are you sure you want to delete <strong id="deleteRollId"></strong>? This action cannot be undone.
-    </p>
-    <div class="logout-actions">
-      <button class="logout-btn" type="button" onclick="closeDeleteDialog()">Cancel</button>
-      <button
-        class="logout-btn"
-        type="button"
-        id="deleteConfirmBtn"
-        onclick="submitDelete()"
-        style="background: #ef4444; color: #fff; border-color: #ef4444;">
-        Yes, Delete
-      </button>
-    </div>
-  </div>
-</div>
-
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
-<script id="stock-data" type="application/json"><%- safeJson(stock) %></script>
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
 <script id="adhesive-specs-data" type="application/json"><%- safeJson({ types, vendors, makes, vendorSkuCodes, shelfLifes, viscosities, cohesions, shears, densities }) %></script>
+<script id="adhesive-masters-data" type="application/json"><%- safeJson(masters) %></script>
 <script>
-  const stockData = JSON.parse(document.getElementById("stock-data").textContent);
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
+  const mastersData = JSON.parse(document.getElementById("adhesive-masters-data").textContent);
   const adhesiveSpecsData = JSON.parse(document.getElementById("adhesive-specs-data").textContent);
 
   function locationOptionsHtml(selectedName) {
@@ -515,7 +498,6 @@
   let addTypeChoices = null, addVendorChoices = null, addMakeChoices = null, addVendorSkuCodeChoices = null;
   let addShelfLifeChoices = null, addViscosityChoices = null, addCohesionChoices = null, addShearChoices = null, addDensityChoices = null;
   let addLocationChoices = null;
-  let editTypeChoices = null, editVendorChoices = null, editLocationChoices = null;
 
   // ---- Add (inward) dialog: smart filter for Type/Vendor/Make/Vendor SKU
   // Code/Shelf Life/Viscosity/Cohesion/Shear/Density ---- Narrows each
@@ -645,61 +627,6 @@
     return value;
   }
 
-  // ---- Table ----
-  const table = new Tabulator("#adhesive-stock-table", {
-    data: stockData,
-    height: "100%",
-    responsiveLayout: false,
-    movableColumns: true,
-    placeholder: "No adhesive stock added yet.",
-    columns: [
-      { title: "Drum ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
-      { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
-      { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
-      { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
-      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
-      { title: "Shelf Life", field: "shelfLife", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
-      { title: "Viscosity", field: "viscosity", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Cohesion", field: "cohesion", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Shear", field: "shear", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Density", field: "density", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Mtrs", field: "reelMtrs", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
-      { title: "Rate", field: "rate", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Location", field: "location", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
-      { title: "Vendor Drum ID", field: "vendorRollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
-      {
-        title: "Actions",
-        width: 110,
-        hozAlign: "center",
-        headerSort: false,
-        formatter: function (cell) {
-          const row = cell.getRow().getData();
-          const wrap = document.createElement("div");
-          wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
-
-          const editBtn = document.createElement("button");
-          editBtn.className = "loc-btn";
-          editBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#e67e22;";
-          editBtn.title = "Edit Drum";
-          editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
-          editBtn.addEventListener("click", () => openEditDialog(row));
-
-          const deleteBtn = document.createElement("button");
-          deleteBtn.className = "loc-btn";
-          deleteBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#d9534f;";
-          deleteBtn.title = "Delete Drum";
-          deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-          deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.rollId));
-
-          wrap.appendChild(editBtn);
-          wrap.appendChild(deleteBtn);
-          return wrap;
-        },
-      },
-    ],
-  });
-
   // ---- Helpers ----
   function openModal(id) {
     const d = document.getElementById(id);
@@ -726,7 +653,7 @@
     btn.style.opacity = loading ? "0.7" : "";
   }
 
-  ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+  ["addDialog", "poDialog"].forEach(id => {
     document.getElementById(id).addEventListener("click", function (e) {
       if (e.target === this) closeModal(id);
     });
@@ -734,10 +661,132 @@
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+    ["addDialog", "poDialog"].forEach(id => {
       if (document.getElementById(id).classList.contains("show")) closeModal(id);
     });
   });
+
+  // ---- Masters & Reorder table ----
+  const mastersTable = new Tabulator("#adhesive-masters-table", {
+    data: mastersData,
+    height: "100%",
+    responsiveLayout: false,
+    movableColumns: true,
+    placeholder: "No adhesive masters added yet.",
+    columns: [
+      { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
+      { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
+      { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Shelf Life", field: "shelfLife", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
+      { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Current Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 150 },
+      { title: "Stock (Drums)", field: "rollCount", hozAlign: "center", minWidth: 110 },
+      {
+        title: "Shortage",
+        field: "shortage",
+        hozAlign: "center",
+        minWidth: 110,
+        formatter: (cell) => `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>`,
+      },
+      {
+        title: "Inward",
+        width: 110,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const btn = document.createElement("button");
+          btn.className = "add-stock-btn";
+          btn.title = "Add stock drums for this spec";
+          btn.innerHTML = '<i class="fa-solid fa-plus"></i> Add';
+          btn.addEventListener("click", () => openAddDialog(row));
+          return btn;
+        },
+      },
+      {
+        title: "Purchase Order",
+        width: 150,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row.hasActivePO) return `<span class="po-pending-badge">PO Pending</span>`;
+          const btn = document.createElement("button");
+          btn.className = "po-action-btn";
+          btn.textContent = "Create PO";
+          btn.addEventListener("click", () => openPoDialog(row));
+          return btn;
+        },
+      },
+    ],
+  });
+
+  // ---- Create Purchase Order dialog ----
+  let poLocationChoices = null;
+  let poMasterId = null;
+
+  function openPoDialog(row) {
+    poMasterId = row._id;
+    document.getElementById("poSkuDisplay").value = row.skuId;
+    document.getElementById("poVendorDisplay").value = row.vendorName || "—";
+    document.getElementById("poQtyInput").value = row.shortage || "";
+    document.getElementById("poNumberInput").value = "";
+    document.getElementById("poRemarksInput").value = "";
+
+    const inSevenDays = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    document.getElementById("poDateInput").value = inSevenDays.toISOString().slice(0, 10);
+
+    if (poLocationChoices) { poLocationChoices.destroy(); poLocationChoices = null; }
+    const locSel = document.getElementById("poLocationSelect");
+    locSel.innerHTML = locationOptionsHtml("");
+    poLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    hideError("poError");
+    openModal("poDialog");
+  }
+  function closePoDialog() {
+    closeModal("poDialog");
+    poMasterId = null;
+  }
+
+  async function submitPo() {
+    const quantity = document.getElementById("poQtyInput").value;
+    const poNumber = document.getElementById("poNumberInput").value.trim();
+    const userLocation = document.getElementById("poLocationSelect").value;
+    const estimatedDate = document.getElementById("poDateInput").value;
+    if (!quantity || Number(quantity) <= 0) return showError("poError", "Quantity is required.");
+    if (!poNumber) return showError("poError", "PO Number is required.");
+    if (!userLocation) return showError("poError", "Delivery location is required.");
+    if (!poMasterId) return;
+
+    hideError("poError");
+    setLoading("poSubmitBtn", true);
+    try {
+      const res = await fetch("/sachiko/adhesivestock/purchase-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          masterId: poMasterId,
+          quantity,
+          poNumber,
+          estimatedDate,
+          userLocation,
+          remarks: document.getElementById("poRemarksInput").value.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = data.redirect || "/sachiko/purchase/pending";
+      } else {
+        showError("poError", data.message || "Failed to create Purchase Order.");
+      }
+    } catch {
+      showError("poError", "Server error. Please try again.");
+    } finally {
+      setLoading("poSubmitBtn", false);
+    }
+  }
 
   // ---- ADD (batch inward) ----
 
@@ -806,7 +855,15 @@
     renderDrumRows(count, true);
   });
 
-  function openAddDialog() {
+  // masterPrefill (optional): a row from the Masters & Reorder panel below --
+  // when given, every spec field is pre-set to that master's own spec
+  // instead of left blank, so "Add Stock" on a master row jumps straight to
+  // entering drum rows rather than re-picking a spec the smart filters would
+  // narrow down to anyway. GSM isn't part of Adhesive Master (see
+  // buildHeaderPayload), so it's left as-is -- there's nothing to prefill it
+  // from.
+  function openAddDialog(masterPrefill) {
+    const pf = masterPrefill || {};
     document.getElementById("addGsmInput").value = "";
     document.getElementById("addRateInput").value = "";
     document.getElementById("addInvoiceNoInput").value = "";
@@ -814,40 +871,58 @@
     document.getElementById("addDrumCountInput").value = "1";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
-    document.getElementById("addTypeSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.types, "Select type", true);
-    addTypeChoices = new Choices("#addTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+    const typeSel = document.getElementById("addTypeSelect");
+    typeSel.innerHTML = specOptionsHtml(adhesiveSpecsData.types, "Select type", true);
+    typeSel.value = pf.type || "";
+    addTypeChoices = new Choices(typeSel, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
     if (addVendorChoices) { addVendorChoices.destroy(); addVendorChoices = null; }
-    document.getElementById("addVendorSelect").innerHTML = vendorOptionsHtml(adhesiveSpecsData.vendors);
-    addVendorChoices = new Choices("#addVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const vendorSel = document.getElementById("addVendorSelect");
+    vendorSel.innerHTML = vendorOptionsHtml(adhesiveSpecsData.vendors);
+    vendorSel.value = pf.vendorId || "";
+    addVendorChoices = new Choices(vendorSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addMakeChoices) { addMakeChoices.destroy(); addMakeChoices = null; }
-    document.getElementById("addMakeSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.makes, "— None —", false);
-    addMakeChoices = new Choices("#addMakeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const makeSel = document.getElementById("addMakeSelect");
+    makeSel.innerHTML = specOptionsHtml(adhesiveSpecsData.makes, "— None —", false);
+    makeSel.value = pf.make || "";
+    addMakeChoices = new Choices(makeSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addVendorSkuCodeChoices) { addVendorSkuCodeChoices.destroy(); addVendorSkuCodeChoices = null; }
-    document.getElementById("addVendorSkuCodeSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.vendorSkuCodes, "— None —", false);
-    addVendorSkuCodeChoices = new Choices("#addVendorSkuCodeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const vendorSkuSel = document.getElementById("addVendorSkuCodeSelect");
+    vendorSkuSel.innerHTML = specOptionsHtml(adhesiveSpecsData.vendorSkuCodes, "— None —", false);
+    vendorSkuSel.value = pf.vendorSkuCode || "";
+    addVendorSkuCodeChoices = new Choices(vendorSkuSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addShelfLifeChoices) { addShelfLifeChoices.destroy(); addShelfLifeChoices = null; }
-    document.getElementById("addShelfLifeSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.shelfLifes, "— None —", false);
-    addShelfLifeChoices = new Choices("#addShelfLifeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const shelfLifeSel = document.getElementById("addShelfLifeSelect");
+    shelfLifeSel.innerHTML = specOptionsHtml(adhesiveSpecsData.shelfLifes, "— None —", false);
+    shelfLifeSel.value = pf.shelfLife || "";
+    addShelfLifeChoices = new Choices(shelfLifeSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addViscosityChoices) { addViscosityChoices.destroy(); addViscosityChoices = null; }
-    document.getElementById("addViscositySelect").innerHTML = specOptionsHtml(adhesiveSpecsData.viscosities, "— None —", false);
-    addViscosityChoices = new Choices("#addViscositySelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const viscositySel = document.getElementById("addViscositySelect");
+    viscositySel.innerHTML = specOptionsHtml(adhesiveSpecsData.viscosities, "— None —", false);
+    viscositySel.value = pf.viscosity != null ? String(pf.viscosity) : "";
+    addViscosityChoices = new Choices(viscositySel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addCohesionChoices) { addCohesionChoices.destroy(); addCohesionChoices = null; }
-    document.getElementById("addCohesionSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.cohesions, "— None —", false);
-    addCohesionChoices = new Choices("#addCohesionSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const cohesionSel = document.getElementById("addCohesionSelect");
+    cohesionSel.innerHTML = specOptionsHtml(adhesiveSpecsData.cohesions, "— None —", false);
+    cohesionSel.value = pf.cohesion != null ? String(pf.cohesion) : "";
+    addCohesionChoices = new Choices(cohesionSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addShearChoices) { addShearChoices.destroy(); addShearChoices = null; }
-    document.getElementById("addShearSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.shears, "— None —", false);
-    addShearChoices = new Choices("#addShearSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const shearSel = document.getElementById("addShearSelect");
+    shearSel.innerHTML = specOptionsHtml(adhesiveSpecsData.shears, "— None —", false);
+    shearSel.value = pf.shear != null ? String(pf.shear) : "";
+    addShearChoices = new Choices(shearSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addDensityChoices) { addDensityChoices.destroy(); addDensityChoices = null; }
-    document.getElementById("addDensitySelect").innerHTML = specOptionsHtml(adhesiveSpecsData.densities, "— None —", false);
-    addDensityChoices = new Choices("#addDensitySelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const densitySel = document.getElementById("addDensitySelect");
+    densitySel.innerHTML = specOptionsHtml(adhesiveSpecsData.densities, "— None —", false);
+    densitySel.value = pf.density != null ? String(pf.density) : "";
+    addDensityChoices = new Choices(densitySel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
     const locSel = document.getElementById("addLocationSelect");
@@ -914,135 +989,4 @@
     }
   }
 
-  // ---- EDIT ----
-  let editId = null;
-
-  function openEditDialog(row) {
-    editId = row._id;
-    document.getElementById("editRollIdDisplay").value = row.rollId;
-    document.getElementById("editGsmInput").value = row.gsm ?? "";
-    document.getElementById("editMtrsInput").value = row.reelMtrs ?? "";
-    document.getElementById("editRateInput").value = row.rate ?? "";
-    document.getElementById("editVendorRollIdInput").value = row.vendorRollId || "";
-    document.getElementById("editInvoiceNoInput").value = row.invoiceNo || "";
-    document.getElementById("editRemarksInput").value = row.remarks || "";
-    document.getElementById("editMakeInput").value = row.make || "";
-    document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
-    document.getElementById("editShelfLifeInput").value = row.shelfLife || "";
-    document.getElementById("editViscosityInput").value = row.viscosity ?? "";
-    document.getElementById("editCohesionInput").value = row.cohesion ?? "";
-    document.getElementById("editShearInput").value = row.shear ?? "";
-    document.getElementById("editDensityInput").value = row.density ?? "";
-
-    if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
-    document.getElementById("editTypeSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.types, "Select type", true);
-    document.getElementById("editTypeSelect").value = row.type || "";
-    editTypeChoices = new Choices("#editTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
-
-    if (editVendorChoices) { editVendorChoices.destroy(); editVendorChoices = null; }
-    const editVendorSel = document.getElementById("editVendorSelect");
-    // A drum's saved vendor might not be in the current Adhesive Master
-    // vendor list (e.g. that master entry was since edited/removed) -- add
-    // it as an extra option so editing this drum never silently drops it.
-    const knownVendors = adhesiveSpecsData.vendors.some((v) => v.vendorId === row.vendorId)
-      ? adhesiveSpecsData.vendors
-      : row.vendorId
-        ? [...adhesiveSpecsData.vendors, { vendorId: row.vendorId, vendorName: row.vendorName || row.vendorId }]
-        : adhesiveSpecsData.vendors;
-    editVendorSel.innerHTML = vendorOptionsHtml(knownVendors);
-    editVendorSel.value = row.vendorId || "";
-    editVendorChoices = new Choices(editVendorSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (editLocationChoices) { editLocationChoices.destroy(); editLocationChoices = null; }
-    const locSel = document.getElementById("editLocationSelect");
-    locSel.innerHTML = locationOptionsHtml(row.location || "");
-    editLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    hideError("editAdhesiveError");
-    openModal("editDialog");
-  }
-  function closeEditDialog() {
-    closeModal("editDialog");
-    editId = null;
-  }
-
-  async function submitEdit() {
-    const type = document.getElementById("editTypeSelect").value;
-    const location = document.getElementById("editLocationSelect").value;
-    const reelMtrs = document.getElementById("editMtrsInput").value;
-    if (!type) return showError("editAdhesiveError", "Type is required.");
-    if (!location) return showError("editAdhesiveError", "Location is required.");
-    if (!reelMtrs || Number(reelMtrs) <= 0) return showError("editAdhesiveError", "Mtrs is required.");
-    if (!editId) return;
-
-    hideError("editAdhesiveError");
-    setLoading("editSubmitBtn", true);
-    try {
-      const res = await fetch(`/sachiko/adhesivestock/${editId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type,
-          gsm: document.getElementById("editGsmInput").value,
-          vendorId: document.getElementById("editVendorSelect").value,
-          make: document.getElementById("editMakeInput").value,
-          vendorSkuCode: document.getElementById("editVendorSkuCodeInput").value,
-          shelfLife: document.getElementById("editShelfLifeInput").value,
-          viscosity: document.getElementById("editViscosityInput").value,
-          cohesion: document.getElementById("editCohesionInput").value,
-          shear: document.getElementById("editShearInput").value,
-          density: document.getElementById("editDensityInput").value,
-          reelMtrs,
-          rate: document.getElementById("editRateInput").value,
-          location,
-          vendorRollId: document.getElementById("editVendorRollIdInput").value,
-          invoiceNo: document.getElementById("editInvoiceNoInput").value,
-          remarks: document.getElementById("editRemarksInput").value,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        window.location.reload();
-      } else {
-        showError("editAdhesiveError", data.message || "Failed to update adhesive stock.");
-      }
-    } catch {
-      showError("editAdhesiveError", "Server error. Please try again.");
-    } finally {
-      setLoading("editSubmitBtn", false);
-    }
-  }
-
-  // ---- DELETE ----
-  let deleteId = null;
-
-  function openDeleteDialog(id, rollId) {
-    deleteId = id;
-    document.getElementById("deleteRollId").textContent = rollId;
-    openModal("deleteDialog");
-  }
-  function closeDeleteDialog() {
-    closeModal("deleteDialog");
-    deleteId = null;
-  }
-
-  async function submitDelete() {
-    if (!deleteId) return;
-    setLoading("deleteConfirmBtn", true);
-    try {
-      const res = await fetch(`/sachiko/adhesivestock/${deleteId}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        window.location.reload();
-      } else {
-        closeDeleteDialog();
-        alert(data.message || "Failed to delete drum.");
-      }
-    } catch {
-      closeDeleteDialog();
-      alert("Error deleting drum.");
-    } finally {
-      setLoading("deleteConfirmBtn", false);
-    }
-  }
 </script>

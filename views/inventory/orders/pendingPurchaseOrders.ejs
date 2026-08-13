@@ -194,6 +194,9 @@
           <option value="">All Items</option>
           <option value="Tape">Tape</option>
           <option value="Ttr">TTR</option>
+          <option value="FacestockMaster">Facestock</option>
+          <option value="AdhesiveMaster">Adhesive</option>
+          <option value="ReleaseMaster">Release Liner</option>
         </select>
       </div>
 
@@ -400,6 +403,12 @@
     }
     if (row.onModel === "Ttr") {
       return `${item.ttrType || ""} ${item.ttrWidth || ""}x${item.ttrMtrs || ""}`.trim() || item.ttrProductId;
+    }
+    if (row.onModel === "FacestockMaster") {
+      return `${item.skuId || ""} — ${item.family || ""} ${item.type || ""}`.trim();
+    }
+    if (row.onModel === "AdhesiveMaster" || row.onModel === "ReleaseMaster") {
+      return `${item.skuId || ""} — ${item.type || ""}`.trim();
     }
     return "Unknown Item";
   }

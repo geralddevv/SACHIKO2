@@ -1,0 +1,605 @@
+<% layout('/layout/boilerplate') %>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 2px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .header-action-btn:hover {
+      background-color: #e4e4e4;
+    }
+    #finished-stock-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .dialog-header {
+      background: #044A78;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .dialog-close-btn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 2px;
+      opacity: 0.8;
+      transition: opacity 0.15s;
+    }
+    .dialog-close-btn:hover {
+      opacity: 1;
+    }
+    .dialog-body {
+      padding: 24px;
+    }
+    .dialog-field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 8px;
+    }
+    .dialog-error {
+      color: #ef4444;
+      font-size: 12px;
+      margin-top: 5px;
+      display: none;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .dialog-field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+    .dialog-body .choices__inner {
+      padding: 11px 14px !important;
+      border-radius: 10px !important;
+      border: 1.5px solid #e2e8f0 !important;
+      background-color: #f8fafc !important;
+      font-size: 14px !important;
+      min-height: 0 !important;
+      transition: all 0.2s ease !important;
+    }
+    .dialog-body .choices__list--single {
+      padding: 0 !important;
+    }
+    .dialog-body .choices.is-focused .choices__inner,
+    .dialog-body .choices.is-open .choices__inner {
+      border-color: #044a78 !important;
+      background-color: #ffffff !important;
+      box-shadow: 0 0 0 4px rgba(4, 74, 120, 0.1) !important;
+    }
+    .dialog-body .choices__list--dropdown {
+      border-radius: 10px !important;
+      border: 1.5px solid #e2e8f0 !important;
+      z-index: 99999 !important;
+    }
+    .dialog-section-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: #044a78;
+      text-transform: uppercase;
+      margin: 16px 0 10px;
+      flex: 0 0 auto;
+    }
+    .roll-row {
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      background: #f8fafc;
+      margin-bottom: 10px;
+    }
+    .roll-row-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #044a78;
+      margin-bottom: 8px;
+    }
+    .deckle-hint {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+  </style>
+
+  <div class="indi-head">
+    <h1>Finished Goods Stock</h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <button class="header-action-btn" onclick="openProduceDialog()">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Produce Finished Rolls
+      </button>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="finished-stock-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- ============ PRODUCE (SLIT) DIALOG ============ -->
+<div class="logout-modal" id="produceDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="produceDialogTitle"
+    style="width: min(760px, 94vw); max-height: 90vh; padding: 0; border-radius: 14px; display: flex; flex-direction: column;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0; flex: 0 0 auto;">
+      <h2 id="produceDialogTitle">Produce Finished Rolls (Slit a Deckle)</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeProduceDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body custom-scrollbar" style="border-radius: 0 0 14px 14px; overflow-y: auto;">
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="produceOrderSelect">Order (Lot No)</label>
+          <select id="produceOrderSelect">
+            <option value="" disabled selected hidden>Select an order</option>
+          </select>
+        </div>
+        <div>
+          <label class="dialog-field-label" for="produceDeckleSelect">Deckle</label>
+          <select id="produceDeckleSelect">
+            <option value="" disabled selected hidden>Select an order first</option>
+          </select>
+          <div class="deckle-hint" id="deckleHint"></div>
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="produceRollCountInput">No of Rolls</label>
+          <input type="number" id="produceRollCountInput" class="form-control premium-input" min="1" max="100" step="1" value="1" />
+        </div>
+        <div></div>
+      </div>
+
+      <div class="dialog-section-label"><span>Rolls</span></div>
+      <div id="produceRollsContainer"></div>
+
+      <div id="produceFinishedError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeProduceDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="produceSubmitBtn" onclick="submitProduce()">Save Rolls</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EDIT FINISHED ROLL DIALOG ============ -->
+<div class="logout-modal" id="editDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
+    style="width: min(500px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="editDialogTitle">Edit Finished Roll</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <label class="dialog-field-label" for="editRollIdDisplay">Roll ID</label>
+      <input type="text" id="editRollIdDisplay" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
+
+      <label class="dialog-field-label" for="editLocationSelect">Location</label>
+      <select id="editLocationSelect" style="margin-bottom: 16px;"></select>
+
+      <label class="dialog-field-label" for="editRateInput">Rate</label>
+      <input type="number" id="editRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" style="margin-bottom: 16px;" />
+
+      <label class="dialog-field-label" for="editRemarksInput">Remarks</label>
+      <input type="text" id="editRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
+
+      <div id="editFinishedError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Roll</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DELETE CONFIRMATION DIALOG ============ -->
+<div class="logout-modal" id="deleteDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle"
+    style="width: min(400px, 95vw);">
+    <h2 class="logout-title" id="deleteDialogTitle">
+      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Delete Roll?
+    </h2>
+    <p class="logout-text">
+      Are you sure you want to delete <strong id="deleteRollId"></strong>? This action cannot be undone.
+    </p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" onclick="closeDeleteDialog()">Cancel</button>
+      <button
+        class="logout-btn"
+        type="button"
+        id="deleteConfirmBtn"
+        onclick="submitDelete()"
+        style="background: #ef4444; color: #fff; border-color: #ef4444;">
+        Yes, Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+<script id="stock-data" type="application/json"><%- safeJson(stock) %></script>
+<script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
+<script>
+  const stockData = JSON.parse(document.getElementById("stock-data").textContent);
+  const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
+
+  function locationOptionsHtml(selectedName) {
+    return locationsData
+      .map((l) => `<option value="${l.locationName}" ${l.locationName === selectedName ? "selected" : ""}>${l.locationName}</option>`)
+      .join("");
+  }
+
+  // ---- Table ----
+  const table = new Tabulator("#finished-stock-table", {
+    data: stockData,
+    height: "100%",
+    responsiveLayout: false,
+    movableColumns: true,
+    placeholder: "No finished goods stock yet.",
+    columns: [
+      { title: "Roll ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 170 },
+      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Paper Size", field: "paperSize", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Lot No", field: "lotNo", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Client", field: "clientName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Deckle ID", field: "deckleRollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Mtrs", field: "mtrs", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
+      { title: "Rate", field: "rate", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Location", field: "location", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
+      {
+        title: "Actions",
+        width: 110,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: function (cell) {
+          const row = cell.getRow().getData();
+          const wrap = document.createElement("div");
+          wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "loc-btn";
+          editBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#e67e22;";
+          editBtn.title = "Edit Roll";
+          editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
+          editBtn.addEventListener("click", () => openEditDialog(row));
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "loc-btn";
+          deleteBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#d9534f;";
+          deleteBtn.title = "Delete Roll";
+          deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+          deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.rollId));
+
+          wrap.appendChild(editBtn);
+          wrap.appendChild(deleteBtn);
+          return wrap;
+        },
+      },
+    ],
+  });
+
+  // ---- Helpers ----
+  function openModal(id) {
+    const d = document.getElementById(id);
+    d.classList.add("show");
+    d.setAttribute("aria-hidden", "false");
+  }
+  function closeModal(id) {
+    const d = document.getElementById(id);
+    d.classList.remove("show");
+    d.setAttribute("aria-hidden", "true");
+  }
+  function showError(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+  function hideError(elId) {
+    document.getElementById(elId).style.display = "none";
+  }
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.style.opacity = loading ? "0.7" : "";
+  }
+
+  ["produceDialog", "editDialog", "deleteDialog"].forEach(id => {
+    document.getElementById(id).addEventListener("click", function (e) {
+      if (e.target === this) closeModal(id);
+    });
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    ["produceDialog", "editDialog", "deleteDialog"].forEach(id => {
+      if (document.getElementById(id).classList.contains("show")) closeModal(id);
+    });
+  });
+
+  // ---- PRODUCE (slit a Deckle into finished rolls) ----
+  let produceOrderChoices = null;
+  let produceDeckleChoices = null;
+  let eligibleOrders = [];
+  let orderDeckles = [];
+
+  function rollRowHtml(index, prevMtrs) {
+    return `
+      <div class="roll-row" data-index="${index}">
+        <div class="roll-row-title">Roll ${index + 1}</div>
+        <label class="dialog-field-label">Roll ID</label>
+        <input type="text" class="form-control premium-input roll-id-preview" readonly style="margin-bottom: 10px; background: #f1f5f9;" />
+        <label class="dialog-field-label">Mtrs</label>
+        <input type="number" class="form-control premium-input roll-mtrs" min="0" step="any" placeholder="Enter Mtrs" value="${prevMtrs || ""}" />
+      </div>`;
+  }
+
+  function renderProduceRollRows(count, preserveValues) {
+    const container = document.getElementById("produceRollsContainer");
+    const existing = preserveValues
+      ? Array.from(container.querySelectorAll(".roll-row")).map((row) => row.querySelector(".roll-mtrs").value)
+      : [];
+    container.innerHTML = Array.from({ length: count }, (_, i) => rollRowHtml(i, existing[i])).join("");
+    refreshProduceRollIdPreviews();
+  }
+
+  async function refreshProduceRollIdPreviews() {
+    const rows = document.querySelectorAll("#produceRollsContainer .roll-row");
+    const productCode = document.getElementById("produceOrderSelect").dataset.productCode || "";
+    if (!rows.length || !productCode) return;
+    try {
+      const res = await fetch(`/sachiko/finishedstock/preview-roll-ids?productCode=${encodeURIComponent(productCode)}&count=${rows.length}`);
+      const data = await res.json();
+      const ids = data.rollIds || [];
+      rows.forEach((row, i) => {
+        row.querySelector(".roll-id-preview").value = ids[i] || "";
+      });
+    } catch {
+      // Preview is cosmetic only -- the server assigns the real id on save.
+    }
+  }
+
+  document.getElementById("produceRollCountInput").addEventListener("change", function () {
+    const count = Math.min(Math.max(parseInt(this.value, 10) || 1, 1), 100);
+    this.value = count;
+    renderProduceRollRows(count, true);
+  });
+
+  async function loadEligibleOrders() {
+    const sel = document.getElementById("produceOrderSelect");
+    sel.innerHTML = `<option value="" disabled selected hidden>Loading orders…</option>`;
+    try {
+      const res = await fetch("/sachiko/finishedstock/eligible-orders");
+      const data = await res.json();
+      eligibleOrders = data.orders || [];
+    } catch {
+      eligibleOrders = [];
+    }
+
+    if (produceOrderChoices) { produceOrderChoices.destroy(); produceOrderChoices = null; }
+    if (!eligibleOrders.length) {
+      sel.innerHTML = `<option value="" disabled selected hidden>No orders with unslit Deckle stock</option>`;
+      produceOrderChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+      return;
+    }
+    sel.innerHTML = `<option value="" disabled selected hidden>Select an order</option>` +
+      eligibleOrders.map((o) => `<option value="${o._id}">${o.lotNo} — ${o.productCode} (${o.paperSize})</option>`).join("");
+    produceOrderChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+  }
+
+  async function loadOrderDeckles(pendingId) {
+    const sel = document.getElementById("produceDeckleSelect");
+    if (produceDeckleChoices) { produceDeckleChoices.destroy(); produceDeckleChoices = null; }
+    document.getElementById("deckleHint").textContent = "";
+    orderDeckles = [];
+
+    if (!pendingId) {
+      sel.innerHTML = `<option value="" disabled selected hidden>Select an order first</option>`;
+      produceDeckleChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+      return;
+    }
+
+    sel.innerHTML = `<option value="" disabled selected hidden>Loading Deckles…</option>`;
+    try {
+      const res = await fetch(`/sachiko/finishedstock/order-deckles?pendingId=${encodeURIComponent(pendingId)}`);
+      const data = await res.json();
+      orderDeckles = data.deckles || [];
+    } catch {
+      orderDeckles = [];
+    }
+
+    if (!orderDeckles.length) {
+      sel.innerHTML = `<option value="" disabled selected hidden>No Deckle stock left for this order</option>`;
+      produceDeckleChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+      return;
+    }
+    sel.innerHTML = `<option value="" disabled selected hidden>Select a Deckle</option>` +
+      orderDeckles.map((d) => `<option value="${d._id}">${d.rollId} — ${d.reelMtrs} mtrs @ ${d.location}</option>`).join("");
+    produceDeckleChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    sel.onchange = () => {
+      const deckle = orderDeckles.find((d) => d._id === sel.value);
+      document.getElementById("deckleHint").textContent = deckle ? `${deckle.reelMtrs} mtrs available at ${deckle.location}` : "";
+    };
+  }
+
+  async function openProduceDialog() {
+    document.getElementById("produceRollCountInput").value = "1";
+    hideError("produceFinishedError");
+
+    await loadEligibleOrders();
+    await loadOrderDeckles("");
+    renderProduceRollRows(1, false);
+
+    const orderSel = document.getElementById("produceOrderSelect");
+    orderSel.onchange = async () => {
+      const order = eligibleOrders.find((o) => o._id === orderSel.value);
+      orderSel.dataset.productCode = order?.productCode && order.productCode !== "—" ? order.productCode : "";
+      await loadOrderDeckles(orderSel.value);
+      refreshProduceRollIdPreviews();
+    };
+
+    openModal("produceDialog");
+  }
+  function closeProduceDialog() {
+    closeModal("produceDialog");
+  }
+
+  async function submitProduce() {
+    const pendingId = document.getElementById("produceOrderSelect").value;
+    const deckleStockId = document.getElementById("produceDeckleSelect").value;
+    if (!pendingId) return showError("produceFinishedError", "Select an order.");
+    if (!deckleStockId) return showError("produceFinishedError", "Select a Deckle.");
+
+    const rollRows = Array.from(document.querySelectorAll("#produceRollsContainer .roll-row"));
+    const rolls = rollRows.map((row) => ({ mtrs: row.querySelector(".roll-mtrs").value }));
+    const emptyIndex = rolls.findIndex((r) => !r.mtrs || Number(r.mtrs) <= 0);
+    if (emptyIndex !== -1) return showError("produceFinishedError", `Mtrs is required for roll ${emptyIndex + 1}.`);
+
+    hideError("produceFinishedError");
+    setLoading("produceSubmitBtn", true);
+    try {
+      const res = await fetch("/sachiko/finishedstock/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingId, deckleStockId, rolls }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = data.redirect || "/sachiko/finishedstock";
+      } else {
+        showError("produceFinishedError", data.message || "Failed to produce finished rolls.");
+      }
+    } catch {
+      showError("produceFinishedError", "Server error. Please try again.");
+    } finally {
+      setLoading("produceSubmitBtn", false);
+    }
+  }
+
+  // ---- EDIT ----
+  let editId = null;
+  let editLocationChoices = null;
+
+  function openEditDialog(row) {
+    editId = row._id;
+    document.getElementById("editRollIdDisplay").value = row.rollId;
+    document.getElementById("editRateInput").value = row.rate ?? "";
+    document.getElementById("editRemarksInput").value = row.remarks || "";
+
+    if (editLocationChoices) { editLocationChoices.destroy(); editLocationChoices = null; }
+    const locSel = document.getElementById("editLocationSelect");
+    locSel.innerHTML = locationOptionsHtml(row.location || "");
+    editLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    hideError("editFinishedError");
+    openModal("editDialog");
+  }
+  function closeEditDialog() {
+    closeModal("editDialog");
+    editId = null;
+  }
+
+  async function submitEdit() {
+    const location = document.getElementById("editLocationSelect").value;
+    if (!location) return showError("editFinishedError", "Location is required.");
+    if (!editId) return;
+
+    hideError("editFinishedError");
+    setLoading("editSubmitBtn", true);
+    try {
+      const res = await fetch(`/sachiko/finishedstock/${editId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location,
+          rate: document.getElementById("editRateInput").value,
+          remarks: document.getElementById("editRemarksInput").value,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        showError("editFinishedError", data.message || "Failed to update finished roll.");
+      }
+    } catch {
+      showError("editFinishedError", "Server error. Please try again.");
+    } finally {
+      setLoading("editSubmitBtn", false);
+    }
+  }
+
+  // ---- DELETE ----
+  let deleteId = null;
+
+  function openDeleteDialog(id, rollId) {
+    deleteId = id;
+    document.getElementById("deleteRollId").textContent = rollId;
+    openModal("deleteDialog");
+  }
+  function closeDeleteDialog() {
+    closeModal("deleteDialog");
+    deleteId = null;
+  }
+
+  async function submitDelete() {
+    if (!deleteId) return;
+    setLoading("deleteConfirmBtn", true);
+    try {
+      const res = await fetch(`/sachiko/finishedstock/${deleteId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        closeDeleteDialog();
+        alert(data.message || "Failed to delete roll.");
+      }
+    } catch {
+      closeDeleteDialog();
+      alert("Error deleting roll.");
+    } finally {
+      setLoading("deleteConfirmBtn", false);
+    }
+  }
+</script>

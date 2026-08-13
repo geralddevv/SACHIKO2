@@ -130,6 +130,32 @@
       border: 1.5px solid #e2e8f0 !important;
       z-index: 99999 !important;
     }
+    /* A long value (e.g. Vendor Name) shouldn't overflow its field or push
+       against the dropdown arrow -- truncate with an ellipsis instead, both
+       for the selected value shown in the closed field and for each option
+       in the open dropdown list. Applies to every Choices.js select in this
+       dialog, not just Vendor Name. */
+    .dialog-body .choices__list--single .choices__item {
+      display: block !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      max-width: 100% !important;
+      padding-right: 18px !important;
+    }
+    .dialog-body .choices__list--dropdown .choices__item {
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
+    /* Vendor Name otherwise stretches to the dialog's full width -- a fixed
+       width keeps it visually consistent regardless of how long the
+       selected vendor's name is (the ellipsis rule above handles the
+       overflow within it). Caps at 100% so it still shrinks to fit on
+       narrow/mobile viewports. */
+    .vendor-field-fixed {
+      max-width: 320px;
+    }
   </style>
 
   <div class="indi-head">
@@ -168,7 +194,7 @@
 <!-- ============ ADD ADHESIVE DIALOG ============ -->
 <div class="logout-modal" id="addDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
-    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(640px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="addDialogTitle">Add Adhesive</h2>
       <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
@@ -194,14 +220,16 @@
       <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
 
       <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
-      <select id="addVendorSelect" style="margin-bottom: 16px;">
-        <option value="" disabled selected hidden>Select vendor</option>
-        <% vendors?.forEach(v => { %>
-          <option value="<%= v._id %>"><%= v.vendorName %></option>
-        <% }) %>
-      </select>
+      <div class="vendor-field-fixed" style="margin-bottom: 16px;">
+        <select id="addVendorSelect">
+          <option value="" disabled selected hidden>Select vendor</option>
+          <% vendors?.forEach(v => { %>
+            <option value="<%= v._id %>"><%= v.vendorName %></option>
+          <% }) %>
+        </select>
+      </div>
 
-      <div class="dialog-field-row">
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="addVendorSkuCodeInput">Vendor SKU Code</label>
           <input type="text" id="addVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
@@ -209,6 +237,10 @@
         <div>
           <label class="dialog-field-label" for="addShelfLifeInput">Shelf Life</label>
           <input type="text" id="addShelfLifeInput" class="form-control premium-input" placeholder="e.g. 12 Months" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addMsqInput">MSQ</label>
+          <input type="number" id="addMsqInput" class="form-control premium-input" placeholder="Enter MSQ" min="0" step="any" />
         </div>
       </div>
 
@@ -246,7 +278,7 @@
 <!-- ============ EDIT ADHESIVE DIALOG ============ -->
 <div class="logout-modal" id="editDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
-    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(640px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="editDialogTitle">Edit Adhesive</h2>
       <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
@@ -269,17 +301,19 @@
       </div>
 
       <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
-      <select id="editVendorSelect" style="margin-bottom: 16px;">
-        <option value="" disabled hidden>Select vendor</option>
-        <% vendors?.forEach(v => { %>
-          <option value="<%= v._id %>"><%= v.vendorName %></option>
-        <% }) %>
-      </select>
+      <div class="vendor-field-fixed" style="margin-bottom: 16px;">
+        <select id="editVendorSelect">
+          <option value="" disabled hidden>Select vendor</option>
+          <% vendors?.forEach(v => { %>
+            <option value="<%= v._id %>"><%= v.vendorName %></option>
+          <% }) %>
+        </select>
+      </div>
 
       <label class="dialog-field-label" for="editMakeInput">Make</label>
       <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
 
-      <div class="dialog-field-row">
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="editVendorSkuCodeInput">Vendor SKU Code</label>
           <input type="text" id="editVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
@@ -287,6 +321,10 @@
         <div>
           <label class="dialog-field-label" for="editShelfLifeInput">Shelf Life</label>
           <input type="text" id="editShelfLifeInput" class="form-control premium-input" placeholder="e.g. 12 Months" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editMsqInput">MSQ</label>
+          <input type="number" id="editMsqInput" class="form-control premium-input" placeholder="Enter MSQ" min="0" step="any" />
         </div>
       </div>
 
@@ -324,7 +362,7 @@
 <!-- ============ VIEW ADHESIVE DIALOG ============ -->
 <div class="logout-modal" id="viewDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="viewDialogTitle"
-    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(640px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="viewDialogTitle">Adhesive Details</h2>
       <button class="dialog-close-btn" type="button" onclick="closeViewDialog()" aria-label="Close">×</button>
@@ -428,6 +466,7 @@
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Shelf Life", field: "shelfLife", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
+      { title: "MSQ", field: "msq", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Viscosity", field: "viscosity", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Cohesion", field: "cohesion", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Shear", field: "shear", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
@@ -502,6 +541,7 @@
       detailRow("Cohesion", row.cohesion ?? "—"),
       detailRow("Shear", row.shear ?? "—"),
       detailRow("Density", row.density ?? "—"),
+      detailRow("MSQ", row.msq ?? "—"),
     ].join("");
     openModal("viewDialog");
   }
@@ -532,6 +572,7 @@
     document.getElementById("addCohesionInput").value = "";
     document.getElementById("addShearInput").value = "";
     document.getElementById("addDensityInput").value = "";
+    document.getElementById("addMsqInput").value = "";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
     document.getElementById("addTypeSelect").value = "";
@@ -574,6 +615,7 @@
           cohesion: document.getElementById("addCohesionInput").value,
           shear: document.getElementById("addShearInput").value,
           density: document.getElementById("addDensityInput").value,
+          msq: document.getElementById("addMsqInput").value,
         }),
       });
       const data = await res.json();
@@ -602,6 +644,7 @@
     document.getElementById("editCohesionInput").value = row.cohesion ?? "";
     document.getElementById("editShearInput").value = row.shear ?? "";
     document.getElementById("editDensityInput").value = row.density ?? "";
+    document.getElementById("editMsqInput").value = row.msq ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
     document.getElementById("editTypeSelect").value = row.type || "";
@@ -646,6 +689,7 @@
           cohesion: document.getElementById("editCohesionInput").value,
           shear: document.getElementById("editShearInput").value,
           density: document.getElementById("editDensityInput").value,
+          msq: document.getElementById("editMsqInput").value,
         }),
       });
       const data = await res.json();

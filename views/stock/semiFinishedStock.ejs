@@ -1,0 +1,339 @@
+<% layout('/layout/boilerplate') %>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    #semi-finished-stock-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .dialog-header {
+      background: #044A78;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .dialog-close-btn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 2px;
+      opacity: 0.8;
+      transition: opacity 0.15s;
+    }
+    .dialog-close-btn:hover {
+      opacity: 1;
+    }
+    .dialog-body {
+      padding: 24px;
+    }
+    .dialog-field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 8px;
+    }
+    .dialog-error {
+      color: #ef4444;
+      font-size: 12px;
+      margin-top: 5px;
+      display: none;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .dialog-field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+    .dialog-body .choices__inner {
+      padding: 11px 14px !important;
+      border-radius: 10px !important;
+      border: 1.5px solid #e2e8f0 !important;
+      background-color: #f8fafc !important;
+      font-size: 14px !important;
+      min-height: 0 !important;
+      transition: all 0.2s ease !important;
+    }
+    .dialog-body .choices__list--single {
+      padding: 0 !important;
+    }
+    .dialog-body .choices.is-focused .choices__inner,
+    .dialog-body .choices.is-open .choices__inner {
+      border-color: #044a78 !important;
+      background-color: #ffffff !important;
+      box-shadow: 0 0 0 4px rgba(4, 74, 120, 0.1) !important;
+    }
+    .dialog-body .choices__list--dropdown {
+      border-radius: 10px !important;
+      border: 1.5px solid #e2e8f0 !important;
+      z-index: 99999 !important;
+    }
+  </style>
+
+  <div class="indi-head">
+    <h1>Semi Finished Goods Stock</h1>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="semi-finished-stock-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- ============ EDIT DECKLE DIALOG ============ -->
+<div class="logout-modal" id="editDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
+    style="width: min(500px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="editDialogTitle">Edit Deckle Reel</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <label class="dialog-field-label" for="editRollIdDisplay">Deckle ID</label>
+      <input type="text" id="editRollIdDisplay" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
+
+      <label class="dialog-field-label" for="editLocationSelect">Location</label>
+      <select id="editLocationSelect" style="margin-bottom: 16px;"></select>
+
+      <label class="dialog-field-label" for="editRateInput">Rate</label>
+      <input type="number" id="editRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" style="margin-bottom: 16px;" />
+
+      <label class="dialog-field-label" for="editRemarksInput">Remarks</label>
+      <input type="text" id="editRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
+
+      <div id="editSemiFinishedError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Reel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DELETE CONFIRMATION DIALOG ============ -->
+<div class="logout-modal" id="deleteDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle"
+    style="width: min(400px, 95vw);">
+    <h2 class="logout-title" id="deleteDialogTitle">
+      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Delete Reel?
+    </h2>
+    <p class="logout-text">
+      Are you sure you want to delete <strong id="deleteRollId"></strong>? This action cannot be undone.
+    </p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" onclick="closeDeleteDialog()">Cancel</button>
+      <button
+        class="logout-btn"
+        type="button"
+        id="deleteConfirmBtn"
+        onclick="submitDelete()"
+        style="background: #ef4444; color: #fff; border-color: #ef4444;">
+        Yes, Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+<script id="stock-data" type="application/json"><%- safeJson(stock) %></script>
+<script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
+<script>
+  const stockData = JSON.parse(document.getElementById("stock-data").textContent);
+  const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
+
+  function locationOptionsHtml(selectedName) {
+    return locationsData
+      .map((l) => `<option value="${l.locationName}" ${l.locationName === selectedName ? "selected" : ""}>${l.locationName}</option>`)
+      .join("");
+  }
+
+  const table = new Tabulator("#semi-finished-stock-table", {
+    data: stockData,
+    height: "100%",
+    responsiveLayout: false,
+    movableColumns: true,
+    placeholder: "No semi finished goods (Deckle) stock yet.",
+    columns: [
+      { title: "Deckle ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 170 },
+      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Family", field: "family", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Mtrs", field: "reelMtrs", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
+      { title: "Rate", field: "rate", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Location", field: "location", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
+      { title: "Remarks", field: "remarks", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160, formatter: (cell) => cell.getValue() || "—" },
+      {
+        title: "Actions",
+        width: 110,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: function (cell) {
+          const row = cell.getRow().getData();
+          const wrap = document.createElement("div");
+          wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "loc-btn";
+          editBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#e67e22;";
+          editBtn.title = "Edit Reel";
+          editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
+          editBtn.addEventListener("click", () => openEditDialog(row));
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "loc-btn";
+          deleteBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#d9534f;";
+          deleteBtn.title = "Delete Reel";
+          deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+          deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.rollId));
+
+          wrap.appendChild(editBtn);
+          wrap.appendChild(deleteBtn);
+          return wrap;
+        },
+      },
+    ],
+  });
+
+  function openModal(id) {
+    const d = document.getElementById(id);
+    d.classList.add("show");
+    d.setAttribute("aria-hidden", "false");
+  }
+  function closeModal(id) {
+    const d = document.getElementById(id);
+    d.classList.remove("show");
+    d.setAttribute("aria-hidden", "true");
+  }
+  function showError(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+  function hideError(elId) {
+    document.getElementById(elId).style.display = "none";
+  }
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.style.opacity = loading ? "0.7" : "";
+  }
+
+  ["editDialog", "deleteDialog"].forEach(id => {
+    document.getElementById(id).addEventListener("click", function (e) {
+      if (e.target === this) closeModal(id);
+    });
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    ["editDialog", "deleteDialog"].forEach(id => {
+      if (document.getElementById(id).classList.contains("show")) closeModal(id);
+    });
+  });
+
+  // ---- EDIT ----
+  let editId = null;
+  let editLocationChoices = null;
+
+  function openEditDialog(row) {
+    editId = row._id;
+    document.getElementById("editRollIdDisplay").value = row.rollId;
+    document.getElementById("editRateInput").value = row.rate ?? "";
+    document.getElementById("editRemarksInput").value = row.remarks || "";
+
+    if (editLocationChoices) { editLocationChoices.destroy(); editLocationChoices = null; }
+    const locSel = document.getElementById("editLocationSelect");
+    locSel.innerHTML = locationOptionsHtml(row.location || "");
+    editLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    hideError("editSemiFinishedError");
+    openModal("editDialog");
+  }
+  function closeEditDialog() {
+    closeModal("editDialog");
+    editId = null;
+  }
+
+  async function submitEdit() {
+    const location = document.getElementById("editLocationSelect").value;
+    if (!location) return showError("editSemiFinishedError", "Location is required.");
+    if (!editId) return;
+
+    hideError("editSemiFinishedError");
+    setLoading("editSubmitBtn", true);
+    try {
+      const res = await fetch(`/sachiko/semifinishedstock/${editId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location,
+          rate: document.getElementById("editRateInput").value,
+          remarks: document.getElementById("editRemarksInput").value,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        showError("editSemiFinishedError", data.message || "Failed to update Deckle reel.");
+      }
+    } catch {
+      showError("editSemiFinishedError", "Server error. Please try again.");
+    } finally {
+      setLoading("editSubmitBtn", false);
+    }
+  }
+
+  // ---- DELETE ----
+  let deleteId = null;
+
+  function openDeleteDialog(id, rollId) {
+    deleteId = id;
+    document.getElementById("deleteRollId").textContent = rollId;
+    openModal("deleteDialog");
+  }
+  function closeDeleteDialog() {
+    closeModal("deleteDialog");
+    deleteId = null;
+  }
+
+  async function submitDelete() {
+    if (!deleteId) return;
+    setLoading("deleteConfirmBtn", true);
+    try {
+      const res = await fetch(`/sachiko/semifinishedstock/${deleteId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        closeDeleteDialog();
+        alert(data.message || "Failed to delete reel.");
+      }
+    } catch {
+      closeDeleteDialog();
+      alert("Error deleting reel.");
+    } finally {
+      setLoading("deleteConfirmBtn", false);
+    }
+  }
+</script>

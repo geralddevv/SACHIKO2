@@ -1,0 +1,490 @@
+<% layout('/layout/boilerplate') -%>
+
+<div class="contain mnt-page" style="flex-direction: column; padding: 10px; gap: 14px;">
+  <style>
+    .mnt-head h1 { font-size: 20px; color: #fff; margin: 0; }
+    .mnt-head .mnt-sub { font-size: 13px; color: rgba(255, 255, 255, 0.85); margin-top: 2px; }
+    .mnt-head > div { flex: 1 1 auto; min-width: 0; }
+    .mnt-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+    /* Operators have no side nav, so the two pages they live on carry their own
+       tab strip. */
+    .op-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .op-tab {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: #fff; color: #044a78; border: 1px solid #cfe0ee;
+      border-radius: 8px; padding: 8px 16px; font-size: 13.5px; font-weight: 600;
+      text-decoration: none; transition: background 0.15s, color 0.15s;
+    }
+    .op-tab:hover { background: #eef6fc; color: #044a78; }
+    .op-tab.active { background: #044a78; color: #fff; border-color: #044a78; }
+    .op-tab .op-tab-badge {
+      background: #fff8e1; color: #7a5b00; border: 1px solid #f0c36d;
+      border-radius: 999px; padding: 1px 8px; font-size: 11.5px; font-weight: 700;
+    }
+    .op-tab.active .op-tab-badge { background: rgba(255, 255, 255, 0.18); color: #fff; border-color: rgba(255, 255, 255, 0.4); }
+
+    .mnt-report-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      background: #dc2626; color: #fff; border: none; border-radius: 8px;
+      padding: 9px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .mnt-report-btn:hover { opacity: 0.88; }
+
+    .mnt-card {
+      width: 100%; background: #fff; border: 1px solid #e2e8f0;
+      border-radius: 10px; overflow: hidden;
+    }
+    .mnt-card-head {
+      background: #044a78; color: #fff; padding: 9px 16px;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      font-size: 13.5px; font-weight: 600;
+    }
+    .mnt-card-body { padding: 12px 16px; display: flex; gap: 14px; align-items: flex-start; }
+
+    /* Attachment tiles: a photo, a video, or both. The video tile shows its
+       poster frame with a play badge and the clip length. */
+    .mnt-media { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; }
+    .mnt-tile {
+      position: relative; width: 92px; height: 92px; border-radius: 8px; overflow: hidden;
+      border: 1px solid #e2e8f0; background: #f8fafc; cursor: zoom-in;
+    }
+    .mnt-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .mnt-tile-play {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, 0.32); color: #fff; font-size: 22px;
+    }
+    .mnt-tile-len {
+      position: absolute; right: 4px; bottom: 4px; background: rgba(0, 0, 0, 0.7); color: #fff;
+      border-radius: 4px; padding: 1px 5px; font-size: 10.5px; font-weight: 700;
+    }
+    .mnt-details { flex: 1 1 auto; min-width: 0; }
+    .mnt-desc { color: #1f2a44; font-size: 13.5px; font-weight: 600; white-space: pre-wrap; word-break: break-word; }
+    .mnt-meta { color: #5a6586; font-size: 12px; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+    .mnt-remark {
+      margin-top: 10px; padding: 8px 10px; background: #f8fafc;
+      border-left: 3px solid #044a78; border-radius: 0 6px 6px 0;
+      font-size: 12.5px; color: #1f2a44;
+    }
+    .mnt-remark .mnt-remark-by { color: #5a6586; font-size: 11.5px; display: block; margin-top: 3px; }
+
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+      border-radius: 999px; padding: 3px 11px; font-size: 11.5px; font-weight: 700;
+    }
+    .status-OPEN { background: #fff8e1; color: #7a5b00; border: 1px solid #f0c36d; }
+    .status-IN-PROGRESS { background: #e0f2fe; color: #075985; border: 1px solid #7dd3fc; }
+    .status-RESOLVED { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .status-REJECTED { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+    .mnt-notice {
+      background: #fff8e1; border: 1px solid #f0c36d; color: #7a5b00; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px;
+    }
+
+    .dialog-header {
+      background: #044a78; padding: 18px 22px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-radius: 14px 14px 0 0;
+    }
+    .dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #fff; }
+    .dialog-close-btn {
+      background: none; border: none; color: #fff; font-size: 20px;
+      cursor: pointer; line-height: 1; padding: 0 2px; opacity: 0.8;
+    }
+    .dialog-close-btn:hover { opacity: 1; }
+    .dialog-body { padding: 20px 22px; background: #fff; border-radius: 0 0 14px 14px; }
+
+    .fld-label { display: block; font-size: 12.5px; font-weight: 700; color: #044a78; margin-bottom: 6px; }
+    .fld-hint { font-size: 11.5px; color: #5a6586; margin-top: 5px; }
+    .fld-input {
+      width: 100%; border: 1px solid #cfd9e4; border-radius: 8px; padding: 10px 12px;
+      font-size: 13.5px; color: #1f2a44; background-color: #ffffff; font-family: inherit; resize: vertical;
+    }
+    .fld-input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12); }
+    /* A <select> left without an explicit background-color is "not fully
+       styled" as far as Chrome's dark-mode heuristics for native form
+       controls go, and the OS/browser theme takes over the dropdown popup --
+       on a dark-themed system that renders the option text unreadable even
+       though the closed box looks fine. Both the select and its own options
+       need it explicitly, and color-scheme: light stops the browser guessing
+       from the page's own light styling and picking dark anyway.
+
+       height is overridden too: common.css's global `select { height: 2.3rem }`
+       combines with this page's `* { box-sizing: border-box }` and
+       .fld-input's own 10px/12px padding + border to leave under 15px for the
+       text itself -- less than one line needs at this font size, so the
+       selected value was rendering clipped almost to nothing. */
+    select.fld-input {
+      color-scheme: light;
+      height: auto;
+      min-height: 44px;
+      line-height: 1.4;
+    }
+    select.fld-input option {
+      color: #1f2a44;
+      background-color: #ffffff;
+    }
+
+    /* The capture controls: big tap targets on a phone, side by side, each
+       replaced by its own preview once something has been taken. */
+    .capture-row { display: flex; gap: 10px; }
+    .capture-drop {
+      flex: 1 1 0; min-width: 0;
+      border: 2px dashed #cfd9e4; border-radius: 10px; background: #f8fafc;
+      padding: 16px 10px; text-align: center; cursor: pointer; color: #5a6586;
+      font-size: 12.5px; font-weight: 600; display: block;
+    }
+    .capture-drop:hover { border-color: #044a78; background: #f0f7ff; color: #044a78; }
+    .capture-drop i { display: block; font-size: 24px; margin-bottom: 7px; color: #044a78; }
+    .capture-preview { display: none; margin-top: 10px; position: relative; }
+    .capture-preview img, .capture-preview video {
+      width: 100%; max-height: 240px; border-radius: 8px; border: 1px solid #e2e8f0;
+      background: #0b1220; display: block;
+    }
+    .capture-preview img { object-fit: contain; background: #f8fafc; }
+    .capture-clear {
+      position: absolute; top: 8px; right: 8px; background: rgba(0, 0, 0, 0.6); color: #fff;
+      border: none; border-radius: 999px; width: 28px; height: 28px; cursor: pointer; font-size: 14px;
+    }
+    .capture-name {
+      font-size: 11.5px; color: #5a6586; margin-top: 5px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .btn-cancel, .btn-submit {
+      border-radius: 8px; padding: 9px 18px; font-size: 13.5px; font-weight: 600; cursor: pointer; border: none;
+    }
+    .btn-cancel { background: #f1f5f9; color: #44506b; }
+    .btn-submit { background: #044a78; color: #fff; }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    #lightboxImg { width: 100%; border-radius: 8px; }
+    #lightboxVideo { width: 100%; max-height: 70vh; border-radius: 8px; background: #0b1220; }
+
+    @media screen and (max-width: 768px) {
+      .mnt-page { height: auto; min-height: 100%; padding: 8px; gap: 10px; }
+      .mnt-head { padding: 0.5rem 0.7rem; }
+      .mnt-head h1 { font-size: 17px; }
+      .op-tab { flex: 1 1 auto; justify-content: center; padding: 10px 12px; }
+      .mnt-report-btn { width: 100%; padding: 12px; font-size: 15px; }
+      .mnt-card-body { flex-direction: column; }
+      .mnt-media { flex-direction: row; width: 100%; }
+      .mnt-tile { flex: 1 1 0; width: auto; height: 120px; }
+      .dialog-header { padding: 14px 16px; }
+      .dialog-body { padding: 14px 16px; }
+      .dialog-actions { flex-direction: column-reverse; }
+      .btn-cancel, .btn-submit { width: 100%; padding: 12px; font-size: 14.5px; }
+    }
+  </style>
+
+  <div class="indi-head mnt-head">
+    <div>
+      <div class="mnt-title-row"><h1>Maintenance</h1></div>
+      <div class="mnt-sub">
+        <i class="fa-solid fa-user"></i> <%= operatorName || "—" %><% if (operatorLocation) { %> / <%= operatorLocation %><% } %>
+        <% if (machineName) { %> &nbsp;·&nbsp; <i class="fa-solid fa-gears"></i> <%= machineName %><% } %>
+      </div>
+    </div>
+  </div>
+
+  <div class="op-tabs">
+    <a href="/sachiko/operator/queue" class="op-tab"><i class="fa-solid fa-list-check"></i> Work Queue</a>
+    <a href="/sachiko/operator/maintenance" class="op-tab active">
+      <i class="fa-solid fa-screwdriver-wrench"></i> Maintenance
+      <% if (openCount) { %><span class="op-tab-badge"><%= openCount %></span><% } %>
+    </a>
+  </div>
+
+  <div>
+    <button type="button" class="mnt-report-btn" onclick="openReportDialog()">
+      <i class="fa-solid fa-camera"></i> Report a Problem
+    </button>
+  </div>
+
+  <% if (!requests.length) { %>
+    <div class="mnt-card">
+      <div style="padding: 14px 16px;">
+        <div class="mnt-notice">
+          <i class="fa-solid fa-circle-info"></i>
+          You haven't reported any problems yet. Tap "Report a Problem" to send a description (and a photo or video, if you have one) to the office.
+        </div>
+      </div>
+    </div>
+  <% } else { %>
+    <% requests.forEach((r) => { %>
+      <div class="mnt-card">
+        <div class="mnt-card-head">
+          <span><i class="fa-solid fa-hashtag"></i> <%= r.ticketNo %></span>
+          <span class="status-pill status-<%= r.status.replace(/\s+/g, '-') %>"><%= r.status %></span>
+        </div>
+        <div class="mnt-card-body">
+          <% if (r.media.length) { %>
+            <div class="mnt-media">
+              <% r.media.forEach((m) => { %>
+                <div class="mnt-tile" title="<%= m.label %>" data-url="<%= m.url %>" data-kind="<%= m.kind %>"
+                     onclick="openViewer(this.dataset.url, this.dataset.kind)">
+                  <img src="<%= m.thumbUrl %>" alt="<%= m.label %> of the problem" loading="lazy" />
+                  <% if (m.kind === "video") { %>
+                    <span class="mnt-tile-play"><i class="fa-solid fa-circle-play"></i></span>
+                    <% if (m.durationLabel) { %><span class="mnt-tile-len"><%= m.durationLabel %></span><% } %>
+                  <% } %>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+          <div class="mnt-details">
+            <div class="mnt-desc"><%= r.description %></div>
+            <div class="mnt-meta">
+              <span><i class="fa-regular fa-clock"></i> <%= new Date(r.createdAt).toLocaleString("en-IN") %></span>
+              <% if (r.machineName && r.machineName !== "—") { %><span><i class="fa-solid fa-gears"></i> <%= r.machineName %></span><% } %>
+              <% if (r.locationName && r.locationName !== "—") { %><span><i class="fa-solid fa-location-dot"></i> <%= r.locationName %></span><% } %>
+            </div>
+            <% if (r.latestAction) { %>
+              <div class="mnt-remark">
+                <%= r.latestAction.remark || `Marked ${r.latestAction.status}` %>
+                <span class="mnt-remark-by">
+                  — <%= r.latestAction.byName || "Office" %>, <%= new Date(r.latestAction.at).toLocaleString("en-IN") %>
+                </span>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    <% }) %>
+  <% } %>
+</div>
+
+<!-- ============ REPORT A PROBLEM DIALOG ============ -->
+<div class="logout-modal" id="reportDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="reportTitle"
+    style="width: min(460px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="reportTitle">Report a Problem</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeModal('reportDialog')" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <!-- Deliberately not a <form>: the app's global `form { display: grid;
+           grid-template-columns: repeat(32, 1fr); ... }` (common.css) is meant
+           for the big data-entry forms that opt into it field-by-field with
+           .span-* wrapper classes. Any plain <form> inherits that grid and its
+           border with no spans to control it, which packs every field into one
+           cramped row. Every other dialog in the app (see machineMaster.ejs)
+           avoids this the same way: plain <div>s, buttons wired by onclick. -->
+      <div style="margin-bottom: 16px;">
+        <label class="fld-label">Show the problem</label>
+        <div class="capture-row">
+          <label class="capture-drop" for="photoInput" id="photoDrop">
+            <i class="fa-solid fa-camera"></i>
+            Take a photo
+          </label>
+          <label class="capture-drop" for="videoInput" id="videoDrop">
+            <i class="fa-solid fa-video"></i>
+            Record a video
+          </label>
+        </div>
+
+        <!-- capture="environment" opens the rear camera straight away on a
+             phone (photo mode / video mode respectively); on a PC both fall
+             back to the normal file picker. -->
+        <input type="file" id="photoInput" name="photo" accept="image/*" capture="environment" style="display: none;" />
+        <input type="file" id="videoInput" name="video" accept="video/*" capture="environment" style="display: none;" />
+
+        <div class="capture-preview" id="photoPreviewWrap">
+          <img id="photoPreview" alt="Selected photo" />
+          <button type="button" class="capture-clear" onclick="clearPhoto()" aria-label="Remove photo">×</button>
+        </div>
+        <div class="capture-preview" id="videoPreviewWrap">
+          <video id="videoPreview" controls playsinline muted preload="metadata"></video>
+          <button type="button" class="capture-clear" onclick="clearVideo()" aria-label="Remove video">×</button>
+          <div class="capture-name" id="videoName"></div>
+        </div>
+
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label class="fld-label" for="machineSelect">Machine</label>
+        <select class="fld-input" id="machineSelect" name="machineId">
+          <option value="">Not sure / not listed</option>
+          <% (machines || []).forEach((m) => { %>
+            <option value="<%= m._id %>" <%= m._id === defaultMachineId ? "selected" : "" %>><%= m.machineName %></option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div>
+        <label class="fld-label" for="descInput">What is the problem?</label>
+        <textarea class="fld-input" id="descInput" name="description" rows="4" maxlength="1000"
+          placeholder="Describe the problem — what happened, what part, when it started..."></textarea>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn-cancel" onclick="closeModal('reportDialog')">Cancel</button>
+        <button type="button" class="btn-submit" id="reportSubmitBtn" onclick="submitReport()">
+          <i class="fa-solid fa-paper-plane"></i> Submit
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ATTACHMENT VIEWER ============ -->
+<div class="logout-modal" id="mediaViewer" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="mediaViewerTitle"
+    style="width: min(640px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="mediaViewerTitle">Problem Photo</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeViewer()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <img id="lightboxImg" alt="Problem photo" />
+      <video id="lightboxVideo" controls playsinline preload="metadata" style="display: none;"></video>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openModal(id)  { const d = document.getElementById(id); d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
+  function closeModal(id) { const d = document.getElementById(id); d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
+
+  const photoInput = document.getElementById("photoInput");
+  const photoPreview = document.getElementById("photoPreview");
+  const photoPreviewWrap = document.getElementById("photoPreviewWrap");
+  const photoDrop = document.getElementById("photoDrop");
+  const videoInput = document.getElementById("videoInput");
+  const videoPreview = document.getElementById("videoPreview");
+  const videoPreviewWrap = document.getElementById("videoPreviewWrap");
+  const videoDrop = document.getElementById("videoDrop");
+  const videoName = document.getElementById("videoName");
+  const reportSubmitBtn = document.getElementById("reportSubmitBtn");
+  const descInput = document.getElementById("descInput");
+  const machineSelect = document.getElementById("machineSelect");
+  // The server pre-selects this same id on render; kept here too so a change
+  // the operator made on a previous open of this dialog doesn't linger --
+  // each open starts back at their own machine, same as description/photo/video.
+  const DEFAULT_MACHINE_ID = "<%= defaultMachineId %>";
+
+  let videoObjectUrl = null;
+
+  function openReportDialog() {
+    descInput.value = "";
+    if (machineSelect) machineSelect.value = DEFAULT_MACHINE_ID;
+    clearPhoto();
+    clearVideo();
+    openModal("reportDialog");
+  }
+
+  function clearPhoto() {
+    photoInput.value = "";
+    photoPreview.removeAttribute("src");
+    photoPreviewWrap.style.display = "none";
+    photoDrop.style.display = "block";
+  }
+
+  function clearVideo() {
+    videoInput.value = "";
+    videoPreview.pause();
+    videoPreview.removeAttribute("src");
+    videoPreview.load();
+    if (videoObjectUrl) { URL.revokeObjectURL(videoObjectUrl); videoObjectUrl = null; }
+    videoName.textContent = "";
+    videoPreviewWrap.style.display = "none";
+    videoDrop.style.display = "block";
+  }
+
+  photoInput.addEventListener("change", () => {
+    const file = photoInput.files?.[0];
+    if (!file) return clearPhoto();
+    // A data: URL, not a blob: one -- the page's CSP allows img-src 'self' data:
+    // and would block a blob image preview.
+    const reader = new FileReader();
+    reader.onload = () => {
+      photoPreview.src = reader.result;
+      photoPreviewWrap.style.display = "block";
+      photoDrop.style.display = "none";
+    };
+    reader.readAsDataURL(file);
+  });
+
+  videoInput.addEventListener("change", () => {
+    const file = videoInput.files?.[0];
+    if (!file) return clearVideo();
+    // A clip is far too big to hold as a data: URL, so this one is a blob: --
+    // which is why the CSP carries media-src 'self' blob:.
+    if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+    videoObjectUrl = URL.createObjectURL(file);
+    videoPreview.src = videoObjectUrl;
+    videoName.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB — will be compressed on upload`;
+    videoPreviewWrap.style.display = "block";
+    videoDrop.style.display = "none";
+  });
+
+  const lightboxImg = document.getElementById("lightboxImg");
+  const lightboxVideo = document.getElementById("lightboxVideo");
+
+  function openViewer(url, kind) {
+    const isVideo = kind === "video";
+    document.getElementById("mediaViewerTitle").textContent = isVideo ? "Problem Video" : "Problem Photo";
+    lightboxImg.style.display = isVideo ? "none" : "block";
+    lightboxVideo.style.display = isVideo ? "block" : "none";
+    if (isVideo) {
+      lightboxImg.removeAttribute("src");
+      lightboxVideo.src = url;
+    } else {
+      lightboxVideo.pause();
+      lightboxVideo.removeAttribute("src");
+      lightboxImg.src = url;
+    }
+    openModal("mediaViewer");
+  }
+
+  // Stop playback on close -- otherwise the clip keeps running behind the page.
+  function closeViewer() {
+    lightboxVideo.pause();
+    lightboxVideo.removeAttribute("src");
+    closeModal("mediaViewer");
+  }
+
+  async function submitReport() {
+    const description = descInput.value.trim();
+    const photo = photoInput.files?.[0];
+    const video = videoInput.files?.[0];
+
+    if (!description) return showToast("Please describe the problem.", "error");
+    // Photo/video is optional -- a description alone is a valid report.
+
+    const data = new FormData();
+    if (photo) data.append("photo", photo);
+    if (video) data.append("video", video);
+    data.append("description", description);
+    if (machineSelect?.value) data.append("machineId", machineSelect.value);
+
+    reportSubmitBtn.disabled = true;
+    // A video is re-encoded server-side, so this can sit for a few seconds --
+    // say so rather than looking stuck.
+    reportSubmitBtn.innerHTML = video
+      ? '<i class="fa-solid fa-spinner fa-spin"></i> Uploading & compressing...'
+      : '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
+    try {
+      // The global fetch wrapper adds the CSRF header; FormData sets its own
+      // multipart Content-Type, so none is set here.
+      const res = await fetch("/sachiko/operator/maintenance", { method: "POST", body: data });
+      const out = await res.json();
+      if (!res.ok || !out.success) throw new Error(out.message || "Could not report the issue.");
+      window.location.href = out.redirect || "/sachiko/operator/maintenance";
+    } catch (err) {
+      showToast(err.message || "Could not report the issue.", "error");
+      reportSubmitBtn.disabled = false;
+      reportSubmitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit';
+    }
+  }
+
+  document.getElementById("reportDialog").addEventListener("click", (e) => {
+    if (e.target.id === "reportDialog") closeModal("reportDialog");
+  });
+  document.getElementById("mediaViewer").addEventListener("click", (e) => {
+    if (e.target.id === "mediaViewer") closeViewer();
+  });
+</script>

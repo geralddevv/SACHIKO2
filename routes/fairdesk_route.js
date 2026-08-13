@@ -37,8 +37,15 @@ import Sample from "../models/inventory/sample.js";
 import PendingProduction from "../models/inventory/pendingProduction.js";
 import MaterialStock from "../models/inventory/materialStock.js";
 import MachineJobCard from "../models/inventory/machineJobCard.js";
+import FacestockMaster from "../models/inventory/facestockMaster.js";
+import AdhesiveMaster from "../models/inventory/adhesiveMaster.js";
+import ReleaseMaster from "../models/inventory/releaseMaster.js";
+import FacestockStock from "../models/inventory/facestockStock.js";
+import AdhesiveStock from "../models/inventory/adhesiveStock.js";
+import ReleaseLinerStock from "../models/inventory/releaseLinerStock.js";
 import { escapeRegex } from "../utils/security.js";
 import { getUserLocationNames, normalizeLocationName } from "../utils/locations.js";
+import { generateMaterialRollId } from "../utils/materialRollId.js";
 import {
   reconcileUserBindingLocations,
   syncLabelBindingIdentity,
@@ -3037,18 +3044,40 @@ router.get("/sales/pending", async (req, res) => {
 });
 
 // View Pending Purchase Orders
+// Facestock/Adhesive/Release Master have no VendorUser/binding concept the
+// way Tape does (see PurchaseOrder model) -- this is the one shared lookup
+// table for those three, used to name the item on the Pending/Receive PO
+// pages and to know which stock model a received PO creates a reel in.
+const MATERIAL_PO_TYPES = {
+  FacestockMaster: {
+    label: "Facestock",
+    name: (item) => (item ? `${item.skuId || ""} — ${item.family || ""} ${item.type || ""}`.trim() : "N/A"),
+  },
+  AdhesiveMaster: {
+    label: "Adhesive",
+    name: (item) => (item ? `${item.skuId || ""} — ${item.type || ""}`.trim() : "N/A"),
+  },
+  ReleaseMaster: {
+    label: "Release Liner",
+    name: (item) => (item ? `${item.skuId || ""} — ${item.type || ""}`.trim() : "N/A"),
+  },
+};
+
 router.get("/purchase/pending", async (req, res) => {
   try {
     const pendingPOs = await PurchaseOrder.find({
       status: { $in: ["PENDING", "CONFIRMED", "PARTIALLY_RECEIVED"] },
-      vendorUserId: { $ne: null },
-      vendorBinding: { $ne: null },
+      $or: [
+        { vendorUserId: { $ne: null }, vendorBinding: { $ne: null } },
+        { onModel: { $in: Object.keys(MATERIAL_PO_TYPES) } },
+      ],
     })
       .populate("vendorUserId", "vendorName userName")
       .populate({
         path: "itemId",
         select:
-          "tapeProductId tapePaperCode tapeGsm ttrProductId ttrType ttrWidth ttrMtrs",
+          "tapeProductId tapePaperCode tapeGsm ttrProductId ttrType ttrWidth ttrMtrs" +
+          " skuId family type size gsm micron make vendorSkuCode shelfLife color msq",
       })
       .sort({ createdAt: -1 })
       .lean();
@@ -3075,6 +3104,7 @@ router.get("/purchase/pending", async (req, res) => {
 function getItemName(item, type) {
   if (!item) return "N/A";
   if (type === "Tape") return `${item.tapePaperCode || ""} ${item.tapeGsm || ""}gsm`.trim() || item.tapeProductId;
+  if (MATERIAL_PO_TYPES[type]) return MATERIAL_PO_TYPES[type].name(item);
   return "N/A";
 }
 
@@ -3144,6 +3174,66 @@ router.post("/purchase/receive", async (req, res) => {
         quantity: qty,
         remarks: remarks || `From PO: ${po.poNumber}`,
         tapeFinish: po.itemId.tapeFinish || "MATTE"
+      });
+    } else if (po.onModel === "FacestockMaster") {
+      const item = po.itemId;
+      const rollId = await generateMaterialRollId("FACESTOCK", FacestockStock);
+      await FacestockStock.create({
+        family: item.family,
+        type: item.type,
+        size: item.size,
+        gsm: item.gsm,
+        micron: item.micron,
+        vendorId: item.vendorId,
+        vendorName: item.vendorName,
+        make: item.make,
+        vendorSkuCode: item.vendorSkuCode,
+        location,
+        quantity: 1,
+        reelMtrs: qty,
+        rollId,
+        invoiceNo: `PO:${po.poNumber}`,
+        remarks: remarks || `From PO: ${po.poNumber}`,
+      });
+    } else if (po.onModel === "AdhesiveMaster") {
+      const item = po.itemId;
+      const rollId = await generateMaterialRollId("ADHESIVE", AdhesiveStock);
+      await AdhesiveStock.create({
+        type: item.type,
+        vendorId: item.vendorId,
+        vendorName: item.vendorName,
+        make: item.make,
+        vendorSkuCode: item.vendorSkuCode,
+        shelfLife: item.shelfLife,
+        viscosity: item.viscosity,
+        cohesion: item.cohesion,
+        shear: item.shear,
+        density: item.density,
+        location,
+        quantity: 1,
+        reelMtrs: qty,
+        rollId,
+        invoiceNo: `PO:${po.poNumber}`,
+        remarks: remarks || `From PO: ${po.poNumber}`,
+      });
+    } else if (po.onModel === "ReleaseMaster") {
+      const item = po.itemId;
+      const rollId = await generateMaterialRollId("RELEASE", ReleaseLinerStock);
+      await ReleaseLinerStock.create({
+        type: item.type,
+        color: item.color,
+        size: item.size,
+        gsm: item.gsm,
+        vendorId: item.vendorId,
+        vendorName: item.vendorName,
+        make: item.make,
+        vendorSkuCode: item.vendorSkuCode,
+        location,
+        quantity: 1,
+        reelMtrs: qty,
+        rollId,
+        invoiceNo: `PO:${po.poNumber}`,
+        remarks: remarks || `From PO: ${po.poNumber}`,
       });
     }
 

@@ -3,6 +3,8 @@ import FacestockStock from "../../models/inventory/facestockStock.js";
 import FacestockMaster from "../../models/inventory/facestockMaster.js";
 import Vendor from "../../models/users/vendor.js";
 import Location from "../../models/system/location.js";
+import PurchaseOrder from "../../models/inventory/PurchaseOrder.js";
+import PurchaseOrderLog from "../../models/inventory/PurchaseOrderLog.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
@@ -135,21 +137,119 @@ async function loadSpecOptions(filter) {
   };
 }
 
+// Groups a Facestock Master row and a FacestockStock reel as "the same
+// spec" using exactly the fields buildFacestockSignature() (routes/system/
+// facestockMaster.js) hashes -- every field the stock schema mirrors from
+// the master, so a reel entered against a spec always lands in that spec's
+// bucket. Not the hash itself (no need to match the master's stored
+// signature, just to group consistently within this one request).
+function facestockSpecKey(o) {
+  const s = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
+  const n = (v) => (v === undefined || v === null || v === "" ? "" : String(Number(v)));
+  return [String(o.vendorId || ""), s(o.family), s(o.make), s(o.vendorSkuCode), s(o.type), s(o.size), n(o.gsm), n(o.micron)].join("||");
+}
+
+// Reorder view for the Masters panel -- current stock (total mtrs still on
+// non-empty reels) per master spec vs. its MSQ, plus whether a PO is already
+// in flight for it (see models/inventory/PurchaseOrder.js's onModel
+// extension for Facestock/Adhesive/Release Master).
+async function loadMastersWithStock(stock) {
+  const stockByKey = new Map();
+  const rollCountByKey = new Map();
+  for (const s of stock) {
+    if (!s.quantity) continue;
+    const key = facestockSpecKey(s);
+    stockByKey.set(key, (stockByKey.get(key) || 0) + (Number(s.reelMtrs) || 0));
+    rollCountByKey.set(key, (rollCountByKey.get(key) || 0) + (Number(s.quantity) || 0));
+  }
+
+  const masters = await FacestockMaster.find().sort({ skuId: 1 }).lean();
+  const activePOs = await PurchaseOrder.find({
+    onModel: "FacestockMaster",
+    itemId: { $in: masters.map((m) => m._id) },
+    status: { $in: ["PENDING", "CONFIRMED", "PARTIALLY_RECEIVED"] },
+  }).select("itemId").lean();
+  const activePOSet = new Set(activePOs.map((po) => String(po.itemId)));
+
+  return masters.map((m) => {
+    const key = facestockSpecKey(m);
+    const currentStock = stockByKey.get(key) || 0;
+    const rollCount = rollCountByKey.get(key) || 0;
+    const msq = Number(m.msq) || 0;
+    return {
+      ...m,
+      currentStock,
+      rollCount,
+      shortage: Math.max(0, msq - currentStock),
+      hasActivePO: activePOSet.has(String(m._id)),
+    };
+  });
+}
+
 router.get("/", async (req, res) => {
   const [locations, stock, specOptions] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
     FacestockStock.find().sort({ createdAt: -1 }).lean(),
     loadSpecOptions({}),
   ]);
+  const masters = await loadMastersWithStock(stock);
   res.render("stock/facestockStock.ejs", {
     JS: false,
     CSS: "tableDisp.css",
     title: "Facestock Stock",
     locations,
-    stock,
+    masters,
     ...specOptions,
     notification: req.flash("notification"),
   });
+});
+
+router.post("/purchase-order", requireAuth, createLimiter, async (req, res) => {
+  try {
+    const { masterId, quantity, poNumber, estimatedDate, userLocation, remarks } = req.body;
+
+    const master = await FacestockMaster.findById(masterId).lean();
+    if (!master) return res.status(404).json({ success: false, message: "Facestock master not found." });
+    if (!master.vendorId) return res.status(400).json({ success: false, message: "This facestock has no vendor set." });
+
+    const qty = Number(quantity);
+    if (!qty || qty <= 0) return res.status(400).json({ success: false, message: "Quantity is required." });
+    if (!String(poNumber || "").trim()) return res.status(400).json({ success: false, message: "PO Number is required." });
+
+    const parsedDate = new Date(estimatedDate);
+    const resolvedDate = Number.isNaN(parsedDate.getTime())
+      ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      : parsedDate;
+    const performer = req.session?.authUser?.username || "SYSTEM";
+
+    const po = await PurchaseOrder.create({
+      onModel: "FacestockMaster",
+      itemId: master._id,
+      vendorId: master.vendorId,
+      vendorName: master.vendorName,
+      userLocation,
+      quantity: qty,
+      poNumber: String(poNumber).trim(),
+      estimatedDate: resolvedDate,
+      remarks,
+      status: "PENDING",
+      createdBy: performer,
+    });
+    await PurchaseOrderLog.create({
+      orderId: po._id,
+      action: "CREATED",
+      poNumber: po.poNumber,
+      quantity: po.quantity,
+      performedBy: performer,
+    });
+
+    res.locals.auditDescription = `Created purchase order "${po.poNumber}" for facestock "${master.skuId}" from "${master.vendorName}" (qty ${po.quantity} mtrs)`;
+    req.flash("notification", "Purchase Order created successfully.");
+    res.json({ success: true, redirect: "/sachiko/purchase/pending" });
+  } catch (err) {
+    console.error("FACESTOCK CREATE PO ERROR:", err);
+    res.status(400).json({ success: false, message: "Failed to create Purchase Order." });
+  }
 });
 
 router.get("/filter-specs", async (req, res) => {

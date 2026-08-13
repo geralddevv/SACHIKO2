@@ -52,6 +52,13 @@ const coreMasterSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    // Minimum Stock Quantity -- the reorder threshold for this core spec,
+    // matching the "MSQ" field on the Tape vendor binding (tapeMinQty).
+    // Purely an operational stock-control value, so it's not part of
+    // coreSignature below.
+    msq: {
+      type: Number,
+    },
     // Identifies "the exact same core spec" -- every field hashed together
     // (see buildCoreSignature in routes/system/coreMaster.js), so create/edit
     // is blocked only on a full duplicate, not a partial match. Sparse so

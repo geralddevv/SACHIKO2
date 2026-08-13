@@ -7,7 +7,7 @@
     <input type="hidden" name="location" id="selected-location-input" />
 
     <%
-      const vendor = order.vendorUserId?.vendorName || 'N/A';
+      const vendor = order.vendorUserId?.vendorName || order.vendorName || 'N/A';
       const coordinator = order.vendorUserId?.userName || 'N/A';
       const contact = order.vendorUserId?.userContact || 'N/A';
       const userLoc = order.vendorUserId?.userLocation || 'N/A';
@@ -108,6 +108,36 @@
             specs.push(["Core Length", d.ttrCoreLength]);
             specs.push(["Notch", d.ttrNotch]);
             specs.push(["Winding", d.ttrWinding]);
+          } else if (order.onModel === "FacestockMaster") {
+            specs.push(["SKU ID", d.skuId]);
+            specs.push(["Family", d.family]);
+            specs.push(["Type", d.type]);
+            specs.push(["Size", d.size]);
+            specs.push(["GSM", d.gsm]);
+            specs.push(["Micron", d.micron]);
+            specs.push(["Make", d.make]);
+            specs.push(["Vendor SKU Code", d.vendorSkuCode]);
+            specs.push(["MSQ", d.msq]);
+          } else if (order.onModel === "AdhesiveMaster") {
+            specs.push(["SKU ID", d.skuId]);
+            specs.push(["Type", d.type]);
+            specs.push(["Make", d.make]);
+            specs.push(["Vendor SKU Code", d.vendorSkuCode]);
+            specs.push(["Shelf Life", d.shelfLife]);
+            specs.push(["Viscosity", d.viscosity]);
+            specs.push(["Cohesion", d.cohesion]);
+            specs.push(["Shear", d.shear]);
+            specs.push(["Density", d.density]);
+            specs.push(["MSQ", d.msq]);
+          } else if (order.onModel === "ReleaseMaster") {
+            specs.push(["SKU ID", d.skuId]);
+            specs.push(["Type", d.type]);
+            specs.push(["Make", d.make]);
+            specs.push(["Vendor SKU Code", d.vendorSkuCode]);
+            specs.push(["Color", d.color]);
+            specs.push(["Size", d.size]);
+            specs.push(["GSM", d.gsm]);
+            specs.push(["MSQ", d.msq]);
           }
         %>
 

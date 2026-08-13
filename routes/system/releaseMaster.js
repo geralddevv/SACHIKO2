@@ -88,6 +88,7 @@ async function buildPayload(body) {
     color: String(body.color || "WHITE").trim() || "WHITE",
     size: String(body.size || "").trim(),
     gsm: numOrUndef(body.gsm),
+    msq: numOrUndef(body.msq),
   };
 
   if (vendorId) {

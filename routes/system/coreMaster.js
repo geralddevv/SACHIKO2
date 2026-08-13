@@ -85,6 +85,7 @@ async function buildPayload(body) {
     printType: String(body.printType || "").trim(),
     thickness: numOrUndef(body.thickness),
     width: numOrUndef(body.width),
+    msq: numOrUndef(body.msq),
   };
 
   if (vendorId) {

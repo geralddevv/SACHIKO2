@@ -23,10 +23,45 @@
     .header-action-btn:hover {
       background-color: #e4e4e4;
     }
-    #release-liner-stock-table {
+    #release-masters-table {
       width: 100%;
       flex: 1 1 auto;
       min-height: 0;
+    }
+    .po-action-btn {
+      padding: 4px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+      background: #044a78;
+    }
+    .po-action-btn:hover {
+      background: #03365a;
+    }
+    .add-stock-btn {
+      padding: 4px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+      background: #15803d;
+    }
+    .add-stock-btn:hover {
+      background: #116531;
+    }
+    .po-pending-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #fef3c7;
+      color: #92400e;
     }
     .dialog-header {
       background: #044A78;
@@ -130,6 +165,24 @@
       border: 1.5px solid #e2e8f0 !important;
       z-index: 99999 !important;
     }
+    /* A long value (e.g. Vendor Name) shouldn't overflow its field or push
+       against the dropdown arrow -- truncate with an ellipsis instead, both
+       for the selected value shown in the closed field and for each option
+       in the open dropdown list. Applies to every Choices.js select in this
+       dialog, not just Vendor Name. */
+    .dialog-body .choices__list--single .choices__item {
+      display: block !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      max-width: 100% !important;
+      padding-right: 18px !important;
+    }
+    .dialog-body .choices__list--dropdown .choices__item {
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
 
     .dialog-section-label {
       display: flex;
@@ -162,6 +215,13 @@
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
   </style>
 
+  <!-- Release Master rows are the only table here: current stock (total
+       mtrs still on non-empty reels, matched by the same fields Release
+       Master's own duplicate-check signature hashes) sits right on the spec
+       it's stock of, alongside MSQ/shortage and the Inward/Create PO
+       actions -- see routes/stock/releaseLinerStock.js's
+       loadMastersWithStock. Every master is listed here even with zero
+       reels. -->
   <div class="indi-head">
     <h1>Release Liner Stock</h1>
     <div style="display: flex; gap: 10px; align-items: center">
@@ -172,7 +232,61 @@
   </div>
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
-  <div id="release-liner-stock-table" class="tabulator tabulator-modern"></div>
+  <div id="release-masters-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- ============ CREATE PURCHASE ORDER DIALOG ============ -->
+<div class="logout-modal" id="poDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="poDialogTitle"
+    style="width: min(480px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="poDialogTitle">Create Purchase Order</h2>
+      <button class="dialog-close-btn" type="button" onclick="closePoDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="poSkuDisplay">SKU ID</label>
+          <input type="text" id="poSkuDisplay" class="form-control premium-input" readonly style="background: #f1f5f9;" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="poVendorDisplay">Vendor</label>
+          <input type="text" id="poVendorDisplay" class="form-control premium-input" readonly style="background: #f1f5f9;" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="poQtyInput">Quantity (Mtrs)</label>
+          <input type="number" id="poQtyInput" class="form-control premium-input" min="1" step="any" placeholder="Enter mtrs" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="poNumberInput">PO Number</label>
+          <input type="text" id="poNumberInput" class="form-control premium-input" placeholder="Enter PO number" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="poLocationSelect">Delivery Location</label>
+          <select id="poLocationSelect"></select>
+        </div>
+        <div>
+          <label class="dialog-field-label" for="poDateInput">Estimated Date</label>
+          <input type="date" id="poDateInput" class="form-control premium-input" />
+        </div>
+      </div>
+
+      <label class="dialog-field-label" for="poRemarksInput">Remarks</label>
+      <input type="text" id="poRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
+
+      <div id="poError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closePoDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="poSubmitBtn" onclick="submitPo()">Create PO</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ============ ADD RELEASE LINER DIALOG (batch inward, landscape) ============ -->
@@ -320,126 +434,14 @@
   </div>
 </div>
 
-<!-- ============ EDIT RELEASE LINER DIALOG ============ -->
-<div class="logout-modal" id="editDialog" aria-hidden="true">
-  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
-    style="width: min(600px, 95vw); padding: 0; border-radius: 14px;">
-    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
-      <h2 id="editDialogTitle">Edit Release Liner Reel</h2>
-      <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
-    </div>
-    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
-      <label class="dialog-field-label" for="editRollIdDisplay">Roll ID</label>
-      <input type="text" id="editRollIdDisplay" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
-
-      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
-        <div>
-          <label class="dialog-field-label" for="editTypeSelect">Type</label>
-          <select id="editTypeSelect">
-            <option value="" disabled hidden>Select type</option>
-          </select>
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editColorSelect">Color</label>
-          <select id="editColorSelect"></select>
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editSizeInput">Size</label>
-          <input type="text" id="editSizeInput" class="form-control premium-input" placeholder="Enter size" />
-        </div>
-      </div>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editGsmInput">GSM</label>
-          <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
-          <select id="editVendorSelect"></select>
-        </div>
-      </div>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editMakeInput">Make</label>
-          <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editVendorSkuCodeInput">Vendor SKU Code</label>
-          <input type="text" id="editVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
-        </div>
-      </div>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editMtrsInput">Mtrs</label>
-          <input type="number" id="editMtrsInput" class="form-control premium-input" placeholder="Enter Mtrs" min="0" step="any" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editRateInput">Rate</label>
-          <input type="number" id="editRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
-        </div>
-      </div>
-
-      <label class="dialog-field-label" for="editLocationSelect">Location</label>
-      <select id="editLocationSelect" style="margin-bottom: 16px;"></select>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="editVendorRollIdInput">Vendor Roll ID</label>
-          <input type="text" id="editVendorRollIdInput" class="form-control premium-input" placeholder="Vendor's own roll no" />
-        </div>
-        <div>
-          <label class="dialog-field-label" for="editInvoiceNoInput">Invoice No</label>
-          <input type="text" id="editInvoiceNoInput" class="form-control premium-input" placeholder="Enter invoice no" />
-        </div>
-      </div>
-
-      <label class="dialog-field-label" for="editRemarksInput">Remarks</label>
-      <input type="text" id="editRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
-
-      <div id="editReleaseError" class="dialog-error"></div>
-      <div class="dialog-actions">
-        <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
-        <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Reel</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ============ DELETE CONFIRMATION DIALOG ============ -->
-<div class="logout-modal" id="deleteDialog" aria-hidden="true">
-  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle"
-    style="width: min(400px, 95vw);">
-    <h2 class="logout-title" id="deleteDialogTitle">
-      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Delete Reel?
-    </h2>
-    <p class="logout-text">
-      Are you sure you want to delete <strong id="deleteRollId"></strong>? This action cannot be undone.
-    </p>
-    <div class="logout-actions">
-      <button class="logout-btn" type="button" onclick="closeDeleteDialog()">Cancel</button>
-      <button
-        class="logout-btn"
-        type="button"
-        id="deleteConfirmBtn"
-        onclick="submitDelete()"
-        style="background: #ef4444; color: #fff; border-color: #ef4444;">
-        Yes, Delete
-      </button>
-    </div>
-  </div>
-</div>
-
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
-<script id="stock-data" type="application/json"><%- safeJson(stock) %></script>
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
 <script id="release-specs-data" type="application/json"><%- safeJson({ types, colors, sizes, gsms, vendors, makes, vendorSkuCodes }) %></script>
+<script id="release-masters-data" type="application/json"><%- safeJson(masters) %></script>
 <script>
-  const stockData = JSON.parse(document.getElementById("stock-data").textContent);
+  const mastersData = JSON.parse(document.getElementById("release-masters-data").textContent);
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
   const releaseSpecsData = JSON.parse(document.getElementById("release-specs-data").textContent);
 
@@ -466,7 +468,6 @@
 
   let addTypeChoices = null, addColorChoices = null, addSizeChoices = null, addGsmChoices = null;
   let addVendorChoices = null, addMakeChoices = null, addVendorSkuCodeChoices = null, addLocationChoices = null;
-  let editTypeChoices = null, editColorChoices = null, editVendorChoices = null, editLocationChoices = null;
 
   // ---- Add (inward) dialog: smart filter for Type/Color/Size/GSM/Vendor/
   // Make/Vendor SKU Code ---- Narrows each field's options to combinations
@@ -584,58 +585,6 @@
     return value;
   }
 
-  // ---- Table ----
-  const table = new Tabulator("#release-liner-stock-table", {
-    data: stockData,
-    height: "100%",
-    responsiveLayout: false,
-    movableColumns: true,
-    placeholder: "No release liner stock added yet.",
-    columns: [
-      { title: "Roll ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
-      { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120 },
-      { title: "Color", field: "color", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
-      { title: "Size", field: "size", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110, formatter: (cell) => cell.getValue() || "—" },
-      { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
-      { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
-      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
-      { title: "Mtrs", field: "reelMtrs", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
-      { title: "Rate", field: "rate", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Location", field: "location", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
-      { title: "Vendor Roll ID", field: "vendorRollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
-      {
-        title: "Actions",
-        width: 110,
-        hozAlign: "center",
-        headerSort: false,
-        formatter: function (cell) {
-          const row = cell.getRow().getData();
-          const wrap = document.createElement("div");
-          wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
-
-          const editBtn = document.createElement("button");
-          editBtn.className = "loc-btn";
-          editBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#e67e22;";
-          editBtn.title = "Edit Reel";
-          editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
-          editBtn.addEventListener("click", () => openEditDialog(row));
-
-          const deleteBtn = document.createElement("button");
-          deleteBtn.className = "loc-btn";
-          deleteBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#d9534f;";
-          deleteBtn.title = "Delete Reel";
-          deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-          deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.rollId));
-
-          wrap.appendChild(editBtn);
-          wrap.appendChild(deleteBtn);
-          return wrap;
-        },
-      },
-    ],
-  });
-
   // ---- Helpers ----
   function openModal(id) {
     const d = document.getElementById(id);
@@ -662,7 +611,7 @@
     btn.style.opacity = loading ? "0.7" : "";
   }
 
-  ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+  ["addDialog", "poDialog"].forEach(id => {
     document.getElementById(id).addEventListener("click", function (e) {
       if (e.target === this) closeModal(id);
     });
@@ -670,10 +619,132 @@
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+    ["addDialog", "poDialog"].forEach(id => {
       if (document.getElementById(id).classList.contains("show")) closeModal(id);
     });
   });
+
+  // ---- Masters & Reorder table ----
+  const mastersTable = new Tabulator("#release-masters-table", {
+    data: mastersData,
+    height: "100%",
+    responsiveLayout: false,
+    movableColumns: true,
+    placeholder: "No release liner masters added yet.",
+    columns: [
+      { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
+      { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
+      { title: "Color", field: "color", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
+      { title: "GSM", field: "gsm", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Current Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 150 },
+      { title: "Stock (Rolls)", field: "rollCount", hozAlign: "center", minWidth: 110 },
+      {
+        title: "Shortage",
+        field: "shortage",
+        hozAlign: "center",
+        minWidth: 110,
+        formatter: (cell) => `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>`,
+      },
+      {
+        title: "Inward",
+        width: 110,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const btn = document.createElement("button");
+          btn.className = "add-stock-btn";
+          btn.title = "Add stock reels for this spec";
+          btn.innerHTML = '<i class="fa-solid fa-plus"></i> Add';
+          btn.addEventListener("click", () => openAddDialog(row));
+          return btn;
+        },
+      },
+      {
+        title: "Purchase Order",
+        width: 150,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row.hasActivePO) return `<span class="po-pending-badge">PO Pending</span>`;
+          const btn = document.createElement("button");
+          btn.className = "po-action-btn";
+          btn.textContent = "Create PO";
+          btn.addEventListener("click", () => openPoDialog(row));
+          return btn;
+        },
+      },
+    ],
+  });
+
+  // ---- Create Purchase Order dialog ----
+  let poLocationChoices = null;
+  let poMasterId = null;
+
+  function openPoDialog(row) {
+    poMasterId = row._id;
+    document.getElementById("poSkuDisplay").value = row.skuId;
+    document.getElementById("poVendorDisplay").value = row.vendorName || "—";
+    document.getElementById("poQtyInput").value = row.shortage || "";
+    document.getElementById("poNumberInput").value = "";
+    document.getElementById("poRemarksInput").value = "";
+
+    const inSevenDays = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    document.getElementById("poDateInput").value = inSevenDays.toISOString().slice(0, 10);
+
+    if (poLocationChoices) { poLocationChoices.destroy(); poLocationChoices = null; }
+    const locSel = document.getElementById("poLocationSelect");
+    locSel.innerHTML = locationOptionsHtml("");
+    poLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    hideError("poError");
+    openModal("poDialog");
+  }
+  function closePoDialog() {
+    closeModal("poDialog");
+    poMasterId = null;
+  }
+
+  async function submitPo() {
+    const quantity = document.getElementById("poQtyInput").value;
+    const poNumber = document.getElementById("poNumberInput").value.trim();
+    const userLocation = document.getElementById("poLocationSelect").value;
+    const estimatedDate = document.getElementById("poDateInput").value;
+    if (!quantity || Number(quantity) <= 0) return showError("poError", "Quantity is required.");
+    if (!poNumber) return showError("poError", "PO Number is required.");
+    if (!userLocation) return showError("poError", "Delivery location is required.");
+    if (!poMasterId) return;
+
+    hideError("poError");
+    setLoading("poSubmitBtn", true);
+    try {
+      const res = await fetch("/sachiko/releaselinerstock/purchase-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          masterId: poMasterId,
+          quantity,
+          poNumber,
+          estimatedDate,
+          userLocation,
+          remarks: document.getElementById("poRemarksInput").value.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = data.redirect || "/sachiko/purchase/pending";
+      } else {
+        showError("poError", data.message || "Failed to create Purchase Order.");
+      }
+    } catch {
+      showError("poError", "Server error. Please try again.");
+    } finally {
+      setLoading("poSubmitBtn", false);
+    }
+  }
 
   // ---- ADD (batch inward) ----
 
@@ -742,41 +813,59 @@
     renderRollRows(count, true);
   });
 
-  function openAddDialog() {
+  // masterPrefill (optional): a row from the Masters & Reorder panel below --
+  // when given, every spec field is pre-set to that master's own spec
+  // instead of left blank, so "Add Stock" on a master row jumps straight to
+  // entering roll rows rather than re-picking a spec the smart filters would
+  // narrow down to anyway.
+  function openAddDialog(masterPrefill) {
+    const pf = masterPrefill || {};
     document.getElementById("addRateInput").value = "";
     document.getElementById("addInvoiceNoInput").value = "";
     document.getElementById("addRemarksInput").value = "";
     document.getElementById("addRollCountInput").value = "1";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
-    document.getElementById("addTypeSelect").innerHTML = specOptionsHtml(releaseSpecsData.types, "Select type", true);
-    addTypeChoices = new Choices("#addTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+    const typeSel = document.getElementById("addTypeSelect");
+    typeSel.innerHTML = specOptionsHtml(releaseSpecsData.types, "Select type", true);
+    typeSel.value = pf.type || "";
+    addTypeChoices = new Choices(typeSel, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
     if (addColorChoices) { addColorChoices.destroy(); addColorChoices = null; }
     const colorSel = document.getElementById("addColorSelect");
     colorSel.innerHTML = specOptionsHtml(releaseSpecsData.colors, "— None —", false);
-    if (releaseSpecsData.colors.includes("WHITE")) colorSel.value = "WHITE";
+    colorSel.value = pf.color || (releaseSpecsData.colors.includes("WHITE") ? "WHITE" : "");
     addColorChoices = new Choices(colorSel, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
     if (addSizeChoices) { addSizeChoices.destroy(); addSizeChoices = null; }
-    document.getElementById("addSizeSelect").innerHTML = specOptionsHtml(releaseSpecsData.sizes, "— None —", false);
-    addSizeChoices = new Choices("#addSizeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const sizeSel = document.getElementById("addSizeSelect");
+    sizeSel.innerHTML = specOptionsHtml(releaseSpecsData.sizes, "— None —", false);
+    sizeSel.value = pf.size || "";
+    addSizeChoices = new Choices(sizeSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addGsmChoices) { addGsmChoices.destroy(); addGsmChoices = null; }
-    document.getElementById("addGsmSelect").innerHTML = specOptionsHtml(releaseSpecsData.gsms, "— None —", false);
-    addGsmChoices = new Choices("#addGsmSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const gsmSel = document.getElementById("addGsmSelect");
+    gsmSel.innerHTML = specOptionsHtml(releaseSpecsData.gsms, "— None —", false);
+    gsmSel.value = pf.gsm != null ? String(pf.gsm) : "";
+    addGsmChoices = new Choices(gsmSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addVendorChoices) { addVendorChoices.destroy(); addVendorChoices = null; }
-    document.getElementById("addVendorSelect").innerHTML = vendorOptionsHtml(releaseSpecsData.vendors);
-    addVendorChoices = new Choices("#addVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const vendorSel = document.getElementById("addVendorSelect");
+    vendorSel.innerHTML = vendorOptionsHtml(releaseSpecsData.vendors);
+    vendorSel.value = pf.vendorId || "";
+    addVendorChoices = new Choices(vendorSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addMakeChoices) { addMakeChoices.destroy(); addMakeChoices = null; }
-    document.getElementById("addMakeSelect").innerHTML = specOptionsHtml(releaseSpecsData.makes, "— None —", false);
-    addMakeChoices = new Choices("#addMakeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const makeSel = document.getElementById("addMakeSelect");
+    makeSel.innerHTML = specOptionsHtml(releaseSpecsData.makes, "— None —", false);
+    makeSel.value = pf.make || "";
+    addMakeChoices = new Choices(makeSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addVendorSkuCodeChoices) { addVendorSkuCodeChoices.destroy(); addVendorSkuCodeChoices = null; }
-    document.getElementById("addVendorSkuCodeSelect").innerHTML = specOptionsHtml(releaseSpecsData.vendorSkuCodes, "— None —", false);
-    addVendorSkuCodeChoices = new Choices("#addVendorSkuCodeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    const vendorSkuSel = document.getElementById("addVendorSkuCodeSelect");
+    vendorSkuSel.innerHTML = specOptionsHtml(releaseSpecsData.vendorSkuCodes, "— None —", false);
+    vendorSkuSel.value = pf.vendorSkuCode || "";
+    addVendorSkuCodeChoices = new Choices(vendorSkuSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
     const locSel = document.getElementById("addLocationSelect");
@@ -840,134 +929,4 @@
     }
   }
 
-  // ---- EDIT ----
-  let editId = null;
-
-  function openEditDialog(row) {
-    editId = row._id;
-    document.getElementById("editRollIdDisplay").value = row.rollId;
-    document.getElementById("editGsmInput").value = row.gsm ?? "";
-    document.getElementById("editMtrsInput").value = row.reelMtrs ?? "";
-    document.getElementById("editRateInput").value = row.rate ?? "";
-    document.getElementById("editVendorRollIdInput").value = row.vendorRollId || "";
-    document.getElementById("editInvoiceNoInput").value = row.invoiceNo || "";
-    document.getElementById("editRemarksInput").value = row.remarks || "";
-    document.getElementById("editMakeInput").value = row.make || "";
-    document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
-    document.getElementById("editSizeInput").value = row.size || "";
-
-    if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
-    document.getElementById("editTypeSelect").innerHTML = specOptionsHtml(releaseSpecsData.types, "Select type", true);
-    document.getElementById("editTypeSelect").value = row.type || "";
-    editTypeChoices = new Choices("#editTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
-
-    if (editColorChoices) { editColorChoices.destroy(); editColorChoices = null; }
-    const editColorSel = document.getElementById("editColorSelect");
-    editColorSel.innerHTML = specOptionsHtml(releaseSpecsData.colors, "— None —", false);
-    editColorSel.value = row.color || "WHITE";
-    editColorChoices = new Choices(editColorSel, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
-
-    if (editVendorChoices) { editVendorChoices.destroy(); editVendorChoices = null; }
-    const editVendorSel = document.getElementById("editVendorSelect");
-    // A reel's saved vendor might not be in the current Release Master
-    // vendor list (e.g. that master entry was since edited/removed) -- add
-    // it as an extra option so editing this reel never silently drops it.
-    const knownVendors = releaseSpecsData.vendors.some((v) => v.vendorId === row.vendorId)
-      ? releaseSpecsData.vendors
-      : row.vendorId
-        ? [...releaseSpecsData.vendors, { vendorId: row.vendorId, vendorName: row.vendorName || row.vendorId }]
-        : releaseSpecsData.vendors;
-    editVendorSel.innerHTML = vendorOptionsHtml(knownVendors);
-    editVendorSel.value = row.vendorId || "";
-    editVendorChoices = new Choices(editVendorSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (editLocationChoices) { editLocationChoices.destroy(); editLocationChoices = null; }
-    const locSel = document.getElementById("editLocationSelect");
-    locSel.innerHTML = locationOptionsHtml(row.location || "");
-    editLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    hideError("editReleaseError");
-    openModal("editDialog");
-  }
-  function closeEditDialog() {
-    closeModal("editDialog");
-    editId = null;
-  }
-
-  async function submitEdit() {
-    const type = document.getElementById("editTypeSelect").value;
-    const location = document.getElementById("editLocationSelect").value;
-    const reelMtrs = document.getElementById("editMtrsInput").value;
-    if (!type) return showError("editReleaseError", "Type is required.");
-    if (!location) return showError("editReleaseError", "Location is required.");
-    if (!reelMtrs || Number(reelMtrs) <= 0) return showError("editReleaseError", "Mtrs is required.");
-    if (!editId) return;
-
-    hideError("editReleaseError");
-    setLoading("editSubmitBtn", true);
-    try {
-      const res = await fetch(`/sachiko/releaselinerstock/${editId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type,
-          color: document.getElementById("editColorSelect").value,
-          size: document.getElementById("editSizeInput").value,
-          gsm: document.getElementById("editGsmInput").value,
-          vendorId: document.getElementById("editVendorSelect").value,
-          make: document.getElementById("editMakeInput").value,
-          vendorSkuCode: document.getElementById("editVendorSkuCodeInput").value,
-          reelMtrs,
-          rate: document.getElementById("editRateInput").value,
-          location,
-          vendorRollId: document.getElementById("editVendorRollIdInput").value,
-          invoiceNo: document.getElementById("editInvoiceNoInput").value,
-          remarks: document.getElementById("editRemarksInput").value,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        window.location.reload();
-      } else {
-        showError("editReleaseError", data.message || "Failed to update release liner stock.");
-      }
-    } catch {
-      showError("editReleaseError", "Server error. Please try again.");
-    } finally {
-      setLoading("editSubmitBtn", false);
-    }
-  }
-
-  // ---- DELETE ----
-  let deleteId = null;
-
-  function openDeleteDialog(id, rollId) {
-    deleteId = id;
-    document.getElementById("deleteRollId").textContent = rollId;
-    openModal("deleteDialog");
-  }
-  function closeDeleteDialog() {
-    closeModal("deleteDialog");
-    deleteId = null;
-  }
-
-  async function submitDelete() {
-    if (!deleteId) return;
-    setLoading("deleteConfirmBtn", true);
-    try {
-      const res = await fetch(`/sachiko/releaselinerstock/${deleteId}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.success) {
-        window.location.reload();
-      } else {
-        closeDeleteDialog();
-        alert(data.message || "Failed to delete reel.");
-      }
-    } catch {
-      closeDeleteDialog();
-      alert("Error deleting reel.");
-    } finally {
-      setLoading("deleteConfirmBtn", false);
-    }
-  }
 </script>

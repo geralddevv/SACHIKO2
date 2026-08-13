@@ -1,0 +1,453 @@
+<% layout('/layout/boilerplate') -%>
+
+<div class="contain mr-page" style="flex-direction: column; padding: 10px; gap: 14px;">
+  <style>
+    .mr-head h1 { font-size: 20px; color: #fff; margin: 0; }
+    .mr-head .mr-sub { font-size: 13px; color: rgba(255, 255, 255, 0.85); margin-top: 2px; }
+    .mr-head > div { flex: 1 1 auto; min-width: 0; }
+
+    /* Status filter -- a segmented strip rather than a dropdown, since there are
+       only five choices and the counts belong on them. */
+    .mr-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .mr-filter {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: #fff; color: #044a78; border: 1px solid #cfe0ee;
+      border-radius: 8px; padding: 7px 14px; font-size: 13px; font-weight: 600;
+      text-decoration: none; transition: background 0.15s, color 0.15s;
+    }
+    .mr-filter:hover { background: #eef6fc; color: #044a78; }
+    .mr-filter.active { background: #044a78; color: #fff; border-color: #044a78; }
+    .mr-filter .mr-filter-count {
+      background: #f1f5f9; color: #44506b; border-radius: 999px;
+      padding: 1px 8px; font-size: 11.5px; font-weight: 700;
+    }
+    .mr-filter.active .mr-filter-count { background: rgba(255, 255, 255, 0.18); color: #fff; }
+
+    .mr-card {
+      width: 100%; background: #fff; border: 1px solid #e2e8f0;
+      border-radius: 10px; overflow: hidden;
+    }
+    .mr-table-wrap { overflow-x: auto; }
+    .mr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .mr-table th, .mr-table td {
+      padding: 9px 12px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb;
+      text-align: left; vertical-align: middle;
+    }
+    .mr-table tr > *:last-child { border-right: none; }
+    .mr-table th { background: #f8fafc; color: #044a78; font-weight: 700; white-space: nowrap; }
+    .mr-table td { color: #1f2a44; font-weight: 600; }
+    .mr-table tbody tr:hover { background: #fbfdff; }
+    .mr-desc-cell { max-width: 320px; white-space: pre-wrap; word-break: break-word; font-weight: 600; }
+
+    /* Attachment tiles in the list: photo and/or video, the video marked with a
+       play badge and its length. */
+    .mr-media { display: flex; gap: 6px; }
+    .mr-tile {
+      position: relative; width: 52px; height: 52px; border-radius: 6px; overflow: hidden;
+      border: 1px solid #e2e8f0; background: #f8fafc; cursor: zoom-in; flex: 0 0 auto;
+    }
+    .mr-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .mr-tile-play {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, 0.32); color: #fff; font-size: 15px;
+    }
+    .mr-tile-len {
+      position: absolute; right: 2px; bottom: 2px; background: rgba(0, 0, 0, 0.7); color: #fff;
+      border-radius: 3px; padding: 0 3px; font-size: 9.5px; font-weight: 700;
+    }
+
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+      border-radius: 999px; padding: 3px 11px; font-size: 11.5px; font-weight: 700;
+    }
+    .status-OPEN { background: #fff8e1; color: #7a5b00; border: 1px solid #f0c36d; }
+    .status-IN-PROGRESS { background: #e0f2fe; color: #075985; border: 1px solid #7dd3fc; }
+    .status-RESOLVED { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .status-REJECTED { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+    .mr-action-btn {
+      display: inline-flex; align-items: center; gap: 6px; background: #044a78; color: #fff;
+      border: none; border-radius: 6px; padding: 6px 12px; font-size: 12.5px; font-weight: 600;
+      cursor: pointer; white-space: nowrap;
+    }
+    .mr-action-btn:hover { opacity: 0.88; }
+    .mr-link-btn {
+      background: none; border: none; color: #044a78; font-size: 12.5px; font-weight: 600;
+      cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 0;
+    }
+
+    .mr-notice {
+      background: #fff8e1; border: 1px solid #f0c36d; color: #7a5b00; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px;
+    }
+
+    .dialog-header {
+      background: #044a78; padding: 18px 22px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-radius: 14px 14px 0 0;
+    }
+    .dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #fff; }
+    .dialog-close-btn {
+      background: none; border: none; color: #fff; font-size: 20px;
+      cursor: pointer; line-height: 1; padding: 0 2px; opacity: 0.8;
+    }
+    .dialog-close-btn:hover { opacity: 1; }
+    .dialog-body { padding: 20px 22px; background: #fff; border-radius: 0 0 14px 14px; }
+
+    .fld-label { display: block; font-size: 12.5px; font-weight: 700; color: #044a78; margin-bottom: 6px; }
+    .fld-input {
+      width: 100%; border: 1px solid #cfd9e4; border-radius: 8px; padding: 10px 12px;
+      font-size: 13.5px; color: #1f2a44; font-family: inherit; resize: vertical; background: #fff;
+    }
+    .fld-input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12); }
+
+    /* Status picker uses Choices.js (app convention -- see machineMaster.ejs)
+       instead of a bare <select>, so it matches the rest of the dialog's
+       styling rather than falling back to the browser's native control. */
+    .dialog-choices .choices__inner {
+      border-radius: 8px !important; border: 1px solid #cfd9e4 !important;
+      background: #fff !important; font-size: 13.5px; color: #1f2a44;
+      min-height: 42px; padding: 8px 12px; display: flex; align-items: center;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .dialog-choices .choices__list--single { padding: 0; }
+    .dialog-choices .choices__list--single .choices__item { font-weight: 600; }
+    .dialog-choices .choices.choices--focused .choices__inner,
+    .dialog-choices .choices.is-open .choices__inner {
+      border-color: #044a78 !important; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12);
+    }
+    .dialog-choices .choices__list--dropdown {
+      z-index: 99999; border-radius: 8px; border-color: #cfd9e4 !important;
+    }
+    .dialog-choices .choices__list--dropdown .choices__item--selectable.is-highlighted { background: #eef6fc; }
+
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .btn-cancel, .btn-submit {
+      border-radius: 8px; padding: 9px 18px; font-size: 13.5px; font-weight: 600; cursor: pointer; border: none;
+    }
+    .btn-cancel { background: #f1f5f9; color: #44506b; }
+    .btn-submit { background: #044a78; color: #fff; }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Ticket detail: label/value pairs, then the action trail. */
+    .rd-pairs { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .rd-pairs th, .rd-pairs td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    .rd-pairs th { width: 38%; color: #5a6586; font-weight: 600; }
+    .rd-pairs td { color: #1f2a44; font-weight: 700; word-break: break-word; }
+    .rd-section {
+      margin: 14px 0 6px; padding-top: 12px; border-top: 1px solid #e5e7eb;
+      color: #044a78; font-size: 13px; font-weight: 700;
+    }
+    .rd-trail { display: flex; flex-direction: column; gap: 8px; }
+    .rd-trail-item {
+      padding: 8px 10px; background: #f8fafc; border-left: 3px solid #044a78;
+      border-radius: 0 6px 6px 0; font-size: 12.5px; color: #1f2a44;
+    }
+    .rd-trail-by { color: #5a6586; font-size: 11.5px; display: block; margin-top: 3px; }
+    /* Capped so a tall phone photo (or a video) can never blow the dialog past
+       a sane height on its own -- see the #detailDialog scroll rules below for
+       the rest of that story. */
+    .detail-media {
+      width: 100%; max-height: 60vh; object-fit: contain;
+      border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 10px; display: block;
+      background: #f8fafc;
+    }
+    .detail-media[data-kind="video"] { background: #0b1220; }
+
+    /* Ticket detail dialog: content is unbounded (description length, photo/
+       video, a growing action trail), so unlike the other dialogs on this page
+       it can't assume it'll always fit the viewport. Cap the dialog and let
+       only the body scroll, keeping the header (and its close button) pinned
+       and reachable instead of the dialog overflowing past the screen edge. */
+    #detailDialog .logout-dialog { display: flex; flex-direction: column; max-height: 85vh; }
+    #detailDialog .dialog-header { flex: 0 0 auto; }
+    #detailDialog .dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+    /* Custom Scrollbar -- app convention (see views/users/clientDetails.ejs) */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #044a78; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+
+    @media screen and (max-width: 768px) {
+      .mr-page { height: auto; min-height: 100%; padding: 8px; gap: 10px; }
+      .mr-head h1 { font-size: 17px; }
+      .mr-table-wrap { overflow-x: auto; }
+      .mr-table { min-width: 780px; }
+      .dialog-header { padding: 14px 16px; }
+      .dialog-body { padding: 14px 16px; }
+    }
+  </style>
+
+  <div class="indi-head mr-head">
+    <div>
+      <h1>Maintenance Requests</h1>
+      <div class="mr-sub">
+        <%= totalCount %> total<% if (activeStatus) { %> · showing <%= activeStatus %><% } %>
+      </div>
+    </div>
+  </div>
+
+  <div class="mr-filters">
+    <a href="/sachiko/maintenance" class="mr-filter <%= activeStatus ? '' : 'active' %>">
+      All <span class="mr-filter-count"><%= totalCount %></span>
+    </a>
+    <% statuses.forEach((s) => { %>
+      <a href="/sachiko/maintenance?status=<%= encodeURIComponent(s) %>" class="mr-filter <%= activeStatus === s ? 'active' : '' %>">
+        <%= s %> <span class="mr-filter-count"><%= countByStatus[s] || 0 %></span>
+      </a>
+    <% }) %>
+  </div>
+
+  <div class="mr-card">
+    <% if (!requests.length) { %>
+      <div style="padding: 14px 16px;">
+        <div class="mr-notice">
+          <i class="fa-solid fa-circle-info"></i>
+          No maintenance requests<% if (activeStatus) { %> with status <%= activeStatus %><% } %> right now.
+        </div>
+      </div>
+    <% } else { %>
+      <div class="mr-table-wrap">
+        <table class="mr-table">
+          <thead>
+            <tr>
+              <th>Ticket</th>
+              <th>Reported</th>
+              <th>Operator</th>
+              <th>Machine</th>
+              <th>Location</th>
+              <th>Attachments</th>
+              <th>Problem</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% requests.forEach((r) => { %>
+              <tr>
+                <td style="white-space: nowrap;"><%= r.ticketNo %></td>
+                <td style="white-space: nowrap;"><%= new Date(r.createdAt).toLocaleString("en-IN") %></td>
+                <td><%= r.raisedByName %></td>
+                <td><%= r.machineName %></td>
+                <td><%= r.locationName %></td>
+                <td>
+                  <% if (r.media.length) { %>
+                    <div class="mr-media">
+                      <% r.media.forEach((m) => { %>
+                        <div class="mr-tile" title="<%= m.label %> — click to open the ticket"
+                             data-id="<%= r._id %>" onclick="openDetail(this.dataset.id)">
+                          <img src="<%= m.thumbUrl %>" alt="<%= m.label %>" loading="lazy" />
+                          <% if (m.kind === "video") { %>
+                            <span class="mr-tile-play"><i class="fa-solid fa-circle-play"></i></span>
+                            <% if (m.durationLabel) { %><span class="mr-tile-len"><%= m.durationLabel %></span><% } %>
+                          <% } %>
+                        </div>
+                      <% }) %>
+                    </div>
+                  <% } else { %>—<% } %>
+                </td>
+                <td class="mr-desc-cell"><%= r.description %></td>
+                <td><span class="status-pill status-<%= r.status.replace(/\s+/g, '-') %>"><%= r.status %></span></td>
+                <td>
+                  <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" class="mr-link-btn" data-id="<%= r._id %>" onclick="openDetail(this.dataset.id)">View</button>
+                    <% if (canAct) { %>
+                      <button type="button" class="mr-action-btn" data-id="<%= r._id %>" onclick="openActionDialog(this.dataset.id)">
+                        <i class="fa-solid fa-screwdriver-wrench"></i> Action
+                      </button>
+                    <% } %>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+</div>
+
+<!-- ============ TICKET DETAIL DIALOG ============ -->
+<div class="logout-modal" id="detailDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="detailTitle"
+    style="width: min(560px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="detailTitle">Maintenance Request</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeDetail()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body custom-scrollbar" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- ============ TAKE ACTION DIALOG ============ -->
+<% if (canAct) { %>
+<div class="logout-modal" id="actionDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="actionTitle"
+    style="width: min(460px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="actionTitle">Take Action</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeModal('actionDialog')" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <!-- Deliberately not a <form>: the app's global `form { display: grid;
+           grid-template-columns: repeat(32, 1fr); ... }` (common.css) is meant
+           for the big data-entry forms that opt into it field-by-field with
+           .span-* wrapper classes. Any plain <form> inherits that grid and its
+           border with no spans to control it, which packs every field into one
+           cramped row. Every other dialog in the app (see machineMaster.ejs)
+           avoids this the same way: plain <div>s, buttons wired by onclick. -->
+      <input type="hidden" id="actionId" />
+      <div id="actionTicketInfo" style="font-size: 12.5px; color: #5a6586; margin-bottom: 14px;"></div>
+
+      <div class="dialog-choices" style="margin-bottom: 16px;">
+        <label class="fld-label" for="actionStatus">Status</label>
+        <select id="actionStatus"></select>
+      </div>
+
+      <div>
+        <label class="fld-label" for="actionRemark">Remark for the operator (optional)</label>
+        <textarea class="fld-input" id="actionRemark" rows="3" maxlength="500"
+          placeholder="What was done / what happens next..."></textarea>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn-cancel" onclick="closeModal('actionDialog')">Cancel</button>
+        <button type="button" class="btn-submit" id="actionSubmitBtn" onclick="submitAction()"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+<% } %>
+
+<script id="requests-data" type="application/json"><%- safeJson(requests) %></script>
+<script id="statuses-data" type="application/json"><%- safeJson(statuses) %></script>
+<script>
+  const REQUESTS = JSON.parse(document.getElementById("requests-data").textContent);
+  const STATUSES = JSON.parse(document.getElementById("statuses-data").textContent);
+  const CAN_ACT = <%= canAct ? "true" : "false" %>;
+
+  function openModal(id)  { const d = document.getElementById(id); if (!d) return; d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
+  function closeModal(id) { const d = document.getElementById(id); if (!d) return; d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
+
+  function dash(v) { return v === undefined || v === null || v === "" ? "—" : v; }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function fmt(dt) { return dt ? new Date(dt).toLocaleString("en-IN") : "—"; }
+
+  // Full ticket: who raised it, where, the photo, and everything done so far.
+  function openDetail(id) {
+    const r = REQUESTS.find((x) => x._id === id);
+    if (!r) return;
+
+    const pairs = [
+      ["Ticket", r.ticketNo],
+      ["Reported", fmt(r.createdAt)],
+      ["Operator", dash(r.raisedByName)],
+      ["Machine", dash(r.machineName)],
+      ["Location", dash(r.locationName)],
+      ["Status", r.status],
+    ];
+    const pairsHtml = pairs.map(([k, v]) => `<tr><th>${k}</th><td>${escapeHtml(v)}</td></tr>`).join("");
+
+    const trailHtml = r.actions.length
+      ? `<div class="rd-trail">` + r.actions.map((a) =>
+          `<div class="rd-trail-item">${escapeHtml(a.remark || "Marked " + a.status)}` +
+          `<span class="rd-trail-by">${escapeHtml(a.status)} — ${escapeHtml(a.byName || "Office")}, ${escapeHtml(fmt(a.at))}</span></div>`
+        ).join("") + `</div>`
+      : `<div class="mr-notice"><i class="fa-solid fa-circle-info"></i> No action taken yet.</div>`;
+
+    // Photos render inline; a video gets a real player (the server streams with
+    // Range support, so it starts without downloading the whole clip) with its
+    // own thumbnail as the poster.
+    const mediaHtml = r.media.map((m) =>
+      m.kind === "video"
+        ? `<video class="detail-media" data-kind="video" controls playsinline preload="metadata"` +
+          ` poster="${escapeHtml(m.thumbUrl)}" src="${escapeHtml(m.url)}"></video>` +
+          `<div style="font-size:11.5px; color:#5a6586; margin-top:4px;">Video${m.durationLabel ? " · " + escapeHtml(m.durationLabel) : ""}${m.sizeLabel ? " · " + escapeHtml(m.sizeLabel) : ""}</div>`
+        : `<img class="detail-media" data-kind="image" src="${escapeHtml(m.url)}" alt="Problem photo" />`
+    ).join("");
+
+    document.getElementById("detailBody").innerHTML =
+      `<table class="rd-pairs"><tbody>${pairsHtml}</tbody></table>` +
+      `<div class="rd-section">Problem</div>` +
+      `<div style="font-size:13px; color:#1f2a44; white-space:pre-wrap; word-break:break-word;">${escapeHtml(r.description)}</div>` +
+      mediaHtml +
+      `<div class="rd-section">Action Trail</div>` + trailHtml;
+
+    openModal("detailDialog");
+  }
+
+  // Closing the dialog must stop any clip that's playing inside it.
+  function closeDetail() {
+    document.querySelectorAll("#detailBody video").forEach((v) => v.pause());
+    closeModal("detailDialog");
+  }
+
+  // Status picker: Choices.js, rebuilt fresh each time the dialog opens (same
+  // destroy/reinit pattern as machineMaster.ejs) so the current ticket's status
+  // is pre-selected via the option's `selected` attribute rather than a
+  // post-init setChoiceByValue call.
+  const STATUS_CHOICES_CONFIG = { searchEnabled: false, shouldSort: false, itemSelectText: "" };
+  let actionStatusChoices = null;
+
+  function buildStatusChoices(selectedStatus) {
+    const sel = document.getElementById("actionStatus");
+    sel.innerHTML = STATUSES.map((s) =>
+      `<option value="${escapeHtml(s)}"${s === selectedStatus ? " selected" : ""}>${escapeHtml(s)}</option>`
+    ).join("");
+    return new Choices(sel, STATUS_CHOICES_CONFIG);
+  }
+
+  function openActionDialog(id) {
+    if (!CAN_ACT) return;
+    const r = REQUESTS.find((x) => x._id === id);
+    if (!r) return;
+    document.getElementById("actionId").value = id;
+    document.getElementById("actionTicketInfo").innerHTML =
+      `<strong>${escapeHtml(r.ticketNo)}</strong> · ${escapeHtml(r.machineName)} · raised by ${escapeHtml(r.raisedByName)}`;
+
+    if (actionStatusChoices) { actionStatusChoices.destroy(); actionStatusChoices = null; }
+    actionStatusChoices = buildStatusChoices(r.status);
+
+    document.getElementById("actionRemark").value = "";
+    openModal("actionDialog");
+  }
+
+  async function submitAction() {
+    const id = document.getElementById("actionId").value;
+    const status = actionStatusChoices?.getValue(true) || document.getElementById("actionStatus").value;
+    const remark = document.getElementById("actionRemark").value.trim();
+    const btn = document.getElementById("actionSubmitBtn");
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    try {
+      const res = await fetch(`/sachiko/maintenance/${encodeURIComponent(id)}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, remark }),
+      });
+      const out = await res.json();
+      if (!res.ok || !out.success) throw new Error(out.message || "Could not update the request.");
+      window.location.reload();
+    } catch (err) {
+      showToast(err.message || "Could not update the request.", "error");
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-check"></i> Save';
+    }
+  }
+
+  document.getElementById("detailDialog").addEventListener("click", (e) => {
+    if (e.target.id === "detailDialog") closeDetail();
+  });
+  const actionDialogEl = document.getElementById("actionDialog");
+  if (actionDialogEl) {
+    actionDialogEl.addEventListener("click", (e) => { if (e.target.id === "actionDialog") closeModal("actionDialog"); });
+  }
+</script>

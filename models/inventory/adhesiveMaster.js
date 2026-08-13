@@ -62,6 +62,13 @@ const adhesiveMasterSchema = new mongoose.Schema(
     density: {
       type: Number,
     },
+    // Minimum Stock Quantity -- the reorder threshold for this adhesive
+    // spec, matching the "MSQ" field on the Tape vendor binding
+    // (tapeMinQty). Purely an operational stock-control value, so it's not
+    // part of adhesiveSignature below.
+    msq: {
+      type: Number,
+    },
     // Identifies "the exact same adhesive spec" -- every field hashed
     // together (see buildAdhesiveSignature in routes/system/adhesiveMaster.js),
     // so create/edit is blocked only on a full duplicate, not a partial

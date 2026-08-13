@@ -63,6 +63,13 @@ const facestockMasterSchema = new mongoose.Schema(
     micron: {
       type: Number,
     },
+    // Minimum Stock Quantity -- the reorder threshold for this facestock
+    // spec, matching the "MSQ" field on the Tape vendor binding
+    // (tapeMinQty). Purely an operational stock-control value, so it's not
+    // part of facestockSignature below.
+    msq: {
+      type: Number,
+    },
     // Identifies "the exact same facestock spec" -- every field hashed
     // together (see buildFacestockSignature in routes/system/facestockMaster.js),
     // so create/edit is blocked only on a full duplicate, not a partial

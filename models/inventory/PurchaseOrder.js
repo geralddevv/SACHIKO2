@@ -19,10 +19,26 @@ const purchaseOrderSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Facestock/Adhesive/Release Master have no VendorUser/binding concept
+    // (each master row already carries a single vendorId) -- these two
+    // fields stand in for vendorUserId/vendorBinding on those POs so a
+    // vendor can still be shown and reported without a coordinator. Unused
+    // (left undefined) for Tape/Ttr, which resolve vendor through
+    // vendorUserId/vendorBinding instead.
+    vendorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
+      index: true,
+    },
+    vendorName: {
+      type: String,
+      trim: true,
+    },
+
     onModel: {
       type: String,
       required: true,
-      enum: ["Tape", "Ttr"],
+      enum: ["Tape", "Ttr", "FacestockMaster", "AdhesiveMaster", "ReleaseMaster"],
     },
     itemId: {
       type: mongoose.Schema.Types.ObjectId,

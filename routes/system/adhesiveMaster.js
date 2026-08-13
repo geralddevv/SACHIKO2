@@ -91,6 +91,7 @@ async function buildPayload(body) {
     cohesion: numOrUndef(body.cohesion),
     shear: numOrUndef(body.shear),
     density: numOrUndef(body.density),
+    msq: numOrUndef(body.msq),
   };
 
   if (vendorId) {

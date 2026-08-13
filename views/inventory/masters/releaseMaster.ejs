@@ -130,6 +130,32 @@
       border: 1.5px solid #e2e8f0 !important;
       z-index: 99999 !important;
     }
+    /* A long value (e.g. Vendor Name) shouldn't overflow its field or push
+       against the dropdown arrow -- truncate with an ellipsis instead, both
+       for the selected value shown in the closed field and for each option
+       in the open dropdown list. Applies to every Choices.js select in this
+       dialog, not just Vendor Name. */
+    .dialog-body .choices__list--single .choices__item {
+      display: block !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+      max-width: 100% !important;
+      padding-right: 18px !important;
+    }
+    .dialog-body .choices__list--dropdown .choices__item {
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
+    }
+    /* Vendor Name otherwise stretches to the dialog's full width -- a fixed
+       width keeps it visually consistent regardless of how long the
+       selected vendor's name is (the ellipsis rule above handles the
+       overflow within it). Caps at 100% so it still shrinks to fit on
+       narrow/mobile viewports. */
+    .vendor-field-fixed {
+      max-width: 320px;
+    }
   </style>
 
   <div class="indi-head">
@@ -194,12 +220,14 @@
       <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
 
       <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
-      <select id="addVendorSelect" style="margin-bottom: 16px;">
-        <option value="" disabled selected hidden>Select vendor</option>
-        <% vendors?.forEach(v => { %>
-          <option value="<%= v._id %>"><%= v.vendorName %></option>
-        <% }) %>
-      </select>
+      <div class="vendor-field-fixed" style="margin-bottom: 16px;">
+        <select id="addVendorSelect">
+          <option value="" disabled selected hidden>Select vendor</option>
+          <% vendors?.forEach(v => { %>
+            <option value="<%= v._id %>"><%= v.vendorName %></option>
+          <% }) %>
+        </select>
+      </div>
 
       <div class="dialog-field-row">
         <div>
@@ -216,7 +244,7 @@
         </div>
       </div>
 
-      <div class="dialog-field-row">
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="addSizeInput">Size</label>
           <input type="text" id="addSizeInput" class="form-control premium-input" placeholder="Enter size" />
@@ -224,6 +252,10 @@
         <div>
           <label class="dialog-field-label" for="addGsmInput">GSM</label>
           <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addMsqInput">MSQ</label>
+          <input type="number" id="addMsqInput" class="form-control premium-input" placeholder="Enter MSQ" min="0" step="any" />
         </div>
       </div>
 
@@ -262,12 +294,14 @@
       </div>
 
       <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
-      <select id="editVendorSelect" style="margin-bottom: 16px;">
-        <option value="" disabled hidden>Select vendor</option>
-        <% vendors?.forEach(v => { %>
-          <option value="<%= v._id %>"><%= v.vendorName %></option>
-        <% }) %>
-      </select>
+      <div class="vendor-field-fixed" style="margin-bottom: 16px;">
+        <select id="editVendorSelect">
+          <option value="" disabled hidden>Select vendor</option>
+          <% vendors?.forEach(v => { %>
+            <option value="<%= v._id %>"><%= v.vendorName %></option>
+          <% }) %>
+        </select>
+      </div>
 
       <label class="dialog-field-label" for="editMakeInput">Make</label>
       <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
@@ -287,7 +321,7 @@
         </div>
       </div>
 
-      <div class="dialog-field-row">
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="editSizeInput">Size</label>
           <input type="text" id="editSizeInput" class="form-control premium-input" placeholder="Enter size" />
@@ -295,6 +329,10 @@
         <div>
           <label class="dialog-field-label" for="editGsmInput">GSM</label>
           <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editMsqInput">MSQ</label>
+          <input type="number" id="editMsqInput" class="form-control premium-input" placeholder="Enter MSQ" min="0" step="any" />
         </div>
       </div>
 
@@ -414,6 +452,7 @@
       { title: "Color", field: "color", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
       { title: "Size", field: "size", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110, formatter: (cell) => cell.getValue() || "—" },
       { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "MSQ", field: "msq", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
     ],
   });
 
@@ -482,6 +521,7 @@
       detailRow("Color", row.color || "—"),
       detailRow("Size", row.size || "—"),
       detailRow("GSM", row.gsm ?? "—"),
+      detailRow("MSQ", row.msq ?? "—"),
     ].join("");
     openModal("viewDialog");
   }
@@ -509,6 +549,7 @@
     document.getElementById("addVendorSkuCodeInput").value = "";
     document.getElementById("addSizeInput").value = "";
     document.getElementById("addGsmInput").value = "";
+    document.getElementById("addMsqInput").value = "";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
     document.getElementById("addTypeSelect").value = "";
@@ -549,6 +590,7 @@
           color: document.getElementById("addColorSelect").value,
           size: document.getElementById("addSizeInput").value.trim(),
           gsm: document.getElementById("addGsmInput").value,
+          msq: document.getElementById("addMsqInput").value,
         }),
       });
       const data = await res.json();
@@ -574,6 +616,7 @@
     document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
     document.getElementById("editSizeInput").value = row.size || "";
     document.getElementById("editGsmInput").value = row.gsm ?? "";
+    document.getElementById("editMsqInput").value = row.msq ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
     document.getElementById("editTypeSelect").value = row.type || "";
@@ -616,6 +659,7 @@
           color: document.getElementById("editColorSelect").value,
           size: document.getElementById("editSizeInput").value.trim(),
           gsm: document.getElementById("editGsmInput").value,
+          msq: document.getElementById("editMsqInput").value,
         }),
       });
       const data = await res.json();

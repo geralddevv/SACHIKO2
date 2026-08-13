@@ -9,6 +9,7 @@ import PendingProduction from "../../models/inventory/pendingProduction.js";
 import MaterialStock from "../../models/inventory/materialStock.js";
 import MaterialStockLog from "../../models/inventory/materialStockLog.js";
 import MachineJobCard from "../../models/inventory/machineJobCard.js";
+import MaintenanceRequest from "../../models/system/maintenanceRequest.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -279,6 +280,16 @@ router.get("/operator/queue", requireRole(["operator"]), async (req, res) => {
     })
     .sort((a, b) => String(a.machineName).localeCompare(String(b.machineName)));
 
+  // Badge on the Maintenance tab: the operator's own tickets still being
+  // worked on, so a raised problem stays visible from the queue page too.
+  const openMaintenanceCount =
+    operatorObjId && mongoose.isValidObjectId(operatorObjId)
+      ? await MaintenanceRequest.countDocuments({
+          raisedById: operatorObjId,
+          status: { $in: ["OPEN", "IN PROGRESS"] },
+        })
+      : 0;
+
   res.render("inventory/masters/operatorQueue.ejs", {
     title: "Work Queue",
     CSS: "tableDisp.css",
@@ -287,6 +298,7 @@ router.get("/operator/queue", requireRole(["operator"]), async (req, res) => {
     operatorLocation: authUser?.empLoc || "",
     groups,
     totalJobs: rows.length,
+    openMaintenanceCount,
     notification: req.flash("notification"),
   });
 });

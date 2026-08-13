@@ -168,7 +168,7 @@
 <!-- ============ ADD CORE DIALOG ============ -->
 <div class="logout-modal" id="addDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
-    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(720px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="addDialogTitle">Add Core</h2>
       <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
@@ -200,7 +200,7 @@
         <% }) %>
       </select>
 
-      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="addPrintTypeSelect">Print Type</label>
           <select id="addPrintTypeSelect">
@@ -217,6 +217,10 @@
           <label class="dialog-field-label" for="addWidthInput">Width (inch)</label>
           <input type="number" id="addWidthInput" class="form-control premium-input" placeholder="Enter width" min="0" step="any" />
         </div>
+        <div>
+          <label class="dialog-field-label" for="addMsqInput">MSQ</label>
+          <input type="number" id="addMsqInput" class="form-control premium-input" placeholder="Enter MSQ" min="0" step="any" />
+        </div>
       </div>
 
       <div id="addCoreError" class="dialog-error"></div>
@@ -231,7 +235,7 @@
 <!-- ============ EDIT CORE DIALOG ============ -->
 <div class="logout-modal" id="editDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
-    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(720px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="editDialogTitle">Edit Core</h2>
       <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
@@ -263,7 +267,7 @@
       <label class="dialog-field-label" for="editMakeInput">Make</label>
       <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
 
-      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="editPrintTypeSelect">Print Type</label>
           <select id="editPrintTypeSelect">
@@ -280,6 +284,10 @@
           <label class="dialog-field-label" for="editWidthInput">Width (inch)</label>
           <input type="number" id="editWidthInput" class="form-control premium-input" placeholder="Enter width" min="0" step="any" />
         </div>
+        <div>
+          <label class="dialog-field-label" for="editMsqInput">MSQ</label>
+          <input type="number" id="editMsqInput" class="form-control premium-input" placeholder="Enter MSQ" min="0" step="any" />
+        </div>
       </div>
 
       <div id="editCoreError" class="dialog-error"></div>
@@ -294,7 +302,7 @@
 <!-- ============ VIEW CORE DIALOG ============ -->
 <div class="logout-modal" id="viewDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="viewDialogTitle"
-    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(720px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="viewDialogTitle">Core Details</h2>
       <button class="dialog-close-btn" type="button" onclick="closeViewDialog()" aria-label="Close">×</button>
@@ -397,6 +405,7 @@
       { title: "Print Type", field: "printType", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Thickness (mm)", field: "thickness", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Width (inch)", field: "width", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "MSQ", field: "msq", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
     ],
   });
 
@@ -464,6 +473,7 @@
       detailRow("Print Type", row.printType || "—"),
       detailRow("Thickness (mm)", row.thickness ?? "—"),
       detailRow("Width (inch)", row.width ?? "—"),
+      detailRow("MSQ", row.msq ?? "—"),
     ].join("");
     openModal("viewDialog");
   }
@@ -490,6 +500,7 @@
     document.getElementById("addMakeInput").value = "";
     document.getElementById("addThicknessInput").value = "";
     document.getElementById("addWidthInput").value = "";
+    document.getElementById("addMsqInput").value = "";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
     document.getElementById("addTypeSelect").value = "";
@@ -535,6 +546,7 @@
           printType,
           thickness,
           width,
+          msq: document.getElementById("addMsqInput").value,
         }),
       });
       const data = await res.json();
@@ -559,6 +571,7 @@
     document.getElementById("editMakeInput").value = row.make || "";
     document.getElementById("editThicknessInput").value = row.thickness ?? "";
     document.getElementById("editWidthInput").value = row.width ?? "";
+    document.getElementById("editMsqInput").value = row.msq ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
     document.getElementById("editTypeSelect").value = row.type || "";
@@ -606,6 +619,7 @@
           printType,
           thickness,
           width,
+          msq: document.getElementById("editMsqInput").value,
         }),
       });
       const data = await res.json();
