@@ -18,6 +18,10 @@ const releaseLinerStockSchema = new mongoose.Schema(
       trim: true,
       default: "WHITE",
     },
+    size: {
+      type: String,
+      trim: true,
+    },
     gsm: {
       type: Number,
     },

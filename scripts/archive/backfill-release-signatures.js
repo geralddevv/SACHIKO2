@@ -36,6 +36,7 @@ function buildReleaseSignature(doc) {
       canonStr(doc.make),
       canonStr(doc.vendorSkuCode),
       canonStr(doc.color),
+      canonStr(doc.size),
       String(Number(doc.gsm ?? "")),
     ].join("||"),
   );

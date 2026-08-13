@@ -369,6 +369,49 @@ function buildLabelStockBindingSignature({ labelStock, userId, paperSize, runnin
   );
 }
 
+// Resolves the LabelStockBinding for labelStock+userId+paperSize+runningMeters,
+// reusing one whose bindingSignature already matches, otherwise creating it
+// from what the order form collected for Rate/Location -- the same inputs a
+// manually-created binding would need (see POST /form/label-stock-binding in
+// routes/sachiko/labelStockBinding.js). Used by the LABEL_STOCK branch of
+// POST /sales/order both when the picked product has no binding at all yet,
+// and when an existing binding was picked but the order's own Paper Size/
+// Running Meters don't match it -- the same labelStock+client pair can have
+// several bindings, one per paperSize+RM combo (that's the whole point of
+// bindingSignature excluding nothing but location), so a mismatch there
+// means a *different* binding is being asked for, not an edit of the one
+// that was picked.
+async function resolveLabelStockBinding({ labelStock, userId, paperSize, runningMeters, itemRate, sourceLocation, locationRadio, userLocation }) {
+  const bindingRate = Number(itemRate);
+  if (!Number.isFinite(bindingRate) || bindingRate <= 0) {
+    return { error: "Rate is required to bind this product to the client." };
+  }
+  const bindingLocation = canonicalizeLocationName(sourceLocation || locationRadio || userLocation);
+  if (!bindingLocation || bindingLocation === "ALL") {
+    return { error: "Select a location for this product." };
+  }
+
+  const bindingSignature = buildLabelStockBindingSignature({ labelStock, userId, paperSize, runningMeters });
+  let binding = await LabelStockBinding.findOne({ bindingSignature });
+  if (!binding) {
+    binding = await LabelStockBinding.create({
+      labelStock,
+      userId,
+      location: bindingLocation,
+      paperSize,
+      runningMeters: Number(runningMeters),
+      rate: bindingRate,
+      bindingSignature,
+    });
+    // Same linkage step the manual Label Stock Binding form does -- without
+    // it the binding exists but is invisible on /label-stock-binding/view/:id
+    // and to /sales/items, which both resolve a user's bindings via
+    // Username.labelStock rather than by querying LabelStockBinding directly.
+    await Username.updateOne({ _id: userId }, { $addToSet: { labelStock: binding._id } });
+  }
+  return { binding };
+}
+
 function isTemplateOnlyInvoice(invoiceNumber) {
   const value = String(invoiceNumber || "").trim();
   if (!value) return true;
@@ -2740,56 +2783,55 @@ router.post("/sales/order", async (req, res) => {
 
       let binding = itemId ? await LabelStockBinding.findById(itemId) : null;
 
-      if (!binding) {
+      // A picked binding whose own Paper Size/Running Meters don't match
+      // what's actually on this order isn't the right binding to save
+      // against -- the Paper Size/RM inputs stay editable after picking an
+      // item (they're only auto-filled from it, not locked to it), so a
+      // client with one binding at e.g. 500mm/1000m can still be ordered
+      // 600mm/1500m of the same product, which is a *different* binding
+      // (see LabelStockBinding.bindingSignature). Route that the same way
+      // as "no binding was picked at all" -- resolve/create the one that
+      // actually matches, rather than silently saving the order under the
+      // mismatched binding it was picked from.
+      const bindingMatchesOrder = binding
+        && String(binding.paperSize || "").trim() === trimmedPaperSize
+        && Number(binding.runningMeters) === Number(runningMeters);
+
+      if (!binding || !bindingMatchesOrder) {
         // The Product Code picker lists every Label Stock master product
         // (see /sachiko/label-stock/view), not just ones already bound to
         // this client -- so itemId can come back empty when the picked
-        // product has no binding yet. Auto-create one from the master id
-        // plus what the order form collected for Rate/Paper Size/RM/Location,
-        // the same inputs a manually-created binding would need, and reuse
-        // an existing binding instead of duplicating it if one already
-        // matches (same labelStock+user+paperSize+RM signature).
-        const masterId = String(labelStockMasterId || "").trim();
-        if (!masterId) {
-          return res.status(400).json({ success: false, message: "Invalid item selected" });
+        // product has no binding yet. A mismatched existing binding already
+        // has a known-valid labelStock master id; a missing one needs it
+        // resolved (and validated) from labelStockMasterId instead.
+        let masterId;
+        if (binding) {
+          masterId = String(binding.labelStock);
+        } else {
+          masterId = String(labelStockMasterId || "").trim();
+          if (!masterId) {
+            return res.status(400).json({ success: false, message: "Invalid item selected" });
+          }
+          const master = await SachikoLabelStock.findById(masterId).select("_id").lean();
+          if (!master) {
+            return res.status(400).json({ success: false, message: "Invalid item selected" });
+          }
         }
-        const master = await SachikoLabelStock.findById(masterId).select("_id").lean();
-        if (!master) {
-          return res.status(400).json({ success: false, message: "Invalid item selected" });
-        }
-        const bindingRate = Number(itemRate);
-        if (!Number.isFinite(bindingRate) || bindingRate <= 0) {
-          return res.status(400).json({ success: false, message: "Rate is required to bind this product to the client." });
-        }
-        const bindingLocation = canonicalizeLocationName(sourceLocation || locationRadio || userLocation);
-        if (!bindingLocation || bindingLocation === "ALL") {
-          return res.status(400).json({ success: false, message: "Select a location for this product." });
-        }
-        const newBindingSignature = buildLabelStockBindingSignature({
+
+        const resolved = await resolveLabelStockBinding({
           labelStock: masterId,
           userId,
           paperSize: trimmedPaperSize,
           runningMeters,
+          itemRate,
+          sourceLocation,
+          locationRadio,
+          userLocation,
         });
-        binding = await LabelStockBinding.findOne({ bindingSignature: newBindingSignature });
-        if (!binding) {
-          binding = await LabelStockBinding.create({
-            labelStock: masterId,
-            userId,
-            location: bindingLocation,
-            paperSize: trimmedPaperSize,
-            runningMeters: Number(runningMeters),
-            rate: bindingRate,
-            bindingSignature: newBindingSignature,
-          });
-          // Same linkage step the manual Label Stock Binding form does (see
-          // POST /form/label-stock-binding in routes/sachiko/labelStockBinding.js)
-          // -- without it the binding exists but is invisible on
-          // /label-stock-binding/view/:id and to /sales/items, which both
-          // resolve a user's bindings via Username.labelStock rather than by
-          // querying LabelStockBinding directly.
-          await Username.updateOne({ _id: userId }, { $addToSet: { labelStock: binding._id } });
+        if (resolved.error) {
+          return res.status(400).json({ success: false, message: resolved.error });
         }
+        binding = resolved.binding;
       }
 
       if (!orderId && binding.status === "INACTIVE") {

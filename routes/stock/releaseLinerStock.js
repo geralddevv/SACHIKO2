@@ -25,6 +25,7 @@ async function buildHeaderPayload(body) {
   const header = {
     type: String(body.type || "").trim(),
     color: String(body.color || "WHITE").trim() || "WHITE",
+    size: String(body.size || "").trim(),
     gsm: numOrUndef(body.gsm),
     vendorId: vendorId || undefined,
     make: String(body.make || "").trim(),
@@ -110,9 +111,10 @@ async function distinctVendorPairs(filter) {
 // Tape Stock inward (routes/stock/tapeStock.js's /filter-specs) and
 // Facestock Stock inward (routes/stock/facestockStock.js's /filter-specs).
 async function loadSpecOptions(filter) {
-  const [types, colors, gsms, vendors, makes, vendorSkuCodes] = await Promise.all([
+  const [types, colors, sizes, gsms, vendors, makes, vendorSkuCodes] = await Promise.all([
     ReleaseMaster.distinct("type", omit(filter, "type")),
     ReleaseMaster.distinct("color", omit(filter, "color")),
+    ReleaseMaster.distinct("size", omit(filter, "size")),
     ReleaseMaster.distinct("gsm", omit(filter, "gsm")),
     distinctVendorPairs(omit(filter, "vendorId")),
     ReleaseMaster.distinct("make", omit(filter, "make")),
@@ -121,6 +123,7 @@ async function loadSpecOptions(filter) {
   return {
     types: cleanDistinct(types),
     colors: cleanDistinct(colors),
+    sizes: cleanDistinct(sizes),
     gsms: cleanDistinct(gsms, { numeric: true }),
     vendors,
     makes: cleanDistinct(makes),
@@ -147,10 +150,11 @@ router.get("/", async (req, res) => {
 
 router.get("/filter-specs", async (req, res) => {
   try {
-    const { type, color, gsm, vendorId, make, vendorSkuCode } = req.query;
+    const { type, color, size, gsm, vendorId, make, vendorSkuCode } = req.query;
     const filter = {};
     if (type) filter.type = type;
     if (color) filter.color = color;
+    if (size) filter.size = size;
     if (gsm) filter.gsm = Number(gsm);
     if (vendorId) filter.vendorId = vendorId;
     if (make) filter.make = make;

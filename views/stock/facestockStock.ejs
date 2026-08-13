@@ -178,7 +178,7 @@
 <!-- ============ ADD FACESTOCK DIALOG (batch inward, landscape) ============ -->
 <div class="logout-modal" id="addDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
-    style="width: min(1100px, 92vw); height: min(680px, 85vh); padding: 0; border-radius: 14px; display: flex; flex-direction: column;">
+    style="width: min(1180px, 94vw); height: min(680px, 85vh); padding: 0; border-radius: 14px; display: flex; flex-direction: column;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0; flex: 0 0 auto;">
       <div style="display: flex; align-items: center; gap: 20px;">
         <h2 id="addDialogTitle">Add Facestock Reels</h2>
@@ -199,7 +199,7 @@
              downward from fields that always have room below them here, so
              clipping in practice shouldn't come up (CLAUDE.md "Dialog /
              modal pattern"). -->
-        <div class="custom-scrollbar" style="flex: 1 1 340px; min-width: 340px; padding-right: 6px; overflow-y: auto;">
+        <div class="custom-scrollbar" style="flex: 1 1 400px; min-width: 400px; padding-right: 6px; overflow-y: auto;">
           <!-- Family/Type/GSM/Micron/Vendor/Make/Vendor SKU Code -- every
                field Facestock Master itself carries -- are smart-filtered
                against it (see GET /sachiko/facestockstock/filter-specs):
@@ -227,7 +227,16 @@
             </div>
           </div>
 
-          <div class="dialog-field-row">
+          <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
+            <div>
+              <label class="dialog-field-label" for="addSizeSelect">Size</label>
+              <select id="addSizeSelect">
+                <option value="">— None —</option>
+                <% sizes?.forEach(v => { %>
+                <option value="<%= v %>"><%= v %></option>
+                <% }) %>
+              </select>
+            </div>
             <div>
               <label class="dialog-field-label" for="addGsmSelect">GSM</label>
               <select id="addGsmSelect">
@@ -327,7 +336,7 @@
 <!-- ============ EDIT FACESTOCK DIALOG ============ -->
 <div class="logout-modal" id="editDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
-    style="width: min(480px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(600px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="editDialogTitle">Edit Facestock Reel</h2>
       <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
@@ -372,7 +381,11 @@
         </div>
       </div>
 
-      <div class="dialog-field-row">
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div>
+          <label class="dialog-field-label" for="editSizeInput">Size</label>
+          <input type="text" id="editSizeInput" class="form-control premium-input" placeholder="Enter size" />
+        </div>
         <div>
           <label class="dialog-field-label" for="editGsmInput">GSM</label>
           <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
@@ -463,7 +476,7 @@
 
 <script id="stock-data" type="application/json"><%- safeJson(stock) %></script>
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
-<script id="facestock-specs-data" type="application/json"><%- safeJson({ families, types, gsms, microns, vendors, makes, vendorSkuCodes }) %></script>
+<script id="facestock-specs-data" type="application/json"><%- safeJson({ families, types, sizes, gsms, microns, vendors, makes, vendorSkuCodes }) %></script>
 <script>
   const stockData = JSON.parse(document.getElementById("stock-data").textContent);
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
@@ -490,7 +503,7 @@
     return `<option value="">— None —</option>` + vendors.map((v) => `<option value="${v.vendorId}">${v.vendorName}</option>`).join("");
   }
 
-  let addFamilyChoices = null, addTypeChoices = null, addGsmChoices = null, addMicronChoices = null;
+  let addFamilyChoices = null, addTypeChoices = null, addSizeChoices = null, addGsmChoices = null, addMicronChoices = null;
   let addVendorChoices = null, addMakeChoices = null, addVendorSkuCodeChoices = null, addLocationChoices = null;
   let editFamilyChoices = null, editTypeChoices = null, editVendorChoices = null, editLocationChoices = null;
 
@@ -516,12 +529,13 @@
   // (routes/stock/tapeStock.js) and the Label Stock Binding spec pickers
   // (routes/sachiko/labelStockBinding.js).
   const addSpecFields = [
-    "addFamilySelect", "addTypeSelect", "addGsmSelect", "addMicronSelect",
+    "addFamilySelect", "addTypeSelect", "addSizeSelect", "addGsmSelect", "addMicronSelect",
     "addVendorSelect", "addMakeSelect", "addVendorSkuCodeSelect",
   ];
   const addSpecFieldToKey = {
     addFamilySelect: "family",
     addTypeSelect: "type",
+    addSizeSelect: "size",
     addGsmSelect: "gsm",
     addMicronSelect: "micron",
     addVendorSelect: "vendorId",
@@ -531,6 +545,7 @@
   const addSpecFieldToDataKey = {
     addFamilySelect: "families",
     addTypeSelect: "types",
+    addSizeSelect: "sizes",
     addGsmSelect: "gsms",
     addMicronSelect: "microns",
     addVendorSelect: "vendors",
@@ -554,6 +569,7 @@
   const addSpecFieldPlaceholder = {
     addFamilySelect: { label: "— None —", disabled: false },
     addTypeSelect: { label: "Select type", disabled: true },
+    addSizeSelect: { label: "— None —", disabled: false },
     addGsmSelect: { label: "— None —", disabled: false },
     addMicronSelect: { label: "— None —", disabled: false },
     addVendorSelect: { label: "— None —", disabled: false },
@@ -563,6 +579,7 @@
   function addSpecChoicesInstance(id) {
     if (id === "addFamilySelect") return addFamilyChoices;
     if (id === "addTypeSelect") return addTypeChoices;
+    if (id === "addSizeSelect") return addSizeChoices;
     if (id === "addGsmSelect") return addGsmChoices;
     if (id === "addMicronSelect") return addMicronChoices;
     if (id === "addVendorSelect") return addVendorChoices;
@@ -640,6 +657,7 @@
       { title: "Roll ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Family", field: "family", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120 },
+      { title: "Size", field: "size", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110, formatter: (cell) => cell.getValue() || "—" },
       { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Micron", field: "micron", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
@@ -801,6 +819,10 @@
     document.getElementById("addTypeSelect").innerHTML = specOptionsHtml(facestockSpecsData.types, "Select type", true);
     addTypeChoices = new Choices("#addTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
+    if (addSizeChoices) { addSizeChoices.destroy(); addSizeChoices = null; }
+    document.getElementById("addSizeSelect").innerHTML = specOptionsHtml(facestockSpecsData.sizes, "— None —", false);
+    addSizeChoices = new Choices("#addSizeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
     if (addGsmChoices) { addGsmChoices.destroy(); addGsmChoices = null; }
     document.getElementById("addGsmSelect").innerHTML = specOptionsHtml(facestockSpecsData.gsms, "— None —", false);
     addGsmChoices = new Choices("#addGsmSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
@@ -858,6 +880,7 @@
         body: JSON.stringify({
           family: document.getElementById("addFamilySelect").value,
           type,
+          size: document.getElementById("addSizeSelect").value,
           gsm: document.getElementById("addGsmSelect").value,
           micron: document.getElementById("addMicronSelect").value,
           vendorId: document.getElementById("addVendorSelect").value,
@@ -898,6 +921,7 @@
     document.getElementById("editRemarksInput").value = row.remarks || "";
     document.getElementById("editMakeInput").value = row.make || "";
     document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
+    document.getElementById("editSizeInput").value = row.size || "";
 
     if (editFamilyChoices) { editFamilyChoices.destroy(); editFamilyChoices = null; }
     document.getElementById("editFamilySelect").value = row.family || "";
@@ -952,6 +976,7 @@
         body: JSON.stringify({
           family: document.getElementById("editFamilySelect").value,
           type,
+          size: document.getElementById("editSizeInput").value,
           gsm: document.getElementById("editGsmInput").value,
           micron: document.getElementById("editMicronInput").value,
           vendorId: document.getElementById("editVendorSelect").value,

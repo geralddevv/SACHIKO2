@@ -28,6 +28,7 @@ function buildFacestockSignature(payload) {
       canonStr(payload.make),
       canonStr(payload.vendorSkuCode),
       canonStr(payload.type),
+      canonStr(payload.size),
       String(Number(payload.gsm ?? "")),
       String(Number(payload.micron ?? "")),
     ].join("||"),
@@ -69,6 +70,7 @@ async function buildPayload(body) {
     make: String(body.make || "").trim(),
     vendorSkuCode: String(body.vendorSkuCode || "").trim(),
     type: String(body.type || "").trim(),
+    size: String(body.size || "").trim(),
     gsm: numOrUndef(body.gsm),
     micron: numOrUndef(body.micron),
   };

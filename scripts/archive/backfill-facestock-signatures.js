@@ -44,6 +44,7 @@ function buildFacestockSignature(doc) {
       canonStr(doc.make),
       canonStr(doc.vendorSkuCode),
       canonStr(doc.type),
+      canonStr(doc.size),
       String(Number(doc.gsm ?? "")),
       String(Number(doc.micron ?? "")),
     ].join("||"),

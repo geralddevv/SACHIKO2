@@ -25,6 +25,7 @@ async function buildHeaderPayload(body) {
   const header = {
     family: String(body.family || "").trim(),
     type: String(body.type || "").trim(),
+    size: String(body.size || "").trim(),
     gsm: numOrUndef(body.gsm),
     micron: numOrUndef(body.micron),
     vendorId: vendorId || undefined,
@@ -112,9 +113,10 @@ async function distinctVendorPairs(filter) {
 // Label Stock Binding spec pickers (routes/sachiko/labelStockBinding.js's
 // /filter-specs).
 async function loadSpecOptions(filter) {
-  const [families, types, gsms, microns, vendors, makes, vendorSkuCodes] = await Promise.all([
+  const [families, types, sizes, gsms, microns, vendors, makes, vendorSkuCodes] = await Promise.all([
     FacestockMaster.distinct("family", omit(filter, "family")),
     FacestockMaster.distinct("type", omit(filter, "type")),
+    FacestockMaster.distinct("size", omit(filter, "size")),
     FacestockMaster.distinct("gsm", omit(filter, "gsm")),
     FacestockMaster.distinct("micron", omit(filter, "micron")),
     distinctVendorPairs(omit(filter, "vendorId")),
@@ -124,6 +126,7 @@ async function loadSpecOptions(filter) {
   return {
     families: cleanDistinct(families),
     types: cleanDistinct(types),
+    sizes: cleanDistinct(sizes),
     gsms: cleanDistinct(gsms, { numeric: true }),
     microns: cleanDistinct(microns, { numeric: true }),
     vendors,
@@ -151,10 +154,11 @@ router.get("/", async (req, res) => {
 
 router.get("/filter-specs", async (req, res) => {
   try {
-    const { family, type, gsm, micron, vendorId, make, vendorSkuCode } = req.query;
+    const { family, type, size, gsm, micron, vendorId, make, vendorSkuCode } = req.query;
     const filter = {};
     if (family) filter.family = family;
     if (type) filter.type = type;
+    if (size) filter.size = size;
     if (gsm) filter.gsm = Number(gsm);
     if (micron) filter.micron = Number(micron);
     if (vendorId) filter.vendorId = vendorId;

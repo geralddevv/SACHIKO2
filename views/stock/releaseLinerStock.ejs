@@ -178,7 +178,7 @@
 <!-- ============ ADD RELEASE LINER DIALOG (batch inward, landscape) ============ -->
 <div class="logout-modal" id="addDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
-    style="width: min(1100px, 92vw); height: min(680px, 85vh); padding: 0; border-radius: 14px; display: flex; flex-direction: column;">
+    style="width: min(1180px, 94vw); height: min(680px, 85vh); padding: 0; border-radius: 14px; display: flex; flex-direction: column;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0; flex: 0 0 auto;">
       <div style="display: flex; align-items: center; gap: 20px;">
         <h2 id="addDialogTitle">Add Release Liner Reels</h2>
@@ -205,8 +205,8 @@
              narrows the others to combinations that actually exist in the
              master catalog, same "narrow as you pick" pattern as Tape Stock
              inward and Facestock Stock inward. -->
-        <div class="custom-scrollbar" style="flex: 1 1 340px; min-width: 340px; padding-right: 6px; overflow-y: auto;">
-          <div class="dialog-field-row">
+        <div class="custom-scrollbar" style="flex: 1 1 400px; min-width: 400px; padding-right: 6px; overflow-y: auto;">
+          <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
             <div>
               <label class="dialog-field-label" for="addTypeSelect">Type</label>
               <select id="addTypeSelect">
@@ -222,6 +222,15 @@
                 <option value="">— None —</option>
                 <% colors?.forEach(v => { %>
                 <option value="<%= v %>" <%= v === "WHITE" ? "selected" : "" %>><%= v %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addSizeSelect">Size</label>
+              <select id="addSizeSelect">
+                <option value="">— None —</option>
+                <% sizes?.forEach(v => { %>
+                <option value="<%= v %>"><%= v %></option>
                 <% }) %>
               </select>
             </div>
@@ -314,7 +323,7 @@
 <!-- ============ EDIT RELEASE LINER DIALOG ============ -->
 <div class="logout-modal" id="editDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
-    style="width: min(480px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(600px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="editDialogTitle">Edit Release Liner Reel</h2>
       <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
@@ -323,7 +332,7 @@
       <label class="dialog-field-label" for="editRollIdDisplay">Roll ID</label>
       <input type="text" id="editRollIdDisplay" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
 
-      <div class="dialog-field-row">
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="editTypeSelect">Type</label>
           <select id="editTypeSelect">
@@ -333,6 +342,10 @@
         <div>
           <label class="dialog-field-label" for="editColorSelect">Color</label>
           <select id="editColorSelect"></select>
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editSizeInput">Size</label>
+          <input type="text" id="editSizeInput" class="form-control premium-input" placeholder="Enter size" />
         </div>
       </div>
 
@@ -424,7 +437,7 @@
 
 <script id="stock-data" type="application/json"><%- safeJson(stock) %></script>
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
-<script id="release-specs-data" type="application/json"><%- safeJson({ types, colors, gsms, vendors, makes, vendorSkuCodes }) %></script>
+<script id="release-specs-data" type="application/json"><%- safeJson({ types, colors, sizes, gsms, vendors, makes, vendorSkuCodes }) %></script>
 <script>
   const stockData = JSON.parse(document.getElementById("stock-data").textContent);
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
@@ -451,19 +464,20 @@
     return `<option value="">— None —</option>` + vendors.map((v) => `<option value="${v.vendorId}">${v.vendorName}</option>`).join("");
   }
 
-  let addTypeChoices = null, addColorChoices = null, addGsmChoices = null;
+  let addTypeChoices = null, addColorChoices = null, addSizeChoices = null, addGsmChoices = null;
   let addVendorChoices = null, addMakeChoices = null, addVendorSkuCodeChoices = null, addLocationChoices = null;
   let editTypeChoices = null, editColorChoices = null, editVendorChoices = null, editLocationChoices = null;
 
-  // ---- Add (inward) dialog: smart filter for Type/Color/GSM/Vendor/Make/
-  // Vendor SKU Code ---- Narrows each field's options to combinations that
-  // actually exist in Release Master as the others are picked -- same
+  // ---- Add (inward) dialog: smart filter for Type/Color/Size/GSM/Vendor/
+  // Make/Vendor SKU Code ---- Narrows each field's options to combinations
+  // that actually exist in Release Master as the others are picked -- same
   // pattern as Tape Stock inward (routes/stock/tapeStock.js) and Facestock
   // Stock inward (routes/stock/facestockStock.js).
-  const addSpecFields = ["addTypeSelect", "addColorSelect", "addGsmSelect", "addVendorSelect", "addMakeSelect", "addVendorSkuCodeSelect"];
+  const addSpecFields = ["addTypeSelect", "addColorSelect", "addSizeSelect", "addGsmSelect", "addVendorSelect", "addMakeSelect", "addVendorSkuCodeSelect"];
   const addSpecFieldToKey = {
     addTypeSelect: "type",
     addColorSelect: "color",
+    addSizeSelect: "size",
     addGsmSelect: "gsm",
     addVendorSelect: "vendorId",
     addMakeSelect: "make",
@@ -472,6 +486,7 @@
   const addSpecFieldToDataKey = {
     addTypeSelect: "types",
     addColorSelect: "colors",
+    addSizeSelect: "sizes",
     addGsmSelect: "gsms",
     addVendorSelect: "vendors",
     addMakeSelect: "makes",
@@ -494,6 +509,7 @@
   const addSpecFieldPlaceholder = {
     addTypeSelect: { label: "Select type", disabled: true },
     addColorSelect: { label: "— None —", disabled: false },
+    addSizeSelect: { label: "— None —", disabled: false },
     addGsmSelect: { label: "— None —", disabled: false },
     addVendorSelect: { label: "— None —", disabled: false },
     addMakeSelect: { label: "— None —", disabled: false },
@@ -502,6 +518,7 @@
   function addSpecChoicesInstance(id) {
     if (id === "addTypeSelect") return addTypeChoices;
     if (id === "addColorSelect") return addColorChoices;
+    if (id === "addSizeSelect") return addSizeChoices;
     if (id === "addGsmSelect") return addGsmChoices;
     if (id === "addVendorSelect") return addVendorChoices;
     if (id === "addMakeSelect") return addMakeChoices;
@@ -578,6 +595,7 @@
       { title: "Roll ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120 },
       { title: "Color", field: "color", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
+      { title: "Size", field: "size", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110, formatter: (cell) => cell.getValue() || "—" },
       { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
@@ -740,6 +758,10 @@
     if (releaseSpecsData.colors.includes("WHITE")) colorSel.value = "WHITE";
     addColorChoices = new Choices(colorSel, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
+    if (addSizeChoices) { addSizeChoices.destroy(); addSizeChoices = null; }
+    document.getElementById("addSizeSelect").innerHTML = specOptionsHtml(releaseSpecsData.sizes, "— None —", false);
+    addSizeChoices = new Choices("#addSizeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
     if (addGsmChoices) { addGsmChoices.destroy(); addGsmChoices = null; }
     document.getElementById("addGsmSelect").innerHTML = specOptionsHtml(releaseSpecsData.gsms, "— None —", false);
     addGsmChoices = new Choices("#addGsmSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
@@ -793,6 +815,7 @@
         body: JSON.stringify({
           type,
           color: document.getElementById("addColorSelect").value,
+          size: document.getElementById("addSizeSelect").value,
           gsm: document.getElementById("addGsmSelect").value,
           vendorId: document.getElementById("addVendorSelect").value,
           make: document.getElementById("addMakeSelect").value,
@@ -831,6 +854,7 @@
     document.getElementById("editRemarksInput").value = row.remarks || "";
     document.getElementById("editMakeInput").value = row.make || "";
     document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
+    document.getElementById("editSizeInput").value = row.size || "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
     document.getElementById("editTypeSelect").innerHTML = specOptionsHtml(releaseSpecsData.types, "Select type", true);
@@ -888,6 +912,7 @@
         body: JSON.stringify({
           type,
           color: document.getElementById("editColorSelect").value,
+          size: document.getElementById("editSizeInput").value,
           gsm: document.getElementById("editGsmInput").value,
           vendorId: document.getElementById("editVendorSelect").value,
           make: document.getElementById("editMakeInput").value,

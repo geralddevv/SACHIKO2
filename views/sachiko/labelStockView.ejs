@@ -18,7 +18,7 @@
     .header-action-btn:hover { background-color: #e4e4e4; }
 
     /* Custom Scrollbar */
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
@@ -503,6 +503,34 @@
       document.getElementById("ls-create-error").textContent = "";
     }
 
+    // Prefixes a field's own label with which layer card it belongs to
+    // (facestock1/2, adhesive1/2, release1/2) -- "Type" alone is ambiguous
+    // with two facestock cards on screen, "Facestock 2 Type" isn't.
+    const LS_BLOCK_LABELS = {
+      facestock1: "Facestock", facestock2: "Facestock 2",
+      adhesive1: "Adhesive", adhesive2: "Adhesive 2",
+      release1: "Release Liner", release2: "Release Liner 2",
+    };
+    function lsFieldLabel(field) {
+      const ownLabel = field.closest(".dialog-field, .layer-field")?.querySelector("label")?.textContent?.trim() || field.name || field.id;
+      const blockLabel = LS_BLOCK_LABELS[field.closest(".layer-card")?.dataset.block];
+      return blockLabel ? `${blockLabel} ${ownLabel}` : ownLabel;
+    }
+
+    // Every currently-required field that's actually empty/invalid, in one
+    // pass -- required-when-visible fields (layer cards hidden for the
+    // current roll type, Laser/Ink hidden outside Sheet+Digital) already
+    // have their `required` attribute cleared while hidden (see
+    // lsApplyRollType / lsUpdateDigitalPrintTypeVisibility), so they're
+    // naturally skipped here without extra visibility checks.
+    function lsFindMissingFields() {
+      const fields = [];
+      lsForm.querySelectorAll("[required]").forEach((field) => {
+        if (!field.checkValidity()) fields.push(field);
+      });
+      return { labels: fields.map(lsFieldLabel), firstField: fields[0] || null };
+    }
+
     // Smart filter, any order (mirrors /sachiko/form/tape-binding's Paper
     // Code/Type/GSM/... fields): every field in a layer card is fillable
     // from the start, none disabled waiting on an earlier pick. Picking any
@@ -800,12 +828,68 @@
       }
     });
 
-    window.openCreateLabelStockDialog = function () {
+    // Choices.js decides whether to flip a dropdown above its field by
+    // comparing the dropdown's position against the browser *viewport*
+    // height -- it has no idea #ls-create-form itself scrolls with a much
+    // smaller visible height than the viewport. A field can sit nowhere
+    // near the bottom of the window yet still be at the bottom of this
+    // scrolling form (the Release Liner cards especially, being last in the
+    // layer stack), so Choices never flips and the dropdown renders past
+    // the form's own overflow-y: auto edge -- clipped away, not just
+    // stacked behind something (z-index alone can't fix a clip). Forcing
+    // the dropdown to `position: fixed`, placed from the field's own
+    // (always viewport-relative) bounding box, makes it escape that clip
+    // entirely and render in the viewport like a native popover.
+    let lsOpenDropdownSelect = null;
+    function lsPositionDropdown(select) {
+      const wrap = select.closest(".choices");
+      const list = wrap?.querySelector(".choices__list--dropdown");
+      if (!wrap || !list) return;
+      const rect = wrap.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const openAbove = spaceBelow < 160 && spaceAbove > spaceBelow;
+
+      list.style.position = "fixed";
+      list.style.left = `${rect.left}px`;
+      list.style.width = `${rect.width}px`;
+      list.style.margin = "0";
+      if (openAbove) {
+        list.style.top = "auto";
+        list.style.bottom = `${window.innerHeight - rect.top}px`;
+        list.style.maxHeight = `${Math.max(spaceAbove - 8, 100)}px`;
+      } else {
+        list.style.top = `${rect.bottom}px`;
+        list.style.bottom = "auto";
+        list.style.maxHeight = `${Math.max(spaceBelow - 8, 100)}px`;
+      }
+    }
+    function lsResetDropdownPosition(select) {
+      const list = select.closest(".choices")?.querySelector(".choices__list--dropdown");
+      if (!list) return;
+      list.style.position = list.style.left = list.style.top = list.style.bottom = list.style.width = list.style.margin = list.style.maxHeight = "";
+    }
+    lsForm.addEventListener("showDropdown", (e) => {
+      lsOpenDropdownSelect = e.target;
+      lsPositionDropdown(e.target);
+    });
+    lsForm.addEventListener("hideDropdown", (e) => {
+      lsResetDropdownPosition(e.target);
+      if (lsOpenDropdownSelect === e.target) lsOpenDropdownSelect = null;
+    });
+    // Scrolling the form (or resizing the window) moves the field out from
+    // under a dropdown positioned in fixed viewport coordinates -- keep it
+    // glued to its field, same as a native <select> would behave.
+    lsForm.addEventListener("scroll", () => { if (lsOpenDropdownSelect) lsPositionDropdown(lsOpenDropdownSelect); }, true);
+    window.addEventListener("resize", () => { if (lsOpenDropdownSelect) lsPositionDropdown(lsOpenDropdownSelect); });
+
+    // Shared by opening a fresh "New" dialog and closing the dialog (either
+    // way) -- resets the form back to a blank slate, including the layer
+    // cascades and roll-type layout, so nothing typed lingers into the next
+    // open. Kept as one function so those two call sites can't drift apart.
+    function lsResetForm() {
       lsForm.reset();
       lsEditId = null;
-      document.getElementById("ls-dialog-title").textContent = "New Label Stock";
-      document.getElementById("ls-create-submit-btn").textContent = "Save Label Stock";
-      document.getElementById("lsSkuCode").value = lsPreviewSkuCode;
       document.getElementById("lsCurrentFileLink").style.display = "none";
       hideLsError();
 
@@ -822,6 +906,13 @@
       lsUpdateDigitalPrintTypeVisibility("", "", "");
 
       lsApplyRollType("NORMAL");
+    }
+
+    window.openCreateLabelStockDialog = function () {
+      lsResetForm();
+      document.getElementById("ls-dialog-title").textContent = "New Label Stock";
+      document.getElementById("ls-create-submit-btn").textContent = "Save Label Stock";
+      document.getElementById("lsSkuCode").value = lsPreviewSkuCode;
       document.getElementById("ls-create-modal").style.display = "flex";
     };
 
@@ -876,16 +967,29 @@
       document.getElementById("ls-create-modal").style.display = "flex";
     };
 
+    // Deliberately no backdrop-click-to-close here -- this form is long
+    // enough that an accidental outside click shouldn't discard everything
+    // typed. Closing only happens via the explicit Cancel/× controls, both
+    // wired to closeCreateLabelStockDialog below.
     window.closeCreateLabelStockDialog = function () {
       document.getElementById("ls-create-modal").style.display = "none";
+      lsResetForm();
     };
 
-    document.getElementById("ls-create-modal").addEventListener("click", function (e) {
-      if (e.target === this) closeCreateLabelStockDialog();
-    });
-
     window.submitCreateLabelStock = async function () {
-      if (!lsForm.reportValidity()) return;
+      const { labels: missing, firstField } = lsFindMissingFields();
+      if (missing.length > 0) {
+        if (typeof showToast === "function") {
+          showToast(`Please fill in: ${missing.join(", ")}`, "error");
+        }
+        if (firstField) {
+          firstField.scrollIntoView({ behavior: "smooth", block: "center" });
+          firstField.focus({ preventScroll: true });
+        } else {
+          lsForm.reportValidity();
+        }
+        return;
+      }
 
       const btn = document.getElementById("ls-create-submit-btn");
       btn.disabled = true;

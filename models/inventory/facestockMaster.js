@@ -50,6 +50,10 @@ const facestockMasterSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    size: {
+      type: String,
+      trim: true,
+    },
     // GSM and micron are mutually exclusive ways of specifying a facestock's
     // thickness -- the create/edit dialog disables whichever field is empty
     // once the other has a value, so a reel is described one way, not both.

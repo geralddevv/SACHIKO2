@@ -28,6 +28,7 @@ function buildReleaseSignature(payload) {
       canonStr(payload.make),
       canonStr(payload.vendorSkuCode),
       canonStr(payload.color),
+      canonStr(payload.size),
       String(Number(payload.gsm ?? "")),
     ].join("||"),
   );
@@ -68,6 +69,7 @@ async function buildPayload(body) {
     make: String(body.make || "").trim(),
     vendorSkuCode: String(body.vendorSkuCode || "").trim(),
     color: String(body.color || "WHITE").trim() || "WHITE",
+    size: String(body.size || "").trim(),
     gsm: numOrUndef(body.gsm),
   };
 

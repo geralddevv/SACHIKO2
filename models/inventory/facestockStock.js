@@ -19,6 +19,10 @@ const facestockStockSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    size: {
+      type: String,
+      trim: true,
+    },
     gsm: {
       type: Number,
     },

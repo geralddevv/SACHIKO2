@@ -168,7 +168,7 @@
 <!-- ============ ADD RELEASE DIALOG ============ -->
 <div class="logout-modal" id="addDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
-    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(500px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="addDialogTitle">Add Release Liner</h2>
       <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
@@ -216,9 +216,16 @@
         </div>
       </div>
 
-      <label class="dialog-field-label" for="addGsmInput">GSM</label>
-      <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
-
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="addSizeInput">Size</label>
+          <input type="text" id="addSizeInput" class="form-control premium-input" placeholder="Enter size" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addGsmInput">GSM</label>
+          <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+        </div>
+      </div>
 
       <div id="addReleaseError" class="dialog-error"></div>
       <div class="dialog-actions">
@@ -232,7 +239,7 @@
 <!-- ============ EDIT RELEASE DIALOG ============ -->
 <div class="logout-modal" id="editDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
-    style="width: min(460px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(500px, 95vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="editDialogTitle">Edit Release Liner</h2>
       <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
@@ -280,8 +287,16 @@
         </div>
       </div>
 
-      <label class="dialog-field-label" for="editGsmInput">GSM</label>
-      <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editSizeInput">Size</label>
+          <input type="text" id="editSizeInput" class="form-control premium-input" placeholder="Enter size" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editGsmInput">GSM</label>
+          <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+        </div>
+      </div>
 
       <div id="editReleaseError" class="dialog-error"></div>
       <div class="dialog-actions">
@@ -397,6 +412,7 @@
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
       { title: "Color", field: "color", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
+      { title: "Size", field: "size", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110, formatter: (cell) => cell.getValue() || "—" },
       { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
     ],
   });
@@ -464,6 +480,7 @@
       detailRow("Make", row.make || "—"),
       detailRow("Vendor SKU Code", row.vendorSkuCode || "—"),
       detailRow("Color", row.color || "—"),
+      detailRow("Size", row.size || "—"),
       detailRow("GSM", row.gsm ?? "—"),
     ].join("");
     openModal("viewDialog");
@@ -490,6 +507,7 @@
     document.getElementById("addSkuIdPreview").value = previewSkuId;
     document.getElementById("addMakeInput").value = "";
     document.getElementById("addVendorSkuCodeInput").value = "";
+    document.getElementById("addSizeInput").value = "";
     document.getElementById("addGsmInput").value = "";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
@@ -529,6 +547,7 @@
           make: document.getElementById("addMakeInput").value.trim(),
           vendorSkuCode: document.getElementById("addVendorSkuCodeInput").value.trim(),
           color: document.getElementById("addColorSelect").value,
+          size: document.getElementById("addSizeInput").value.trim(),
           gsm: document.getElementById("addGsmInput").value,
         }),
       });
@@ -553,6 +572,7 @@
     document.getElementById("editSkuIdDisplay").value = row.skuId;
     document.getElementById("editMakeInput").value = row.make || "";
     document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
+    document.getElementById("editSizeInput").value = row.size || "";
     document.getElementById("editGsmInput").value = row.gsm ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
@@ -594,6 +614,7 @@
           make: document.getElementById("editMakeInput").value.trim(),
           vendorSkuCode: document.getElementById("editVendorSkuCodeInput").value.trim(),
           color: document.getElementById("editColorSelect").value,
+          size: document.getElementById("editSizeInput").value.trim(),
           gsm: document.getElementById("editGsmInput").value,
         }),
       });
