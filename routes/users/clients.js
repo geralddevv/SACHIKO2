@@ -152,9 +152,9 @@ router.get("/orders/:id", async (req, res) => {
     const userIds = client.users || [];
     const populateUser = { path: "userId", select: "clientName userName" };
     const itemSelect =
-      "productId tapeProductId tapePaperCode tapeWidth tapeMtrs labelWidth labelHeight";
+      "productId tapeProductId tapePaperCode tapeWidth tapeMtrs labelWidth labelHeight productCode skuCode";
     const orderSelect =
-      "onModel userId quantity dispatchedQuantity poDate poNumber orderRate estimatedDate status remarks createdAt sourceLocation";
+      "onModel userId quantity dispatchedQuantity poDate poNumber orderRate estimatedDate status remarks createdAt sourceLocation paperSize runningMeters";
 
     const tapeOrders = await TapeSalesOrder.find({ userId: { $in: userIds } })
       .select(`${orderSelect} tapeId`)

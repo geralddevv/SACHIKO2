@@ -2463,14 +2463,20 @@ router.get("/sales/order", async (req, res) => {
 router.get("/sales/clients/:itemType", async (req, res) => {
   try {
     const { itemType } = req.params;
-    let bindingModel;
-    if (itemType === "TAPE") bindingModel = TapeBinding;
-    else if (itemType === "LABEL_STOCK") bindingModel = LabelStockBinding;
-    else {
+
+    // LABEL_STOCK (like the "no itemType" case) lists every client, not just
+    // ones with an existing LabelStockBinding: the Product Code picker on
+    // this same form lists the full master catalog and POST /sales/order
+    // auto-creates the binding on submit when one doesn't exist yet (see
+    // the labelStockMasterId fallback there), so a first-time client must
+    // still be selectable here. TAPE has no such fallback -- its items only
+    // ever come from an existing TapeBinding -- so it stays filtered.
+    if (itemType !== "TAPE") {
       const clients = await Client.distinct("clientName");
       return res.json(clients.sort());
     }
-    const userIds = await bindingModel.distinct("userId");
+
+    const userIds = await TapeBinding.distinct("userId");
     const users = await Username.find({ _id: { $in: userIds } })
       .select("clientName")
       .lean();
@@ -2879,6 +2885,22 @@ router.post("/sales/order", async (req, res) => {
 
     if (duplicateSubmissionToken) {
       return res.json({ success: true, redirect: "/sachiko/sales/pending", duplicate: true });
+    }
+    // Race between two near-simultaneous submits for the same new-client
+    // Label Stock binding: both pass the findOne(bindingSignature) check
+    // above before either creates, so the second create() hits the unique
+    // index instead (see buildLabelStockBindingSignature / LabelStockBinding
+    // schema). Same friendly message the manual binding form gives.
+    const duplicateBindingSignature =
+      err?.code === 11000 &&
+      ((err?.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "bindingSignature")) ||
+        (err?.keyValue && Object.prototype.hasOwnProperty.call(err.keyValue, "bindingSignature")) ||
+        String(err?.message || "").includes("bindingSignature"));
+    if (duplicateBindingSignature) {
+      return res.status(400).json({
+        success: false,
+        message: "This Label Stock binding already exists (same SKU Code, Paper Size, RM, Client and User).",
+      });
     }
     const sourceLocError = err?.errors?.sourceLocation;
     if (sourceLocError) {

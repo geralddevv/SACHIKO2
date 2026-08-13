@@ -1,5 +1,7 @@
 import express from "express";
 import FacestockStock from "../../models/inventory/facestockStock.js";
+import FacestockMaster from "../../models/inventory/facestockMaster.js";
+import Vendor from "../../models/users/vendor.js";
 import Location from "../../models/system/location.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -15,18 +17,31 @@ const numOrUndef = (value) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-// Fields shared by every reel in one inward batch (one spec, one invoice).
-function buildHeaderPayload(body) {
-  return {
+// Fields shared by every reel in one inward batch (one spec, one invoice) --
+// every field Facestock Master itself carries (family/type/gsm/micron/
+// vendor/make/vendorSkuCode), plus this batch's own location/rate/invoice.
+async function buildHeaderPayload(body) {
+  const vendorId = String(body.vendorId || "").trim();
+  const header = {
     family: String(body.family || "").trim(),
     type: String(body.type || "").trim(),
     gsm: numOrUndef(body.gsm),
     micron: numOrUndef(body.micron),
+    vendorId: vendorId || undefined,
+    make: String(body.make || "").trim(),
+    vendorSkuCode: String(body.vendorSkuCode || "").trim(),
     location: String(body.location || "").trim(),
     rate: numOrUndef(body.rate),
     invoiceNo: String(body.invoiceNo || "").trim(),
     remarks: String(body.remarks || "").trim(),
   };
+
+  if (vendorId) {
+    const vendor = await Vendor.findById(vendorId).select("vendorName").lean();
+    header.vendorName = vendor?.vendorName || "";
+  }
+
+  return header;
 }
 
 function validateHeaderPayload(header) {
@@ -46,8 +61,9 @@ function buildRollPayload(raw) {
 // The Edit dialog still edits one existing reel at a time (its own Roll ID
 // is already assigned, so there's nothing to batch) -- full single-reel
 // payload, same shape as the pre-batch /create used.
-function buildEditPayload(body) {
-  return { ...buildHeaderPayload(body), ...buildRollPayload(body) };
+async function buildEditPayload(body) {
+  const header = await buildHeaderPayload(body);
+  return { ...header, ...buildRollPayload(body) };
 }
 
 function validateEditPayload(payload) {
@@ -57,10 +73,70 @@ function validateEditPayload(payload) {
   return null;
 }
 
+// Strips null/undefined/blank entries out of a Mongo .distinct() result and
+// sorts it -- numeric fields (gsm/micron) sort numerically, everything else
+// alphabetically.
+function cleanDistinct(values, { numeric = false } = {}) {
+  const filtered = (values || []).filter((v) => v !== null && v !== undefined && v !== "");
+  return numeric ? filtered.sort((a, b) => a - b) : filtered.sort();
+}
+
+function omit(obj, key) {
+  const { [key]: _, ...rest } = obj;
+  return rest;
+}
+
+// vendorId is an ObjectId, not a plain scalar, so it can't go through
+// .distinct() + cleanDistinct() like the other fields -- this groups by it
+// instead and keeps each vendor's denormalized name for display, the same
+// {vendorId, vendorName} pairing Facestock Master itself stores.
+async function distinctVendorPairs(filter) {
+  const rows = await FacestockMaster.aggregate([
+    { $match: { ...filter, vendorId: { $ne: null } } },
+    { $group: { _id: "$vendorId", vendorName: { $first: "$vendorName" } } },
+  ]);
+  return rows
+    .map((r) => ({ vendorId: String(r._id), vendorName: r.vendorName || "" }))
+    .filter((v) => v.vendorName)
+    .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
+}
+
+// Single source of truth for the Add dialog's Family/Type/GSM/Micron/Vendor/
+// Make/Vendor SKU Code pickers -- every field Facestock Master itself
+// carries, sourced from it instead of a hardcoded list or free typing, so
+// inward entry only ever selects a real cataloged spec. Used both for the
+// initial page load (`filter: {}`) and /filter-specs (each field narrowed by
+// every OTHER currently-selected field, never by itself, so picking a value
+// never removes itself from its own list). Same "narrow as you pick" pattern
+// as Tape Stock inward (routes/stock/tapeStock.js's /filter-specs) and the
+// Label Stock Binding spec pickers (routes/sachiko/labelStockBinding.js's
+// /filter-specs).
+async function loadSpecOptions(filter) {
+  const [families, types, gsms, microns, vendors, makes, vendorSkuCodes] = await Promise.all([
+    FacestockMaster.distinct("family", omit(filter, "family")),
+    FacestockMaster.distinct("type", omit(filter, "type")),
+    FacestockMaster.distinct("gsm", omit(filter, "gsm")),
+    FacestockMaster.distinct("micron", omit(filter, "micron")),
+    distinctVendorPairs(omit(filter, "vendorId")),
+    FacestockMaster.distinct("make", omit(filter, "make")),
+    FacestockMaster.distinct("vendorSkuCode", omit(filter, "vendorSkuCode")),
+  ]);
+  return {
+    families: cleanDistinct(families),
+    types: cleanDistinct(types),
+    gsms: cleanDistinct(gsms, { numeric: true }),
+    microns: cleanDistinct(microns, { numeric: true }),
+    vendors,
+    makes: cleanDistinct(makes),
+    vendorSkuCodes: cleanDistinct(vendorSkuCodes),
+  };
+}
+
 router.get("/", async (req, res) => {
-  const [locations, stock] = await Promise.all([
+  const [locations, stock, specOptions] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
     FacestockStock.find().sort({ createdAt: -1 }).lean(),
+    loadSpecOptions({}),
   ]);
   res.render("stock/facestockStock.ejs", {
     JS: false,
@@ -68,8 +144,28 @@ router.get("/", async (req, res) => {
     title: "Facestock Stock",
     locations,
     stock,
+    ...specOptions,
     notification: req.flash("notification"),
   });
+});
+
+router.get("/filter-specs", async (req, res) => {
+  try {
+    const { family, type, gsm, micron, vendorId, make, vendorSkuCode } = req.query;
+    const filter = {};
+    if (family) filter.family = family;
+    if (type) filter.type = type;
+    if (gsm) filter.gsm = Number(gsm);
+    if (micron) filter.micron = Number(micron);
+    if (vendorId) filter.vendorId = vendorId;
+    if (make) filter.make = make;
+    if (vendorSkuCode) filter.vendorSkuCode = vendorSkuCode;
+
+    res.json(await loadSpecOptions(filter));
+  } catch (err) {
+    console.error("FACESTOCK STOCK FILTER-SPECS ERROR:", err);
+    res.status(500).json({ error: "Failed to load filter options." });
+  }
 });
 
 // Read-only preview of the next `count` Roll IDs -- refreshed by the add
@@ -83,7 +179,7 @@ router.get("/preview-roll-ids", async (req, res) => {
 
 router.post("/create", requireAuth, createLimiter, async (req, res) => {
   try {
-    const header = buildHeaderPayload(req.body);
+    const header = await buildHeaderPayload(req.body);
     const headerError = validateHeaderPayload(header);
     if (headerError) return res.status(400).json({ success: false, message: headerError });
 
@@ -123,7 +219,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
 
 router.put("/:id", requireAuth, updateLimiter, async (req, res) => {
   try {
-    const payload = buildEditPayload(req.body);
+    const payload = await buildEditPayload(req.body);
     const error = validateEditPayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 

@@ -40,19 +40,9 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
 
-const handleWordUpload = (req, res, next) => {
-  upload.single("wordFile")(req, res, (err) => {
-    if (err) {
-      req.flash("notification", err.message);
-      return res.redirect("back");
-    }
-    next();
-  });
-};
-
-// Same upload handling as handleWordUpload, but for the label-stock create
-// dialog, which submits via fetch and needs a JSON error response instead of
-// a redirect.
+// Label Stock create/edit both happen in the same dialog (labelStockView.ejs)
+// and submit via fetch, so both need a JSON error response instead of a
+// redirect.
 const handleWordUploadJson = (req, res, next) => {
   upload.single("wordFile")(req, res, (err) => {
     if (err) {
@@ -301,38 +291,37 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
   }
 });
 
-router.get("/label-stock/edit/:id", async (req, res) => {
-  const [ds, facestockMasters, adhesiveMasters, releaseMasters] = await Promise.all([
-    SachikoLabelStock.findById(req.params.id).lean(),
-    FacestockMaster.find().select("skuId family type make vendorId vendorName vendorSkuCode gsm micron").lean(),
-    AdhesiveMaster.find().select("skuId type make vendorId vendorName vendorSkuCode shelfLife").lean(),
-    ReleaseMaster.find().select("skuId type make vendorId vendorName color gsm").lean(),
-  ]);
-  if (!ds) {
-    req.flash("notification", "Label Stock not found");
-    return res.redirect("/sachiko/label-stock/view");
-  }
-  res.render("sachiko/labelStockEdit.ejs", {
-    title: "Edit Label Stock",
-    CSS: false,
-    JS: false,
-    ds,
-    facestockMasters,
-    adhesiveMasters,
-    releaseMasters,
-    notification: req.flash("notification"),
-  });
+// Editing now happens in a dialog on /sachiko/label-stock/view (see
+// openEditLabelStockDialog in labelStockView.ejs, mirroring
+// openCreateLabelStockDialog) instead of a standalone page -- this GET only
+// exists so old bookmarks/links to that page still land somewhere.
+router.get("/label-stock/edit/:id", (req, res) => {
+  res.redirect("/sachiko/label-stock/view");
 });
 
-router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUpload, async (req, res) => {
+router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploadJson, async (req, res) => {
   try {
     const existing = await SachikoLabelStock.findById(req.params.id);
     if (!existing) {
-      req.flash("notification", "Label Stock not found");
-      return res.redirect("/sachiko/label-stock/view");
+      return res.status(404).json({ success: false, message: "Label Stock not found" });
     }
 
     const payload = await buildLabelStockPayload(req.body);
+    if (!payload.productCode) {
+      throw Object.assign(new Error("Product Code is required"), { userMessage: "Product Code is required" });
+    }
+    if (!payload.family) {
+      throw Object.assign(new Error("Family is required"), { userMessage: "Family is required" });
+    }
+    if (!payload.rollOrSheet) {
+      throw Object.assign(new Error("Roll or Sheet is required"), { userMessage: "Roll or Sheet is required" });
+    }
+    if (!payload.printingTechnology) {
+      throw Object.assign(new Error("Printing Technology is required"), { userMessage: "Printing Technology is required" });
+    }
+    if (payload.rollOrSheet === "SHEET" && payload.printingTechnology === "DIGITAL" && !payload.digitalPrintType) {
+      throw Object.assign(new Error("Laser or Ink is required"), { userMessage: "Laser or Ink is required" });
+    }
 
     if (req.file) {
       // Remove the previous file before swapping in the new one.
@@ -355,11 +344,11 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
     const update = Object.keys(unset).length ? { $set: payload, $unset: unset } : payload;
     await SachikoLabelStock.findByIdAndUpdate(req.params.id, update);
     req.flash("notification", "Label Stock updated successfully!");
-    res.redirect("/sachiko/label-stock/view");
+    res.json({ success: true, redirect: "/sachiko/label-stock/view" });
   } catch (err) {
     console.error("SACHIKO LABEL STOCK UPDATE ERROR:", err);
-    req.flash("notification", "Failed to update Label Stock");
-    res.redirect(`/sachiko/label-stock/edit/${req.params.id}`);
+    if (req.file) fs.existsSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename)) && fs.unlinkSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename));
+    res.status(400).json({ success: false, message: err.userMessage || "Failed to update Label Stock" });
   }
 });
 

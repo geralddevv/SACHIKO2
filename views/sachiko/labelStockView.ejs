@@ -210,12 +210,12 @@
                 title="View">
                 <i class="fa-solid fa-eye"></i>
               </button>
-              <a href="/sachiko/label-stock/edit/${row._id}"
-                style="height:24px;padding:2px 9px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:3px;font-weight:600;text-decoration:none;"
+              <button onclick="openEditLabelStockDialog('${row._id}')"
+                style="height:24px;padding:2px 9px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:3px;font-weight:600;"
                 onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'"
                 title="Edit">
                 <i class="fa-solid fa-pencil"></i>
-              </a>
+              </button>
               <button onclick="deleteLabelStock('${row._id}','${row.productCode}')"
                 style="height:24px;padding:2px 9px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:3px;font-weight:600;"
                 onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'"
@@ -449,6 +449,11 @@
       "DOUBLE FACESTOCK": ["facestock1", "adhesive1", "facestock2", "adhesive2", "release1"],
     };
 
+    // null while the dialog is in "New" mode; set to a Label Stock _id while
+    // editing that record, so submitCreateLabelStock knows which endpoint to
+    // POST to and openCreateLabelStockDialog knows to reset back to "New".
+    let lsEditId = null;
+
     const lsForm = document.getElementById("ls-create-form");
     const lsFieldsEnd = document.getElementById("ls-fields-end");
     const lsBlocks = {};
@@ -653,6 +658,41 @@
     function adRebuildCascade(masters, els, reinit, opts) { fsRebuildGroup(AD_ORDER, masters, els, reinit, opts); }
     function rlRebuildCascade(masters, els, reinit, opts) { fsRebuildGroup(RL_ORDER, masters, els, reinit, opts); }
 
+    // The cascade above reads `desired.family`/`.type`/`.make`/`.vendorId`/
+    // `.vendorSkuCode`/`.gsm`/`.micron` etc. -- short generic keys shared
+    // across all three layer types, matching FS_ORDER/AD_ORDER/RL_ORDER and
+    // the master documents' own field names. A saved Label Stock's
+    // facestock/adhesive/releaseLiner instead store them prefixed
+    // ("facestockFamily", "adhesiveType", "releaseLinerColor", ...), so
+    // they're remapped here before being handed to openEditLabelStockDialog
+    // below -- passing them through as-is would leave every `desired[key]`
+    // lookup undefined and silently fail to prefill anything.
+    function lsRemapFsLayer(layer) {
+      if (!layer) return null;
+      return {
+        family: layer.facestockFamily, type: layer.facestockType, make: layer.facestockMake,
+        vendorId: layer.facestockVendorId, vendorName: layer.facestockVendorName,
+        vendorSkuCode: layer.facestockVendorSkuCode,
+        gsm: layer.facestockGsm, micron: layer.facestockMicron,
+      };
+    }
+    function lsRemapAdLayer(layer) {
+      if (!layer) return null;
+      return {
+        type: layer.adhesiveType, make: layer.adhesiveMake, vendorId: layer.adhesiveVendorId,
+        vendorName: layer.adhesiveVendorName,
+        vendorSkuCode: layer.adhesiveVendorSkuCode, shelfLife: layer.adhesiveShelfLife,
+      };
+    }
+    function lsRemapRlLayer(layer) {
+      if (!layer) return null;
+      return {
+        type: layer.releaseLinerType, make: layer.releaseLinerMake, vendorId: layer.releaseLinerVendorId,
+        vendorName: layer.releaseLinerVendorName,
+        color: layer.releaseLinerColor, gsm: layer.releaseLinerGsm,
+      };
+    }
+
     function fsFieldSet(suffix) {
       return {
         family: document.getElementById("lsFacestockFamily" + suffix),
@@ -762,7 +802,11 @@
 
     window.openCreateLabelStockDialog = function () {
       lsForm.reset();
+      lsEditId = null;
+      document.getElementById("ls-dialog-title").textContent = "New Label Stock";
+      document.getElementById("ls-create-submit-btn").textContent = "Save Label Stock";
       document.getElementById("lsSkuCode").value = lsPreviewSkuCode;
+      document.getElementById("lsCurrentFileLink").style.display = "none";
       hideLsError();
 
       ["lsRollType", "lsFamily", "lsRollOrSheet"].forEach((id) => lsInitChoices(id));
@@ -781,6 +825,57 @@
       document.getElementById("ls-create-modal").style.display = "flex";
     };
 
+    // Edit uses the exact same dialog/form as Create (CLAUDE.md dialog
+    // pattern) -- every field just gets seeded from the saved record first.
+    // `raw` (the full jsonData the page already loaded for the table/View
+    // modal) already carries everything needed, so no extra fetch is made.
+    window.openEditLabelStockDialog = function (id) {
+      const ds = raw.find((d) => String(d._id) === id);
+      if (!ds) return;
+
+      lsForm.reset();
+      lsEditId = id;
+      document.getElementById("ls-dialog-title").textContent = "Edit Label Stock";
+      document.getElementById("ls-create-submit-btn").textContent = "Update Label Stock";
+      hideLsError();
+
+      document.getElementById("lsSkuCode").value = ds.skuCode || "";
+      document.getElementById("lsProductCode").value = ds.productCode || "";
+
+      const fileLink = document.getElementById("lsCurrentFileLink");
+      if (ds.wordFile) {
+        fileLink.href = `/sachiko/label-stock/file/${ds.wordFile}`;
+        fileLink.title = ds.wordFileOriginalName || ds.wordFile;
+        fileLink.style.display = "inline-flex";
+      } else {
+        fileLink.style.display = "none";
+      }
+
+      const rollType = ds.rollType || "NORMAL";
+      document.getElementById("lsRollType").value = rollType;
+      document.getElementById("lsFamily").value = ds.family || "";
+      document.getElementById("lsRollOrSheet").value = ds.rollOrSheet || "";
+      ["lsRollType", "lsFamily", "lsRollOrSheet"].forEach((id) => lsInitChoices(id));
+
+      lsRebuildPrintingTechnology(ds.rollOrSheet || "", ds.printingTechnology || "");
+      lsUpdateDigitalPrintTypeVisibility(ds.rollOrSheet || "", ds.printingTechnology || "", ds.digitalPrintType || "");
+
+      fsRebuildCascade(lsFacestockMasters, lsFsEls1, lsInitChoices, { desired: lsRemapFsLayer(ds.facestock) });
+      fsRebuildCascade(lsFacestockMasters, lsFsEls2, lsInitChoices, { desired: lsRemapFsLayer(ds.facestock2) });
+      adRebuildCascade(lsAdhesiveMasters, lsAdEls1, lsInitChoices, { desired: lsRemapAdLayer(ds.adhesive) });
+      adRebuildCascade(lsAdhesiveMasters, lsAdEls2, lsInitChoices, { desired: lsRemapAdLayer(ds.adhesive2) });
+      rlRebuildCascade(lsReleaseMasters, lsRlEls1, lsInitChoices, { desired: lsRemapRlLayer(ds.releaseLiner) });
+      rlRebuildCascade(lsReleaseMasters, lsRlEls2, lsInitChoices, { desired: lsRemapRlLayer(ds.releaseLiner2) });
+
+      // GSM has no Adhesive Master equivalent (AD_ORDER excludes it), so it's
+      // a plain typed number seeded directly rather than through the cascade.
+      document.getElementById("lsAdhesiveGsm").value = ds.adhesive?.adhesiveGsm != null ? ds.adhesive.adhesiveGsm : "";
+      document.getElementById("lsAdhesiveGsm2").value = ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm : "";
+
+      lsApplyRollType(rollType);
+      document.getElementById("ls-create-modal").style.display = "flex";
+    };
+
     window.closeCreateLabelStockDialog = function () {
       document.getElementById("ls-create-modal").style.display = "none";
     };
@@ -796,12 +891,13 @@
       btn.disabled = true;
       hideLsError();
       try {
-        const res = await fetch("/sachiko/label-stock/form", { method: "POST", body: new FormData(lsForm) });
+        const url = lsEditId ? `/sachiko/label-stock/edit/${lsEditId}` : "/sachiko/label-stock/form";
+        const res = await fetch(url, { method: "POST", body: new FormData(lsForm) });
         const data = await res.json().catch(() => null);
         if (data?.success) {
           window.location.href = data.redirect || "/sachiko/label-stock/view";
         } else {
-          showLsError(data?.message || "Failed to create Label Stock.");
+          showLsError(data?.message || `Failed to ${lsEditId ? "update" : "create"} Label Stock.`);
         }
       } catch {
         showLsError("Server error. Please try again.");
@@ -834,7 +930,7 @@
 <div id="ls-create-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:10000;justify-content:center;align-items:center;padding:24px;backdrop-filter:blur(4px);">
   <div style="background:#fff;border-radius:14px;overflow:hidden;width:min(1520px,96vw);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(4,74,120,0.2);animation:dsPopIn 0.2s ease-out;">
     <div style="background:linear-gradient(135deg,#044a78 0%,#03365a 100%);padding:12px 24px;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:12px;flex:0 0 auto;">
-      <h2 style="margin:0;font-size:19px;font-weight:700;">New Label Stock</h2>
+      <h2 id="ls-dialog-title" style="margin:0;font-size:19px;font-weight:700;">New Label Stock</h2>
       <button type="button" onclick="closeCreateLabelStockDialog()"
         style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:700;">
         <i class="fa-solid fa-xmark"></i>
@@ -852,7 +948,12 @@
           <input type="text" id="lsProductCode" name="productCode" class="form-control" placeholder="Enter product code" required />
         </div>
         <div class="dialog-field">
-          <label class="dialog-field-label" for="lsWordFile">Attach Word File</label>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <label class="dialog-field-label" for="lsWordFile" style="margin:0;">Attach Word File</label>
+            <a id="lsCurrentFileLink" href="#" target="_blank" style="display:none;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#044a78;text-decoration:none;">
+              <i class="fa-solid fa-file-word"></i> Show current file
+            </a>
+          </div>
           <input type="file" id="lsWordFile" name="wordFile" class="form-control" accept=".doc,.docx" />
         </div>
         <div class="dialog-field">
@@ -971,7 +1072,7 @@
       <!-- Adhesive -->
       <div class="ls-block layer-card layer-card--adhesive" data-block="adhesive1">
         <span class="layer-card__label">ADHESIVE<span id="lsAdhesiveSkuId" class="layer-card__sku-badge" style="display:none;"></span></span>
-        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 1fr 0.6fr;">
+        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 0.6fr;">
           <div class="layer-field">
             <label for="lsAdhesiveType">Type</label>
             <select id="lsAdhesiveType" name="adhesiveType" class="form-control select-tag" required>
@@ -996,7 +1097,10 @@
               <option value="" disabled selected hidden>Search</option>
             </select>
           </div>
-          <div class="layer-field">
+          <!-- Shelf Life hidden from the form -- the field/cascade still exist
+               (lsAdhesiveShelfLife keeps narrowing Type/Make/Vendor/... the
+               same as before), it's just not shown or user-editable. -->
+          <div class="layer-field" style="display:none;">
             <label for="lsAdhesiveShelfLife">Shelf Life</label>
             <select id="lsAdhesiveShelfLife" name="adhesiveShelfLife" class="form-control select-tag">
               <option value="" disabled selected hidden>Search</option>
@@ -1065,7 +1169,7 @@
       <!-- Adhesive (Layer 2) -- for DOUBLE FACESTOCK and DOUBLE RELEASE -->
       <div class="ls-block layer-card layer-card--adhesive" data-block="adhesive2" style="display:none">
         <span class="layer-card__label">ADHESIVE <span style="opacity:0.7;">(Layer 2)</span><span id="lsAdhesiveSkuId2" class="layer-card__sku-badge" style="display:none;"></span></span>
-        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 1fr 0.6fr;">
+        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 0.6fr;">
           <div class="layer-field">
             <label for="lsAdhesiveType2">Type</label>
             <select id="lsAdhesiveType2" name="adhesiveType2" class="form-control select-tag" data-required-when-visible>
@@ -1090,7 +1194,9 @@
               <option value="" disabled selected hidden>Search</option>
             </select>
           </div>
-          <div class="layer-field">
+          <!-- Shelf Life hidden from the form -- see the Layer 1 Adhesive
+               card above for why the field/cascade stay in the DOM. -->
+          <div class="layer-field" style="display:none;">
             <label for="lsAdhesiveShelfLife2">Shelf Life</label>
             <select id="lsAdhesiveShelfLife2" name="adhesiveShelfLife2" class="form-control select-tag">
               <option value="" disabled selected hidden>Search</option>

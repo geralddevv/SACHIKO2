@@ -829,7 +829,7 @@
 
       clientChoices.clearStore();
       clientChoices.setChoices(
-        [{ value: "", label: "Select Client", disabled: true, selected: !targetToKeep },
+        [{ value: "", label: "Select Client", disabled: true, selected: !targetToKeep, placeholder: true },
          ...finalNames.map(name => ({ 
            value: name, 
            label: name, 
@@ -2121,6 +2121,13 @@
         else if (orderToEdit.tapeId && orderToEdit.tapeId._id) itemId = String(orderToEdit.tapeId._id);
       }
     }
+
+    // New order, nothing in the URL saying otherwise -- default Item Type to
+    // Label Stock instead of leaving it on the blank placeholder. Only
+    // applies when there's no orderToEdit (edit mode already resolved its
+    // real type above via inferSalesOrderType) and no explicit ?type= param
+    // (an incoming link asking for Tape is still honoured).
+    if (!type && !orderToEdit) type = "LABEL_STOCK";
 
     // 1. Handle Type Prefill
     if (type) {

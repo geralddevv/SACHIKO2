@@ -2,9 +2,10 @@ import mongoose from "mongoose";
 
 // One doc = one physical reel of raw Release Liner material. Generic
 // raw-material inventory (see facestockStock.js for the fuller comment) --
-// its Type/Color/GSM is entered directly at inward, same fields as the
-// releaseLiner sub-schema on SachikoLabelStock, since Sachiko has no separate
-// release liner master.
+// its Type/Color/GSM/Vendor/Make/Vendor SKU Code is entered directly at
+// inward, smart-filtered against Release Master (see
+// routes/stock/releaseLinerStock.js's /filter-specs) so every field here
+// mirrors one on models/inventory/releaseMaster.js.
 const releaseLinerStockSchema = new mongoose.Schema(
   {
     type: {
@@ -19,6 +20,27 @@ const releaseLinerStockSchema = new mongoose.Schema(
     },
     gsm: {
       type: Number,
+    },
+    // The vendor who supplied this specific reel -- same Vendor master
+    // (filtered to commodities: "RELEASE PAPER") and vendorId/vendorName
+    // denormalization pairing used by Release Master.
+    vendorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
+    },
+    vendorName: {
+      type: String,
+      trim: true,
+    },
+    make: {
+      type: String,
+      trim: true,
+    },
+    // The vendor's own code for this spec -- purely a cross-reference
+    // against the vendor's paperwork, same as Release Master's own field.
+    vendorSkuCode: {
+      type: String,
+      trim: true,
     },
     location: {
       type: String,

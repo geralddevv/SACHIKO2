@@ -8,8 +8,8 @@ import SachikoLabelStock from "../models/sachiko/sachikoLabelStock.js";
 
 // ---------------------------------------------------------------------------
 // One-time backfill for SachikoLabelStock.skuCode ("SKU Code" in the UI --
-// views/sachiko/labelStockEdit.ejs, labelStockBindingForm.ejs's SKU Code
-// select, etc.). The field is `required: true, unique: true` on the schema,
+// views/sachiko/labelStockView.ejs's New/Edit dialog, labelStockBindingForm.ejs's
+// SKU Code select, etc.). The field is `required: true, unique: true` on the schema,
 // but a record predating that constraint (or written straight to the
 // database) can still end up without one -- e.g. a record still carrying its
 // old "SP | DS | ..." labelStockId from before the datasheet -> label stock

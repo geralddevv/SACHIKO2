@@ -1,5 +1,7 @@
 import express from "express";
 import ReleaseLinerStock from "../../models/inventory/releaseLinerStock.js";
+import ReleaseMaster from "../../models/inventory/releaseMaster.js";
+import Vendor from "../../models/users/vendor.js";
 import Location from "../../models/system/location.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -15,17 +17,30 @@ const numOrUndef = (value) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-// Fields shared by every reel in one inward batch (one spec, one invoice).
-function buildHeaderPayload(body) {
-  return {
+// Fields shared by every reel in one inward batch (one spec, one invoice) --
+// every field Release Master itself carries (type/color/gsm/vendor/make/
+// vendorSkuCode), plus this batch's own location/rate/invoice.
+async function buildHeaderPayload(body) {
+  const vendorId = String(body.vendorId || "").trim();
+  const header = {
     type: String(body.type || "").trim(),
     color: String(body.color || "WHITE").trim() || "WHITE",
     gsm: numOrUndef(body.gsm),
+    vendorId: vendorId || undefined,
+    make: String(body.make || "").trim(),
+    vendorSkuCode: String(body.vendorSkuCode || "").trim(),
     location: String(body.location || "").trim(),
     rate: numOrUndef(body.rate),
     invoiceNo: String(body.invoiceNo || "").trim(),
     remarks: String(body.remarks || "").trim(),
   };
+
+  if (vendorId) {
+    const vendor = await Vendor.findById(vendorId).select("vendorName").lean();
+    header.vendorName = vendor?.vendorName || "";
+  }
+
+  return header;
 }
 
 function validateHeaderPayload(header) {
@@ -45,8 +60,9 @@ function buildRollPayload(raw) {
 // The Edit dialog still edits one existing reel at a time (its own Roll ID
 // is already assigned, so there's nothing to batch) -- full single-reel
 // payload, same shape as the pre-batch /create used.
-function buildEditPayload(body) {
-  return { ...buildHeaderPayload(body), ...buildRollPayload(body) };
+async function buildEditPayload(body) {
+  const header = await buildHeaderPayload(body);
+  return { ...header, ...buildRollPayload(body) };
 }
 
 function validateEditPayload(payload) {
@@ -56,10 +72,67 @@ function validateEditPayload(payload) {
   return null;
 }
 
+// Strips null/undefined/blank entries out of a Mongo .distinct() result and
+// sorts it -- numeric fields (gsm) sort numerically, everything else
+// alphabetically.
+function cleanDistinct(values, { numeric = false } = {}) {
+  const filtered = (values || []).filter((v) => v !== null && v !== undefined && v !== "");
+  return numeric ? filtered.sort((a, b) => a - b) : filtered.sort();
+}
+
+function omit(obj, key) {
+  const { [key]: _, ...rest } = obj;
+  return rest;
+}
+
+// vendorId is an ObjectId, not a plain scalar, so it can't go through
+// .distinct() + cleanDistinct() like the other fields -- this groups by it
+// instead and keeps each vendor's denormalized name for display, the same
+// {vendorId, vendorName} pairing Release Master itself stores.
+async function distinctVendorPairs(filter) {
+  const rows = await ReleaseMaster.aggregate([
+    { $match: { ...filter, vendorId: { $ne: null } } },
+    { $group: { _id: "$vendorId", vendorName: { $first: "$vendorName" } } },
+  ]);
+  return rows
+    .map((r) => ({ vendorId: String(r._id), vendorName: r.vendorName || "" }))
+    .filter((v) => v.vendorName)
+    .sort((a, b) => a.vendorName.localeCompare(b.vendorName));
+}
+
+// Single source of truth for the Add dialog's Type/Color/GSM/Vendor/Make/
+// Vendor SKU Code pickers -- every field Release Master itself carries,
+// sourced from it instead of a hardcoded list or free typing, so inward
+// entry only ever selects a real cataloged spec. Used both for the initial
+// page load (`filter: {}`) and /filter-specs (each field narrowed by every
+// OTHER currently-selected field, never by itself, so picking a value never
+// removes itself from its own list). Same "narrow as you pick" pattern as
+// Tape Stock inward (routes/stock/tapeStock.js's /filter-specs) and
+// Facestock Stock inward (routes/stock/facestockStock.js's /filter-specs).
+async function loadSpecOptions(filter) {
+  const [types, colors, gsms, vendors, makes, vendorSkuCodes] = await Promise.all([
+    ReleaseMaster.distinct("type", omit(filter, "type")),
+    ReleaseMaster.distinct("color", omit(filter, "color")),
+    ReleaseMaster.distinct("gsm", omit(filter, "gsm")),
+    distinctVendorPairs(omit(filter, "vendorId")),
+    ReleaseMaster.distinct("make", omit(filter, "make")),
+    ReleaseMaster.distinct("vendorSkuCode", omit(filter, "vendorSkuCode")),
+  ]);
+  return {
+    types: cleanDistinct(types),
+    colors: cleanDistinct(colors),
+    gsms: cleanDistinct(gsms, { numeric: true }),
+    vendors,
+    makes: cleanDistinct(makes),
+    vendorSkuCodes: cleanDistinct(vendorSkuCodes),
+  };
+}
+
 router.get("/", async (req, res) => {
-  const [locations, stock] = await Promise.all([
+  const [locations, stock, specOptions] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
     ReleaseLinerStock.find().sort({ createdAt: -1 }).lean(),
+    loadSpecOptions({}),
   ]);
   res.render("stock/releaseLinerStock.ejs", {
     JS: false,
@@ -67,8 +140,27 @@ router.get("/", async (req, res) => {
     title: "Release Liner Stock",
     locations,
     stock,
+    ...specOptions,
     notification: req.flash("notification"),
   });
+});
+
+router.get("/filter-specs", async (req, res) => {
+  try {
+    const { type, color, gsm, vendorId, make, vendorSkuCode } = req.query;
+    const filter = {};
+    if (type) filter.type = type;
+    if (color) filter.color = color;
+    if (gsm) filter.gsm = Number(gsm);
+    if (vendorId) filter.vendorId = vendorId;
+    if (make) filter.make = make;
+    if (vendorSkuCode) filter.vendorSkuCode = vendorSkuCode;
+
+    res.json(await loadSpecOptions(filter));
+  } catch (err) {
+    console.error("RELEASE LINER STOCK FILTER-SPECS ERROR:", err);
+    res.status(500).json({ error: "Failed to load filter options." });
+  }
 });
 
 // Read-only preview of the next `count` Roll IDs -- refreshed by the add
@@ -82,7 +174,7 @@ router.get("/preview-roll-ids", async (req, res) => {
 
 router.post("/create", requireAuth, createLimiter, async (req, res) => {
   try {
-    const header = buildHeaderPayload(req.body);
+    const header = await buildHeaderPayload(req.body);
     const headerError = validateHeaderPayload(header);
     if (headerError) return res.status(400).json({ success: false, message: headerError });
 
@@ -122,7 +214,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
 
 router.put("/:id", requireAuth, updateLimiter, async (req, res) => {
   try {
-    const payload = buildEditPayload(req.body);
+    const payload = await buildEditPayload(req.body);
     const error = validateEditPayload(payload);
     if (error) return res.status(400).json({ success: false, message: error });
 

@@ -1,9 +1,12 @@
 import mongoose from "mongoose";
 
 // One doc = one physical reel of raw Adhesive material. Generic raw-material
-// inventory (see facestockStock.js for the fuller comment) -- its Type/GSM
-// is entered directly at inward, same fields as the adhesive sub-schema on
-// SachikoLabelStock, since Sachiko has no separate adhesive master.
+// inventory (see facestockStock.js for the fuller comment) -- its Type/Vendor/
+// Make/Vendor SKU Code/Shelf Life/Viscosity/Cohesion/Shear/Density are
+// entered directly at inward, smart-filtered against Adhesive Master (see
+// routes/stock/adhesiveStock.js's /filter-specs) so every field here mirrors
+// one on models/inventory/adhesiveMaster.js. GSM is the one exception --
+// Adhesive Master carries no gsm field, so it stays a plain typed value here.
 const adhesiveStockSchema = new mongoose.Schema(
   {
     type: {
@@ -12,6 +15,43 @@ const adhesiveStockSchema = new mongoose.Schema(
       trim: true,
     },
     gsm: {
+      type: Number,
+    },
+    // The vendor who supplied this specific drum -- same Vendor master
+    // (filtered to commodities: "ADHESIVE") and vendorId/vendorName
+    // denormalization pairing used by Adhesive Master.
+    vendorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Vendor",
+    },
+    vendorName: {
+      type: String,
+      trim: true,
+    },
+    make: {
+      type: String,
+      trim: true,
+    },
+    // The vendor's own code for this spec -- purely a cross-reference
+    // against the vendor's paperwork, same as Adhesive Master's own field.
+    vendorSkuCode: {
+      type: String,
+      trim: true,
+    },
+    shelfLife: {
+      type: String,
+      trim: true,
+    },
+    viscosity: {
+      type: Number,
+    },
+    cohesion: {
+      type: Number,
+    },
+    shear: {
+      type: Number,
+    },
+    density: {
       type: Number,
     },
     location: {

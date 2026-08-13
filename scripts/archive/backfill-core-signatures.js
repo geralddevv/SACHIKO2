@@ -36,6 +36,7 @@ function buildCoreSignature(doc) {
       canonStr(doc.make),
       canonStr(doc.printType),
       String(Number(doc.thickness ?? "")),
+      String(Number(doc.width ?? "")),
     ].join("||"),
   );
 }

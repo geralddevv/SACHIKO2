@@ -155,6 +155,11 @@
       color: #044a78;
       margin-bottom: 8px;
     }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
   </style>
 
   <div class="indi-head">
@@ -194,17 +199,107 @@
              downward from fields that always have room below them here, so
              clipping in practice shouldn't come up (CLAUDE.md "Dialog /
              modal pattern"). -->
-        <div style="flex: 1 1 340px; min-width: 340px; padding-right: 6px; overflow-y: auto;">
+        <!-- Type/Vendor/Make/Vendor SKU Code/Shelf Life/Viscosity/Cohesion/
+             Shear/Density -- every field Adhesive Master itself carries --
+             are smart-filtered against it (see GET
+             /sachiko/adhesivestock/filter-specs): picking one narrows the
+             others to combinations that actually exist in the master
+             catalog, same "narrow as you pick" pattern as Tape Stock inward
+             and Facestock Stock inward. GSM has no counterpart on Adhesive
+             Master, so it stays a plain typed field. -->
+        <div class="custom-scrollbar" style="flex: 1 1 340px; min-width: 340px; padding-right: 6px; overflow-y: auto;">
           <div class="dialog-field-row">
             <div>
               <label class="dialog-field-label" for="addTypeSelect">Type</label>
               <select id="addTypeSelect">
                 <option value="" disabled selected hidden>Select type</option>
-                <option value="ACRYLIC">ACRYLIC</option>
-                <option value="HOTMELT">HOTMELT</option>
-                <option value="HT">HT</option>
-                <option value="STAIN FREE">STAIN FREE</option>
-                <option value="WATERBASE">WATERBASE</option>
+                <% types?.forEach(v => { %>
+                <option value="<%= v %>"><%= v %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
+              <select id="addVendorSelect">
+                <option value="">— None —</option>
+                <% vendors?.forEach(v => { %>
+                <option value="<%= v.vendorId %>"><%= v.vendorName %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+
+          <div class="dialog-field-row">
+            <div>
+              <label class="dialog-field-label" for="addMakeSelect">Make</label>
+              <select id="addMakeSelect">
+                <option value="">— None —</option>
+                <% makes?.forEach(v => { %>
+                <option value="<%= v %>"><%= v %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addVendorSkuCodeSelect">Vendor SKU Code</label>
+              <select id="addVendorSkuCodeSelect">
+                <option value="">— None —</option>
+                <% vendorSkuCodes?.forEach(v => { %>
+                <option value="<%= v %>"><%= v %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+
+          <div class="dialog-field-row">
+            <div>
+              <label class="dialog-field-label" for="addShelfLifeSelect">Shelf Life</label>
+              <select id="addShelfLifeSelect">
+                <option value="">— None —</option>
+                <% shelfLifes?.forEach(v => { %>
+                <option value="<%= v %>"><%= v %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addViscositySelect">Viscosity</label>
+              <select id="addViscositySelect">
+                <option value="">— None —</option>
+                <% viscosities?.forEach(v => { %>
+                <option value="<%= v %>"><%= v %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+
+          <div class="dialog-field-row">
+            <div>
+              <label class="dialog-field-label" for="addCohesionSelect">Cohesion</label>
+              <select id="addCohesionSelect">
+                <option value="">— None —</option>
+                <% cohesions?.forEach(v => { %>
+                <option value="<%= v %>"><%= v %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addShearSelect">Shear</label>
+              <select id="addShearSelect">
+                <option value="">— None —</option>
+                <% shears?.forEach(v => { %>
+                <option value="<%= v %>"><%= v %></option>
+                <% }) %>
+              </select>
+            </div>
+          </div>
+
+          <div class="dialog-field-row">
+            <div>
+              <label class="dialog-field-label" for="addDensitySelect">Density</label>
+              <select id="addDensitySelect">
+                <option value="">— None —</option>
+                <% densities?.forEach(v => { %>
+                <option value="<%= v %>"><%= v %></option>
+                <% }) %>
               </select>
             </div>
             <div>
@@ -242,7 +337,7 @@
         <!-- ---- Right: one card per physical drum ---- -->
         <div style="flex: 1 1 auto; min-width: 0; max-width: 600px; display: flex; flex-direction: column;">
           <div class="dialog-section-label"><span>Drums</span></div>
-          <div id="addDrumsContainer" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start; gap: 14px; padding-right: 6px;"></div>
+          <div id="addDrumsContainer" class="custom-scrollbar" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start; gap: 14px; padding-right: 6px;"></div>
         </div>
       </div>
 
@@ -272,16 +367,55 @@
           <label class="dialog-field-label" for="editTypeSelect">Type</label>
           <select id="editTypeSelect">
             <option value="" disabled hidden>Select type</option>
-            <option value="ACRYLIC">ACRYLIC</option>
-            <option value="HOTMELT">HOTMELT</option>
-            <option value="HT">HT</option>
-            <option value="STAIN FREE">STAIN FREE</option>
-            <option value="WATERBASE">WATERBASE</option>
           </select>
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editVendorSelect">Vendor Name</label>
+          <select id="editVendorSelect"></select>
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editMakeInput">Make</label>
+          <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editVendorSkuCodeInput">Vendor SKU Code</label>
+          <input type="text" id="editVendorSkuCodeInput" class="form-control premium-input" placeholder="Enter vendor SKU code" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editShelfLifeInput">Shelf Life</label>
+          <input type="text" id="editShelfLifeInput" class="form-control premium-input" placeholder="Enter shelf life" />
         </div>
         <div>
           <label class="dialog-field-label" for="editGsmInput">GSM</label>
           <input type="number" id="editGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editViscosityInput">Viscosity</label>
+          <input type="number" id="editViscosityInput" class="form-control premium-input" placeholder="Enter viscosity" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editCohesionInput">Cohesion</label>
+          <input type="number" id="editCohesionInput" class="form-control premium-input" placeholder="Enter cohesion" min="0" step="any" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editShearInput">Shear</label>
+          <input type="number" id="editShearInput" class="form-control premium-input" placeholder="Enter shear" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editDensityInput">Density</label>
+          <input type="number" id="editDensityInput" class="form-control premium-input" placeholder="Enter density" min="0" step="any" />
         </div>
       </div>
 
@@ -351,9 +485,11 @@
 
 <script id="stock-data" type="application/json"><%- safeJson(stock) %></script>
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
+<script id="adhesive-specs-data" type="application/json"><%- safeJson({ types, vendors, makes, vendorSkuCodes, shelfLifes, viscosities, cohesions, shears, densities }) %></script>
 <script>
   const stockData = JSON.parse(document.getElementById("stock-data").textContent);
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
+  const adhesiveSpecsData = JSON.parse(document.getElementById("adhesive-specs-data").textContent);
 
   function locationOptionsHtml(selectedName) {
     return locationsData
@@ -361,8 +497,153 @@
       .join("");
   }
 
-  let addTypeChoices = null, addLocationChoices = null;
-  let editTypeChoices = null, editLocationChoices = null;
+  // Rebuilds a smart-filtered select's full (unfiltered) option list -- used
+  // to reset the Add dialog's pickers back to every Adhesive Master value
+  // each time the dialog is (re)opened, since filterAddSpecs narrows them in
+  // place while it's open.
+  function specOptionsHtml(values, noneLabel, noneDisabled) {
+    const noneOption = `<option value="" ${noneDisabled ? "disabled selected hidden" : ""}>${noneLabel}</option>`;
+    return noneOption + values.map((v) => `<option value="${v}">${v}</option>`).join("");
+  }
+
+  // Same, for the Vendor Name picker -- its options are {vendorId, vendorName}
+  // pairs, not plain scalars, so it needs its own value/label mapping.
+  function vendorOptionsHtml(vendors) {
+    return `<option value="">— None —</option>` + vendors.map((v) => `<option value="${v.vendorId}">${v.vendorName}</option>`).join("");
+  }
+
+  let addTypeChoices = null, addVendorChoices = null, addMakeChoices = null, addVendorSkuCodeChoices = null;
+  let addShelfLifeChoices = null, addViscosityChoices = null, addCohesionChoices = null, addShearChoices = null, addDensityChoices = null;
+  let addLocationChoices = null;
+  let editTypeChoices = null, editVendorChoices = null, editLocationChoices = null;
+
+  // ---- Add (inward) dialog: smart filter for Type/Vendor/Make/Vendor SKU
+  // Code/Shelf Life/Viscosity/Cohesion/Shear/Density ---- Narrows each
+  // field's options to combinations that actually exist in Adhesive Master
+  // as the others are picked -- same pattern as Tape Stock inward
+  // (routes/stock/tapeStock.js) and Facestock Stock inward
+  // (routes/stock/facestockStock.js). GSM has no counterpart on Adhesive
+  // Master, so it's a plain typed field and stays out of this cascade.
+  const addSpecFields = [
+    "addTypeSelect", "addVendorSelect", "addMakeSelect", "addVendorSkuCodeSelect",
+    "addShelfLifeSelect", "addViscositySelect", "addCohesionSelect", "addShearSelect", "addDensitySelect",
+  ];
+  const addSpecFieldToKey = {
+    addTypeSelect: "type",
+    addVendorSelect: "vendorId",
+    addMakeSelect: "make",
+    addVendorSkuCodeSelect: "vendorSkuCode",
+    addShelfLifeSelect: "shelfLife",
+    addViscositySelect: "viscosity",
+    addCohesionSelect: "cohesion",
+    addShearSelect: "shear",
+    addDensitySelect: "density",
+  };
+  const addSpecFieldToDataKey = {
+    addTypeSelect: "types",
+    addVendorSelect: "vendors",
+    addMakeSelect: "makes",
+    addVendorSkuCodeSelect: "vendorSkuCodes",
+    addShelfLifeSelect: "shelfLifes",
+    addViscositySelect: "viscosities",
+    addCohesionSelect: "cohesions",
+    addShearSelect: "shears",
+    addDensitySelect: "densities",
+  };
+  // Vendor's options are {vendorId, vendorName} pairs; every other field's
+  // are plain scalars -- this is the one place that difference matters.
+  const addSpecFieldToChoice = {
+    addVendorSelect: (v) => ({ value: v.vendorId, label: v.vendorName }),
+  };
+  function toChoiceOption(fieldId, value, currentValue) {
+    const mapper = addSpecFieldToChoice[fieldId] || ((v) => ({ value: String(v), label: String(v) }));
+    const { value: val, label } = mapper(value);
+    return { value: val, label, selected: val === currentValue };
+  }
+  // Everything but Type is optional on a stock drum, so its reset choice is
+  // a real selectable "— None —"; Type is required, so it stays a disabled
+  // placeholder like the rest of this dialog's required selects.
+  const addSpecFieldPlaceholder = {
+    addTypeSelect: { label: "Select type", disabled: true },
+    addVendorSelect: { label: "— None —", disabled: false },
+    addMakeSelect: { label: "— None —", disabled: false },
+    addVendorSkuCodeSelect: { label: "— None —", disabled: false },
+    addShelfLifeSelect: { label: "— None —", disabled: false },
+    addViscositySelect: { label: "— None —", disabled: false },
+    addCohesionSelect: { label: "— None —", disabled: false },
+    addShearSelect: { label: "— None —", disabled: false },
+    addDensitySelect: { label: "— None —", disabled: false },
+  };
+  function addSpecChoicesInstance(id) {
+    if (id === "addTypeSelect") return addTypeChoices;
+    if (id === "addVendorSelect") return addVendorChoices;
+    if (id === "addMakeSelect") return addMakeChoices;
+    if (id === "addVendorSkuCodeSelect") return addVendorSkuCodeChoices;
+    if (id === "addShelfLifeSelect") return addShelfLifeChoices;
+    if (id === "addViscositySelect") return addViscosityChoices;
+    if (id === "addCohesionSelect") return addCohesionChoices;
+    if (id === "addShearSelect") return addShearChoices;
+    if (id === "addDensitySelect") return addDensityChoices;
+    return null;
+  }
+
+  async function filterAddSpecs(changedFieldId) {
+    const params = new URLSearchParams();
+    addSpecFields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && el.value) params.set(addSpecFieldToKey[id], el.value);
+    });
+
+    try {
+      const res = await fetch(`/sachiko/adhesivestock/filter-specs?${params}`);
+      const data = await res.json();
+      if (!data) return;
+
+      const autoSelected = [];
+
+      addSpecFields.forEach((id) => {
+        if (id === changedFieldId) return;
+        const choicesInstance = addSpecChoicesInstance(id);
+        if (!choicesInstance) return;
+
+        const filteredValues = data[addSpecFieldToDataKey[id]] || [];
+        const currentValue = document.getElementById(id)?.value || "";
+
+        const newChoices = filteredValues.map((v) => toChoiceOption(id, v, currentValue));
+
+        if (filteredValues.length === 1 && !currentValue) {
+          newChoices[0].selected = true;
+          autoSelected.push(id);
+        }
+
+        const ph = addSpecFieldPlaceholder[id];
+        choicesInstance.clearStore();
+        choicesInstance.setChoices(
+          [{ value: "", label: ph.label, disabled: ph.disabled, selected: !newChoices.some((c) => c.selected) }, ...newChoices],
+          "value", "label", true
+        );
+      });
+
+      if (autoSelected.length > 0) await filterAddSpecs(autoSelected[0]);
+    } catch (err) {
+      console.error("Adhesive filter specs error:", err);
+    }
+  }
+
+  addSpecFields.forEach((id) => {
+    document.getElementById(id)?.addEventListener("change", () => filterAddSpecs(id));
+  });
+
+  // Truncates a long cell value with an ellipsis (title attribute carries
+  // the full text as a hover tooltip) -- used for free-text fields like
+  // Vendor Name that can run longer than the column is wide.
+  function ellipsisFormatter(cell) {
+    const value = cell.getValue();
+    if (!value) return "—";
+    cell.getElement().style.cssText += "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    cell.getElement().title = value;
+    return value;
+  }
 
   // ---- Table ----
   const table = new Tabulator("#adhesive-stock-table", {
@@ -375,6 +656,14 @@
       { title: "Drum ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
       { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
+      { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Shelf Life", field: "shelfLife", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Viscosity", field: "viscosity", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Cohesion", field: "cohesion", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Shear", field: "shear", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Density", field: "density", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Mtrs", field: "reelMtrs", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
       { title: "Rate", field: "rate", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Location", field: "location", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
@@ -525,8 +814,40 @@
     document.getElementById("addDrumCountInput").value = "1";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
-    document.getElementById("addTypeSelect").value = "";
+    document.getElementById("addTypeSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.types, "Select type", true);
     addTypeChoices = new Choices("#addTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    if (addVendorChoices) { addVendorChoices.destroy(); addVendorChoices = null; }
+    document.getElementById("addVendorSelect").innerHTML = vendorOptionsHtml(adhesiveSpecsData.vendors);
+    addVendorChoices = new Choices("#addVendorSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    if (addMakeChoices) { addMakeChoices.destroy(); addMakeChoices = null; }
+    document.getElementById("addMakeSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.makes, "— None —", false);
+    addMakeChoices = new Choices("#addMakeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    if (addVendorSkuCodeChoices) { addVendorSkuCodeChoices.destroy(); addVendorSkuCodeChoices = null; }
+    document.getElementById("addVendorSkuCodeSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.vendorSkuCodes, "— None —", false);
+    addVendorSkuCodeChoices = new Choices("#addVendorSkuCodeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    if (addShelfLifeChoices) { addShelfLifeChoices.destroy(); addShelfLifeChoices = null; }
+    document.getElementById("addShelfLifeSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.shelfLifes, "— None —", false);
+    addShelfLifeChoices = new Choices("#addShelfLifeSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    if (addViscosityChoices) { addViscosityChoices.destroy(); addViscosityChoices = null; }
+    document.getElementById("addViscositySelect").innerHTML = specOptionsHtml(adhesiveSpecsData.viscosities, "— None —", false);
+    addViscosityChoices = new Choices("#addViscositySelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    if (addCohesionChoices) { addCohesionChoices.destroy(); addCohesionChoices = null; }
+    document.getElementById("addCohesionSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.cohesions, "— None —", false);
+    addCohesionChoices = new Choices("#addCohesionSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    if (addShearChoices) { addShearChoices.destroy(); addShearChoices = null; }
+    document.getElementById("addShearSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.shears, "— None —", false);
+    addShearChoices = new Choices("#addShearSelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    if (addDensityChoices) { addDensityChoices.destroy(); addDensityChoices = null; }
+    document.getElementById("addDensitySelect").innerHTML = specOptionsHtml(adhesiveSpecsData.densities, "— None —", false);
+    addDensityChoices = new Choices("#addDensitySelect", { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
     const locSel = document.getElementById("addLocationSelect");
@@ -565,6 +886,14 @@
         body: JSON.stringify({
           type,
           gsm: document.getElementById("addGsmInput").value,
+          vendorId: document.getElementById("addVendorSelect").value,
+          make: document.getElementById("addMakeSelect").value,
+          vendorSkuCode: document.getElementById("addVendorSkuCodeSelect").value,
+          shelfLife: document.getElementById("addShelfLifeSelect").value,
+          viscosity: document.getElementById("addViscositySelect").value,
+          cohesion: document.getElementById("addCohesionSelect").value,
+          shear: document.getElementById("addShearSelect").value,
+          density: document.getElementById("addDensitySelect").value,
           rate: document.getElementById("addRateInput").value,
           location,
           invoiceNo: document.getElementById("addInvoiceNoInput").value,
@@ -597,10 +926,32 @@
     document.getElementById("editVendorRollIdInput").value = row.vendorRollId || "";
     document.getElementById("editInvoiceNoInput").value = row.invoiceNo || "";
     document.getElementById("editRemarksInput").value = row.remarks || "";
+    document.getElementById("editMakeInput").value = row.make || "";
+    document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
+    document.getElementById("editShelfLifeInput").value = row.shelfLife || "";
+    document.getElementById("editViscosityInput").value = row.viscosity ?? "";
+    document.getElementById("editCohesionInput").value = row.cohesion ?? "";
+    document.getElementById("editShearInput").value = row.shear ?? "";
+    document.getElementById("editDensityInput").value = row.density ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
+    document.getElementById("editTypeSelect").innerHTML = specOptionsHtml(adhesiveSpecsData.types, "Select type", true);
     document.getElementById("editTypeSelect").value = row.type || "";
     editTypeChoices = new Choices("#editTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
+    if (editVendorChoices) { editVendorChoices.destroy(); editVendorChoices = null; }
+    const editVendorSel = document.getElementById("editVendorSelect");
+    // A drum's saved vendor might not be in the current Adhesive Master
+    // vendor list (e.g. that master entry was since edited/removed) -- add
+    // it as an extra option so editing this drum never silently drops it.
+    const knownVendors = adhesiveSpecsData.vendors.some((v) => v.vendorId === row.vendorId)
+      ? adhesiveSpecsData.vendors
+      : row.vendorId
+        ? [...adhesiveSpecsData.vendors, { vendorId: row.vendorId, vendorName: row.vendorName || row.vendorId }]
+        : adhesiveSpecsData.vendors;
+    editVendorSel.innerHTML = vendorOptionsHtml(knownVendors);
+    editVendorSel.value = row.vendorId || "";
+    editVendorChoices = new Choices(editVendorSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (editLocationChoices) { editLocationChoices.destroy(); editLocationChoices = null; }
     const locSel = document.getElementById("editLocationSelect");
@@ -633,6 +984,14 @@
         body: JSON.stringify({
           type,
           gsm: document.getElementById("editGsmInput").value,
+          vendorId: document.getElementById("editVendorSelect").value,
+          make: document.getElementById("editMakeInput").value,
+          vendorSkuCode: document.getElementById("editVendorSkuCodeInput").value,
+          shelfLife: document.getElementById("editShelfLifeInput").value,
+          viscosity: document.getElementById("editViscosityInput").value,
+          cohesion: document.getElementById("editCohesionInput").value,
+          shear: document.getElementById("editShearInput").value,
+          density: document.getElementById("editDensityInput").value,
           reelMtrs,
           rate: document.getElementById("editRateInput").value,
           location,

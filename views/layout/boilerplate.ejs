@@ -750,7 +750,12 @@
         <% const canAccounting = isAdmin || isHr || permissions.accounting; %>
         <% const canHr = isAdmin || isHr || permissions.hr; %>
 
-        <% if (canView) { %>
+        <% /* "Tape View" (below) is hidden app-wide -- for isAdmin/isHod it was
+               one of two items here, so the dropdown still has Label Stock and
+               stays as canView gated it before. For every other role it was
+               the *only* item, so this whole dropdown is gated to isAdmin/isHod
+               too now, rather than leaving a toggle that opens onto nothing. */ %>
+        <% if (canView && (isAdmin || isHod)) { %>
         <div class="nav-opt-wrap">
           <div title="View" class="view-toggle nav-items">
             <i class="fa-solid fa-boxes-stacked" style="color: #ffffff"></i>
@@ -759,13 +764,11 @@
           </div>
 
           <div class="nav-labels-opt">
-            <% if (isAdmin || isHod) { %>
-            <div title="Label Stock View" class="<%= (title === 'Label Stock View' || title === 'Label Stock Form' || title === 'Edit Label Stock') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/label-stock/view'" style="border-top: 2px solid #ffffff9d;">
+            <div title="Label Stock View" class="<%= (title === 'Label Stock View' || title === 'Label Stock Form' || title === 'Edit Label Stock') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/label-stock/view'" style="border-top: 2px solid #ffffff9d; border-bottom: 2px solid #ffffff9d;">
               <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
               <p class="nav-items-para">Label Stock</p>
             </div>
-            <% } %>
-            <div title="Tape View" class="<%= title === 'Tape View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tape/view'" style="<%= (isAdmin || isHod) ? '' : 'border-top: 2px solid #ffffff9d;' %> border-bottom: 2px solid #ffffff9d;">
+            <div title="Tape View" class="<%= title === 'Tape View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tape/view'" style="display:none;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
             </div>
@@ -795,15 +798,18 @@
               <p class="nav-items-para">Client Data</p>
             </div>
 
-            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
+            <!-- "Binding" only ever labelled "Client Label Stock" and
+                 "Client Tape" below it, both now hidden app-wide -- hiding
+                 the header too instead of leaving an empty labelled group. -->
+            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none; display:none;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
             </div>
 
-            <div title="Client Label Stock" class="<%= title === 'Client Label Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/label-stock-binding'" style="border-top: 2px solid #ffffff9d; margin-bottom: 2px;">
+            <div title="Client Label Stock" class="<%= title === 'Client Label Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/label-stock-binding'" style="display:none;">
               <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
               <p class="nav-items-para">Label Stock</p>
             </div>
-            <div title="Client Tape" class="<%= title === 'Client Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/tape-binding'" style="border-bottom: 2px solid #ffffff9d;">
+            <div title="Client Tape" class="<%= title === 'Client Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/tape-binding'" style="display:none;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
             </div>
@@ -939,11 +945,11 @@
               <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
               <p class="nav-items-para">Adhesive</p>
             </div>
-            <div title="Release Liner Stock" class="<%= title === 'Release Liner Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/releaselinerstock'">
+            <div title="Release Liner Stock" class="<%= title === 'Release Liner Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/releaselinerstock'" style="border-bottom: 2px solid #ffffff9d;">
               <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
               <p class="nav-items-para">Release Liner</p>
             </div>
-            <div title="Tape Stock" class="<%= title === 'Tape Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tapestock'" style="border-bottom: 2px solid #ffffff9d;">
+            <div title="Tape Stock" class="<%= title === 'Tape Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tapestock'" style="display:none;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
             </div>
@@ -999,11 +1005,14 @@
               <p class="nav-items-para">Vendor Create</p>
             </div>
 
-            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
+            <!-- "Binding" only ever labelled "Vendor Tape" below it, which is
+                 now hidden app-wide -- hiding the header too instead of
+                 leaving an empty labelled group. -->
+            <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none; display:none;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
             </div>
 
-            <div title="Vendor Tape" class="<%= title === 'Vendor Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor-item-binding/tape'" style="border-bottom: 2px solid #ffffff9d;">
+            <div title="Vendor Tape" class="<%= title === 'Vendor Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor-item-binding/tape'" style="display:none;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
             </div>

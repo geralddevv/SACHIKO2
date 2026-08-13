@@ -39,13 +39,6 @@
 <script>
   const rawOrders = JSON.parse(document.getElementById("orders-data").textContent);
 
-  const ITEM_TYPE_LABELS = {
-    Tape: "TAPE",
-    Ttr: "TTR",
-    Label: "PLAIN LABEL",
-    ColorLabel: "COLOR LABEL",
-  };
-
   function getItemName(row) {
     const item = row.item;
     if (!item) return "N/A";
@@ -57,6 +50,8 @@
       case "Label":
       case "ColorLabel":
         return item.productId || `${item.labelWidth || ""}x${item.labelHeight || ""}`.trim() || "N/A";
+      case "SachikoLabelStock":
+        return item.productCode ? `${item.productCode} (${item.skuCode || ""})` : item.skuCode || "N/A";
       default:
         return "N/A";
     }
@@ -75,9 +70,9 @@
     return {
       ...o,
       userName: o.userId?.userName || "",
-      itemTypeLabel: ITEM_TYPE_LABELS[o.onModel] || o.onModel || "N/A",
       itemName: getItemName(o),
       dateText: formatDate(o.createdAt),
+      poDateText: formatDate(o.poDate),
       estimatedDateText: formatDate(o.estimatedDate),
       balance: Math.max(qty - dispatched, 0),
       valueAmount: qty * (Number(o.orderRate) || 0),
@@ -99,15 +94,17 @@
     initialSort: [{ column: "dateText", dir: "desc" }],
     placeholder: "No purchases found for this client.",
     columns: [
-      withTextFilter({ title: "Date", field: "dateText", width: 130 }),
-      withTextFilter({ title: "User", field: "userName", widthGrow: 1 }),
-      withTextFilter({ title: "Item Type", field: "itemTypeLabel", width: 130 }),
+      withTextFilter({ title: "PO Date", field: "poDateText", width: 130 }),
+      withTextFilter({ title: "PO No", field: "poNumber" }),
       withTextFilter({
-        title: "Item",
+        title: "Item Code",
         field: "itemName",
         widthGrow: 2,
         formatter: (cell) => `<span style="color:#044A78;font-weight:600;">${cell.getValue()}</span>`,
       }),
+      withTextFilter({ title: "Size", field: "paperSize", width: 110 }),
+      withTextFilter({ title: "Running Meters", field: "runningMeters", hozAlign: "center", width: 130 }),
+      withTextFilter({ title: "User", field: "userName", widthGrow: 1 }),
       withTextFilter({ title: "Qty", field: "quantity", hozAlign: "center", width: 80 }),
       withTextFilter({ title: "Sent", field: "dispatchedQuantity", hozAlign: "center", width: 80 }),
       withTextFilter({
@@ -159,7 +156,6 @@
           return `<span style="display:inline-block;padding:2px 10px;background:${bg};color:white;border-radius:12px;font-size:11px;font-weight:600;">${status}</span>`;
         },
       },
-      withTextFilter({ title: "PO No", field: "poNumber" }),
       withTextFilter({ title: "Est. Delivery", field: "estimatedDateText" }),
       withTextFilter({ title: "Remarks", field: "remarks" }),
     ],
