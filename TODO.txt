@@ -31,3 +31,4 @@ edit sales order after dispatch also
 client acc head track log
 
 vendor finish in tape sp
+if fs use our sequence and if cust use that

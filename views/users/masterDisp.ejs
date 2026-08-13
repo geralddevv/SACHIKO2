@@ -190,7 +190,6 @@
         flatData.push({
           ...user,
           userLocation: loc,
-          tapeCount: countAtLoc(user.tape, loc),
           labelStockCount: countAtLoc(user.labelStock, loc),
           dispatchType: user.SelfDispatch ? "Self Dispatch" : "Transport",
         });
@@ -286,26 +285,6 @@
             field: "userDepartment",
             headerSort: true,
             widthGrow: 2,
-          }),
-          withTextFilter({
-            title: "Tapes",
-            field: "tapeCount",
-            width: 95,
-            widthGrow: 0,
-            widthShrink: 0,
-            hozAlign: "center",
-            headerSort: true,
-            headerSortStartingDir: "desc",
-            cssClass: "col-count-center",
-            formatter: (cell) => {
-              const row = cell.getRow().getData();
-              if (!row.tapeCount) return "";
-              return `<span style="cursor:pointer;text-decoration:underline;">${row.tapeCount}</span>`;
-            },
-            cellClick: (e, cell) => {
-              const row = cell.getRow().getData();
-              window.location.href = `/sachiko/tape/view/${row._id}`;
-            },
           }),
           withTextFilter({
             title: "Label Stock",

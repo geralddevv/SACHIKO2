@@ -4959,9 +4959,8 @@ router.get("/edit/user/:id", async (req, res) => {
 // route for details page.
 router.get("/master/view", async (req, res) => {
   let jsonData = await Username.find()
-    .select("clientName clientType accountHead userName userLocation userDepartment locationDetails label tape labelStock")
+    .select("clientName clientType accountHead userName userLocation userDepartment locationDetails label labelStock")
     .populate({ path: "label", select: "location" })
-    .populate({ path: "tape", select: "location" })
     .populate({ path: "labelStock", select: "location" })
     .sort({ clientName: 1, userName: 1 })
     .lean();
