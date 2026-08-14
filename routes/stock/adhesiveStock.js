@@ -78,7 +78,7 @@ async function buildEditPayload(body) {
 function validateEditPayload(payload) {
   const headerError = validateHeaderPayload(payload);
   if (headerError) return headerError;
-  if (!payload.reelMtrs || payload.reelMtrs <= 0) return "Mtrs is required.";
+  if (!payload.reelMtrs || payload.reelMtrs <= 0) return "Kg is required.";
   return null;
 }
 
@@ -167,16 +167,37 @@ function adhesiveRecipeKey(o) {
   return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode), s(o.shelfLife)].join("||");
 }
 
-// mtrs already committed to open (not-yet-produced) Label Stock orders, per
-// Adhesive Master spec -- "reserved for production" demand, not a drum-level
-// hold (raw adhesive is deducted immediately at Assign & Continue, see
-// utils/labelStockProduction.js's produceDeckle, so there's no separate
-// reserved state on the drum itself). A PendingProduction's own runningMeters
-// is exactly how much every layer of its recipe draws off its drum (all
-// layers run through the laminator together for the same length), so it's
-// added once per matching adhesive/adhesive2 layer.
-async function loadAllottedByKey() {
-  const pending = await PendingProduction.find({ producedAt: null })
+// mtrs already committed to WIP (assigned to a machine, not-yet-produced)
+// Label Stock orders, per Adhesive Master spec -- "reserved for production"
+// demand, not a drum-level hold (raw adhesive is deducted immediately at
+// Assign & Continue, see utils/labelStockProduction.js's produceDeckle, so
+// there's no separate reserved state on the drum itself). Scoped to
+// assignedMachineId being set -- an order still sitting in Pending (not yet
+// assigned to a machine) hasn't committed to a location/timeline yet, so it
+// doesn't reserve stock here. A PendingProduction's own runningMeters is
+// exactly how much every layer of its recipe draws off its drum (all layers
+// run through the laminator together for the same length), so it's added
+// once per matching adhesive/adhesive2 layer.
+async function loadAllottedByKey(masters) {
+  // A recipe layer only carries the reduced adhesiveRecipeKey fields, not
+  // Viscosity/Cohesion/Shear/Density -- so it can't be matched straight to a
+  // master's full adhesiveSpecKey the way a physical drum can. Resolve it
+  // instead: map every current master's reduced key to the full spec key(s)
+  // that share it (almost always exactly one), so demand ends up keyed the
+  // same way stock is (stockByKey/rollCountByKey in loadMastersWithStock,
+  // both full adhesiveSpecKey) instead of silently bucketing under a key
+  // nothing else uses. If two masters really are identical down to those
+  // four fields, the recipe genuinely can't tell them apart -- charge the
+  // demand to every candidate rather than picking one arbitrarily and
+  // leaving the other looking falsely available.
+  const specKeysByRecipeKey = new Map();
+  for (const m of masters) {
+    const recipeKey = adhesiveRecipeKey(m);
+    if (!specKeysByRecipeKey.has(recipeKey)) specKeysByRecipeKey.set(recipeKey, []);
+    specKeysByRecipeKey.get(recipeKey).push(adhesiveSpecKey(m));
+  }
+
+  const pending = await PendingProduction.find({ producedAt: null, assignedMachineId: { $ne: null } })
     .select("itemId runningMeters")
     .populate({ path: "itemId", select: "rollType adhesive adhesive2" })
     .lean();
@@ -184,14 +205,16 @@ async function loadAllottedByKey() {
   const allottedByKey = new Map();
   const addDemand = (layer, mtrs) => {
     if (!layer || !layer.adhesiveType || !mtrs) return;
-    const key = adhesiveRecipeKey({
+    const recipeKey = adhesiveRecipeKey({
       vendorId: layer.adhesiveVendorId,
       type: layer.adhesiveType,
       make: layer.adhesiveMake,
       vendorSkuCode: layer.adhesiveVendorSkuCode,
       shelfLife: layer.adhesiveShelfLife,
     });
-    allottedByKey.set(key, (allottedByKey.get(key) || 0) + mtrs);
+    for (const specKey of specKeysByRecipeKey.get(recipeKey) || []) {
+      allottedByKey.set(specKey, (allottedByKey.get(specKey) || 0) + mtrs);
+    }
   };
 
   for (const p of pending) {
@@ -240,7 +263,7 @@ async function loadMastersWithStock(stock) {
     status: { $in: ["PENDING", "CONFIRMED", "PARTIALLY_RECEIVED"] },
   }).select("itemId").lean();
   const activePOSet = new Set(activePOs.map((po) => String(po.itemId)));
-  const allottedByKey = await loadAllottedByKey();
+  const allottedByKey = await loadAllottedByKey(masters);
 
   return masters.map((m) => {
     const key = adhesiveSpecKey(m);
@@ -248,7 +271,7 @@ async function loadMastersWithStock(stock) {
     const rollCount = rollCountByKey.get(key) || 0;
     const msq = Number(m.msq) || 0;
     const rolls = (rollsByKey.get(key) || []).slice().sort((a, b) => String(a.rollId).localeCompare(String(b.rollId)));
-    const allotted = allottedByKey.get(adhesiveRecipeKey(m)) || 0;
+    const allotted = allottedByKey.get(key) || 0;
     const available = currentStock - allotted;
     return {
       ...m,
@@ -320,7 +343,7 @@ router.post("/purchase-order", requireAuth, createLimiter, async (req, res) => {
       performedBy: performer,
     });
 
-    res.locals.auditDescription = `Created purchase order "${po.poNumber}" for adhesive "${master.skuId}" from "${master.vendorName}" (qty ${po.quantity} mtrs)`;
+    res.locals.auditDescription = `Created purchase order "${po.poNumber}" for adhesive "${master.skuId}" from "${master.vendorName}" (qty ${po.quantity} kg)`;
     req.flash("notification", "Purchase Order created successfully.");
     res.json({ success: true, redirect: "/sachiko/purchase/pending" });
   } catch (err) {
@@ -361,6 +384,21 @@ router.get("/preview-roll-ids", async (req, res) => {
 
 router.post("/create", requireAuth, createLimiter, async (req, res) => {
   try {
+    // If masterId is provided, look up the master and populate fields from it
+    if (req.body.masterId) {
+      const master = await AdhesiveMaster.findById(req.body.masterId).lean();
+      if (!master) return res.status(400).json({ success: false, message: "Master not found." });
+      // Populate fields from master
+      req.body.type = req.body.type || master.type;
+      req.body.vendorId = req.body.vendorId || master.vendorId;
+      req.body.make = req.body.make || master.make;
+      req.body.vendorSkuCode = req.body.vendorSkuCode || master.vendorSkuCode;
+      req.body.shelfLife = req.body.shelfLife || master.shelfLife;
+      req.body.viscosity = req.body.viscosity || master.viscosity;
+      req.body.cohesion = req.body.cohesion || master.cohesion;
+      req.body.shear = req.body.shear || master.shear;
+      req.body.density = req.body.density || master.density;
+    }
     const header = await buildHeaderPayload(req.body);
     const headerError = validateHeaderPayload(header);
     if (headerError) return res.status(400).json({ success: false, message: headerError });
@@ -374,7 +412,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     const drums = rawDrums.map(buildDrumPayload);
     const invalidIndex = drums.findIndex((d) => !d.reelMtrs || d.reelMtrs <= 0);
     if (invalidIndex !== -1) {
-      return res.status(400).json({ success: false, message: `Mtrs is required for drum ${invalidIndex + 1}.` });
+      return res.status(400).json({ success: false, message: `Kg is required for drum ${invalidIndex + 1}.` });
     }
 
     const locationExists = await Location.exists({ locationName: header.location });

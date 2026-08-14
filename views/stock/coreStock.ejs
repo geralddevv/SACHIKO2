@@ -703,7 +703,6 @@
       { title: "Print Type", field: "printType", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Thickness", field: "thickness", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Width", field: "width", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Stock (Pcs)",
         field: "currentStock",
@@ -725,6 +724,7 @@
         minWidth: 110,
         formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>` : ""),
       },
+      { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Inward",
         width: 110,

@@ -404,6 +404,21 @@ async function buildQueueRows(match) {
       };
     });
 
+    // Row highlight -- green once every raw-material layer this item's
+    // recipe calls for is allotted (Facestock/Adhesive/Release Liner, ...),
+    // red otherwise. Deliberately NOT the same thing as rollsStatus above
+    // (Deckle reels produced vs. noOfRolls ordered): "Produce New Deckle"
+    // only ever laminates one physical reel per Assign & Continue submission,
+    // so an order needing 2+ rolls reads "short" on rollsStatus after the
+    // very first run even though every layer feeding that run is fully
+    // allocated -- material allocation, not roll count, is what says this
+    // order is actually ready to run.
+    const materialStatus = layerAllotments.length === 0
+      ? null
+      : layerAllotments.every((l) => l.allocated)
+      ? "match"
+      : "short";
+
     return {
       _id: String(p._id),
       machineId: String(p.assignedMachineId || ""),
@@ -414,6 +429,7 @@ async function buildQueueRows(match) {
       allottedRolls: allottedRolls != null ? String(allottedRolls) : "—",
       balanceRolls: balanceRolls != null ? String(balanceRolls) : "—",
       rollsStatus,
+      materialStatus,
       quantity: qty,
       balanceQuantity: balanceQty,
       clientName: p.userId?.clientName || p.userId?.userName || "—",
@@ -482,6 +498,17 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
     }
   }
 
+  // A pendingId that resolves to nothing -- the order was deleted, sent back
+  // to Pending, or the link is simply stale. Without it the form still opens,
+  // but every field reads "—" and a save would record a job card belonging to
+  // no order and deducting from no reel. Send them back to the queue instead.
+  // A form opened with no pendingId at all is left alone: that's the
+  // deliberate blank-entry route the POST handler's "new" case covers.
+  if (pendingId && !prefill) {
+    req.flash("notification", "That production order no longer exists — pick a job from the queue.");
+    return res.redirect("/sachiko/machine/queue");
+  }
+
   // No physical reels ticked on Assign Production yet -- starting the job
   // card would let the operator scan against material that was never
   // actually set aside, so send them back to the queue instead of opening
@@ -509,9 +536,13 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
   });
 });
 
-// Metres a single production-log row consumed: the counter runs up during a
-// job, so it's the stop reading minus the start reading.
+// Metres a single row consumed. The two tables measure it differently: a Job
+// Setting row is a counter run, so it's the stop reading minus the start
+// reading; a Production Log row is one deckle, which carries the metres it
+// made outright.
 const consumedMeters = (row) => {
+  const made = Number(row?.meters);
+  if (Number.isFinite(made) && made > 0) return made;
   const from = Number(row?.mtrs1);
   const to = Number(row?.mtrs2);
   return Number.isFinite(from) && Number.isFinite(to) && to > from ? to - from : 0;
@@ -662,21 +693,37 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       }))
       .filter((row) => row.rollId || row.mtrs1 != null || row.mtrs2 != null || row.startTime || row.stopTime);
 
-    // Production Log rows -- same shape as Job Setting above
+    // Production Log rows -- one per deckle produced, so unlike Job Setting
+    // above these carry the deckle's own metres rather than a start/stop
+    // counter pair, plus the joint/wrinkle noted on each web.
     const rollId = toArray(b.rollId);
-    const logMtrs1 = toArray(b.logMtrs1);
+    const deckleId = toArray(b.deckleId);
     const logStart = toArray(b.logStart);
-    const logMtrs2 = toArray(b.logMtrs2);
-    const logStop = toArray(b.logStop);
+    const logEnd = toArray(b.logEnd);
+    const logMeters = toArray(b.logMeters);
+    const faceJoint = toArray(b.faceJoint);
+    const faceMtr = toArray(b.faceMtr);
+    const releaseJoint = toArray(b.releaseJoint);
+    const releaseMtr = toArray(b.releaseMtr);
     const productionLog = rollId
       .map((_, i) => ({
         rollId: trim(rollId[i]),
-        mtrs1: numOrUndef(logMtrs1[i]),
-        startTime: trim(logStart[i]),
-        mtrs2: numOrUndef(logMtrs2[i]),
-        stopTime: trim(logStop[i]),
+        deckleId: trim(deckleId[i]),
+        meters: numOrUndef(logMeters[i]),
+        face: { joint: trim(faceJoint[i]), mtr: numOrUndef(faceMtr[i]) },
+        release: { joint: trim(releaseJoint[i]), mtr: numOrUndef(releaseMtr[i]) },
+        time: { startTime: trim(logStart[i]), endTime: trim(logEnd[i]) },
       }))
-      .filter((row) => row.rollId || row.mtrs1 != null || row.mtrs2 != null || row.startTime || row.stopTime);
+      .filter(
+        (row) =>
+          row.rollId ||
+          row.deckleId ||
+          row.meters != null ||
+          row.face.mtr != null ||
+          row.release.mtr != null ||
+          row.time.startTime ||
+          row.time.endTime,
+      );
 
     await MachineJobCard.create({
       jobCardId,

@@ -30,6 +30,8 @@ node scripts/backfill-core-signatures.js         # repair Core Master dup protec
 node scripts/drop-legacy-skucode-index.js        # drop dead skuCode_1 index on Facestock/Adhesive/Release/Core Master
 node scripts/send-back-to-pending.js <orderId>   # unassign one WIP order back to Pending (CLI form of the UI button)
 node scripts/clear-label-stock-layer-data.js     # wipe SachikoLabelStock facestock/adhesive/releaseLiner (+2) so they're re-picked from master
+node scripts/backfill-pendingproduction-allotted-layers.js  # PendingProduction allottedLayers <- parsed from the produced Deckle's log, where missing
+node scripts/backfill-labelstock-signatures.js   # repair SachikoLabelStock dup protection
 ```
 
 `backfill-paper-roll-ids.js` must be run **before** starting the app on code

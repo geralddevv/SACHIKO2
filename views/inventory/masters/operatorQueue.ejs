@@ -224,7 +224,7 @@
             </thead>
             <tbody>
               <% group.jobs.forEach((row) => { %>
-                <tr class="<%= row.rollsStatus === 'match' ? 'mq-row-match' : row.rollsStatus === 'short' ? 'mq-row-short' : '' %>">
+                <tr class="<%= row.materialStatus === 'match' ? 'mq-row-match' : row.materialStatus === 'short' ? 'mq-row-short' : '' %>">
                   <td data-label="Lot No" title="<%= row.lotNo %>"><%= row.lotNo %></td>
                   <td data-label="Product Code" title="<%= row.productCode %>"><%= row.productCode %></td>
                   <td data-label="Paper Size"><%= row.paperSize %></td>
@@ -289,11 +289,24 @@
     const rolls = row.allottedRollDetails || [];
     const layers = row.layerAllotments || [];
 
-    const statusLabel = row.rollsStatus === "match" ? "Fully allotted"
+    // Two distinct readinesses, kept as separate rows so they can't be
+    // mistaken for each other -- Material Status (are the raw layers
+    // allotted, the same thing that colors the queue row) vs. Deckle Status
+    // (how many finished reels have actually been laminated against
+    // noOfRolls ordered). A single "Produce New Deckle" run only ever
+    // laminates one reel, so an order needing 2+ rolls can be fully
+    // material-allotted yet still short on Deckle count until a second run.
+    const materialStatusLabel = row.materialStatus === "match" ? "Fully allotted"
+      : row.materialStatus === "short" ? "Short allotted"
+      : "—";
+    const materialStatusColor = row.materialStatus === "match" ? "#16a34a"
+      : row.materialStatus === "short" ? "#dc2626"
+      : "#1f2a44";
+    const deckleStatusLabel = row.rollsStatus === "match" ? "Fully allotted"
       : row.rollsStatus === "short" ? "Short allotted"
       : row.rollsStatus === "over" ? "Over allotted"
       : "—";
-    const statusColor = row.rollsStatus === "match" ? "#16a34a"
+    const deckleStatusColor = row.rollsStatus === "match" ? "#16a34a"
       : row.rollsStatus === "short" ? "#dc2626"
       : row.rollsStatus === "over" ? "#d97706"
       : "#1f2a44";
@@ -306,7 +319,8 @@
       ["Paper Size", dash(ref.paperSize || row.paperSize)],
     ];
     const pairsHtml = pairs.map(([k, v]) => `<tr><th>${k}</th><td>${escapeHtml(v)}</td></tr>`).join("")
-      + `<tr><th>Status</th><td><span style="color:${statusColor};">${statusLabel}</span></td></tr>`;
+      + `<tr><th>Material Status</th><td><span style="color:${materialStatusColor};">${materialStatusLabel}</span></td></tr>`
+      + `<tr><th>Deckle Status</th><td><span style="color:${deckleStatusColor};">${deckleStatusLabel}</span></td></tr>`;
 
     const rollsHtml = rolls.length
       ? `<table class="rd-table">` +

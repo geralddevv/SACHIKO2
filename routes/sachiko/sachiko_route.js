@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { randomBytes } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import Client from "../../models/users/client.js";
 import Username from "../../models/users/username.js";
 import Vendor from "../../models/users/vendor.js";
@@ -257,6 +257,62 @@ async function buildLabelStockPayload(body) {
   return payload;
 }
 
+// Same sha256 signature scheme used for Client/TapeSalesOrder/Facestock
+// Master/Adhesive Master/Release Master/Label Stock Binding duplicate
+// prevention (see routes/users/clients.js, routes/fairdesk_route.js,
+// routes/system/facestockMaster.js, routes/sachiko/labelStockBinding.js) --
+// blocks create/edit only when every field matches an existing record
+// exactly, not just a similar recipe.
+function hashSignature(rawSignature) {
+  return `sha256:${createHash("sha256").update(String(rawSignature ?? "")).digest("hex")}`;
+}
+
+function canonStr(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+}
+
+function canonNum(value) {
+  return value === undefined || value === null || value === "" ? "" : String(Number(value));
+}
+
+const FS_SIG_FIELDS = ["facestockFamily", "facestockType", "facestockMake", "facestockVendorId", "facestockVendorSkuCode"];
+const FS_SIG_NUM_FIELDS = ["facestockGsm", "facestockMicron"];
+const AD_SIG_FIELDS = ["adhesiveType", "adhesiveMake", "adhesiveVendorId", "adhesiveVendorSkuCode", "adhesiveShelfLife"];
+const AD_SIG_NUM_FIELDS = ["adhesiveGsm"];
+const RL_SIG_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerVendorId", "releaseLinerColor"];
+const RL_SIG_NUM_FIELDS = ["releaseLinerGsm"];
+
+function layerSignaturePart(layer, strFields, numFields) {
+  if (!layer) return "";
+  return strFields.map((f) => canonStr(layer[f])).concat(numFields.map((f) => canonNum(layer[f]))).join("|");
+}
+
+// Hashes every user-editable field buildLabelStockPayload sets -- the top
+// Product/Roll row plus all six facestock/adhesive/releaseLiner layers (2 and
+// 2-suffixed ones included, blank/absent when the current rollType doesn't
+// call for them) -- so two rows only collide when they're the exact same
+// record, not merely the same materials under a different Product Code.
+function buildLabelStockSignature(payload) {
+  return hashSignature(
+    [
+      canonStr(payload.productCode),
+      canonStr(payload.rollType),
+      canonStr(payload.family),
+      canonStr(payload.rollOrSheet),
+      canonStr(payload.printingTechnology),
+      canonStr(payload.digitalPrintType),
+      layerSignaturePart(payload.facestock, FS_SIG_FIELDS, FS_SIG_NUM_FIELDS),
+      layerSignaturePart(payload.adhesive, AD_SIG_FIELDS, AD_SIG_NUM_FIELDS),
+      layerSignaturePart(payload.releaseLiner, RL_SIG_FIELDS, RL_SIG_NUM_FIELDS),
+      layerSignaturePart(payload.facestock2, FS_SIG_FIELDS, FS_SIG_NUM_FIELDS),
+      layerSignaturePart(payload.adhesive2, AD_SIG_FIELDS, AD_SIG_NUM_FIELDS),
+      layerSignaturePart(payload.releaseLiner2, RL_SIG_FIELDS, RL_SIG_NUM_FIELDS),
+    ].join("||"),
+  );
+}
+
+const DUPLICATE_LABELSTOCK_MESSAGE = "This Label Stock already exists (every field matches an existing record).";
+
 router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJson, async (req, res) => {
   try {
     const labelStockId = await generateId("sachikoLabelStockId", "LS");
@@ -281,12 +337,22 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
       payload.wordFile = req.file.filename;
       payload.wordFileOriginalName = req.file.originalname;
     }
-    await SachikoLabelStock.create({ labelStockId, skuCode, ...payload });
+
+    const labelStockSignature = buildLabelStockSignature(payload);
+    const existingSignature = await SachikoLabelStock.findOne({ labelStockSignature }).select("_id").lean();
+    if (existingSignature) {
+      throw Object.assign(new Error("Duplicate Label Stock"), { userMessage: DUPLICATE_LABELSTOCK_MESSAGE });
+    }
+
+    await SachikoLabelStock.create({ labelStockId, skuCode, ...payload, labelStockSignature });
     req.flash("notification", "Label Stock created successfully!");
     res.json({ success: true, redirect: "/sachiko/label-stock/view" });
   } catch (err) {
     console.error("SACHIKO LABEL STOCK CREATE ERROR:", err);
     if (req.file) fs.existsSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename)) && fs.unlinkSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename));
+    if (err?.code === 11000 && err?.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "labelStockSignature")) {
+      return res.status(400).json({ success: false, message: DUPLICATE_LABELSTOCK_MESSAGE });
+    }
     res.status(400).json({ success: false, message: err.userMessage || "Failed to create Label Stock" });
   }
 });
@@ -333,6 +399,16 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
       payload.wordFileOriginalName = req.file.originalname;
     }
 
+    const labelStockSignature = buildLabelStockSignature(payload);
+    const existingSignature = await SachikoLabelStock.findOne({
+      _id: { $ne: req.params.id },
+      labelStockSignature,
+    }).select("_id").lean();
+    if (existingSignature) {
+      throw Object.assign(new Error("Duplicate Label Stock"), { userMessage: DUPLICATE_LABELSTOCK_MESSAGE });
+    }
+    payload.labelStockSignature = labelStockSignature;
+
     // Clear whichever second-layer fields the new rollType no longer calls
     // for, so switching a roll back to NORMAL (or between the two double
     // modes) doesn't leave a stale facestock2/adhesive2/releaseLiner2 behind.
@@ -348,6 +424,9 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
   } catch (err) {
     console.error("SACHIKO LABEL STOCK UPDATE ERROR:", err);
     if (req.file) fs.existsSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename)) && fs.unlinkSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename));
+    if (err?.code === 11000 && err?.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "labelStockSignature")) {
+      return res.status(400).json({ success: false, message: DUPLICATE_LABELSTOCK_MESSAGE });
+    }
     res.status(400).json({ success: false, message: err.userMessage || "Failed to update Label Stock" });
   }
 });

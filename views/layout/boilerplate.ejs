@@ -46,7 +46,11 @@
         padding: 12px 40px 12px 15px;
         border-radius: 8px;
         box-shadow: 0 4px 10px rgba(255, 255, 255, 0.3);
-        z-index: 9999;
+        /* Above every dialog overlay in the app, including the highest
+           (labelStockView.ejs's #ls-create-modal at 10000, and a dialog's
+           own Choices.js dropdown at 99999) -- a save/error toast fired while
+           a dialog is open must never be hidden behind it. */
+        z-index: 100000;
         font-family: Arial, sans-serif;
         font-size: 18px;
         border-left: 4px solid #0a3646; /* green accent */

@@ -5,6 +5,16 @@ const sachikoLabelStockSchema = new mongoose.Schema(
     labelStockId: { type: String, required: true, unique: true },
     skuCode: { type: String, required: true, unique: true },
     productCode: { type: String, required: true, trim: true },
+    // Same sha256 signature scheme used for Client/TapeSalesOrder/Facestock
+    // Master/... duplicate prevention (see CLAUDE.md "Dialog / modal
+    // pattern" callers and routes/sachiko/sachiko_route.js's
+    // buildLabelStockSignature) -- hashes every user-editable field on this
+    // schema (productCode, rollType, family, roll/sheet, printing tech, and
+    // all six facestock/adhesive/releaseLiner layers), so create/edit is
+    // only blocked when a saved row already matches on every one of those
+    // fields, not just a similar recipe. `sparse` so pre-existing rows from
+    // before this field existed don't collide on a shared `null`.
+    labelStockSignature: { type: String, unique: true, sparse: true, trim: true },
     rollType: { type: String, trim: true, enum: ["NORMAL", "DOUBLE RELEASE", "DOUBLE FACESTOCK"], default: "NORMAL" },
     wordFile: { type: String },
     wordFileOriginalName: { type: String },

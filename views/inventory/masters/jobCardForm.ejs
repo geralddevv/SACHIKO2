@@ -113,6 +113,17 @@
   .jc-log-table th:last-child {
     border-right: none;
   }
+  /* Two-tier head on the Production Log: Time / Face / Release each span
+     their sub-columns. */
+  .jc-log-table th.group-head {
+    border-bottom: 1px solid rgba(255,255,255,0.3);
+  }
+  .jc-log-table th.sub-head {
+    background: #055690;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 7px 10px;
+  }
 
   .jc-hidden { display: none !important; }
 
@@ -137,7 +148,8 @@
   .jc-log-table tr:last-child td {
     border-bottom: none;
   }
-  .jc-log-table input.form-control {
+  .jc-log-table input.form-control,
+  .jc-log-table select.form-control {
     padding: 6px 8px !important;
     font-size: 13px !important;
     height: auto !important;
@@ -147,7 +159,7 @@
   .jc-log-table .js-start-display,
   .jc-log-table .js-stop-display,
   .jc-log-table .log-start-display,
-  .jc-log-table .log-stop-display {
+  .jc-log-table .log-end-display {
     display: inline-block;
     min-width: 62px;
     text-align: center;
@@ -325,6 +337,31 @@
     .jc-log-table tbody td[data-label="Mtrs"]::before { flex: 0 0 auto; }
     .jc-log-table tbody td[data-label="Start"]::before,
     .jc-log-table tbody td[data-label="Stop"]::before { content: none; }
+
+    /* Production Log only -- the clock trio rides on one line, everything
+       else stacks. Its labels are deliberately distinct from Job Setting's
+       ("Start Time" vs "Start") so the rules above don't catch them. */
+    .jc-log-table tbody td[data-label="Deckle ID"] { border-bottom: 1px solid #cbd5e1; }
+    .jc-log-table tbody td[data-label="Start Time"],
+    .jc-log-table tbody td[data-label="End Time"],
+    .jc-log-table tbody td[data-label="Timer"] {
+      flex: 1 1 30%;
+      border-bottom: 1px solid #cbd5e1;
+      justify-content: center;
+    }
+    .jc-log-table tbody td[data-label="Start Time"],
+    .jc-log-table tbody td[data-label="End Time"] { border-right: 1px solid #cbd5e1; }
+    .jc-log-table tbody td[data-label="Start Time"]::before,
+    .jc-log-table tbody td[data-label="End Time"]::before,
+    .jc-log-table tbody td[data-label="Timer"]::before { flex: 0 0 auto; font-size: 11px; }
+    .jc-log-table tbody td[data-label="Face Joint"],
+    .jc-log-table tbody td[data-label="Face Mtr"],
+    .jc-log-table tbody td[data-label="Rel. Joint"],
+    .jc-log-table tbody td[data-label="Rel. Mtr"] { flex: 1 1 50%; }
+    .jc-log-table tbody td[data-label="Face Joint"],
+    .jc-log-table tbody td[data-label="Rel. Joint"] { border-right: 1px solid #cbd5e1; }
+    .jc-log-table tbody td[data-label="Face Joint"],
+    .jc-log-table tbody td[data-label="Face Mtr"] { border-bottom: 1px solid #cbd5e1; }
     .jc-log-table td {
       display: flex; align-items: center; gap: 10px;
       padding: 7px 10px; border-right: none; min-width: 0 !important;
@@ -337,12 +374,12 @@
     .jc-log-table td:not([data-label])::before { content: none; }
     .jc-log-table tbody td:first-child { background: #f0f7ff; }
     .jc-log-table tbody td:last-child { border-bottom: none; }
-    .jc-log-table input.form-control { width: 100% !important; flex: 1 1 auto; }
+    .jc-log-table input.form-control,
+    .jc-log-table select.form-control { width: 100% !important; flex: 1 1 auto; min-width: 0 !important; }
     .roll-scan-btn { display: inline-flex; width: 40px; height: 40px; font-size: 16px; }
     .jc-log-table .js-start-btn,
     .jc-log-table .js-stop-btn,
-    .jc-log-table .log-start-btn,
-    .jc-log-table .log-stop-btn {
+    .jc-log-table .log-timer-btn {
       flex: 1 1 auto;
       width: auto !important;
       height: 38px !important;
@@ -351,7 +388,7 @@
     .jc-log-table .js-start-display,
     .jc-log-table .js-stop-display,
     .jc-log-table .log-start-display,
-    .jc-log-table .log-stop-display { flex: 0 0 auto; margin-right: 0 !important; }
+    .jc-log-table .log-end-display { flex: 0 0 auto; margin-right: 0 !important; min-width: 0; }
 
     .jc-log-table .jc-total-row {
       display: flex; flex-wrap: wrap; width: auto;
@@ -431,6 +468,54 @@
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Material Allocation — the raw-material reels ticked on Assign
+         Production, one line per layer this SKU's recipe actually calls for
+         (PendingProduction.allottedLayers, resolved live in buildQueueRows).
+         Deliberately separate from Allocated Paper below: these are what goes
+         *into* the run, that is the finished Deckle reel they were laminated
+         into. The machine queue's allotment dialog shows the same pair. -->
+    <% const allocLayers = jc.layerAllotments || []; %>
+    <div class="span-full form-subheading">
+      <h1>Material Allocation</h1>
+    </div>
+
+    <div class="span-full jc-info-wrap">
+      <% if (allocLayers.length) { %>
+        <table class="jc-roll-table">
+          <thead>
+            <tr>
+              <th style="width:150px;">Layer</th>
+              <th style="width:120px;">Status</th>
+              <th>Qty</th>
+              <th>Roll / Drum ID</th>
+              <th>Location</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% allocLayers.forEach((l) => { %>
+              <tr>
+                <td data-label="Layer"><%= dash(l.label) %></td>
+                <td data-label="Status">
+                  <% if (l.allocated) { %>
+                    <span style="color:#16a34a; font-weight:700;">Allotted</span>
+                  <% } else { %>
+                    <span style="color:#dc2626; font-weight:700;">Not Allotted</span>
+                  <% } %>
+                </td>
+                <td data-label="Qty"><%= l.allocated ? `1 ${l.unit}${l.reelMtrs != null ? ` (${fmtQty(l.reelMtrs)} m)` : ""}` : "—" %></td>
+                <td data-label="Roll / Drum ID"><%= l.allocated ? dash(l.rollId) : "—" %></td>
+                <td data-label="Location"><%= l.allocated ? dash(l.location) : "—" %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } else { %>
+        <div class="jc-no-rolls">
+          This SKU has no raw-material recipe to allocate.
+        </div>
+      <% } %>
     </div>
 
     <!-- Allocated Paper — one row per facestock roll ticked on the Assign
@@ -530,16 +615,29 @@
       </div>
     </div>
 
+    <!-- One row per deckle produced: which reel it came off (Roll ID), the
+         deckle's own id, the run it was clocked over, the metres it made and
+         any joint/wrinkle found on either web. -->
     <div class="span-full jc-hidden" id="prodLogBody">
       <table class="jc-log-table">
         <thead>
           <tr>
-            <th style="width:36px; text-align:center;">#</th>
-            <th style="width:240px;">Roll ID</th>
-            <th>Mtrs</th>
-            <th style="text-align:center;">Start</th>
-            <th>Mtrs</th>
-            <th style="text-align:center;">Stop</th>
+            <th rowspan="2" style="vertical-align: middle; width:36px; text-align:center;">#</th>
+            <th rowspan="2" style="vertical-align: middle; width:240px; text-align:left; padding-left:12px;">Roll ID</th>
+            <th rowspan="2" style="vertical-align: middle; text-align:left; padding-left:12px;">Deckle ID</th>
+            <th colspan="3" class="group-head">Time</th>
+            <th rowspan="2" style="vertical-align: middle;">Meters</th>
+            <th colspan="2" class="group-head">Face</th>
+            <th colspan="2" class="group-head">Release</th>
+          </tr>
+          <tr>
+            <th class="sub-head">Start</th>
+            <th class="sub-head">End</th>
+            <th class="sub-head">Timer</th>
+            <th class="sub-head">Joint</th>
+            <th class="sub-head">Mtr</th>
+            <th class="sub-head">Joint</th>
+            <th class="sub-head">Mtr</th>
           </tr>
         </thead>
         <tbody id="logTableBody">
@@ -548,7 +646,7 @@
         <tfoot>
           <tr class="jc-total-row" style="background: #044a78;">
             <td class="jc-total-label" style="text-align:center; font-size:12px; font-weight:700; color:#ffffff; white-space:nowrap; padding: 6px 8px;">Total</td>
-            <td colspan="3" style="padding: 6px 8px" data-label="RM">
+            <td colspan="8" style="padding: 6px 8px" data-label="RM">
               <input type="text" name="totalMeter" class="form-control jc-readonly" readonly
                      placeholder="RM" style="padding:6px 8px !important; font-size:13px !important; height:auto !important;" />
             </td>
@@ -594,13 +692,14 @@
 <script src="/js/jsQR.min.js" defer></script>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
-    /* ── Row gating (shared by Job Setting and Production Log) ──
-       An entry row unlocks left to right: naming the roll opens the start
-       Mtrs, the start Mtrs arms Start and opens the stop Mtrs, the stop Mtrs
-       arms Stop. Clearing a field re-locks and wipes everything downstream of
-       it, so a row can never end up holding a stop reading for a roll that was
-       never named. Both tables build identical rows apart from the js-/log-
-       class prefix, hence the prefix argument. */
+    /* ── Row gating ──
+       Both tables unlock a row left to right, so it can never end up holding
+       figures for a roll that was never named. They differ in what comes
+       after the roll, because they measure different things: a Job Setting row
+       is a counter run (Mtrs -> Start -> Mtrs -> Stop, see syncRowGating), a
+       Production Log row is one deckle clocked on a single timer (Timer ->
+       deckle id, metres and joints, see syncLogRowGating). Clearing a field
+       re-locks and wipes everything downstream of it either way. */
     const filled = (el) => Boolean(el && String(el.value).trim() !== "");
 
     /* ── Roll ID scanning ──
@@ -611,8 +710,8 @@
        First, scanners finish their payload with Enter, and Enter in a text
        input submits the form -- which here would save a half-filled job card
        and deduct against it. So Enter inside a Roll ID box is swallowed and
-       moves focus to the Mtrs box beside it, which is where the operator is
-       headed next anyway.
+       moves focus to whatever comes next on that row (see nextAfterRoll),
+       which is where the operator is headed anyway.
 
        Second, the QR doesn't carry the Roll ID alone -- its payload is
        "rollId vendorRollId paperSize reelMtrs" (utils/rollLabel.js's
@@ -650,6 +749,11 @@
       note.className = `roll-note ${reel ? "ok" : "warn"}`;
     }
 
+    // Where the operator is headed once the roll is named: the counter reading
+    // on a Job Setting row, the deckle's id on a Production Log one.
+    const nextAfterRoll = (row, p) =>
+      row?.querySelector(p === "js" ? ".js-mtrs1" : ".log-deckle-id");
+
     function handleRollIdEnter(e, p) {
       if (e.key !== "Enter" || !e.target.classList?.contains(`${p}-roll-id`)) return;
       e.preventDefault();
@@ -657,8 +761,8 @@
       checkRollId(row, p);
       const cleanId = extractScannedRollId(e.target.value);
       if (cleanId) e.target.value = cleanId;
-      const mtrs = row?.querySelector(`.${p}-mtrs1`);
-      if (mtrs && !mtrs.readOnly) mtrs.focus();
+      const next = nextAfterRoll(row, p);
+      if (next && !next.readOnly) next.focus();
     }
 
     /* ── Roll ID scanning via the phone camera ── */
@@ -739,8 +843,8 @@
       input.value = cleanId;
       input.dispatchEvent(new Event("input", { bubbles: true }));
 
-      const mtrs = row.querySelector(`.${p}-mtrs1`);
-      if (mtrs && !mtrs.readOnly) mtrs.focus();
+      const next = nextAfterRoll(row, p);
+      if (next && !next.readOnly) next.focus();
       if (typeof showToast === "function") showToast(`Scanned Roll ID: ${cleanId}`, "success");
     }
 
@@ -777,7 +881,15 @@
 
     function setInputLocked(input, locked) {
       if (!input) return;
-      input.readOnly = locked;
+      if (input.tagName === "SELECT") {
+        // A <select> has no readOnly, and disabling one drops it from the POST
+        // -- which would slide every later row's joint up an index on save. So
+        // lock it by putting it out of reach instead, leaving it submittable.
+        input.style.pointerEvents = locked ? "none" : "";
+        input.tabIndex = locked ? -1 : 0;
+      } else {
+        input.readOnly = locked;
+      }
       input.style.background = locked ? "#f1f5f9" : "";
       input.style.cursor = locked ? "not-allowed" : "";
       if (locked) input.value = "";
@@ -806,6 +918,39 @@
         setInputLocked(mtrs2, !filled(mtrs1));
         setBtnArmed(row.querySelector(`.${p}-stop-btn`), filled(mtrs2), "#ef4444");
       }
+    }
+
+    /* A Production Log row unlocks on the same left-to-right principle, but
+       around a single timer rather than a start/stop pair: naming the roll arms
+       the Timer, and starting it opens the deckle's id, its metres and the two
+       joint columns. So the sheet can never hold production figures for a
+       deckle that was never actually run. */
+    const LOG_RUN_FIELDS = [
+      ".log-deckle-id",
+      ".log-meters",
+      ".log-face-joint",
+      ".log-face-mtr",
+      ".log-release-joint",
+      ".log-release-mtr",
+    ];
+
+    function syncLogRowGating(row) {
+      if (!row) return;
+      const started = filled(row.querySelector(".log-start-input"));
+      const ended = filled(row.querySelector(".log-end-input"));
+      const timer = row.querySelector(".log-timer-btn");
+
+      // Once the run has ended the timer is spent -- leave it as the click
+      // handler left it (a grey tick) rather than re-arming it here.
+      if (timer && !ended) {
+        setBtnArmed(
+          timer,
+          started || filled(row.querySelector(".log-roll-id")),
+          started ? "#ef4444" : "#10b981",
+        );
+      }
+
+      LOG_RUN_FIELDS.forEach((sel) => setInputLocked(row.querySelector(sel), !started));
     }
 
     /* ── Job Setting dynamic rows ── */
@@ -944,6 +1089,15 @@
       logCount.value = logBody.rows.length;
     }
 
+    // Values match Sachiko's own job card (routes/sachiko/sachiko_route.js), so
+    // the two collections read the same. "—" stays selectable rather than
+    // `hidden` as it is there: a blank joint means the web ran clean, which is
+    // both the normal case and the only way back from a mis-pick.
+    const jointOptionHtml = `
+      <option value="" selected>—</option>
+      <option value="Joint">Joint</option>
+      <option value="Wrinkle">Wrinkle</option>`;
+
     function createLogRow() {
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -958,25 +1112,27 @@
           </div>
           <span class="roll-note"></span>
         </td>
-        <td data-label="Mtrs"><input type="number" name="logMtrs1" class="form-control log-mtrs1" placeholder="Mtrs" min="0" step="any" /></td>
-        <td style="text-align:center; white-space:nowrap; min-width:110px;" data-label="Start">
-          <span class="log-start-display" style="font-size:12px; font-weight:700; color:#03365a; margin-right:4px;">—</span>
+        <td data-label="Deckle ID"><input type="text" name="deckleId" class="form-control log-deckle-id" placeholder="Deckle ID" autocomplete="off" /></td>
+        <td style="text-align:center; font-size:12px; font-weight:700; white-space:nowrap; min-width:70px;" data-label="Start Time">
+          <span class="log-start-display" style="color:#03365a;">—</span>
           <input type="hidden" name="logStart" class="log-start-input" />
-          <button type="button" class="log-start-btn" disabled
+        </td>
+        <td style="text-align:center; font-size:12px; font-weight:700; white-space:nowrap; min-width:70px;" data-label="End Time">
+          <span class="log-end-display" style="color:#dc2626;">—</span>
+          <input type="hidden" name="logEnd" class="log-end-input" />
+        </td>
+        <td style="text-align:center; white-space:nowrap;" data-label="Timer">
+          <button type="button" class="log-timer-btn" data-state="idle" disabled
             style="width:32px; height:26px; padding:0; font-size:12px; border:none; border-radius:4px; cursor:not-allowed; background:#d1d5db; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-play"></i>
           </button>
         </td>
-        <td data-label="Mtrs"><input type="number" name="logMtrs2" class="form-control log-mtrs2" placeholder="Mtrs" min="0" step="any" /></td>
-        <td style="text-align:center; white-space:nowrap; min-width:110px;" data-label="Stop">
-          <span class="log-stop-display" style="font-size:12px; font-weight:700; color:#dc2626; margin-right:4px;">—</span>
-          <input type="hidden" name="logStop" class="log-stop-input" />
-          <button type="button" class="log-stop-btn" disabled
-            style="width:32px; height:26px; padding:0; font-size:12px; border:none; border-radius:4px; cursor:not-allowed; background:#d1d5db; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
-            <i class="fa-solid fa-stop"></i>
-          </button>
-        </td>`;
-      syncRowGating(tr, "log");
+        <td data-label="Meters"><input type="number" name="logMeters" class="form-control log-meters" placeholder="Meters" min="0" step="any" /></td>
+        <td data-label="Face Joint"><select name="faceJoint" class="form-control log-face-joint" style="min-width:100px;">${jointOptionHtml}</select></td>
+        <td data-label="Face Mtr"><input type="number" name="faceMtr" class="form-control log-face-mtr" placeholder="Mtr" min="0" step="any" /></td>
+        <td data-label="Rel. Joint"><select name="releaseJoint" class="form-control log-release-joint" style="min-width:100px;">${jointOptionHtml}</select></td>
+        <td data-label="Rel. Mtr"><input type="number" name="releaseMtr" class="form-control log-release-mtr" placeholder="Mtr" min="0" step="any" /></td>`;
+      syncLogRowGating(tr);
       return tr;
     }
 
@@ -995,21 +1151,23 @@
     const paperSizeVal = Number(document.querySelector('input[name="paperSize"]')?.value) || 0;
     const round2 = (n) => String(Math.round(n * 100) / 100);
 
+    // Each log row now states the metres its deckle made outright, so the
+    // running total is their sum -- no start/stop counter arithmetic.
     function recalcLogTotals() {
       let runningMtrs = 0;
       Array.from(logBody.rows).forEach((row) => {
-        const from = parseFloat(row.querySelector(".log-mtrs1")?.value);
-        const to = parseFloat(row.querySelector(".log-mtrs2")?.value);
-        if (Number.isFinite(from) && Number.isFinite(to) && to > from) runningMtrs += to - from;
+        const made = parseFloat(row.querySelector(".log-meters")?.value);
+        if (Number.isFinite(made) && made > 0) runningMtrs += made;
       });
 
       if (totalMeterInput) totalMeterInput.value = runningMtrs ? round2(runningMtrs) : "";
       if (sqMtrInput) sqMtrInput.value = runningMtrs ? round2(paperSizeVal * (runningMtrs / 100)) : "";
     }
 
+    // Selects fire "input" too, so this covers the joint columns as well.
     logBody.addEventListener("input", (e) => {
       const row = e.target.closest("tr");
-      syncRowGating(row, "log");
+      syncLogRowGating(row);
       checkRollId(row, "log");
       recalcLogTotals();
     });
@@ -1019,28 +1177,28 @@
     logBody.addEventListener("click", (e) => {
       const scanBtn = e.target.closest(".log-roll-scan-btn");
       if (scanBtn) { openScanDialog(scanBtn.closest("tr"), "log"); return; }
-      const startBtn = e.target.closest(".log-start-btn");
-      if (startBtn && !startBtn.disabled) {
-        const row = startBtn.closest("tr");
-        const time = nowHHMM();
+
+      // One button walks the run: play starts the clock, stop ends it, and
+      // then it's spent.
+      const timerBtn = e.target.closest(".log-timer-btn");
+      if (!timerBtn || timerBtn.disabled) return;
+      const row = timerBtn.closest("tr");
+      const time = nowHHMM();
+
+      if (timerBtn.dataset.state === "idle") {
         row.querySelector(".log-start-input").value = time;
         row.querySelector(".log-start-display").textContent = time;
-        startBtn.disabled = true;
-        startBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
-        startBtn.style.background = "#6b7280";
-        startBtn.style.cursor = "default";
-        return;
-      }
-      const stopBtn = e.target.closest(".log-stop-btn");
-      if (stopBtn && !stopBtn.disabled) {
-        const row = stopBtn.closest("tr");
-        const time = nowHHMM();
-        row.querySelector(".log-stop-input").value = time;
-        row.querySelector(".log-stop-display").textContent = time;
-        stopBtn.disabled = true;
-        stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
-        stopBtn.style.background = "#6b7280";
-        stopBtn.style.cursor = "default";
+        timerBtn.dataset.state = "running";
+        timerBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+        syncLogRowGating(row);
+      } else if (timerBtn.dataset.state === "running") {
+        row.querySelector(".log-end-input").value = time;
+        row.querySelector(".log-end-display").textContent = time;
+        timerBtn.dataset.state = "done";
+        timerBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        timerBtn.disabled = true;
+        timerBtn.style.background = "#6b7280";
+        timerBtn.style.cursor = "default";
       }
     });
 
@@ -1075,20 +1233,35 @@
       try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* ignore */ }
     }
 
-    const readRows = (body, p) => Array.from(body.rows).map((row) => ({
-      rollId: row.querySelector(`.${p}-roll-id`)?.value || "",
-      mtrs1: row.querySelector(`.${p}-mtrs1`)?.value || "",
-      start: row.querySelector(`.${p}-start-input`)?.value || "",
-      mtrs2: row.querySelector(`.${p}-mtrs2`)?.value || "",
-      stop: row.querySelector(`.${p}-stop-input`)?.value || "",
+    const val = (row, sel) => row.querySelector(sel)?.value || "";
+
+    const readJsRows = () => Array.from(jsBody.rows).map((row) => ({
+      rollId: val(row, ".js-roll-id"),
+      mtrs1: val(row, ".js-mtrs1"),
+      start: val(row, ".js-start-input"),
+      mtrs2: val(row, ".js-mtrs2"),
+      stop: val(row, ".js-stop-input"),
     }));
 
-    const anyEntry = (rows) => rows.some((r) => r.rollId || r.mtrs1 || r.mtrs2 || r.start || r.stop);
+    const readLogRows = () => Array.from(logBody.rows).map((row) => ({
+      rollId: val(row, ".log-roll-id"),
+      deckleId: val(row, ".log-deckle-id"),
+      start: val(row, ".log-start-input"),
+      end: val(row, ".log-end-input"),
+      meters: val(row, ".log-meters"),
+      faceJoint: val(row, ".log-face-joint"),
+      faceMtr: val(row, ".log-face-mtr"),
+      releaseJoint: val(row, ".log-release-joint"),
+      releaseMtr: val(row, ".log-release-mtr"),
+    }));
+
+    const anyEntry = (rows) =>
+      rows.some((r) => Object.values(r).some((v) => String(v ?? "").trim() !== ""));
 
     function saveDraft() {
       const draft = {
-        jsRows: readRows(jsBody, "js"),
-        logRows: readRows(logBody, "log"),
+        jsRows: readJsRows(),
+        logRows: readLogRows(),
         productionStarted,
         savedAt: Date.now(),
       };
@@ -1109,49 +1282,94 @@
       btn.style.cursor = "default";
     }
 
-    function applyRows(body, p, rows, makeRow, renumberFn) {
-      while (body.rows.length < rows.length) body.appendChild(makeRow());
-      while (body.rows.length > rows.length && body.rows.length > 1) body.removeChild(body.lastElementChild);
+    // Unlock before writing: gating locked these on the fresh row, and a locked
+    // field is wiped on the next sync. syncRowGating/syncLogRowGating below
+    // then settles each row back to the state its own values imply.
+    const putValue = (row, sel, value) => {
+      const el = row.querySelector(sel);
+      if (!el) return;
+      if (el.tagName === "SELECT") {
+        el.style.pointerEvents = "";
+        el.tabIndex = 0;
+      } else {
+        el.readOnly = false;
+      }
+      el.value = value ?? "";
+    };
+
+    function applyJsRows(rows) {
+      while (jsBody.rows.length < rows.length) jsBody.appendChild(createJsRow());
+      while (jsBody.rows.length > rows.length && jsBody.rows.length > 1) jsBody.removeChild(jsBody.lastElementChild);
       rows.forEach((data, i) => {
-        const row = body.rows[i];
+        const row = jsBody.rows[i];
         if (!row) return;
-        const put = (sel, value) => {
-          const el = row.querySelector(sel);
-          if (!el) return;
-          el.readOnly = false;
-          el.value = value;
-        };
-        put(`.${p}-roll-id`, data.rollId);
-        put(`.${p}-mtrs1`, data.mtrs1);
-        put(`.${p}-mtrs2`, data.mtrs2);
+        putValue(row, ".js-roll-id", data.rollId);
+        putValue(row, ".js-mtrs1", data.mtrs1);
+        putValue(row, ".js-mtrs2", data.mtrs2);
         markPunched(
-          row.querySelector(`.${p}-start-btn`),
-          row.querySelector(`.${p}-start-display`),
-          row.querySelector(`.${p}-start-input`),
+          row.querySelector(".js-start-btn"),
+          row.querySelector(".js-start-display"),
+          row.querySelector(".js-start-input"),
           data.start,
         );
         markPunched(
-          row.querySelector(`.${p}-stop-btn`),
-          row.querySelector(`.${p}-stop-display`),
-          row.querySelector(`.${p}-stop-input`),
+          row.querySelector(".js-stop-btn"),
+          row.querySelector(".js-stop-display"),
+          row.querySelector(".js-stop-input"),
           data.stop,
         );
-        syncRowGating(row, p);
-        checkRollId(row, p);
+        syncRowGating(row, "js");
+        checkRollId(row, "js");
       });
-      renumberFn();
+      jsRenumber();
+    }
+
+    // The log's single timer has three resting states, so it can't go through
+    // markPunched -- a run that started but hadn't ended when the page died
+    // must come back mid-run, still stoppable.
+    function restoreLogTimer(row, start, end) {
+      const btn = row.querySelector(".log-timer-btn");
+      if (!btn || !start) return;
+      row.querySelector(".log-start-input").value = start;
+      row.querySelector(".log-start-display").textContent = start;
+      btn.dataset.state = "running";
+      btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+      if (!end) return;
+      row.querySelector(".log-end-input").value = end;
+      row.querySelector(".log-end-display").textContent = end;
+      btn.dataset.state = "done";
+      btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+      btn.disabled = true;
+      btn.style.background = "#6b7280";
+      btn.style.cursor = "default";
+    }
+
+    function applyLogRows(rows) {
+      while (logBody.rows.length < rows.length) logBody.appendChild(createLogRow());
+      while (logBody.rows.length > rows.length && logBody.rows.length > 1) logBody.removeChild(logBody.lastElementChild);
+      rows.forEach((data, i) => {
+        const row = logBody.rows[i];
+        if (!row) return;
+        restoreLogTimer(row, data.start, data.end);
+        putValue(row, ".log-roll-id", data.rollId);
+        putValue(row, ".log-deckle-id", data.deckleId);
+        putValue(row, ".log-meters", data.meters);
+        putValue(row, ".log-face-joint", data.faceJoint);
+        putValue(row, ".log-face-mtr", data.faceMtr);
+        putValue(row, ".log-release-joint", data.releaseJoint);
+        putValue(row, ".log-release-mtr", data.releaseMtr);
+        syncLogRowGating(row);
+        checkRollId(row, "log");
+      });
+      renumber();
     }
 
     function restoreDraft() {
       const draft = readDraft();
       if (!draft) return;
 
-      if (Array.isArray(draft.jsRows) && draft.jsRows.length) {
-        applyRows(jsBody, "js", draft.jsRows, createJsRow, jsRenumber);
-      }
-      if (Array.isArray(draft.logRows) && draft.logRows.length) {
-        applyRows(logBody, "log", draft.logRows, createLogRow, renumber);
-      }
+      if (Array.isArray(draft.jsRows) && draft.jsRows.length) applyJsRows(draft.jsRows);
+      if (Array.isArray(draft.logRows) && draft.logRows.length) applyLogRows(draft.logRows);
       if (draft.productionStarted) {
         productionStarted = true;
         startProdWrap.classList.add("jc-hidden");

@@ -4224,7 +4224,7 @@ router.get("/labels/production/pending", async (req, res) => {
 
   const all = await PendingProduction.find({})
     .populate("userId", "clientName userName clientType")
-    .populate("itemId", "productCode skuCode")
+    .populate("itemId", "productCode skuCode rollType")
     .populate("assignedMachineId", "machineName machineType")
     .populate("operatorId", "empName")
     .populate("helperId", "empName")
@@ -4253,6 +4253,22 @@ router.get("/labels/production/pending", async (req, res) => {
         : rollsAllotted < rollsRequired
         ? "short"
         : "over";
+
+    // "Not allocated" should mean the raw materials (Facestock/Adhesive/
+    // Release Liner, ...) aren't allotted -- not "fewer Deckle reels have
+    // been laminated than rolls were ordered" (rollsStatus above). A single
+    // Assign & Continue only ever produces one Deckle, so an order needing
+    // 2+ rolls reads "short" on rollsStatus right after its very first,
+    // fully-allocated run -- material allocation is the real ready/not-ready
+    // signal (see routes/system/machine.js's buildQueueRows for the same
+    // split, used by the machine queue this WIP tab links out to).
+    const requiredLayers = requiredLayersFor(item.rollType);
+    const materialStatus = requiredLayers.length === 0
+      ? null
+      : requiredLayers.every((key) => !!r.allottedLayers?.[key])
+      ? "match"
+      : "short";
+
     return {
       _id: String(r._id),
       productCode: item.productCode || item.skuCode || "—",
@@ -4263,6 +4279,7 @@ router.get("/labels/production/pending", async (req, res) => {
       noOfRolls: r.noOfRolls ?? "—",
       allottedRolls: rollsAllotted,
       rollsStatus,
+      materialStatus,
       quantity: r.quantity,
       balance: Math.max((Number(r.quantity) || 0) - (Number(r.dispatchedQuantity) || 0), 0),
       machineName: r.assignedMachineId?.machineName || "",
@@ -4356,7 +4373,7 @@ router.get("/labels/production/assign/:id", async (req, res) => {
 
     const pendingProduction = await PendingProduction.findById(id)
       .populate("userId", "clientName userName userContact")
-      .populate("itemId")
+      .populate("itemId", "labelStockId skuCode productCode rollType facestock adhesive releaseLiner facestock2 adhesive2 releaseLiner2")
       .lean();
 
     if (!pendingProduction) {

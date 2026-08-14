@@ -57,6 +57,67 @@ export const POOL_MODELS = {
   release: { Model: ReleaseLinerStock, LogModel: ReleaseLinerStockLog },
 };
 
+// Every reel-side field a recipe layer can actually pin down, paired with the
+// recipe's own (prefixed) field name for it -- mirrors buildFacestockSignature/
+// buildAdhesiveSignature/buildReleaseSignature's own field lists (routes/system/
+// */Master.js) minus whatever that master carries but the recipe layer has no
+// field for (Size on Facestock, Viscosity/Cohesion/Shear/Density on Adhesive,
+// Vendor SKU Code/Size on Release -- see the *RecipeKey comments in
+// routes/stock/*Stock.js). Drives reelMatchesLayer() below, the single check
+// both the raw-stock picker (routes/sachiko/labelStockProduction.js) and
+// produceDeckle() use, so a reel only ever counts as "this recipe's material"
+// when its *whole* recorded identity agrees with the recipe, not just Type.
+export const POOL_MATCH_FIELDS = {
+  facestock: [
+    { field: "family", recipe: "facestockFamily" },
+    { field: "type", recipe: "facestockType" },
+    { field: "make", recipe: "facestockMake" },
+    { field: "vendorId", recipe: "facestockVendorId" },
+    { field: "vendorSkuCode", recipe: "facestockVendorSkuCode" },
+    { field: "gsm", recipe: "facestockGsm", numeric: true },
+    { field: "micron", recipe: "facestockMicron", numeric: true },
+  ],
+  adhesive: [
+    { field: "type", recipe: "adhesiveType" },
+    { field: "make", recipe: "adhesiveMake" },
+    { field: "vendorId", recipe: "adhesiveVendorId" },
+    { field: "vendorSkuCode", recipe: "adhesiveVendorSkuCode" },
+    { field: "shelfLife", recipe: "adhesiveShelfLife" },
+  ],
+  release: [
+    { field: "type", recipe: "releaseLinerType" },
+    { field: "make", recipe: "releaseLinerMake" },
+    { field: "vendorId", recipe: "releaseLinerVendorId" },
+    { field: "color", recipe: "releaseLinerColor" },
+    { field: "gsm", recipe: "releaseLinerGsm", numeric: true },
+  ],
+};
+
+const canonMatch = (v) => String(v ?? "").trim().toUpperCase();
+
+// True when every field the recipe layer actually specifies agrees with the
+// reel -- a recipe field left blank (Make/Vendor SKU Code are optional on the
+// Label Stock form) imposes no constraint, same "no value = no narrowing"
+// rule the form's own smart-filter cascade uses. vendorId compares as a bare
+// ObjectId string; gsm/micron compare numerically (a select's string value
+// vs. the reel's stored Number); everything else is a canonicalized string
+// compare, matching *SpecKey/*RecipeKey's own canonStr in routes/stock/*.js.
+export function reelMatchesLayer(pool, reel, layer) {
+  if (!reel || !layer) return false;
+  for (const { field, recipe, numeric } of POOL_MATCH_FIELDS[pool] || []) {
+    const raw = layer[recipe];
+    if (raw === undefined || raw === null || String(raw).trim() === "") continue;
+    if (numeric) {
+      if (Number(reel[field]) !== Number(raw)) return false;
+    } else if (field === "vendorId") {
+      if (String(reel[field] || "") !== String(raw)) return false;
+    } else if (canonMatch(reel[field]) !== canonMatch(raw)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 const round2 = (n) => Math.round(Number(n) * 100) / 100;
 
 const numOrUndef = (value) => {
@@ -99,13 +160,17 @@ export async function produceDeckle({ labelStock, location, reelMtrs, rate, rema
     if (!reel) throw new Error(`${meta.label} reel not found.`);
 
     // The client only offers reels matching the SKU's spec, but the picked
-    // stockId is client-supplied -- re-check the material type server-side
-    // so a stale/tampered request can't laminate a Deckle out of the wrong
-    // raw material.
-    const requiredType = String(labelStock[meta.specField]?.[meta.typeField] || "").trim().toUpperCase();
+    // stockId is client-supplied -- re-check the material's *whole* recorded
+    // identity server-side (family/type/make/vendor/vendor SKU code/gsm/
+    // micron, whichever the recipe actually pins down -- see
+    // POOL_MATCH_FIELDS/reelMatchesLayer above), not just Type, so a
+    // stale/tampered request can't laminate a Deckle out of raw material that
+    // only coincidentally shares this SKU's Type.
+    const layerSpec = labelStock[meta.specField];
+    const requiredType = String(layerSpec?.[meta.typeField] || "").trim().toUpperCase();
     if (!requiredType) throw new Error(`${meta.label} spec is incomplete on this SKU.`);
-    if (String(reel.type || "").trim().toUpperCase() !== requiredType) {
-      throw new Error(`${meta.label} reel "${reel.rollId}" does not match this SKU's spec (${requiredType}).`);
+    if (!reelMatchesLayer(meta.pool, reel, layerSpec)) {
+      throw new Error(`${meta.label} reel "${reel.rollId}" does not match this SKU's full spec (${requiredType}).`);
     }
     if (reel.location !== location) {
       throw new Error(`${meta.label} reel "${reel.rollId}" is not at "${location}".`);

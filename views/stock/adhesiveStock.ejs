@@ -323,7 +323,7 @@
 
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="poQtyInput">Quantity (Mtrs)</label>
+          <label class="dialog-field-label" for="poQtyInput">Quantity (Kg)</label>
           <input type="number" id="poQtyInput" class="form-control premium-input" min="1" step="any" placeholder="Enter mtrs" />
         </div>
         <div>
@@ -364,7 +364,7 @@
         <h2 id="addDialogTitle">Add Adhesive Drums</h2>
         <div style="display: flex; align-items: center; gap: 16px; font-size: 13px; color: rgba(255, 255, 255, 0.8);">
           <span>Drums: <strong id="summaryDrumCount" style="color: #fff; font-size: 15px;">1</strong></span>
-          <span>Total Mtrs: <strong id="summaryTotalMtrs" style="color: #fff; font-size: 15px;">0</strong></span>
+          <span>Total Kg: <strong id="summaryTotalMtrs" style="color: #fff; font-size: 15px;">0</strong></span>
         </div>
       </div>
       <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
@@ -717,14 +717,13 @@
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
       { title: "Shelf Life", field: "shelfLife", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
-      { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 130 },
       {
         title: "Allotted (Mtrs)",
         field: "allotted",
         hozAlign: "center",
         minWidth: 130,
-        headerTooltip: "Mtrs already committed to open (not-yet-produced) Label Stock orders needing this spec.",
+        headerTooltip: "Mtrs already committed to WIP (assigned to a machine, not-yet-produced) Label Stock orders needing this spec.",
         formatter: (cell) => {
           if (!cell.getRow().getData().isParent) return "";
           const value = cell.getValue() || 0;
@@ -758,6 +757,7 @@
         minWidth: 110,
         formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>` : ""),
       },
+      { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Inward",
         width: 110,
@@ -871,8 +871,8 @@
         <input type="text" class="form-control premium-input drum-id-preview" readonly style="margin-bottom: 10px; background: #f1f5f9;" />
         <label class="dialog-field-label">Vendor Drum ID</label>
         <input type="text" class="form-control premium-input drum-vendor-id" placeholder="Vendor's own drum no" value="${prev.vendorRollId || ""}" style="margin-bottom: 10px;" />
-        <label class="dialog-field-label">Mtrs</label>
-        <input type="number" class="form-control premium-input drum-mtrs" min="0" step="any" placeholder="Enter Mtrs" value="${prev.mtrs || ""}" />
+        <label class="dialog-field-label">Kg</label>
+        <input type="number" class="form-control premium-input drum-mtrs" min="0" step="any" placeholder="Enter Kg" value="${prev.mtrs || ""}" />
       </div>`;
   }
 
@@ -994,7 +994,7 @@
       vendorRollId: row.querySelector(".drum-vendor-id").value,
     }));
     const emptyIndex = rolls.findIndex((r) => !r.reelMtrs || Number(r.reelMtrs) <= 0);
-    if (emptyIndex !== -1) return showError("addAdhesiveError", `Mtrs is required for drum ${emptyIndex + 1}.`);
+    if (emptyIndex !== -1) return showError("addAdhesiveError", `Kg is required for drum ${emptyIndex + 1}.`);
 
     hideError("addAdhesiveError");
     setLoading("addSubmitBtn", true);

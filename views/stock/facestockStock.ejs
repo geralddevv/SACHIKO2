@@ -719,16 +719,16 @@
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
       { title: "Family", field: "family", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
+      { title: "Size", field: "size", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() || "—" },
       { title: "GSM", field: "gsm", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Micron", field: "micron", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 130 },
       {
         title: "Allotted (Mtrs)",
         field: "allotted",
         hozAlign: "center",
         minWidth: 130,
-        headerTooltip: "Mtrs already committed to open (not-yet-produced) Label Stock orders needing this spec.",
+        headerTooltip: "Mtrs already committed to WIP (assigned to a machine, not-yet-produced) Label Stock orders needing this spec.",
         formatter: (cell) => {
           if (!cell.getRow().getData().isParent) return "";
           const value = cell.getValue() || 0;
@@ -762,6 +762,7 @@
         minWidth: 110,
         formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>` : ""),
       },
+      { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Inward",
         width: 110,

@@ -108,6 +108,17 @@
       font-family: monospace; font-size: 11px; font-weight: 600; letter-spacing: normal;
       text-transform: none; margin-left: 6px; opacity: 0.75;
     }
+    /* Pushed to the far right of the card header by margin-left: auto --
+       .layer-card__label is itself the flex row, so this doesn't need its
+       own wrapper. Clears just this one card's group (see
+       lsResetLayerGroup), not the whole form. */
+    .layer-card__reset-btn {
+      margin-left: auto; flex: 0 0 auto;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.03em; text-transform: none;
+      color: inherit; background: rgba(15, 23, 42, 0.06); border: 1px solid rgba(15, 23, 42, 0.15);
+      border-radius: 6px; padding: 3px 10px; cursor: pointer; transition: background 0.15s ease;
+    }
+    .layer-card__reset-btn:hover { background: rgba(15, 23, 42, 0.12); }
     .layer-card__fields { display: grid; gap: 16px; }
     .layer-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
     .layer-field label { font-size: 13px; font-weight: 800; letter-spacing: 0.02em; color: #334155; text-transform: uppercase; }
@@ -774,6 +785,37 @@
     const lsRlIds1 = new Set(Object.keys(lsRlKeyById1));
     const lsRlIds2 = new Set(Object.keys(lsRlKeyById2));
 
+    // One Reset button per layer card (see the .layer-card__reset-btn markup
+    // on each FACESTOCK/ADHESIVE/RELEASE LINER card above) -- the smart-filter
+    // cascade only ever narrows a group's options forward as fields get
+    // picked (fsRebuildGroup), so once a card is fully (or even partly)
+    // filled in, there's no way back to a wider set without clearing fields
+    // by hand one at a time, fighting the very auto-fill that just narrowed
+    // them. This clears one card's own fields and rebuilds it against the
+    // full, unconstrained master pool -- the same call shape lsResetForm()
+    // below already uses to blank every group when a fresh dialog opens,
+    // just scoped to a single card instead of all six. adhesiveGsm is a
+    // plain typed number outside the cascade (see adFieldSet -- Adhesive
+    // Master has no GSM field of its own), so it's cleared separately.
+    const LS_LAYER_RESET_GROUPS = {
+      facestock1: { masters: lsFacestockMasters, els: lsFsEls1, rebuild: fsRebuildCascade },
+      facestock2: { masters: lsFacestockMasters, els: lsFsEls2, rebuild: fsRebuildCascade },
+      adhesive1: { masters: lsAdhesiveMasters, els: lsAdEls1, rebuild: adRebuildCascade, extraInputIds: ["lsAdhesiveGsm"] },
+      adhesive2: { masters: lsAdhesiveMasters, els: lsAdEls2, rebuild: adRebuildCascade, extraInputIds: ["lsAdhesiveGsm2"] },
+      release1: { masters: lsReleaseMasters, els: lsRlEls1, rebuild: rlRebuildCascade },
+      release2: { masters: lsReleaseMasters, els: lsRlEls2, rebuild: rlRebuildCascade },
+    };
+    window.lsResetLayerGroup = function (blockKey) {
+      const group = LS_LAYER_RESET_GROUPS[blockKey];
+      if (!group) return;
+      Object.values(group.els).forEach((el) => { if (el && el.tagName === "SELECT") el.value = ""; });
+      (group.extraInputIds || []).forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+      });
+      group.rebuild(group.masters, group.els, lsInitChoices);
+    };
+
     // Roll/Sheet -> Printing Technology options: SHEET opens Digital/Offset,
     // ROLL opens Flexographic/Gravure/Letter Press. Digital (Sheet-only) opens
     // a further Laser/Ink field.
@@ -1124,7 +1166,7 @@
 
       <!-- Facestock -->
       <div class="ls-block layer-card layer-card--facestock" data-block="facestock1">
-        <span class="layer-card__label">FACESTOCK<span id="lsFacestockSkuId" class="layer-card__sku-badge" style="display:none;"></span></span>
+        <span class="layer-card__label">FACESTOCK<span id="lsFacestockSkuId" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('facestock1')">Reset</button></span>
         <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1fr 1.6fr 1fr 0.8fr 0.8fr;">
           <div class="layer-field">
             <label for="lsFacestockFamily">Family</label>
@@ -1175,7 +1217,7 @@
 
       <!-- Adhesive -->
       <div class="ls-block layer-card layer-card--adhesive" data-block="adhesive1">
-        <span class="layer-card__label">ADHESIVE<span id="lsAdhesiveSkuId" class="layer-card__sku-badge" style="display:none;"></span></span>
+        <span class="layer-card__label">ADHESIVE<span id="lsAdhesiveSkuId" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('adhesive1')">Reset</button></span>
         <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 0.6fr;">
           <div class="layer-field">
             <label for="lsAdhesiveType">Type</label>
@@ -1221,7 +1263,7 @@
 
       <!-- Facestock (Layer 2) -- only for DOUBLE FACESTOCK -->
       <div class="ls-block layer-card layer-card--facestock" data-block="facestock2" style="display:none">
-        <span class="layer-card__label">FACESTOCK <span style="opacity:0.7;">(Layer 2)</span><span id="lsFacestockSkuId2" class="layer-card__sku-badge" style="display:none;"></span></span>
+        <span class="layer-card__label">FACESTOCK <span style="opacity:0.7;">(Layer 2)</span><span id="lsFacestockSkuId2" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('facestock2')">Reset</button></span>
         <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1fr 1.6fr 1fr 0.8fr 0.8fr;">
           <div class="layer-field">
             <label for="lsFacestockFamily2">Family</label>
@@ -1272,7 +1314,7 @@
 
       <!-- Adhesive (Layer 2) -- for DOUBLE FACESTOCK and DOUBLE RELEASE -->
       <div class="ls-block layer-card layer-card--adhesive" data-block="adhesive2" style="display:none">
-        <span class="layer-card__label">ADHESIVE <span style="opacity:0.7;">(Layer 2)</span><span id="lsAdhesiveSkuId2" class="layer-card__sku-badge" style="display:none;"></span></span>
+        <span class="layer-card__label">ADHESIVE <span style="opacity:0.7;">(Layer 2)</span><span id="lsAdhesiveSkuId2" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('adhesive2')">Reset</button></span>
         <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 0.6fr;">
           <div class="layer-field">
             <label for="lsAdhesiveType2">Type</label>
@@ -1317,7 +1359,7 @@
 
       <!-- Release Liner -->
       <div class="ls-block layer-card layer-card--release" data-block="release1">
-        <span class="layer-card__label">RELEASE LINER<span id="lsReleaseLinerSkuId" class="layer-card__sku-badge" style="display:none;"></span></span>
+        <span class="layer-card__label">RELEASE LINER<span id="lsReleaseLinerSkuId" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('release1')">Reset</button></span>
         <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 0.6fr;">
           <div class="layer-field">
             <label for="lsReleaseLinerType">Type</label>
@@ -1356,7 +1398,7 @@
 
       <!-- Release Liner (Layer 2) -- only for DOUBLE RELEASE -->
       <div class="ls-block layer-card layer-card--release" data-block="release2" style="display:none">
-        <span class="layer-card__label">RELEASE LINER <span style="opacity:0.7;">(Layer 2)</span><span id="lsReleaseLinerSkuId2" class="layer-card__sku-badge" style="display:none;"></span></span>
+        <span class="layer-card__label">RELEASE LINER <span style="opacity:0.7;">(Layer 2)</span><span id="lsReleaseLinerSkuId2" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('release2')">Reset</button></span>
         <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.6fr 1fr 0.6fr;">
           <div class="layer-field">
             <label for="lsReleaseLinerType2">Type</label>

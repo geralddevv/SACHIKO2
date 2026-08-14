@@ -158,16 +158,37 @@ function releaseRecipeKey(o) {
   return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.color), n(o.gsm)].join("||");
 }
 
-// mtrs already committed to open (not-yet-produced) Label Stock orders, per
-// Release Master spec -- "reserved for production" demand, not a reel-level
-// hold (raw release liner is deducted immediately at Assign & Continue, see
-// utils/labelStockProduction.js's produceDeckle, so there's no separate
-// reserved state on the reel itself). A PendingProduction's own runningMeters
-// is exactly how much every layer of its recipe draws off its reel (all
-// layers run through the laminator together for the same length), so it's
-// added once per matching releaseLiner/releaseLiner2 layer.
-async function loadAllottedByKey() {
-  const pending = await PendingProduction.find({ producedAt: null })
+// mtrs already committed to WIP (assigned to a machine, not-yet-produced)
+// Label Stock orders, per Release Master spec -- "reserved for production"
+// demand, not a reel-level hold (raw release liner is deducted immediately
+// at Assign & Continue, see utils/labelStockProduction.js's produceDeckle,
+// so there's no separate reserved state on the reel itself). Scoped to
+// assignedMachineId being set -- an order still sitting in Pending (not yet
+// assigned to a machine) hasn't committed to a location/timeline yet, so it
+// doesn't reserve stock here. A PendingProduction's own runningMeters is
+// exactly how much every layer of its recipe draws off its reel (all layers
+// run through the laminator together for the same length), so it's added
+// once per matching releaseLiner/releaseLiner2 layer.
+async function loadAllottedByKey(masters) {
+  // A recipe layer only carries the reduced releaseRecipeKey fields, not
+  // Vendor SKU Code/Size -- so it can't be matched straight to a master's
+  // full releaseSpecKey the way a physical reel can. Resolve it instead: map
+  // every current master's reduced key to the full spec key(s) that share it
+  // (almost always exactly one), so demand ends up keyed the same way stock
+  // is (stockByKey/rollCountByKey in loadMastersWithStock, both full
+  // releaseSpecKey) instead of silently bucketing under a key nothing else
+  // uses. If two masters really are identical down to Vendor SKU Code/Size,
+  // the recipe genuinely can't tell them apart -- charge the demand to every
+  // candidate rather than picking one arbitrarily and leaving the other
+  // looking falsely available.
+  const specKeysByRecipeKey = new Map();
+  for (const m of masters) {
+    const recipeKey = releaseRecipeKey(m);
+    if (!specKeysByRecipeKey.has(recipeKey)) specKeysByRecipeKey.set(recipeKey, []);
+    specKeysByRecipeKey.get(recipeKey).push(releaseSpecKey(m));
+  }
+
+  const pending = await PendingProduction.find({ producedAt: null, assignedMachineId: { $ne: null } })
     .select("itemId runningMeters")
     .populate({ path: "itemId", select: "rollType releaseLiner releaseLiner2" })
     .lean();
@@ -175,14 +196,16 @@ async function loadAllottedByKey() {
   const allottedByKey = new Map();
   const addDemand = (layer, mtrs) => {
     if (!layer || !layer.releaseLinerType || !mtrs) return;
-    const key = releaseRecipeKey({
+    const recipeKey = releaseRecipeKey({
       vendorId: layer.releaseLinerVendorId,
       type: layer.releaseLinerType,
       make: layer.releaseLinerMake,
       color: layer.releaseLinerColor,
       gsm: layer.releaseLinerGsm,
     });
-    allottedByKey.set(key, (allottedByKey.get(key) || 0) + mtrs);
+    for (const specKey of specKeysByRecipeKey.get(recipeKey) || []) {
+      allottedByKey.set(specKey, (allottedByKey.get(specKey) || 0) + mtrs);
+    }
   };
 
   for (const p of pending) {
@@ -231,7 +254,7 @@ async function loadMastersWithStock(stock) {
     status: { $in: ["PENDING", "CONFIRMED", "PARTIALLY_RECEIVED"] },
   }).select("itemId").lean();
   const activePOSet = new Set(activePOs.map((po) => String(po.itemId)));
-  const allottedByKey = await loadAllottedByKey();
+  const allottedByKey = await loadAllottedByKey(masters);
 
   return masters.map((m) => {
     const key = releaseSpecKey(m);
@@ -239,7 +262,7 @@ async function loadMastersWithStock(stock) {
     const rollCount = rollCountByKey.get(key) || 0;
     const msq = Number(m.msq) || 0;
     const rolls = (rollsByKey.get(key) || []).slice().sort((a, b) => String(a.rollId).localeCompare(String(b.rollId)));
-    const allotted = allottedByKey.get(releaseRecipeKey(m)) || 0;
+    const allotted = allottedByKey.get(key) || 0;
     const available = currentStock - allotted;
     return {
       ...m,

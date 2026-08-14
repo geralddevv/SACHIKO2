@@ -364,17 +364,23 @@
       },
       { title: "Machine", field: "machineName", headerFilter: "input", headerFilterPlaceholder: "Filter machine...", formatter: (cell) => cell.getValue() || "—" },
       {
+        // Raw-material allocation (Facestock/Adhesive/Release Liner, ...),
+        // not Deckle reels produced vs. rolls ordered (rollsStatus) -- a
+        // single Assign & Continue only ever laminates one Deckle, so an
+        // order needing 2+ rolls would read "short" on rollsStatus right
+        // after its very first, fully-allocated run. materialStatus is the
+        // real ready/not-ready signal (see routes/fairdesk_route.js and
+        // routes/system/machine.js's buildQueueRows for the same split).
         title: "Stock",
-        field: "rollsStatus",
+        field: "materialStatus",
         hozAlign: "center",
         headerFilter: "list",
-        headerFilterParams: { values: { "": "All", short: "Short", match: "Fully allotted", over: "Over" } },
+        headerFilterParams: { values: { "": "All", short: "Short", match: "Fully allotted" } },
         headerFilterPlaceholder: "All",
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          if (row.rollsStatus === "short") return `<span style="color:#dc2626; font-weight:700;" title="Assign facestock rolls before starting production"><i class="fa-solid fa-triangle-exclamation"></i> Not allocated</span>`;
-          if (row.rollsStatus === "match") return `<span style="color:#16a34a; font-weight:700;"><i class="fa-solid fa-check"></i> Allotted</span>`;
-          if (row.rollsStatus === "over") return `<span style="color:#d97706; font-weight:700;">Over</span>`;
+          if (row.materialStatus === "short") return `<span style="color:#dc2626; font-weight:700;" title="Assign facestock rolls before starting production"><i class="fa-solid fa-triangle-exclamation"></i> Not allocated</span>`;
+          if (row.materialStatus === "match") return `<span style="color:#16a34a; font-weight:700;"><i class="fa-solid fa-check"></i> Allotted</span>`;
           return `<span style="color:#9ca3af;">—</span>`;
         },
       },

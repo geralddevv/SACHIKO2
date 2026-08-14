@@ -118,8 +118,9 @@
     .layer-block.is-layer2 { border-style: dashed; }
     .layer-block-label { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; color: var(--mg-text); white-space: nowrap; width: 130px; flex: 0 0 auto; }
     .layer-block-sep { font-size: 13px; font-weight: 700; color: var(--mg-border); }
-    .layer-block-detail { font-size: 13px; font-weight: 700; color: #334155; text-align: left; }
-    .layer-block-detail .lbd-field { color: #000; font-weight: 900; }
+    .layer-block-detail { font-size: 13px; font-weight: 800; color: #334155; text-align: left; }
+    .layer-block-detail .lbd-pair { display: inline-block; width: 150px; }
+    .layer-block-detail .lbd-field { color: #000; font-weight: 600; }
     .layer-caret { display: flex; justify-content: center; margin: -2px 0; color: #cbd5e1; font-size: 11px; }
 
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -281,9 +282,9 @@
             <%
               const detailParts = g.fields
                 .filter(function (f) { return !isEmpty(f[1]); })
-                .map(function (f) { return '<span class="lbd-field">' + escHtml(f[0]) + ':</span> ' + escHtml(f[1]); });
+                .map(function (f) { return '<span class="lbd-pair"><span class="lbd-field">' + escHtml(f[0]) + ':</span> ' + escHtml(f[1]) + '</span>'; });
             %>
-            <span class="layer-block-detail"><%- detailParts.length ? detailParts.join(" · ") : "—" %></span>
+            <span class="layer-block-detail"><%- detailParts.length ? detailParts.join(" | ") : "—" %></span>
           </div>
           <% if (idx < materialGroups.length - 1) { %>
             <div class="layer-caret"><i class="fa-solid fa-caret-down"></i></div>
@@ -291,13 +292,6 @@
         <% }) %>
       </div>
 
-      <% if (item.wordFile) { %>
-        <div class="material-wordfile">
-          <a href="/sachiko/label-stock/file/<%= item.wordFile %>">
-            <i class="fa-solid fa-file-word"></i> <%= dash(item.wordFileOriginalName || item.wordFile) %>
-          </a>
-        </div>
-      <% } %>
     </div>
   </div>
 
@@ -382,6 +376,7 @@
 
 <script id="all-machines-data" type="application/json"><%- safeJson(allMachines) %></script>
 <script id="item-data" type="application/json"><%- safeJson(item) %></script>
+<script id="allotted-layers-data" type="application/json"><%- safeJson(pp.allottedLayers || {}) %></script>
 <script src="/js/choices.min.js"></script>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
@@ -469,6 +464,15 @@
     const requiredLayerKeys = () => LAYER_ORDER[ITEM.rollType] || LAYER_ORDER.NORMAL;
     const layerReelsCache = {}; // layerKey -> reels fetched for the current machine's location
 
+    // What this order already had picked per raw-material layer (see
+    // models/inventory/pendingProduction.js's allottedLayers) -- so
+    // re-opening a partially-allocated order to top up one layer doesn't
+    // silently drop what was already picked for the others. Only used as a
+    // fallback default the first time a layer renders; once the radio group
+    // exists in the DOM, renderLayerRows() carries the live DOM selection
+    // forward instead (see previouslyChecked below), same as any other pick.
+    const ALLOTTED_LAYERS = JSON.parse(document.getElementById("allotted-layers-data").textContent) || {};
+
     function specSummary(spec, layerKey) {
       if (!spec) return "—";
       const bits = [];
@@ -515,7 +519,12 @@
       // Rebuilding the tbody below replaces every radio, which would
       // otherwise silently drop whatever was picked -- carry the current
       // pick forward as long as it's still a valid (not now-too-short) reel.
-      const previouslyChecked = tbody.querySelector("input[type='radio']:checked")?.value || "";
+      // Before anything's been checked yet (this layer's first render since
+      // page load), fall back to whatever was already allotted server-side.
+      const previouslyChecked =
+        tbody.querySelector("input[type='radio']:checked")?.value ||
+        ALLOTTED_LAYERS[layerKey]?.stockId ||
+        "";
 
       if (!reels) {
         tbody.innerHTML = `<tr><td colspan="3" style="color:#94a3b8; font-style:italic;">Select a machine first</td></tr>`;
@@ -556,7 +565,7 @@
       }
 
       try {
-        const res = await fetch(`/sachiko/labelstockproduction/raw-stock?pool=${meta.pool}&type=${encodeURIComponent(type)}&location=${encodeURIComponent(location)}`);
+        const res = await fetch(`/sachiko/labelstockproduction/raw-stock?layerKey=${encodeURIComponent(layerKey)}&itemId=${encodeURIComponent(ITEM._id)}&location=${encodeURIComponent(location)}`);
         const data = await res.json();
         layerReelsCache[layerKey] = data.reels || [];
       } catch {

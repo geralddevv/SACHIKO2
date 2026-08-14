@@ -18,6 +18,8 @@ const materialBlockSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Job Setting: setup wastage, measured off the machine's own counter -- hence
+// a start and a stop reading rather than a length.
 const rollRowSchema = new mongoose.Schema(
   {
     rollId: { type: String, trim: true },
@@ -25,6 +27,34 @@ const rollRowSchema = new mongoose.Schema(
     startTime: { type: String, trim: true },
     mtrs2: { type: Number },
     stopTime: { type: String, trim: true },
+  },
+  { _id: false },
+);
+
+// Production Log: one row per deckle produced, not per counter run -- the
+// deckle's id, the run's clocked start/end, the metres it made, and any
+// joint/wrinkle found on the face and release webs. Same shape as Sachiko's
+// own job card (models/sachiko/sachikoJobcard.js), which is where this layout
+// comes from, plus the rollId SACHIKO2 needs on top: it names which of the
+// job's allotted reels the deckle came off, and is what
+// consumeAllottedRollMeters deducts `meters` against.
+const productionLogRowSchema = new mongoose.Schema(
+  {
+    rollId: { type: String, trim: true },
+    deckleId: { type: String, trim: true },
+    meters: { type: Number },
+    face: {
+      joint: { type: String, trim: true },
+      mtr: { type: Number },
+    },
+    release: {
+      joint: { type: String, trim: true },
+      mtr: { type: Number },
+    },
+    time: {
+      startTime: { type: String, trim: true },
+      endTime: { type: String, trim: true },
+    },
   },
   { _id: false },
 );
@@ -74,7 +104,7 @@ const machineJobCardSchema = new mongoose.Schema(
     releaseLiner: materialBlockSchema,
 
     jobSetting: [rollRowSchema],
-    productionLog: [rollRowSchema],
+    productionLog: [productionLogRowSchema],
 
     totalMeter: { type: String, trim: true },
     sqMtr: { type: String, trim: true },
