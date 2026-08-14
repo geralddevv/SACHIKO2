@@ -23,7 +23,7 @@
     .header-action-btn:hover {
       background-color: #e4e4e4;
     }
-    #facestock-masters-table {
+    #core-masters-table {
       width: 100%;
       flex: 1 1 auto;
       min-height: 0;
@@ -214,10 +214,10 @@
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
 
-    /* Rolls dropdown -- Tabulator's dataTree module, same pattern as
+    /* Lots dropdown -- Tabulator's dataTree module, same pattern as
        FAIRTECH's Paper Re-Order page (views/inventory/orders/paperReorder.ejs):
        each master row expands via its own tree toggle into one child row per
-       individual FacestockStock reel behind that master's stock count. */
+       individual CoreStock lot behind that master's stock count. */
     .tabulator-data-tree-control {
       width: 20px !important;
       height: 20px !important;
@@ -266,39 +266,42 @@
       content: none !important;
       display: none !important;
     }
-    #facestock-masters-table .tabulator-row.roll-detail-row {
+    #core-masters-table .tabulator-row.roll-detail-row {
       transition: background-color 0.15s ease;
     }
-    #facestock-masters-table .tabulator-row.roll-detail-row:hover {
+    #core-masters-table .tabulator-row.roll-detail-row:hover {
       background-color: #eef2f7 !important;
       border-top: 1px solid #e6eaf2 !important;
       border-right-style: none !important;
       border-bottom-style: none !important;
       border-left-style: none !important;
     }
-    #facestock-masters-table .tabulator-row.roll-detail-row > .tabulator-cell,
-    #facestock-masters-table .tabulator-row.roll-detail-row > .tabulator-col-resize-handle {
+    #core-masters-table .tabulator-row.roll-detail-row > .tabulator-cell,
+    #core-masters-table .tabulator-row.roll-detail-row > .tabulator-col-resize-handle {
       display: none !important;
     }
   </style>
 
-  <!-- Facestock Master rows are the only table here: current stock (total
-       mtrs still on non-empty reels, matched by the same fields Facestock
-       Master's own duplicate-check signature hashes) sits right on the spec
-       it's stock of, alongside MSQ/shortage and the Inward/Create PO
-       actions -- see routes/stock/facestockStock.js's loadMastersWithStock.
-       Every master is listed here even with zero reels. -->
+  <!-- Core Master rows are the only table here: current stock (total pieces
+       still in non-empty lots, matched by the same fields Core Master's own
+       duplicate-check signature hashes) sits right on the spec it's stock
+       of, alongside MSQ/shortage and the Inward/Create PO actions -- see
+       routes/stock/coreStock.js's loadMastersWithStock. Every master is
+       listed here even with zero lots. Unlike Facestock/Adhesive/Release
+       Liner, there's no Allotted/Available pair here -- Core isn't a Label
+       Stock production recipe layer, so there's no PendingProduction demand
+       to net against stock (see loadMastersWithStock's comment). -->
   <div class="indi-head">
-    <h1>Facestock Stock</h1>
+    <h1>Core Stock</h1>
     <div style="display: flex; gap: 10px; align-items: center">
       <button class="header-action-btn" onclick="openAddDialog()">
-        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Facestock Reel
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Core Lot
       </button>
     </div>
   </div>
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
-  <div id="facestock-masters-table" class="tabulator tabulator-modern"></div>
+  <div id="core-masters-table" class="tabulator tabulator-modern"></div>
 </div>
 
 <!-- ============ CREATE PURCHASE ORDER DIALOG ============ -->
@@ -323,8 +326,8 @@
 
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="poQtyInput">Quantity (Mtrs)</label>
-          <input type="number" id="poQtyInput" class="form-control premium-input" min="1" step="any" placeholder="Enter mtrs" />
+          <label class="dialog-field-label" for="poQtyInput">Quantity (Pcs)</label>
+          <input type="number" id="poQtyInput" class="form-control premium-input" min="1" step="1" placeholder="Enter pieces" />
         </div>
         <div>
           <label class="dialog-field-label" for="poNumberInput">PO Number</label>
@@ -355,16 +358,16 @@
   </div>
 </div>
 
-<!-- ============ ADD FACESTOCK DIALOG (batch inward, landscape) ============ -->
+<!-- ============ ADD CORE DIALOG (batch inward, landscape) ============ -->
 <div class="logout-modal" id="addDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
     style="width: min(1180px, 94vw); height: min(680px, 85vh); padding: 0; border-radius: 14px; display: flex; flex-direction: column;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0; flex: 0 0 auto;">
       <div style="display: flex; align-items: center; gap: 20px;">
-        <h2 id="addDialogTitle">Add Facestock Reels</h2>
+        <h2 id="addDialogTitle">Add Core Lots</h2>
         <div style="display: flex; align-items: center; gap: 16px; font-size: 13px; color: rgba(255, 255, 255, 0.8);">
-          <span>Rolls: <strong id="summaryRollCount" style="color: #fff; font-size: 15px;">1</strong></span>
-          <span>Total Mtrs: <strong id="summaryTotalMtrs" style="color: #fff; font-size: 15px;">0</strong></span>
+          <span>Lots: <strong id="summaryLotCount" style="color: #fff; font-size: 15px;">1</strong></span>
+          <span>Total Pcs: <strong id="summaryTotalPcs" style="color: #fff; font-size: 15px;">0</strong></span>
         </div>
       </div>
       <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
@@ -373,28 +376,22 @@
       <div style="display: flex; gap: 28px; flex: 1 1 auto; min-height: 0;">
 
         <!-- ---- Left: shared spec for this batch ---- -->
-        <!-- overflow-y: auto is a safety net only (see updateBatchSummary --
-             this column's content is sized to fit without scrolling in the
-             normal case); Choices.js dropdowns for Family/Type/Location open
-             downward from fields that always have room below them here, so
-             clipping in practice shouldn't come up (CLAUDE.md "Dialog /
-             modal pattern"). -->
+        <!-- Type/Vendor/Make/Print Type/Thickness/Width -- every field Core
+             Master itself carries -- are smart-filtered against it (see GET
+             /sachiko/corestock/filter-specs): picking one narrows the others
+             to combinations that actually exist in the master catalog, same
+             "narrow as you pick" pattern as Tape Stock inward and Facestock
+             Stock inward. -->
         <div class="custom-scrollbar" style="flex: 1 1 400px; min-width: 400px; padding-right: 6px; overflow-y: auto;">
           <!-- ---- Master Table (read-only reference) ---- -->
           <div style="margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; overflow: hidden;">
-            <table id="facestockMastersRef" style="width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 600;">
+            <table id="coreMastersRef" style="width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 600;">
               <tbody style="color: #0f172a;">
                 <tr><td colspan="2" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>
               </tbody>
             </table>
           </div>
 
-          <!-- Family/Type/GSM/Micron/Vendor/Make/Vendor SKU Code -- every
-               field Facestock Master itself carries -- are smart-filtered
-               against it (see GET /sachiko/facestockstock/filter-specs):
-               picking one narrows the others to combinations that actually
-               exist in the master catalog, same "narrow as you pick" pattern
-               as Tape Stock inward and the Label Stock Binding spec pickers. -->
           <h3 style="margin: 0 0 16px 0; font-size: 0.9rem; font-weight: 600; color: #044a78; text-transform: uppercase; letter-spacing: 0.03em;">Inward Details</h3>
 
           <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
@@ -411,8 +408,8 @@
               <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
             </div>
             <div>
-              <label class="dialog-field-label" for="addRollCountInput">No of Rolls</label>
-              <input type="number" id="addRollCountInput" class="form-control premium-input" min="1" max="100" step="1" value="1" />
+              <label class="dialog-field-label" for="addLotCountInput">No of Lots</label>
+              <input type="number" id="addLotCountInput" class="form-control premium-input" min="1" max="100" step="1" value="1" />
             </div>
           </div>
 
@@ -420,17 +417,17 @@
           <input type="text" id="addRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
         </div>
 
-        <!-- ---- Right: one card per physical reel ---- -->
+        <!-- ---- Right: one card per inward lot ---- -->
         <div style="flex: 1 1 auto; min-width: 0; max-width: 600px; display: flex; flex-direction: column;">
-          <div class="dialog-section-label"><span>Rolls</span></div>
-          <div id="addRollsContainer" class="custom-scrollbar" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start; gap: 14px; padding-right: 6px;"></div>
+          <div class="dialog-section-label"><span>Lots</span></div>
+          <div id="addLotsContainer" class="custom-scrollbar" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start; gap: 14px; padding-right: 6px;"></div>
         </div>
       </div>
 
-      <div id="addFacestockError" class="dialog-error"></div>
+      <div id="addCoreError" class="dialog-error"></div>
       <div class="dialog-actions" style="flex: 0 0 auto;">
         <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
-        <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Reels</button>
+        <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Lots</button>
       </div>
     </div>
   </div>
@@ -440,12 +437,12 @@
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
-<script id="facestock-specs-data" type="application/json"><%- safeJson({ families, types, sizes, gsms, microns, vendors, makes, vendorSkuCodes }) %></script>
-<script id="facestock-masters-data" type="application/json"><%- safeJson(masters) %></script>
+<script id="core-specs-data" type="application/json"><%- safeJson({ types, vendors, makes, printTypes, thicknesses, widths }) %></script>
+<script id="core-masters-data" type="application/json"><%- safeJson(masters) %></script>
 <script>
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
-  const facestockSpecsData = JSON.parse(document.getElementById("facestock-specs-data").textContent);
-  const mastersData = JSON.parse(document.getElementById("facestock-masters-data").textContent);
+  const coreSpecsData = JSON.parse(document.getElementById("core-specs-data").textContent);
+  const mastersData = JSON.parse(document.getElementById("core-masters-data").textContent);
 
   function locationOptionsHtml(selectedName) {
     return locationsData
@@ -454,9 +451,9 @@
   }
 
   // Rebuilds a smart-filtered select's full (unfiltered) option list -- used
-  // to reset the Add dialog's Family/Type/GSM/Micron/Make/Vendor SKU Code
-  // pickers back to every Facestock Master value each time the dialog is
-  // (re)opened, since filterAddSpecs narrows them in place while it's open.
+  // to reset the Add dialog's Type/Make/Print Type/Thickness/Width pickers
+  // back to every Core Master value each time the dialog is (re)opened,
+  // since filterAddSpecs narrows them in place while it's open.
   function specOptionsHtml(values, noneLabel, noneDisabled) {
     const noneOption = `<option value="" ${noneDisabled ? "disabled selected hidden" : ""}>${noneLabel}</option>`;
     return noneOption + values.map((v) => `<option value="${v}">${v}</option>`).join("");
@@ -468,38 +465,29 @@
     return `<option value="">— None —</option>` + vendors.map((v) => `<option value="${v.vendorId}">${v.vendorName}</option>`).join("");
   }
 
-  let addFamilyChoices = null, addTypeChoices = null, addSizeChoices = null, addGsmChoices = null, addMicronChoices = null;
-  let addVendorChoices = null, addMakeChoices = null, addVendorSkuCodeChoices = null, addLocationChoices = null;
+  let addTypeChoices = null, addVendorChoices = null, addMakeChoices = null;
+  let addPrintTypeChoices = null, addThicknessChoices = null, addWidthChoices = null, addLocationChoices = null;
 
-  // ---- Add (inward) dialog: smart filter for Family/Type/GSM/Micron/
-  // Vendor/Make/Vendor SKU Code ---- Narrows each field's options to
-  // combinations that actually exist in Facestock Master as the other
-  // fields are picked -- same pattern as Tape Stock inward
-  // (routes/stock/tapeStock.js) and the Label Stock Binding spec pickers
-  // (routes/sachiko/labelStockBinding.js).
-  const addSpecFields = [
-    "addFamilySelect", "addTypeSelect", "addSizeSelect", "addGsmSelect", "addMicronSelect",
-    "addVendorSelect", "addMakeSelect", "addVendorSkuCodeSelect",
-  ];
+  // ---- Add (inward) dialog: smart filter for Type/Vendor/Make/Print Type/
+  // Thickness/Width ---- Narrows each field's options to combinations that
+  // actually exist in Core Master as the other fields are picked -- same
+  // pattern as Tape Stock inward and Facestock Stock inward.
+  const addSpecFields = ["addTypeSelect", "addVendorSelect", "addMakeSelect", "addPrintTypeSelect", "addThicknessSelect", "addWidthSelect"];
   const addSpecFieldToKey = {
-    addFamilySelect: "family",
     addTypeSelect: "type",
-    addSizeSelect: "size",
-    addGsmSelect: "gsm",
-    addMicronSelect: "micron",
     addVendorSelect: "vendorId",
     addMakeSelect: "make",
-    addVendorSkuCodeSelect: "vendorSkuCode",
+    addPrintTypeSelect: "printType",
+    addThicknessSelect: "thickness",
+    addWidthSelect: "width",
   };
   const addSpecFieldToDataKey = {
-    addFamilySelect: "families",
     addTypeSelect: "types",
-    addSizeSelect: "sizes",
-    addGsmSelect: "gsms",
-    addMicronSelect: "microns",
     addVendorSelect: "vendors",
     addMakeSelect: "makes",
-    addVendorSkuCodeSelect: "vendorSkuCodes",
+    addPrintTypeSelect: "printTypes",
+    addThicknessSelect: "thicknesses",
+    addWidthSelect: "widths",
   };
   // Vendor's options are {vendorId, vendorName} pairs; every other field's
   // are plain scalars -- this is the one place that difference matters.
@@ -511,29 +499,25 @@
     const { value: val, label } = mapper(value);
     return { value: val, label, selected: val === currentValue };
   }
-  // Family/GSM/Micron/Vendor/Make/Vendor SKU Code are all optional on a
-  // stock reel, so their reset choice is a real selectable "— None —";
-  // Type is required, so it stays a disabled placeholder like the rest of
-  // this dialog's required selects.
+  // Vendor/Make/Print Type/Thickness/Width are all optional on a stock lot,
+  // so their reset choice is a real selectable "— None —"; Type is required,
+  // so it stays a disabled placeholder like the rest of this dialog's
+  // required selects.
   const addSpecFieldPlaceholder = {
-    addFamilySelect: { label: "— None —", disabled: false },
     addTypeSelect: { label: "Select type", disabled: true },
-    addSizeSelect: { label: "— None —", disabled: false },
-    addGsmSelect: { label: "— None —", disabled: false },
-    addMicronSelect: { label: "— None —", disabled: false },
     addVendorSelect: { label: "— None —", disabled: false },
     addMakeSelect: { label: "— None —", disabled: false },
-    addVendorSkuCodeSelect: { label: "— None —", disabled: false },
+    addPrintTypeSelect: { label: "— None —", disabled: false },
+    addThicknessSelect: { label: "— None —", disabled: false },
+    addWidthSelect: { label: "— None —", disabled: false },
   };
   function addSpecChoicesInstance(id) {
-    if (id === "addFamilySelect") return addFamilyChoices;
     if (id === "addTypeSelect") return addTypeChoices;
-    if (id === "addSizeSelect") return addSizeChoices;
-    if (id === "addGsmSelect") return addGsmChoices;
-    if (id === "addMicronSelect") return addMicronChoices;
     if (id === "addVendorSelect") return addVendorChoices;
     if (id === "addMakeSelect") return addMakeChoices;
-    if (id === "addVendorSkuCodeSelect") return addVendorSkuCodeChoices;
+    if (id === "addPrintTypeSelect") return addPrintTypeChoices;
+    if (id === "addThicknessSelect") return addThicknessChoices;
+    if (id === "addWidthSelect") return addWidthChoices;
     return null;
   }
 
@@ -545,7 +529,7 @@
     });
 
     try {
-      const res = await fetch(`/sachiko/facestockstock/filter-specs?${params}`);
+      const res = await fetch(`/sachiko/corestock/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -576,7 +560,7 @@
 
       if (autoSelected.length > 0) await filterAddSpecs(autoSelected[0]);
     } catch (err) {
-      console.error("Facestock filter specs error:", err);
+      console.error("Core filter specs error:", err);
     }
   }
 
@@ -648,12 +632,12 @@
 
   const fmt = (n) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("en-IN"));
 
-  // Flattens each master into Tabulator's dataTree shape: one row per
-  // Facestock Master, with the individual FacestockStock reels behind its
-  // stock count (see routes/stock/facestockStock.js's loadMastersWithStock)
-  // as _children rows -- same "Rolls" dropdown pattern as FAIRTECH's Paper
-  // Re-Order page (paperReorder.ejs). A master with no reels still gets a
-  // one-line placeholder child so its tree toggle has something to open onto
+  // Flattens each master into Tabulator's dataTree shape: one row per Core
+  // Master, with the individual CoreStock lots behind its stock count (see
+  // routes/stock/coreStock.js's loadMastersWithStock) as _children rows --
+  // same "Rolls" dropdown pattern as FAIRTECH's Paper Re-Order page
+  // (paperReorder.ejs). A master with no lots still gets a one-line
+  // placeholder child so its tree toggle has something to open onto
   // (Tabulator draws the toggle for any array, regardless of length).
   function buildMastersTreeData(masters) {
     return masters.map((m) => {
@@ -667,21 +651,18 @@
   }
 
   // ---- Masters & Reorder table ----
-  const mastersTable = new Tabulator("#facestock-masters-table", {
+  const mastersTable = new Tabulator("#core-masters-table", {
     data: buildMastersTreeData(mastersData),
     height: "100%",
     responsiveLayout: false,
     movableColumns: true,
-    placeholder: "No facestock masters added yet.",
+    placeholder: "No core masters added yet.",
     dataTree: true,
     dataTreeStartExpanded: false,
     dataTreeChildField: "_children",
-    // Child (reel) rows don't carry a master's own values -- scope header
-    // filtering to parent rows only, same reasoning as paperReorder.ejs, so a
-    // matching parent's reels still display in full under an active filter.
     dataTreeFilter: false,
     dataTreeElementColumn: "_toggle",
-    // Reel rows carry free-text identity (Roll ID, Vendor Roll ID, Remarks...)
+    // Lot rows carry free-text identity (Core ID, Vendor Batch No, Remarks...)
     // that doesn't fit a fixed column width -- hide every per-column cell on
     // those rows and replace them with one spanning detail bar instead,
     // exactly like paperReorder.ejs's order rows.
@@ -697,12 +678,12 @@
       bar.className = "roll-detail-span";
       bar.style.cssText = "flex:1; display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 12px; color:#4b5563; font-size:13px;";
       if (data.noRolls) {
-        bar.innerHTML = `<span style="color:#94a3b8; font-style:italic;">No reels in stock for this spec.</span>`;
+        bar.innerHTML = `<span style="color:#94a3b8; font-style:italic;">No lots in stock for this spec.</span>`;
       } else {
         const parts = [
           `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
-          data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
-          `Mtrs ${fmt(data.reelMtrs)}`,
+          data.vendorRollId ? `Vendor Batch No: ${escapeHtml(data.vendorRollId)}` : "",
+          `Pcs ${fmt(data.quantity)}`,
           data.location ? escapeHtml(data.location) : "",
           data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
           data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : "",
@@ -717,42 +698,24 @@
       { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false },
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
-      { title: "Family", field: "family", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
-      { title: "GSM", field: "gsm", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Micron", field: "micron", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Print Type", field: "printType", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
+      { title: "Thickness", field: "thickness", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Width", field: "width", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 130 },
       {
-        title: "Allotted (Mtrs)",
-        field: "allotted",
+        title: "Stock (Pcs)",
+        field: "currentStock",
         hozAlign: "center",
-        minWidth: 130,
-        headerTooltip: "Mtrs already committed to open (not-yet-produced) Label Stock orders needing this spec.",
-        formatter: (cell) => {
-          if (!cell.getRow().getData().isParent) return "";
-          const value = cell.getValue() || 0;
-          return value ? `<span style="font-weight:700; color:#92400e;">${value}</span>` : "—";
-        },
+        minWidth: 110,
+        formatter: (cell) => (cell.getRow().getData().isParent ? (cell.getValue() || 0) : ""),
       },
       {
-        title: "Available (Mtrs)",
-        field: "available",
-        hozAlign: "center",
-        minWidth: 130,
-        headerTooltip: "Stock (Mtrs) minus Allotted (Mtrs) -- what's actually free to commit.",
-        formatter: (cell) => {
-          if (!cell.getRow().getData().isParent) return "";
-          const value = cell.getValue() || 0;
-          const color = value < 0 ? "#dc2626" : "#15803d";
-          return `<span style="font-weight:800; color:${color};">${value}</span>`;
-        },
-      },
-      {
-        title: "Stock (Rolls)",
+        title: "Stock (Lots)",
         field: "rollCount",
         hozAlign: "center",
-        minWidth: 130,
+        minWidth: 110,
         formatter: (cell) => (cell.getRow().getData().isParent ? (cell.getValue() || 0) : ""),
       },
       {
@@ -772,7 +735,7 @@
           if (!row.isParent) return "";
           const btn = document.createElement("button");
           btn.className = "add-stock-btn";
-          btn.title = "Add stock reels for this spec";
+          btn.title = "Add stock lots for this spec";
           btn.innerHTML = '<i class="fa-solid fa-plus"></i> Add';
           btn.addEventListener("click", () => openAddDialog(row));
           return btn;
@@ -838,7 +801,7 @@
     hideError("poError");
     setLoading("poSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/facestockstock/purchase-order", {
+      const res = await fetch("/sachiko/corestock/purchase-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -865,55 +828,55 @@
 
   // ---- ADD (batch inward) ----
 
-  // Row group markup for one physical reel of the batch's shared spec --
-  // Roll ID is filled in after the fact by refreshRollIdPreviews(), never typed.
-  function rollRowHtml(index, prev) {
+  // Row group markup for one inward lot of the batch's shared spec -- Core
+  // ID is filled in after the fact by refreshRollIdPreviews(), never typed.
+  function lotRowHtml(index, prev) {
     return `
       <div class="roll-row" data-index="${index}">
-        <div class="roll-row-title">Roll ${index + 1}</div>
-        <label class="dialog-field-label">Roll ID</label>
+        <div class="roll-row-title">Lot ${index + 1}</div>
+        <label class="dialog-field-label">Core ID</label>
         <input type="text" class="form-control premium-input roll-id-preview" readonly style="margin-bottom: 10px; background: #f1f5f9;" />
-        <label class="dialog-field-label">Vendor Roll ID</label>
-        <input type="text" class="form-control premium-input roll-vendor-id" placeholder="Vendor's own roll no" value="${prev.vendorRollId || ""}" style="margin-bottom: 10px;" />
-        <label class="dialog-field-label">Mtrs</label>
-        <input type="number" class="form-control premium-input roll-mtrs" min="0" step="any" placeholder="Enter Mtrs" value="${prev.mtrs || ""}" />
+        <label class="dialog-field-label">Vendor Batch No</label>
+        <input type="text" class="form-control premium-input roll-vendor-id" placeholder="Vendor's own batch no" value="${prev.vendorRollId || ""}" style="margin-bottom: 10px;" />
+        <label class="dialog-field-label">Pieces</label>
+        <input type="number" class="form-control premium-input roll-mtrs" min="0" step="1" placeholder="Enter pieces" value="${prev.mtrs || ""}" />
       </div>`;
   }
 
-  // Rebuilds the roll rows for the given count, keeping whatever the user
+  // Rebuilds the lot rows for the given count, keeping whatever the user
   // already typed into rows that are still present -- only rows past the
   // new count are dropped, and new rows are always appended at the end so an
   // existing row's index never shifts while it's on screen.
-  function renderRollRows(count, preserveValues) {
-    const container = document.getElementById("addRollsContainer");
+  function renderLotRows(count, preserveValues) {
+    const container = document.getElementById("addLotsContainer");
     const existing = preserveValues
       ? Array.from(container.querySelectorAll(".roll-row")).map((row) => ({
           vendorRollId: row.querySelector(".roll-vendor-id").value,
           mtrs: row.querySelector(".roll-mtrs").value,
         }))
       : [];
-    container.innerHTML = Array.from({ length: count }, (_, i) => rollRowHtml(i, existing[i] || {})).join("");
+    container.innerHTML = Array.from({ length: count }, (_, i) => lotRowHtml(i, existing[i] || {})).join("");
     refreshRollIdPreviews();
     updateBatchSummary();
   }
 
-  // Live roll count / total mtrs shown in the dialog header as rows are
-  // added/removed and Mtrs values are typed.
+  // Live lot count / total pieces shown in the dialog header as rows are
+  // added/removed and Pieces values are typed.
   function updateBatchSummary() {
-    const rows = document.querySelectorAll("#addRollsContainer .roll-row");
-    const totalMtrs = Array.from(rows).reduce((sum, row) => sum + (Number(row.querySelector(".roll-mtrs").value) || 0), 0);
-    document.getElementById("summaryRollCount").textContent = rows.length;
-    document.getElementById("summaryTotalMtrs").textContent = Number.isInteger(totalMtrs) ? totalMtrs : totalMtrs.toFixed(1);
+    const rows = document.querySelectorAll("#addLotsContainer .roll-row");
+    const totalPcs = Array.from(rows).reduce((sum, row) => sum + (Number(row.querySelector(".roll-mtrs").value) || 0), 0);
+    document.getElementById("summaryLotCount").textContent = rows.length;
+    document.getElementById("summaryTotalPcs").textContent = totalPcs;
   }
-  document.getElementById("addRollsContainer").addEventListener("input", (e) => {
+  document.getElementById("addLotsContainer").addEventListener("input", (e) => {
     if (e.target.classList.contains("roll-mtrs")) updateBatchSummary();
   });
 
   async function refreshRollIdPreviews() {
-    const rows = document.querySelectorAll("#addRollsContainer .roll-row");
+    const rows = document.querySelectorAll("#addLotsContainer .roll-row");
     if (!rows.length) return;
     try {
-      const res = await fetch(`/sachiko/facestockstock/preview-roll-ids?count=${rows.length}`);
+      const res = await fetch(`/sachiko/corestock/preview-roll-ids?count=${rows.length}`);
       const data = await res.json();
       const ids = data.rollIds || [];
       rows.forEach((row, i) => {
@@ -924,49 +887,45 @@
     }
   }
 
-  document.getElementById("addRollCountInput").addEventListener("change", function () {
+  document.getElementById("addLotCountInput").addEventListener("change", function () {
     const count = Math.min(Math.max(parseInt(this.value, 10) || 1, 1), 100);
     this.value = count;
-    renderRollRows(count, true);
+    renderLotRows(count, true);
   });
 
   // masterPrefill (optional): a row from the Masters & Reorder panel below --
   // when given, every spec field is pre-set to that master's own spec
   // instead of left blank, so "Add Stock" on a master row jumps straight to
-  // entering roll rows rather than re-picking a spec the smart filters would
+  // entering lot rows rather than re-picking a spec the smart filters would
   // narrow down to anyway.
-  let selectedFacestockMaster = null;
+  let selectedCoreMaster = {};
 
   function openAddDialog(masterPrefill) {
-    selectedFacestockMaster = masterPrefill || {};
+    selectedCoreMaster = masterPrefill || {};
 
     // Populate masters table with selected master only - show ALL master data
-    const tbody = document.getElementById("facestockMastersRef").querySelector("tbody");
-    if (selectedFacestockMaster && selectedFacestockMaster.family) {
-      const gsmMicron = selectedFacestockMaster.gsm != null ? `${selectedFacestockMaster.gsm} GSM` :
-                        selectedFacestockMaster.micron != null ? `${selectedFacestockMaster.micron} Micron` : "—";
+    const tbody = document.getElementById("coreMastersRef").querySelector("tbody");
+    if (selectedCoreMaster && selectedCoreMaster.type) {
       tbody.innerHTML = `
         <tr style="border-bottom: 1px solid #e2e8f0;">
           <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Vendor</td>
-          <td style="padding: 10px; color: #0f172a; width: 75%;" colspan="3">${selectedFacestockMaster.vendorName || "—"}</td>
+          <td style="padding: 10px; color: #0f172a; width: 75%;" colspan="3">${selectedCoreMaster.vendorName || "—"}</td>
         </tr>
         <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Family</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedFacestockMaster.family || "—"}</td>
           <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Type</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedFacestockMaster.type || "—"}</td>
+          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedCoreMaster.type || "—"}</td>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Make</td>
+          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedCoreMaster.make || "—"}</td>
         </tr>
         <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Make</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedFacestockMaster.make || "—"}</td>
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">SKU</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedFacestockMaster.vendorSkuCode || "—"}</td>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Print Type</td>
+          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedCoreMaster.printType || "—"}</td>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Thickness</td>
+          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedCoreMaster.thickness || "—"}</td>
         </tr>
         <tr>
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Size</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedFacestockMaster.size || "—"}</td>
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">GSM/Micron</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%;">${gsmMicron}</td>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Width</td>
+          <td style="padding: 10px; color: #0f172a; width: 75%;" colspan="3">${selectedCoreMaster.width || "—"}</td>
         </tr>
       `;
     } else {
@@ -976,16 +935,16 @@
     document.getElementById("addRateInput").value = "";
     document.getElementById("addInvoiceNoInput").value = "";
     document.getElementById("addRemarksInput").value = "";
-    document.getElementById("addRollCountInput").value = "1";
+    document.getElementById("addLotCountInput").value = "1";
 
     if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
     const locSel = document.getElementById("addLocationSelect");
     locSel.innerHTML = locationOptionsHtml("");
     addLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
-    renderRollRows(1, false);
+    renderLotRows(1, false);
 
-    hideError("addFacestockError");
+    hideError("addCoreError");
     openModal("addDialog");
   }
   function closeAddDialog() {
@@ -993,34 +952,32 @@
   }
 
   async function submitAdd() {
-    if (!selectedFacestockMaster || !selectedFacestockMaster._id) return showError("addFacestockError", "Please select a master to inward.");
+    if (!selectedCoreMaster || !selectedCoreMaster._id) return showError("addCoreError", "Please select a master to inward.");
 
     const location = document.getElementById("addLocationSelect").value;
-    if (!location) return showError("addFacestockError", "Location is required.");
+    if (!location) return showError("addCoreError", "Location is required.");
 
-    const rollRows = Array.from(document.querySelectorAll("#addRollsContainer .roll-row"));
-    const rolls = rollRows.map((row) => ({
-      reelMtrs: row.querySelector(".roll-mtrs").value,
+    const lotRows = Array.from(document.querySelectorAll("#addLotsContainer .roll-row"));
+    const rolls = lotRows.map((row) => ({
+      quantity: row.querySelector(".roll-mtrs").value,
       vendorRollId: row.querySelector(".roll-vendor-id").value,
     }));
-    const emptyIndex = rolls.findIndex((r) => !r.reelMtrs || Number(r.reelMtrs) <= 0);
-    if (emptyIndex !== -1) return showError("addFacestockError", `Mtrs is required for roll ${emptyIndex + 1}.`);
+    const emptyIndex = rolls.findIndex((r) => !r.quantity || Number(r.quantity) <= 0);
+    if (emptyIndex !== -1) return showError("addCoreError", `Pieces is required for lot ${emptyIndex + 1}.`);
 
-    hideError("addFacestockError");
+    hideError("addCoreError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/facestockstock/create", {
+      const res = await fetch("/sachiko/corestock/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          family: selectedFacestockMaster.family,
-          type: selectedFacestockMaster.type,
-          size: selectedFacestockMaster.size,
-          gsm: selectedFacestockMaster.gsm,
-          micron: selectedFacestockMaster.micron,
-          vendorId: selectedFacestockMaster.vendorId,
-          make: selectedFacestockMaster.make,
-          vendorSkuCode: selectedFacestockMaster.vendorSkuCode,
+          type: selectedCoreMaster.type,
+          vendorId: selectedCoreMaster.vendorId,
+          make: selectedCoreMaster.make,
+          printType: selectedCoreMaster.printType,
+          thickness: selectedCoreMaster.thickness,
+          width: selectedCoreMaster.width,
           rate: document.getElementById("addRateInput").value,
           location,
           invoiceNo: document.getElementById("addInvoiceNoInput").value,
@@ -1030,12 +987,12 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/facestockstock";
+        window.location.href = data.redirect || "/sachiko/corestock";
       } else {
-        showError("addFacestockError", data.message || "Failed to add facestock stock.");
+        showError("addCoreError", data.message || "Failed to add core stock.");
       }
     } catch {
-      showError("addFacestockError", "Server error. Please try again.");
+      showError("addCoreError", "Server error. Please try again.");
     } finally {
       setLoading("addSubmitBtn", false);
     }

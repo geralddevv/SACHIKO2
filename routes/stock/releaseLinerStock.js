@@ -5,9 +5,11 @@ import Vendor from "../../models/users/vendor.js";
 import Location from "../../models/system/location.js";
 import PurchaseOrder from "../../models/inventory/PurchaseOrder.js";
 import PurchaseOrderLog from "../../models/inventory/PurchaseOrderLog.js";
+import PendingProduction from "../../models/inventory/pendingProduction.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
+import { requiredLayersFor } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
 const ROLL_ID_PREFIX = "RELEASE";
@@ -145,6 +147,56 @@ function releaseSpecKey(o) {
   return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode), s(o.color), s(o.size), n(o.gsm)].join("||");
 }
 
+// Same grouping, minus Vendor SKU Code and Size -- a Label Stock SKU's
+// releaseLiner/releaseLiner2 recipe (models/sachiko/sachikoLabelStock.js)
+// pins down vendor/type/make/color/gsm but carries neither field of its own,
+// so matching a recipe layer back to a Release Master can't key on them the
+// way releaseSpecKey does for a physical reel.
+function releaseRecipeKey(o) {
+  const s = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
+  const n = (v) => (v === undefined || v === null || v === "" ? "" : String(Number(v)));
+  return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.color), n(o.gsm)].join("||");
+}
+
+// mtrs already committed to open (not-yet-produced) Label Stock orders, per
+// Release Master spec -- "reserved for production" demand, not a reel-level
+// hold (raw release liner is deducted immediately at Assign & Continue, see
+// utils/labelStockProduction.js's produceDeckle, so there's no separate
+// reserved state on the reel itself). A PendingProduction's own runningMeters
+// is exactly how much every layer of its recipe draws off its reel (all
+// layers run through the laminator together for the same length), so it's
+// added once per matching releaseLiner/releaseLiner2 layer.
+async function loadAllottedByKey() {
+  const pending = await PendingProduction.find({ producedAt: null })
+    .select("itemId runningMeters")
+    .populate({ path: "itemId", select: "rollType releaseLiner releaseLiner2" })
+    .lean();
+
+  const allottedByKey = new Map();
+  const addDemand = (layer, mtrs) => {
+    if (!layer || !layer.releaseLinerType || !mtrs) return;
+    const key = releaseRecipeKey({
+      vendorId: layer.releaseLinerVendorId,
+      type: layer.releaseLinerType,
+      make: layer.releaseLinerMake,
+      color: layer.releaseLinerColor,
+      gsm: layer.releaseLinerGsm,
+    });
+    allottedByKey.set(key, (allottedByKey.get(key) || 0) + mtrs);
+  };
+
+  for (const p of pending) {
+    const labelStock = p.itemId;
+    if (!labelStock) continue;
+    const mtrs = Number(p.runningMeters) || 0;
+    if (!mtrs) continue;
+    const layers = requiredLayersFor(labelStock.rollType);
+    if (layers.includes("releaseLiner")) addDemand(labelStock.releaseLiner, mtrs);
+    if (layers.includes("releaseLiner2")) addDemand(labelStock.releaseLiner2, mtrs);
+  }
+  return allottedByKey;
+}
+
 // Reorder view for the Masters panel -- current stock (total mtrs still on
 // non-empty reels) per master spec vs. its MSQ, plus whether a PO is already
 // in flight for it (see models/inventory/PurchaseOrder.js's onModel
@@ -152,11 +204,24 @@ function releaseSpecKey(o) {
 async function loadMastersWithStock(stock) {
   const stockByKey = new Map();
   const rollCountByKey = new Map();
+  const rollsByKey = new Map();
   for (const s of stock) {
     if (!s.quantity) continue;
     const key = releaseSpecKey(s);
     stockByKey.set(key, (stockByKey.get(key) || 0) + (Number(s.reelMtrs) || 0));
     rollCountByKey.set(key, (rollCountByKey.get(key) || 0) + (Number(s.quantity) || 0));
+    if (!rollsByKey.has(key)) rollsByKey.set(key, []);
+    rollsByKey.get(key).push({
+      _id: s._id,
+      rollId: s.rollId,
+      vendorRollId: s.vendorRollId,
+      reelMtrs: s.reelMtrs,
+      location: s.location,
+      rate: s.rate,
+      invoiceNo: s.invoiceNo,
+      remarks: s.remarks,
+      createdAt: s.createdAt,
+    });
   }
 
   const masters = await ReleaseMaster.find().sort({ skuId: 1 }).lean();
@@ -166,16 +231,23 @@ async function loadMastersWithStock(stock) {
     status: { $in: ["PENDING", "CONFIRMED", "PARTIALLY_RECEIVED"] },
   }).select("itemId").lean();
   const activePOSet = new Set(activePOs.map((po) => String(po.itemId)));
+  const allottedByKey = await loadAllottedByKey();
 
   return masters.map((m) => {
     const key = releaseSpecKey(m);
     const currentStock = stockByKey.get(key) || 0;
     const rollCount = rollCountByKey.get(key) || 0;
     const msq = Number(m.msq) || 0;
+    const rolls = (rollsByKey.get(key) || []).slice().sort((a, b) => String(a.rollId).localeCompare(String(b.rollId)));
+    const allotted = allottedByKey.get(releaseRecipeKey(m)) || 0;
+    const available = currentStock - allotted;
     return {
       ...m,
       currentStock,
       rollCount,
+      rolls,
+      allotted,
+      available,
       shortage: Math.max(0, msq - currentStock),
       hasActivePO: activePOSet.has(String(m._id)),
     };

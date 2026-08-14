@@ -38,7 +38,7 @@ const purchaseOrderSchema = new mongoose.Schema(
     onModel: {
       type: String,
       required: true,
-      enum: ["Tape", "Ttr", "FacestockMaster", "AdhesiveMaster", "ReleaseMaster"],
+      enum: ["Tape", "Ttr", "FacestockMaster", "AdhesiveMaster", "ReleaseMaster", "CoreMaster"],
     },
     itemId: {
       type: mongoose.Schema.Types.ObjectId,

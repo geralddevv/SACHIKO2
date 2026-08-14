@@ -213,6 +213,73 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+
+    /* Rolls dropdown -- Tabulator's dataTree module, same pattern as
+       FAIRTECH's Paper Re-Order page (views/inventory/orders/paperReorder.ejs):
+       each master row expands via its own tree toggle into one child row per
+       individual ReleaseLinerStock reel behind that master's stock count. */
+    .tabulator-data-tree-control {
+      width: 20px !important;
+      height: 20px !important;
+      border: none !important;
+      border-radius: 4px !important;
+      background: rgba(4, 74, 120, 0.1) !important;
+      box-shadow: none !important;
+      outline: none !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: pointer !important;
+      transition: background-color 0.15s ease !important;
+    }
+    .tabulator-data-tree-control:hover {
+      background: rgba(4, 74, 120, 0.18) !important;
+    }
+    .tabulator-data-tree-control:focus,
+    .tabulator-data-tree-control:focus-visible {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+    .tabulator-data-tree-control-expand,
+    .tabulator-data-tree-control-collapse {
+      width: auto !important;
+      height: auto !important;
+      background: none !important;
+      border: none !important;
+    }
+    .tabulator-data-tree-control-expand::before,
+    .tabulator-data-tree-control-collapse::before {
+      font-family: "Font Awesome 6 Free";
+      font-weight: 900;
+      content: "\f054"; /* chevron-right, one glyph for both states */
+      font-size: 11px;
+      line-height: 1;
+      color: #044a78;
+      display: inline-block;
+      transition: transform 0.2s ease;
+    }
+    .tabulator-data-tree-control-collapse::before {
+      transform: rotate(90deg);
+    }
+    .tabulator-data-tree-control-expand::after,
+    .tabulator-data-tree-control-collapse::after {
+      content: none !important;
+      display: none !important;
+    }
+    #release-masters-table .tabulator-row.roll-detail-row {
+      transition: background-color 0.15s ease;
+    }
+    #release-masters-table .tabulator-row.roll-detail-row:hover {
+      background-color: #eef2f7 !important;
+      border-top: 1px solid #e6eaf2 !important;
+      border-right-style: none !important;
+      border-bottom-style: none !important;
+      border-left-style: none !important;
+    }
+    #release-masters-table .tabulator-row.roll-detail-row > .tabulator-cell,
+    #release-masters-table .tabulator-row.roll-detail-row > .tabulator-col-resize-handle {
+      display: none !important;
+    }
   </style>
 
   <!-- Release Master rows are the only table here: current stock (total
@@ -320,93 +387,29 @@
              master catalog, same "narrow as you pick" pattern as Tape Stock
              inward and Facestock Stock inward. -->
         <div class="custom-scrollbar" style="flex: 1 1 400px; min-width: 400px; padding-right: 6px; overflow-y: auto;">
-          <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
-            <div>
-              <label class="dialog-field-label" for="addTypeSelect">Type</label>
-              <select id="addTypeSelect">
-                <option value="" disabled selected hidden>Select type</option>
-                <% types?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addColorSelect">Color</label>
-              <select id="addColorSelect">
-                <option value="">— None —</option>
-                <% colors?.forEach(v => { %>
-                <option value="<%= v %>" <%= v === "WHITE" ? "selected" : "" %>><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addSizeSelect">Size</label>
-              <select id="addSizeSelect">
-                <option value="">— None —</option>
-                <% sizes?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
+          <!-- ---- Master Table (read-only reference) ---- -->
+          <div style="margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; overflow: hidden;">
+            <table id="releaseMastersRef" style="width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 600;">
+              <tbody style="color: #0f172a;">
+                <tr><td colspan="2" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>
+              </tbody>
+            </table>
           </div>
 
-          <div class="dialog-field-row">
-            <div>
-              <label class="dialog-field-label" for="addGsmSelect">GSM</label>
-              <select id="addGsmSelect">
-                <option value="">— None —</option>
-                <% gsms?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
-              <select id="addVendorSelect">
-                <option value="">— None —</option>
-                <% vendors?.forEach(v => { %>
-                <option value="<%= v.vendorId %>"><%= v.vendorName %></option>
-                <% }) %>
-              </select>
-            </div>
-          </div>
+          <h3 style="margin: 0 0 16px 0; font-size: 0.9rem; font-weight: 600; color: #044a78; text-transform: uppercase; letter-spacing: 0.03em;">Inward Details</h3>
 
-          <div class="dialog-field-row">
+          <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
             <div>
-              <label class="dialog-field-label" for="addMakeSelect">Make</label>
-              <select id="addMakeSelect">
-                <option value="">— None —</option>
-                <% makes?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addVendorSkuCodeSelect">Vendor SKU Code</label>
-              <select id="addVendorSkuCodeSelect">
-                <option value="">— None —</option>
-                <% vendorSkuCodes?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-          </div>
-
-          <div class="dialog-field-row">
-            <div>
-              <label class="dialog-field-label" for="addRateInput">Rate</label>
-              <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
+              <label class="dialog-field-label" for="addInvoiceNoInput">Invoice No</label>
+              <input type="text" id="addInvoiceNoInput" class="form-control premium-input" placeholder="Enter invoice no" />
             </div>
             <div>
               <label class="dialog-field-label" for="addLocationSelect">Location</label>
               <select id="addLocationSelect"></select>
             </div>
-          </div>
-
-          <div class="dialog-field-row">
             <div>
-              <label class="dialog-field-label" for="addInvoiceNoInput">Invoice No</label>
-              <input type="text" id="addInvoiceNoInput" class="form-control premium-input" placeholder="Enter invoice no" />
+              <label class="dialog-field-label" for="addRateInput">Rate</label>
+              <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
             </div>
             <div>
               <label class="dialog-field-label" for="addRollCountInput">No of Rolls</label>
@@ -624,28 +627,129 @@
     });
   });
 
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]);
+  }
+
+  function formatRollDate(value) {
+    if (!value) return "—";
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  }
+
+  const fmt = (n) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("en-IN"));
+
+  // Flattens each master into Tabulator's dataTree shape: one row per
+  // Release Master, with the individual ReleaseLinerStock reels behind its
+  // stock count (see routes/stock/releaseLinerStock.js's loadMastersWithStock)
+  // as _children rows -- same "Rolls" dropdown pattern as FAIRTECH's Paper
+  // Re-Order page (paperReorder.ejs). A master with no reels still gets a
+  // one-line placeholder child so its tree toggle has something to open onto
+  // (Tabulator draws the toggle for any array, regardless of length).
+  function buildMastersTreeData(masters) {
+    return masters.map((m) => {
+      const rolls = Array.isArray(m.rolls) ? m.rolls : [];
+      return {
+        ...m,
+        isParent: true,
+        _children: rolls.length ? rolls.map((r) => ({ ...r, isParent: false })) : [{ isParent: false, noRolls: true }],
+      };
+    });
+  }
+
   // ---- Masters & Reorder table ----
   const mastersTable = new Tabulator("#release-masters-table", {
-    data: mastersData,
+    data: buildMastersTreeData(mastersData),
     height: "100%",
     responsiveLayout: false,
     movableColumns: true,
     placeholder: "No release liner masters added yet.",
+    dataTree: true,
+    dataTreeStartExpanded: false,
+    dataTreeChildField: "_children",
+    dataTreeFilter: false,
+    dataTreeElementColumn: "_toggle",
+    // Reel rows carry free-text identity (Roll ID, Vendor Roll ID, Remarks...)
+    // that doesn't fit a fixed column width -- hide every per-column cell on
+    // those rows and replace them with one spanning detail bar instead,
+    // exactly like paperReorder.ejs's order rows.
+    rowFormatter: (row) => {
+      const data = row.getData();
+      if (data.isParent) return;
+      const el = row.getElement();
+      if (el.querySelector(".roll-detail-span")) return;
+      el.style.backgroundColor = "#f8fafc";
+      el.style.borderTop = "1px solid #e6eaf2";
+      el.classList.add("roll-detail-row");
+      const bar = document.createElement("div");
+      bar.className = "roll-detail-span";
+      bar.style.cssText = "flex:1; display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 12px; color:#4b5563; font-size:13px;";
+      if (data.noRolls) {
+        bar.innerHTML = `<span style="color:#94a3b8; font-style:italic;">No reels in stock for this spec.</span>`;
+      } else {
+        const parts = [
+          `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
+          data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
+          `Mtrs ${fmt(data.reelMtrs)}`,
+          data.location ? escapeHtml(data.location) : "",
+          data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
+          data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : "",
+          `Added ${formatRollDate(data.createdAt)}`,
+          data.remarks ? escapeHtml(data.remarks) : "",
+        ].filter(Boolean);
+        bar.innerHTML = parts.map((p, i) => (i === 0 ? p : `<span>${p}</span>`)).join('<span style="color:#334155; font-size:16px; font-weight:700; line-height:1;">&middot;</span>');
+      }
+      el.appendChild(bar);
+    },
     columns: [
+      { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false },
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Color", field: "color", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
       { title: "GSM", field: "gsm", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Current Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 150 },
-      { title: "Stock (Rolls)", field: "rollCount", hozAlign: "center", minWidth: 110 },
+      { title: "Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 130 },
+      {
+        title: "Allotted (Mtrs)",
+        field: "allotted",
+        hozAlign: "center",
+        minWidth: 130,
+        headerTooltip: "Mtrs already committed to open (not-yet-produced) Label Stock orders needing this spec.",
+        formatter: (cell) => {
+          if (!cell.getRow().getData().isParent) return "";
+          const value = cell.getValue() || 0;
+          return value ? `<span style="font-weight:700; color:#92400e;">${value}</span>` : "—";
+        },
+      },
+      {
+        title: "Available (Mtrs)",
+        field: "available",
+        hozAlign: "center",
+        minWidth: 130,
+        headerTooltip: "Stock (Mtrs) minus Allotted (Mtrs) -- what's actually free to commit.",
+        formatter: (cell) => {
+          if (!cell.getRow().getData().isParent) return "";
+          const value = cell.getValue() || 0;
+          const color = value < 0 ? "#dc2626" : "#15803d";
+          return `<span style="font-weight:800; color:${color};">${value}</span>`;
+        },
+      },
+      {
+        title: "Stock (Rolls)",
+        field: "rollCount",
+        hozAlign: "center",
+        minWidth: 110,
+        formatter: (cell) => (cell.getRow().getData().isParent ? (cell.getValue() || 0) : ""),
+      },
       {
         title: "Shortage",
         field: "shortage",
         hozAlign: "center",
         minWidth: 110,
-        formatter: (cell) => `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>`,
+        formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>` : ""),
       },
       {
         title: "Inward",
@@ -654,6 +758,7 @@
         headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
+          if (!row.isParent) return "";
           const btn = document.createElement("button");
           btn.className = "add-stock-btn";
           btn.title = "Add stock reels for this spec";
@@ -669,6 +774,7 @@
         headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
+          if (!row.isParent) return "";
           if (row.hasActivePO) return `<span class="po-pending-badge">PO Pending</span>`;
           const btn = document.createElement("button");
           btn.className = "po-action-btn";
@@ -818,54 +924,46 @@
   // instead of left blank, so "Add Stock" on a master row jumps straight to
   // entering roll rows rather than re-picking a spec the smart filters would
   // narrow down to anyway.
+  let selectedReleaseMaster = {};
+
   function openAddDialog(masterPrefill) {
-    const pf = masterPrefill || {};
+    selectedReleaseMaster = masterPrefill || {};
+
+    // Populate masters table with selected master only - show ALL master data
+    const tbody = document.getElementById("releaseMastersRef").querySelector("tbody");
+    if (selectedReleaseMaster && selectedReleaseMaster.type) {
+      tbody.innerHTML = `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Vendor</td>
+          <td style="padding: 10px; color: #0f172a; width: 75%;" colspan="3">${selectedReleaseMaster.vendorName || "—"}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Type</td>
+          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedReleaseMaster.type || "—"}</td>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Color</td>
+          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedReleaseMaster.color || "—"}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Make</td>
+          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedReleaseMaster.make || "—"}</td>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">SKU</td>
+          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedReleaseMaster.vendorSkuCode || "—"}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Size</td>
+          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedReleaseMaster.size || "—"}</td>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">GSM</td>
+          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedReleaseMaster.gsm || "—"}</td>
+        </tr>
+      `;
+    } else {
+      tbody.innerHTML = '<tr><td colspan="2" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>';
+    }
+
     document.getElementById("addRateInput").value = "";
     document.getElementById("addInvoiceNoInput").value = "";
     document.getElementById("addRemarksInput").value = "";
     document.getElementById("addRollCountInput").value = "1";
-
-    if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
-    const typeSel = document.getElementById("addTypeSelect");
-    typeSel.innerHTML = specOptionsHtml(releaseSpecsData.types, "Select type", true);
-    typeSel.value = pf.type || "";
-    addTypeChoices = new Choices(typeSel, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
-
-    if (addColorChoices) { addColorChoices.destroy(); addColorChoices = null; }
-    const colorSel = document.getElementById("addColorSelect");
-    colorSel.innerHTML = specOptionsHtml(releaseSpecsData.colors, "— None —", false);
-    colorSel.value = pf.color || (releaseSpecsData.colors.includes("WHITE") ? "WHITE" : "");
-    addColorChoices = new Choices(colorSel, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
-
-    if (addSizeChoices) { addSizeChoices.destroy(); addSizeChoices = null; }
-    const sizeSel = document.getElementById("addSizeSelect");
-    sizeSel.innerHTML = specOptionsHtml(releaseSpecsData.sizes, "— None —", false);
-    sizeSel.value = pf.size || "";
-    addSizeChoices = new Choices(sizeSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addGsmChoices) { addGsmChoices.destroy(); addGsmChoices = null; }
-    const gsmSel = document.getElementById("addGsmSelect");
-    gsmSel.innerHTML = specOptionsHtml(releaseSpecsData.gsms, "— None —", false);
-    gsmSel.value = pf.gsm != null ? String(pf.gsm) : "";
-    addGsmChoices = new Choices(gsmSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addVendorChoices) { addVendorChoices.destroy(); addVendorChoices = null; }
-    const vendorSel = document.getElementById("addVendorSelect");
-    vendorSel.innerHTML = vendorOptionsHtml(releaseSpecsData.vendors);
-    vendorSel.value = pf.vendorId || "";
-    addVendorChoices = new Choices(vendorSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addMakeChoices) { addMakeChoices.destroy(); addMakeChoices = null; }
-    const makeSel = document.getElementById("addMakeSelect");
-    makeSel.innerHTML = specOptionsHtml(releaseSpecsData.makes, "— None —", false);
-    makeSel.value = pf.make || "";
-    addMakeChoices = new Choices(makeSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addVendorSkuCodeChoices) { addVendorSkuCodeChoices.destroy(); addVendorSkuCodeChoices = null; }
-    const vendorSkuSel = document.getElementById("addVendorSkuCodeSelect");
-    vendorSkuSel.innerHTML = specOptionsHtml(releaseSpecsData.vendorSkuCodes, "— None —", false);
-    vendorSkuSel.value = pf.vendorSkuCode || "";
-    addVendorSkuCodeChoices = new Choices(vendorSkuSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
     const locSel = document.getElementById("addLocationSelect");
@@ -882,9 +980,9 @@
   }
 
   async function submitAdd() {
-    const type = document.getElementById("addTypeSelect").value;
+    if (!selectedReleaseMaster || !selectedReleaseMaster._id) return showError("addReleaseError", "Please select a master to inward.");
+
     const location = document.getElementById("addLocationSelect").value;
-    if (!type) return showError("addReleaseError", "Type is required.");
     if (!location) return showError("addReleaseError", "Location is required.");
 
     const rollRows = Array.from(document.querySelectorAll("#addRollsContainer .roll-row"));
@@ -902,13 +1000,13 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type,
-          color: document.getElementById("addColorSelect").value,
-          size: document.getElementById("addSizeSelect").value,
-          gsm: document.getElementById("addGsmSelect").value,
-          vendorId: document.getElementById("addVendorSelect").value,
-          make: document.getElementById("addMakeSelect").value,
-          vendorSkuCode: document.getElementById("addVendorSkuCodeSelect").value,
+          type: selectedReleaseMaster.type,
+          color: selectedReleaseMaster.color,
+          size: selectedReleaseMaster.size,
+          gsm: selectedReleaseMaster.gsm,
+          vendorId: selectedReleaseMaster.vendorId,
+          make: selectedReleaseMaster.make,
+          vendorSkuCode: selectedReleaseMaster.vendorSkuCode,
           rate: document.getElementById("addRateInput").value,
           location,
           invoiceNo: document.getElementById("addInvoiceNoInput").value,

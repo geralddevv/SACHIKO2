@@ -37,13 +37,18 @@ export const LAYER_ORDER = {
   "DOUBLE FACESTOCK": ["facestock", "adhesive", "facestock2", "adhesive2", "releaseLiner"],
 };
 
+// `unit` names the physical container each pool's reel actually is -- most
+// are rolls, but Adhesive stock is drummed, not reeled (see the "specific
+// drum" comment on models/inventory/adhesiveStock.js). Single source of
+// truth for that wording everywhere a layer's allocation is displayed
+// (assignProduction.ejs, machineQueue.ejs via routes/system/machine.js).
 export const LAYER_META = {
-  facestock: { pool: "facestock", label: "Facestock", specField: "facestock", typeField: "facestockType" },
-  adhesive: { pool: "adhesive", label: "Adhesive", specField: "adhesive", typeField: "adhesiveType" },
-  releaseLiner: { pool: "release", label: "Release Liner", specField: "releaseLiner", typeField: "releaseLinerType" },
-  facestock2: { pool: "facestock", label: "Facestock (Layer 2)", specField: "facestock2", typeField: "facestockType" },
-  adhesive2: { pool: "adhesive", label: "Adhesive (Layer 2)", specField: "adhesive2", typeField: "adhesiveType" },
-  releaseLiner2: { pool: "release", label: "Release Liner (Layer 2)", specField: "releaseLiner2", typeField: "releaseLinerType" },
+  facestock: { pool: "facestock", label: "Facestock", specField: "facestock", typeField: "facestockType", unit: "Roll" },
+  adhesive: { pool: "adhesive", label: "Adhesive", specField: "adhesive", typeField: "adhesiveType", unit: "Drum" },
+  releaseLiner: { pool: "release", label: "Release Liner", specField: "releaseLiner", typeField: "releaseLinerType", unit: "Roll" },
+  facestock2: { pool: "facestock", label: "Facestock (Layer 2)", specField: "facestock2", typeField: "facestockType", unit: "Roll" },
+  adhesive2: { pool: "adhesive", label: "Adhesive (Layer 2)", specField: "adhesive2", typeField: "adhesiveType", unit: "Drum" },
+  releaseLiner2: { pool: "release", label: "Release Liner (Layer 2)", specField: "releaseLiner2", typeField: "releaseLinerType", unit: "Roll" },
 };
 
 export const POOL_MODELS = {

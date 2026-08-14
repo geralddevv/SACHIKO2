@@ -236,10 +236,10 @@
           return `<span style="font-weight:600;color:${color};">${label}</span>`;
         } },
         { "": "All", "NORMAL": "STANDARD", "DOUBLE RELEASE": "DOUBLE RELEASE", "DOUBLE FACESTOCK": "DOUBLE FACESTOCK" }),
-      { title: "Word File", field: "wordFile", minWidth: 110, headerFilter: false, hozAlign: "center", headerHozAlign: "center",
+      { title: "File", field: "wordFile", minWidth: 110, headerFilter: false, hozAlign: "center", headerHozAlign: "center",
         formatter: (cell) => {
           const v = cell.getValue();
-          return v ? `<a href="/sachiko/label-stock/file/${v}" style="color:#044a78;font-weight:600;text-decoration:none;" title="Download file"><i class="fa-solid fa-file-word" style="margin-right:4px;"></i>Download</a>` : `<span style="color:#aaa;">—</span>`;
+          return v ? `<a href="/sachiko/label-stock/file/${v}" target="_blank" style="color:#044a78;font-weight:600;text-decoration:none;" title="View file"><i class="fa-solid fa-file" style="margin-right:4px;"></i>View</a>` : `<span style="color:#aaa;">—</span>`;
         }
       },
     ],
@@ -392,9 +392,9 @@
             <span style="font-size:14.5px;color:#03365a;font-weight:700;text-align:right;">${esc(r.value)}</span>
           </div>`).join("")}
         ${ds.wordFile ? `
-          <a href="/sachiko/label-stock/file/${esc(ds.wordFile)}"
+          <a href="/sachiko/label-stock/file/${esc(ds.wordFile)}" target="_blank"
             style="display:inline-flex;align-items:center;gap:8px;margin-top:6px;color:#044a78;font-weight:600;text-decoration:none;font-size:14px;">
-            <i class="fa-solid fa-file-word"></i> ${esc(ds.wordFileOriginalName || ds.wordFile)}
+            <i class="fa-solid fa-file"></i> ${esc(ds.wordFileOriginalName || ds.wordFile)}
           </a>` : ""}
       </div>`;
     modal.style.display = "flex";
@@ -1053,12 +1053,12 @@
         </div>
         <div class="dialog-field">
           <div style="display:flex;align-items:center;justify-content:space-between;">
-            <label class="dialog-field-label" for="lsWordFile" style="margin:0;">Attach Word File</label>
+            <label class="dialog-field-label" for="lsWordFile" style="margin:0;">Attach Word or PDF File</label>
             <a id="lsCurrentFileLink" href="#" target="_blank" style="display:none;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#044a78;text-decoration:none;">
-              <i class="fa-solid fa-file-word"></i> Show current file
+              <i class="fa-solid fa-file"></i> View current file
             </a>
           </div>
-          <input type="file" id="lsWordFile" name="wordFile" class="form-control" accept=".doc,.docx" />
+          <input type="file" id="lsWordFile" name="wordFile" class="form-control" accept=".doc,.docx,.pdf" />
         </div>
         <div class="dialog-field">
           <label class="dialog-field-label" for="lsRollType">Type</label>

@@ -287,6 +287,7 @@
     if (!row) return;
     const ref = row.materialReference || {};
     const rolls = row.allottedRollDetails || [];
+    const layers = row.layerAllotments || [];
 
     const statusLabel = row.rollsStatus === "match" ? "Fully allotted"
       : row.rollsStatus === "short" ? "Short allotted"
@@ -319,9 +320,35 @@
       : `<div class="ap-notice"><i class="fa-solid fa-circle-info"></i> ` +
         `No rolls recorded for this order — pick them in the Rolls section of Assign Production.</div>`;
 
+    // One line per raw-material layer this item's recipe calls for --
+    // Facestock/Release Liner are rolls, Adhesive is a drum (row.unit names
+    // whichever it actually is, see LAYER_META in utils/labelStockProduction.js).
+    // Only allocated layers show a Roll/Drum ID; anything not yet picked
+    // reads "Not Allotted" instead of a blank cell, so a partial pick (e.g.
+    // Facestock done, Adhesive still open) is unambiguous.
+    const layersHtml = layers.length
+      ? `<table class="rd-table">` +
+        `<thead><tr><th>Layer</th><th>Status</th><th>Qty</th><th>ID</th></tr></thead>` +
+        `<tbody>` + layers.map((l) => {
+          const statusHtml = l.allocated
+            ? `<span style="color:#16a34a;">Allotted</span>`
+            : `<span style="color:#dc2626;">Not Allotted</span>`;
+          const qty = l.allocated ? `1 ${escapeHtml(l.unit)}${l.reelMtrs != null ? ` (${escapeHtml(l.reelMtrs)} m)` : ""}` : "—";
+          return `<tr>` +
+            `<td>${escapeHtml(l.label)}</td>` +
+            `<td>${statusHtml}</td>` +
+            `<td>${qty}</td>` +
+            `<td>${l.allocated ? escapeHtml(dash(l.rollId)) : "—"}</td>` +
+          `</tr>`;
+        }).join("") + `</tbody></table>`
+      : `<div class="ap-notice"><i class="fa-solid fa-circle-info"></i> ` +
+        `This SKU has no raw-material recipe to allocate.</div>`;
+
     document.getElementById("rollDetailsBody").innerHTML =
       `<table class="rd-pairs"><tbody>${pairsHtml}</tbody></table>` +
-      `<div class="rd-section">Rolls</div>` +
+      `<div class="rd-section">Material Allocation</div>` +
+      layersHtml +
+      `<div class="rd-section">Deckle Rolls Produced</div>` +
       rollsHtml;
     openModal("rollDetailsDialog");
   }

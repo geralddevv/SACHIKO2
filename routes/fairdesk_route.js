@@ -51,7 +51,7 @@ import {
   syncLabelBindingIdentity,
 } from "../utils/reconcileBindingLocations.js";
 import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
-import { produceDeckle, requiredLayersFor } from "../utils/labelStockProduction.js";
+import { produceDeckle, requiredLayersFor, LAYER_META, POOL_MODELS } from "../utils/labelStockProduction.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 
@@ -4239,6 +4239,20 @@ router.get("/labels/production/pending", async (req, res) => {
 
   const mapped = all.map((r) => {
     const item = r.itemId || {};
+    // Same rollsStatus classification as routes/system/machine.js's
+    // buildQueueRows -- lets the WIP tab flag an order that was assigned to
+    // a machine without (or without enough) raw material allocated, since
+    // Assign Production no longer blocks on short stock.
+    const rollsRequired = r.noOfRolls != null ? Number(r.noOfRolls) : null;
+    const rollsAllotted = r.allottedRolls != null ? Number(r.allottedRolls) : null;
+    const rollsStatus =
+      rollsAllotted == null || rollsRequired == null
+        ? null
+        : rollsAllotted === rollsRequired
+        ? "match"
+        : rollsAllotted < rollsRequired
+        ? "short"
+        : "over";
     return {
       _id: String(r._id),
       productCode: item.productCode || item.skuCode || "—",
@@ -4247,6 +4261,8 @@ router.get("/labels/production/pending", async (req, res) => {
       clientType: r.userId?.clientType || "",
       paperSize: r.paperSize || "—",
       noOfRolls: r.noOfRolls ?? "—",
+      allottedRolls: rollsAllotted,
+      rollsStatus,
       quantity: r.quantity,
       balance: Math.max((Number(r.quantity) || 0) - (Number(r.dispatchedQuantity) || 0), 0),
       machineName: r.assignedMachineId?.machineName || "",
@@ -4442,34 +4458,57 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     // Deckle now, at the machine's own location, for exactly the mtrs
     // submitted, then fold that new reel in with whatever existing Deckle
     // stock was ticked above.
+    //
+    // Raw material being short (missing reels, a reel too small, no location
+    // on the machine, ...) must NOT block the assignment itself -- the order
+    // still needs to land on the machine's queue (as a "short allotted" row,
+    // see routes/system/machine.js's buildQueueRows/rollsStatus) so it's
+    // visible and can be topped up later by re-opening this same page once
+    // material is available. Only a genuinely bad submission (invalid
+    // machine/operator/helper, checked above) rejects outright.
+    const location = machine.location?.locationName;
+    const labelStock = await SachikoLabelStock.findById(pendingProduction.itemId).lean();
+    const required = labelStock ? requiredLayersFor(labelStock.rollType) : [];
+
+    // Record whichever raw-material layer reels were picked on the assign
+    // form, independent of whether every layer got picked -- lets the
+    // machine queue show allocation per material (Facestock/Adhesive/
+    // Release Liner, ...) rather than only the all-or-nothing Deckle count
+    // further down. Existence-checked against the right pool model so a
+    // stale/tampered id can't leave a broken reference on the order.
+    let allottedLayers = {};
+    for (const key of required) {
+      const meta = LAYER_META[key];
+      const stockId = rawLayers?.[key];
+      if (!stockId || !mongoose.isValidObjectId(stockId)) continue;
+      const { Model } = POOL_MODELS[meta.pool];
+      const exists = await Model.exists({ _id: stockId });
+      if (exists) allottedLayers[key] = { pool: meta.pool, stockId };
+    }
+
     let deckleId = null;
+    let stockWarning = null;
     if (rawProduceMtrs > 0) {
-      const location = machine.location?.locationName;
+      const layersPicked = required.length > 0 && required.every((key) => rawLayers && rawLayers[key]);
+
       if (!location) {
-        req.flash("notification", "The selected machine has no location set — cannot produce label stock there.");
-        return res.redirect(`/sachiko/labels/production/assign/${id}`);
-      }
-
-      const labelStock = await SachikoLabelStock.findById(pendingProduction.itemId).lean();
-      const required = requiredLayersFor(labelStock?.rollType);
-      if (required.some((key) => !rawLayers || !rawLayers[key])) {
-        req.flash("notification", "Select a reel for every layer this recipe needs before producing.");
-        return res.redirect(`/sachiko/labels/production/assign/${id}`);
-      }
-
-      try {
-        const produced = await produceDeckle({
-          labelStock,
-          location,
-          reelMtrs: rawProduceMtrs,
-          layers: rawLayers,
-          createdBy: req.user?.username || "SYSTEM",
-        });
-        deckleId = produced.deckleId;
-        allottedRollIds.push(new mongoose.Types.ObjectId(produced.stockId));
-      } catch (produceErr) {
-        req.flash("notification", produceErr.message || "Failed to produce label stock.");
-        return res.redirect(`/sachiko/labels/production/assign/${id}`);
+        stockWarning = "the selected machine has no location set";
+      } else if (!layersPicked) {
+        stockWarning = "not every raw-material layer has a reel selected";
+      } else {
+        try {
+          const produced = await produceDeckle({
+            labelStock,
+            location,
+            reelMtrs: rawProduceMtrs,
+            layers: rawLayers,
+            createdBy: req.user?.username || "SYSTEM",
+          });
+          deckleId = produced.deckleId;
+          allottedRollIds.push(new mongoose.Types.ObjectId(produced.stockId));
+        } catch (produceErr) {
+          stockWarning = produceErr.message || "failed to produce label stock";
+        }
       }
     }
 
@@ -4482,14 +4521,19 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
         helperId: helper ? helperId : null,
         allottedRolls: allottedRollIds.length,
         allottedRollIds,
+        allottedLayers,
         lotNo,
         assignedAt: new Date(),
       },
     });
 
     res.locals.auditDescription = `Assigned production order ${id} to machine ${machineId}`
-      + (deckleId ? ` (produced Deckle ${deckleId})` : "");
-    req.flash("notification", deckleId ? `Machine assigned — Deckle ${deckleId} produced.` : "Machine assigned successfully.");
+      + (deckleId ? ` (produced Deckle ${deckleId})` : stockWarning ? " (stock not fully allocated)" : "");
+    req.flash("notification", deckleId
+      ? `Machine assigned — Deckle ${deckleId} produced.`
+      : stockWarning
+        ? `Machine assigned, but stock wasn't allocated (${stockWarning}) — this order is on the queue as short-allotted. Re-open it to produce a Deckle once material is available.`
+        : "Machine assigned successfully.");
     res.redirect("/sachiko/machine/queue");
   } catch (err) {
     console.error("ASSIGN PRODUCTION SAVE ERROR:", err);

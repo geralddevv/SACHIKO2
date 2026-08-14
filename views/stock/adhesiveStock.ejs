@@ -213,6 +213,73 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+
+    /* Rolls dropdown -- Tabulator's dataTree module, same pattern as
+       FAIRTECH's Paper Re-Order page (views/inventory/orders/paperReorder.ejs):
+       each master row expands via its own tree toggle into one child row per
+       individual AdhesiveStock drum behind that master's stock count. */
+    .tabulator-data-tree-control {
+      width: 20px !important;
+      height: 20px !important;
+      border: none !important;
+      border-radius: 4px !important;
+      background: rgba(4, 74, 120, 0.1) !important;
+      box-shadow: none !important;
+      outline: none !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: pointer !important;
+      transition: background-color 0.15s ease !important;
+    }
+    .tabulator-data-tree-control:hover {
+      background: rgba(4, 74, 120, 0.18) !important;
+    }
+    .tabulator-data-tree-control:focus,
+    .tabulator-data-tree-control:focus-visible {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+    .tabulator-data-tree-control-expand,
+    .tabulator-data-tree-control-collapse {
+      width: auto !important;
+      height: auto !important;
+      background: none !important;
+      border: none !important;
+    }
+    .tabulator-data-tree-control-expand::before,
+    .tabulator-data-tree-control-collapse::before {
+      font-family: "Font Awesome 6 Free";
+      font-weight: 900;
+      content: "\f054"; /* chevron-right, one glyph for both states */
+      font-size: 11px;
+      line-height: 1;
+      color: #044a78;
+      display: inline-block;
+      transition: transform 0.2s ease;
+    }
+    .tabulator-data-tree-control-collapse::before {
+      transform: rotate(90deg);
+    }
+    .tabulator-data-tree-control-expand::after,
+    .tabulator-data-tree-control-collapse::after {
+      content: none !important;
+      display: none !important;
+    }
+    #adhesive-masters-table .tabulator-row.roll-detail-row {
+      transition: background-color 0.15s ease;
+    }
+    #adhesive-masters-table .tabulator-row.roll-detail-row:hover {
+      background-color: #eef2f7 !important;
+      border-top: 1px solid #e6eaf2 !important;
+      border-right-style: none !important;
+      border-bottom-style: none !important;
+      border-left-style: none !important;
+    }
+    #adhesive-masters-table .tabulator-row.roll-detail-row > .tabulator-cell,
+    #adhesive-masters-table .tabulator-row.roll-detail-row > .tabulator-col-resize-handle {
+      display: none !important;
+    }
   </style>
 
   <!-- Adhesive Master rows are the only table here: current stock (total
@@ -305,140 +372,41 @@
     <div class="dialog-body" style="border-radius: 0 0 14px 14px; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 24px;">
       <div style="display: flex; gap: 28px; flex: 1 1 auto; min-height: 0;">
 
-        <!-- ---- Left: shared spec for this batch ---- -->
-        <!-- overflow-y: auto is a safety net only (see updateBatchSummary --
-             this column's content is sized to fit without scrolling in the
-             normal case); Choices.js dropdowns for Type/Location open
-             downward from fields that always have room below them here, so
-             clipping in practice shouldn't come up (CLAUDE.md "Dialog /
-             modal pattern"). -->
-        <!-- Type/Vendor/Make/Vendor SKU Code/Shelf Life/Viscosity/Cohesion/
-             Shear/Density -- every field Adhesive Master itself carries --
-             are smart-filtered against it (see GET
-             /sachiko/adhesivestock/filter-specs): picking one narrows the
-             others to combinations that actually exist in the master
-             catalog, same "narrow as you pick" pattern as Tape Stock inward
-             and Facestock Stock inward. GSM has no counterpart on Adhesive
-             Master, so it stays a plain typed field. -->
+        <!-- ---- Left: Inward Details ---- -->
         <div class="custom-scrollbar" style="flex: 1 1 340px; min-width: 340px; padding-right: 6px; overflow-y: auto;">
-          <div class="dialog-field-row">
-            <div>
-              <label class="dialog-field-label" for="addTypeSelect">Type</label>
-              <select id="addTypeSelect">
-                <option value="" disabled selected hidden>Select type</option>
-                <% types?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
-              <select id="addVendorSelect">
-                <option value="">— None —</option>
-                <% vendors?.forEach(v => { %>
-                <option value="<%= v.vendorId %>"><%= v.vendorName %></option>
-                <% }) %>
-              </select>
-            </div>
+          <h3 style="margin: 0 0 16px 0; font-size: 0.9rem; font-weight: 600; color: #044a78; text-transform: uppercase; letter-spacing: 0.03em;">Inward Details</h3>
+
+          <!-- ---- Master Table (read-only reference) ---- -->
+          <div style="margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; overflow: hidden;">
+            <table id="mastersRef" style="width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 600;">
+              <tbody style="color: #0f172a;">
+                <tr><td colspan="2" style="padding: 12px; text-align: center; color: #64748b;">Loading...</td></tr>
+              </tbody>
+            </table>
           </div>
 
-          <div class="dialog-field-row">
-            <div>
-              <label class="dialog-field-label" for="addMakeSelect">Make</label>
-              <select id="addMakeSelect">
-                <option value="">— None —</option>
-                <% makes?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addVendorSkuCodeSelect">Vendor SKU Code</label>
-              <select id="addVendorSkuCodeSelect">
-                <option value="">— None —</option>
-                <% vendorSkuCodes?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-          </div>
-
-          <div class="dialog-field-row">
-            <div>
-              <label class="dialog-field-label" for="addShelfLifeSelect">Shelf Life</label>
-              <select id="addShelfLifeSelect">
-                <option value="">— None —</option>
-                <% shelfLifes?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addViscositySelect">Viscosity</label>
-              <select id="addViscositySelect">
-                <option value="">— None —</option>
-                <% viscosities?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-          </div>
-
-          <div class="dialog-field-row">
-            <div>
-              <label class="dialog-field-label" for="addCohesionSelect">Cohesion</label>
-              <select id="addCohesionSelect">
-                <option value="">— None —</option>
-                <% cohesions?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addShearSelect">Shear</label>
-              <select id="addShearSelect">
-                <option value="">— None —</option>
-                <% shears?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-          </div>
-
-          <div class="dialog-field-row">
-            <div>
-              <label class="dialog-field-label" for="addDensitySelect">Density</label>
-              <select id="addDensitySelect">
-                <option value="">— None —</option>
-                <% densities?.forEach(v => { %>
-                <option value="<%= v %>"><%= v %></option>
-                <% }) %>
-              </select>
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addGsmInput">GSM</label>
-              <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
-            </div>
-          </div>
-
-          <div class="dialog-field-row">
-            <div>
-              <label class="dialog-field-label" for="addRateInput">Rate</label>
-              <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addLocationSelect">Location</label>
-              <select id="addLocationSelect"></select>
-            </div>
-          </div>
-
-          <div class="dialog-field-row">
+          <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
             <div>
               <label class="dialog-field-label" for="addInvoiceNoInput">Invoice No</label>
               <input type="text" id="addInvoiceNoInput" class="form-control premium-input" placeholder="Enter invoice no" />
             </div>
             <div>
-              <label class="dialog-field-label" for="addDrumCountInput">No of Drums</label>
+              <label class="dialog-field-label" for="addLocationSelect">Location</label>
+              <select id="addLocationSelect"></select>
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addRateInput">Rate</label>
+              <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
+            </div>
+          </div>
+
+          <div class="dialog-field-row">
+            <div>
+              <label class="dialog-field-label" for="addGsmInput">GSM</label>
+              <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addDrumCountInput">No of Rolls</label>
               <input type="number" id="addDrumCountInput" class="form-control premium-input" min="1" max="100" step="1" value="1" />
             </div>
           </div>
@@ -666,28 +634,129 @@
     });
   });
 
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]);
+  }
+
+  function formatRollDate(value) {
+    if (!value) return "—";
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  }
+
+  const fmt = (n) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("en-IN"));
+
+  // Flattens each master into Tabulator's dataTree shape: one row per
+  // Adhesive Master, with the individual AdhesiveStock drums behind its
+  // stock count (see routes/stock/adhesiveStock.js's loadMastersWithStock)
+  // as _children rows -- same "Rolls" dropdown pattern as FAIRTECH's Paper
+  // Re-Order page (paperReorder.ejs). A master with no drums still gets a
+  // one-line placeholder child so its tree toggle has something to open onto
+  // (Tabulator draws the toggle for any array, regardless of length).
+  function buildMastersTreeData(masters) {
+    return masters.map((m) => {
+      const rolls = Array.isArray(m.rolls) ? m.rolls : [];
+      return {
+        ...m,
+        isParent: true,
+        _children: rolls.length ? rolls.map((r) => ({ ...r, isParent: false })) : [{ isParent: false, noRolls: true }],
+      };
+    });
+  }
+
   // ---- Masters & Reorder table ----
   const mastersTable = new Tabulator("#adhesive-masters-table", {
-    data: mastersData,
+    data: buildMastersTreeData(mastersData),
     height: "100%",
     responsiveLayout: false,
     movableColumns: true,
     placeholder: "No adhesive masters added yet.",
+    dataTree: true,
+    dataTreeStartExpanded: false,
+    dataTreeChildField: "_children",
+    dataTreeFilter: false,
+    dataTreeElementColumn: "_toggle",
+    // Drum rows carry free-text identity (Drum ID, Vendor Drum ID, Remarks...)
+    // that doesn't fit a fixed column width -- hide every per-column cell on
+    // those rows and replace them with one spanning detail bar instead,
+    // exactly like paperReorder.ejs's order rows.
+    rowFormatter: (row) => {
+      const data = row.getData();
+      if (data.isParent) return;
+      const el = row.getElement();
+      if (el.querySelector(".roll-detail-span")) return;
+      el.style.backgroundColor = "#f8fafc";
+      el.style.borderTop = "1px solid #e6eaf2";
+      el.classList.add("roll-detail-row");
+      const bar = document.createElement("div");
+      bar.className = "roll-detail-span";
+      bar.style.cssText = "flex:1; display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 12px; color:#4b5563; font-size:13px;";
+      if (data.noRolls) {
+        bar.innerHTML = `<span style="color:#94a3b8; font-style:italic;">No drums in stock for this spec.</span>`;
+      } else {
+        const parts = [
+          `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
+          data.vendorRollId ? `Vendor Drum ID: ${escapeHtml(data.vendorRollId)}` : "",
+          `Mtrs ${fmt(data.reelMtrs)}`,
+          data.location ? escapeHtml(data.location) : "",
+          data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
+          data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : "",
+          `Added ${formatRollDate(data.createdAt)}`,
+          data.remarks ? escapeHtml(data.remarks) : "",
+        ].filter(Boolean);
+        bar.innerHTML = parts.map((p, i) => (i === 0 ? p : `<span>${p}</span>`)).join('<span style="color:#334155; font-size:16px; font-weight:700; line-height:1;">&middot;</span>');
+      }
+      el.appendChild(bar);
+    },
     columns: [
+      { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false },
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
       { title: "Shelf Life", field: "shelfLife", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Current Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 150 },
-      { title: "Stock (Drums)", field: "rollCount", hozAlign: "center", minWidth: 110 },
+      { title: "Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 130 },
+      {
+        title: "Allotted (Mtrs)",
+        field: "allotted",
+        hozAlign: "center",
+        minWidth: 130,
+        headerTooltip: "Mtrs already committed to open (not-yet-produced) Label Stock orders needing this spec.",
+        formatter: (cell) => {
+          if (!cell.getRow().getData().isParent) return "";
+          const value = cell.getValue() || 0;
+          return value ? `<span style="font-weight:700; color:#92400e;">${value}</span>` : "—";
+        },
+      },
+      {
+        title: "Available (Mtrs)",
+        field: "available",
+        hozAlign: "center",
+        minWidth: 130,
+        headerTooltip: "Stock (Mtrs) minus Allotted (Mtrs) -- what's actually free to commit.",
+        formatter: (cell) => {
+          if (!cell.getRow().getData().isParent) return "";
+          const value = cell.getValue() || 0;
+          const color = value < 0 ? "#dc2626" : "#15803d";
+          return `<span style="font-weight:800; color:${color};">${value}</span>`;
+        },
+      },
+      {
+        title: "Stock (Drums)",
+        field: "rollCount",
+        hozAlign: "center",
+        minWidth: 110,
+        formatter: (cell) => (cell.getRow().getData().isParent ? (cell.getValue() || 0) : ""),
+      },
       {
         title: "Shortage",
         field: "shortage",
         hozAlign: "center",
         minWidth: 110,
-        formatter: (cell) => `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>`,
+        formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>` : ""),
       },
       {
         title: "Inward",
@@ -696,6 +765,7 @@
         headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
+          if (!row.isParent) return "";
           const btn = document.createElement("button");
           btn.className = "add-stock-btn";
           btn.title = "Add stock drums for this spec";
@@ -711,6 +781,7 @@
         headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
+          if (!row.isParent) return "";
           if (row.hasActivePO) return `<span class="po-pending-badge">PO Pending</span>`;
           const btn = document.createElement("button");
           btn.className = "po-action-btn";
@@ -862,67 +933,41 @@
   // narrow down to anyway. GSM isn't part of Adhesive Master (see
   // buildHeaderPayload), so it's left as-is -- there's nothing to prefill it
   // from.
+  let selectedMaster = null;
+
   function openAddDialog(masterPrefill) {
-    const pf = masterPrefill || {};
+    selectedMaster = masterPrefill || {};
+
+    // Populate masters table with selected master only
+    const tbody = document.getElementById("mastersRef").querySelector("tbody");
+    if (selectedMaster && selectedMaster.type) {
+      tbody.innerHTML = `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 30%; border-right: 1px solid #e2e8f0;">Type</td>
+          <td style="padding: 10px; color: #0f172a;">${selectedMaster.type || "—"}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 30%; border-right: 1px solid #e2e8f0;">Vendor</td>
+          <td style="padding: 10px; color: #0f172a;">${selectedMaster.vendorName || "—"}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 30%; border-right: 1px solid #e2e8f0;">Make</td>
+          <td style="padding: 10px; color: #0f172a;">${selectedMaster.make || "—"}</td>
+        </tr>
+        <tr>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 30%; border-right: 1px solid #e2e8f0;">SKU</td>
+          <td style="padding: 10px; color: #0f172a;">${selectedMaster.vendorSkuCode || "—"}</td>
+        </tr>
+      `;
+    } else {
+      tbody.innerHTML = '<tr><td colspan="2" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>';
+    }
+
     document.getElementById("addGsmInput").value = "";
     document.getElementById("addRateInput").value = "";
     document.getElementById("addInvoiceNoInput").value = "";
     document.getElementById("addRemarksInput").value = "";
     document.getElementById("addDrumCountInput").value = "1";
-
-    if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
-    const typeSel = document.getElementById("addTypeSelect");
-    typeSel.innerHTML = specOptionsHtml(adhesiveSpecsData.types, "Select type", true);
-    typeSel.value = pf.type || "";
-    addTypeChoices = new Choices(typeSel, { searchEnabled: false, shouldSort: false, itemSelectText: "" });
-
-    if (addVendorChoices) { addVendorChoices.destroy(); addVendorChoices = null; }
-    const vendorSel = document.getElementById("addVendorSelect");
-    vendorSel.innerHTML = vendorOptionsHtml(adhesiveSpecsData.vendors);
-    vendorSel.value = pf.vendorId || "";
-    addVendorChoices = new Choices(vendorSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addMakeChoices) { addMakeChoices.destroy(); addMakeChoices = null; }
-    const makeSel = document.getElementById("addMakeSelect");
-    makeSel.innerHTML = specOptionsHtml(adhesiveSpecsData.makes, "— None —", false);
-    makeSel.value = pf.make || "";
-    addMakeChoices = new Choices(makeSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addVendorSkuCodeChoices) { addVendorSkuCodeChoices.destroy(); addVendorSkuCodeChoices = null; }
-    const vendorSkuSel = document.getElementById("addVendorSkuCodeSelect");
-    vendorSkuSel.innerHTML = specOptionsHtml(adhesiveSpecsData.vendorSkuCodes, "— None —", false);
-    vendorSkuSel.value = pf.vendorSkuCode || "";
-    addVendorSkuCodeChoices = new Choices(vendorSkuSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addShelfLifeChoices) { addShelfLifeChoices.destroy(); addShelfLifeChoices = null; }
-    const shelfLifeSel = document.getElementById("addShelfLifeSelect");
-    shelfLifeSel.innerHTML = specOptionsHtml(adhesiveSpecsData.shelfLifes, "— None —", false);
-    shelfLifeSel.value = pf.shelfLife || "";
-    addShelfLifeChoices = new Choices(shelfLifeSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addViscosityChoices) { addViscosityChoices.destroy(); addViscosityChoices = null; }
-    const viscositySel = document.getElementById("addViscositySelect");
-    viscositySel.innerHTML = specOptionsHtml(adhesiveSpecsData.viscosities, "— None —", false);
-    viscositySel.value = pf.viscosity != null ? String(pf.viscosity) : "";
-    addViscosityChoices = new Choices(viscositySel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addCohesionChoices) { addCohesionChoices.destroy(); addCohesionChoices = null; }
-    const cohesionSel = document.getElementById("addCohesionSelect");
-    cohesionSel.innerHTML = specOptionsHtml(adhesiveSpecsData.cohesions, "— None —", false);
-    cohesionSel.value = pf.cohesion != null ? String(pf.cohesion) : "";
-    addCohesionChoices = new Choices(cohesionSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addShearChoices) { addShearChoices.destroy(); addShearChoices = null; }
-    const shearSel = document.getElementById("addShearSelect");
-    shearSel.innerHTML = specOptionsHtml(adhesiveSpecsData.shears, "— None —", false);
-    shearSel.value = pf.shear != null ? String(pf.shear) : "";
-    addShearChoices = new Choices(shearSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    if (addDensityChoices) { addDensityChoices.destroy(); addDensityChoices = null; }
-    const densitySel = document.getElementById("addDensitySelect");
-    densitySel.innerHTML = specOptionsHtml(adhesiveSpecsData.densities, "— None —", false);
-    densitySel.value = pf.density != null ? String(pf.density) : "";
-    addDensityChoices = new Choices(densitySel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
 
     if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
     const locSel = document.getElementById("addLocationSelect");
@@ -939,9 +984,8 @@
   }
 
   async function submitAdd() {
-    const type = document.getElementById("addTypeSelect").value;
+    if (!selectedMaster || !selectedMaster._id) return showError("addAdhesiveError", "Please select a master first.");
     const location = document.getElementById("addLocationSelect").value;
-    if (!type) return showError("addAdhesiveError", "Type is required.");
     if (!location) return showError("addAdhesiveError", "Location is required.");
 
     const drumRows = Array.from(document.querySelectorAll("#addDrumsContainer .drum-row"));
@@ -959,16 +1003,8 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type,
+          masterId: selectedMaster._id,
           gsm: document.getElementById("addGsmInput").value,
-          vendorId: document.getElementById("addVendorSelect").value,
-          make: document.getElementById("addMakeSelect").value,
-          vendorSkuCode: document.getElementById("addVendorSkuCodeSelect").value,
-          shelfLife: document.getElementById("addShelfLifeSelect").value,
-          viscosity: document.getElementById("addViscositySelect").value,
-          cohesion: document.getElementById("addCohesionSelect").value,
-          shear: document.getElementById("addShearSelect").value,
-          density: document.getElementById("addDensitySelect").value,
           rate: document.getElementById("addRateInput").value,
           location,
           invoiceNo: document.getElementById("addInvoiceNoInput").value,

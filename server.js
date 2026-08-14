@@ -23,6 +23,7 @@ import stockViewRoutes from "./routes/stock/stockView.js";
 import facestockStockRoutes from "./routes/stock/facestockStock.js";
 import adhesiveStockRoutes from "./routes/stock/adhesiveStock.js";
 import releaseLinerStockRoutes from "./routes/stock/releaseLinerStock.js";
+import coreStockRoutes from "./routes/stock/coreStock.js";
 import semiFinishedStockRoutes from "./routes/stock/semiFinishedStock.js";
 import finishedStockRoutes from "./routes/stock/finishedStock.js";
 import labelStockProductionRoutes from "./routes/sachiko/labelStockProduction.js";
@@ -893,6 +894,7 @@ app.use("/sachiko/stocks", requireAuth, requireRole(["proprietor", "admin", "hod
 app.use("/sachiko/facestockstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), facestockStockRoutes);
 app.use("/sachiko/adhesivestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), adhesiveStockRoutes);
 app.use("/sachiko/releaselinerstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), releaseLinerStockRoutes);
+app.use("/sachiko/corestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), coreStockRoutes);
 app.use("/sachiko/semifinishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), semiFinishedStockRoutes);
 app.use("/sachiko/finishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), finishedStockRoutes);
 app.use("/sachiko/labelstockproduction", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockProductionRoutes);

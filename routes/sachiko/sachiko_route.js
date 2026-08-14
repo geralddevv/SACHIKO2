@@ -30,10 +30,10 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedExts = [".doc", ".docx"];
+  const allowedExts = [".doc", ".docx", ".pdf"];
   const ext = path.extname(file.originalname).toLowerCase();
   if (!allowedExts.includes(ext)) {
-    return cb(new Error("Only Word files (.doc, .docx) are allowed"), false);
+    return cb(new Error("Only Word (.doc, .docx) and PDF files are allowed"), false);
   }
   cb(null, true);
 };
@@ -359,7 +359,9 @@ router.get("/label-stock/file/:filename", async (req, res) => {
     return res.status(404).send("File not found");
   }
   const ds = await SachikoLabelStock.findOne({ wordFile: filename }).select("wordFileOriginalName").lean();
-  res.download(filePath, ds?.wordFileOriginalName || filename);
+  const originalName = ds?.wordFileOriginalName || filename;
+  res.setHeader("Content-Disposition", `inline; filename="${originalName}"`);
+  res.sendFile(filePath);
 });
 
 router.delete("/label-stock/:id", requireAuth, deleteLimiter, async (req, res) => {

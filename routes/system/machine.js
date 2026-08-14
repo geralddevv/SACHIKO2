@@ -15,6 +15,7 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { normalizeLocationName } from "../../utils/locations.js";
 import { normalizeRollId, extractScannedRollId } from "../../utils/rollId.js";
+import { requiredLayersFor, LAYER_META, POOL_MODELS } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
 
@@ -309,7 +310,10 @@ router.get("/operator/queue", requireRole(["operator"]), async (req, res) => {
 // one round of queries per machine.
 async function buildQueueRows(match) {
   const pending = await PendingProduction.find(match)
-    .populate({ path: "itemId", select: "productCode skuCode facestock adhesive releaseLiner" })
+    .populate({
+      path: "itemId",
+      select: "productCode skuCode rollType facestock facestock2 adhesive adhesive2 releaseLiner releaseLiner2",
+    })
     .populate({ path: "operatorId", select: "empName" })
     .populate({ path: "helperId", select: "empName" })
     .populate({ path: "userId", select: "clientName userName" })
@@ -323,6 +327,26 @@ async function buildQueueRows(match) {
     ? await MaterialStock.find({ _id: { $in: rollIds } }).select("rollId reelMtrs location").lean()
     : [];
   const rollMap = new Map(rollDocs.map((r) => [String(r._id), r]));
+
+  // Raw-material layer picks (Facestock/Adhesive/Release Liner, ...) recorded
+  // on the assign form -- kept as { pool, stockId } on each order (see
+  // models/inventory/pendingProduction.js's allottedLayers), so the queue
+  // always re-reads the live rollId/reelMtrs off the actual pool doc rather
+  // than trusting a snapshot. Batched per pool across every order in this
+  // match, same pattern as rollMap above.
+  const stockIdsByPool = {};
+  for (const p of pending) {
+    for (const pick of Object.values(p.allottedLayers || {})) {
+      if (!pick?.pool || !pick?.stockId) continue;
+      (stockIdsByPool[pick.pool] ||= []).push(pick.stockId);
+    }
+  }
+  const layerDocMaps = {};
+  for (const [pool, ids] of Object.entries(stockIdsByPool)) {
+    const { Model } = POOL_MODELS[pool];
+    const docs = await Model.find({ _id: { $in: ids } }).select("rollId reelMtrs location").lean();
+    layerDocMaps[pool] = new Map(docs.map((d) => [String(d._id), d]));
+  }
 
   return pending.map((p) => {
     const item = p.itemId || {};
@@ -357,6 +381,29 @@ async function buildQueueRows(match) {
     const runningMetersLabel =
       p.runningMeters != null ? `${Number(p.runningMeters).toLocaleString("en-IN")} m` : "";
 
+    // Per-layer allocation -- one row per raw-material layer this item's
+    // recipe actually calls for (facestock/adhesive/releaseLiner, +2 more
+    // for DOUBLE FACESTOCK/DOUBLE RELEASE), so "Facestock allotted, Adhesive
+    // not" reads as its own line rather than collapsing into one Deckle
+    // count. `unallocated` distinguishes "picked, but the doc since got
+    // deleted/emptied" from "never picked" (dash link a rollId no longer
+    // reads garbage in either case) -- both count as not-allotted for
+    // display, but only a real pick shows a stockId.
+    const layerAllotments = requiredLayersFor(item.rollType).map((key) => {
+      const meta = LAYER_META[key];
+      const pick = p.allottedLayers?.[key];
+      const doc = pick ? layerDocMaps[pick.pool]?.get(String(pick.stockId)) : null;
+      return {
+        key,
+        label: meta.label,
+        unit: meta.unit,
+        allocated: !!doc,
+        rollId: doc?.rollId || "",
+        reelMtrs: doc ? Number(doc.reelMtrs) || 0 : null,
+        location: doc?.location || "",
+      };
+    });
+
     return {
       _id: String(p._id),
       machineId: String(p.assignedMachineId || ""),
@@ -373,6 +420,7 @@ async function buildQueueRows(match) {
       operatorName: p.operatorId?.empName || "—",
       helperName: p.helperId?.empName || "—",
       allottedRollDetails,
+      layerAllotments,
       materialReference: {
         facestockType: item.facestock?.facestockType || "",
         facestockFamily: item.facestock?.facestockFamily || "",

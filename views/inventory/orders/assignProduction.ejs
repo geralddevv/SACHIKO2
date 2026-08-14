@@ -220,9 +220,6 @@
     .raw-layer-title { font-size: 13px; font-weight: 700; color: #044a78; margin-bottom: 2px; }
     .raw-layer-spec { font-size: 11.5px; color: #64748b; margin-bottom: 6px; }
     .raw-layer-table td, .raw-layer-table th { white-space: normal; }
-    .raw-error {
-      grid-column: 1 / -1; color: #ef4444; font-size: 12.5px; margin-top: -6px; display: none;
-    }
   </style>
 
   <div class="indi-head ap-head" style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
@@ -353,12 +350,34 @@
       </div>
     </div>
     <div id="rawLayersGrid"></div>
-    <div id="rawError" class="raw-error"></div>
 
     <div class="btn-grp span-full">
-      <button type="submit" class="ap-submit-btn">Assign &amp; Continue</button>
+      <button type="button" id="assignSubmitBtn" class="ap-submit-btn">Assign &amp; Continue</button>
     </div>
   </form>
+
+  <!-- Confirmation for submitting with raw-material layers left unallocated
+       -- reuses boilerplate.ejs's .logout-modal/.logout-dialog pattern so it
+       looks/behaves like every other confirm dialog in the app. Only raised
+       when Mtrs to Produce > 0 but not every required layer has a reel
+       picked, since that's the case the server (fairdesk_route.js's POST
+       handler) silently skips producing the Deckle for -- the goal is to
+       make sure that's a deliberate choice, not a missed row. -->
+  <div class="logout-modal" id="unallocatedModal" aria-hidden="true">
+    <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="unallocatedTitle">
+      <h2 class="logout-title" id="unallocatedTitle">Some layers aren't allocated</h2>
+      <p class="logout-text">
+        No reel is selected for: <strong id="unallocatedList"></strong>.
+        The order will still be assigned to the machine, but no new Deckle will be
+        produced -- it'll sit on the queue as short-allotted until you come back
+        and top it up. Continue anyway?
+      </p>
+      <div class="logout-actions">
+        <button class="logout-btn" type="button" id="unallocatedCancel">Cancel</button>
+        <button class="logout-btn primary" type="button" id="unallocatedConfirm">Assign Anyway</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script id="all-machines-data" type="application/json"><%- safeJson(allMachines) %></script>
@@ -588,25 +607,61 @@
     rawMtrsInput.value = REQUIRED_METERS || "";
     requiredLayerKeys().forEach((key) => renderLayerRows(key));
 
-    // Guards the raw-material picks before the native form submit: either
-    // every layer has a reel (so produceDeckle() server-side has everything
-    // it needs), or Mtrs to Produce is 0/blank and none of this is used.
-    document.getElementById("assign-form").addEventListener("submit", (e) => {
-      const errEl = document.getElementById("rawError");
-      errEl.style.display = "none";
-      const needed = Number(rawMtrsInput.value) || 0;
-      if (needed <= 0) return;
+    // Missing/short raw-material picks don't block the assignment
+    // server-side (see the POST handler in fairdesk_route.js): it just skips
+    // producing a Deckle and flashes a notice, and the order still lands on
+    // the machine queue as a "short allotted" row (see machineQueue.ejs's
+    // rollsStatus) to be topped up later by re-opening this same page once
+    // material is available. That's a legitimate thing to do deliberately,
+    // but easy to do by accident -- so confirm before submitting whenever
+    // Mtrs to Produce is set but not every required layer has a reel picked.
+    //
+    // This gate has to live on the button's click, not the form's "submit"
+    // event: boilerplate.ejs loads BTStrap.js on every page, which attaches
+    // its own "submit" listener to every .needs-validation form (this one
+    // included) that fires its own fetch()-based AJAX submission -- a second
+    // listener here calling preventDefault() doesn't stop that one from
+    // still running and submitting. Keeping the button type="button" means
+    // nothing dispatches "submit" at all until we're ready, so BTStrap's
+    // handler only ever runs once, on the real (confirmed) submit.
+    const assignForm = document.getElementById("assign-form");
+    const assignSubmitBtn = document.getElementById("assignSubmitBtn");
+    const unallocatedModal = document.getElementById("unallocatedModal");
+    const unallocatedList = document.getElementById("unallocatedList");
+    const unallocatedCancel = document.getElementById("unallocatedCancel");
+    const unallocatedConfirm = document.getElementById("unallocatedConfirm");
 
-      for (const key of requiredLayerKeys()) {
-        const picked = document.querySelector(`input[name="rawLayers[${key}]"]:checked`);
-        if (!picked) {
-          e.preventDefault();
-          errEl.textContent = `Select a reel for ${LAYER_META[key].label}, or clear Mtrs to Produce to skip producing.`;
-          errEl.style.display = "block";
-          errEl.scrollIntoView({ behavior: "smooth", block: "center" });
-          return;
-        }
+    function missingLayerLabels() {
+      const mtrs = Number(rawMtrsInput.value) || 0;
+      if (mtrs <= 0) return [];
+      return requiredLayerKeys()
+        .filter((key) => !document.querySelector(`input[name="rawLayers[${key}]"]:checked`))
+        .map((key) => LAYER_META[key].label);
+    }
+
+    function closeUnallocatedModal() {
+      unallocatedModal.classList.remove("show");
+      unallocatedModal.setAttribute("aria-hidden", "true");
+    }
+
+    assignSubmitBtn.addEventListener("click", () => {
+      const missing = missingLayerLabels();
+      if (!missing.length) {
+        assignForm.requestSubmit();
+        return;
       }
+      unallocatedList.textContent = missing.join(", ");
+      unallocatedModal.classList.add("show");
+      unallocatedModal.setAttribute("aria-hidden", "false");
+    });
+
+    unallocatedCancel.addEventListener("click", closeUnallocatedModal);
+    unallocatedModal.addEventListener("click", (e) => {
+      if (e.target === unallocatedModal) closeUnallocatedModal();
+    });
+    unallocatedConfirm.addEventListener("click", () => {
+      closeUnallocatedModal();
+      assignForm.requestSubmit();
     });
   });
 </script>

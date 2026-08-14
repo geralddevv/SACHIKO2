@@ -363,6 +363,21 @@
         },
       },
       { title: "Machine", field: "machineName", headerFilter: "input", headerFilterPlaceholder: "Filter machine...", formatter: (cell) => cell.getValue() || "—" },
+      {
+        title: "Stock",
+        field: "rollsStatus",
+        hozAlign: "center",
+        headerFilter: "list",
+        headerFilterParams: { values: { "": "All", short: "Short", match: "Fully allotted", over: "Over" } },
+        headerFilterPlaceholder: "All",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row.rollsStatus === "short") return `<span style="color:#dc2626; font-weight:700;" title="Assign facestock rolls before starting production"><i class="fa-solid fa-triangle-exclamation"></i> Not allocated</span>`;
+          if (row.rollsStatus === "match") return `<span style="color:#16a34a; font-weight:700;"><i class="fa-solid fa-check"></i> Allotted</span>`;
+          if (row.rollsStatus === "over") return `<span style="color:#d97706; font-weight:700;">Over</span>`;
+          return `<span style="color:#9ca3af;">—</span>`;
+        },
+      },
       { title: "Operator", field: "operatorName", headerFilter: "input", headerFilterPlaceholder: "Filter...", formatter: (cell) => cell.getValue() || "—" },
       { title: "Helper", field: "helperName", headerFilter: "input", headerFilterPlaceholder: "Filter...", formatter: (cell) => cell.getValue() || "—" },
       {

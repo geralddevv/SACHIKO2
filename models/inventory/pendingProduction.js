@@ -69,6 +69,24 @@ const pendingProductionSchema = new mongoose.Schema(
         ref: "MaterialStock",
       },
     ],
+    // One entry per raw-material layer this item's recipe calls for
+    // (LAYER_ORDER in utils/labelStockProduction.js), recording whichever
+    // reel/drum was picked in the "Produce New Deckle" section of the assign
+    // form -- independent of whether every layer got picked, since that all
+    // only gates whether a Deckle actually got laminated (see the POST
+    // handler in fairdesk_route.js). Lets the machine queue show allocation
+    // per material (Facestock/Adhesive/Release Liner, ...) instead of one
+    // all-or-nothing Deckle count, since they're not even the same kind of
+    // unit (rolls vs. Adhesive's drums). Keyed by layer key ("facestock",
+    // "adhesive", "releaseLiner", "facestock2", ...); each value is
+    // { pool, stockId } naming which pool model (FacestockStock/
+    // AdhesiveStock/ReleaseLinerStock) and doc to look up -- the queue
+    // always re-reads rollId/reelMtrs live off that doc rather than
+    // snapshotting them here, same as allottedRollIds/MaterialStock above.
+    allottedLayers: {
+      type: mongoose.Schema.Types.Mixed,
+      default: undefined,
+    },
     lotNo: {
       type: String,
       trim: true,
