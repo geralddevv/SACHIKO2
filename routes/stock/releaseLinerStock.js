@@ -9,7 +9,7 @@ import PendingProduction from "../../models/inventory/pendingProduction.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
-import { requiredLayersFor } from "../../utils/labelStockProduction.js";
+import { requiredLayersFor, reelMatchesLayer } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
 const ROLL_ID_PREFIX = "RELEASE";
@@ -147,65 +147,84 @@ function releaseSpecKey(o) {
   return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode), s(o.color), s(o.size), n(o.gsm)].join("||");
 }
 
-// Same grouping, minus Vendor SKU Code and Size -- a Label Stock SKU's
-// releaseLiner/releaseLiner2 recipe (models/sachiko/sachikoLabelStock.js)
-// pins down vendor/type/make/color/gsm but carries neither field of its own,
-// so matching a recipe layer back to a Release Master can't key on them the
-// way releaseSpecKey does for a physical reel.
-function releaseRecipeKey(o) {
-  const s = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
-  const n = (v) => (v === undefined || v === null || v === "" ? "" : String(Number(v)));
-  return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.color), n(o.gsm)].join("||");
-}
-
-// mtrs already committed to WIP (assigned to a machine, not-yet-produced)
-// Label Stock orders, per Release Master spec -- "reserved for production"
-// demand, not a reel-level hold (raw release liner is deducted immediately
-// at Assign & Continue, see utils/labelStockProduction.js's produceDeckle,
-// so there's no separate reserved state on the reel itself). Scoped to
-// assignedMachineId being set -- an order still sitting in Pending (not yet
-// assigned to a machine) hasn't committed to a location/timeline yet, so it
-// doesn't reserve stock here. A PendingProduction's own runningMeters is
-// exactly how much every layer of its recipe draws off its reel (all layers
-// run through the laminator together for the same length), so it's added
-// once per matching releaseLiner/releaseLiner2 layer.
-async function loadAllottedByKey(masters) {
-  // A recipe layer only carries the reduced releaseRecipeKey fields, not
-  // Vendor SKU Code/Size -- so it can't be matched straight to a master's
-  // full releaseSpecKey the way a physical reel can. Resolve it instead: map
-  // every current master's reduced key to the full spec key(s) that share it
-  // (almost always exactly one), so demand ends up keyed the same way stock
-  // is (stockByKey/rollCountByKey in loadMastersWithStock, both full
-  // releaseSpecKey) instead of silently bucketing under a key nothing else
-  // uses. If two masters really are identical down to Vendor SKU Code/Size,
-  // the recipe genuinely can't tell them apart -- charge the demand to every
-  // candidate rather than picking one arbitrarily and leaving the other
-  // looking falsely available.
-  const specKeysByRecipeKey = new Map();
-  for (const m of masters) {
-    const recipeKey = releaseRecipeKey(m);
-    if (!specKeysByRecipeKey.has(recipeKey)) specKeysByRecipeKey.set(recipeKey, []);
-    specKeysByRecipeKey.get(recipeKey).push(releaseSpecKey(m));
-  }
-
+// mtrs committed to WIP Label Stock orders, per Release Master spec, split
+// into everything committed (allottedByKey -- the Allotted column) and the
+// part already laminated into a Deckle (drawnByKey). Scoped to
+// assignedMachineId being set -- an order still in Pending (not yet assigned
+// to a machine) hasn't committed to a location/timeline yet, so it doesn't
+// reserve stock here. A PendingProduction's own runningMeters is exactly how
+// much every layer of its recipe draws off its reel (all layers run through
+// the laminator together for the same length), so it's added once per matching
+// releaseLiner/releaseLiner2 layer.
+//
+// The split exists because raw release liner is never held in a reserved
+// state -- Assign & Continue draws it straight out, so the drawn part has
+// already left Stock and Available must not subtract it again. See the fuller
+// note on routes/stock/facestockStock.js's own loadAllottedByKey.
+async function loadAllottedByKey(masters, stockByKey) {
   const pending = await PendingProduction.find({ producedAt: null, assignedMachineId: { $ne: null } })
-    .select("itemId runningMeters")
+    .select("itemId runningMeters allottedRollIds allottedLayers")
     .populate({ path: "itemId", select: "rollType releaseLiner releaseLiner2" })
     .lean();
 
+  // The actual reels set aside on the assign form, batched in one query --
+  // where an order names one it beats spec matching outright, and is what
+  // makes the roll count a real count. Same shape as Facestock Stock's own
+  // loadAllottedByKey.
+  const pickedIds = pending.flatMap((p) =>
+    Object.values(p.allottedLayers || {})
+      .filter((pick) => pick?.pool === "release" && pick?.stockId)
+      .map((pick) => pick.stockId),
+  );
+  const pickedReels = pickedIds.length
+    ? await ReleaseLinerStock.find({ _id: { $in: pickedIds } }).lean()
+    : [];
+  const reelById = new Map(pickedReels.map((r) => [String(r._id), r]));
+
   const allottedByKey = new Map();
-  const addDemand = (layer, mtrs) => {
+  const drawnByKey = new Map();
+  const rollsByKey = new Map();
+  // reelMatchesLayer() (utils/labelStockProduction.js) checks every field
+  // the recipe layer actually specifies and treats a blank one as "no
+  // constraint" -- e.g. a Label Stock saved before releaseLinerVendorSkuCode/
+  // releaseLinerSize existed has no opinion on them at all, so it matches
+  // every master agreeing on everything else. That's deliberate on the
+  // matching side: a plain key-equality lookup (comparing a recipe-built key
+  // against each master's full spec key) would require the master's field to
+  // be blank too, which no real master ever is, and would silently drop the
+  // demand instead.
+  //
+  // But an order only ever draws ONE reel, so its metres belong on one master
+  // row -- charging every match inflates the column by the number of
+  // candidates. Pick one instead: preferably a candidate that actually holds
+  // stock (that's the one the raw-stock picker will offer at Assign &
+  // Continue), and with none or several stocked, the lowest skuId so the row
+  // it lands on is stable between requests. Same rule as Facestock Stock's
+  // own loadAllottedByKey (routes/stock/facestockStock.js).
+  const pickDemandTarget = (matches) => {
+    const stocked = matches.filter((m) => (stockByKey.get(releaseSpecKey(m)) || 0) > 0);
+    const pool = stocked.length ? stocked : matches;
+    return pool
+      .slice()
+      .sort((a, b) => String(a.skuId || "").localeCompare(String(b.skuId || "")))[0];
+  };
+
+  const addDemand = (layer, mtrs, drawn, pick) => {
     if (!layer || !layer.releaseLinerType || !mtrs) return;
-    const recipeKey = releaseRecipeKey({
-      vendorId: layer.releaseLinerVendorId,
-      type: layer.releaseLinerType,
-      make: layer.releaseLinerMake,
-      color: layer.releaseLinerColor,
-      gsm: layer.releaseLinerGsm,
-    });
-    for (const specKey of specKeysByRecipeKey.get(recipeKey) || []) {
-      allottedByKey.set(specKey, (allottedByKey.get(specKey) || 0) + mtrs);
+    const reel = pick?.pool === "release" && pick?.stockId ? reelById.get(String(pick.stockId)) : null;
+
+    let specKey;
+    if (reel) {
+      specKey = releaseSpecKey(reel);
+    } else {
+      const matches = masters.filter((m) => reelMatchesLayer("release", m, layer));
+      if (!matches.length) return;
+      specKey = releaseSpecKey(pickDemandTarget(matches));
     }
+
+    allottedByKey.set(specKey, (allottedByKey.get(specKey) || 0) + mtrs);
+    if (reel) rollsByKey.set(specKey, (rollsByKey.get(specKey) || 0) + 1);
+    if (drawn) drawnByKey.set(specKey, (drawnByKey.get(specKey) || 0) + mtrs);
   };
 
   for (const p of pending) {
@@ -213,11 +232,16 @@ async function loadAllottedByKey(masters) {
     if (!labelStock) continue;
     const mtrs = Number(p.runningMeters) || 0;
     if (!mtrs) continue;
+    // A Deckle reel on the order proves its release liner has already been
+    // laminated and taken out of Stock. Not keyed on allottedLayers -- that
+    // records reels merely *picked* on the assign form, which haven't been
+    // drawn from yet.
+    const drawn = (p.allottedRollIds || []).length > 0;
     const layers = requiredLayersFor(labelStock.rollType);
-    if (layers.includes("releaseLiner")) addDemand(labelStock.releaseLiner, mtrs);
-    if (layers.includes("releaseLiner2")) addDemand(labelStock.releaseLiner2, mtrs);
+    if (layers.includes("releaseLiner")) addDemand(labelStock.releaseLiner, mtrs, drawn, p.allottedLayers?.releaseLiner);
+    if (layers.includes("releaseLiner2")) addDemand(labelStock.releaseLiner2, mtrs, drawn, p.allottedLayers?.releaseLiner2);
   }
-  return allottedByKey;
+  return { allottedByKey, drawnByKey, rollsByKey };
 }
 
 // Reorder view for the Masters panel -- current stock (total mtrs still on
@@ -254,7 +278,8 @@ async function loadMastersWithStock(stock) {
     status: { $in: ["PENDING", "CONFIRMED", "PARTIALLY_RECEIVED"] },
   }).select("itemId").lean();
   const activePOSet = new Set(activePOs.map((po) => String(po.itemId)));
-  const allottedByKey = await loadAllottedByKey(masters);
+  // `rollsByKey` is already taken above (reels in stock), hence the rename.
+  const { allottedByKey, drawnByKey, rollsByKey: allottedRollsByKey } = await loadAllottedByKey(masters, stockByKey);
 
   return masters.map((m) => {
     const key = releaseSpecKey(m);
@@ -263,13 +288,18 @@ async function loadMastersWithStock(stock) {
     const msq = Number(m.msq) || 0;
     const rolls = (rollsByKey.get(key) || []).slice().sort((a, b) => String(a.rollId).localeCompare(String(b.rollId)));
     const allotted = allottedByKey.get(key) || 0;
-    const available = currentStock - allotted;
+    // Only the committed mtrs still waiting to be drawn come off Stock -- the
+    // drawn part already left it at lamination (see loadAllottedByKey).
+    const drawn = drawnByKey.get(key) || 0;
+    const available = currentStock - (allotted - drawn);
     return {
       ...m,
       currentStock,
       rollCount,
       rolls,
       allotted,
+      allottedRolls: allottedRollsByKey.get(key) || 0,
+      drawn,
       available,
       shortage: Math.max(0, msq - currentStock),
       hasActivePO: activePOSet.has(String(m._id)),

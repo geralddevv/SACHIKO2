@@ -9,7 +9,7 @@ import PendingProduction from "../../models/inventory/pendingProduction.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
-import { requiredLayersFor } from "../../utils/labelStockProduction.js";
+import { requiredLayersFor, reelMatchesLayer } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
 const ROLL_ID_PREFIX = "FACESTOCK";
@@ -151,67 +151,98 @@ function facestockSpecKey(o) {
   return [String(o.vendorId || ""), s(o.family), s(o.make), s(o.vendorSkuCode), s(o.type), s(o.size), n(o.gsm), n(o.micron)].join("||");
 }
 
-// Same grouping, minus Size -- a Label Stock SKU's facestock/facestock2
-// recipe (models/sachiko/sachikoLabelStock.js) pins down vendor/family/make/
-// vendor SKU code/type/gsm/micron but has no Size field of its own, so
-// matching a recipe layer back to a Facestock Master can't key on Size the
-// way facestockSpecKey does for a physical reel.
-function facestockRecipeKey(o) {
-  const s = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
-  const n = (v) => (v === undefined || v === null || v === "" ? "" : String(Number(v)));
-  return [String(o.vendorId || ""), s(o.family), s(o.make), s(o.vendorSkuCode), s(o.type), n(o.gsm), n(o.micron)].join("||");
-}
-
-// mtrs already committed to WIP (assigned to a machine, not-yet-produced)
-// Label Stock orders, per Facestock Master spec -- "reserved for production"
-// demand, not a reel-level hold (raw facestock is deducted immediately at
-// Assign & Continue, see utils/labelStockProduction.js's produceDeckle, so
-// there's no separate reserved state on the reel itself). Scoped to
-// assignedMachineId being set -- an order still sitting in Pending (not yet
-// assigned to a machine) hasn't committed to a location/timeline yet, so it
-// doesn't reserve stock here. A PendingProduction's own runningMeters is
+// mtrs committed to WIP Label Stock orders, per Facestock Master spec, split
+// two ways. Scoped to assignedMachineId being set -- an order still in Pending
+// (not yet assigned to a machine) hasn't committed to a location/timeline yet,
+// so it doesn't reserve stock here. A PendingProduction's own runningMeters is
 // exactly how much every layer of its recipe draws off its reel (all layers
-// run through the laminator together for the same length), so it's added
-// once per matching facestock/facestock2 layer.
-async function loadAllottedByKey(masters) {
-  // A recipe layer only carries the reduced facestockRecipeKey fields, not
-  // Size -- so it can't be matched straight to a master's full facestockSpecKey
-  // the way a physical reel can. Resolve it instead: map every current
-  // master's reduced key to the full spec key(s) that share it (almost
-  // always exactly one), so demand ends up keyed the same way stock is
-  // (stockByKey/rollCountByKey in loadMastersWithStock, both full
-  // facestockSpecKey) instead of silently bucketing under a key nothing else
-  // uses. If two masters really are identical down to Size, the recipe
-  // genuinely can't tell them apart -- charge the demand to every candidate
-  // rather than picking one arbitrarily and leaving the other looking falsely
-  // available.
-  const specKeysByRecipeKey = new Map();
-  for (const m of masters) {
-    const recipeKey = facestockRecipeKey(m);
-    if (!specKeysByRecipeKey.has(recipeKey)) specKeysByRecipeKey.set(recipeKey, []);
-    specKeysByRecipeKey.get(recipeKey).push(facestockSpecKey(m));
-  }
-
+// run through the laminator together for the same length), so it's added once
+// per matching facestock/facestock2 layer.
+//
+//   allottedByKey -- everything committed, whether or not it's been drawn yet.
+//                    This is the Allotted column: an order that has taken its
+//                    material still shows what it took, which is the whole
+//                    point of the column.
+//   drawnByKey    -- the part of that already laminated into a Deckle.
+//
+// The split exists because raw facestock is never held in a reserved state:
+// Assign & Continue laminates it into a Deckle there and then and takes the
+// mtrs straight out (utils/labelStockProduction.js's produceDeckle). So the
+// drawn part has already left Stock, and Available must not subtract it a
+// second time -- Available = Stock - (Allotted - Drawn). A 1000 m reel fully
+// drawn by one order used to read Stock 0, Allotted 1000, Available -1000;
+// it now reads Stock 0, Allotted 1000, Available 0. An order assigned but not
+// yet produced reads Stock 1000, Allotted 1000, Available 0 -- same free
+// figure, reached from the other side.
+async function loadAllottedByKey(masters, stockByKey) {
   const pending = await PendingProduction.find({ producedAt: null, assignedMachineId: { $ne: null } })
-    .select("itemId runningMeters")
+    .select("itemId runningMeters allottedRollIds allottedLayers")
     .populate({ path: "itemId", select: "rollType facestock facestock2" })
     .lean();
 
+  // The actual reels set aside on the assign form, batched across every order
+  // in one query. Where an order names one, it beats any amount of spec
+  // matching: the reel says which master row this order's mtrs belong to, and
+  // is what makes the roll count a real count rather than an estimate.
+  const pickedIds = pending.flatMap((p) =>
+    Object.values(p.allottedLayers || {})
+      .filter((pick) => pick?.pool === "facestock" && pick?.stockId)
+      .map((pick) => pick.stockId),
+  );
+  const pickedReels = pickedIds.length
+    ? await FacestockStock.find({ _id: { $in: pickedIds } }).lean()
+    : [];
+  const reelById = new Map(pickedReels.map((r) => [String(r._id), r]));
+
   const allottedByKey = new Map();
-  const addDemand = (layer, mtrs) => {
+  const drawnByKey = new Map();
+  const rollsByKey = new Map();
+  // reelMatchesLayer() (utils/labelStockProduction.js) checks every field
+  // the recipe layer actually specifies and treats a blank one as "no
+  // constraint" -- e.g. a Label Stock saved before facestockSize existed has
+  // no Size opinion at all, so it matches every master agreeing on everything
+  // else. That's deliberate on the matching side: a plain key-equality lookup
+  // (comparing a recipe-built key against each master's full spec key) would
+  // require the master's Size to be blank too, which no real master ever is,
+  // and would silently drop the demand instead.
+  //
+  // But an order only ever draws ONE reel, so its metres belong on one master
+  // row. Charging every match, as this used to, showed a single 1000 m order
+  // as 1000 m allotted against each of three CHROMO/GLOSSY specs differing
+  // only by Size -- 3000 m of demand that does not exist. Pick one instead:
+  // preferably a candidate that actually holds stock (that's the one the
+  // raw-stock picker will offer at Assign & Continue), and with none or
+  // several stocked, the lowest skuId so the row it lands on is stable
+  // between requests rather than following master insertion order.
+  const pickDemandTarget = (matches) => {
+    const stocked = matches.filter((m) => (stockByKey.get(facestockSpecKey(m)) || 0) > 0);
+    const pool = stocked.length ? stocked : matches;
+    return pool
+      .slice()
+      .sort((a, b) => String(a.skuId || "").localeCompare(String(b.skuId || "")))[0];
+  };
+
+  // `pick` is the reel this order actually set aside for the layer, when it
+  // has one. It settles both questions at once: which master row the mtrs
+  // belong to (exactly, no matching needed) and that one whole roll is
+  // committed. Only an order with no reel picked yet falls back to matching
+  // the recipe against the masters.
+  const addDemand = (layer, mtrs, drawn, pick) => {
     if (!layer || !layer.facestockType || !mtrs) return;
-    const recipeKey = facestockRecipeKey({
-      vendorId: layer.facestockVendorId,
-      family: layer.facestockFamily,
-      make: layer.facestockMake,
-      vendorSkuCode: layer.facestockVendorSkuCode,
-      type: layer.facestockType,
-      gsm: layer.facestockGsm,
-      micron: layer.facestockMicron,
-    });
-    for (const specKey of specKeysByRecipeKey.get(recipeKey) || []) {
-      allottedByKey.set(specKey, (allottedByKey.get(specKey) || 0) + mtrs);
+    const reel = pick?.pool === "facestock" && pick?.stockId ? reelById.get(String(pick.stockId)) : null;
+
+    let specKey;
+    if (reel) {
+      specKey = facestockSpecKey(reel);
+    } else {
+      const matches = masters.filter((m) => reelMatchesLayer("facestock", m, layer));
+      if (!matches.length) return;
+      specKey = facestockSpecKey(pickDemandTarget(matches));
     }
+
+    allottedByKey.set(specKey, (allottedByKey.get(specKey) || 0) + mtrs);
+    if (reel) rollsByKey.set(specKey, (rollsByKey.get(specKey) || 0) + 1);
+    if (drawn) drawnByKey.set(specKey, (drawnByKey.get(specKey) || 0) + mtrs);
   };
 
   for (const p of pending) {
@@ -219,11 +250,19 @@ async function loadAllottedByKey(masters) {
     if (!labelStock) continue;
     const mtrs = Number(p.runningMeters) || 0;
     if (!mtrs) continue;
+    // A Deckle reel on the order is proof its facestock has already been
+    // laminated and taken out of Stock -- every Deckle is produced by
+    // produceDeckle, which deducts each layer as it goes. Deliberately not
+    // keyed on allottedLayers: that records the reels *picked* on the assign
+    // form even when nothing was produced from them (no produce mtrs entered,
+    // no machine location, produceDeckle threw), and those orders haven't
+    // drawn anything yet.
+    const drawn = (p.allottedRollIds || []).length > 0;
     const layers = requiredLayersFor(labelStock.rollType);
-    if (layers.includes("facestock")) addDemand(labelStock.facestock, mtrs);
-    if (layers.includes("facestock2")) addDemand(labelStock.facestock2, mtrs);
+    if (layers.includes("facestock")) addDemand(labelStock.facestock, mtrs, drawn, p.allottedLayers?.facestock);
+    if (layers.includes("facestock2")) addDemand(labelStock.facestock2, mtrs, drawn, p.allottedLayers?.facestock2);
   }
-  return allottedByKey;
+  return { allottedByKey, drawnByKey, rollsByKey };
 }
 
 // Reorder view for the Masters panel -- current stock (total mtrs still on
@@ -260,7 +299,8 @@ async function loadMastersWithStock(stock) {
     status: { $in: ["PENDING", "CONFIRMED", "PARTIALLY_RECEIVED"] },
   }).select("itemId").lean();
   const activePOSet = new Set(activePOs.map((po) => String(po.itemId)));
-  const allottedByKey = await loadAllottedByKey(masters);
+  // `rollsByKey` is already taken above (reels in stock), hence the rename.
+  const { allottedByKey, drawnByKey, rollsByKey: allottedRollsByKey } = await loadAllottedByKey(masters, stockByKey);
 
   return masters.map((m) => {
     const key = facestockSpecKey(m);
@@ -269,13 +309,18 @@ async function loadMastersWithStock(stock) {
     const msq = Number(m.msq) || 0;
     const rolls = (rollsByKey.get(key) || []).slice().sort((a, b) => String(a.rollId).localeCompare(String(b.rollId)));
     const allotted = allottedByKey.get(key) || 0;
-    const available = currentStock - allotted;
+    // Only the committed mtrs still waiting to be drawn come off Stock -- the
+    // drawn part already left it at lamination (see loadAllottedByKey).
+    const drawn = drawnByKey.get(key) || 0;
+    const available = currentStock - (allotted - drawn);
     return {
       ...m,
       currentStock,
       rollCount,
       rolls,
       allotted,
+      allottedRolls: allottedRollsByKey.get(key) || 0,
+      drawn,
       available,
       shortage: Math.max(0, msq - currentStock),
       hasActivePO: activePOSet.has(String(m._id)),

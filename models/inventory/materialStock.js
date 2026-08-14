@@ -54,6 +54,19 @@ const materialStockSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // The order whose Assign & Continue laminated this reel. Only set on reels
+    // this app produced for an order -- it's what lets sending that order back
+    // to Pending un-make exactly the Deckles it made and return their raw
+    // material, without touching Deckles that were merely ticked onto the
+    // order from existing stock (see dissolveDeckle in
+    // utils/labelStockProduction.js). Reels laminated before this field
+    // existed carry nothing, and are left alone by that reversal; use
+    // scripts/dissolve-deckle.js to return one by hand.
+    producedFor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PendingProduction",
+      index: { sparse: true },
+    },
   },
   { timestamps: true },
 );

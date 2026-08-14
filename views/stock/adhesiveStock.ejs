@@ -723,11 +723,17 @@
         field: "allotted",
         hozAlign: "center",
         minWidth: 130,
-        headerTooltip: "Mtrs already committed to WIP (assigned to a machine, not-yet-produced) Label Stock orders needing this spec.",
+        headerTooltip: "Mtrs committed to WIP (assigned to a machine, not-yet-produced) Label Stock orders needing this spec -- including material already laminated into a Deckle, which has left Stock.",
         formatter: (cell) => {
           if (!cell.getRow().getData().isParent) return "";
           const value = cell.getValue() || 0;
-          return value ? `<span style="font-weight:700; color:#92400e;">${value}</span>` : "—";
+          if (!value) return "—";
+          // Reads as the shopfloor says it: "1000 mtrs, 1 drum allotted".
+          const drums = cell.getRow().getData().allottedRolls || 0;
+          const drumLine = drums
+            ? `<div style="font-size:11px; font-weight:600; color:#b45309;">${drums} drum${drums === 1 ? "" : "s"}</div>`
+            : "";
+          return `<span style="font-weight:700; color:#92400e;">${value}</span>${drumLine}`;
         },
       },
       {
@@ -735,7 +741,7 @@
         field: "available",
         hozAlign: "center",
         minWidth: 130,
-        headerTooltip: "Stock (Mtrs) minus Allotted (Mtrs) -- what's actually free to commit.",
+        headerTooltip: "What's actually free to commit: Stock (Mtrs) minus the Allotted mtrs still waiting to be drawn. Material already laminated into a Deckle has left Stock, so it isn't subtracted a second time.",
         formatter: (cell) => {
           if (!cell.getRow().getData().isParent) return "";
           const value = cell.getValue() || 0;

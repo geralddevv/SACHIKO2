@@ -60,13 +60,16 @@ export const POOL_MODELS = {
 // Every reel-side field a recipe layer can actually pin down, paired with the
 // recipe's own (prefixed) field name for it -- mirrors buildFacestockSignature/
 // buildAdhesiveSignature/buildReleaseSignature's own field lists (routes/system/
-// */Master.js) minus whatever that master carries but the recipe layer has no
-// field for (Size on Facestock, Viscosity/Cohesion/Shear/Density on Adhesive,
-// Vendor SKU Code/Size on Release -- see the *RecipeKey comments in
-// routes/stock/*Stock.js). Drives reelMatchesLayer() below, the single check
-// both the raw-stock picker (routes/sachiko/labelStockProduction.js) and
-// produceDeckle() use, so a reel only ever counts as "this recipe's material"
-// when its *whole* recorded identity agrees with the recipe, not just Type.
+// */Master.js). Used to be missing whatever the master carried but the
+// recipe layer had no field for (Size on Facestock, Viscosity/Cohesion/
+// Shear/Density on Adhesive, Vendor SKU Code/Size on Release), which let
+// masters differing only in one of those collapse into one ambiguous match --
+// models/sachiko/sachikoLabelStock.js's facestock/adhesive/releaseLiner
+// sub-schemas now carry all of them. Drives reelMatchesLayer() below, the
+// single check both the raw-stock picker (routes/sachiko/
+// labelStockProduction.js) and produceDeckle() use, so a reel only ever
+// counts as "this recipe's material" when its *whole* recorded identity
+// agrees with the recipe, not just Type.
 export const POOL_MATCH_FIELDS = {
   facestock: [
     { field: "family", recipe: "facestockFamily" },
@@ -74,6 +77,7 @@ export const POOL_MATCH_FIELDS = {
     { field: "make", recipe: "facestockMake" },
     { field: "vendorId", recipe: "facestockVendorId" },
     { field: "vendorSkuCode", recipe: "facestockVendorSkuCode" },
+    { field: "size", recipe: "facestockSize" },
     { field: "gsm", recipe: "facestockGsm", numeric: true },
     { field: "micron", recipe: "facestockMicron", numeric: true },
   ],
@@ -83,12 +87,18 @@ export const POOL_MATCH_FIELDS = {
     { field: "vendorId", recipe: "adhesiveVendorId" },
     { field: "vendorSkuCode", recipe: "adhesiveVendorSkuCode" },
     { field: "shelfLife", recipe: "adhesiveShelfLife" },
+    { field: "viscosity", recipe: "adhesiveViscosity", numeric: true },
+    { field: "cohesion", recipe: "adhesiveCohesion", numeric: true },
+    { field: "shear", recipe: "adhesiveShear", numeric: true },
+    { field: "density", recipe: "adhesiveDensity", numeric: true },
   ],
   release: [
     { field: "type", recipe: "releaseLinerType" },
     { field: "make", recipe: "releaseLinerMake" },
     { field: "vendorId", recipe: "releaseLinerVendorId" },
+    { field: "vendorSkuCode", recipe: "releaseLinerVendorSkuCode" },
     { field: "color", recipe: "releaseLinerColor" },
+    { field: "size", recipe: "releaseLinerSize" },
     { field: "gsm", recipe: "releaseLinerGsm", numeric: true },
   ],
 };
@@ -141,7 +151,7 @@ export function requiredLayersFor(rollType) {
 // projection) -- every layer's spec is read off it. `layers` is
 // { layerKey: rawStockId }, one entry per key requiredLayersFor(rollType)
 // calls for.
-export async function produceDeckle({ labelStock, location, reelMtrs, rate, remarks, layers, createdBy }) {
+export async function produceDeckle({ labelStock, location, reelMtrs, rate, remarks, layers, createdBy, producedFor }) {
   if (!labelStock) throw new Error("Label Stock SKU not found.");
   if (!location) throw new Error("A stock location is required.");
   reelMtrs = Number(reelMtrs);
@@ -231,6 +241,9 @@ export async function produceDeckle({ labelStock, location, reelMtrs, rate, rema
     rate: numOrUndef(rate),
     rollId: deckleId,
     remarks: remarks?.trim() || undefined,
+    // Provenance, so sending the order back to Pending can un-make this reel
+    // and only this reel -- see dissolveDeckle below.
+    producedFor: producedFor && mongoose.isValidObjectId(producedFor) ? producedFor : undefined,
   });
 
   await MaterialStockLog.create({
@@ -249,4 +262,115 @@ export async function produceDeckle({ labelStock, location, reelMtrs, rate, rema
   });
 
   return { deckleId, stockId: String(created._id), usedRollIds: resolved.map((r) => r.reel.rollId) };
+}
+
+const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// The exact inverse of produceDeckle(): un-makes one Deckle and puts the mtrs
+// back on the raw-material reels it was laminated from. Sending a WIP order
+// back to Pending calls this for every reel that order produced -- the order
+// no longer holds the material, so neither should the Deckle.
+//
+// It reverses off the ledger rather than off the order. produceDeckle writes
+// one OUTWARD line per layer reading "<Layer> allocated to Deckle <deckleId>",
+// carrying the mtrs drawn and the rolls taken out; reading those back names
+// the source reels, the exact lengths, and whether a reel was emptied (so its
+// quantity comes back too). Deliberately not read off PendingProduction's
+// allottedLayers: that only ever holds the *latest* submission's picks, so an
+// order that produced twice would restore the second run's reels twice and
+// leave the first run's short.
+//
+// Refuses rather than half-returns: a Deckle that has already been drawn from
+// (a job card took metres off it, or it was cut down) cannot make its layers
+// whole again, so the caller is told instead of silently restoring the wrong
+// length. Nothing is written until every check has passed.
+export async function dissolveDeckle({ stockId, createdBy }) {
+  const deckle = await MaterialStock.findById(stockId);
+  if (!deckle) throw new Error("Deckle reel not found.");
+
+  const inward = await MaterialStockLog.findOne({
+    rollId: deckle.rollId,
+    type: "INWARD",
+    remarks: /^Produced from /,
+  }).lean();
+  if (!inward) {
+    throw new Error(`Deckle ${deckle.rollId} has no lamination record -- nothing to return it to.`);
+  }
+  if (Number(deckle.quantity) !== 1 || round2(Number(deckle.reelMtrs)) !== round2(Number(inward.reelMtrs))) {
+    throw new Error(
+      `Deckle ${deckle.rollId} has already been used (${deckle.reelMtrs} of ${inward.reelMtrs} mtrs left) -- its raw material can't be returned.`,
+    );
+  }
+
+  const by = createdBy || "SYSTEM";
+  // Anchored so a longer id starting with this one can't be caught by it; the
+  // optional tail is produceDeckle's own " -- reel emptied" suffix.
+  const remarkMatch = new RegExp(`allocated to Deckle ${escapeRegExp(deckle.rollId)}(?: --.*)?$`);
+
+  const restored = [];
+  const missing = [];
+  for (const { Model, LogModel } of Object.values(POOL_MODELS)) {
+    const outs = await LogModel.find({ type: "OUTWARD", remarks: remarkMatch }).lean();
+    for (const out of outs) {
+      const reel = await Model.findOne({ rollId: out.rollId });
+      if (!reel) {
+        missing.push(out.rollId);
+        continue;
+      }
+      const mtrsBack = round2(Number(out.reelMtrs) || 0);
+      const rollsBack = Number(out.quantity) || 0;
+
+      const bal = await Model.aggregate([
+        { $match: { type: reel.type, location: reel.location } },
+        { $group: { _id: null, qty: { $sum: "$quantity" } } },
+      ]);
+      const openingStock = bal[0]?.qty || 0;
+
+      await Model.updateOne(
+        { _id: reel._id },
+        { $set: { reelMtrs: round2((Number(reel.reelMtrs) || 0) + mtrsBack), quantity: (Number(reel.quantity) || 0) + rollsBack } },
+      );
+
+      await LogModel.create({
+        location: reel.location,
+        openingStock,
+        quantity: rollsBack,
+        closingStock: openingStock + rollsBack,
+        reelMtrs: mtrsBack,
+        rate: reel.rate,
+        rollId: reel.rollId,
+        vendorRollId: reel.vendorRollId,
+        type: "INWARD",
+        source: "SYSTEM",
+        remarks: `Returned from dissolved Deckle ${deckle.rollId}`,
+        createdBy: by,
+      });
+      restored.push({ rollId: reel.rollId, mtrs: mtrsBack, rolls: rollsBack });
+    }
+  }
+
+  const matBal = await MaterialStock.aggregate([
+    { $match: { material: deckle.material, location: deckle.location } },
+    { $group: { _id: null, qty: { $sum: "$quantity" } } },
+  ]);
+  const openingStock = matBal[0]?.qty || 0;
+
+  await MaterialStock.deleteOne({ _id: deckle._id });
+
+  await MaterialStockLog.create({
+    material: deckle.material,
+    location: deckle.location,
+    openingStock,
+    quantity: 1,
+    closingStock: openingStock - 1,
+    reelMtrs: deckle.reelMtrs,
+    rate: deckle.rate,
+    rollId: deckle.rollId,
+    type: "OUTWARD",
+    source: "SYSTEM",
+    remarks: `Dissolved -- returned to ${restored.map((r) => r.rollId).join(", ") || "(no reel found)"}`,
+    createdBy: by,
+  });
+
+  return { deckleId: deckle.rollId, mtrs: Number(deckle.reelMtrs) || 0, restored, missing };
 }

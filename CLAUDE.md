@@ -32,6 +32,7 @@ node scripts/send-back-to-pending.js <orderId>   # unassign one WIP order back t
 node scripts/clear-label-stock-layer-data.js     # wipe SachikoLabelStock facestock/adhesive/releaseLiner (+2) so they're re-picked from master
 node scripts/backfill-pendingproduction-allotted-layers.js  # PendingProduction allottedLayers <- parsed from the produced Deckle's log, where missing
 node scripts/backfill-labelstock-signatures.js   # repair SachikoLabelStock dup protection
+node scripts/dissolve-deckle.js [deckleId]       # un-make a Deckle, returning its mtrs to the raw reels it was laminated from
 ```
 
 `backfill-paper-roll-ids.js` must be run **before** starting the app on code

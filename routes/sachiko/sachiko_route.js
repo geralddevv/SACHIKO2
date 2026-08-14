@@ -123,9 +123,9 @@ router.get("/label-stock/view", async (req, res) => {
   const [jsonData, previewSkuCode, facestockMasters, adhesiveMasters, releaseMasters] = await Promise.all([
     SachikoLabelStock.find().sort({ skuCode: 1 }).lean(),
     previewNextSkuCode(),
-    FacestockMaster.find().select("skuId family type make vendorId vendorName vendorSkuCode gsm micron").lean(),
-    AdhesiveMaster.find().select("skuId type make vendorId vendorName vendorSkuCode shelfLife").lean(),
-    ReleaseMaster.find().select("skuId type make vendorId vendorName color gsm").lean(),
+    FacestockMaster.find().select("skuId family type make vendorId vendorName vendorSkuCode size gsm micron").lean(),
+    AdhesiveMaster.find().select("skuId type make vendorId vendorName vendorSkuCode shelfLife viscosity cohesion shear density").lean(),
+    ReleaseMaster.find().select("skuId type make vendorId vendorName vendorSkuCode color size gsm").lean(),
   ]);
   res.render("sachiko/labelStockView.ejs", {
     title: "Label Stock View",
@@ -184,6 +184,7 @@ async function buildLabelStockPayload(body) {
       facestockVendorId: facestockVendorId || undefined,
       facestockVendorName: await resolveVendorName(facestockVendorId),
       facestockVendorSkuCode: trim(body.facestockVendorSkuCode),
+      facestockSize: trim(body.facestockSize),
       facestockGsm: numOrUndef(body.facestockGsm),
       facestockMicron: numOrUndef(body.facestockMicron),
     },
@@ -194,6 +195,10 @@ async function buildLabelStockPayload(body) {
       adhesiveVendorName: await resolveVendorName(adhesiveVendorId),
       adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode),
       adhesiveShelfLife: trim(body.adhesiveShelfLife),
+      adhesiveViscosity: numOrUndef(body.adhesiveViscosity),
+      adhesiveCohesion: numOrUndef(body.adhesiveCohesion),
+      adhesiveShear: numOrUndef(body.adhesiveShear),
+      adhesiveDensity: numOrUndef(body.adhesiveDensity),
       adhesiveGsm: numOrUndef(body.adhesiveGsm),
     },
     releaseLiner: {
@@ -201,7 +206,9 @@ async function buildLabelStockPayload(body) {
       releaseLinerMake: trim(body.releaseLinerMake),
       releaseLinerVendorId: releaseLinerVendorId || undefined,
       releaseLinerVendorName: await resolveVendorName(releaseLinerVendorId),
+      releaseLinerVendorSkuCode: trim(body.releaseLinerVendorSkuCode),
       releaseLinerColor: trim(body.releaseLinerColor) || "WHITE",
+      releaseLinerSize: trim(body.releaseLinerSize),
       releaseLinerGsm: numOrUndef(body.releaseLinerGsm),
     },
   };
@@ -220,6 +227,7 @@ async function buildLabelStockPayload(body) {
       facestockVendorId: facestockVendorId2 || undefined,
       facestockVendorName: await resolveVendorName(facestockVendorId2),
       facestockVendorSkuCode: trim(body.facestockVendorSkuCode2),
+      facestockSize: trim(body.facestockSize2),
       facestockGsm: numOrUndef(body.facestockGsm2),
       facestockMicron: numOrUndef(body.facestockMicron2),
     };
@@ -230,6 +238,10 @@ async function buildLabelStockPayload(body) {
       adhesiveVendorName: await resolveVendorName(adhesiveVendorId2),
       adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode2),
       adhesiveShelfLife: trim(body.adhesiveShelfLife2),
+      adhesiveViscosity: numOrUndef(body.adhesiveViscosity2),
+      adhesiveCohesion: numOrUndef(body.adhesiveCohesion2),
+      adhesiveShear: numOrUndef(body.adhesiveShear2),
+      adhesiveDensity: numOrUndef(body.adhesiveDensity2),
       adhesiveGsm: numOrUndef(body.adhesiveGsm2),
     };
   } else if (rollType === "DOUBLE RELEASE") {
@@ -242,6 +254,10 @@ async function buildLabelStockPayload(body) {
       adhesiveVendorName: await resolveVendorName(adhesiveVendorId2),
       adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode2),
       adhesiveShelfLife: trim(body.adhesiveShelfLife2),
+      adhesiveViscosity: numOrUndef(body.adhesiveViscosity2),
+      adhesiveCohesion: numOrUndef(body.adhesiveCohesion2),
+      adhesiveShear: numOrUndef(body.adhesiveShear2),
+      adhesiveDensity: numOrUndef(body.adhesiveDensity2),
       adhesiveGsm: numOrUndef(body.adhesiveGsm2),
     };
     payload.releaseLiner2 = {
@@ -249,7 +265,9 @@ async function buildLabelStockPayload(body) {
       releaseLinerMake: trim(body.releaseLinerMake2),
       releaseLinerVendorId: releaseLinerVendorId2 || undefined,
       releaseLinerVendorName: await resolveVendorName(releaseLinerVendorId2),
+      releaseLinerVendorSkuCode: trim(body.releaseLinerVendorSkuCode2),
       releaseLinerColor: trim(body.releaseLinerColor2) || "WHITE",
+      releaseLinerSize: trim(body.releaseLinerSize2),
       releaseLinerGsm: numOrUndef(body.releaseLinerGsm2),
     };
   }
@@ -275,11 +293,11 @@ function canonNum(value) {
   return value === undefined || value === null || value === "" ? "" : String(Number(value));
 }
 
-const FS_SIG_FIELDS = ["facestockFamily", "facestockType", "facestockMake", "facestockVendorId", "facestockVendorSkuCode"];
+const FS_SIG_FIELDS = ["facestockFamily", "facestockType", "facestockMake", "facestockVendorId", "facestockVendorSkuCode", "facestockSize"];
 const FS_SIG_NUM_FIELDS = ["facestockGsm", "facestockMicron"];
 const AD_SIG_FIELDS = ["adhesiveType", "adhesiveMake", "adhesiveVendorId", "adhesiveVendorSkuCode", "adhesiveShelfLife"];
-const AD_SIG_NUM_FIELDS = ["adhesiveGsm"];
-const RL_SIG_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerVendorId", "releaseLinerColor"];
+const AD_SIG_NUM_FIELDS = ["adhesiveGsm", "adhesiveViscosity", "adhesiveCohesion", "adhesiveShear", "adhesiveDensity"];
+const RL_SIG_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerVendorId", "releaseLinerVendorSkuCode", "releaseLinerColor", "releaseLinerSize"];
 const RL_SIG_NUM_FIELDS = ["releaseLinerGsm"];
 
 function layerSignaturePart(layer, strFields, numFields) {

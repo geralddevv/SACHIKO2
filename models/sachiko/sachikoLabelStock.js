@@ -36,6 +36,17 @@ const sachikoLabelStockSchema = new mongoose.Schema(
       facestockVendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
       facestockVendorName: { type: String, trim: true },
       facestockVendorSkuCode: { type: String, trim: true },
+      // Facestock Master's own Size wasn't captured here at all until this
+      // field was added -- Family/Type/Make/Vendor/Vendor SKU Code/GSM/Micron
+      // alone can't tell apart two masters that differ only in Size (a real
+      // case in this data: three Facestock Masters sharing everything else),
+      // so matching (routes/stock/facestockStock.js's facestockRecipeKey,
+      // utils/labelStockProduction.js's POOL_MATCH_FIELDS) stayed ambiguous
+      // between them until now. Blank on a row saved before this field
+      // existed -- reelMatchesLayer() treats a blank recipe field as "no
+      // constraint", so an old row just stays as ambiguous as before until
+      // it's re-saved with a Size picked.
+      facestockSize: { type: String, trim: true },
       facestockGsm: { type: Number },
       facestockMicron: { type: Number },
     },
@@ -46,6 +57,20 @@ const sachikoLabelStockSchema = new mongoose.Schema(
       adhesiveVendorName: { type: String, trim: true },
       adhesiveVendorSkuCode: { type: String, trim: true },
       adhesiveShelfLife: { type: String, trim: true },
+      // Adhesive Master's own Viscosity/Cohesion/Shear/Density weren't
+      // captured here at all until these fields were added -- same gap as
+      // facestockSize below: Type/Make/Vendor/Vendor SKU Code/Shelf Life
+      // alone can't tell apart two Adhesive Masters that differ only in one
+      // of these four physical properties, so matching (routes/stock/
+      // adhesiveStock.js's adhesiveRecipeKey, utils/labelStockProduction.js's
+      // POOL_MATCH_FIELDS) stayed ambiguous between them. Blank on a row
+      // saved before these fields existed -- reelMatchesLayer() treats a
+      // blank recipe field as "no constraint", so an old row just stays as
+      // ambiguous as before until it's re-saved with values picked.
+      adhesiveViscosity: { type: Number },
+      adhesiveCohesion: { type: Number },
+      adhesiveShear: { type: Number },
+      adhesiveDensity: { type: Number },
       adhesiveGsm: { type: Number },
     },
     releaseLiner: {
@@ -53,7 +78,12 @@ const sachikoLabelStockSchema = new mongoose.Schema(
       releaseLinerMake: { type: String, trim: true },
       releaseLinerVendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
       releaseLinerVendorName: { type: String, trim: true },
+      // Release Master's own Vendor SKU Code/Size weren't captured here at
+      // all until these fields were added -- same gap as facestockSize
+      // above/adhesiveViscosity etc. above.
+      releaseLinerVendorSkuCode: { type: String, trim: true },
       releaseLinerColor: { type: String, trim: true, default: "WHITE" },
+      releaseLinerSize: { type: String, trim: true },
       releaseLinerGsm: { type: Number },
     },
     // Second layer, only populated when rollType calls for it:
@@ -66,6 +96,7 @@ const sachikoLabelStockSchema = new mongoose.Schema(
       facestockVendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
       facestockVendorName: { type: String, trim: true },
       facestockVendorSkuCode: { type: String, trim: true },
+      facestockSize: { type: String, trim: true },
       facestockGsm: { type: Number },
       facestockMicron: { type: Number },
     },
@@ -76,6 +107,10 @@ const sachikoLabelStockSchema = new mongoose.Schema(
       adhesiveVendorName: { type: String, trim: true },
       adhesiveVendorSkuCode: { type: String, trim: true },
       adhesiveShelfLife: { type: String, trim: true },
+      adhesiveViscosity: { type: Number },
+      adhesiveCohesion: { type: Number },
+      adhesiveShear: { type: Number },
+      adhesiveDensity: { type: Number },
       adhesiveGsm: { type: Number },
     },
     releaseLiner2: {
@@ -83,7 +118,9 @@ const sachikoLabelStockSchema = new mongoose.Schema(
       releaseLinerMake: { type: String, trim: true },
       releaseLinerVendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
       releaseLinerVendorName: { type: String, trim: true },
+      releaseLinerVendorSkuCode: { type: String, trim: true },
       releaseLinerColor: { type: String, trim: true, default: "WHITE" },
+      releaseLinerSize: { type: String, trim: true },
       releaseLinerGsm: { type: Number },
     },
   },

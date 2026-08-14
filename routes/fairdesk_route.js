@@ -51,7 +51,7 @@ import {
   syncLabelBindingIdentity,
 } from "../utils/reconcileBindingLocations.js";
 import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
-import { produceDeckle, requiredLayersFor, LAYER_META, POOL_MODELS } from "../utils/labelStockProduction.js";
+import { produceDeckle, dissolveDeckle, requiredLayersFor, LAYER_META, POOL_MODELS } from "../utils/labelStockProduction.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 
@@ -4520,6 +4520,10 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
             reelMtrs: rawProduceMtrs,
             layers: rawLayers,
             createdBy: req.user?.username || "SYSTEM",
+            // Stamps the reel as this order's own work, so sending the order
+            // back to Pending can un-make it (dissolveDeckle) and leave any
+            // Deckle merely ticked on from existing stock alone.
+            producedFor: id,
           });
           deckleId = produced.deckleId;
           allottedRollIds.push(new mongoose.Types.ObjectId(produced.stockId));
@@ -4576,22 +4580,55 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
       req.flash("notification", "This order isn't assigned to a machine.");
       return res.redirect("/sachiko/labels/production/pending?tab=wip");
     }
-    // Paper is only deducted when a Job Card is filed -- as long as producedAt
-    // is unset nothing physical needs reversing.
+    // The Deckle's own mtrs only leave when a Job Card is filed, so a filed
+    // card can't be undone from here.
     if (pendingProduction.producedAt) {
       req.flash("notification", "A Job Card has already been filed for this order — it can't be sent back to Pending. Cancel it instead if it needs to stop.");
       return res.redirect("/sachiko/labels/production/pending?tab=wip");
+    }
+
+    // Raw material, though, left stock the moment Assign & Continue laminated
+    // it (produceDeckle). Unassigning gives the order's material back, so those
+    // Deckles are un-made and their facestock/adhesive/release liner returned
+    // to the reels they came off -- otherwise the raw stock stays spent and an
+    // orphan Deckle nobody ordered is left sitting in Finished stock. Only
+    // reels this order actually produced are touched; a Deckle merely ticked
+    // onto the order from existing stock is simply released below.
+    const producedHere = await MaterialStock.find({ producedFor: id }).select("_id rollId").lean();
+    const dissolved = [];
+    const kept = [];
+    for (const reel of producedHere) {
+      try {
+        const result = await dissolveDeckle({
+          stockId: reel._id,
+          createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+        });
+        dissolved.push(result);
+      } catch (dissolveErr) {
+        // A Deckle that's already been drawn from can't be returned. Say so
+        // and leave it standing rather than failing the whole unassign -- the
+        // order still needs to come off the machine.
+        kept.push(`${reel.rollId} (${dissolveErr.message})`);
+      }
     }
 
     // lotNo is deliberately kept -- it's tied to the order's life, not the
     // assignment, so a re-assignment reuses it.
     await PendingProduction.findByIdAndUpdate(id, {
       $set: { assignedMachineId: null, operatorId: null, helperId: null, allottedRollIds: [] },
-      $unset: { allottedRolls: "", assignedAt: "" },
+      $unset: { allottedRolls: "", assignedAt: "", allottedLayers: "" },
     });
 
     res.locals.auditDescription = `Sent production order ${id} back to Pending`;
-    req.flash("notification", "Order sent back to Pending Production.");
+    let message = "Order sent back to Pending Production.";
+    if (dissolved.length) {
+      const mtrs = dissolved.reduce((sum, d) => sum + d.mtrs, 0);
+      message += ` ${dissolved.length} Deckle${dissolved.length === 1 ? "" : "s"} un-made — ${mtrs} mtrs returned to raw stock.`;
+      const missing = [...new Set(dissolved.flatMap((d) => d.missing))];
+      if (missing.length) message += ` Note: reel${missing.length === 1 ? "" : "s"} ${missing.join(", ")} no longer exist, so that material couldn't be returned.`;
+    }
+    if (kept.length) message += ` Note: could not return ${kept.join("; ")}.`;
+    req.flash("notification", message);
     res.redirect("/sachiko/labels/production/pending");
   } catch (err) {
     console.error("UNASSIGN PRODUCTION ERROR:", err);

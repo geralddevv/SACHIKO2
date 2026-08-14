@@ -36,15 +36,28 @@
   const LAYER_GROUPS = {
     facestock: {
       title: "Facestock", swatch: "facestock",
-      fields: (s) => [["Family", s?.facestockFamily], ["Type", s?.facestockType], ["GSM", gsm(s?.facestockGsm)], ["Micron", mic(s?.facestockMicron)]],
+      fields: (s) => [
+        ["Family", s?.facestockFamily], ["Type", s?.facestockType], ["Make", s?.facestockMake],
+        ["Vendor", s?.facestockVendorName], ["Vendor SKU Code", s?.facestockVendorSkuCode],
+        ["Size", s?.facestockSize], ["GSM", gsm(s?.facestockGsm)], ["Micron", mic(s?.facestockMicron)],
+      ],
     },
     adhesive: {
       title: "Adhesive", swatch: "adhesive",
-      fields: (s) => [["Type", s?.adhesiveType], ["GSM", gsm(s?.adhesiveGsm)]],
+      fields: (s) => [
+        ["Type", s?.adhesiveType], ["Make", s?.adhesiveMake], ["Vendor", s?.adhesiveVendorName],
+        ["Vendor SKU Code", s?.adhesiveVendorSkuCode], ["Viscosity", s?.adhesiveViscosity],
+        ["Cohesion", s?.adhesiveCohesion], ["Shear", s?.adhesiveShear], ["Density", s?.adhesiveDensity],
+        ["GSM", gsm(s?.adhesiveGsm)],
+      ],
     },
     releaseLiner: {
       title: "Release Liner", swatch: "release",
-      fields: (s) => [["Type", s?.releaseLinerType], ["Color", s?.releaseLinerColor], ["GSM", gsm(s?.releaseLinerGsm)]],
+      fields: (s) => [
+        ["Type", s?.releaseLinerType], ["Make", s?.releaseLinerMake], ["Vendor", s?.releaseLinerVendorName],
+        ["Vendor SKU Code", s?.releaseLinerVendorSkuCode], ["Color", s?.releaseLinerColor],
+        ["Size", s?.releaseLinerSize], ["GSM", gsm(s?.releaseLinerGsm)],
+      ],
     },
   };
   const specFieldFor = { facestock: "facestock", facestock2: "facestock2", adhesive: "adhesive", adhesive2: "adhesive2", releaseLiner: "releaseLiner", releaseLiner2: "releaseLiner2" };
@@ -119,8 +132,14 @@
     .layer-block-label { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; color: var(--mg-text); white-space: nowrap; width: 130px; flex: 0 0 auto; }
     .layer-block-sep { font-size: 13px; font-weight: 700; color: var(--mg-border); }
     .layer-block-detail { font-size: 13px; font-weight: 800; color: #334155; text-align: left; }
-    .layer-block-detail .lbd-pair { display: inline-block; width: 150px; }
-    .layer-block-detail .lbd-field { color: #000; font-weight: 600; }
+    .layer-block-detail .lbd-pair { display: inline-flex; align-items: baseline; width: 150px; vertical-align: top; }
+    /* Vendor Name runs much longer than every other field here (e.g. "SHREE
+       ASHTAVINAYAK PAPERS PVT LTD") -- give it more room than the shared
+       150px pair width, and truncate with an ellipsis (rather than wrapping
+       or overflowing the card) if it's still too long even at that width. */
+    .layer-block-detail .lbd-pair--vendor { width: 260px; }
+    .layer-block-detail .lbd-field { color: #000; font-weight: 600; white-space: nowrap; flex: 0 0 auto; margin-right: 4px; }
+    .layer-block-detail .lbd-value { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .layer-caret { display: flex; justify-content: center; margin: -2px 0; color: #cbd5e1; font-size: 11px; }
 
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -282,7 +301,12 @@
             <%
               const detailParts = g.fields
                 .filter(function (f) { return !isEmpty(f[1]); })
-                .map(function (f) { return '<span class="lbd-pair"><span class="lbd-field">' + escHtml(f[0]) + ':</span> ' + escHtml(f[1]) + '</span>'; });
+                .map(function (f) {
+                  const isVendor = f[0] === "Vendor";
+                  return '<span class="lbd-pair' + (isVendor ? ' lbd-pair--vendor' : '') + '" title="' + escHtml(f[1]) + '">'
+                    + '<span class="lbd-field">' + escHtml(f[0]) + ':</span>'
+                    + '<span class="lbd-value">' + escHtml(f[1]) + '</span></span>';
+                });
             %>
             <span class="layer-block-detail"><%- detailParts.length ? detailParts.join(" | ") : "—" %></span>
           </div>
@@ -479,14 +503,29 @@
       if (layerKey.startsWith("facestock")) {
         if (spec.facestockFamily) bits.push(spec.facestockFamily);
         if (spec.facestockType) bits.push(spec.facestockType);
+        if (spec.facestockMake) bits.push(spec.facestockMake);
+        if (spec.facestockVendorName) bits.push(spec.facestockVendorName);
+        if (spec.facestockVendorSkuCode) bits.push(spec.facestockVendorSkuCode);
+        if (spec.facestockSize) bits.push(`Size ${spec.facestockSize}`);
         if (spec.facestockGsm) bits.push(`${spec.facestockGsm} GSM`);
         else if (spec.facestockMicron) bits.push(`${spec.facestockMicron} MIC`);
       } else if (layerKey.startsWith("adhesive")) {
         if (spec.adhesiveType) bits.push(spec.adhesiveType);
+        if (spec.adhesiveMake) bits.push(spec.adhesiveMake);
+        if (spec.adhesiveVendorName) bits.push(spec.adhesiveVendorName);
+        if (spec.adhesiveVendorSkuCode) bits.push(spec.adhesiveVendorSkuCode);
+        if (spec.adhesiveViscosity) bits.push(`Visc ${spec.adhesiveViscosity}`);
+        if (spec.adhesiveCohesion) bits.push(`Coh ${spec.adhesiveCohesion}`);
+        if (spec.adhesiveShear) bits.push(`Shear ${spec.adhesiveShear}`);
+        if (spec.adhesiveDensity) bits.push(`Dens ${spec.adhesiveDensity}`);
         if (spec.adhesiveGsm) bits.push(`${spec.adhesiveGsm} GSM`);
       } else {
         if (spec.releaseLinerType) bits.push(spec.releaseLinerType);
+        if (spec.releaseLinerMake) bits.push(spec.releaseLinerMake);
+        if (spec.releaseLinerVendorName) bits.push(spec.releaseLinerVendorName);
+        if (spec.releaseLinerVendorSkuCode) bits.push(spec.releaseLinerVendorSkuCode);
         if (spec.releaseLinerColor) bits.push(spec.releaseLinerColor);
+        if (spec.releaseLinerSize) bits.push(`Size ${spec.releaseLinerSize}`);
         if (spec.releaseLinerGsm) bits.push(`${spec.releaseLinerGsm} GSM`);
       }
       return bits.join(" · ") || "—";
