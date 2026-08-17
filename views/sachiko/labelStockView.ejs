@@ -182,6 +182,7 @@
   // below, reading straight from `raw`) instead of being duplicated here.
   const tableData = raw.map(ds => {
     const fsType = ds.facestock?.facestockType || "";
+    const fsGsm = ds.facestock?.facestockGsm || "";
     const fsMicron = ds.facestock?.facestockMicron || "";
     const adType = ds.adhesive?.adhesiveType   || "";
     const adGsm = ds.adhesive?.adhesiveGsm || "";
@@ -196,6 +197,7 @@
       family: ds.family || "",
       rollType: ds.rollType || "NORMAL",
       facestockType: fsType,
+      facestockGsm: fsGsm,
       facestockMicron: fsMicron,
       adhesiveType: adType,
       adhesiveGsm: adGsm,
@@ -248,6 +250,7 @@
       withTextFilter({ title: "Product Code", field: "productCode", width: 150, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
       withTextFilter({ title: "Family", field: "family", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
       withTextFilter({ title: "FSK Type", field: "facestockType", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
+      withTextFilter({ title: "FSK GSM", field: "facestockGsm", minWidth: 120, formatter: (cell) => cell.getValue() ? cell.getValue() + " GSM" : "—" }),
       withTextFilter({ title: "FSK Micron", field: "facestockMicron", minWidth: 140, formatter: (cell) => cell.getValue() ? cell.getValue() + " MIC" : "—" }),
       withTextFilter({ title: "ADV Type", field: "adhesiveType", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
       withTextFilter({ title: "ADV GSM", field: "adhesiveGsm", minWidth: 120, formatter: (cell) => cell.getValue() ? cell.getValue() + " GSM" : "—" }),
