@@ -324,7 +324,7 @@
       <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="poQtyInput">Quantity (Kg)</label>
-          <input type="number" id="poQtyInput" class="form-control premium-input" min="1" step="any" placeholder="Enter mtrs" />
+          <input type="number" id="poQtyInput" class="form-control premium-input" min="1" step="any" placeholder="Enter kg" />
         </div>
         <div>
           <label class="dialog-field-label" for="poNumberInput">PO Number</label>
@@ -699,7 +699,7 @@
         const parts = [
           `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
           data.vendorRollId ? `Vendor Drum ID: ${escapeHtml(data.vendorRollId)}` : "",
-          `Mtrs ${fmt(data.reelMtrs)}`,
+          `Kg ${fmt(data.reelMtrs)}`,
           data.location ? escapeHtml(data.location) : "",
           data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
           data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : "",
@@ -717,13 +717,13 @@
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
       { title: "Shelf Life", field: "shelfLife", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
-      { title: "Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 130 },
+      { title: "Stock (Kg)", field: "currentStock", hozAlign: "center", minWidth: 130 },
       {
-        title: "Allotted (Mtrs)",
+        title: "Allotted (Kg)",
         field: "allotted",
         hozAlign: "center",
         minWidth: 130,
-        headerTooltip: "Mtrs committed to WIP (assigned to a machine, not-yet-produced) Label Stock orders needing this spec -- including material already laminated into a Deckle, which has left Stock.",
+        headerTooltip: "Kg committed to WIP (assigned to a machine, not-yet-produced) Label Stock orders needing this spec -- including material already laminated into a Deckle, which has left Stock.",
         formatter: (cell) => {
           if (!cell.getRow().getData().isParent) return "";
           const value = cell.getValue() || 0;
@@ -737,11 +737,11 @@
         },
       },
       {
-        title: "Available (Mtrs)",
+        title: "Available (Kg)",
         field: "available",
         hozAlign: "center",
         minWidth: 130,
-        headerTooltip: "What's actually free to commit: Stock (Mtrs) minus the Allotted mtrs still waiting to be drawn. Material already laminated into a Deckle has left Stock, so it isn't subtracted a second time.",
+        headerTooltip: "What's actually free to commit: Stock (Kg) minus the Allotted kg still waiting to be drawn. Material already laminated into a Deckle has left Stock, so it isn't subtracted a second time.",
         formatter: (cell) => {
           if (!cell.getRow().getData().isParent) return "";
           const value = cell.getValue() || 0;

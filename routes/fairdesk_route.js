@@ -4487,17 +4487,44 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     const labelStock = await SachikoLabelStock.findById(pendingProduction.itemId).lean();
     const required = labelStock ? requiredLayersFor(labelStock.rollType) : [];
 
+    // Reels already claimed by another still-open WIP order's own raw-
+    // material picks -- a physical reel/drum can only be mounted on one
+    // machine at a time, so once ANY other order holds it (assigned to a
+    // machine, not yet produced), it can't also land on this order. Same
+    // "race-guard against stale page state" the selectedRolls/takenSet check
+    // above already does for finished Deckle rolls; this is its counterpart
+    // for raw facestock/adhesive/release liner reels. Scoped to producedAt:
+    // null, same as loadAllottedByKey (routes/stock/facestockStock.js etc.)
+    // -- once an order has actually finished drawing from a reel, whatever
+    // is physically left on it goes back to being free stock, not locked to
+    // that (now complete) order forever.
+    const otherPendingLayers = await PendingProduction.find({
+      assignedMachineId: { $ne: null },
+      producedAt: null,
+      _id: { $ne: pendingProduction._id },
+      allottedLayers: { $ne: null },
+    }).select("allottedLayers").lean();
+    const claimedKeySet = new Set(
+      otherPendingLayers.flatMap((p) =>
+        Object.values(p.allottedLayers || {})
+          .filter((pick) => pick?.pool && pick?.stockId)
+          .map((pick) => `${pick.pool}|${pick.stockId}`),
+      ),
+    );
+
     // Record whichever raw-material layer reels were picked on the assign
     // form, independent of whether every layer got picked -- lets the
     // machine queue show allocation per material (Facestock/Adhesive/
     // Release Liner, ...) rather than only the all-or-nothing Deckle count
     // further down. Existence-checked against the right pool model so a
-    // stale/tampered id can't leave a broken reference on the order.
+    // stale/tampered id can't leave a broken reference on the order, and
+    // dropped (left unallotted) if another order already claimed it.
     let allottedLayers = {};
     for (const key of required) {
       const meta = LAYER_META[key];
       const stockId = rawLayers?.[key];
       if (!stockId || !mongoose.isValidObjectId(stockId)) continue;
+      if (claimedKeySet.has(`${meta.pool}|${stockId}`)) continue;
       const { Model } = POOL_MODELS[meta.pool];
       const exists = await Model.exists({ _id: stockId });
       if (exists) allottedLayers[key] = { pool: meta.pool, stockId };

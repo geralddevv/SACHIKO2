@@ -401,6 +401,7 @@
 <script id="all-machines-data" type="application/json"><%- safeJson(allMachines) %></script>
 <script id="item-data" type="application/json"><%- safeJson(item) %></script>
 <script id="allotted-layers-data" type="application/json"><%- safeJson(pp.allottedLayers || {}) %></script>
+<script id="order-id-data" type="application/json"><%- safeJson(String(pp._id)) %></script>
 <script src="/js/choices.min.js"></script>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
@@ -496,6 +497,7 @@
     // exists in the DOM, renderLayerRows() carries the live DOM selection
     // forward instead (see previouslyChecked below), same as any other pick.
     const ALLOTTED_LAYERS = JSON.parse(document.getElementById("allotted-layers-data").textContent) || {};
+    const ORDER_ID = JSON.parse(document.getElementById("order-id-data").textContent);
 
     function specSummary(spec, layerKey) {
       if (!spec) return "—";
@@ -604,7 +606,7 @@
       }
 
       try {
-        const res = await fetch(`/sachiko/labelstockproduction/raw-stock?layerKey=${encodeURIComponent(layerKey)}&itemId=${encodeURIComponent(ITEM._id)}&location=${encodeURIComponent(location)}`);
+        const res = await fetch(`/sachiko/labelstockproduction/raw-stock?layerKey=${encodeURIComponent(layerKey)}&itemId=${encodeURIComponent(ITEM._id)}&location=${encodeURIComponent(location)}&orderId=${encodeURIComponent(ORDER_ID)}`);
         const data = await res.json();
         layerReelsCache[layerKey] = data.reels || [];
       } catch {

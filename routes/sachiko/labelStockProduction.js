@@ -1,6 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
+import PendingProduction from "../../models/inventory/pendingProduction.js";
 import { POOL_MODELS, LAYER_META, reelMatchesLayer } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
@@ -25,6 +26,7 @@ router.get("/raw-stock", async (req, res) => {
     const poolMeta = meta ? POOL_MODELS[meta.pool] : null;
     const itemId = String(req.query.itemId || "");
     const location = String(req.query.location || "").trim();
+    const orderId = String(req.query.orderId || "");
     if (!poolMeta || !itemId || !mongoose.isValidObjectId(itemId) || !location) {
       return res.json({ reels: [] });
     }
@@ -34,10 +36,31 @@ router.get("/raw-stock", async (req, res) => {
     const type = String(layerSpec?.[meta.typeField] || "").trim();
     if (!type) return res.json({ reels: [] });
 
+    // A physical reel/drum can only be mounted on one machine at a time --
+    // once another still-open WIP order (assigned to a machine, not yet
+    // produced) holds it, however little of it that order actually needs,
+    // it doesn't belong in this picker at all (mirrors the server-side
+    // race-guard in fairdesk_route.js's POST /labels/production/assign/:id).
+    // Excludes this same order's own pick, so re-opening Assign Production
+    // for the order that already holds a reel still offers it back.
+    const otherPendingLayers = await PendingProduction.find({
+      assignedMachineId: { $ne: null },
+      producedAt: null,
+      ...(mongoose.isValidObjectId(orderId) ? { _id: { $ne: orderId } } : {}),
+      allottedLayers: { $ne: null },
+    }).select("allottedLayers").lean();
+    const claimedIds = new Set(
+      otherPendingLayers.flatMap((p) =>
+        Object.values(p.allottedLayers || {})
+          .filter((pick) => pick?.pool === meta.pool && pick?.stockId)
+          .map((pick) => String(pick.stockId)),
+      ),
+    );
+
     const reels = await poolMeta.Model.find({ type, location, reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
       .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
       .lean();
-    const matched = reels.filter((r) => reelMatchesLayer(meta.pool, r, layerSpec));
+    const matched = reels.filter((r) => reelMatchesLayer(meta.pool, r, layerSpec) && !claimedIds.has(String(r._id)));
 
     res.json({
       reels: matched.map((r) => ({

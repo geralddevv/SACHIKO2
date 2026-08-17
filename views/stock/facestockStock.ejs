@@ -323,7 +323,7 @@
 
       <div class="dialog-field-row">
         <div>
-          <label class="dialog-field-label" for="poQtyInput">Quantity (Mtrs)</label>
+          <label class="dialog-field-label" for="poQtyInput">Quantity (Kg)</label>
           <input type="number" id="poQtyInput" class="form-control premium-input" min="1" step="any" placeholder="Enter mtrs" />
         </div>
         <div>
@@ -364,7 +364,7 @@
         <h2 id="addDialogTitle">Add Facestock Reels</h2>
         <div style="display: flex; align-items: center; gap: 16px; font-size: 13px; color: rgba(255, 255, 255, 0.8);">
           <span>Rolls: <strong id="summaryRollCount" style="color: #fff; font-size: 15px;">1</strong></span>
-          <span>Total Mtrs: <strong id="summaryTotalMtrs" style="color: #fff; font-size: 15px;">0</strong></span>
+          <span>Total Kg: <strong id="summaryTotalMtrs" style="color: #fff; font-size: 15px;">0</strong></span>
         </div>
       </div>
       <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
@@ -702,7 +702,7 @@
         const parts = [
           `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
           data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
-          `Mtrs ${fmt(data.reelMtrs)}`,
+          `Kg ${fmt(data.reelMtrs)}`,
           data.location ? escapeHtml(data.location) : "",
           data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
           data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : "",
@@ -722,18 +722,28 @@
       { title: "Size", field: "size", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() || "—" },
       { title: "GSM", field: "gsm", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Micron", field: "micron", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Stock (Mtrs)", field: "currentStock", hozAlign: "center", minWidth: 130 },
       {
-        title: "Allotted (Mtrs)",
+        title: "Stock (Kg)",
+        field: "currentStock",
+        hozAlign: "center",
+        minWidth: 150,
+        formatter: (cell) => {
+          const value = cell.getValue() || 0;
+          const rolls = cell.getRow().getData().rollCount || 0;
+          return rolls ? `${value} (${rolls} roll${rolls === 1 ? "" : "s"})` : String(value);
+        },
+      },
+      {
+        title: "Allotted (Kg)",
         field: "allotted",
         hozAlign: "center",
         minWidth: 130,
-        headerTooltip: "Mtrs committed to WIP (assigned to a machine, not-yet-produced) Label Stock orders needing this spec -- including material already laminated into a Deckle, which has left Stock.",
+        headerTooltip: "Kg committed to WIP (assigned to a machine, not-yet-produced) Label Stock orders needing this spec -- including material already laminated into a Deckle, which has left Stock.",
         formatter: (cell) => {
           if (!cell.getRow().getData().isParent) return "";
           const value = cell.getValue() || 0;
           if (!value) return "—";
-          // Reads as the shopfloor says it: "1000 mtrs, 1 roll allotted".
+          // Reads as the shopfloor says it: "1000 kg, 1 roll allotted".
           const rolls = cell.getRow().getData().allottedRolls || 0;
           const rollLine = rolls
             ? `<div style="font-size:11px; font-weight:600; color:#b45309;">${rolls} roll${rolls === 1 ? "" : "s"}</div>`
@@ -742,11 +752,11 @@
         },
       },
       {
-        title: "Available (Mtrs)",
+        title: "Available (Kg)",
         field: "available",
         hozAlign: "center",
         minWidth: 130,
-        headerTooltip: "What's actually free to commit: Stock (Mtrs) minus the Allotted mtrs still waiting to be drawn. Material already laminated into a Deckle has left Stock, so it isn't subtracted a second time.",
+        headerTooltip: "What's actually free to commit: Stock (Kg) minus the Allotted kg still waiting to be drawn. Material already laminated into a Deckle has left Stock, so it isn't subtracted a second time.",
         formatter: (cell) => {
           if (!cell.getRow().getData().isParent) return "";
           const value = cell.getValue() || 0;
@@ -882,8 +892,8 @@
         <input type="text" class="form-control premium-input roll-id-preview" readonly style="margin-bottom: 10px; background: #f1f5f9;" />
         <label class="dialog-field-label">Vendor Roll ID</label>
         <input type="text" class="form-control premium-input roll-vendor-id" placeholder="Vendor's own roll no" value="${prev.vendorRollId || ""}" style="margin-bottom: 10px;" />
-        <label class="dialog-field-label">Mtrs</label>
-        <input type="number" class="form-control premium-input roll-mtrs" min="0" step="any" placeholder="Enter Mtrs" value="${prev.mtrs || ""}" />
+        <label class="dialog-field-label">Kg</label>
+        <input type="number" class="form-control premium-input roll-mtrs" min="0" step="any" placeholder="Enter Kg" value="${prev.mtrs || ""}" />
       </div>`;
   }
 
@@ -1011,7 +1021,7 @@
       vendorRollId: row.querySelector(".roll-vendor-id").value,
     }));
     const emptyIndex = rolls.findIndex((r) => !r.reelMtrs || Number(r.reelMtrs) <= 0);
-    if (emptyIndex !== -1) return showError("addFacestockError", `Mtrs is required for roll ${emptyIndex + 1}.`);
+    if (emptyIndex !== -1) return showError("addFacestockError", `Kg is required for roll ${emptyIndex + 1}.`);
 
     hideError("addFacestockError");
     setLoading("addSubmitBtn", true);

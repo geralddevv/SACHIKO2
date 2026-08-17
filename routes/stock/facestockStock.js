@@ -74,7 +74,7 @@ async function buildEditPayload(body) {
 function validateEditPayload(payload) {
   const headerError = validateHeaderPayload(payload);
   if (headerError) return headerError;
-  if (!payload.reelMtrs || payload.reelMtrs <= 0) return "Mtrs is required.";
+  if (!payload.reelMtrs || payload.reelMtrs <= 0) return "Kg is required.";
   return null;
 }
 
@@ -385,7 +385,7 @@ router.post("/purchase-order", requireAuth, createLimiter, async (req, res) => {
       performedBy: performer,
     });
 
-    res.locals.auditDescription = `Created purchase order "${po.poNumber}" for facestock "${master.skuId}" from "${master.vendorName}" (qty ${po.quantity} mtrs)`;
+    res.locals.auditDescription = `Created purchase order "${po.poNumber}" for facestock "${master.skuId}" from "${master.vendorName}" (qty ${po.quantity} kg)`;
     req.flash("notification", "Purchase Order created successfully.");
     res.json({ success: true, redirect: "/sachiko/purchase/pending" });
   } catch (err) {
@@ -438,7 +438,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     const rolls = rawRolls.map(buildRollPayload);
     const invalidIndex = rolls.findIndex((r) => !r.reelMtrs || r.reelMtrs <= 0);
     if (invalidIndex !== -1) {
-      return res.status(400).json({ success: false, message: `Mtrs is required for roll ${invalidIndex + 1}.` });
+      return res.status(400).json({ success: false, message: `Kg is required for roll ${invalidIndex + 1}.` });
     }
 
     const locationExists = await Location.exists({ locationName: header.location });
