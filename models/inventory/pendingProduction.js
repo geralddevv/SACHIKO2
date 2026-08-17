@@ -71,18 +71,23 @@ const pendingProductionSchema = new mongoose.Schema(
     ],
     // One entry per raw-material layer this item's recipe calls for
     // (LAYER_ORDER in utils/labelStockProduction.js), recording whichever
-    // reel/drum was picked in the "Produce New Deckle" section of the assign
-    // form -- independent of whether every layer got picked, since that all
-    // only gates whether a Deckle actually got laminated (see the POST
-    // handler in fairdesk_route.js). Lets the machine queue show allocation
-    // per material (Facestock/Adhesive/Release Liner, ...) instead of one
-    // all-or-nothing Deckle count, since they're not even the same kind of
-    // unit (rolls vs. Adhesive's drums). Keyed by layer key ("facestock",
-    // "adhesive", "releaseLiner", "facestock2", ...); each value is
-    // { pool, stockId } naming which pool model (FacestockStock/
-    // AdhesiveStock/ReleaseLinerStock) and doc to look up -- the queue
-    // always re-reads rollId/reelMtrs live off that doc rather than
-    // snapshotting them here, same as allottedRollIds/MaterialStock above.
+    // reel/drum(s) were picked in the "Raw Material Allotment" section of the
+    // assign form -- independent of whether every layer got picked. Lets the
+    // machine queue show allocation per material (Facestock/Adhesive/Release
+    // Liner, ...) instead of one all-or-nothing Deckle count, since they're
+    // not even the same kind of unit (rolls vs. Adhesive's drums). Keyed by
+    // layer key ("facestock", "adhesive", "releaseLiner", "facestock2", ...);
+    // each value is { pool, stockIds } naming which pool model (FacestockStock/
+    // AdhesiveStock/ReleaseLinerStock) and the doc(s) to look up -- a layer
+    // can hold more than one reel picked at once (Assign Production's pickers
+    // are checkboxes, not single-select, so e.g. two undersized drums can be
+    // combined onto one order). The queue always re-reads rollId/reelMtrs
+    // live off those docs rather than snapshotting them here, same as
+    // allottedRollIds/MaterialStock above. Orders assigned before this
+    // changed still have the old singular { pool, stockId } shape saved --
+    // read through utils/labelStockProduction.js's pickStockIds() rather
+    // than `.stockId` directly, so both shapes keep working without a data
+    // migration.
     allottedLayers: {
       type: mongoose.Schema.Types.Mixed,
       default: undefined,

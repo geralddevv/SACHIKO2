@@ -51,7 +51,7 @@ import {
   syncLabelBindingIdentity,
 } from "../utils/reconcileBindingLocations.js";
 import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
-import { produceDeckle, dissolveDeckle, requiredLayersFor, LAYER_META, POOL_MODELS } from "../utils/labelStockProduction.js";
+import { produceDeckle, dissolveDeckle, requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds } from "../utils/labelStockProduction.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 
@@ -4507,8 +4507,8 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     const claimedKeySet = new Set(
       otherPendingLayers.flatMap((p) =>
         Object.values(p.allottedLayers || {})
-          .filter((pick) => pick?.pool && pick?.stockId)
-          .map((pick) => `${pick.pool}|${pick.stockId}`),
+          .filter((pick) => pick?.pool)
+          .flatMap((pick) => pickStockIds(pick).map((sid) => `${pick.pool}|${sid}`)),
       ),
     );
 
@@ -4516,18 +4516,24 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     // form, independent of whether every layer got picked -- lets the
     // machine queue show allocation per material (Facestock/Adhesive/
     // Release Liner, ...) rather than only the all-or-nothing Deckle count
-    // further down. Existence-checked against the right pool model so a
-    // stale/tampered id can't leave a broken reference on the order, and
-    // dropped (left unallotted) if another order already claimed it.
+    // further down. A layer's checkboxes (assignProduction.ejs) can submit
+    // more than one reel now -- e.g. combining two undersized drums onto one
+    // order -- so `rawLayers[key]` may be a single id or an array of them.
+    // Existence-checked against the right pool model so a stale/tampered id
+    // can't leave a broken reference on the order, and dropped (left
+    // unallotted) if another order already claimed it.
     let allottedLayers = {};
     for (const key of required) {
       const meta = LAYER_META[key];
-      const stockId = rawLayers?.[key];
-      if (!stockId || !mongoose.isValidObjectId(stockId)) continue;
-      if (claimedKeySet.has(`${meta.pool}|${stockId}`)) continue;
+      const submitted = rawLayers?.[key];
+      const candidateIds = (Array.isArray(submitted) ? submitted : submitted ? [submitted] : [])
+        .filter((sid) => mongoose.isValidObjectId(sid))
+        .filter((sid) => !claimedKeySet.has(`${meta.pool}|${sid}`));
+      if (!candidateIds.length) continue;
       const { Model } = POOL_MODELS[meta.pool];
-      const exists = await Model.exists({ _id: stockId });
-      if (exists) allottedLayers[key] = { pool: meta.pool, stockId };
+      const existingIds = new Set((await Model.find({ _id: { $in: candidateIds } }).distinct("_id")).map(String));
+      const validIds = candidateIds.filter((sid) => existingIds.has(String(sid)));
+      if (validIds.length) allottedLayers[key] = { pool: meta.pool, stockIds: validIds.map(String) };
     }
 
     let deckleId = null;

@@ -9,7 +9,7 @@ import PendingProduction from "../../models/inventory/pendingProduction.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
-import { requiredLayersFor, reelMatchesLayer } from "../../utils/labelStockProduction.js";
+import { requiredLayersFor, reelMatchesLayer, pickStockIds } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
 const ROLL_ID_PREFIX = "FACESTOCK";
@@ -184,11 +184,13 @@ async function loadAllottedByKey(masters, stockByKey) {
   // The actual reels set aside on the assign form, batched across every order
   // in one query. Where an order names one, it beats any amount of spec
   // matching: the reel says which master row this order's mtrs belong to, and
-  // is what makes the roll count a real count rather than an estimate.
+  // is what makes the roll count a real count rather than an estimate. A
+  // layer can hold more than one picked reel now (Assign Production's
+  // pickers are checkboxes).
   const pickedIds = pending.flatMap((p) =>
     Object.values(p.allottedLayers || {})
-      .filter((pick) => pick?.pool === "facestock" && pick?.stockId)
-      .map((pick) => pick.stockId),
+      .filter((pick) => pick?.pool === "facestock")
+      .flatMap((pick) => pickStockIds(pick)),
   );
   const pickedReels = pickedIds.length
     ? await FacestockStock.find({ _id: { $in: pickedIds } }).lean()
@@ -207,10 +209,10 @@ async function loadAllottedByKey(masters, stockByKey) {
   // require the master's Size to be blank too, which no real master ever is,
   // and would silently drop the demand instead.
   //
-  // But an order only ever draws ONE reel, so its metres belong on one master
-  // row. Charging every match, as this used to, showed a single 1000 m order
-  // as 1000 m allotted against each of three CHROMO/GLOSSY specs differing
-  // only by Size -- 3000 m of demand that does not exist. Pick one instead:
+  // An order's metres (its own requirement) belong on one master row.
+  // Charging every match, as this used to, showed a single 1000 m order as
+  // 1000 m allotted against each of three CHROMO/GLOSSY specs differing only
+  // by Size -- 3000 m of demand that does not exist. Pick one instead:
   // preferably a candidate that actually holds stock (that's the one the
   // raw-stock picker will offer at Assign & Continue), and with none or
   // several stocked, the lowest skuId so the row it lands on is stable
@@ -223,18 +225,22 @@ async function loadAllottedByKey(masters, stockByKey) {
       .sort((a, b) => String(a.skuId || "").localeCompare(String(b.skuId || "")))[0];
   };
 
-  // `pick` is the reel this order actually set aside for the layer, when it
-  // has one. It settles both questions at once: which master row the mtrs
-  // belong to (exactly, no matching needed) and that one whole roll is
-  // committed. Only an order with no reel picked yet falls back to matching
+  // `pick` is the reel(s) this order actually set aside for the layer, when
+  // it has any -- Assign Production's checkboxes let a layer combine several
+  // undersized reels onto one order now, so there can be more than one. It
+  // settles both questions at once: which master row the mtrs belong to
+  // (exactly, no matching needed) and how many whole reels are committed.
+  // The order's own mtrs requirement is still charged just once (picking
+  // more reels for the same layer doesn't mean the order needs more
+  // material). Only an order with no reel picked yet falls back to matching
   // the recipe against the masters.
   const addDemand = (layer, mtrs, drawn, pick) => {
     if (!layer || !layer.facestockType || !mtrs) return;
-    const reel = pick?.pool === "facestock" && pick?.stockId ? reelById.get(String(pick.stockId)) : null;
+    const reels = pick?.pool === "facestock" ? pickStockIds(pick).map((sid) => reelById.get(sid)).filter(Boolean) : [];
 
     let specKey;
-    if (reel) {
-      specKey = facestockSpecKey(reel);
+    if (reels.length) {
+      specKey = facestockSpecKey(reels[0]);
     } else {
       const matches = masters.filter((m) => reelMatchesLayer("facestock", m, layer));
       if (!matches.length) return;
@@ -242,7 +248,7 @@ async function loadAllottedByKey(masters, stockByKey) {
     }
 
     allottedByKey.set(specKey, (allottedByKey.get(specKey) || 0) + mtrs);
-    if (reel) rollsByKey.set(specKey, (rollsByKey.get(specKey) || 0) + 1);
+    if (reels.length) rollsByKey.set(specKey, (rollsByKey.get(specKey) || 0) + reels.length);
     if (drawn) drawnByKey.set(specKey, (drawnByKey.get(specKey) || 0) + mtrs);
   };
 

@@ -15,7 +15,7 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { normalizeLocationName } from "../../utils/locations.js";
 import { normalizeRollId, extractScannedRollId } from "../../utils/rollId.js";
-import { requiredLayersFor, LAYER_META, POOL_MODELS } from "../../utils/labelStockProduction.js";
+import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
 
@@ -329,16 +329,16 @@ async function buildQueueRows(match) {
   const rollMap = new Map(rollDocs.map((r) => [String(r._id), r]));
 
   // Raw-material layer picks (Facestock/Adhesive/Release Liner, ...) recorded
-  // on the assign form -- kept as { pool, stockId } on each order (see
-  // models/inventory/pendingProduction.js's allottedLayers), so the queue
-  // always re-reads the live rollId/reelMtrs off the actual pool doc rather
-  // than trusting a snapshot. Batched per pool across every order in this
-  // match, same pattern as rollMap above.
+  // on the assign form -- kept as { pool, stockIds } on each order (see
+  // models/inventory/pendingProduction.js's allottedLayers, one or more
+  // reels per layer), so the queue always re-reads the live rollId/reelMtrs
+  // off the actual pool doc(s) rather than trusting a snapshot. Batched per
+  // pool across every order in this match, same pattern as rollMap above.
   const stockIdsByPool = {};
   for (const p of pending) {
     for (const pick of Object.values(p.allottedLayers || {})) {
-      if (!pick?.pool || !pick?.stockId) continue;
-      (stockIdsByPool[pick.pool] ||= []).push(pick.stockId);
+      if (!pick?.pool) continue;
+      (stockIdsByPool[pick.pool] ||= []).push(...pickStockIds(pick));
     }
   }
   const layerDocMaps = {};
@@ -385,22 +385,25 @@ async function buildQueueRows(match) {
     // recipe actually calls for (facestock/adhesive/releaseLiner, +2 more
     // for DOUBLE FACESTOCK/DOUBLE RELEASE), so "Facestock allotted, Adhesive
     // not" reads as its own line rather than collapsing into one Deckle
-    // count. `unallocated` distinguishes "picked, but the doc since got
-    // deleted/emptied" from "never picked" (dash link a rollId no longer
-    // reads garbage in either case) -- both count as not-allotted for
-    // display, but only a real pick shows a stockId.
+    // count. A layer can hold more than one picked reel (see pickStockIds),
+    // so `reels` is a list -- `allocated` is true once at least one of them
+    // still resolves to a real doc, which also silently drops any pick whose
+    // doc since got deleted/emptied rather than showing it as garbage.
     const layerAllotments = requiredLayersFor(item.rollType).map((key) => {
       const meta = LAYER_META[key];
       const pick = p.allottedLayers?.[key];
-      const doc = pick ? layerDocMaps[pick.pool]?.get(String(pick.stockId)) : null;
+      const reels = pick
+        ? pickStockIds(pick)
+            .map((sid) => layerDocMaps[pick.pool]?.get(sid))
+            .filter(Boolean)
+            .map((doc) => ({ rollId: doc.rollId || "", reelMtrs: Number(doc.reelMtrs) || 0, location: doc.location || "" }))
+        : [];
       return {
         key,
         label: meta.label,
         unit: meta.unit,
-        allocated: !!doc,
-        rollId: doc?.rollId || "",
-        reelMtrs: doc ? Number(doc.reelMtrs) || 0 : null,
-        location: doc?.location || "",
+        allocated: reels.length > 0,
+        reels,
       };
     });
 

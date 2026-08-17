@@ -9,7 +9,7 @@ import PendingProduction from "../../models/inventory/pendingProduction.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
-import { requiredLayersFor, reelMatchesLayer } from "../../utils/labelStockProduction.js";
+import { requiredLayersFor, reelMatchesLayer, pickStockIds } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
 const ROLL_ID_PREFIX = "RELEASE";
@@ -170,12 +170,13 @@ async function loadAllottedByKey(masters, stockByKey) {
 
   // The actual reels set aside on the assign form, batched in one query --
   // where an order names one it beats spec matching outright, and is what
-  // makes the roll count a real count. Same shape as Facestock Stock's own
-  // loadAllottedByKey.
+  // makes the roll count a real count. A layer can hold more than one
+  // picked reel now (Assign Production's pickers are checkboxes). Same
+  // shape as Facestock Stock's own loadAllottedByKey.
   const pickedIds = pending.flatMap((p) =>
     Object.values(p.allottedLayers || {})
-      .filter((pick) => pick?.pool === "release" && pick?.stockId)
-      .map((pick) => pick.stockId),
+      .filter((pick) => pick?.pool === "release")
+      .flatMap((pick) => pickStockIds(pick)),
   );
   const pickedReels = pickedIds.length
     ? await ReleaseLinerStock.find({ _id: { $in: pickedIds } }).lean()
@@ -195,13 +196,13 @@ async function loadAllottedByKey(masters, stockByKey) {
   // be blank too, which no real master ever is, and would silently drop the
   // demand instead.
   //
-  // But an order only ever draws ONE reel, so its metres belong on one master
-  // row -- charging every match inflates the column by the number of
-  // candidates. Pick one instead: preferably a candidate that actually holds
-  // stock (that's the one the raw-stock picker will offer at Assign &
-  // Continue), and with none or several stocked, the lowest skuId so the row
-  // it lands on is stable between requests. Same rule as Facestock Stock's
-  // own loadAllottedByKey (routes/stock/facestockStock.js).
+  // An order's metres (its own requirement) belong on one master row --
+  // charging every match inflates the column by the number of candidates.
+  // Pick one instead: preferably a candidate that actually holds stock
+  // (that's the one the raw-stock picker will offer at Assign & Continue),
+  // and with none or several stocked, the lowest skuId so the row it lands
+  // on is stable between requests. Same rule as Facestock Stock's own
+  // loadAllottedByKey (routes/stock/facestockStock.js).
   const pickDemandTarget = (matches) => {
     const stocked = matches.filter((m) => (stockByKey.get(releaseSpecKey(m)) || 0) > 0);
     const pool = stocked.length ? stocked : matches;
@@ -210,13 +211,17 @@ async function loadAllottedByKey(masters, stockByKey) {
       .sort((a, b) => String(a.skuId || "").localeCompare(String(b.skuId || "")))[0];
   };
 
+  // `pick` can now name more than one reel (Assign Production's checkboxes
+  // let a layer combine several undersized reels onto one order) -- the
+  // order's own mtrs requirement is still just charged once, but every
+  // picked reel counts toward rollsByKey.
   const addDemand = (layer, mtrs, drawn, pick) => {
     if (!layer || !layer.releaseLinerType || !mtrs) return;
-    const reel = pick?.pool === "release" && pick?.stockId ? reelById.get(String(pick.stockId)) : null;
+    const reels = pick?.pool === "release" ? pickStockIds(pick).map((sid) => reelById.get(sid)).filter(Boolean) : [];
 
     let specKey;
-    if (reel) {
-      specKey = releaseSpecKey(reel);
+    if (reels.length) {
+      specKey = releaseSpecKey(reels[0]);
     } else {
       const matches = masters.filter((m) => reelMatchesLayer("release", m, layer));
       if (!matches.length) return;
@@ -224,7 +229,7 @@ async function loadAllottedByKey(masters, stockByKey) {
     }
 
     allottedByKey.set(specKey, (allottedByKey.get(specKey) || 0) + mtrs);
-    if (reel) rollsByKey.set(specKey, (rollsByKey.get(specKey) || 0) + 1);
+    if (reels.length) rollsByKey.set(specKey, (rollsByKey.get(specKey) || 0) + reels.length);
     if (drawn) drawnByKey.set(specKey, (drawnByKey.get(specKey) || 0) + mtrs);
   };
 

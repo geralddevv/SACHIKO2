@@ -104,7 +104,7 @@ for (const p of rows) {
       unresolved = true;
       break;
     }
-    allottedLayers[layerKey] = { pool: meta.pool, stockId: String(doc._id) };
+    allottedLayers[layerKey] = { pool: meta.pool, stockIds: [String(doc._id)] };
   }
 
   if (unresolved) {
@@ -114,7 +114,7 @@ for (const p of rows) {
   }
 
   console.log(`BACKFILL ${label}`);
-  console.log(`           -> ${Object.entries(allottedLayers).map(([k, v]) => `${k}: ${v.stockId}`).join(", ")}`);
+  console.log(`           -> ${Object.entries(allottedLayers).map(([k, v]) => `${k}: ${v.stockIds.join("+")}`).join(", ")}`);
 
   if (APPLY) {
     await PendingProduction.updateOne({ _id: p._id }, { $set: { allottedLayers } });

@@ -114,6 +114,21 @@ export function reelMatchesLayer(pool, reel, layer) {
   return true;
 }
 
+// PendingProduction.allottedLayers[key] is `{ pool, stockIds: [...] }` --
+// Assign Production's raw-material pickers are checkboxes (assignProduction.ejs),
+// so a layer can now hold more than one reel picked at once (e.g. combining
+// two undersized drums to cover one order, since nothing gets laminated from
+// this page anymore -- see the POST handler's dead rawProduceMtrs branch).
+// Orders assigned before that changed still have the old singular
+// `{ pool, stockId }` shape saved -- normalizing through this helper
+// everywhere `allottedLayers` gets read is what keeps both shapes working
+// without a data migration.
+export function pickStockIds(pick) {
+  if (!pick) return [];
+  if (Array.isArray(pick.stockIds)) return pick.stockIds.filter(Boolean).map(String);
+  return pick.stockId ? [String(pick.stockId)] : [];
+}
+
 const round2 = (n) => Math.round(Number(n) * 100) / 100;
 
 const numOrUndef = (value) => {

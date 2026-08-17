@@ -221,21 +221,12 @@
     .roll-table tbody tr.roll-locked td { color: #94a3b8; }
     .roll-table tbody tr.roll-locked input[type="checkbox"] { cursor: not-allowed; }
 
-    /* ---- Produce New Deckle -- one inline column per raw-material layer,
-       styled like .roll-table above. NORMAL needs 3 (Facestock/Adhesive/
-       Release Liner); DOUBLE RELEASE and DOUBLE FACESTOCK need 5 -- the grid
-       is auto-fit rather than a fixed 3 columns so those extra columns just
-       wrap onto a second row instead of needing their own layout. ---- */
-    /* .raw-produce-row sits on .form-subheading's own dark-blue bar --
-       text here needs to read on that background, not on white. */
-    .raw-mtrs-field {
-      display: flex; flex-direction: row; align-items: center; gap: 10px;
-    }
-    .raw-mtrs-field label {
-      font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
-      color: rgba(255, 255, 255, 0.8);
-    }
-    .raw-mtrs-field input { width: 100px; font-weight: 700; color: #03365a; padding: 4px 8px !important; }
+    /* ---- Raw Material Allotment -- one inline column per raw-material
+       layer, styled like .roll-table above. NORMAL needs 3 (Facestock/
+       Adhesive/Release Liner); DOUBLE RELEASE and DOUBLE FACESTOCK need 5 --
+       the grid is auto-fit rather than a fixed 3 columns so those extra
+       columns just wrap onto a second row instead of needing their own
+       layout. ---- */
     #rawLayersGrid {
       grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px;
     }
@@ -362,22 +353,20 @@
     </div>
 
 
-    <!-- ============ PRODUCE NEW DECKLE ============
-         Allocates one reel of each raw-material layer this item's recipe
-         calls for (Facestock/Adhesive/Release Liner -- +2 more layers for
-         DOUBLE FACESTOCK/DOUBLE RELEASE, see
-         models/sachiko/sachikoLabelStock.js) and laminates them into a new
-         finished reel -- a Deckle -- right here, as part of this same
-         Assign & Continue submit (produceDeckle() in
-         utils/labelStockProduction.js, called from the POST handler once
-         the machine, and so its location, is known). Select a machine
-         first -- these columns are scoped to its location. -->
+    <!-- ============ RAW MATERIAL ALLOTMENT ============
+         Lets a reel of each raw-material layer this item's recipe calls for
+         (Facestock/Adhesive/Release Liner -- +2 more layers for DOUBLE
+         FACESTOCK/DOUBLE RELEASE, see models/sachiko/sachikoLabelStock.js)
+         be picked and reserved to this order (allottedLayers, via this same
+         Assign & Continue submit). Select a machine first -- these columns
+         are scoped to its location.
+         No Kg-to-produce quantity is taken here for now -- reel picks are
+         just recorded as allotted; producing an actual Deckle from them is a
+         separate step, not part of this submit (the POST handler in
+         fairdesk_route.js only calls produceDeckle() when rawProduceMtrs is
+         submitted > 0, which nothing on this page does anymore). -->
     <div class="span-full form-subheading raw-produce-row" style="grid-column: 1 / -1; margin: 10px 0 0; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 18px;">
-      <h1>Produce New Deckle</h1>
-      <div class="raw-mtrs-field">
-        <label for="rawMtrsInput">Kg to Produce</label>
-        <input type="number" id="rawMtrsInput" name="rawProduceMtrs" class="form-control premium-input" min="0" step="any" value="0" />
-      </div>
+      <h1>Raw Material Allotment</h1>
     </div>
     <div id="rawLayersGrid"></div>
 
@@ -385,29 +374,6 @@
       <button type="button" id="assignSubmitBtn" class="ap-submit-btn">Assign &amp; Continue</button>
     </div>
   </form>
-
-  <!-- Confirmation for submitting with raw-material layers left unallocated
-       -- reuses boilerplate.ejs's .logout-modal/.logout-dialog pattern so it
-       looks/behaves like every other confirm dialog in the app. Only raised
-       when Mtrs to Produce > 0 but not every required layer has a reel
-       picked, since that's the case the server (fairdesk_route.js's POST
-       handler) silently skips producing the Deckle for -- the goal is to
-       make sure that's a deliberate choice, not a missed row. -->
-  <div class="logout-modal" id="unallocatedModal" aria-hidden="true">
-    <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="unallocatedTitle">
-      <h2 class="logout-title" id="unallocatedTitle">Some layers aren't allocated</h2>
-      <p class="logout-text">
-        No reel is selected for: <strong id="unallocatedList"></strong>.
-        The order will still be assigned to the machine, but no new Deckle will be
-        produced -- it'll sit on the queue as short-allotted until you come back
-        and top it up. Continue anyway?
-      </p>
-      <div class="logout-actions">
-        <button class="logout-btn" type="button" id="unallocatedCancel">Cancel</button>
-        <button class="logout-btn primary" type="button" id="unallocatedConfirm">Assign Anyway</button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <script id="all-machines-data" type="application/json"><%- safeJson(allMachines) %></script>
@@ -454,11 +420,6 @@
       "value", "label", true,
     );
 
-    // Running metres this job needs -- also the default for "Mtrs to
-    // Produce" further down, since producing a fresh Deckle is now the only
-    // way this page allocates material to a job (see "Produce New Deckle").
-    const REQUIRED_METERS = <%- JSON.stringify(Number(pp.runningMeters) || 0) %>;
-
     // What this order already had assigned, so re-opening it to edit shows
     // the previous machine/operator/helper instead of a blank form.
     const ASSIGNED = <%- safeJson({
@@ -471,14 +432,16 @@
     if (ASSIGNED.operatorId) operatorChoices.setChoiceByValue(String(ASSIGNED.operatorId));
     if (ASSIGNED.helperId) helperChoices.setChoiceByValue(String(ASSIGNED.helperId));
 
-    // ---- Produce New Deckle ----
+    // ---- Raw Material Allotment ----
     // One inline column per raw-material layer this item's recipe calls
     // for -- Facestock/Adhesive/Release Liner reel picks travel straight in
-    // the main form (radio inputs named rawLayers[<key>]) and are laminated
-    // into a new Deckle server-side, as part of this same Assign & Continue
-    // submit (produceDeckle() in utils/labelStockProduction.js). Columns are
-    // scoped to the selected machine's own location, so nothing here is
-    // choosable until a machine is picked.
+    // the main form (checkbox inputs named rawLayers[<key>]; a layer can
+    // have more than one checked at once, e.g. combining two undersized
+    // reels onto one order) and are recorded server-side as allottedLayers,
+    // as part of this same Assign & Continue submit -- no Deckle gets
+    // laminated from this page for now (see the doc comment above
+    // #rawLayersGrid). Columns are scoped to the selected machine's own
+    // location, so nothing here is choosable until a machine is picked.
     //
     // LAYER_ORDER / LAYER_META mirror the server copy in
     // utils/labelStockProduction.js (and labelStockForm.ejs's
@@ -505,8 +468,8 @@
     // models/inventory/pendingProduction.js's allottedLayers) -- so
     // re-opening a partially-allocated order to top up one layer doesn't
     // silently drop what was already picked for the others. Only used as a
-    // fallback default the first time a layer renders; once the radio group
-    // exists in the DOM, renderLayerRows() carries the live DOM selection
+    // fallback default the first time a layer renders; once the checkbox
+    // group exists in the DOM, renderLayerRows() carries the live DOM selection
     // forward instead (see previouslyChecked below), same as any other pick.
     const ALLOTTED_LAYERS = JSON.parse(document.getElementById("allotted-layers-data").textContent) || {};
     const ORDER_ID = JSON.parse(document.getElementById("order-id-data").textContent);
@@ -553,8 +516,9 @@
     function reelDetail(layerKey, r) {
       const bits = [];
       if (layerKey.startsWith("facestock")) {
+        // Size has its own column for facestock reels (see layerColumnHtml/
+        // renderLayerRows) -- not repeated here.
         if (r.vendorName) bits.push(r.vendorName);
-        if (r.size) bits.push(`Size ${r.size}`);
       } else if (layerKey.startsWith("adhesive")) {
         if (r.vendorName) bits.push(r.vendorName);
         if (r.shelfLife) bits.push(`Shelf Life ${r.shelfLife}`);
@@ -570,56 +534,82 @@
       return bits.join(" · ") || "—";
     }
 
+    // Facestock reels get a dedicated Size column (produceDeckle doesn't
+    // match on it -- POOL_MATCH_FIELDS leaves Size out on purpose, see
+    // utils/labelStockProduction.js -- so it's the one field that can
+    // legitimately differ between two otherwise-identical facestock reels
+    // and is worth its own column rather than living inside the truncated
+    // Details cell). Adhesive/Release Liner stay the plain 3 columns.
+    function layerHasSizeColumn(layerKey) {
+      return LAYER_META[layerKey].pool === "facestock";
+    }
+    function layerColCount(layerKey) {
+      return layerHasSizeColumn(layerKey) ? 4 : 3;
+    }
+
     function layerColumnHtml(layerKey, meta) {
+      const sizeHeader = layerHasSizeColumn(layerKey) ? "<th>Size</th>" : "";
       return `
         <div class="raw-layer-col" data-layer="${layerKey}">
           <div class="raw-layer-title">${meta.label}</div>
           <div class="raw-layer-spec">${specSummary(ITEM[meta.specField], layerKey)}</div>
           <div class="ap-table-wrap"><table class="ap-table roll-table raw-layer-table">
-            <thead><tr><th class="roll-check-cell"></th><th>Details</th><th>Kg</th></tr></thead>
-            <tbody data-body="${layerKey}"><tr><td colspan="3" style="color:#94a3b8; font-style:italic;">Select a machine first</td></tr></tbody>
+            <thead><tr><th class="roll-check-cell"></th><th>Details</th>${sizeHeader}<th>Kg</th></tr></thead>
+            <tbody data-body="${layerKey}"><tr><td colspan="${layerColCount(layerKey)}" style="color:#94a3b8; font-style:italic;">Select a machine first</td></tr></tbody>
           </table></div>
         </div>`;
     }
 
-    // Renders (or re-renders) one layer column's rows from its cached reels,
-    // disabling any reel too short for the current Mtrs to Produce -- doesn't
-    // refetch, so typing in the Mtrs field doesn't hit the server on every
-    // keystroke. layerReelsCache[key] is `null` until a location has
-    // actually been fetched for it (distinct from `[]`, fetched-but-empty),
-    // so re-renders before a machine is picked don't claim "no reels" when
-    // really nothing has been looked up yet.
+    // Renders (or re-renders) one layer column's rows from its cached reels.
+    // Every reel is always selectable -- no quantity gates this anymore (no
+    // "Kg to Produce" field: this page only records which reels are allotted
+    // to the order, it doesn't laminate a Deckle -- see the doc comment above
+    // #rawLayersGrid). Doesn't refetch, so re-renders don't hit the server.
+    // layerReelsCache[key] is `null` until a location has actually been
+    // fetched for it (distinct from `[]`, fetched-but-empty), so re-renders
+    // before a machine is picked don't claim "no reels" when really nothing
+    // has been looked up yet.
     function renderLayerRows(layerKey) {
       const tbody = document.querySelector(`#rawLayersGrid tbody[data-body="${layerKey}"]`);
       if (!tbody) return;
       const reels = layerReelsCache[layerKey];
-      const needed = Number(document.getElementById("rawMtrsInput").value) || 0;
-      // Rebuilding the tbody below replaces every radio, which would
-      // otherwise silently drop whatever was picked -- carry the current
-      // pick forward as long as it's still a valid (not now-too-short) reel.
+      // Rebuilding the tbody below replaces every checkbox, which would
+      // otherwise silently drop whatever was picked -- carry every
+      // currently-checked id forward (a layer can hold more than one picked
+      // reel at once, e.g. combining two undersized drums onto one order).
       // Before anything's been checked yet (this layer's first render since
-      // page load), fall back to whatever was already allotted server-side.
-      const previouslyChecked =
-        tbody.querySelector("input[type='radio']:checked")?.value ||
-        ALLOTTED_LAYERS[layerKey]?.stockId ||
-        "";
+      // page load), fall back to whatever was already allotted server-side
+      // -- reads both the current `stockIds` array shape and the legacy
+      // single `stockId` shape orders assigned before this changed still
+      // have saved (see utils/labelStockProduction.js's pickStockIds).
+      const checkedNow = Array.from(tbody.querySelectorAll("input[type='checkbox']:checked")).map((el) => el.value);
+      const allotted = ALLOTTED_LAYERS[layerKey];
+      const previouslyChecked = new Set(
+        checkedNow.length ? checkedNow : allotted?.stockIds || (allotted?.stockId ? [allotted.stockId] : []),
+      );
 
       if (!reels) {
-        tbody.innerHTML = `<tr><td colspan="3" style="color:#94a3b8; font-style:italic;">Select a machine first</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${layerColCount(layerKey)}" style="color:#94a3b8; font-style:italic;">Select a machine first</td></tr>`;
         return;
       }
       if (!reels.length) {
-        tbody.innerHTML = `<tr><td colspan="3" style="color:#94a3b8; font-style:italic;">No reels in stock at this location</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${layerColCount(layerKey)}" style="color:#94a3b8; font-style:italic;">No reels in stock at this location</td></tr>`;
         return;
       }
 
+      const sizeColumn = layerHasSizeColumn(layerKey);
+
+      // Checkboxes -- a layer can hold more than one picked reel at once,
+      // so every row is independently selectable with no single-select
+      // enforcement (unlike a native radio group).
       tbody.innerHTML = reels.map((r) => {
-        const short = needed > 0 && r.reelMtrs < needed;
-        const checked = !short && r._id === previouslyChecked;
+        const checked = previouslyChecked.has(r._id);
         const detail = reelDetail(layerKey, r);
-        return `<tr class="${short ? "roll-locked" : ""}">` +
-          `<td class="roll-check-cell"><input type="radio" name="rawLayers[${layerKey}]" value="${r._id}"${short ? " disabled" : ""}${checked ? " checked" : ""} /></td>` +
+        const sizeCell = sizeColumn ? `<td>${r.size || "—"}</td>` : "";
+        return `<tr>` +
+          `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"${checked ? " checked" : ""} /></td>` +
           `<td class="raw-layer-detail-cell" title="${r.rollId} -- ${detail}">${detail}</td>` +
+          sizeCell +
           `<td>${r.reelMtrs}</td>` +
         `</tr>`;
       }).join("");
@@ -639,7 +629,7 @@
       }
       if (!type) {
         layerReelsCache[layerKey] = [];
-        tbody.innerHTML = `<tr><td colspan="3" style="color:#ef4444;">Spec incomplete on this SKU</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${layerColCount(layerKey)}" style="color:#ef4444;">Spec incomplete on this SKU</td></tr>`;
         return;
       }
 
@@ -663,21 +653,19 @@
       requiredLayerKeys().forEach((key) => refreshLayerOptions(key, location));
     }
 
-    // Radio rows are click-to-select on the whole row, matching the Rolls
-    // table above.
+    // Checkbox rows are click-to-select on the whole row, matching the Rolls
+    // table above. Each layer can hold more than one reel checked at once --
+    // there's no single-select enforcement -- so this just toggles whichever
+    // row was clicked, same as clicking its checkbox directly.
     document.getElementById("rawLayersGrid").addEventListener("click", (e) => {
-      if (e.target.closest("input[type='radio']")) return;
+      if (e.target.closest("input[type='checkbox']")) return; // browser toggles it natively
       const row = e.target.closest(".raw-layer-table tbody tr");
-      const radio = row?.querySelector("input[type='radio']");
-      if (radio && !radio.disabled) radio.checked = true;
-    });
-
-    document.getElementById("rawMtrsInput").addEventListener("input", () => {
-      requiredLayerKeys().forEach((key) => renderLayerRows(key));
+      const checkbox = row?.querySelector("input[type='checkbox']");
+      if (checkbox) checkbox.checked = !checkbox.checked;
     });
 
     // Build the columns once -- they don't change shape after load, only
-    // their reel options do, as the machine/mtrs change.
+    // their reel options do, as the machine changes.
     document.getElementById("rawLayersGrid").innerHTML =
       requiredLayerKeys().map((key) => layerColumnHtml(key, LAYER_META[key])).join("");
 
@@ -688,68 +676,12 @@
     // so run this once unconditionally rather than depending on that.
     refreshAllLayerOptions();
 
-    // Defaults "Mtrs to Produce" to the job's Required mtrs -- producing a
-    // fresh Deckle is the only way this page allocates material to a job,
-    // so there's nothing else to net it against.
-    const rawMtrsInput = document.getElementById("rawMtrsInput");
-    rawMtrsInput.value = REQUIRED_METERS || "";
-    requiredLayerKeys().forEach((key) => renderLayerRows(key));
-
-    // Missing/short raw-material picks don't block the assignment
-    // server-side (see the POST handler in fairdesk_route.js): it just skips
-    // producing a Deckle and flashes a notice, and the order still lands on
-    // the machine queue as a "short allotted" row (see machineQueue.ejs's
-    // rollsStatus) to be topped up later by re-opening this same page once
-    // material is available. That's a legitimate thing to do deliberately,
-    // but easy to do by accident -- so confirm before submitting whenever
-    // Mtrs to Produce is set but not every required layer has a reel picked.
-    //
-    // This gate has to live on the button's click, not the form's "submit"
-    // event: boilerplate.ejs loads BTStrap.js on every page, which attaches
-    // its own "submit" listener to every .needs-validation form (this one
-    // included) that fires its own fetch()-based AJAX submission -- a second
-    // listener here calling preventDefault() doesn't stop that one from
-    // still running and submitting. Keeping the button type="button" means
-    // nothing dispatches "submit" at all until we're ready, so BTStrap's
-    // handler only ever runs once, on the real (confirmed) submit.
+    // Submits straight away -- no Kg-to-produce quantity or "some layers
+    // unallocated" gate anymore, since this page only records which reels
+    // are allotted (see the doc comment above #rawLayersGrid); a partial
+    // pick, or none at all, is always a fine thing to submit.
     const assignForm = document.getElementById("assign-form");
     const assignSubmitBtn = document.getElementById("assignSubmitBtn");
-    const unallocatedModal = document.getElementById("unallocatedModal");
-    const unallocatedList = document.getElementById("unallocatedList");
-    const unallocatedCancel = document.getElementById("unallocatedCancel");
-    const unallocatedConfirm = document.getElementById("unallocatedConfirm");
-
-    function missingLayerLabels() {
-      const mtrs = Number(rawMtrsInput.value) || 0;
-      if (mtrs <= 0) return [];
-      return requiredLayerKeys()
-        .filter((key) => !document.querySelector(`input[name="rawLayers[${key}]"]:checked`))
-        .map((key) => LAYER_META[key].label);
-    }
-
-    function closeUnallocatedModal() {
-      unallocatedModal.classList.remove("show");
-      unallocatedModal.setAttribute("aria-hidden", "true");
-    }
-
-    assignSubmitBtn.addEventListener("click", () => {
-      const missing = missingLayerLabels();
-      if (!missing.length) {
-        assignForm.requestSubmit();
-        return;
-      }
-      unallocatedList.textContent = missing.join(", ");
-      unallocatedModal.classList.add("show");
-      unallocatedModal.setAttribute("aria-hidden", "false");
-    });
-
-    unallocatedCancel.addEventListener("click", closeUnallocatedModal);
-    unallocatedModal.addEventListener("click", (e) => {
-      if (e.target === unallocatedModal) closeUnallocatedModal();
-    });
-    unallocatedConfirm.addEventListener("click", () => {
-      closeUnallocatedModal();
-      assignForm.requestSubmit();
-    });
+    assignSubmitBtn.addEventListener("click", () => assignForm.requestSubmit());
   });
 </script>

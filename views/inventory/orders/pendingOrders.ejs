@@ -96,10 +96,23 @@
   const orderData = JSON.parse(document.getElementById("order-data").textContent);
   const enrichedOrderData = orderData.map((row) => {
     const rate = Number(row.orderRate) || 0;
-    const balance = Math.max((Number(row.quantity) || 0) - (Number(row.dispatchedQuantity) || 0), 0);
+    const noOfRolls = Number(row.noOfRolls) || 0;
+
+    let width = 0;
+    let mtrs = 0;
+    if (row.onModel === "Tape") {
+      width = Number(row.tapeId?.tapeWidth) || 0;
+      mtrs = Number(row.tapeId?.tapeMtrs) || 0;
+    } else if (row.onModel === "SachikoLabelStock") {
+      width = Number(row.paperSize) || 0;
+      mtrs = Number(row.runningMeters) || 0;
+    }
+
+    const valueAmount = (width * mtrs / 1000 * noOfRolls * rate) || 0;
+
     return {
       ...row,
-      valueAmount: balance * rate,
+      valueAmount,
     };
   });
 
@@ -216,7 +229,7 @@
       if (tape.tapeProductId) return String(tape.tapeProductId);
     }
     if (row.onModel === "SachikoLabelStock") {
-      if (tape.productCode) return `${tape.productCode} (${tape.skuCode || ""})`;
+      if (tape.productCode) return tape.productCode;
     }
     return "Unknown Item";
   }
@@ -577,19 +590,7 @@
       },
       { title: "User", field: "userId.userName", width: 150, headerFilter: "input", headerFilterPlaceholder: "Search" },
       {
-        title: "Item Type",
-        field: "onModel",
-        width: 100,
-        headerFilter: "input",
-        headerFilterPlaceholder: "Search",
-        formatter: (cell) => {
-          const val = cell.getValue();
-          if (val === "SachikoLabelStock") return "Label Stock";
-          return "Tape";
-        },
-      },
-      {
-        title: "Item Details",
+        title: "Prod Code",
         field: "tapeId",
         width: 200,
         headerFilter: "input",
@@ -605,24 +606,6 @@
           return `<span style="color:#044A78; font-weight:600; display:block;">
                     ${name}
                   </span>`;
-        },
-      },
-      {
-        title: "GSM/Micron",
-        field: "tapeId",
-        hozAlign: "center",
-        width: 100,
-        headerFilter: "input",
-        headerFilterPlaceholder: "Search",
-        headerFilterFunc: (headerValue, rowValue, rowData, filterParams) => {
-          const gsm = getItemGsm(rowData);
-          return String(gsm).toLowerCase().includes(String(headerValue).toLowerCase());
-        },
-        // Column shares its `field` with "Item Details"/"Width" (all read tapeId).
-        sorter: (a, b, aRow, bRow) => (Number(getItemGsm(aRow.getData())) || 0) - (Number(getItemGsm(bRow.getData())) || 0),
-        formatter: (cell) => {
-          const gsm = getItemGsm(cell.getRow().getData());
-          return gsm !== "" && gsm != null ? String(gsm) : "-";
         },
       },
       {

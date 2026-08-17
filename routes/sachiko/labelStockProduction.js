@@ -2,7 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import PendingProduction from "../../models/inventory/pendingProduction.js";
-import { POOL_MODELS, LAYER_META, reelMatchesLayer } from "../../utils/labelStockProduction.js";
+import { POOL_MODELS, LAYER_META, reelMatchesLayer, pickStockIds } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
 
@@ -52,8 +52,8 @@ router.get("/raw-stock", async (req, res) => {
     const claimedIds = new Set(
       otherPendingLayers.flatMap((p) =>
         Object.values(p.allottedLayers || {})
-          .filter((pick) => pick?.pool === meta.pool && pick?.stockId)
-          .map((pick) => String(pick.stockId)),
+          .filter((pick) => pick?.pool === meta.pool)
+          .flatMap((pick) => pickStockIds(pick)),
       ),
     );
 

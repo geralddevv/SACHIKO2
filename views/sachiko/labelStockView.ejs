@@ -333,7 +333,12 @@
       }
     },
     columns: [
-      { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false },
+      { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false,
+        // Leaf rows (a variant nested under its base Product Code) get no
+        // expand/collapse control of their own from Tabulator's dataTree --
+        // show the same "↳" marker facestockStock.ejs uses there instead, so
+        // it lands in the toggle column itself rather than the data column.
+        formatter: (cell) => (cell.getRow().getTreeParent && cell.getRow().getTreeParent() ? "↳" : "") },
       {
         title: "Actions",
         hozAlign: "center",

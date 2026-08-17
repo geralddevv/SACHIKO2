@@ -269,9 +269,12 @@
     // One line per raw-material layer this item's recipe calls for --
     // Facestock/Release Liner are rolls, Adhesive is a drum (row.unit names
     // whichever it actually is, see LAYER_META in utils/labelStockProduction.js).
-    // Only allocated layers show a Roll/Drum ID; anything not yet picked
-    // reads "Not Allotted" instead of a blank cell, so a partial pick (e.g.
-    // Facestock done, Adhesive still open) is unambiguous.
+    // A layer can hold more than one picked reel now (Assign Production's
+    // pickers are checkboxes -- combining two undersized reels onto one
+    // order is the whole point), so Qty/ID summarize across l.reels instead
+    // of assuming exactly one. Anything not yet picked reads "Not Allotted"
+    // instead of a blank cell, so a partial pick (e.g. Facestock done,
+    // Adhesive still open) is unambiguous.
     const layersHtml = layers.length
       ? `<table class="rd-table">` +
         `<thead><tr><th>Layer</th><th>Status</th><th>Qty</th><th>ID</th></tr></thead>` +
@@ -279,12 +282,16 @@
           const statusHtml = l.allocated
             ? `<span style="color:#16a34a;">Allotted</span>`
             : `<span style="color:#dc2626;">Not Allotted</span>`;
-          const qty = l.allocated ? `1 ${escapeHtml(l.unit)}${l.reelMtrs != null ? ` (${escapeHtml(l.reelMtrs)} m)` : ""}` : "—";
+          const totalMtrs = l.reels.reduce((sum, r) => sum + (r.reelMtrs || 0), 0);
+          const qty = l.allocated
+            ? `${l.reels.length} ${escapeHtml(l.unit)}${l.reels.length === 1 ? "" : "s"} (${escapeHtml(totalMtrs)} m)`
+            : "—";
+          const ids = l.allocated ? l.reels.map((r) => escapeHtml(dash(r.rollId))).join(", ") : "—";
           return `<tr>` +
             `<td>${escapeHtml(l.label)}</td>` +
             `<td>${statusHtml}</td>` +
             `<td>${qty}</td>` +
-            `<td>${l.allocated ? escapeHtml(dash(l.rollId)) : "—"}</td>` +
+            `<td>${ids}</td>` +
           `</tr>`;
         }).join("") + `</tbody></table>`
       : `<div class="ap-notice"><i class="fa-solid fa-circle-info"></i> ` +
