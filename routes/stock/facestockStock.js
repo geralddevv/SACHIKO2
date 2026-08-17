@@ -430,6 +430,13 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     const header = await buildHeaderPayload(req.body);
     const headerError = validateHeaderPayload(header);
     if (headerError) return res.status(400).json({ success: false, message: headerError });
+    // Every inward field is mandatory except Invoice No/Remarks (see
+    // buildHeaderPayload/validateHeaderPayload) -- Rate specifically, since
+    // it's optional on the schema and on the single-reel Edit dialog, is only
+    // enforced here at batch-create time.
+    if (!header.rate || header.rate <= 0) {
+      return res.status(400).json({ success: false, message: "Rate is required." });
+    }
 
     const rawRolls = Array.isArray(req.body.rolls) ? req.body.rolls : [];
     if (!rawRolls.length) return res.status(400).json({ success: false, message: "At least one roll is required." });
@@ -441,6 +448,10 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     const invalidIndex = rolls.findIndex((r) => !r.reelMtrs || r.reelMtrs <= 0);
     if (invalidIndex !== -1) {
       return res.status(400).json({ success: false, message: `Kg is required for roll ${invalidIndex + 1}.` });
+    }
+    const missingVendorRollIdIndex = rolls.findIndex((r) => !r.vendorRollId);
+    if (missingVendorRollIdIndex !== -1) {
+      return res.status(400).json({ success: false, message: `Vendor Roll ID is required for roll ${missingVendorRollIdIndex + 1}.` });
     }
 
     const locationExists = await Location.exists({ locationName: header.location });

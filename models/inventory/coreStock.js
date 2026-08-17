@@ -39,8 +39,12 @@ const coreStockSchema = new mongoose.Schema(
     thickness: {
       type: Number,
     },
-    // Width in inches.
-    width: {
+    // OD (Outer Diameter) in inches.
+    od: {
+      type: Number,
+    },
+    // Length in inches.
+    length: {
       type: Number,
     },
     location: {

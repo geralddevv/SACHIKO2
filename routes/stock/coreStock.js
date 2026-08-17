@@ -21,7 +21,7 @@ const numOrUndef = (value) => {
 
 // Fields shared by every lot in one inward batch (one spec, one invoice) --
 // every field Core Master itself carries (type/vendor/make/printType/
-// thickness/width), plus this batch's own location/rate/invoice.
+// thickness/od/length), plus this batch's own location/rate/invoice.
 async function buildHeaderPayload(body) {
   const vendorId = String(body.vendorId || "").trim();
   const header = {
@@ -30,7 +30,8 @@ async function buildHeaderPayload(body) {
     make: String(body.make || "").trim(),
     printType: String(body.printType || "").trim(),
     thickness: numOrUndef(body.thickness),
-    width: numOrUndef(body.width),
+    od: numOrUndef(body.od),
+    length: numOrUndef(body.length),
     location: String(body.location || "").trim(),
     rate: numOrUndef(body.rate),
     invoiceNo: String(body.invoiceNo || "").trim(),
@@ -103,7 +104,7 @@ async function distinctVendorPairs(filter) {
 }
 
 // Single source of truth for the Add dialog's Type/Vendor/Make/Print Type/
-// Thickness/Width pickers -- every field Core Master itself carries, sourced
+// Thickness/OD/Length pickers -- every field Core Master itself carries, sourced
 // from it instead of a hardcoded list or free typing, so inward entry only
 // ever selects a real cataloged spec. Used both for the initial page load
 // (`filter: {}`) and /filter-specs (each field narrowed by every OTHER
@@ -111,13 +112,14 @@ async function distinctVendorPairs(filter) {
 // removes itself from its own list). Same "narrow as you pick" pattern as
 // Tape Stock inward and Facestock Stock inward.
 async function loadSpecOptions(filter) {
-  const [types, vendors, makes, printTypes, thicknesses, widths] = await Promise.all([
+  const [types, vendors, makes, printTypes, thicknesses, ods, lengths] = await Promise.all([
     CoreMaster.distinct("type", omit(filter, "type")),
     distinctVendorPairs(omit(filter, "vendorId")),
     CoreMaster.distinct("make", omit(filter, "make")),
     CoreMaster.distinct("printType", omit(filter, "printType")),
     CoreMaster.distinct("thickness", omit(filter, "thickness")),
-    CoreMaster.distinct("width", omit(filter, "width")),
+    CoreMaster.distinct("od", omit(filter, "od")),
+    CoreMaster.distinct("length", omit(filter, "length")),
   ]);
   return {
     types: cleanDistinct(types),
@@ -125,7 +127,8 @@ async function loadSpecOptions(filter) {
     makes: cleanDistinct(makes),
     printTypes: cleanDistinct(printTypes),
     thicknesses: cleanDistinct(thicknesses, { numeric: true }),
-    widths: cleanDistinct(widths, { numeric: true }),
+    ods: cleanDistinct(ods, { numeric: true }),
+    lengths: cleanDistinct(lengths, { numeric: true }),
   };
 }
 
@@ -138,7 +141,7 @@ async function loadSpecOptions(filter) {
 function coreSpecKey(o) {
   const s = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
   const n = (v) => (v === undefined || v === null || v === "" ? "" : String(Number(v)));
-  return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.printType), n(o.thickness), n(o.width)].join("||");
+  return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.printType), n(o.thickness), n(o.od), n(o.length)].join("||");
 }
 
 // Reorder view for the Masters panel -- current stock (total pieces still in
@@ -264,14 +267,15 @@ router.post("/purchase-order", requireAuth, createLimiter, async (req, res) => {
 
 router.get("/filter-specs", async (req, res) => {
   try {
-    const { type, vendorId, make, printType, thickness, width } = req.query;
+    const { type, vendorId, make, printType, thickness, od, length } = req.query;
     const filter = {};
     if (type) filter.type = type;
     if (vendorId) filter.vendorId = vendorId;
     if (make) filter.make = make;
     if (printType) filter.printType = printType;
     if (thickness) filter.thickness = Number(thickness);
-    if (width) filter.width = Number(width);
+    if (od) filter.od = Number(od);
+    if (length) filter.length = Number(length);
 
     res.json(await loadSpecOptions(filter));
   } catch (err) {

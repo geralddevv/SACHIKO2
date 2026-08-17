@@ -34,3 +34,10 @@ vendor finish in tape sp
 if fs use our sequence and if cust use that
 
 in the sales order exclude the username and location
+
+prod detail up in ls view
+
+if deckle free and set if set ask for size
+deckle type and size
+
+if no inoice red in the roll

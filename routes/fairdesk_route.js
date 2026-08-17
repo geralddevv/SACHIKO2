@@ -2465,7 +2465,7 @@ router.get("/sales/order", async (req, res) => {
   // Product Code picker lists every master product, not just ones already
   // bound to the selected client (see onLabelStockProductChange / the
   // labelStockMasterId fallback in POST /sales/order below).
-  const labelStocksPromise = SachikoLabelStock.find({}, { skuCode: 1, productCode: 1 }).sort({ productCode: 1 }).lean();
+  const labelStocksPromise = SachikoLabelStock.find({}, { skuCode: 1, productCode: 1, rollOrSheet: 1 }).sort({ productCode: 1 }).lean();
   const submissionToken = crypto.randomUUID();
 
   const orderPromise = orderId
@@ -4531,6 +4531,7 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     }
 
     let deckleId = null;
+    let variantProductCode = null;
     let stockWarning = null;
     if (rawProduceMtrs > 0) {
       const layersPicked = required.length > 0 && required.every((key) => rawLayers && rawLayers[key]);
@@ -4553,6 +4554,7 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
             producedFor: id,
           });
           deckleId = produced.deckleId;
+          variantProductCode = produced.variantProductCode;
           allottedRollIds.push(new mongoose.Types.ObjectId(produced.stockId));
         } catch (produceErr) {
           stockWarning = produceErr.message || "failed to produce label stock";
@@ -4576,9 +4578,10 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     });
 
     res.locals.auditDescription = `Assigned production order ${id} to machine ${machineId}`
-      + (deckleId ? ` (produced Deckle ${deckleId})` : stockWarning ? " (stock not fully allocated)" : "");
+      + (deckleId ? ` (produced Deckle ${deckleId}${variantProductCode ? `, tracked as variant ${variantProductCode}` : ""})` : stockWarning ? " (stock not fully allocated)" : "");
     req.flash("notification", deckleId
       ? `Machine assigned — Deckle ${deckleId} produced.`
+        + (variantProductCode ? ` Note: the raw material picked doesn't exactly match this SKU's own spec (e.g. a different vendor) -- tracked as new variant "${variantProductCode}" instead of plain ${labelStock?.productCode || "this SKU"}.` : "")
       : stockWarning
         ? `Machine assigned, but stock wasn't allocated (${stockWarning}) — this order is on the queue as short-allotted. Re-open it to produce a Deckle once material is available.`
         : "Machine assigned successfully.");

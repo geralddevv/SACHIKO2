@@ -214,8 +214,12 @@
           <input type="number" id="addThicknessInput" class="form-control premium-input" placeholder="Enter thickness" min="0" step="any" />
         </div>
         <div>
-          <label class="dialog-field-label" for="addWidthInput">Width (inch)</label>
-          <input type="number" id="addWidthInput" class="form-control premium-input" placeholder="Enter width" min="0" step="any" />
+          <label class="dialog-field-label" for="addOdInput">OD (inch)</label>
+          <input type="number" id="addOdInput" class="form-control premium-input" placeholder="Enter OD" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addLengthInput">Length (inch)</label>
+          <input type="number" id="addLengthInput" class="form-control premium-input" placeholder="Enter length" min="0" step="any" />
         </div>
         <div>
           <label class="dialog-field-label" for="addMsqInput">MSQ</label>
@@ -281,8 +285,12 @@
           <input type="number" id="editThicknessInput" class="form-control premium-input" placeholder="Enter thickness" min="0" step="any" />
         </div>
         <div>
-          <label class="dialog-field-label" for="editWidthInput">Width (inch)</label>
-          <input type="number" id="editWidthInput" class="form-control premium-input" placeholder="Enter width" min="0" step="any" />
+          <label class="dialog-field-label" for="editOdInput">OD (inch)</label>
+          <input type="number" id="editOdInput" class="form-control premium-input" placeholder="Enter OD" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editLengthInput">Length (inch)</label>
+          <input type="number" id="editLengthInput" class="form-control premium-input" placeholder="Enter length" min="0" step="any" />
         </div>
         <div>
           <label class="dialog-field-label" for="editMsqInput">MSQ</label>
@@ -404,7 +412,8 @@
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Print Type", field: "printType", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Thickness (mm)", field: "thickness", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Width (inch)", field: "width", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "OD (inch)", field: "od", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Length (inch)", field: "length", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "MSQ", field: "msq", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
     ],
   });
@@ -472,7 +481,8 @@
       detailRow("Make", row.make || "—"),
       detailRow("Print Type", row.printType || "—"),
       detailRow("Thickness (mm)", row.thickness ?? "—"),
-      detailRow("Width (inch)", row.width ?? "—"),
+      detailRow("OD (inch)", row.od ?? "—"),
+      detailRow("Length (inch)", row.length ?? "—"),
       detailRow("MSQ", row.msq ?? "—"),
     ].join("");
     openModal("viewDialog");
@@ -499,7 +509,8 @@
     document.getElementById("addSkuIdPreview").value = previewSkuId;
     document.getElementById("addMakeInput").value = "";
     document.getElementById("addThicknessInput").value = "";
-    document.getElementById("addWidthInput").value = "";
+    document.getElementById("addOdInput").value = "";
+    document.getElementById("addLengthInput").value = "";
     document.getElementById("addMsqInput").value = "";
 
     if (addTypeChoices) { addTypeChoices.destroy(); addTypeChoices = null; }
@@ -526,12 +537,12 @@
     const type = document.getElementById("addTypeSelect").value;
     const printType = document.getElementById("addPrintTypeSelect").value;
     const thickness = document.getElementById("addThicknessInput").value;
-    const width = document.getElementById("addWidthInput").value;
+    const od = document.getElementById("addOdInput").value;
     if (!vendorId) return showError("addCoreError", "Vendor Name is required.");
     if (!type) return showError("addCoreError", "Type is required.");
     if (!printType) return showError("addCoreError", "Print Type is required.");
     if (!thickness) return showError("addCoreError", "Thickness is required.");
-    if (!width) return showError("addCoreError", "Width is required.");
+    if (!od) return showError("addCoreError", "OD is required.");
 
     hideError("addCoreError");
     setLoading("addSubmitBtn", true);
@@ -545,7 +556,8 @@
           make: document.getElementById("addMakeInput").value.trim(),
           printType,
           thickness,
-          width,
+          od,
+          length: document.getElementById("addLengthInput").value,
           msq: document.getElementById("addMsqInput").value,
         }),
       });
@@ -570,7 +582,8 @@
     document.getElementById("editSkuIdDisplay").value = row.skuId;
     document.getElementById("editMakeInput").value = row.make || "";
     document.getElementById("editThicknessInput").value = row.thickness ?? "";
-    document.getElementById("editWidthInput").value = row.width ?? "";
+    document.getElementById("editOdInput").value = row.od ?? "";
+    document.getElementById("editLengthInput").value = row.length ?? "";
     document.getElementById("editMsqInput").value = row.msq ?? "";
 
     if (editTypeChoices) { editTypeChoices.destroy(); editTypeChoices = null; }
@@ -598,12 +611,12 @@
     const type = document.getElementById("editTypeSelect").value;
     const printType = document.getElementById("editPrintTypeSelect").value;
     const thickness = document.getElementById("editThicknessInput").value;
-    const width = document.getElementById("editWidthInput").value;
+    const od = document.getElementById("editOdInput").value;
     if (!vendorId) return showError("editCoreError", "Vendor Name is required.");
     if (!type) return showError("editCoreError", "Type is required.");
     if (!printType) return showError("editCoreError", "Print Type is required.");
     if (!thickness) return showError("editCoreError", "Thickness is required.");
-    if (!width) return showError("editCoreError", "Width is required.");
+    if (!od) return showError("editCoreError", "OD is required.");
     if (!editId) return;
 
     hideError("editCoreError");
@@ -618,7 +631,8 @@
           make: document.getElementById("editMakeInput").value.trim(),
           printType,
           thickness,
-          width,
+          od,
+          length: document.getElementById("editLengthInput").value,
           msq: document.getElementById("editMsqInput").value,
         }),
       });

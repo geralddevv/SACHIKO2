@@ -90,8 +90,8 @@
       <label for="item-type">Item Type</label>
       <select name="itemType" id="item-type" class="form-control select-tag" required>
         <option value="" disabled selected hidden>Select Item Type</option>
-        <option value="TAPE">Tape</option>
-        <option value="LABEL_STOCK">Label Stock</option>
+        <option value="ROLL">Roll</option>
+        <option value="SHEET">Sheet</option>
       </select>
     </div>
 
@@ -113,7 +113,7 @@
       <input type="hidden" name="userName" id="user-name-hidden" />
     </div>
 
-    <div class="span-four" id="user-location-div">
+    <div class="span-five" id="user-location-div">
       <label for="user-location">Location</label>
       <select id="user-location" name="userLocation" class="form-control select-tag">
         <option value="" disabled selected hidden>Location</option>
@@ -536,6 +536,19 @@
   // onLabelStockProductChange and the labelStockMasterId fallback below).
   const allLabelStockMasters = JSON.parse(document.getElementById('label-stocks-data')?.textContent || '[]');
 
+  // Item Type offers Roll/Sheet -- Label Stock's own rollOrSheet split --
+  // instead of a generic "Label Stock" choice (Tape order creation was
+  // removed from this form entirely). Both values still drive exactly the
+  // Label Stock code paths "LABEL_STOCK" used to (Product Code picker,
+  // Paper Size/RM fields, ...) -- isLabelStockItemType is what every such
+  // check now goes through. They only differ in filtering the Product Code
+  // list to the matching SachikoLabelStock.rollOrSheet (see
+  // populateProductChoices) -- the server itself still only knows
+  // "LABEL_STOCK" (see POST /sales/order), so toServerItemType translates
+  // back to that for every fetch/submit.
+  function isLabelStockItemType(v) { return v === "ROLL" || v === "SHEET"; }
+  function toServerItemType(v) { return isLabelStockItemType(v) ? "LABEL_STOCK" : v; }
+
   const confirmModeStr = `<%= typeof confirmMode !== 'undefined' && confirmMode ? 'true' : 'false' %>`;
   const confirmMode = confirmModeStr === 'true';
 
@@ -594,7 +607,7 @@
   const noOfRollsInput = document.getElementById("no-of-rolls");
   if (noOfRollsInput && quantityInput) {
     noOfRollsInput.addEventListener("input", () => {
-      if (itemTypeSelect.value !== "LABEL_STOCK") return;
+      if (!isLabelStockItemType(itemTypeSelect.value)) return;
       quantityInput.value = noOfRollsInput.value;
     });
   }
@@ -649,12 +662,21 @@
       .replace(/\s+/g, " ");
   }
 
+  // Item Type is now Roll/Sheet, not a generic "LABEL_STOCK" -- for an
+  // existing order being edited/confirmed, that's the bound item's own
+  // rollOrSheet (tapeId resolves to the SachikoLabelStock doc itself via its
+  // refPath: "onModel", see models/inventory/TapeSalesOrder.js). Tape orders
+  // can no longer be *created* from this form, but the TAPE check is kept
+  // here defensively in case one was created elsewhere -- opening it here
+  // just won't find a matching Item Type option to preselect.
   function inferSalesOrderType(order) {
     const model = String(order?.onModel || "").toUpperCase();
     const bindingModel = String(order?.onBindingModel || "").toUpperCase();
 
     if (model === "TAPE" || bindingModel.includes("TAPEBINDING")) return "TAPE";
-    if (model === "SACHIKOLABELSTOCK" || bindingModel.includes("LABELSTOCKBINDING")) return "LABEL_STOCK";
+    if (model === "SACHIKOLABELSTOCK" || bindingModel.includes("LABELSTOCKBINDING")) {
+      return String(order?.tapeId?.rollOrSheet || "").toUpperCase();
+    }
 
     return "";
   }
@@ -836,7 +858,7 @@
     resetUsers();
     
     try {
-      const res = await fetch(`/sachiko/sales/clients/${itemType}`);
+      const res = await fetch(`/sachiko/sales/clients/${toServerItemType(itemType)}`);
       const clientNames = await res.json();
       
       const finalNames = [...clientNames];
@@ -955,20 +977,20 @@
     itemChoices.setChoices([{ value: "", label: "Loading...", disabled: true, selected: true }], "value", "label", true);
 
     try {
-      const itemsUrl = `/sachiko/sales/items/${itemType}/${userId}` + (loc ? `?location=${encodeURIComponent(loc)}` : "");
+      const itemsUrl = `/sachiko/sales/items/${toServerItemType(itemType)}/${userId}` + (loc ? `?location=${encodeURIComponent(loc)}` : "");
       const res = await fetch(itemsUrl);
       const items = await res.json();
 
-      latestLabelStockItems = itemType === "LABEL_STOCK" ? items : [];
+      latestLabelStockItems = isLabelStockItemType(itemType) ? items : [];
 
       itemChoices.clearStore();
       if (items.length === 0) {
         itemChoices.setChoices([{ value: "", label: "No items found", disabled: true, selected: true }], "value", "label", true);
-        if (itemType === "LABEL_STOCK") resetLabelStockPicker();
+        if (isLabelStockItemType(itemType)) resetLabelStockPicker();
         return;
       }
 
-      if (itemType === "LABEL_STOCK") populateProductChoices();
+      if (isLabelStockItemType(itemType)) populateProductChoices();
       
       const itemChoicesArray = items.map(item => ({
         value: item._id,
@@ -998,7 +1020,7 @@
         // Prefill by item: align the location dropdown with the chosen item's
         // own location (it may differ from whatever was auto-selected).
         const selectedItem = items.find((it) => String(it._id) === String(targetItemId));
-        if (itemType === "LABEL_STOCK") syncLabelStockPickerFromItem(selectedItem);
+        if (isLabelStockItemType(itemType)) syncLabelStockPickerFromItem(selectedItem);
         const itemLoc = normalizeLocationName(selectedItem?.location || "");
         if (itemLoc && itemLoc !== loc) {
           programmaticLocationUpdate = true;
@@ -1016,7 +1038,7 @@
         }
       } else if (items.length === 1) {
         setChoiceValue(itemChoices, itemSelect, items[0]._id);
-        if (itemType === "LABEL_STOCK") syncLabelStockPickerFromItem(items[0]);
+        if (isLabelStockItemType(itemType)) syncLabelStockPickerFromItem(items[0]);
       }
 
       // Trigger change event to update stock display
@@ -1159,7 +1181,7 @@
   // input listener below), since `quantity` is still what every downstream
   // balance/remaining/dispatch calculation reads for every item type.
   function updateLabelStockFieldsVisibility() {
-    const isLabelStock = itemTypeSelect.value === "LABEL_STOCK";
+    const isLabelStock = isLabelStockItemType(itemTypeSelect.value);
     ["paper-size-div", "running-meters-div", "no-of-rolls-div"].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.style.display = isLabelStock ? "" : "none";
@@ -1191,23 +1213,24 @@
     const productDiv = document.getElementById("label-stock-product-div");
     if (productDiv) productDiv.style.display = showPicker ? "" : "none";
 
-    // Item Type/Client/User/Location share this row with either the Product
-    // Code picker (plus Paper Size/RM, so the whole Label Stock identity row
-    // sits together) or the plain Select Item dropdown -- whichever is
-    // actually visible, resize them to fill the row instead of leaving a
-    // trailing gap or spilling onto a second line:
-    //   Picker visible:      item-type(4) + client(5) + user(5) + location(3) + product(4) + paper-size(4) + rm(3) = 28
-    //   Select Item visible: item-type(7) + client(6) + user(6) + location(6) + item-select(7) = 32
+    // Item Type/Client/User/Location share this row with Deckle Option (a
+    // fixed span-four that's always visible, never resized here) plus either
+    // the Product Code picker (plus Paper Size/RM, so the whole Label Stock
+    // identity row sits together) or the plain Select Item dropdown --
+    // whichever of those two is actually visible, resize them to fill the
+    // row instead of leaving a trailing gap or spilling onto a second line:
+    //   Picker visible:      deckle(4) + item-type(4) + client(5) + user(5) + location(3) + product(4) + paper-size(4) + rm(3) = 32
+    //   Select Item visible: deckle(4) + item-type(4) + client(6) + user(6) + location(5) + item-select(7) = 32 (their static CSS spans -- no resize needed)
     const itemTypeDiv = document.getElementById("item-type-div");
     const locationDiv = document.getElementById("user-location-div");
     const clientDiv = document.getElementById("client-name-div");
     const userDiv = document.getElementById("user-name-div");
     const paperSizeDiv = document.getElementById("paper-size-div");
     const runningMetersDiv = document.getElementById("running-meters-div");
-    if (itemTypeDiv) itemTypeDiv.style.gridColumn = showPicker ? "span 4" : "span 7";
-    if (clientDiv) clientDiv.style.gridColumn = showPicker ? "span 5" : "span 6";
-    if (userDiv) userDiv.style.gridColumn = showPicker ? "span 5" : "span 6";
-    if (locationDiv) locationDiv.style.gridColumn = showPicker ? "span 3" : "span 6";
+    if (itemTypeDiv) itemTypeDiv.style.gridColumn = showPicker ? "span 4" : "";
+    if (clientDiv) clientDiv.style.gridColumn = showPicker ? "span 5" : "";
+    if (userDiv) userDiv.style.gridColumn = showPicker ? "span 5" : "";
+    if (locationDiv) locationDiv.style.gridColumn = showPicker ? "span 3" : "";
     if (productDiv) productDiv.style.gridColumn = showPicker ? "span 4" : "";
     if (paperSizeDiv) paperSizeDiv.style.gridColumn = showPicker ? "span 4" : "";
     if (runningMetersDiv) runningMetersDiv.style.gridColumn = showPicker ? "span 3" : "";
@@ -1286,17 +1309,22 @@
   // ================= LABEL STOCK: PRODUCT CODE PICKER =================
   // Populates the Product Code select from the full Label Stock master
   // catalog (/sachiko/label-stock/view) -- every product, not just ones
-  // already bound to the selected client/user. Labelled by productCode;
-  // skuCode is still what's used internally to key the picker. Picking a
-  // product with no existing binding for this client falls through to the
-  // labelStockMasterId path in onLabelStockProductChange below.
+  // already bound to the selected client/user -- narrowed to whichever of
+  // Roll/Sheet is picked as Item Type (SachikoLabelStock.rollOrSheet).
+  // Labelled by productCode; skuCode is still what's used internally to key
+  // the picker. Picking a product with no existing binding for this client
+  // falls through to the labelStockMasterId path in onLabelStockProductChange
+  // below.
   function populateProductChoices(selected = "") {
     if (!productChoicesInst) return [];
+    const wantedRollOrSheet = itemTypeSelect.value;
     const seen = new Map();
-    allLabelStockMasters.forEach((m) => {
-      const sku = m.skuCode || "";
-      if (sku && !seen.has(sku)) seen.set(sku, m.productCode || sku);
-    });
+    allLabelStockMasters
+      .filter((m) => !wantedRollOrSheet || (m.rollOrSheet || "").toUpperCase() === wantedRollOrSheet)
+      .forEach((m) => {
+        const sku = m.skuCode || "";
+        if (sku && !seen.has(sku)) seen.set(sku, m.productCode || sku);
+      });
     const values = [...seen.keys()];
     productChoicesInst.clearStore();
     productChoicesInst.setChoices(
@@ -1373,7 +1401,7 @@
     const detailsBox = document.getElementById("selected-item-details");
     updateRateDisplay(selectedOption);
     updateQtyUnitBadge(selectedOption);
-    if (itemTypeSelect.value === "LABEL_STOCK") updateLabelStockSpecFields(selectedOption);
+    if (isLabelStockItemType(itemTypeSelect.value)) updateLabelStockSpecFields(selectedOption);
     
     // Reset location selection
     sourceLocationInput.value = "";
@@ -1385,7 +1413,7 @@
     // binding's own one), Total/Booked/Balance shown as "-". The bound
     // item's own location is pre-checked, but the person can still pick a
     // different one.
-    if (itemTypeSelect.value === "LABEL_STOCK") {
+    if (isLabelStockItemType(itemTypeSelect.value)) {
       if (selectedOption && selectedOption.customProperties) {
         try {
           currentSelectedDetails = JSON.parse(selectedOption.customProperties.details || "{}");
@@ -1973,7 +2001,7 @@
     }
 
     // Label Stock orders need Paper Size, RM, and No of Rolls filled in.
-    if (itemType === "LABEL_STOCK") {
+    if (isLabelStockItemType(itemType)) {
       const paperSizeVal = document.getElementById("paper-size")?.value.trim();
       const runningMetersVal = document.getElementById("running-meters")?.value;
       const noOfRollsVal = document.getElementById("no-of-rolls")?.value;
@@ -2043,7 +2071,10 @@
         const formData = new FormData(orderForm);
         const payload = new URLSearchParams();
         for (const [key, value] of formData.entries()) {
-          payload.append(key, value);
+          // The server only ever knows "LABEL_STOCK" (see POST /sales/order) --
+          // Roll/Sheet is purely this form's own Item Type split, translated
+          // back here rather than taught to the backend.
+          payload.append(key, key === "itemType" ? toServerItemType(value) : value);
         }
 
         const res = await fetch(actionPath, {
@@ -2141,12 +2172,10 @@
       }
     }
 
-    // New order, nothing in the URL saying otherwise -- default Item Type to
-    // Label Stock instead of leaving it on the blank placeholder. Only
-    // applies when there's no orderToEdit (edit mode already resolved its
-    // real type above via inferSalesOrderType) and no explicit ?type= param
-    // (an incoming link asking for Tape is still honoured).
-    if (!type && !orderToEdit) type = "LABEL_STOCK";
+    // New order, nothing in the URL or an existing order saying otherwise --
+    // default Item Type to Roll (the common case) instead of leaving it on
+    // the blank placeholder, so Product Code/Paper Size/RM show by default.
+    if (!type && !orderToEdit) type = "ROLL";
 
     // 1. Handle Type Prefill
     if (type) {
@@ -2338,7 +2367,7 @@
            const endYear = startYear + 1;
            const finYearStr = `${String(startYear).slice(-2)}-${String(endYear).slice(-2)}`;
            let typePrefix = type || itemTypeChoices.getValue(true) || "";
-           if (typePrefix === "LABEL_STOCK") typePrefix = "LS";
+           if (isLabelStockItemType(typePrefix)) typePrefix = "LS";
            if (typePrefix) {
              invoiceInput.value = `TECH|IN|${finYearStr}|${typePrefix}|`;
            }

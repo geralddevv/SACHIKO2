@@ -279,6 +279,12 @@ async function loadMastersWithStock(stock) {
       remarks: s.remarks,
       createdAt: s.createdAt,
       inwardDate: s.inwardDate,
+      // Not part of adhesiveSpecKey (Adhesive Master carries no gsm field --
+      // see buildHeaderPayload), so unlike every other spec field it can
+      // differ reel-to-reel even under the same master and can't be sourced
+      // from the parent row -- carried here so the Edit dialog can resubmit
+      // it unchanged (it has no input for this field).
+      gsm: s.gsm,
     });
   }
 
@@ -434,6 +440,12 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     const header = await buildHeaderPayload(req.body);
     const headerError = validateHeaderPayload(header);
     if (headerError) return res.status(400).json({ success: false, message: headerError });
+    // Every inward field is mandatory except Invoice No/Remarks -- Rate
+    // specifically, since it's optional on the schema and on the single-drum
+    // Edit dialog, is only enforced here at batch-create time.
+    if (!header.rate || header.rate <= 0) {
+      return res.status(400).json({ success: false, message: "Rate is required." });
+    }
 
     const rawDrums = Array.isArray(req.body.rolls) ? req.body.rolls : [];
     if (!rawDrums.length) return res.status(400).json({ success: false, message: "At least one drum is required." });
@@ -445,6 +457,10 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     const invalidIndex = drums.findIndex((d) => !d.reelMtrs || d.reelMtrs <= 0);
     if (invalidIndex !== -1) {
       return res.status(400).json({ success: false, message: `Kg is required for drum ${invalidIndex + 1}.` });
+    }
+    const missingVendorRollIdIndex = drums.findIndex((d) => !d.vendorRollId);
+    if (missingVendorRollIdIndex !== -1) {
+      return res.status(400).json({ success: false, message: `Vendor Drum ID is required for drum ${missingVendorRollIdIndex + 1}.` });
     }
 
     const locationExists = await Location.exists({ locationName: header.location });

@@ -243,29 +243,17 @@
     const row = QUEUE_ROWS.find((r) => r._id === id);
     if (!row) return;
     const ref = row.materialReference || {};
-    const rolls = row.allottedRollDetails || [];
     const layers = row.layerAllotments || [];
 
-    // Two distinct readinesses, kept as separate rows so they can't be
-    // mistaken for each other -- Material Status (are the raw layers
-    // allotted, the same thing that colors the queue row) vs. Deckle Status
-    // (how many finished reels have actually been laminated against
-    // noOfRolls ordered). A single "Produce New Deckle" run only ever
-    // laminates one reel, so an order needing 2+ rolls can be fully
-    // material-allotted yet still short on Deckle count until a second run.
+    // Material Status: are the raw layers allotted -- the same thing that
+    // colors the queue row. (Deckle Status/Deckle Rolls Produced used to
+    // show here too, but the deckle itself isn't produced until after this
+    // allotment step runs, so there's nothing meaningful to show yet.)
     const materialStatusLabel = row.materialStatus === "match" ? "Fully allotted"
       : row.materialStatus === "short" ? "Short allotted"
       : "—";
     const materialStatusColor = row.materialStatus === "match" ? "#16a34a"
       : row.materialStatus === "short" ? "#dc2626"
-      : "#1f2a44";
-    const deckleStatusLabel = row.rollsStatus === "match" ? "Fully allotted"
-      : row.rollsStatus === "short" ? "Short allotted"
-      : row.rollsStatus === "over" ? "Over allotted"
-      : "—";
-    const deckleStatusColor = row.rollsStatus === "match" ? "#16a34a"
-      : row.rollsStatus === "short" ? "#dc2626"
-      : row.rollsStatus === "over" ? "#d97706"
       : "#1f2a44";
 
     const pairs = [
@@ -276,20 +264,7 @@
       ["Paper Size", dash(ref.paperSize || row.paperSize)],
     ];
     const pairsHtml = pairs.map(([k, v]) => `<tr><th>${k}</th><td>${escapeHtml(v)}</td></tr>`).join("")
-      + `<tr><th>Material Status</th><td><span style="color:${materialStatusColor};">${materialStatusLabel}</span></td></tr>`
-      + `<tr><th>Deckle Status</th><td><span style="color:${deckleStatusColor};">${deckleStatusLabel}</span></td></tr>`;
-
-    const rollsHtml = rolls.length
-      ? `<table class="rd-table">` +
-        `<thead><tr><th style="width:36px; text-align:center;">#</th><th>Roll ID</th><th>Running Mtrs</th><th>Location</th></tr></thead>` +
-        `<tbody>` + rolls.map((r, i) => `<tr>` +
-          `<td style="text-align:center;">${i + 1}</td>` +
-          `<td>${escapeHtml(dash(r.rollId))}</td>` +
-          `<td>${escapeHtml(dash(r.reelMtrs))}</td>` +
-          `<td>${escapeHtml(dash(r.location))}</td>` +
-        `</tr>`).join("") + `</tbody></table>`
-      : `<div class="ap-notice"><i class="fa-solid fa-circle-info"></i> ` +
-        `No rolls recorded for this order — pick them in the Rolls section of Assign Production.</div>`;
+      + `<tr><th>Material Status</th><td><span style="color:${materialStatusColor};">${materialStatusLabel}</span></td></tr>`;
 
     // One line per raw-material layer this item's recipe calls for --
     // Facestock/Release Liner are rolls, Adhesive is a drum (row.unit names
@@ -318,9 +293,7 @@
     document.getElementById("rollDetailsBody").innerHTML =
       `<table class="rd-pairs"><tbody>${pairsHtml}</tbody></table>` +
       `<div class="rd-section">Material Allocation</div>` +
-      layersHtml +
-      `<div class="rd-section">Deckle Rolls Produced</div>` +
-      rollsHtml;
+      layersHtml;
     openModal("rollDetailsDialog");
   }
 

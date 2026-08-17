@@ -280,6 +280,27 @@
     #release-masters-table .tabulator-row.roll-detail-row > .tabulator-col-resize-handle {
       display: none !important;
     }
+    /* Invoice No is the one inward field that's still optional (see the Add
+       dialog) -- a reel saved without one is flagged red here so it stands
+       out for follow-up, with an Edit button (appended by rowFormatter)
+       to fix it. */
+    #release-masters-table .tabulator-row.roll-detail-row.roll-missing-invoice:hover {
+      background-color: #fee2e2 !important;
+    }
+    .roll-edit-btn {
+      padding: 3px 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #fff;
+      background: #dc2626;
+      margin-left: auto;
+    }
+    .roll-edit-btn:hover {
+      background: #b91c1c;
+    }
   </style>
 
   <!-- Release Master rows are the only table here: current stock (total
@@ -291,11 +312,6 @@
        reels. -->
   <div class="indi-head">
     <h1>Release Liner Stock</h1>
-    <div style="display: flex; gap: 10px; align-items: center">
-      <button class="header-action-btn" onclick="openAddDialog()">
-        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Release Liner Reel
-      </button>
-    </div>
   </div>
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
@@ -359,7 +375,7 @@
 <!-- ============ ADD RELEASE LINER DIALOG (batch inward, landscape) ============ -->
 <div class="logout-modal" id="addDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
-    style="width: min(1180px, 94vw); height: min(680px, 85vh); padding: 0; border-radius: 14px; display: flex; flex-direction: column;">
+    style="width: min(1300px, 95vw); height: min(680px, 85vh); padding: 0; border-radius: 14px; display: flex; flex-direction: column;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0; flex: 0 0 auto;">
       <div style="display: flex; align-items: center; gap: 20px;">
         <h2 id="addDialogTitle">Add Release Liner Reels</h2>
@@ -386,19 +402,27 @@
              narrows the others to combinations that actually exist in the
              master catalog, same "narrow as you pick" pattern as Tape Stock
              inward and Facestock Stock inward. -->
-        <div class="custom-scrollbar" style="flex: 1 1 400px; min-width: 400px; padding-right: 6px; overflow-y: auto;">
+        <div class="custom-scrollbar" style="flex: 1 1 620px; min-width: 620px; padding-right: 6px; overflow-y: auto;">
           <!-- ---- Master Table (read-only reference) ---- -->
           <div style="margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; overflow: hidden;">
-            <table id="releaseMastersRef" style="width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 600;">
+            <table id="releaseMastersRef" style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; font-weight: 600;">
+              <colgroup>
+                <col style="width: 15%;" />
+                <col style="width: 18%;" />
+                <col style="width: 18%;" />
+                <col style="width: 14%;" />
+                <col style="width: 12%;" />
+                <col style="width: 16%;" />
+              </colgroup>
               <tbody style="color: #0f172a;">
-                <tr><td colspan="2" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>
+                <tr><td colspan="6" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>
               </tbody>
             </table>
           </div>
 
           <h3 style="margin: 0 0 16px 0; font-size: 0.9rem; font-weight: 600; color: #044a78; text-transform: uppercase; letter-spacing: 0.03em;">Inward Details</h3>
 
-          <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
+          <div class="dialog-field-row" style="grid-template-columns: repeat(6, 1fr); gap: 10px;">
             <div>
               <label class="dialog-field-label" for="addLocationSelect">Location</label>
               <select id="addLocationSelect"></select>
@@ -411,16 +435,13 @@
               <label class="dialog-field-label" for="addInvoiceNoInput">Invoice No</label>
               <input type="text" id="addInvoiceNoInput" class="form-control premium-input" placeholder="Enter invoice no" />
             </div>
-          </div>
-
-          <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
+            <div>
+              <label class="dialog-field-label" for="addRateInput">Rate/Kg</label>
+              <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
+            </div>
             <div>
               <label class="dialog-field-label" for="addTotalKgInput">Total Kg</label>
               <input type="number" id="addTotalKgInput" class="form-control premium-input" placeholder="Enter total kg" min="0" step="any" />
-            </div>
-            <div>
-              <label class="dialog-field-label" for="addRateInput">Rate</label>
-              <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
             </div>
             <div>
               <label class="dialog-field-label" for="addRollCountInput">No of Rolls</label>
@@ -433,7 +454,7 @@
         </div>
 
         <!-- ---- Right: one card per physical reel ---- -->
-        <div style="flex: 1 1 auto; min-width: 0; max-width: 600px; display: flex; flex-direction: column;">
+        <div style="flex: 1 1 auto; min-width: 0; max-width: 400px; display: flex; flex-direction: column;">
           <div class="dialog-section-label"><span>Rolls</span></div>
           <div id="addRollsContainer" class="custom-scrollbar" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start; gap: 14px; padding-right: 6px;"></div>
         </div>
@@ -443,6 +464,62 @@
       <div class="dialog-actions" style="flex: 0 0 auto;">
         <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
         <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Reels</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EDIT RELEASE LINER REEL DIALOG (fix a reel missing its Invoice No, or any other field) ============ -->
+<div class="logout-modal" id="editRollDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editRollDialogTitle"
+    style="width: min(520px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="editRollDialogTitle">Edit Release Liner Reel</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeEditRollDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div style="margin-bottom: 16px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; font-weight: 600; color: #044a78;" id="editRollSpecSummary"></div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editLocationSelect">Location</label>
+          <select id="editLocationSelect"></select>
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editDateInput">Date</label>
+          <input type="date" id="editDateInput" class="form-control premium-input" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editInvoiceNoInput">Invoice No</label>
+          <input type="text" id="editInvoiceNoInput" class="form-control premium-input" placeholder="Enter invoice no" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editRateInput">Rate/Kg</label>
+          <input type="number" id="editRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editVendorRollIdInput">Vendor Roll ID</label>
+          <input type="text" id="editVendorRollIdInput" class="form-control premium-input" placeholder="Vendor's own roll no" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editKgInput">Kg</label>
+          <input type="number" id="editKgInput" class="form-control premium-input" placeholder="Enter Kg" min="0" step="any" />
+        </div>
+      </div>
+
+      <label class="dialog-field-label" for="editRemarksInput">Remarks</label>
+      <input type="text" id="editRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
+
+      <div id="editRollError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeEditRollDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="editRollSubmitBtn" onclick="submitEditRoll()">Save Changes</button>
       </div>
     </div>
   </div>
@@ -625,7 +702,7 @@
     btn.style.opacity = loading ? "0.7" : "";
   }
 
-  ["addDialog", "poDialog"].forEach(id => {
+  ["addDialog", "poDialog", "editRollDialog"].forEach(id => {
     document.getElementById(id).addEventListener("click", function (e) {
       if (e.target === this) closeModal(id);
     });
@@ -633,7 +710,7 @@
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    ["addDialog", "poDialog"].forEach(id => {
+    ["addDialog", "poDialog", "editRollDialog"].forEach(id => {
       if (document.getElementById(id).classList.contains("show")) closeModal(id);
     });
   });
@@ -691,9 +768,11 @@
       if (data.isParent) return;
       const el = row.getElement();
       if (el.querySelector(".roll-detail-span")) return;
-      el.style.backgroundColor = "#f8fafc";
-      el.style.borderTop = "1px solid #e6eaf2";
+      const missingInvoice = !data.noRolls && !data.invoiceNo;
+      el.style.backgroundColor = missingInvoice ? "#fef2f2" : "#f8fafc";
+      el.style.borderTop = missingInvoice ? "1px solid #fecaca" : "1px solid #e6eaf2";
       el.classList.add("roll-detail-row");
+      if (missingInvoice) el.classList.add("roll-missing-invoice");
       const bar = document.createElement("div");
       bar.className = "roll-detail-span";
       bar.style.cssText = "flex:1; display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 12px; color:#4b5563; font-size:13px;";
@@ -706,16 +785,40 @@
           `Kg ${fmt(data.reelMtrs)}`,
           data.location ? escapeHtml(data.location) : "",
           data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
-          data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : "",
+          data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : `<span style="color:#dc2626; font-weight:700;">No Invoice</span>`,
           `Date ${formatRollDate(data.inwardDate || data.createdAt)}`,
           data.remarks ? escapeHtml(data.remarks) : "",
         ].filter(Boolean);
         bar.innerHTML = parts.map((p, i) => (i === 0 ? p : `<span>${p}</span>`)).join('<span style="color:#334155; font-size:16px; font-weight:700; line-height:1;">&middot;</span>');
+        if (missingInvoice) {
+          const editBtn = document.createElement("button");
+          editBtn.type = "button";
+          editBtn.className = "roll-edit-btn";
+          editBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit';
+          editBtn.addEventListener("click", () => openEditRollDialog(data, row.getTreeParent()?.getData() || {}));
+          bar.appendChild(editBtn);
+        }
       }
       el.appendChild(bar);
     },
     columns: [
       { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false },
+      {
+        title: "Inward",
+        width: 110,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isParent) return "";
+          const btn = document.createElement("button");
+          btn.className = "add-stock-btn";
+          btn.title = "Add stock reels for this spec";
+          btn.innerHTML = '<i class="fa-solid fa-plus"></i> Add';
+          btn.addEventListener("click", () => openAddDialog(row));
+          return btn;
+        },
+      },
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
       { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
@@ -771,22 +874,6 @@
         formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>` : ""),
       },
       { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      {
-        title: "Inward",
-        width: 110,
-        hozAlign: "center",
-        headerSort: false,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          if (!row.isParent) return "";
-          const btn = document.createElement("button");
-          btn.className = "add-stock-btn";
-          btn.title = "Add stock reels for this spec";
-          btn.innerHTML = '<i class="fa-solid fa-plus"></i> Add';
-          btn.addEventListener("click", () => openAddDialog(row));
-          return btn;
-        },
-      },
       {
         title: "Purchase Order",
         width: 150,
@@ -954,30 +1041,28 @@
     if (selectedReleaseMaster && selectedReleaseMaster.type) {
       tbody.innerHTML = `
         <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Vendor</td>
-          <td style="padding: 10px; color: #0f172a; width: 75%;" colspan="3">${selectedReleaseMaster.vendorName || "—"}</td>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; border-right: 1px solid #e2e8f0;">Vendor</td>
+          <td style="padding: 10px; color: #0f172a;" colspan="5">${selectedReleaseMaster.vendorName || "—"}</td>
         </tr>
         <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Type</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedReleaseMaster.type || "—"}</td>
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Color</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedReleaseMaster.color || "—"}</td>
-        </tr>
-        <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Make</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedReleaseMaster.make || "—"}</td>
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">SKU</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedReleaseMaster.vendorSkuCode || "—"}</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Type</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Make</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">SKU</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Color</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Size</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px;">GSM</td>
         </tr>
         <tr>
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Size</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedReleaseMaster.size || "—"}</td>
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">GSM</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedReleaseMaster.gsm || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.type || ""}">${selectedReleaseMaster.type || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.make || ""}">${selectedReleaseMaster.make || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.vendorSkuCode || ""}">${selectedReleaseMaster.vendorSkuCode || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.color || ""}">${selectedReleaseMaster.color || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.size || ""}">${selectedReleaseMaster.size || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.gsm || ""}">${selectedReleaseMaster.gsm || "—"}</td>
         </tr>
       `;
     } else {
-      tbody.innerHTML = '<tr><td colspan="2" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>';
     }
 
     document.getElementById("addDateInput").value = new Date().toISOString().slice(0, 10);
@@ -1010,13 +1095,21 @@
     const inwardDate = document.getElementById("addDateInput").value;
     if (!inwardDate) return showError("addReleaseError", "Date is required.");
 
+    const totalKg = document.getElementById("addTotalKgInput").value;
+    if (!totalKg || Number(totalKg) <= 0) return showError("addReleaseError", "Total Kg is required.");
+
+    const rate = document.getElementById("addRateInput").value;
+    if (!rate || Number(rate) <= 0) return showError("addReleaseError", "Rate is required.");
+
     const rollRows = Array.from(document.querySelectorAll("#addRollsContainer .roll-row"));
     const rolls = rollRows.map((row) => ({
       reelMtrs: row.querySelector(".roll-mtrs").value,
-      vendorRollId: row.querySelector(".roll-vendor-id").value,
+      vendorRollId: row.querySelector(".roll-vendor-id").value.trim(),
     }));
     const emptyIndex = rolls.findIndex((r) => !r.reelMtrs || Number(r.reelMtrs) <= 0);
     if (emptyIndex !== -1) return showError("addReleaseError", `Kg is required for roll ${emptyIndex + 1}.`);
+    const emptyVendorRollIdIndex = rolls.findIndex((r) => !r.vendorRollId);
+    if (emptyVendorRollIdIndex !== -1) return showError("addReleaseError", `Vendor Roll ID is required for roll ${emptyVendorRollIdIndex + 1}.`);
 
     hideError("addReleaseError");
     setLoading("addSubmitBtn", true);
@@ -1053,4 +1146,101 @@
     }
   }
 
+  // ---- EDIT (fix a single existing reel -- e.g. one missing its Invoice No,
+  // flagged red by rowFormatter above) ----
+  let editLocationChoices = null;
+  let editingRollId = null;
+  // The reel's parent master row (type/make/vendor/vendor SKU code/color/
+  // size/gsm) -- every reel under a master shares its spec exactly (that's
+  // how it got grouped there; see releaseSpecKey in
+  // routes/stock/releaseLinerStock.js), so it's safe to source these
+  // straight from the master and resubmit them unchanged rather than
+  // re-picking a spec here, same as openAddDialog's masterPrefill.
+  let editingRollSpec = null;
+
+  function openEditRollDialog(reel, masterSpec) {
+    editingRollId = reel._id;
+    editingRollSpec = masterSpec || {};
+
+    const specBits = [
+      editingRollSpec.type, editingRollSpec.make,
+      editingRollSpec.vendorName, editingRollSpec.vendorSkuCode,
+      editingRollSpec.color,
+      editingRollSpec.gsm != null ? `${editingRollSpec.gsm} GSM` : null,
+    ].filter(Boolean);
+    document.getElementById("editRollSpecSummary").textContent = `${reel.rollId || ""} — ${specBits.join(" · ") || "—"}`;
+
+    if (editLocationChoices) { editLocationChoices.destroy(); editLocationChoices = null; }
+    const locSel = document.getElementById("editLocationSelect");
+    locSel.innerHTML = locationOptionsHtml(reel.location || "");
+    editLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    document.getElementById("editDateInput").value = reel.inwardDate ? new Date(reel.inwardDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+    document.getElementById("editInvoiceNoInput").value = reel.invoiceNo || "";
+    document.getElementById("editRateInput").value = reel.rate != null ? reel.rate : "";
+    document.getElementById("editVendorRollIdInput").value = reel.vendorRollId || "";
+    document.getElementById("editKgInput").value = reel.reelMtrs != null ? reel.reelMtrs : "";
+    document.getElementById("editRemarksInput").value = reel.remarks || "";
+
+    hideError("editRollError");
+    openModal("editRollDialog");
+  }
+  function closeEditRollDialog() {
+    closeModal("editRollDialog");
+    editingRollId = null;
+  }
+
+  async function submitEditRoll() {
+    if (!editingRollId) return;
+
+    const location = document.getElementById("editLocationSelect").value;
+    if (!location) return showError("editRollError", "Location is required.");
+
+    const inwardDate = document.getElementById("editDateInput").value;
+    if (!inwardDate) return showError("editRollError", "Date is required.");
+
+    const rate = document.getElementById("editRateInput").value;
+    if (!rate || Number(rate) <= 0) return showError("editRollError", "Rate is required.");
+
+    const vendorRollId = document.getElementById("editVendorRollIdInput").value.trim();
+    if (!vendorRollId) return showError("editRollError", "Vendor Roll ID is required.");
+
+    const reelMtrs = document.getElementById("editKgInput").value;
+    if (!reelMtrs || Number(reelMtrs) <= 0) return showError("editRollError", "Kg is required.");
+
+    hideError("editRollError");
+    setLoading("editRollSubmitBtn", true);
+    try {
+      const res = await fetch(`/sachiko/releaselinerstock/${editingRollId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: editingRollSpec.type,
+          color: editingRollSpec.color,
+          size: editingRollSpec.size,
+          gsm: editingRollSpec.gsm,
+          vendorId: editingRollSpec.vendorId,
+          make: editingRollSpec.make,
+          vendorSkuCode: editingRollSpec.vendorSkuCode,
+          location,
+          inwardDate,
+          rate,
+          invoiceNo: document.getElementById("editInvoiceNoInput").value,
+          remarks: document.getElementById("editRemarksInput").value,
+          reelMtrs,
+          vendorRollId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        showError("editRollError", data.message || "Failed to update release liner reel.");
+      }
+    } catch {
+      showError("editRollError", "Server error. Please try again.");
+    } finally {
+      setLoading("editRollSubmitBtn", false);
+    }
+  }
 </script>

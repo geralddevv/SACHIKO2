@@ -8,6 +8,7 @@ import AdhesiveStockLog from "../models/inventory/adhesiveStockLog.js";
 import ReleaseLinerStock from "../models/inventory/releaseLinerStock.js";
 import ReleaseLinerStockLog from "../models/inventory/releaseLinerStockLog.js";
 import { generateRollId } from "./rollId.js";
+import { resolveActualLabelStock } from "./labelStockVariant.js";
 
 // ---------------------------------------------------------------------------
 // Label Stock Production -- takes a Label Stock SKU's recipe (facestock +
@@ -176,8 +177,22 @@ export async function produceDeckle({ labelStock, location, reelMtrs, rate, rema
     resolved.push({ layerKey, meta, Model, LogModel, reel });
   }
 
+  // reelMatchesLayer above only enforces POOL_MATCH_FIELDS -- Vendor/Size/
+  // etc. are deliberately not part of that check (see that constant's own
+  // comment), so the reel actually picked for a layer can legitimately carry
+  // a different vendor (or other unmatched field) than this SKU's own stored
+  // spec. When that happens, the Deckle being laminated is materially a
+  // different combination -- resolveActualLabelStock reconstructs the recipe
+  // straight from the picked reels and, if it doesn't match `labelStock`
+  // exactly, resolves (or creates) the "-A"/"-B"/... Product Code variant
+  // that represents it, so this Deckle -- and the finished stock it becomes
+  // -- is tracked under the material it was actually made from rather than
+  // silently counted as the original SKU. Order/job identity (PendingProduction
+  // itemId) is untouched -- only what actually got produced changes.
+  const actualLabelStock = await resolveActualLabelStock(labelStock, resolved);
+
   const by = createdBy || "SYSTEM";
-  const deckleId = await generateRollId(labelStock.productCode);
+  const deckleId = await generateRollId(actualLabelStock.productCode);
 
   for (const { meta, Model, LogModel, reel } of resolved) {
     const remaining = round2(reel.reelMtrs - reelMtrs);
@@ -213,13 +228,13 @@ export async function produceDeckle({ labelStock, location, reelMtrs, rate, rema
   }
 
   const matBal = await MaterialStock.aggregate([
-    { $match: { material: labelStock._id, location } },
+    { $match: { material: actualLabelStock._id, location } },
     { $group: { _id: null, qty: { $sum: "$quantity" } } },
   ]);
   const openingStock = matBal[0]?.qty || 0;
 
   const created = await MaterialStock.create({
-    material: labelStock._id,
+    material: actualLabelStock._id,
     location,
     quantity: 1,
     reelMtrs,
@@ -232,7 +247,7 @@ export async function produceDeckle({ labelStock, location, reelMtrs, rate, rema
   });
 
   await MaterialStockLog.create({
-    material: labelStock._id,
+    material: actualLabelStock._id,
     location,
     openingStock,
     quantity: 1,
@@ -246,7 +261,16 @@ export async function produceDeckle({ labelStock, location, reelMtrs, rate, rema
     createdBy: by,
   });
 
-  return { deckleId, stockId: String(created._id), usedRollIds: resolved.map((r) => r.reel.rollId) };
+  return {
+    deckleId,
+    stockId: String(created._id),
+    usedRollIds: resolved.map((r) => r.reel.rollId),
+    // Set only when the material actually laminated differed from
+    // `labelStock`'s own spec (e.g. a substituted vendor) and got tracked
+    // under its own Product Code variant instead -- lets the caller flash
+    // that to whoever assigned this order, since it happens automatically.
+    variantProductCode: actualLabelStock.productCode !== labelStock.productCode ? actualLabelStock.productCode : null,
+  };
 }
 
 const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

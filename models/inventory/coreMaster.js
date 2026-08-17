@@ -47,10 +47,14 @@ const coreMasterSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-    // Width in inches.
-    width: {
+    // OD (Outer Diameter) in inches.
+    od: {
       type: Number,
       required: true,
+    },
+    // Length in inches.
+    length: {
+      type: Number,
     },
     // Minimum Stock Quantity -- the reorder threshold for this core spec,
     // matching the "MSQ" field on the Tape vendor binding (tapeMinQty).

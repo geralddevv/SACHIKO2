@@ -293,11 +293,6 @@
        to net against stock (see loadMastersWithStock's comment). -->
   <div class="indi-head">
     <h1>Core Stock</h1>
-    <div style="display: flex; gap: 10px; align-items: center">
-      <button class="header-action-btn" onclick="openAddDialog()">
-        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Core Lot
-      </button>
-    </div>
   </div>
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
@@ -385,9 +380,17 @@
         <div class="custom-scrollbar" style="flex: 1 1 400px; min-width: 400px; padding-right: 6px; overflow-y: auto;">
           <!-- ---- Master Table (read-only reference) ---- -->
           <div style="margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; overflow: hidden;">
-            <table id="coreMastersRef" style="width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 600;">
+            <table id="coreMastersRef" style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; font-weight: 600;">
+              <colgroup>
+                <col style="width: 16%;" />
+                <col style="width: 20%;" />
+                <col style="width: 18%;" />
+                <col style="width: 16%;" />
+                <col style="width: 14%;" />
+                <col style="width: 14%;" />
+              </colgroup>
               <tbody style="color: #0f172a;">
-                <tr><td colspan="2" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>
+                <tr><td colspan="6" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>
               </tbody>
             </table>
           </div>
@@ -418,7 +421,7 @@
         </div>
 
         <!-- ---- Right: one card per inward lot ---- -->
-        <div style="flex: 1 1 auto; min-width: 0; max-width: 600px; display: flex; flex-direction: column;">
+        <div style="flex: 1 1 auto; min-width: 0; max-width: 500px; display: flex; flex-direction: column;">
           <div class="dialog-section-label"><span>Lots</span></div>
           <div id="addLotsContainer" class="custom-scrollbar" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-content: start; gap: 14px; padding-right: 6px;"></div>
         </div>
@@ -437,7 +440,7 @@
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
-<script id="core-specs-data" type="application/json"><%- safeJson({ types, vendors, makes, printTypes, thicknesses, widths }) %></script>
+<script id="core-specs-data" type="application/json"><%- safeJson({ types, vendors, makes, printTypes, thicknesses, ods, lengths }) %></script>
 <script id="core-masters-data" type="application/json"><%- safeJson(masters) %></script>
 <script>
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
@@ -451,7 +454,7 @@
   }
 
   // Rebuilds a smart-filtered select's full (unfiltered) option list -- used
-  // to reset the Add dialog's Type/Make/Print Type/Thickness/Width pickers
+  // to reset the Add dialog's Type/Make/Print Type/Thickness/OD/Length pickers
   // back to every Core Master value each time the dialog is (re)opened,
   // since filterAddSpecs narrows them in place while it's open.
   function specOptionsHtml(values, noneLabel, noneDisabled) {
@@ -466,20 +469,21 @@
   }
 
   let addTypeChoices = null, addVendorChoices = null, addMakeChoices = null;
-  let addPrintTypeChoices = null, addThicknessChoices = null, addWidthChoices = null, addLocationChoices = null;
+  let addPrintTypeChoices = null, addThicknessChoices = null, addOdChoices = null, addLengthChoices = null, addLocationChoices = null;
 
   // ---- Add (inward) dialog: smart filter for Type/Vendor/Make/Print Type/
-  // Thickness/Width ---- Narrows each field's options to combinations that
+  // Thickness/OD/Length ---- Narrows each field's options to combinations that
   // actually exist in Core Master as the other fields are picked -- same
   // pattern as Tape Stock inward and Facestock Stock inward.
-  const addSpecFields = ["addTypeSelect", "addVendorSelect", "addMakeSelect", "addPrintTypeSelect", "addThicknessSelect", "addWidthSelect"];
+  const addSpecFields = ["addTypeSelect", "addVendorSelect", "addMakeSelect", "addPrintTypeSelect", "addThicknessSelect", "addOdSelect", "addLengthSelect"];
   const addSpecFieldToKey = {
     addTypeSelect: "type",
     addVendorSelect: "vendorId",
     addMakeSelect: "make",
     addPrintTypeSelect: "printType",
     addThicknessSelect: "thickness",
-    addWidthSelect: "width",
+    addOdSelect: "od",
+    addLengthSelect: "length",
   };
   const addSpecFieldToDataKey = {
     addTypeSelect: "types",
@@ -487,7 +491,8 @@
     addMakeSelect: "makes",
     addPrintTypeSelect: "printTypes",
     addThicknessSelect: "thicknesses",
-    addWidthSelect: "widths",
+    addOdSelect: "ods",
+    addLengthSelect: "lengths",
   };
   // Vendor's options are {vendorId, vendorName} pairs; every other field's
   // are plain scalars -- this is the one place that difference matters.
@@ -499,7 +504,7 @@
     const { value: val, label } = mapper(value);
     return { value: val, label, selected: val === currentValue };
   }
-  // Vendor/Make/Print Type/Thickness/Width are all optional on a stock lot,
+  // Vendor/Make/Print Type/Thickness/OD/Length are all optional on a stock lot,
   // so their reset choice is a real selectable "— None —"; Type is required,
   // so it stays a disabled placeholder like the rest of this dialog's
   // required selects.
@@ -509,7 +514,8 @@
     addMakeSelect: { label: "— None —", disabled: false },
     addPrintTypeSelect: { label: "— None —", disabled: false },
     addThicknessSelect: { label: "— None —", disabled: false },
-    addWidthSelect: { label: "— None —", disabled: false },
+    addOdSelect: { label: "— None —", disabled: false },
+    addLengthSelect: { label: "— None —", disabled: false },
   };
   function addSpecChoicesInstance(id) {
     if (id === "addTypeSelect") return addTypeChoices;
@@ -517,7 +523,8 @@
     if (id === "addMakeSelect") return addMakeChoices;
     if (id === "addPrintTypeSelect") return addPrintTypeChoices;
     if (id === "addThicknessSelect") return addThicknessChoices;
-    if (id === "addWidthSelect") return addWidthChoices;
+    if (id === "addOdSelect") return addOdChoices;
+    if (id === "addLengthSelect") return addLengthChoices;
     return null;
   }
 
@@ -696,13 +703,30 @@
     },
     columns: [
       { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false },
+      {
+        title: "Inward",
+        width: 110,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isParent) return "";
+          const btn = document.createElement("button");
+          btn.className = "add-stock-btn";
+          btn.title = "Add stock lots for this spec";
+          btn.innerHTML = '<i class="fa-solid fa-plus"></i> Add';
+          btn.addEventListener("click", () => openAddDialog(row));
+          return btn;
+        },
+      },
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
       { title: "Print Type", field: "printType", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Thickness", field: "thickness", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Width", field: "width", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "OD", field: "od", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Length", field: "length", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
       {
         title: "Stock (Pcs)",
         field: "currentStock",
@@ -725,22 +749,6 @@
         formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>` : ""),
       },
       { title: "MSQ", field: "msq", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      {
-        title: "Inward",
-        width: 110,
-        hozAlign: "center",
-        headerSort: false,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          if (!row.isParent) return "";
-          const btn = document.createElement("button");
-          btn.className = "add-stock-btn";
-          btn.title = "Add stock lots for this spec";
-          btn.innerHTML = '<i class="fa-solid fa-plus"></i> Add';
-          btn.addEventListener("click", () => openAddDialog(row));
-          return btn;
-        },
-      },
       {
         title: "Purchase Order",
         width: 150,
@@ -908,28 +916,28 @@
     if (selectedCoreMaster && selectedCoreMaster.type) {
       tbody.innerHTML = `
         <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Vendor</td>
-          <td style="padding: 10px; color: #0f172a; width: 75%;" colspan="3">${selectedCoreMaster.vendorName || "—"}</td>
+          <td style="padding: 10px; font-weight: 700; color: #044a78; border-right: 1px solid #e2e8f0;">Vendor</td>
+          <td style="padding: 10px; color: #0f172a;" colspan="5">${selectedCoreMaster.vendorName || "—"}</td>
         </tr>
         <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Type</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedCoreMaster.type || "—"}</td>
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Make</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedCoreMaster.make || "—"}</td>
-        </tr>
-        <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Print Type</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%; border-right: 1px solid #e2e8f0;">${selectedCoreMaster.printType || "—"}</td>
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Thickness</td>
-          <td style="padding: 10px; color: #0f172a; width: 25%;">${selectedCoreMaster.thickness || "—"}</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Type</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Make</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Print Type</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Thickness</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">OD</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px;">Length</td>
         </tr>
         <tr>
-          <td style="padding: 10px; font-weight: 700; color: #044a78; width: 25%; border-right: 1px solid #e2e8f0;">Width</td>
-          <td style="padding: 10px; color: #0f172a; width: 75%;" colspan="3">${selectedCoreMaster.width || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedCoreMaster.type || ""}">${selectedCoreMaster.type || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedCoreMaster.make || ""}">${selectedCoreMaster.make || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedCoreMaster.printType || ""}">${selectedCoreMaster.printType || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedCoreMaster.thickness || ""}">${selectedCoreMaster.thickness || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedCoreMaster.od || ""}">${selectedCoreMaster.od || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedCoreMaster.length || ""}">${selectedCoreMaster.length || "—"}</td>
         </tr>
       `;
     } else {
-      tbody.innerHTML = '<tr><td colspan="2" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>';
     }
 
     document.getElementById("addRateInput").value = "";
@@ -977,7 +985,8 @@
           make: selectedCoreMaster.make,
           printType: selectedCoreMaster.printType,
           thickness: selectedCoreMaster.thickness,
-          width: selectedCoreMaster.width,
+          od: selectedCoreMaster.od,
+          length: selectedCoreMaster.length,
           rate: document.getElementById("addRateInput").value,
           location,
           invoiceNo: document.getElementById("addInvoiceNoInput").value,
