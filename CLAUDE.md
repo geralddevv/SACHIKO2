@@ -173,3 +173,16 @@ Use `data-*` attributes on buttons; read them in the handler via `this.dataset`.
 ### Text inputs auto-uppercase
 
 `common.js` automatically converts all `input[type="text"]` values to uppercase on input. This matches the Mongoose model convention of storing names in uppercase.
+
+### Label Stock Product Code variants
+
+`SachikoLabelStock.productCode` (`models/sachiko/sachikoLabelStock.js`) is free text, not itself unique — only the full `labelStockSignature` (every user-editable field, Product Code included) is unique-indexed, so nothing used to stop the *same* Product Code being entered again for a genuinely different recipe (e.g. `C011` re-entered against a different vendor).
+
+`POST /sachiko/label-stock/form` (`routes/sachiko/sachiko_route.js`) now resolves this at create time via `resolveProductCodeVariant()`:
+1. Find every existing row named exactly the entered code or `<code>-<LETTERS>` (its variant family).
+2. Compare recipes with `buildLabelStockSpecSignature()` — the same sha256 signature `buildLabelStockSignature()` already used, just built **without** Product Code (`labelStockSignatureParts(payload, { includeProductCode })` is the shared builder both call).
+3. An existing family member has the identical recipe → rejected as a real duplicate, naming the existing Product Code it collides with.
+4. No family member matches → a legitimate new variant → assigned the next unused single-letter suffix (`C011` → `C011-A` → `C011-B` → …, reusing a freed letter rather than always climbing).
+5. No family yet → saved under the plain entered code, no suffix.
+
+Only applies at create time — editing an existing row still uses the plain exact-duplicate `buildLabelStockSignature()` check and never renames a row into a new variant on its own.

@@ -2966,7 +2966,7 @@ router.get("/sales/pending", async (req, res) => {
       .select(
         "tapeId tapeBinding userId quantity dispatchedQuantity estimatedDate poDate createdAt sourceLocation poNumber orderRate remarks status onModel onBindingModel paperSize runningMeters noOfRolls",
       )
-      .populate({ path: "userId", select: "clientName userName clientType" })
+      .populate({ path: "userId", select: "clientName userName" })
       .populate({
         path: "tapeId",
         // Widened beyond what the table itself needs so the "View" dialog's
@@ -2976,7 +2976,7 @@ router.get("/sales/pending", async (req, res) => {
         // given document's onModel actually resolves to, so Tape and
         // SachikoLabelStock fields can share one select string safely.
         select:
-          "tapeProductId tapePaperCode tapePaperType tapeGsm tapeWidth tapeMtrs tapeCoreId tapeFinish tapeAdhesiveGsm productCode skuCode facestock adhesive releaseLiner",
+          "tapeProductId tapePaperCode tapePaperType tapeGsm tapeWidth tapeMtrs tapeCoreId tapeFinish tapeAdhesiveGsm productCode skuCode rollOrSheet facestock adhesive releaseLiner",
       })
       .populate({
         path: "tapeBinding",

@@ -305,31 +305,93 @@ function layerSignaturePart(layer, strFields, numFields) {
   return strFields.map((f) => canonStr(layer[f])).concat(numFields.map((f) => canonNum(layer[f]))).join("|");
 }
 
-// Hashes every user-editable field buildLabelStockPayload sets -- the top
-// Product/Roll row plus all six facestock/adhesive/releaseLiner layers (2 and
-// 2-suffixed ones included, blank/absent when the current rollType doesn't
-// call for them) -- so two rows only collide when they're the exact same
-// record, not merely the same materials under a different Product Code.
-function buildLabelStockSignature(payload) {
-  return hashSignature(
-    [
-      canonStr(payload.productCode),
-      canonStr(payload.rollType),
-      canonStr(payload.family),
-      canonStr(payload.rollOrSheet),
-      canonStr(payload.printingTechnology),
-      canonStr(payload.digitalPrintType),
-      layerSignaturePart(payload.facestock, FS_SIG_FIELDS, FS_SIG_NUM_FIELDS),
-      layerSignaturePart(payload.adhesive, AD_SIG_FIELDS, AD_SIG_NUM_FIELDS),
-      layerSignaturePart(payload.releaseLiner, RL_SIG_FIELDS, RL_SIG_NUM_FIELDS),
-      layerSignaturePart(payload.facestock2, FS_SIG_FIELDS, FS_SIG_NUM_FIELDS),
-      layerSignaturePart(payload.adhesive2, AD_SIG_FIELDS, AD_SIG_NUM_FIELDS),
-      layerSignaturePart(payload.releaseLiner2, RL_SIG_FIELDS, RL_SIG_NUM_FIELDS),
-    ].join("||"),
+// Shared by buildLabelStockSignature/buildLabelStockSpecSignature below --
+// every user-editable field buildLabelStockPayload sets, the top Product/Roll
+// row plus all six facestock/adhesive/releaseLiner layers (2 and 2-suffixed
+// ones included, blank/absent when the current rollType doesn't call for
+// them), optionally including productCode.
+function labelStockSignatureParts(payload, { includeProductCode }) {
+  const parts = [];
+  if (includeProductCode) parts.push(canonStr(payload.productCode));
+  parts.push(
+    canonStr(payload.rollType),
+    canonStr(payload.family),
+    canonStr(payload.rollOrSheet),
+    canonStr(payload.printingTechnology),
+    canonStr(payload.digitalPrintType),
+    layerSignaturePart(payload.facestock, FS_SIG_FIELDS, FS_SIG_NUM_FIELDS),
+    layerSignaturePart(payload.adhesive, AD_SIG_FIELDS, AD_SIG_NUM_FIELDS),
+    layerSignaturePart(payload.releaseLiner, RL_SIG_FIELDS, RL_SIG_NUM_FIELDS),
+    layerSignaturePart(payload.facestock2, FS_SIG_FIELDS, FS_SIG_NUM_FIELDS),
+    layerSignaturePart(payload.adhesive2, AD_SIG_FIELDS, AD_SIG_NUM_FIELDS),
+    layerSignaturePart(payload.releaseLiner2, RL_SIG_FIELDS, RL_SIG_NUM_FIELDS),
   );
+  return parts.join("||");
+}
+
+// Hashes every user-editable field including Product Code -- so two rows
+// only collide when they're the exact same record, not merely the same
+// materials under a different Product Code.
+function buildLabelStockSignature(payload) {
+  return hashSignature(labelStockSignatureParts(payload, { includeProductCode: true }));
+}
+
+// Same fields, minus Product Code -- used by resolveProductCodeVariant below
+// to tell whether a row sharing a Product Code (or "<code>-A"/"-B"/... of it)
+// is genuinely the same material recipe (a real duplicate) or a different one
+// that happens to share the code (a new variant).
+function buildLabelStockSpecSignature(payload) {
+  return hashSignature(labelStockSignatureParts(payload, { includeProductCode: false }));
 }
 
 const DUPLICATE_LABELSTOCK_MESSAGE = "This Label Stock already exists (every field matches an existing record).";
+
+const escapeRegExpLS = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Product Code is free text, not itself unique (buildLabelStockSignature
+// blocks an exact duplicate record, but nothing stops the *same* Product
+// Code being entered again for a genuinely different recipe -- e.g. C011
+// re-entered against a different vendor). Rather than silently letting two
+// unrelated recipes share one Product Code, or blocking the entry outright,
+// group every row already named `code` or `code-<LETTERS>` (its variant
+// family) and compare recipes with buildLabelStockSpecSignature (Product
+// Code itself excluded, since that's exactly the field this family shares):
+//   - an existing family member has the identical recipe -> real duplicate,
+//     reject with its Product Code so the user can find it.
+//   - none match -> a legitimate new variant of this Product Code -> assign
+//     the next unused single-letter suffix (code-A, code-B, ...) instead of
+//     colliding on the plain code.
+//   - no family yet -> first entry under this code, no suffix.
+// Only used at create time (see POST /label-stock/form) -- editing an
+// existing row doesn't rename it into a new variant on its own.
+async function resolveProductCodeVariant(payload) {
+  const base = payload.productCode;
+  const family = await SachikoLabelStock.find({
+    productCode: new RegExp(`^${escapeRegExpLS(base)}(-[A-Z]+)?$`),
+  }).lean();
+  if (!family.length) return base;
+
+  const specSignature = buildLabelStockSpecSignature(payload);
+  const suffixOf = (code) => (code === base ? "" : code.slice(base.length + 1));
+
+  const exactMatch = family.find((doc) => buildLabelStockSpecSignature(doc) === specSignature);
+  if (exactMatch) {
+    throw Object.assign(
+      new Error("Duplicate Label Stock combination"),
+      { userMessage: `This exact combination already exists as Product Code "${exactMatch.productCode}".` },
+    );
+  }
+
+  const used = new Set(family.map((doc) => suffixOf(doc.productCode)).filter(Boolean));
+  for (let i = 0; i < 26; i++) {
+    const letter = String.fromCharCode(65 + i);
+    if (!used.has(letter)) return `${base}-${letter}`;
+  }
+  throw Object.assign(
+    new Error("Too many Label Stock variants"),
+    { userMessage: `Too many variants of Product Code "${base}" already exist (max 26).` },
+  );
+}
 
 router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJson, async (req, res) => {
   try {
@@ -356,6 +418,13 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
       payload.wordFileOriginalName = req.file.originalname;
     }
 
+    // Same Product Code, different recipe (e.g. C011 re-entered against a
+    // different vendor) -- resolves to a "-A"/"-B"/... variant of the code
+    // instead of colliding with the existing row, or throws if it's an exact
+    // duplicate of one already in that code's family. See its own comment.
+    const enteredProductCode = payload.productCode;
+    payload.productCode = await resolveProductCodeVariant(payload);
+
     const labelStockSignature = buildLabelStockSignature(payload);
     const existingSignature = await SachikoLabelStock.findOne({ labelStockSignature }).select("_id").lean();
     if (existingSignature) {
@@ -363,7 +432,12 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
     }
 
     await SachikoLabelStock.create({ labelStockId, skuCode, ...payload, labelStockSignature });
-    req.flash("notification", "Label Stock created successfully!");
+    req.flash(
+      "notification",
+      payload.productCode === enteredProductCode
+        ? "Label Stock created successfully!"
+        : `Product Code "${enteredProductCode}" already names a different combination -- saved as new variant "${payload.productCode}".`,
+    );
     res.json({ success: true, redirect: "/sachiko/label-stock/view" });
   } catch (err) {
     console.error("SACHIKO LABEL STOCK CREATE ERROR:", err);

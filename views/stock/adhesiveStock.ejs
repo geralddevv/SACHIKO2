@@ -387,27 +387,35 @@
 
           <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
             <div>
+              <label class="dialog-field-label" for="addLocationSelect">Location</label>
+              <select id="addLocationSelect"></select>
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addDateInput">Date</label>
+              <input type="date" id="addDateInput" class="form-control premium-input" />
+            </div>
+            <div>
               <label class="dialog-field-label" for="addInvoiceNoInput">Invoice No</label>
               <input type="text" id="addInvoiceNoInput" class="form-control premium-input" placeholder="Enter invoice no" />
             </div>
+          </div>
+
+          <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
             <div>
-              <label class="dialog-field-label" for="addLocationSelect">Location</label>
-              <select id="addLocationSelect"></select>
+              <label class="dialog-field-label" for="addTotalKgInput">Total Kg</label>
+              <input type="number" id="addTotalKgInput" class="form-control premium-input" placeholder="Enter total kg" min="0" step="any" />
             </div>
             <div>
               <label class="dialog-field-label" for="addRateInput">Rate</label>
               <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
             </div>
-          </div>
-
-          <div class="dialog-field-row">
-            <div>
-              <label class="dialog-field-label" for="addGsmInput">GSM</label>
-              <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
-            </div>
             <div>
               <label class="dialog-field-label" for="addDrumCountInput">No of Rolls</label>
               <input type="number" id="addDrumCountInput" class="form-control premium-input" min="1" max="100" step="1" value="1" />
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addGsmInput">GSM</label>
+              <input type="number" id="addGsmInput" class="form-control premium-input" placeholder="Enter GSM" min="0" step="any" />
             </div>
           </div>
 
@@ -703,7 +711,7 @@
           data.location ? escapeHtml(data.location) : "",
           data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
           data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : "",
-          `Added ${formatRollDate(data.createdAt)}`,
+          `Date ${formatRollDate(data.inwardDate || data.createdAt)}`,
           data.remarks ? escapeHtml(data.remarks) : "",
         ].filter(Boolean);
         bar.innerHTML = parts.map((p, i) => (i === 0 ? p : `<span>${p}</span>`)).join('<span style="color:#334155; font-size:16px; font-weight:700; line-height:1;">&middot;</span>');
@@ -714,6 +722,7 @@
       { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false },
       { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, maxWidth: 220, formatter: ellipsisFormatter },
+      { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
       { title: "Shelf Life", field: "shelfLife", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
@@ -969,11 +978,13 @@
       tbody.innerHTML = '<tr><td colspan="2" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>';
     }
 
-    document.getElementById("addGsmInput").value = "";
-    document.getElementById("addRateInput").value = "";
+    document.getElementById("addDateInput").value = new Date().toISOString().slice(0, 10);
     document.getElementById("addInvoiceNoInput").value = "";
-    document.getElementById("addRemarksInput").value = "";
+    document.getElementById("addTotalKgInput").value = "";
+    document.getElementById("addRateInput").value = "";
     document.getElementById("addDrumCountInput").value = "1";
+    document.getElementById("addGsmInput").value = "";
+    document.getElementById("addRemarksInput").value = "";
 
     if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
     const locSel = document.getElementById("addLocationSelect");
@@ -994,6 +1005,9 @@
     const location = document.getElementById("addLocationSelect").value;
     if (!location) return showError("addAdhesiveError", "Location is required.");
 
+    const inwardDate = document.getElementById("addDateInput").value;
+    if (!inwardDate) return showError("addAdhesiveError", "Date is required.");
+
     const drumRows = Array.from(document.querySelectorAll("#addDrumsContainer .drum-row"));
     const rolls = drumRows.map((row) => ({
       reelMtrs: row.querySelector(".drum-mtrs").value,
@@ -1013,6 +1027,7 @@
           gsm: document.getElementById("addGsmInput").value,
           rate: document.getElementById("addRateInput").value,
           location,
+          inwardDate,
           invoiceNo: document.getElementById("addInvoiceNoInput").value,
           remarks: document.getElementById("addRemarksInput").value,
           rolls,

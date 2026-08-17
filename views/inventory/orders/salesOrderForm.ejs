@@ -77,6 +77,15 @@
       <h1>Order Details</h1>
     </div>
 
+    <div class="span-four" id="deckle-option-div">
+      <label for="deckle-option">Deckle Option</label>
+      <select name="deckleOption" id="deckle-option" class="form-control select-tag" required>
+        <option value="" disabled selected hidden>Select Option</option>
+        <option value="DECKLE_FREE">Deckle Free</option>
+        <option value="DECKLE_SET">Deckle Set</option>
+      </select>
+    </div>
+
     <div class="span-four" id="item-type-div">
       <label for="item-type">Item Type</label>
       <select name="itemType" id="item-type" class="form-control select-tag" required>
@@ -126,7 +135,7 @@
          the code), which then drives the same hidden #item-select (and
          therefore all the existing rate/stock/details logic) exactly as a
          direct pick would. -->
-    <div class="span-four" id="label-stock-product-div" style="display:none;">
+    <div class="span-three" id="label-stock-product-div" style="display:none;">
       <label for="label-stock-product-select">Product Code</label>
       <select id="label-stock-product-select" class="form-control select-tag">
         <option value="" disabled selected hidden>Select Product Code</option>
@@ -147,7 +156,7 @@
       <input type="text" id="paper-size" name="paperSize" class="form-control" placeholder="Enter paper size" />
     </div>
 
-    <div class="span-three" id="running-meters-div" style="display:none;">
+    <div class="span-two" id="running-meters-div" style="display:none;">
       <label for="running-meters">RM</label>
       <input type="text" inputmode="numeric" id="running-meters" name="runningMeters" class="form-control" placeholder="Enter RM" />
     </div>
@@ -435,6 +444,16 @@
 <% } %>
 
 <style>
+  /* Stock-status bar (location selector + Total/Booked/Balance) hidden from
+     the top of this form -- !important so it stays hidden even though the
+     JS below still rebuilds/re-shows it (stockDisplay.style.display =
+     "block") as the client/item/location selection changes; that JS is left
+     running since it's also what keeps the hidden #source-location input in
+     sync, which POST /sales/order still reads. */
+  #stock-display {
+    display: none !important;
+  }
+
   .location-option {
     display: inline-flex;
     align-items: center;
@@ -1094,8 +1113,8 @@
     }
 
     return `
-      <div style="padding:14px 16px;background:#f8fafc;">
-        <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#03365a;">${escOrderLayer(d.productCode)}${d.skuCode ? ` · ${escOrderLayer(d.skuCode)}` : ""}</p>
+      <div style="padding:14px 16px;background:#f8fafc;max-width:600px;margin:0 auto;">
+        <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#03365a;text-align:center;">${escOrderLayer(d.productCode)}${d.skuCode ? ` · ${escOrderLayer(d.skuCode)}` : ""}</p>
         <div class="custom-scrollbar" style="display:flex;flex-direction:column;gap:2px;max-height:320px;overflow-y:auto;padding:2px;">
           ${layers.join(`
           <div style="display:flex;justify-content:center;margin:-2px 0;"><i class="fa-solid fa-caret-down" style="color:#cbd5e1;font-size:11px;"></i></div>
@@ -1177,7 +1196,7 @@
     // sits together) or the plain Select Item dropdown -- whichever is
     // actually visible, resize them to fill the row instead of leaving a
     // trailing gap or spilling onto a second line:
-    //   Picker visible:      item-type(4) + client(5) + user(5) + location(4) + product(6) + paper-size(4) + rm(4) = 32
+    //   Picker visible:      item-type(4) + client(5) + user(5) + location(3) + product(4) + paper-size(4) + rm(3) = 28
     //   Select Item visible: item-type(7) + client(6) + user(6) + location(6) + item-select(7) = 32
     const itemTypeDiv = document.getElementById("item-type-div");
     const locationDiv = document.getElementById("user-location-div");
@@ -1188,10 +1207,10 @@
     if (itemTypeDiv) itemTypeDiv.style.gridColumn = showPicker ? "span 4" : "span 7";
     if (clientDiv) clientDiv.style.gridColumn = showPicker ? "span 5" : "span 6";
     if (userDiv) userDiv.style.gridColumn = showPicker ? "span 5" : "span 6";
-    if (locationDiv) locationDiv.style.gridColumn = showPicker ? "span 4" : "span 6";
-    if (productDiv) productDiv.style.gridColumn = showPicker ? "span 6" : "";
+    if (locationDiv) locationDiv.style.gridColumn = showPicker ? "span 3" : "span 6";
+    if (productDiv) productDiv.style.gridColumn = showPicker ? "span 4" : "";
     if (paperSizeDiv) paperSizeDiv.style.gridColumn = showPicker ? "span 4" : "";
-    if (runningMetersDiv) runningMetersDiv.style.gridColumn = showPicker ? "span 4" : "";
+    if (runningMetersDiv) runningMetersDiv.style.gridColumn = showPicker ? "span 3" : "";
 
     syncRemarksWidth();
   }

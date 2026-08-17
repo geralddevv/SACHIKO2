@@ -89,6 +89,12 @@ const adhesiveStockSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Date the drum actually arrived/was invoiced -- defaults to today at
+    // inward but editable so a delayed data entry can be backdated. Distinct
+    // from createdAt, which always reflects when the record was saved.
+    inwardDate: {
+      type: Date,
+    },
     remarks: {
       type: String,
       trim: true,

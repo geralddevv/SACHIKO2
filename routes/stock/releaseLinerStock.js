@@ -37,6 +37,7 @@ async function buildHeaderPayload(body) {
     location: String(body.location || "").trim(),
     rate: numOrUndef(body.rate),
     invoiceNo: String(body.invoiceNo || "").trim(),
+    inwardDate: body.inwardDate ? new Date(body.inwardDate) : new Date(),
     remarks: String(body.remarks || "").trim(),
   };
 
@@ -268,6 +269,7 @@ async function loadMastersWithStock(stock) {
       invoiceNo: s.invoiceNo,
       remarks: s.remarks,
       createdAt: s.createdAt,
+      inwardDate: s.inwardDate,
     });
   }
 

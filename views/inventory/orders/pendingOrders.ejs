@@ -229,14 +229,11 @@
     return "";
   }
 
-  // Client GSM is the per-client-binding GSM (clientTapeGsm
-  // on tapeBinding) — distinct from the item's own GSM above.
-  // SL bindings have no client GSM field.
-  function getClientGsm(row) {
-    const binding = row.tapeBinding;
-    if (!binding) return "";
-    if (row.onModel === "Tape") return binding.clientTapeGsm ?? "";
-    return "";
+  // ROLL or SHEET, off the Label Stock item spec (sachikoLabelStock.rollOrSheet).
+  // Tape has no such distinction, so those rows show "-".
+  function getRollOrSheet(row) {
+    if (row.onModel !== "SachikoLabelStock") return "";
+    return String(row.tapeId?.rollOrSheet || "").toUpperCase();
   }
 
   // Width/Mtrs -- broken out of getItemName() into their own table columns
@@ -560,18 +557,21 @@
         headerFilterPlaceholder: "Search",
       },
       {
-        title: "Client Type",
-        field: "userId.clientType",
+        title: "Roll/Sheet",
+        field: "tapeId",
         width: 110,
         hozAlign: "center",
         headerFilter: "list",
-        headerFilterParams: { values: { "": "All", DEALER: "Dealer", CLIENT: "Client" } },
+        headerFilterParams: { values: { "": "All", ROLL: "Roll", SHEET: "Sheet" } },
         headerFilterPlaceholder: "All",
+        // Column shares its `field` with "Item Details"/"GSM/Micron"/"Width"
+        // (all read tapeId), so filter/sort go through getRollOrSheet().
+        headerFilterFunc: (headerValue, rowValue, rowData) => getRollOrSheet(rowData) === headerValue,
+        sorter: (a, b, aRow, bRow) => getRollOrSheet(aRow.getData()).localeCompare(getRollOrSheet(bRow.getData())),
         formatter: (cell) => {
-          const val = String(cell.getValue() || "").toUpperCase();
-          if (!val) return "";
-          const isDealer = val === "DEALER";
-          const color = isDealer ? "#dc2626" : "#059669";
+          const val = getRollOrSheet(cell.getRow().getData());
+          if (!val) return "-";
+          const color = val === "SHEET" ? "#7c3aed" : "#0369a1";
           return `<span style="color:${color}; font-weight:700;">${val}</span>`;
         },
       },
@@ -622,23 +622,6 @@
         sorter: (a, b, aRow, bRow) => (Number(getItemGsm(aRow.getData())) || 0) - (Number(getItemGsm(bRow.getData())) || 0),
         formatter: (cell) => {
           const gsm = getItemGsm(cell.getRow().getData());
-          return gsm !== "" && gsm != null ? String(gsm) : "-";
-        },
-      },
-      {
-        title: "Client GSM",
-        field: "tapeBinding",
-        hozAlign: "center",
-        width: 110,
-        headerFilter: "input",
-        headerFilterPlaceholder: "Search",
-        headerFilterFunc: (headerValue, rowValue, rowData, filterParams) => {
-          const gsm = getClientGsm(rowData);
-          return String(gsm).toLowerCase().includes(String(headerValue).toLowerCase());
-        },
-        sorter: (a, b, aRow, bRow) => (Number(getClientGsm(aRow.getData())) || 0) - (Number(getClientGsm(bRow.getData())) || 0),
-        formatter: (cell) => {
-          const gsm = getClientGsm(cell.getRow().getData());
           return gsm !== "" && gsm != null ? String(gsm) : "-";
         },
       },

@@ -17,13 +17,17 @@
     ? Number(v).toLocaleString('en-IN')
     : (v || '—');
 
-  // Every field on the item's Label Stock recipe (models/sachiko/
-  // sachikoLabelStock.js), grouped into one card per physical layer --
-  // Facestock / Adhesive / Release Liner never share a box, so the spec
-  // reads as distinct materials rather than one mixed list. Layer order and
-  // keys mirror LAYER_ORDER/LAYER_META in utils/labelStockProduction.js
-  // (the same grouping the raw-material columns further down this page
-  // use) -- keep the two in step.
+  // Every field POOL_MATCH_FIELDS (utils/labelStockProduction.js) actually
+  // checks to decide a raw-material reel counts as this layer's material,
+  // grouped into one card per physical layer -- Facestock / Adhesive /
+  // Release Liner never share a box, so the spec reads as distinct materials
+  // rather than one mixed list. Nothing else (Vendor Name, Size, Adhesive's
+  // Viscosity/Cohesion/Shear/Density/GSM, Release's Size/GSM) is part of
+  // that match, so it isn't shown here either -- same trim as this page's
+  // own reelDetail()/specSummary() further down, keep all three in step.
+  // Layer order and keys mirror LAYER_ORDER/LAYER_META in utils/
+  // labelStockProduction.js (the same grouping the raw-material columns
+  // further down this page use) -- keep the two in step.
   const gsm = (v) => (v !== undefined && v !== null && v !== "" ? v + " GSM" : null);
   const mic = (v) => (v !== undefined && v !== null && v !== "" ? v + " MIC" : null);
   const rollType = item.rollType || "NORMAL";
@@ -37,26 +41,23 @@
     facestock: {
       title: "Facestock", swatch: "facestock",
       fields: (s) => [
-        ["Family", s?.facestockFamily], ["Type", s?.facestockType], ["Make", s?.facestockMake],
-        ["Vendor", s?.facestockVendorName], ["Vendor SKU Code", s?.facestockVendorSkuCode],
-        ["Size", s?.facestockSize], ["GSM", gsm(s?.facestockGsm)], ["Micron", mic(s?.facestockMicron)],
+        ["Family", s?.facestockFamily], ["Make", s?.facestockMake],
+        ["Vendor SKU Code", s?.facestockVendorSkuCode], ["Type", s?.facestockType],
+        ["GSM", gsm(s?.facestockGsm)], ["Micron", mic(s?.facestockMicron)],
       ],
     },
     adhesive: {
       title: "Adhesive", swatch: "adhesive",
       fields: (s) => [
-        ["Type", s?.adhesiveType], ["Make", s?.adhesiveMake], ["Vendor", s?.adhesiveVendorName],
-        ["Vendor SKU Code", s?.adhesiveVendorSkuCode], ["Viscosity", s?.adhesiveViscosity],
-        ["Cohesion", s?.adhesiveCohesion], ["Shear", s?.adhesiveShear], ["Density", s?.adhesiveDensity],
-        ["GSM", gsm(s?.adhesiveGsm)],
+        ["Type", s?.adhesiveType], ["Make", s?.adhesiveMake],
+        ["Vendor SKU Code", s?.adhesiveVendorSkuCode],
       ],
     },
     releaseLiner: {
       title: "Release Liner", swatch: "release",
       fields: (s) => [
-        ["Type", s?.releaseLinerType], ["Make", s?.releaseLinerMake], ["Vendor", s?.releaseLinerVendorName],
+        ["Type", s?.releaseLinerType], ["Make", s?.releaseLinerMake],
         ["Vendor SKU Code", s?.releaseLinerVendorSkuCode], ["Color", s?.releaseLinerColor],
-        ["Size", s?.releaseLinerSize], ["GSM", gsm(s?.releaseLinerGsm)],
       ],
     },
   };
@@ -132,14 +133,16 @@
     .layer-block-label { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; color: var(--mg-text); white-space: nowrap; width: 130px; flex: 0 0 auto; }
     .layer-block-sep { font-size: 13px; font-weight: 700; color: var(--mg-border); }
     .layer-block-detail { font-size: 13px; font-weight: 800; color: #334155; text-align: left; }
-    .layer-block-detail .lbd-pair { display: inline-flex; align-items: baseline; width: 150px; vertical-align: top; }
-    /* Vendor Name runs much longer than every other field here (e.g. "SHREE
-       ASHTAVINAYAK PAPERS PVT LTD") -- give it more room than the shared
-       150px pair width, and truncate with an ellipsis (rather than wrapping
-       or overflowing the card) if it's still too long even at that width. */
-    .layer-block-detail .lbd-pair--vendor { width: 260px; }
+    /* Sized to content, not a fixed column width -- a fixed width here used
+       to exist to cap Vendor Name (the one field long enough to need
+       truncating), but that field's gone from this card now (see
+       LAYER_GROUPS above -- only POOL_MATCH_FIELDS's own fields show here),
+       and a fixed width too narrow for "Vendor SKU Code:" made its value
+       overflow into the next pair (no visible gap) or get ellipsis-cut even
+       when short. */
+    .layer-block-detail .lbd-pair { display: inline-flex; align-items: baseline; vertical-align: top; margin-right: 14px; }
     .layer-block-detail .lbd-field { color: #000; font-weight: 600; white-space: nowrap; flex: 0 0 auto; margin-right: 4px; }
-    .layer-block-detail .lbd-value { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .layer-block-detail .lbd-value { white-space: nowrap; }
     .layer-caret { display: flex; justify-content: center; margin: -2px 0; color: #cbd5e1; font-size: 11px; }
 
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -240,6 +243,16 @@
     .raw-layer-title { font-size: 13px; font-weight: 700; color: #044a78; margin-bottom: 2px; }
     .raw-layer-spec { font-size: 11.5px; color: #64748b; margin-bottom: 6px; }
     .raw-layer-table td, .raw-layer-table th { white-space: normal; }
+    /* Vendor Name (plus whatever else reelDetail() joins alongside it) can
+       run longer than this narrow column -- truncate with an ellipsis
+       instead of wrapping/pushing the table wider; the row's title
+       attribute carries the untruncated text as a hover tooltip. */
+    .raw-layer-detail-cell {
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   </style>
 
   <div class="indi-head ap-head" style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
@@ -302,8 +315,7 @@
               const detailParts = g.fields
                 .filter(function (f) { return !isEmpty(f[1]); })
                 .map(function (f) {
-                  const isVendor = f[0] === "Vendor";
-                  return '<span class="lbd-pair' + (isVendor ? ' lbd-pair--vendor' : '') + '" title="' + escHtml(f[1]) + '">'
+                  return '<span class="lbd-pair" title="' + escHtml(f[1]) + '">'
                     + '<span class="lbd-field">' + escHtml(f[0]) + ':</span>'
                     + '<span class="lbd-value">' + escHtml(f[1]) + '</span></span>';
                 });
@@ -363,7 +375,7 @@
     <div class="span-full form-subheading raw-produce-row" style="grid-column: 1 / -1; margin: 10px 0 0; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 18px;">
       <h1>Produce New Deckle</h1>
       <div class="raw-mtrs-field">
-        <label for="rawMtrsInput">Mtrs to Produce</label>
+        <label for="rawMtrsInput">Kg to Produce</label>
         <input type="number" id="rawMtrsInput" name="rawProduceMtrs" class="form-control premium-input" min="0" step="any" value="0" />
       </div>
     </div>
@@ -499,36 +511,61 @@
     const ALLOTTED_LAYERS = JSON.parse(document.getElementById("allotted-layers-data").textContent) || {};
     const ORDER_ID = JSON.parse(document.getElementById("order-id-data").textContent);
 
+    // Shows exactly the fields reelMatchesLayer() (utils/labelStockProduction.js
+    // POOL_MATCH_FIELDS) actually checks to decide a reel counts as this
+    // layer's material -- Facestock: family/make/vendor SKU code/type/gsm or
+    // micron; Adhesive: type/make/vendor SKU code; Release Liner: type/make/
+    // vendor SKU code/color. Nothing else (Vendor Name, Size, Adhesive's
+    // shelf life/viscosity/cohesion/shear/density, Release's size/gsm) is
+    // part of that match, so it isn't shown here either -- keep the two in
+    // step.
     function specSummary(spec, layerKey) {
       if (!spec) return "—";
       const bits = [];
       if (layerKey.startsWith("facestock")) {
         if (spec.facestockFamily) bits.push(spec.facestockFamily);
-        if (spec.facestockType) bits.push(spec.facestockType);
         if (spec.facestockMake) bits.push(spec.facestockMake);
-        if (spec.facestockVendorName) bits.push(spec.facestockVendorName);
         if (spec.facestockVendorSkuCode) bits.push(spec.facestockVendorSkuCode);
-        if (spec.facestockSize) bits.push(`Size ${spec.facestockSize}`);
+        if (spec.facestockType) bits.push(spec.facestockType);
         if (spec.facestockGsm) bits.push(`${spec.facestockGsm} GSM`);
         else if (spec.facestockMicron) bits.push(`${spec.facestockMicron} MIC`);
       } else if (layerKey.startsWith("adhesive")) {
         if (spec.adhesiveType) bits.push(spec.adhesiveType);
         if (spec.adhesiveMake) bits.push(spec.adhesiveMake);
-        if (spec.adhesiveVendorName) bits.push(spec.adhesiveVendorName);
         if (spec.adhesiveVendorSkuCode) bits.push(spec.adhesiveVendorSkuCode);
-        if (spec.adhesiveViscosity) bits.push(`Visc ${spec.adhesiveViscosity}`);
-        if (spec.adhesiveCohesion) bits.push(`Coh ${spec.adhesiveCohesion}`);
-        if (spec.adhesiveShear) bits.push(`Shear ${spec.adhesiveShear}`);
-        if (spec.adhesiveDensity) bits.push(`Dens ${spec.adhesiveDensity}`);
-        if (spec.adhesiveGsm) bits.push(`${spec.adhesiveGsm} GSM`);
       } else {
         if (spec.releaseLinerType) bits.push(spec.releaseLinerType);
         if (spec.releaseLinerMake) bits.push(spec.releaseLinerMake);
-        if (spec.releaseLinerVendorName) bits.push(spec.releaseLinerVendorName);
         if (spec.releaseLinerVendorSkuCode) bits.push(spec.releaseLinerVendorSkuCode);
         if (spec.releaseLinerColor) bits.push(spec.releaseLinerColor);
-        if (spec.releaseLinerSize) bits.push(`Size ${spec.releaseLinerSize}`);
-        if (spec.releaseLinerGsm) bits.push(`${spec.releaseLinerGsm} GSM`);
+      }
+      return bits.join(" · ") || "—";
+    }
+
+    // Per-candidate-reel counterpart to specSummary() above: shows exactly
+    // the fields specSummary DOESN'T (the ones POOL_MATCH_FIELDS no longer
+    // narrows on) -- Facestock: Vendor Name/Size; Adhesive: Vendor Name/
+    // Shelf Life/Viscosity/Cohesion/Shear/Density; Release Liner: Vendor
+    // Name/Size/GSM. Since those fields can now differ between reels that
+    // still count as a match, this is what a picker actually needs to tell
+    // candidates apart by -- replaces the system Roll ID (still available as
+    // this cell's hover tooltip) in the roll table below.
+    function reelDetail(layerKey, r) {
+      const bits = [];
+      if (layerKey.startsWith("facestock")) {
+        if (r.vendorName) bits.push(r.vendorName);
+        if (r.size) bits.push(`Size ${r.size}`);
+      } else if (layerKey.startsWith("adhesive")) {
+        if (r.vendorName) bits.push(r.vendorName);
+        if (r.shelfLife) bits.push(`Shelf Life ${r.shelfLife}`);
+        if (r.viscosity) bits.push(`Visc ${r.viscosity}`);
+        if (r.cohesion) bits.push(`Coh ${r.cohesion}`);
+        if (r.shear) bits.push(`Shear ${r.shear}`);
+        if (r.density) bits.push(`Dens ${r.density}`);
+      } else {
+        if (r.vendorName) bits.push(r.vendorName);
+        if (r.size) bits.push(`Size ${r.size}`);
+        if (r.gsm) bits.push(`${r.gsm} GSM`);
       }
       return bits.join(" · ") || "—";
     }
@@ -539,7 +576,7 @@
           <div class="raw-layer-title">${meta.label}</div>
           <div class="raw-layer-spec">${specSummary(ITEM[meta.specField], layerKey)}</div>
           <div class="ap-table-wrap"><table class="ap-table roll-table raw-layer-table">
-            <thead><tr><th class="roll-check-cell"></th><th>Roll ID</th><th>Mtrs</th></tr></thead>
+            <thead><tr><th class="roll-check-cell"></th><th>Details</th><th>Kg</th></tr></thead>
             <tbody data-body="${layerKey}"><tr><td colspan="3" style="color:#94a3b8; font-style:italic;">Select a machine first</td></tr></tbody>
           </table></div>
         </div>`;
@@ -579,9 +616,10 @@
       tbody.innerHTML = reels.map((r) => {
         const short = needed > 0 && r.reelMtrs < needed;
         const checked = !short && r._id === previouslyChecked;
+        const detail = reelDetail(layerKey, r);
         return `<tr class="${short ? "roll-locked" : ""}">` +
           `<td class="roll-check-cell"><input type="radio" name="rawLayers[${layerKey}]" value="${r._id}"${short ? " disabled" : ""}${checked ? " checked" : ""} /></td>` +
-          `<td>${r.rollId}</td>` +
+          `<td class="raw-layer-detail-cell" title="${r.rollId} -- ${detail}">${detail}</td>` +
           `<td>${r.reelMtrs}</td>` +
         `</tr>`;
       }).join("");

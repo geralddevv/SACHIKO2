@@ -57,49 +57,36 @@ export const POOL_MODELS = {
   release: { Model: ReleaseLinerStock, LogModel: ReleaseLinerStockLog },
 };
 
-// Every reel-side field a recipe layer can actually pin down, paired with the
-// recipe's own (prefixed) field name for it -- mirrors buildFacestockSignature/
-// buildAdhesiveSignature/buildReleaseSignature's own field lists (routes/system/
-// */Master.js). Used to be missing whatever the master carried but the
-// recipe layer had no field for (Size on Facestock, Viscosity/Cohesion/
-// Shear/Density on Adhesive, Vendor SKU Code/Size on Release), which let
-// masters differing only in one of those collapse into one ambiguous match --
-// models/sachiko/sachikoLabelStock.js's facestock/adhesive/releaseLiner
-// sub-schemas now carry all of them. Drives reelMatchesLayer() below, the
-// single check both the raw-stock picker (routes/sachiko/
-// labelStockProduction.js) and produceDeckle() use, so a reel only ever
-// counts as "this recipe's material" when its *whole* recorded identity
-// agrees with the recipe, not just Type.
+// The deliberately narrow set of reel-side fields a recipe layer's material
+// is considered "the same as" for allocation purposes, paired with the
+// recipe's own (prefixed) field name for each -- Facestock: family/make/
+// vendor SKU code/type/gsm/micron; Adhesive: type/make/vendor SKU code;
+// Release Liner: type/make/vendor SKU code/color. Vendor itself and every
+// other master field (Size; Adhesive's shelf life/viscosity/cohesion/shear/
+// density; Release's size/gsm) are NOT checked here -- a reel only needs to
+// agree with the recipe on this list to count as usable, even if it differs
+// from the recipe's exact master elsewhere. Drives reelMatchesLayer() below,
+// the single check both the raw-stock picker (routes/sachiko/
+// labelStockProduction.js) and produceDeckle() use.
 export const POOL_MATCH_FIELDS = {
   facestock: [
     { field: "family", recipe: "facestockFamily" },
-    { field: "type", recipe: "facestockType" },
     { field: "make", recipe: "facestockMake" },
-    { field: "vendorId", recipe: "facestockVendorId" },
     { field: "vendorSkuCode", recipe: "facestockVendorSkuCode" },
-    { field: "size", recipe: "facestockSize" },
+    { field: "type", recipe: "facestockType" },
     { field: "gsm", recipe: "facestockGsm", numeric: true },
     { field: "micron", recipe: "facestockMicron", numeric: true },
   ],
   adhesive: [
     { field: "type", recipe: "adhesiveType" },
     { field: "make", recipe: "adhesiveMake" },
-    { field: "vendorId", recipe: "adhesiveVendorId" },
     { field: "vendorSkuCode", recipe: "adhesiveVendorSkuCode" },
-    { field: "shelfLife", recipe: "adhesiveShelfLife" },
-    { field: "viscosity", recipe: "adhesiveViscosity", numeric: true },
-    { field: "cohesion", recipe: "adhesiveCohesion", numeric: true },
-    { field: "shear", recipe: "adhesiveShear", numeric: true },
-    { field: "density", recipe: "adhesiveDensity", numeric: true },
   ],
   release: [
     { field: "type", recipe: "releaseLinerType" },
     { field: "make", recipe: "releaseLinerMake" },
-    { field: "vendorId", recipe: "releaseLinerVendorId" },
     { field: "vendorSkuCode", recipe: "releaseLinerVendorSkuCode" },
     { field: "color", recipe: "releaseLinerColor" },
-    { field: "size", recipe: "releaseLinerSize" },
-    { field: "gsm", recipe: "releaseLinerGsm", numeric: true },
   ],
 };
 
@@ -108,10 +95,10 @@ const canonMatch = (v) => String(v ?? "").trim().toUpperCase();
 // True when every field the recipe layer actually specifies agrees with the
 // reel -- a recipe field left blank (Make/Vendor SKU Code are optional on the
 // Label Stock form) imposes no constraint, same "no value = no narrowing"
-// rule the form's own smart-filter cascade uses. vendorId compares as a bare
-// ObjectId string; gsm/micron compare numerically (a select's string value
-// vs. the reel's stored Number); everything else is a canonicalized string
-// compare, matching *SpecKey/*RecipeKey's own canonStr in routes/stock/*.js.
+// rule the form's own smart-filter cascade uses. gsm/micron compare
+// numerically (a select's string value vs. the reel's stored Number);
+// everything else is a canonicalized string compare, matching
+// *SpecKey/*RecipeKey's own canonStr in routes/stock/*.js.
 export function reelMatchesLayer(pool, reel, layer) {
   if (!reel || !layer) return false;
   for (const { field, recipe, numeric } of POOL_MATCH_FIELDS[pool] || []) {
@@ -119,8 +106,6 @@ export function reelMatchesLayer(pool, reel, layer) {
     if (raw === undefined || raw === null || String(raw).trim() === "") continue;
     if (numeric) {
       if (Number(reel[field]) !== Number(raw)) return false;
-    } else if (field === "vendorId") {
-      if (String(reel[field] || "") !== String(raw)) return false;
     } else if (canonMatch(reel[field]) !== canonMatch(raw)) {
       return false;
     }
