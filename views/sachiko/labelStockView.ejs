@@ -5,6 +5,62 @@
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
   <style>
     #master-table { width: 100%; flex: 1 1 auto; min-height: 0; }
+
+    /* Product Code variant dropdown -- "C011" grouping its "C011-A"/"C011-B"/...
+       siblings (same base code, different recipe -- see utils/labelStockVariant.js)
+       under one expandable parent row, same Tabulator dataTree "Rolls" toggle
+       pattern as views/stock/facestockStock.ejs. */
+    .tabulator-data-tree-control {
+      width: 20px !important;
+      height: 20px !important;
+      border: none !important;
+      border-radius: 4px !important;
+      background: rgba(4, 74, 120, 0.1) !important;
+      box-shadow: none !important;
+      outline: none !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: pointer !important;
+      transition: background-color 0.15s ease !important;
+    }
+    .tabulator-data-tree-control:hover {
+      background: rgba(4, 74, 120, 0.18) !important;
+    }
+    .tabulator-data-tree-control:focus,
+    .tabulator-data-tree-control:focus-visible {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+    .tabulator-data-tree-control-expand,
+    .tabulator-data-tree-control-collapse {
+      width: auto !important;
+      height: auto !important;
+      background: none !important;
+      border: none !important;
+    }
+    .tabulator-data-tree-control-expand::before,
+    .tabulator-data-tree-control-collapse::before {
+      font-family: "Font Awesome 6 Free";
+      font-weight: 900;
+      content: "\f054"; /* chevron-right, one glyph for both states */
+      font-size: 11px;
+      line-height: 1;
+      color: #044a78;
+      display: inline-block;
+      transition: transform 0.2s ease;
+    }
+    .tabulator-data-tree-control-collapse::before {
+      transform: rotate(90deg);
+    }
+    .tabulator-data-tree-control-expand::after,
+    .tabulator-data-tree-control-collapse::after {
+      content: none !important;
+      display: none !important;
+    }
+    #master-table .tabulator-row[data-variant-child="true"] {
+      background-color: #f8fafc;
+    }
     .tabulator-edit-list { scrollbar-width: none !important; -ms-overflow-style: none !important; }
     .tabulator-edit-list::-webkit-scrollbar { display: none !important; }
     .header-action-btn {
@@ -180,42 +236,104 @@
   // Printing Technology, every FS/AD/RL Family/Type/Make/Vendor/GSM/Micron/
   // Color/Shelf-Life field) lives in the View button's modal (viewLabelStock
   // below, reading straight from `raw`) instead of being duplicated here.
-  const tableData = raw.map(ds => {
-    const fsType = ds.facestock?.facestockType || "";
-    const fsGsm = ds.facestock?.facestockGsm || "";
-    const fsMicron = ds.facestock?.facestockMicron || "";
-    const adType = ds.adhesive?.adhesiveType   || "";
-    const adGsm = ds.adhesive?.adhesiveGsm || "";
-    const rlType = ds.releaseLiner?.releaseLinerType || "";
-    const micPart = ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : "";
-    const product = [fsType, micPart, adType, rlType].filter(Boolean).join(" / ");
+  // Factored into a function (not a one-off const) so a delete can rebuild
+  // both the flat row list and the variant tree below from the trimmed
+  // `raw` array, instead of hand-patching Tabulator's dataTree structure.
+  function buildLabelStockTableData(rawArr) {
+    return rawArr.map(ds => {
+      const fsType = ds.facestock?.facestockType || "";
+      const fsGsm = ds.facestock?.facestockGsm || "";
+      const fsMicron = ds.facestock?.facestockMicron || "";
+      const adType = ds.adhesive?.adhesiveType   || "";
+      const adGsm = ds.adhesive?.adhesiveGsm || "";
+      const rlType = ds.releaseLiner?.releaseLinerType || "";
+      const micPart = ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : "";
+      const product = [fsType, micPart, adType, rlType].filter(Boolean).join(" / ");
 
-    return {
-      _id: String(ds._id),
-      skuCode: ds.skuCode || "",
-      productCode: ds.productCode,
-      family: ds.family || "",
-      rollType: ds.rollType || "NORMAL",
-      facestockType: fsType,
-      facestockGsm: fsGsm,
-      facestockMicron: fsMicron,
-      adhesiveType: adType,
-      adhesiveGsm: adGsm,
-      releaseLinerType: rlType,
-      product,
-      wordFile: ds.wordFile || "",
-    };
-  });
+      return {
+        _id: String(ds._id),
+        skuCode: ds.skuCode || "",
+        productCode: ds.productCode,
+        family: ds.family || "",
+        rollType: ds.rollType || "NORMAL",
+        facestockType: fsType,
+        facestockGsm: fsGsm,
+        facestockMicron: fsMicron,
+        adhesiveType: adType,
+        adhesiveGsm: adGsm,
+        releaseLinerType: rlType,
+        product,
+        wordFile: ds.wordFile || "",
+      };
+    });
+  }
+  const tableData = buildLabelStockTableData(raw);
+
+  // Product Code "C011" / "C011-A" / "C011-B" variants (same base code, a
+  // different recipe -- see utils/labelStockVariant.js's resolveLabelStockProductCode)
+  // are the same underlying spec family, so they're grouped in the table
+  // exactly like Facestock Stock groups its reels under a master: the plain
+  // base code becomes the parent row, its "-A"/"-B"/... siblings become the
+  // dataTree children revealed by the same toggle dropdown. A code with no
+  // variants stays a plain flat row -- no toggle drawn.
+  function lsBaseProductCode(code) {
+    const m = String(code || "").match(/^(.*)-[A-Z]+$/);
+    return m ? m[1] : String(code || "");
+  }
+
+  function buildLabelStockTreeData(rows) {
+    const groups = new Map();
+    rows.forEach((row) => {
+      const base = lsBaseProductCode(row.productCode);
+      if (!groups.has(base)) groups.set(base, []);
+      groups.get(base).push(row);
+    });
+
+    const tree = [];
+    groups.forEach((members, base) => {
+      if (members.length === 1) {
+        tree.push(members[0]);
+        return;
+      }
+      const parent = members.find((r) => r.productCode === base);
+      if (!parent) {
+        // No plain base-code row to hang the dropdown off -- list flat
+        // rather than fabricate a parent with no real record behind it.
+        members.forEach((r) => tree.push(r));
+        return;
+      }
+      const children = members
+        .filter((r) => r !== parent)
+        .sort((a, b) => a.productCode.localeCompare(b.productCode, undefined, { numeric: true }));
+      tree.push({ ...parent, _children: children });
+    });
+    return tree;
+  }
+
+  const treeData = buildLabelStockTreeData(tableData);
 
   const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, hozAlign: "center", headerHozAlign: "center", ...col });
   const withSelectFilter = (col, values) => ({ headerFilter: "list", headerFilterParams: { values, clearable: true }, hozAlign: "center", headerHozAlign: "center", ...col });
 
   const table = new Tabulator("#master-table", {
-    data: tableData,
+    data: treeData,
     height: "100%",
     initialSort: [{ column: "skuCode", dir: "asc" }],
     placeholder: "No Label Stocks found",
+    dataTree: true,
+    dataTreeStartExpanded: false,
+    dataTreeChildField: "_children",
+    dataTreeElementColumn: "_toggle",
+    rowFormatter: (row) => {
+      // Tags a variant child row so it can be shaded differently from its
+      // parent (see the #master-table .tabulator-row[data-variant-child] CSS
+      // above) -- purely cosmetic, doesn't affect the row's own data/actions.
+      if (row.getTreeParent && row.getTreeParent()) {
+        row.getElement().setAttribute("data-variant-child", "true");
+      }
+    },
     columns: [
+      { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false },
       {
         title: "Actions",
         hozAlign: "center",
@@ -247,7 +365,13 @@
         },
       },
       withTextFilter({ title: "SKU", field: "skuCode", minWidth: 180 }),
-      withTextFilter({ title: "Product Code", field: "productCode", width: 150, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
+      withTextFilter({ title: "Product Code", field: "productCode", width: 150, formatter: (cell) => {
+        const children = cell.getRow().getData()._children;
+        const countBadge = children && children.length
+          ? ` <span style="font-size:10.5px;font-weight:700;color:#b45309;background:#fef3c7;border-radius:999px;padding:1px 7px;">${children.length} variant${children.length === 1 ? "" : "s"}</span>`
+          : "";
+        return `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>${countBadge}`;
+      } }),
       withTextFilter({ title: "Family", field: "family", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
       withTextFilter({ title: "FSK Type", field: "facestockType", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
       withTextFilter({ title: "FSK GSM", field: "facestockGsm", minWidth: 120, formatter: (cell) => cell.getValue() ? cell.getValue() + " GSM" : "—" }),
@@ -527,7 +651,14 @@
         });
         const data = await resp.json();
         if (data.success) {
-          table.deleteRow(table.getRows().find(r => r.getData()._id === id));
+          // A deleted row might be a variant nested under another Product
+          // Code's dropdown (or the base row a dropdown hangs off of), so
+          // rebuild the whole tree from the trimmed `raw` array rather than
+          // trying to locate and remove a single (possibly nested) Tabulator
+          // row -- table.getRows() alone only sees top-level rows.
+          const idx = raw.findIndex(d => String(d._id) === id);
+          if (idx !== -1) raw.splice(idx, 1);
+          table.setData(buildLabelStockTreeData(buildLabelStockTableData(raw)));
           if (typeof showToast === "function") showToast("Label Stock deleted", "success");
         } else {
           if (typeof showToast === "function") showToast(data.message || "Delete failed", "error");
