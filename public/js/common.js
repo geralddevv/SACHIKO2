@@ -262,6 +262,22 @@
     });
   });
 
+  // ================= NUMBER INPUT SCROLL GUARD =================
+  // Chrome/Firefox change a focused number input's value on mouse-wheel
+  // scroll, which silently corrupts data entry whenever the page (or a
+  // dialog) happens to be scrollable under the cursor. Blur it on wheel so
+  // scrolling just scrolls, never edits. Delegated on document so it also
+  // covers number inputs added after page load (dialogs, dynamic rows).
+  document.addEventListener(
+    "wheel",
+    () => {
+      if (document.activeElement?.tagName === "INPUT" && document.activeElement.type === "number") {
+        document.activeElement.blur();
+      }
+    },
+    { passive: true }
+  );
+
   // ================= CUSTOM NAV HISTORY =================
 
   (function () {
