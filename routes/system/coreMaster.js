@@ -1,6 +1,7 @@
 import express from "express";
 import crypto from "crypto";
 import CoreMaster from "../../models/inventory/coreMaster.js";
+import CoreStock from "../../models/inventory/coreStock.js";
 import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
@@ -35,6 +36,37 @@ function buildCoreSignature(payload) {
 }
 
 const DUPLICATE_CORE_MESSAGE = "This core already exists (every field matches an existing record).";
+
+// Every field CoreStock mirrors from its master (see models/inventory/
+// coreStock.js's own comment -- stock is entered directly against a master's
+// spec). Editing a master must carry the same edit onto any lot still
+// recorded under the pre-edit spec, or that lot quietly stops matching any
+// master row and vanishes from the Stock columns even though the physical
+// cores are still sitting there.
+const STOCK_MIRROR_FIELDS = ["vendorId", "vendorName", "type", "make", "printType", "thickness", "od", "length"];
+
+// Builds the query that finds every CoreStock lot still carrying the
+// master's PRE-edit identity, and the $set/$unset that brings them onto the
+// post-edit one. A field that's now blank/undefined has to $unset, not $set
+// with undefined -- Mongo/Mongoose silently drop undefined-valued $set keys,
+// which would leave the old value in place.
+function cascadeStockUpdate(before, payload) {
+  const match = {};
+  const $set = {};
+  const $unset = {};
+  for (const field of STOCK_MIRROR_FIELDS) {
+    const oldVal = before[field];
+    match[field] = oldVal === undefined || oldVal === null ? { $exists: false } : oldVal;
+
+    const newVal = payload[field];
+    if (newVal === undefined || newVal === null || newVal === "") $unset[field] = "";
+    else $set[field] = newVal;
+  }
+  const update = {};
+  if (Object.keys($set).length) update.$set = $set;
+  if (Object.keys($unset).length) update.$unset = $unset;
+  return { match, update };
+}
 
 const parseSkuSeq = (skuId) => {
   const match = String(skuId || "").match(/(\d{6})$/);
@@ -161,12 +193,25 @@ router.put("/api/core/:id", requireAuth, requireCoreMaster, updateLimiter, async
       return res.status(400).json({ success: false, message: DUPLICATE_CORE_MESSAGE });
     }
 
-    const updated = await CoreMaster.findByIdAndUpdate(req.params.id, { ...payload, coreSignature }, { new: true, runValidators: true });
-    if (!updated) {
+    const before = await CoreMaster.findById(req.params.id).lean();
+    if (!before) {
       return res.status(404).json({ success: false, message: "Core master not found." });
     }
 
-    res.locals.auditDescription = `Updated core master "${updated.skuId}"`;
+    const updated = await CoreMaster.findByIdAndUpdate(req.params.id, { ...payload, coreSignature }, { new: true, runValidators: true });
+
+    const { match, update } = cascadeStockUpdate(before, payload);
+    let stockUpdated = 0;
+    if (update.$set || update.$unset) {
+      const result = await CoreStock.updateMany(match, update);
+      stockUpdated = result.modifiedCount || 0;
+    }
+
+    res.locals.auditDescription = `Updated core master "${updated.skuId}"`
+      + (stockUpdated ? ` -- carried the change onto ${stockUpdated} existing stock lot${stockUpdated === 1 ? "" : "s"}` : "");
+    req.flash("notification", stockUpdated
+      ? `Core master updated -- ${stockUpdated} existing stock lot${stockUpdated === 1 ? "" : "s"} updated to match.`
+      : "Core master updated successfully!");
     res.json({ success: true });
   } catch (err) {
     console.error("CORE MASTER UPDATE ERROR:", err);

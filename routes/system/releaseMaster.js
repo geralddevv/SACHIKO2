@@ -1,6 +1,7 @@
 import express from "express";
 import crypto from "crypto";
 import ReleaseMaster from "../../models/inventory/releaseMaster.js";
+import ReleaseLinerStock from "../../models/inventory/releaseLinerStock.js";
 import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
@@ -35,6 +36,37 @@ function buildReleaseSignature(payload) {
 }
 
 const DUPLICATE_RELEASE_MESSAGE = "This release liner already exists (every field matches an existing record).";
+
+// Every field ReleaseLinerStock mirrors from its master (see releaseSpecKey,
+// routes/stock/releaseLinerStock.js -- stock is grouped under a master by
+// matching all of these exactly). Editing a master must carry the same edit
+// onto any reel still recorded under the pre-edit spec, or that reel quietly
+// stops matching any master row and vanishes from the Stock/Allotted/
+// Available columns even though the physical reel is still sitting there.
+const STOCK_MIRROR_FIELDS = ["vendorId", "vendorName", "type", "make", "vendorSkuCode", "color", "size", "gsm"];
+
+// Builds the query that finds every ReleaseLinerStock reel still carrying
+// the master's PRE-edit identity, and the $set/$unset that brings them onto
+// the post-edit one. A field that's now blank/undefined has to $unset, not
+// $set with undefined -- Mongo/Mongoose silently drop undefined-valued $set
+// keys, which would leave the old value in place.
+function cascadeStockUpdate(before, payload) {
+  const match = {};
+  const $set = {};
+  const $unset = {};
+  for (const field of STOCK_MIRROR_FIELDS) {
+    const oldVal = before[field];
+    match[field] = oldVal === undefined || oldVal === null ? { $exists: false } : oldVal;
+
+    const newVal = payload[field];
+    if (newVal === undefined || newVal === null || newVal === "") $unset[field] = "";
+    else $set[field] = newVal;
+  }
+  const update = {};
+  if (Object.keys($set).length) update.$set = $set;
+  if (Object.keys($unset).length) update.$unset = $unset;
+  return { match, update };
+}
 
 // Same "SP | <CODE> | 000001" id scheme used for Machine/Label Stock/Job Card
 const parseSkuSeq = (skuId) => {
@@ -159,12 +191,25 @@ router.put("/api/release/:id", requireAuth, requireReleaseMaster, updateLimiter,
       return res.status(400).json({ success: false, message: DUPLICATE_RELEASE_MESSAGE });
     }
 
-    const updated = await ReleaseMaster.findByIdAndUpdate(req.params.id, { ...payload, releaseSignature }, { new: true, runValidators: true });
-    if (!updated) {
+    const before = await ReleaseMaster.findById(req.params.id).lean();
+    if (!before) {
       return res.status(404).json({ success: false, message: "Release master not found." });
     }
 
-    res.locals.auditDescription = `Updated release master "${updated.skuId}"`;
+    const updated = await ReleaseMaster.findByIdAndUpdate(req.params.id, { ...payload, releaseSignature }, { new: true, runValidators: true });
+
+    const { match, update } = cascadeStockUpdate(before, payload);
+    let stockUpdated = 0;
+    if (update.$set || update.$unset) {
+      const result = await ReleaseLinerStock.updateMany(match, update);
+      stockUpdated = result.modifiedCount || 0;
+    }
+
+    res.locals.auditDescription = `Updated release master "${updated.skuId}"`
+      + (stockUpdated ? ` -- carried the change onto ${stockUpdated} existing stock reel${stockUpdated === 1 ? "" : "s"}` : "");
+    req.flash("notification", stockUpdated
+      ? `Release master updated -- ${stockUpdated} existing stock reel${stockUpdated === 1 ? "" : "s"} updated to match.`
+      : "Release master updated successfully!");
     res.json({ success: true });
   } catch (err) {
     console.error("RELEASE MASTER UPDATE ERROR:", err);

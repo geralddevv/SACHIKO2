@@ -153,13 +153,15 @@
       <div class="ap-table-wrap">
         <table class="ap-table">
           <colgroup>
-            <col style="width: 14%" />
-            <col style="width: 22%" />
-            <col style="width: 12%" />
-            <col style="width: 13%" />
-            <col style="width: 13%" />
-            <col style="width: 13%" />
-            <col style="width: 13%" />
+            <col style="width: 11%" />
+            <col style="width: 19%" />
+            <col style="width: 9%" />
+            <col style="width: 9%" />
+            <col style="width: 11%" />
+            <col style="width: 11%" />
+            <col style="width: 11%" />
+            <col style="width: 9%" />
+            <col style="width: 10%" />
           </colgroup>
           <thead>
             <tr>
@@ -167,19 +169,39 @@
               <th>Product Code</th>
               <th>Paper Size</th>
               <th>Required Rolls</th>
-              <th>Allotted Items</th>
+              <th>Facestock</th>
+              <th>Adhesive</th>
+              <th>Release</th>
               <th>Balance Rolls</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
+            <%
+              // Facestock/Adhesive/Release Liner allotment, one badge per raw-
+              // material pool -- red (nothing of that pool allotted), yellow
+              // (DOUBLE FACESTOCK/DOUBLE RELEASE rollTypes have 2 layers per
+              // pool and only one is allotted), green (fully allotted). See
+              // buildQueueRows()'s facestockStatus/adhesiveStatus/releaseStatus
+              // in routes/system/machine.js. Clicking any of the 3 cells opens
+              // the same roll-allotment details dialog the old standalone
+              // "Allotted Items" column used to open (now folded into these).
+              const poolBadge = (status) => {
+                if (status === "none") return '<span style="color:#dc2626; font-weight:700;"><i class="fa-solid fa-triangle-exclamation"></i> Not allotted</span>';
+                if (status === "partial") return '<span style="color:#ca8a04; font-weight:700;"><i class="fa-solid fa-circle-half-stroke"></i> Partial</span>';
+                if (status === "full") return '<span style="color:#16a34a; font-weight:700;"><i class="fa-solid fa-check"></i> Allotted</span>';
+                return '<span style="color:#9ca3af;">—</span>';
+              };
+            %>
             <% rows.forEach((row) => { %>
               <tr class="<%= row.materialStatus === 'match' ? 'mq-row-match' : row.materialStatus === 'short' ? 'mq-row-short' : '' %>">
                 <td data-label="Lot No" title="<%= row.lotNo %>"><%= row.lotNo %></td>
                 <td data-label="Product Code" title="<%= row.productCode %>"><%= row.productCode %></td>
                 <td data-label="Paper Size"><%= row.paperSize %></td>
                 <td data-label="Required Rolls"><%= row.rolls %></td>
-                <td class="mq-rolls-cell" data-label="Allotted Items" data-id="<%= row._id %>" onclick="openRollDetails(this.dataset.id)" title="View roll allotment details"><%= row.allottedRolls %></td>
+                <td class="mq-rolls-cell" data-label="Facestock" data-id="<%= row._id %>" onclick="openRollDetails(this.dataset.id)" title="View roll allotment details"><%- poolBadge(row.facestockStatus) %></td>
+                <td class="mq-rolls-cell" data-label="Adhesive" data-id="<%= row._id %>" onclick="openRollDetails(this.dataset.id)" title="View roll allotment details"><%- poolBadge(row.adhesiveStatus) %></td>
+                <td class="mq-rolls-cell" data-label="Release" data-id="<%= row._id %>" onclick="openRollDetails(this.dataset.id)" title="View roll allotment details"><%- poolBadge(row.releaseStatus) %></td>
                 <td data-label="Balance Rolls"><%= row.balanceRolls %></td>
                 <td>
                   <div class="mq-actions">

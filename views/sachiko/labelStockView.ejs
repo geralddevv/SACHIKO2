@@ -158,11 +158,13 @@
     .layer-card__label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 900; letter-spacing: 0.06em; margin-bottom: 16px; }
     .layer-card__label::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
     /* Shown once every field in a layer card resolves to exactly one master
-       row -- that row's own skuId, so the operator can see which master
-       spec was picked. Plain text, not a pill/capsule. */
+       row -- just an "OK" status pill confirming the card matches a real
+       catalog spec, not the master's own internal skuId (not something the
+       label stock form needs to surface). */
     .layer-card__sku-badge {
-      font-family: monospace; font-size: 11px; font-weight: 600; letter-spacing: normal;
-      text-transform: none; margin-left: 6px; opacity: 0.75;
+      font-family: inherit; font-size: 10px; font-weight: 800; letter-spacing: 0.04em;
+      text-transform: uppercase; margin-left: 6px; color: #15803d; background: #dcfce7;
+      border-radius: 999px; padding: 2px 8px;
     }
     /* Pushed to the far right of the card header by margin-left: auto --
        .layer-card__label is itself the flex row, so this doesn't need its
@@ -378,11 +380,11 @@
         return `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>${countBadge}`;
       } }),
       withTextFilter({ title: "Family", field: "family", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
-      withTextFilter({ title: "FSK Type", field: "facestockType", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
-      withTextFilter({ title: "FSK GSM", field: "facestockGsm", minWidth: 120, formatter: (cell) => cell.getValue() ? cell.getValue() + " GSM" : "—" }),
-      withTextFilter({ title: "FSK Micron", field: "facestockMicron", minWidth: 140, formatter: (cell) => cell.getValue() ? cell.getValue() + " MIC" : "—" }),
-      withTextFilter({ title: "ADV Type", field: "adhesiveType", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
-      withTextFilter({ title: "ADV GSM", field: "adhesiveGsm", minWidth: 120, formatter: (cell) => cell.getValue() ? cell.getValue() + " GSM" : "—" }),
+      withTextFilter({ title: "FS Type", field: "facestockType", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
+      withTextFilter({ title: "FS GSM", field: "facestockGsm", minWidth: 120, formatter: (cell) => cell.getValue() ? cell.getValue() + " GSM" : "—" }),
+      withTextFilter({ title: "FS Micron", field: "facestockMicron", minWidth: 140, formatter: (cell) => cell.getValue() ? cell.getValue() + " MIC" : "—" }),
+      withTextFilter({ title: "ADH Type", field: "adhesiveType", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
+      withTextFilter({ title: "ADH GSM", field: "adhesiveGsm", minWidth: 120, formatter: (cell) => cell.getValue() ? cell.getValue() + " GSM" : "—" }),
       withTextFilter({ title: "REL Type", field: "releaseLinerType", minWidth: 160, formatter: (cell) => cell.getValue() || "—" }),
       withSelectFilter({ title: "Roll Type",  field: "rollType",  minWidth: 140,
         formatter: (cell) => {
@@ -430,7 +432,6 @@
       { label: "Make",         value: ds.facestock?.facestockMake },
       { label: "Vendor Name",  value: ds.facestock?.facestockVendorName },
       { label: "Vendor SKU Code", value: ds.facestock?.facestockVendorSkuCode },
-      { label: "Size",    value: ds.facestock?.facestockSize },
       { label: "GSM",     value: ds.facestock?.facestockGsm    != null ? ds.facestock.facestockGsm + " GSM" : null },
       { label: "Micron",  value: ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : null },
     ];
@@ -439,11 +440,6 @@
       { label: "Make",         value: ds.adhesive?.adhesiveMake },
       { label: "Vendor Name",  value: ds.adhesive?.adhesiveVendorName },
       { label: "Vendor SKU Code", value: ds.adhesive?.adhesiveVendorSkuCode },
-      { label: "Shelf Life",   value: ds.adhesive?.adhesiveShelfLife },
-      { label: "Viscosity",    value: ds.adhesive?.adhesiveViscosity },
-      { label: "Cohesion",     value: ds.adhesive?.adhesiveCohesion },
-      { label: "Shear",        value: ds.adhesive?.adhesiveShear },
-      { label: "Density",      value: ds.adhesive?.adhesiveDensity },
       { label: "GSM",      value: ds.adhesive?.adhesiveGsm      != null ? ds.adhesive.adhesiveGsm + " GSM" : null },
     ];
     const facestock2Rows = [
@@ -452,7 +448,6 @@
       { label: "Make (Layer 2)",         value: ds.facestock2?.facestockMake },
       { label: "Vendor Name (Layer 2)",  value: ds.facestock2?.facestockVendorName },
       { label: "Vendor SKU Code (Layer 2)", value: ds.facestock2?.facestockVendorSkuCode },
-      { label: "Size (Layer 2)",   value: ds.facestock2?.facestockSize },
       { label: "GSM (Layer 2)",    value: ds.facestock2?.facestockGsm    != null ? ds.facestock2.facestockGsm + " GSM" : null },
       { label: "Micron (Layer 2)", value: ds.facestock2?.facestockMicron != null ? ds.facestock2.facestockMicron + " MIC" : null },
     ];
@@ -461,11 +456,6 @@
       { label: "Make (Layer 2)",         value: ds.adhesive2?.adhesiveMake },
       { label: "Vendor Name (Layer 2)",  value: ds.adhesive2?.adhesiveVendorName },
       { label: "Vendor SKU Code (Layer 2)", value: ds.adhesive2?.adhesiveVendorSkuCode },
-      { label: "Shelf Life (Layer 2)",   value: ds.adhesive2?.adhesiveShelfLife },
-      { label: "Viscosity (Layer 2)",    value: ds.adhesive2?.adhesiveViscosity },
-      { label: "Cohesion (Layer 2)",     value: ds.adhesive2?.adhesiveCohesion },
-      { label: "Shear (Layer 2)",        value: ds.adhesive2?.adhesiveShear },
-      { label: "Density (Layer 2)",      value: ds.adhesive2?.adhesiveDensity },
       { label: "GSM (Layer 2)",  value: ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null },
     ];
     const release1Rows = [
@@ -474,7 +464,6 @@
       { label: "Vendor Name", value: ds.releaseLiner?.releaseLinerVendorName },
       { label: "Vendor SKU Code", value: ds.releaseLiner?.releaseLinerVendorSkuCode },
       { label: "Color", value: ds.releaseLiner?.releaseLinerColor },
-      { label: "Size",  value: ds.releaseLiner?.releaseLinerSize },
       { label: "GSM",   value: ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null },
     ];
     const release2Rows = [
@@ -483,7 +472,6 @@
       { label: "Vendor Name (Layer 2)", value: ds.releaseLiner2?.releaseLinerVendorName },
       { label: "Vendor SKU Code (Layer 2)", value: ds.releaseLiner2?.releaseLinerVendorSkuCode },
       { label: "Color (Layer 2)", value: ds.releaseLiner2?.releaseLinerColor },
-      { label: "Size (Layer 2)",  value: ds.releaseLiner2?.releaseLinerSize },
       { label: "GSM (Layer 2)",   value: ds.releaseLiner2?.releaseLinerGsm != null ? ds.releaseLiner2.releaseLinerGsm + " GSM" : null },
     ];
 
@@ -535,24 +523,24 @@
     }
 
     let layers = [
-      layerBlock("facestock", null, [ds.facestock?.facestockFamily, ds.facestock?.facestockType, ds.facestock?.facestockSize, ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm + " GSM" : null, ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : null]),
+      layerBlock("facestock", null, [ds.facestock?.facestockFamily, ds.facestock?.facestockType, ds.facestock?.facestockGsm != null ? ds.facestock.facestockGsm + " GSM" : null, ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : null]),
       layerBlock("adhesive", null, [ds.adhesive?.adhesiveType, ds.adhesive?.adhesiveGsm != null ? ds.adhesive.adhesiveGsm + " GSM" : null]),
     ];
     if (rollType === "DOUBLE FACESTOCK") {
       layers.push(
-        layerBlock("facestock", "Layer 2", [ds.facestock2?.facestockFamily, ds.facestock2?.facestockType, ds.facestock2?.facestockSize, ds.facestock2?.facestockGsm != null ? ds.facestock2.facestockGsm + " GSM" : null, ds.facestock2?.facestockMicron != null ? ds.facestock2.facestockMicron + " MIC" : null]),
+        layerBlock("facestock", "Layer 2", [ds.facestock2?.facestockFamily, ds.facestock2?.facestockType, ds.facestock2?.facestockGsm != null ? ds.facestock2.facestockGsm + " GSM" : null, ds.facestock2?.facestockMicron != null ? ds.facestock2.facestockMicron + " MIC" : null]),
         layerBlock("adhesive", "Layer 2", [ds.adhesive2?.adhesiveType, ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null]),
-        layerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerSize, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+        layerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
       );
     } else if (rollType === "DOUBLE RELEASE") {
       layers.push(
-        layerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerSize, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+        layerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
         layerBlock("adhesive", "Layer 2", [ds.adhesive2?.adhesiveType, ds.adhesive2?.adhesiveGsm != null ? ds.adhesive2.adhesiveGsm + " GSM" : null]),
-        layerBlock("release", "Layer 2", [ds.releaseLiner2?.releaseLinerType, ds.releaseLiner2?.releaseLinerColor, ds.releaseLiner2?.releaseLinerSize, ds.releaseLiner2?.releaseLinerGsm != null ? ds.releaseLiner2.releaseLinerGsm + " GSM" : null]),
+        layerBlock("release", "Layer 2", [ds.releaseLiner2?.releaseLinerType, ds.releaseLiner2?.releaseLinerColor, ds.releaseLiner2?.releaseLinerGsm != null ? ds.releaseLiner2.releaseLinerGsm + " GSM" : null]),
       );
     } else {
       layers.push(
-        layerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerSize, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
+        layerBlock("release", null, [ds.releaseLiner?.releaseLinerType, ds.releaseLiner?.releaseLinerColor, ds.releaseLiner?.releaseLinerGsm != null ? ds.releaseLiner.releaseLinerGsm + " GSM" : null]),
       );
     }
 
@@ -737,6 +725,22 @@
       if (el) lsChoices[id] = new Choices(el, opts || { searchEnabled: false, shouldSort: false, itemSelectText: "" });
     }
 
+    // Roll Type/Family/Roll-Sheet/Laser-Ink keep a static, hardcoded
+    // <option> list in the HTML (unlike the cascade fields, which rebuild
+    // their own markup via fsSetSelectOptions) -- setting the <select>'s
+    // `.value` property doesn't move the `selected` ATTRIBUTE onto the
+    // right <option>, and per CLAUDE.md's Choices.js convention that
+    // attribute (not the live `.value`) is what `new Choices()` actually
+    // reads when it's constructed right after this, so the widget kept
+    // showing whichever option was hardcoded `selected` in the template
+    // instead of the record's real saved value.
+    function lsSelectStaticOption(select, value) {
+      const options = Array.from(select.options);
+      const match = value ? options.find((o) => o.value === value) : null;
+      options.forEach((o) => o.removeAttribute("selected"));
+      (match || options.find((o) => o.value === ""))?.setAttribute("selected", "");
+    }
+
     function showLsError(msg) {
       document.getElementById("ls-create-error").textContent = msg;
     }
@@ -816,15 +820,34 @@
       return String(recordVal ?? "").trim() === selected;
     }
 
+    // `undefined` means the key is missing from the saved sub-document
+    // entirely -- only possible on a record saved before this field existed
+    // on the form (every current save writes it as at least "", via the
+    // server's trim() helper, never omits the key) -- so it's unconstrained,
+    // same as an unset vendorId a few lines below, rather than forced to
+    // FS_NONE. Conflating the two used to hard-filter the seed pool down to
+    // master rows that are ALSO blank on that field, which for a field every
+    // real master row actually fills in (e.g. Vendor SKU Code) resolved to
+    // zero rows and blanked out the whole card, including fields that DID
+    // have a saved value. An explicit "" (the user picked "— None —" and it
+    // got saved) still means FS_NONE -- that's a real, deliberate value.
     function fsDesiredValue(raw) {
-      return (raw === undefined || raw === null || String(raw).trim() === "") ? FS_NONE : String(raw).trim();
+      if (raw === undefined) return "";
+      return (raw === null || String(raw).trim() === "") ? FS_NONE : String(raw).trim();
     }
 
+    // CLAUDE.md's Choices.js convention: pre-selecting a value has to be
+    // baked into the `<option>` markup as a `selected` attribute before
+    // `new Choices()` runs (see reinit(els[key].id) right after this is
+    // called in fsRebuildGroup below) -- setting the plain <select>'s
+    // `.value` property afterward, as this used to do, doesn't reliably
+    // carry into the widget Choices builds from that markup, so every
+    // cascade field silently failed to show its prefilled value on Edit.
     function fsSetSelectOptions(select, placeholder, options, keepValue) {
-      select.innerHTML = ['<option value="" disabled selected hidden>' + placeholder + '</option>']
-        .concat(options.map((o) => `<option value="${o.value}">${o.label}</option>`))
+      const hasKeep = !!keepValue && options.some((o) => o.value === keepValue);
+      select.innerHTML = [`<option value="" disabled${hasKeep ? "" : " selected"} hidden>${placeholder}</option>`]
+        .concat(options.map((o) => `<option value="${o.value}"${hasKeep && o.value === keepValue ? " selected" : ""}>${o.label}</option>`))
         .join("");
-      select.value = keepValue && options.some((o) => o.value === keepValue) ? keepValue : "";
       select.disabled = options.length === 0;
     }
 
@@ -833,9 +856,16 @@
     // position) and the skuBadge's "all resolved" check. GSM has no Adhesive
     // Master equivalent, so it's excluded there and stays a plain typed
     // number.
-    const FS_ORDER = ["family", "type", "make", "vendorId", "vendorSkuCode", "size", "gsm", "micron"];
-    const AD_ORDER = ["type", "make", "vendorId", "vendorSkuCode", "shelfLife", "viscosity", "cohesion", "shear", "density"];
-    const RL_ORDER = ["type", "make", "vendorId", "vendorSkuCode", "color", "size", "gsm"];
+    // Size (Facestock/Release Liner) and Shelf Life (Adhesive) are
+    // deliberately excluded from all three -- removed from the form
+    // entirely (see their layer-field markup below, or lack of it), not
+    // just left out of narrowing: several real Master rows can share every
+    // other identity field and differ only in Size, or in Shelf Life having
+    // drifted stale, either of which used to turn an otherwise-clean match
+    // into "no match"/"ambiguous" for every other field in the same card.
+    const FS_ORDER = ["family", "type", "make", "vendorId", "vendorSkuCode", "gsm", "micron"];
+    const AD_ORDER = ["type", "make", "vendorId", "vendorSkuCode", "viscosity", "cohesion", "shear", "density"];
+    const RL_ORDER = ["type", "make", "vendorId", "vendorSkuCode", "color", "gsm"];
 
     function fsFieldMatches(key, record, value) {
       if (key === "vendorId") return String(record.vendorId ?? "") === value;
@@ -899,17 +929,28 @@
       });
 
       // Once every field in the group has a value AND that combination
-      // resolves to exactly one master row, show that row's own skuId next
-      // to the card's heading. An unselected field is "no constraint" for
-      // narrowing OTHER fields' options, but here it must NOT be treated
-      // that way -- otherwise, with nothing picked yet, the whole unfiltered
-      // master pool counts, and if that master happens to hold only one row
-      // total the badge would show before any real selection.
+      // matches at least one master row, show a plain "OK" status badge next
+      // to the card's heading (not the master's own SKU id -- that's an
+      // internal catalog reference, not something the label stock form needs
+      // to surface). An unselected field is "no constraint" for narrowing
+      // OTHER fields' options, but here it must NOT be treated that way --
+      // otherwise, with nothing picked yet, the whole unfiltered master pool
+      // counts, and if that master happens to hold only one row total the
+      // badge would show before any real selection.
+      //
+      // Not "exactly one row" -- Size (Facestock/Release Liner) and Shelf
+      // Life (Adhesive) are deliberately excluded from `order` now (see the
+      // comment where FS_ORDER/AD_ORDER/RL_ORDER are declared), and several
+      // real Master catalogs have more than one row that's identical on
+      // every field still checked here, differing only in one of those two.
+      // Once that's the only thing left disagreeing, it's not a real
+      // ambiguity anymore -- requiring a single row would mean this badge
+      // could never show for those recipes again.
       const allSet = order.every((k) => !!current[k]);
       const finalPool = allSet ? masters.filter((r) => order.every((k) => fsFieldMatches(k, r, current[k]))) : [];
       if (els.skuBadge) {
-        if (finalPool.length === 1 && finalPool[0].skuId) {
-          els.skuBadge.textContent = finalPool[0].skuId;
+        if (finalPool.length > 0) {
+          els.skuBadge.textContent = "OK";
           els.skuBadge.style.display = "";
         } else {
           els.skuBadge.textContent = "";
@@ -941,7 +982,7 @@
       return {
         family: layer.facestockFamily, type: layer.facestockType, make: layer.facestockMake,
         vendorId: layer.facestockVendorId, vendorName: layer.facestockVendorName,
-        vendorSkuCode: layer.facestockVendorSkuCode, size: layer.facestockSize,
+        vendorSkuCode: layer.facestockVendorSkuCode,
         gsm: layer.facestockGsm, micron: layer.facestockMicron,
       };
     }
@@ -950,7 +991,7 @@
       return {
         type: layer.adhesiveType, make: layer.adhesiveMake, vendorId: layer.adhesiveVendorId,
         vendorName: layer.adhesiveVendorName,
-        vendorSkuCode: layer.adhesiveVendorSkuCode, shelfLife: layer.adhesiveShelfLife,
+        vendorSkuCode: layer.adhesiveVendorSkuCode,
         viscosity: layer.adhesiveViscosity, cohesion: layer.adhesiveCohesion,
         shear: layer.adhesiveShear, density: layer.adhesiveDensity,
       };
@@ -960,7 +1001,7 @@
       return {
         type: layer.releaseLinerType, make: layer.releaseLinerMake, vendorId: layer.releaseLinerVendorId,
         vendorName: layer.releaseLinerVendorName, vendorSkuCode: layer.releaseLinerVendorSkuCode,
-        color: layer.releaseLinerColor, size: layer.releaseLinerSize, gsm: layer.releaseLinerGsm,
+        color: layer.releaseLinerColor, gsm: layer.releaseLinerGsm,
       };
     }
 
@@ -971,7 +1012,6 @@
         make: document.getElementById("lsFacestockMake" + suffix),
         vendorId: document.getElementById("lsFacestockVendorId" + suffix),
         vendorSkuCode: document.getElementById("lsFacestockVendorSkuCode" + suffix),
-        size: document.getElementById("lsFacestockSize" + suffix),
         skuBadge: document.getElementById("lsFacestockSkuId" + suffix),
         gsm: document.getElementById("lsFacestockGsm" + suffix),
         micron: document.getElementById("lsFacestockMicron" + suffix),
@@ -990,7 +1030,6 @@
         make: document.getElementById("lsAdhesiveMake" + suffix),
         vendorId: document.getElementById("lsAdhesiveVendorId" + suffix),
         vendorSkuCode: document.getElementById("lsAdhesiveVendorSkuCode" + suffix),
-        shelfLife: document.getElementById("lsAdhesiveShelfLife" + suffix),
         viscosity: document.getElementById("lsAdhesiveViscosity" + suffix),
         cohesion: document.getElementById("lsAdhesiveCohesion" + suffix),
         shear: document.getElementById("lsAdhesiveShear" + suffix),
@@ -1012,7 +1051,6 @@
         vendorId: document.getElementById("lsReleaseLinerVendorId" + suffix),
         vendorSkuCode: document.getElementById("lsReleaseLinerVendorSkuCode" + suffix),
         color: document.getElementById("lsReleaseLinerColor" + suffix),
-        size: document.getElementById("lsReleaseLinerSize" + suffix),
         gsm: document.getElementById("lsReleaseLinerGsm" + suffix),
         skuBadge: document.getElementById("lsReleaseLinerSkuId" + suffix),
       };
@@ -1080,7 +1118,7 @@
       const show = rollOrSheet === "SHEET" && printingTechnology === "DIGITAL";
       wrap.style.display = show ? "" : "none";
       select.required = show;
-      select.value = show && selectedValue ? selectedValue : "";
+      lsSelectStaticOption(select, show ? selectedValue : "");
       lsInitChoices("lsDigitalPrintType");
       // Family/Roll-Sheet/Printing Technology stretch to fill the row when
       // Laser/Ink isn't shown, instead of leaving its column blank.
@@ -1224,9 +1262,9 @@
       }
 
       const rollType = ds.rollType || "NORMAL";
-      document.getElementById("lsRollType").value = rollType;
-      document.getElementById("lsFamily").value = ds.family || "";
-      document.getElementById("lsRollOrSheet").value = ds.rollOrSheet || "";
+      lsSelectStaticOption(document.getElementById("lsRollType"), rollType);
+      lsSelectStaticOption(document.getElementById("lsFamily"), ds.family || "");
+      lsSelectStaticOption(document.getElementById("lsRollOrSheet"), ds.rollOrSheet || "");
       ["lsRollType", "lsFamily", "lsRollOrSheet"].forEach((id) => lsInitChoices(id));
 
       lsRebuildPrintingTechnology(ds.rollOrSheet || "", ds.printingTechnology || "");
@@ -1406,7 +1444,7 @@
       <!-- Facestock -->
       <div class="ls-block layer-card layer-card--facestock" data-block="facestock1">
         <span class="layer-card__label">FACESTOCK<span id="lsFacestockSkuId" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('facestock1')">Reset</button></span>
-        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1fr 1.6fr 1fr 0.8fr 0.8fr 0.8fr;">
+        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1fr 1.6fr 1fr 0.8fr 0.8fr;">
           <div class="layer-field">
             <label for="lsFacestockFamily">Family</label>
             <select id="lsFacestockFamily" name="facestockFamily" class="form-control select-tag" required>
@@ -1434,12 +1472,6 @@
           <div class="layer-field">
             <label for="lsFacestockVendorSkuCode">Vendor SKU Code</label>
             <select id="lsFacestockVendorSkuCode" name="facestockVendorSkuCode" class="form-control select-tag">
-              <option value="" disabled selected hidden>Search</option>
-            </select>
-          </div>
-          <div class="layer-field">
-            <label for="lsFacestockSize">Size</label>
-            <select id="lsFacestockSize" name="facestockSize" class="form-control select-tag">
               <option value="" disabled selected hidden>Search</option>
             </select>
           </div>
@@ -1488,15 +1520,6 @@
               <option value="" disabled selected hidden>Search</option>
             </select>
           </div>
-          <!-- Shelf Life hidden from the form -- the field/cascade still exist
-               (lsAdhesiveShelfLife keeps narrowing Type/Make/Vendor/... the
-               same as before), it's just not shown or user-editable. -->
-          <div class="layer-field" style="display:none;">
-            <label for="lsAdhesiveShelfLife">Shelf Life</label>
-            <select id="lsAdhesiveShelfLife" name="adhesiveShelfLife" class="form-control select-tag">
-              <option value="" disabled selected hidden>Search</option>
-            </select>
-          </div>
           <div class="layer-field">
             <label for="lsAdhesiveViscosity">Viscosity</label>
             <select id="lsAdhesiveViscosity" name="adhesiveViscosity" class="form-control select-tag">
@@ -1533,7 +1556,7 @@
       <!-- Facestock (Layer 2) -- only for DOUBLE FACESTOCK -->
       <div class="ls-block layer-card layer-card--facestock" data-block="facestock2" style="display:none">
         <span class="layer-card__label">FACESTOCK <span style="opacity:0.7;">(Layer 2)</span><span id="lsFacestockSkuId2" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('facestock2')">Reset</button></span>
-        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1fr 1.6fr 1fr 0.8fr 0.8fr 0.8fr;">
+        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1fr 1.6fr 1fr 0.8fr 0.8fr;">
           <div class="layer-field">
             <label for="lsFacestockFamily2">Family</label>
             <select id="lsFacestockFamily2" name="facestockFamily2" class="form-control select-tag">
@@ -1561,12 +1584,6 @@
           <div class="layer-field">
             <label for="lsFacestockVendorSkuCode2">Vendor SKU Code</label>
             <select id="lsFacestockVendorSkuCode2" name="facestockVendorSkuCode2" class="form-control select-tag">
-              <option value="" disabled selected hidden>Search</option>
-            </select>
-          </div>
-          <div class="layer-field">
-            <label for="lsFacestockSize2">Size</label>
-            <select id="lsFacestockSize2" name="facestockSize2" class="form-control select-tag">
               <option value="" disabled selected hidden>Search</option>
             </select>
           </div>
@@ -1615,14 +1632,6 @@
               <option value="" disabled selected hidden>Search</option>
             </select>
           </div>
-          <!-- Shelf Life hidden from the form -- see the Layer 1 Adhesive
-               card above for why the field/cascade stay in the DOM. -->
-          <div class="layer-field" style="display:none;">
-            <label for="lsAdhesiveShelfLife2">Shelf Life</label>
-            <select id="lsAdhesiveShelfLife2" name="adhesiveShelfLife2" class="form-control select-tag">
-              <option value="" disabled selected hidden>Search</option>
-            </select>
-          </div>
           <div class="layer-field">
             <label for="lsAdhesiveViscosity2">Viscosity</label>
             <select id="lsAdhesiveViscosity2" name="adhesiveViscosity2" class="form-control select-tag">
@@ -1659,7 +1668,7 @@
       <!-- Release Liner -->
       <div class="ls-block layer-card layer-card--release" data-block="release1">
         <span class="layer-card__label">RELEASE LINER<span id="lsReleaseLinerSkuId" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('release1')">Reset</button></span>
-        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.4fr 1fr 0.8fr 0.8fr 0.6fr;">
+        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.4fr 1fr 0.8fr 0.6fr;">
           <div class="layer-field">
             <label for="lsReleaseLinerType">Type</label>
             <select id="lsReleaseLinerType" name="releaseLinerType" class="form-control select-tag" required>
@@ -1691,12 +1700,6 @@
             </select>
           </div>
           <div class="layer-field">
-            <label for="lsReleaseLinerSize">Size</label>
-            <select id="lsReleaseLinerSize" name="releaseLinerSize" class="form-control select-tag">
-              <option value="" disabled selected hidden>Search</option>
-            </select>
-          </div>
-          <div class="layer-field">
             <label for="lsReleaseLinerGsm">GSM</label>
             <select id="lsReleaseLinerGsm" name="releaseLinerGsm" class="form-control select-tag">
               <option value="" disabled selected hidden>Search</option>
@@ -1710,7 +1713,7 @@
       <!-- Release Liner (Layer 2) -- only for DOUBLE RELEASE -->
       <div class="ls-block layer-card layer-card--release" data-block="release2" style="display:none">
         <span class="layer-card__label">RELEASE LINER <span style="opacity:0.7;">(Layer 2)</span><span id="lsReleaseLinerSkuId2" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('release2')">Reset</button></span>
-        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.4fr 1fr 0.8fr 0.8fr 0.6fr;">
+        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.4fr 1fr 0.8fr 0.6fr;">
           <div class="layer-field">
             <label for="lsReleaseLinerType2">Type</label>
             <select id="lsReleaseLinerType2" name="releaseLinerType2" class="form-control select-tag" data-required-when-visible>
@@ -1738,12 +1741,6 @@
           <div class="layer-field">
             <label for="lsReleaseLinerColor2">Color</label>
             <select id="lsReleaseLinerColor2" name="releaseLinerColor2" class="form-control select-tag">
-              <option value="" disabled selected hidden>Search</option>
-            </select>
-          </div>
-          <div class="layer-field">
-            <label for="lsReleaseLinerSize2">Size</label>
-            <select id="lsReleaseLinerSize2" name="releaseLinerSize2" class="form-control select-tag">
               <option value="" disabled selected hidden>Search</option>
             </select>
           </div>

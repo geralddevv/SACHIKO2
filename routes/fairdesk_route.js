@@ -2845,10 +2845,17 @@ router.post("/sales/order", async (req, res) => {
         return res.status(400).json({ success: false, message: "This item is disabled for the selected client and cannot be ordered." });
       }
 
-      // The order always saves at the (now-resolved) binding's own rate --
-      // read-only and auto-filled from an existing binding, or whatever was
-      // typed to create a new one above -- same as how the binding's
-      // paperSize/location are used as-is.
+      // Rate is editable on the order form even for an already-bound product
+      // (see rateDisplayInput in salesOrderForm.ejs) -- a change here is a
+      // rate revision for this client+product going forward, not just a
+      // one-off for this order, so it's written back onto the binding itself
+      // and every future order picks it up the same way a manual edit via
+      // /sachiko/label-stock-binding/edit/:id would.
+      const submittedRate = Number(itemRate);
+      if (Number.isFinite(submittedRate) && submittedRate > 0 && submittedRate !== Number(binding.rate)) {
+        binding.rate = submittedRate;
+        await binding.save();
+      }
       const labelStockRate = Number(binding.rate) || 0;
 
       const data = {
@@ -4269,6 +4276,24 @@ router.get("/labels/production/pending", async (req, res) => {
       ? "match"
       : "short";
 
+    // Same allotment facts as materialStatus above, split per raw-material
+    // pool (Facestock/Adhesive/Release Liner) instead of collapsed into one
+    // yes/no -- DOUBLE FACESTOCK/DOUBLE RELEASE rollTypes call for 2 layers
+    // out of the same pool (facestock+facestock2, or adhesive+adhesive2 /
+    // releaseLiner+releaseLiner2), so "one of two allotted" needs its own
+    // "partial" state distinct from "none" and "full".
+    const poolStatus = (pool) => {
+      const keys = requiredLayers.filter((key) => LAYER_META[key].pool === pool);
+      if (keys.length === 0) return null;
+      const allottedCount = keys.filter((key) => !!r.allottedLayers?.[key]).length;
+      if (allottedCount === 0) return "none";
+      if (allottedCount === keys.length) return "full";
+      return "partial";
+    };
+    const facestockStatus = poolStatus("facestock");
+    const adhesiveStatus = poolStatus("adhesive");
+    const releaseStatus = poolStatus("release");
+
     return {
       _id: String(r._id),
       productCode: item.productCode || item.skuCode || "—",
@@ -4280,6 +4305,9 @@ router.get("/labels/production/pending", async (req, res) => {
       allottedRolls: rollsAllotted,
       rollsStatus,
       materialStatus,
+      facestockStatus,
+      adhesiveStatus,
+      releaseStatus,
       quantity: r.quantity,
       balance: Math.max((Number(r.quantity) || 0) - (Number(r.dispatchedQuantity) || 0), 0),
       machineName: r.assignedMachineId?.machineName || "",

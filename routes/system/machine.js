@@ -422,6 +422,24 @@ async function buildQueueRows(match) {
       ? "match"
       : "short";
 
+    // Same allotment facts as materialStatus above, split per raw-material
+    // pool (Facestock/Adhesive/Release Liner) instead of collapsed into one
+    // yes/no -- DOUBLE FACESTOCK/DOUBLE RELEASE rollTypes call for 2 layers
+    // out of the same pool (facestock+facestock2, or adhesive+adhesive2 /
+    // releaseLiner+releaseLiner2), so "one of two allotted" needs its own
+    // "partial" state distinct from "none" and "full".
+    const poolStatus = (pool) => {
+      const layers = layerAllotments.filter((l) => LAYER_META[l.key].pool === pool);
+      if (layers.length === 0) return null;
+      const allocatedCount = layers.filter((l) => l.allocated).length;
+      if (allocatedCount === 0) return "none";
+      if (allocatedCount === layers.length) return "full";
+      return "partial";
+    };
+    const facestockStatus = poolStatus("facestock");
+    const adhesiveStatus = poolStatus("adhesive");
+    const releaseStatus = poolStatus("release");
+
     return {
       _id: String(p._id),
       machineId: String(p.assignedMachineId || ""),
@@ -433,6 +451,9 @@ async function buildQueueRows(match) {
       balanceRolls: balanceRolls != null ? String(balanceRolls) : "—",
       rollsStatus,
       materialStatus,
+      facestockStatus,
+      adhesiveStatus,
+      releaseStatus,
       quantity: qty,
       balanceQuantity: balanceQty,
       clientName: p.userId?.clientName || p.userId?.userName || "—",

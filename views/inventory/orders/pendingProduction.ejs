@@ -363,27 +363,31 @@
         },
       },
       { title: "Machine", field: "machineName", headerFilter: "input", headerFilterPlaceholder: "Filter machine...", formatter: (cell) => cell.getValue() || "—" },
-      {
-        // Raw-material allocation (Facestock/Adhesive/Release Liner, ...),
-        // not Deckle reels produced vs. rolls ordered (rollsStatus) -- a
-        // single Assign & Continue only ever laminates one Deckle, so an
-        // order needing 2+ rolls would read "short" on rollsStatus right
-        // after its very first, fully-allocated run. materialStatus is the
-        // real ready/not-ready signal (see routes/fairdesk_route.js and
-        // routes/system/machine.js's buildQueueRows for the same split).
-        title: "Stock",
-        field: "materialStatus",
+      // Raw-material allocation, split per pool (Facestock/Adhesive/Release
+      // Liner) instead of one collapsed "Stock" column -- not Deckle reels
+      // produced vs. rolls ordered (rollsStatus): a single Assign & Continue
+      // only ever laminates one Deckle, so an order needing 2+ rolls would
+      // read "short" on rollsStatus right after its very first,
+      // fully-allocated run. facestockStatus/adhesiveStatus/releaseStatus
+      // are the real ready/not-ready signal (see routes/fairdesk_route.js).
+      // Each is null (rollType doesn't use that pool), "none" (red, nothing
+      // allotted), "partial" (yellow, DOUBLE FACESTOCK/DOUBLE RELEASE with
+      // only one of its two same-pool layers allotted), or "full" (green).
+      ...["facestock", "adhesive", "release"].map((pool) => ({
+        title: pool === "facestock" ? "Facestock" : pool === "adhesive" ? "Adhesive" : "Release",
+        field: `${pool}Status`,
         hozAlign: "center",
         headerFilter: "list",
-        headerFilterParams: { values: { "": "All", short: "Short", match: "Fully allotted" } },
+        headerFilterParams: { values: { "": "All", none: "Not allotted", partial: "Partial", full: "Fully allotted" } },
         headerFilterPlaceholder: "All",
         formatter: (cell) => {
-          const row = cell.getRow().getData();
-          if (row.materialStatus === "short") return `<span style="color:#dc2626; font-weight:700;" title="Assign facestock rolls before starting production"><i class="fa-solid fa-triangle-exclamation"></i> Not allocated</span>`;
-          if (row.materialStatus === "match") return `<span style="color:#16a34a; font-weight:700;"><i class="fa-solid fa-check"></i> Allotted</span>`;
+          const status = cell.getValue();
+          if (status === "none") return `<span style="color:#dc2626; font-weight:700;" title="Assign this layer before starting production"><i class="fa-solid fa-triangle-exclamation"></i> Not allotted</span>`;
+          if (status === "partial") return `<span style="color:#ca8a04; font-weight:700;" title="Only part of this layer is allotted"><i class="fa-solid fa-circle-half-stroke"></i> Partial</span>`;
+          if (status === "full") return `<span style="color:#16a34a; font-weight:700;"><i class="fa-solid fa-check"></i> Allotted</span>`;
           return `<span style="color:#9ca3af;">—</span>`;
         },
-      },
+      })),
       { title: "Operator", field: "operatorName", headerFilter: "input", headerFilterPlaceholder: "Filter...", formatter: (cell) => cell.getValue() || "—" },
       { title: "Helper", field: "helperName", headerFilter: "input", headerFilterPlaceholder: "Filter...", formatter: (cell) => cell.getValue() || "—" },
       {

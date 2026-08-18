@@ -15,6 +15,16 @@ const sachikoLabelStockSchema = new mongoose.Schema(
     // fields, not just a similar recipe. `sparse` so pre-existing rows from
     // before this field existed don't collide on a shared `null`.
     labelStockSignature: { type: String, unique: true, sparse: true, trim: true },
+    // Material-only counterpart to labelStockSignature above -- just the six
+    // facestock/adhesive/releaseLiner layers (see buildMaterialSignature in
+    // utils/labelStockVariant.js for the exact field list), none of the
+    // product-level fields. NOT unique: two label stocks legitimately sharing
+    // this hash just means they're the same physical material stack under
+    // different Product Codes, not a duplicate. Consumed by another module as
+    // a stable "same material stack" key -- index for lookup, but don't
+    // change its shape/field list without also re-running
+    // scripts/backfill-labelstock-material-signature.js.
+    materialSignature: { type: String, trim: true, index: true },
     rollType: { type: String, trim: true, enum: ["NORMAL", "DOUBLE RELEASE", "DOUBLE FACESTOCK"], default: "NORMAL" },
     wordFile: { type: String },
     wordFileOriginalName: { type: String },

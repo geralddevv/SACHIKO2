@@ -1367,8 +1367,11 @@
   // The picker now lists every Label Stock master product, not just ones
   // already bound to this client -- so a pick may not resolve to a binding
   // at all. When it doesn't, labelStockMasterId is set instead of itemId,
-  // Rate becomes editable, and POST /sales/order auto-creates the binding
-  // from labelStockMasterId + whatever's typed for Rate/Paper Size/RM/Location.
+  // and POST /sales/order auto-creates the binding from labelStockMasterId +
+  // whatever's typed for Rate/Paper Size/RM/Location. Rate stays editable
+  // either way -- editing it for an already-bound product revises that
+  // binding's rate for every future order too (see the LABEL_STOCK branch of
+  // POST /sales/order), not just this one.
   function onLabelStockProductChange() {
     const sku = document.getElementById("label-stock-product-select")?.value || "";
     const masterIdInput = document.getElementById("label-stock-master-id");
@@ -1377,8 +1380,8 @@
     if (match) {
       if (masterIdInput) masterIdInput.value = "";
       if (rateDisplayInput) {
-        rateDisplayInput.readOnly = true;
-        rateDisplayInput.placeholder = "Rate";
+        rateDisplayInput.readOnly = false;
+        rateDisplayInput.placeholder = "Rate (editing updates the client binding)";
       }
       setChoiceValue(itemChoices, itemSelect, match._id);
       updateStockDisplay();

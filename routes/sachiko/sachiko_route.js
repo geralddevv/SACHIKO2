@@ -15,7 +15,7 @@ import SachikoJobcard from "../../models/sachiko/sachikoJobcard.js";
 import SachikoSalesOrder from "../../models/sachiko/sachikoSalesOrder.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
-import { buildLabelStockSignature, resolveLabelStockProductCode } from "../../utils/labelStockVariant.js";
+import { buildLabelStockSignature, buildMaterialSignature, resolveLabelStockProductCode } from "../../utils/labelStockVariant.js";
 
 const router = express.Router();
 
@@ -328,7 +328,8 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
       throw Object.assign(new Error("Duplicate Label Stock"), { userMessage: DUPLICATE_LABELSTOCK_MESSAGE });
     }
 
-    await SachikoLabelStock.create({ labelStockId, skuCode, ...payload, labelStockSignature });
+    const materialSignature = buildMaterialSignature(payload);
+    await SachikoLabelStock.create({ labelStockId, skuCode, ...payload, labelStockSignature, materialSignature });
     req.flash(
       "notification",
       payload.productCode === enteredProductCode
@@ -397,6 +398,7 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
       throw Object.assign(new Error("Duplicate Label Stock"), { userMessage: DUPLICATE_LABELSTOCK_MESSAGE });
     }
     payload.labelStockSignature = labelStockSignature;
+    payload.materialSignature = buildMaterialSignature(payload);
 
     // Clear whichever second-layer fields the new rollType no longer calls
     // for, so switching a roll back to NORMAL (or between the two double
@@ -450,14 +452,14 @@ router.delete("/label-stock/:id", requireAuth, deleteLimiter, async (req, res) =
 });
 
 /* ================= JOB CARD ================= */
-router.get("/jobcard/view", async (req, res) => {
-  const jsonData = await SachikoJobcard.find().sort({ createdAt: -1 }).lean();
-  res.render("sachiko/jobcardView.ejs", {
-    title: "Job Card View",
-    CSS: "tableDisp.css",
+// Disabled and removed from the side-nav -- superseded by the machine-queue-
+// driven "Production Records" page (/sachiko/machine/jobcard/view).
+router.get("/jobcard/view", (req, res) => {
+  res.status(404).render("errors/notFound", {
+    title: "Page Not Found",
+    CSS: false,
     JS: false,
-    jsonData,
-    notification: req.flash("notification"),
+    homeLabel: "Back to Dashboard",
   });
 });
 

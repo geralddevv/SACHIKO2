@@ -95,6 +95,46 @@ export function buildLabelStockSpecSignature(payload) {
   return hashSignature(labelStockSignatureParts(payload, { includeProductCode: false }));
 }
 
+// Material-only signature -- just the six facestock/adhesive/releaseLiner
+// layers, none of the product-level fields (Product Code, Roll Type, Family,
+// Roll/Sheet, Printing Technology) labelStockSignatureParts also hashes.
+// Deliberately NOT unique-indexed on the model: unlike labelStockSignature
+// (whose whole point is catching an exact duplicate row), two label stocks
+// legitimately sharing this hash just means they're built from the same
+// physical material stack under different Product Codes/classifications --
+// a real, expected case, not a duplicate to reject.
+//
+// Also deliberately narrower than FS_SIG_FIELDS/AD_SIG_FIELDS/RL_SIG_FIELDS
+// above: Size (Facestock/Release Liner) and Shelf Life (Adhesive) are left
+// out, matching FS_ORDER/AD_ORDER/RL_ORDER in views/sachiko/labelStockView.ejs
+// -- fields already established there as not meaningfully identifying the
+// recipe (several real Master rows differ only in one of those two). Keep
+// all three field lists in step if that ever changes.
+const MAT_SIG_FS_FIELDS = ["facestockFamily", "facestockType", "facestockMake", "facestockVendorId", "facestockVendorSkuCode"];
+const MAT_SIG_FS_NUM_FIELDS = ["facestockGsm", "facestockMicron"];
+const MAT_SIG_AD_FIELDS = ["adhesiveType", "adhesiveMake", "adhesiveVendorId", "adhesiveVendorSkuCode"];
+const MAT_SIG_AD_NUM_FIELDS = ["adhesiveViscosity", "adhesiveCohesion", "adhesiveShear", "adhesiveDensity"];
+const MAT_SIG_RL_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerVendorId", "releaseLinerVendorSkuCode", "releaseLinerColor"];
+const MAT_SIG_RL_NUM_FIELDS = ["releaseLinerGsm"];
+
+// Consumed by another module (not this file) as a stable "same physical
+// material stack" key -- keep its shape (sha256:<hex>, same as every other
+// signature in this codebase) and field list stable once that module depends
+// on it; re-run scripts/backfill-labelstock-material-signature.js after any
+// change here to resync existing rows.
+export function buildMaterialSignature(payload) {
+  return hashSignature(
+    [
+      layerSignaturePart(payload.facestock, MAT_SIG_FS_FIELDS, MAT_SIG_FS_NUM_FIELDS),
+      layerSignaturePart(payload.adhesive, MAT_SIG_AD_FIELDS, MAT_SIG_AD_NUM_FIELDS),
+      layerSignaturePart(payload.releaseLiner, MAT_SIG_RL_FIELDS, MAT_SIG_RL_NUM_FIELDS),
+      layerSignaturePart(payload.facestock2, MAT_SIG_FS_FIELDS, MAT_SIG_FS_NUM_FIELDS),
+      layerSignaturePart(payload.adhesive2, MAT_SIG_AD_FIELDS, MAT_SIG_AD_NUM_FIELDS),
+      layerSignaturePart(payload.releaseLiner2, MAT_SIG_RL_FIELDS, MAT_SIG_RL_NUM_FIELDS),
+    ].join("||"),
+  );
+}
+
 const escapeRegExpLS = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // See the file-level comment above for the two callers/two onExactMatch

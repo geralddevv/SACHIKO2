@@ -40,8 +40,6 @@ prod detail up in ls view
 if deckle free and set if set ask for size
 deckle type and size
 
-if no inoice red in the roll
-
-adhesive -> adhesive
+adhesive -> adh
 rate in the header of stock
 dashboard in stock summary

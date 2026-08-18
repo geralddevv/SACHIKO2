@@ -1,6 +1,7 @@
 import express from "express";
 import crypto from "crypto";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
+import AdhesiveStock from "../../models/inventory/adhesiveStock.js";
 import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
@@ -37,6 +38,39 @@ function buildAdhesiveSignature(payload) {
 }
 
 const DUPLICATE_ADHESIVE_MESSAGE = "This adhesive already exists (every field matches an existing record).";
+
+// Every field AdhesiveStock mirrors from its master (see adhesiveSpecKey,
+// routes/stock/adhesiveStock.js -- stock is grouped under a master by
+// matching all of these exactly, including Shelf Life, since two masters can
+// legitimately differ only by it). Editing a master must carry the same edit
+// onto any drum still recorded under the pre-edit spec, or that drum quietly
+// stops matching any master row and vanishes from the Stock/Allotted/
+// Available columns (and everywhere else Stock is grouped by master) even
+// though the physical drum is still sitting there.
+const STOCK_MIRROR_FIELDS = ["vendorId", "vendorName", "type", "make", "vendorSkuCode", "shelfLife", "viscosity", "cohesion", "shear", "density"];
+
+// Builds the query that finds every AdhesiveStock drum still carrying the
+// master's PRE-edit identity, and the $set/$unset that brings them onto the
+// post-edit one. A field that's now blank/undefined has to $unset, not $set
+// with undefined -- Mongo/Mongoose silently drop undefined-valued $set keys,
+// which would leave the old value in place.
+function cascadeStockUpdate(before, payload) {
+  const match = {};
+  const $set = {};
+  const $unset = {};
+  for (const field of STOCK_MIRROR_FIELDS) {
+    const oldVal = before[field];
+    match[field] = oldVal === undefined || oldVal === null ? { $exists: false } : oldVal;
+
+    const newVal = payload[field];
+    if (newVal === undefined || newVal === null || newVal === "") $unset[field] = "";
+    else $set[field] = newVal;
+  }
+  const update = {};
+  if (Object.keys($set).length) update.$set = $set;
+  if (Object.keys($unset).length) update.$unset = $unset;
+  return { match, update };
+}
 
 const parseSkuSeq = (skuId) => {
   const match = String(skuId || "").match(/(\d{6})$/);
@@ -164,12 +198,25 @@ router.put("/api/adhesive/:id", requireAuth, requireAdhesiveMaster, updateLimite
       return res.status(400).json({ success: false, message: DUPLICATE_ADHESIVE_MESSAGE });
     }
 
-    const updated = await AdhesiveMaster.findByIdAndUpdate(req.params.id, { ...payload, adhesiveSignature }, { new: true, runValidators: true });
-    if (!updated) {
+    const before = await AdhesiveMaster.findById(req.params.id).lean();
+    if (!before) {
       return res.status(404).json({ success: false, message: "Adhesive master not found." });
     }
 
-    res.locals.auditDescription = `Updated adhesive master "${updated.skuId}"`;
+    const updated = await AdhesiveMaster.findByIdAndUpdate(req.params.id, { ...payload, adhesiveSignature }, { new: true, runValidators: true });
+
+    const { match, update } = cascadeStockUpdate(before, payload);
+    let stockUpdated = 0;
+    if (update.$set || update.$unset) {
+      const result = await AdhesiveStock.updateMany(match, update);
+      stockUpdated = result.modifiedCount || 0;
+    }
+
+    res.locals.auditDescription = `Updated adhesive master "${updated.skuId}"`
+      + (stockUpdated ? ` -- carried the change onto ${stockUpdated} existing stock drum${stockUpdated === 1 ? "" : "s"}` : "");
+    req.flash("notification", stockUpdated
+      ? `Adhesive master updated -- ${stockUpdated} existing stock drum${stockUpdated === 1 ? "" : "s"} updated to match.`
+      : "Adhesive master updated successfully!");
     res.json({ success: true });
   } catch (err) {
     console.error("ADHESIVE MASTER UPDATE ERROR:", err);

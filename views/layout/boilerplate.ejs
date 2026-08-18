@@ -893,17 +893,13 @@
               <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
               <p class="nav-items-para">Machine Queues</p>
             </div>
-            <div title="Production Records" class="<%= title === 'Production Records' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/machine/jobcard/view'">
+            <div title="Production Records" class="<%= title === 'Production Records' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/machine/jobcard/view'" style="border-bottom: 2px solid #ffffff9d;">
               <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Production Records</p>
             </div>
-            <!-- Sachiko's pre-existing manual Job Card (no machine/stock linkage) --
-                 kept alongside the machine-queue-driven "Production Records" above,
-                 not replaced by it. -->
-            <div title="Job Card View" class="<%= (title === 'Job Card View' || title === 'Job Card Form') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/jobcard/view'" style="border-bottom: 2px solid #ffffff9d;">
-              <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
-              <p class="nav-items-para">Job Card View</p>
-            </div>
+            <!-- Sachiko's pre-existing manual Job Card (/sachiko/jobcard/view) is
+                 hidden from nav and disabled at the route -- superseded by the
+                 machine-queue-driven "Production Records" above. -->
           </div>
         </div>
         <% } %>
