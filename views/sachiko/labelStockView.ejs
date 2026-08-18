@@ -61,6 +61,14 @@
     #master-table .tabulator-row[data-variant-child="true"] {
       background-color: #f8fafc;
     }
+    /* Tabulator's own dataTree "branch" connector -- an "L"-shaped guide line
+       (border-left + border-bottom) it draws next to every child row -- would
+       otherwise show up alongside our own "↳" marker (see the "_toggle"
+       column formatter below) in the same cell. Keep just the "↳". */
+    #master-table .tabulator-data-tree-branch,
+    #master-table .tabulator-data-tree-branch-empty {
+      display: none !important;
+    }
     .tabulator-edit-list { scrollbar-width: none !important; -ms-overflow-style: none !important; }
     .tabulator-edit-list::-webkit-scrollbar { display: none !important; }
     .header-action-btn {

@@ -59,3 +59,5 @@ value in the semi finished
 add size width in semi finished
 when clciked on the product show the material used (C011-A)
 ONLY WATERBASE MANDATORY IN THE ADHESIVE AND IN RELEASE LINER REMOVE COLOR
+remove arrow in the srock view 
+add another options in th masters for assigning

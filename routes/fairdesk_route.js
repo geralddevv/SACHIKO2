@@ -51,7 +51,7 @@ import {
   syncLabelBindingIdentity,
 } from "../utils/reconcileBindingLocations.js";
 import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
-import { produceDeckle, dissolveDeckle, requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds } from "../utils/labelStockProduction.js";
+import { produceDeckle, dissolveDeckle, requiredLayersFor, trackAllottedCombinations, LAYER_META, POOL_MODELS, pickStockIds } from "../utils/labelStockProduction.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 
@@ -4564,6 +4564,28 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       if (validIds.length) allottedLayers[key] = { pool: meta.pool, stockIds: validIds.map(String) };
     }
 
+    // A layer can hold several reels at once, and the operator can laminate
+    // any one of them against any one of another layer's -- so two facestock
+    // + two adhesive + two release liner reels aren't one recipe, they're
+    // eight possible ones. Each combination that differs from this SKU's own
+    // stored recipe (a substituted vendor, a different Size, ... -- the
+    // fields POOL_MATCH_FIELDS deliberately doesn't pin down) is materially a
+    // different label stock, so it's registered now as its own "-A"/"-B"/...
+    // Product Code variant, instead of being discovered one at a time later
+    // as Deckles get laminated. See trackAllottedCombinations.
+    //
+    // Never blocks the assignment: same rule as raw material being short
+    // below -- the order still has to land on the machine's queue.
+    let trackedVariants = null;
+    let variantWarning = null;
+    try {
+      trackedVariants = await trackAllottedCombinations({ labelStock, allottedLayers });
+    } catch (variantErr) {
+      console.error("LABEL STOCK COMBINATION TRACKING ERROR:", variantErr);
+      variantWarning = variantErr.userMessage || variantErr.message || "failed to check material combinations";
+    }
+    const newVariantCodes = trackedVariants?.created || [];
+
     let deckleId = null;
     let variantProductCode = null;
     let stockWarning = null;
@@ -4611,14 +4633,27 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       },
     });
 
+    // Reported alongside whatever the assignment itself did, not instead of
+    // it -- minting these variants is a side effect of the reels picked, and
+    // whoever assigned the order is the one who needs to know it happened.
+    const variantNote = variantWarning
+      ? ` Note: the allotted material combinations couldn't be checked against Label Stock (${variantWarning}).`
+      : newVariantCodes.length
+        ? ` Note: ${newVariantCodes.length === 1 ? "one combination" : `${newVariantCodes.length} combinations`} of the allotted reels`
+          + ` don't match this SKU's own spec (e.g. a different vendor) -- added to Label Stock as`
+          + ` ${newVariantCodes.length === 1 ? "variant" : "variants"} ${newVariantCodes.map((c) => `"${c}"`).join(", ")}.`
+          + (trackedVariants?.truncated ? " Some further combinations were left untracked (too many to enumerate)." : "")
+        : "";
+
     res.locals.auditDescription = `Assigned production order ${id} to machine ${machineId}`
-      + (deckleId ? ` (produced Deckle ${deckleId}${variantProductCode ? `, tracked as variant ${variantProductCode}` : ""})` : stockWarning ? " (stock not fully allocated)" : "");
-    req.flash("notification", deckleId
+      + (deckleId ? ` (produced Deckle ${deckleId}${variantProductCode ? `, tracked as variant ${variantProductCode}` : ""})` : stockWarning ? " (stock not fully allocated)" : "")
+      + (newVariantCodes.length ? ` (label stock variants added: ${newVariantCodes.join(", ")})` : "");
+    req.flash("notification", (deckleId
       ? `Machine assigned — Deckle ${deckleId} produced.`
-        + (variantProductCode ? ` Note: the raw material picked doesn't exactly match this SKU's own spec (e.g. a different vendor) -- tracked as new variant "${variantProductCode}" instead of plain ${labelStock?.productCode || "this SKU"}.` : "")
+        + (variantProductCode ? ` Note: the raw material picked doesn't exactly match this SKU's own spec (e.g. a different vendor) -- tracked as variant "${variantProductCode}" instead of plain ${labelStock?.productCode || "this SKU"}.` : "")
       : stockWarning
         ? `Machine assigned, but stock wasn't allocated (${stockWarning}) — this order is on the queue as short-allotted. Re-open it to produce a Deckle once material is available.`
-        : "Machine assigned successfully.");
+        : "Machine assigned successfully.") + variantNote);
     res.redirect("/sachiko/machine/queue");
   } catch (err) {
     console.error("ASSIGN PRODUCTION SAVE ERROR:", err);

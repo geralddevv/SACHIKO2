@@ -198,11 +198,11 @@ async function loadAllottedByKey(masters, stockByKey) {
   const allottedByKey = new Map();
   const drawnByKey = new Map();
   const rollsByKey = new Map();
-  // reelMatchesLayer() (utils/labelStockProduction.js) checks every field
-  // the recipe layer actually specifies and treats a blank one as "no
-  // constraint" -- e.g. a Label Stock saved before adhesiveViscosity/etc.
-  // existed has no opinion on them at all, so it matches every master
-  // agreeing on everything else. That's deliberate on the matching side: a
+  // reelMatchesLayer() (utils/labelStockProduction.js) checks whichever of
+  // POOL_MATCH_FIELDS' fields the recipe layer actually specifies -- Adhesive
+  // is matched on Type alone -- and treats a blank one as "no constraint", so
+  // one recipe layer routinely matches several masters. That's deliberate on
+  // the matching side: a
   // plain key-equality lookup (comparing a recipe-built key against each
   // master's full spec key) would require the master's field to be blank too,
   // which no real master ever is, and would silently drop the demand instead.

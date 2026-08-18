@@ -8,7 +8,7 @@ import AdhesiveStockLog from "../models/inventory/adhesiveStockLog.js";
 import ReleaseLinerStock from "../models/inventory/releaseLinerStock.js";
 import ReleaseLinerStockLog from "../models/inventory/releaseLinerStockLog.js";
 import { generateRollId } from "./rollId.js";
-import { resolveActualLabelStock } from "./labelStockVariant.js";
+import { resolveActualLabelStock, resolveLabelStockCombinations } from "./labelStockVariant.js";
 
 // ---------------------------------------------------------------------------
 // Label Stock Production -- takes a Label Stock SKU's recipe (facestock +
@@ -61,27 +61,34 @@ export const POOL_MODELS = {
 // The deliberately narrow set of reel-side fields a recipe layer's material
 // is considered "the same as" for allocation purposes, paired with the
 // recipe's own (prefixed) field name for each -- Facestock: family/make/
-// vendor SKU code/type/gsm/micron; Adhesive: type/make/vendor SKU code;
-// Release Liner: type/make/vendor SKU code/color. Vendor itself and every
-// other master field (Size; Adhesive's shelf life/viscosity/cohesion/shear/
-// density; Release's size/gsm) are NOT checked here -- a reel only needs to
-// agree with the recipe on this list to count as usable, even if it differs
-// from the recipe's exact master elsewhere. Drives reelMatchesLayer() below,
-// the single check both the raw-stock picker (routes/sachiko/
-// labelStockProduction.js) and produceDeckle() use.
+// vendor SKU code/type/micron; Adhesive: type alone; Release Liner: type/
+// make/vendor SKU code/color. Vendor itself and every other master field
+// (Facestock's size/gsm; Adhesive's make/vendor SKU code/shelf life/
+// viscosity/cohesion/shear/density; Release's size/gsm) are NOT checked here
+// -- a reel only needs to agree with the recipe on this list to count as
+// usable, even if it differs from the recipe's exact master elsewhere.
+// Drives reelMatchesLayer() below, the single check both the raw-stock picker
+// (routes/sachiko/labelStockProduction.js) and produceDeckle() use.
+//
+// Narrower is not "looser accounting": every field left out here is still
+// part of buildLabelStockSpecSignature (utils/labelStockVariant.js), so
+// picking a reel that differs on one doesn't quietly get counted as the SKU's
+// own material -- it's tracked as that SKU's "-A"/"-B"/... Product Code
+// variant instead (resolveLabelStockCombinations, called from Assign
+// Production). Facestock GSM and Adhesive make/vendor SKU code moved from the
+// first list to the second on purpose: a 78 GSM reel is an acceptable stand-in
+// for an 80 GSM one, and any adhesive of the right type will bond -- so they
+// belong in the picker, under their own variant code, not hidden from it.
 export const POOL_MATCH_FIELDS = {
   facestock: [
     { field: "family", recipe: "facestockFamily" },
     { field: "make", recipe: "facestockMake" },
     { field: "vendorSkuCode", recipe: "facestockVendorSkuCode" },
     { field: "type", recipe: "facestockType" },
-    { field: "gsm", recipe: "facestockGsm", numeric: true },
     { field: "micron", recipe: "facestockMicron", numeric: true },
   ],
   adhesive: [
     { field: "type", recipe: "adhesiveType" },
-    { field: "make", recipe: "adhesiveMake" },
-    { field: "vendorSkuCode", recipe: "adhesiveVendorSkuCode" },
   ],
   release: [
     { field: "type", recipe: "releaseLinerType" },
@@ -127,6 +134,41 @@ export function pickStockIds(pick) {
   if (!pick) return [];
   if (Array.isArray(pick.stockIds)) return pick.stockIds.filter(Boolean).map(String);
   return pick.stockId ? [String(pick.stockId)] : [];
+}
+
+// Reads an order's just-saved allottedLayers back into real reel documents and
+// hands them to resolveLabelStockCombinations, so every material combination
+// those reels can be laminated into is tracked as its own Product Code
+// variant the moment they're allotted -- rather than only the one combination
+// that a later Deckle happens to use (produceDeckle -> resolveActualLabelStock,
+// which stays as the check for what actually got laminated; by then these
+// rows already exist, so it reuses them instead of minting more).
+//
+// Called from POST /labels/production/assign/:id (routes/fairdesk_route.js).
+// Returns null when there's nothing to look at.
+export async function trackAllottedCombinations({ labelStock, allottedLayers }) {
+  if (!labelStock) return null;
+
+  const pickedLayers = [];
+  for (const layerKey of requiredLayersFor(labelStock.rollType)) {
+    const meta = LAYER_META[layerKey];
+    const stockIds = pickStockIds(allottedLayers?.[layerKey]);
+    if (!stockIds.length) continue;
+    const { Model } = POOL_MODELS[meta.pool];
+    // Sorted, so the letters handed out follow a stable order rather than
+    // whatever order the checkboxes happened to submit in.
+    const reels = await Model.find({ _id: { $in: stockIds } }).sort({ rollId: 1 }).lean();
+    // Only a reel that genuinely satisfies this layer counts as a way of
+    // building it -- same gate the picker and produceDeckle apply. A reel
+    // that doesn't (a stale/tampered id, or a SKU whose spec was edited after
+    // the allotment) can't invent a combination, and so can't mint a
+    // Product Code for one.
+    const usable = reels.filter((reel) => reelMatchesLayer(meta.pool, reel, labelStock[meta.specField]));
+    if (usable.length) pickedLayers.push({ layerKey, pool: meta.pool, reels: usable });
+  }
+  if (!pickedLayers.length) return null;
+
+  return resolveLabelStockCombinations(labelStock, pickedLayers);
 }
 
 const round2 = (n) => Math.round(Number(n) * 100) / 100;

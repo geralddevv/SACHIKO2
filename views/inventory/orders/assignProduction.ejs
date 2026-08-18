@@ -476,12 +476,12 @@
 
     // Shows exactly the fields reelMatchesLayer() (utils/labelStockProduction.js
     // POOL_MATCH_FIELDS) actually checks to decide a reel counts as this
-    // layer's material -- Facestock: family/make/vendor SKU code/type/gsm or
-    // micron; Adhesive: type/make/vendor SKU code; Release Liner: type/make/
-    // vendor SKU code/color. Nothing else (Vendor Name, Size, Adhesive's
-    // shelf life/viscosity/cohesion/shear/density, Release's size/gsm) is
-    // part of that match, so it isn't shown here either -- keep the two in
-    // step.
+    // layer's material -- Facestock: family/make/vendor SKU code/type/micron;
+    // Adhesive: type alone; Release Liner: type/make/vendor SKU code/color.
+    // Nothing else (Vendor Name, Size, Facestock's gsm, Adhesive's make/
+    // vendor SKU code/shelf life/viscosity/cohesion/shear/density, Release's
+    // size/gsm) is part of that match, so it isn't shown here either -- it
+    // belongs in reelDetail() below instead. Keep all three in step.
     function specSummary(spec, layerKey) {
       if (!spec) return "—";
       const bits = [];
@@ -490,12 +490,9 @@
         if (spec.facestockMake) bits.push(spec.facestockMake);
         if (spec.facestockVendorSkuCode) bits.push(spec.facestockVendorSkuCode);
         if (spec.facestockType) bits.push(spec.facestockType);
-        if (spec.facestockGsm) bits.push(`${spec.facestockGsm} GSM`);
-        else if (spec.facestockMicron) bits.push(`${spec.facestockMicron} MIC`);
+        if (spec.facestockMicron) bits.push(`${spec.facestockMicron} MIC`);
       } else if (layerKey.startsWith("adhesive")) {
         if (spec.adhesiveType) bits.push(spec.adhesiveType);
-        if (spec.adhesiveMake) bits.push(spec.adhesiveMake);
-        if (spec.adhesiveVendorSkuCode) bits.push(spec.adhesiveVendorSkuCode);
       } else {
         if (spec.releaseLinerType) bits.push(spec.releaseLinerType);
         if (spec.releaseLinerMake) bits.push(spec.releaseLinerMake);
@@ -507,19 +504,23 @@
 
     // Per-candidate-reel counterpart to specSummary() above: shows exactly
     // the fields specSummary DOESN'T (the ones POOL_MATCH_FIELDS no longer
-    // narrows on) -- Facestock: Vendor Name/Size; Adhesive: Vendor Name/
-    // Shelf Life/Viscosity/Cohesion/Shear/Density; Release Liner: Vendor
-    // Name/Size/GSM. Since those fields can now differ between reels that
-    // still count as a match, this is what a picker actually needs to tell
-    // candidates apart by -- replaces the system Roll ID (still available as
-    // this cell's hover tooltip) in the roll table below.
+    // narrows on) -- Facestock: Vendor Name/GSM/Size; Adhesive: Make/Vendor
+    // SKU Code/Vendor Name/Shelf Life/Viscosity/Cohesion/Shear/Density;
+    // Release Liner: Vendor Name/Size/GSM. Since those fields can now differ
+    // between reels that still count as a match, this is what a picker
+    // actually needs to tell candidates apart by -- replaces the system Roll
+    // ID (still available as this cell's hover tooltip) in the roll table
+    // below.
     function reelDetail(layerKey, r) {
       const bits = [];
       if (layerKey.startsWith("facestock")) {
         // Size has its own column for facestock reels (see layerColumnHtml/
         // renderLayerRows) -- not repeated here.
         if (r.vendorName) bits.push(r.vendorName);
+        if (r.gsm) bits.push(`${r.gsm} GSM`);
       } else if (layerKey.startsWith("adhesive")) {
+        if (r.make) bits.push(r.make);
+        if (r.vendorSkuCode) bits.push(r.vendorSkuCode);
         if (r.vendorName) bits.push(r.vendorName);
         if (r.shelfLife) bits.push(`Shelf Life ${r.shelfLife}`);
         if (r.viscosity) bits.push(`Visc ${r.viscosity}`);

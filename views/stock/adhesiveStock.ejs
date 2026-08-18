@@ -317,21 +317,27 @@
        actions -- see routes/stock/adhesiveStock.js's loadMastersWithStock.
        Every master is listed here even with zero drums. -->
   <div class="indi-head">
-    <div style="display: flex; align-items: center; gap: 14px;">
-      <h1>Adhesive Stock</h1>
+    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 14px;">
+      <div style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; border-radius: 10px;">
+        <i class="fa-solid fa-droplet" style="font-size: 1.1rem; opacity: 0.9;"></i>
+        <h1 style="margin: 0; letter-spacing: 0.02em;">Adhesive Stock</h1>
+      </div>
+      <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
-        Adhesive Value: <span style="color: #15803d;">₹<%= Number(adhesiveValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+        Total Value: <span style="color: #15803d; font-size: 15px;">₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
+      <span style="width: 1px; align-self: stretch; background: rgba(255, 255, 255, 0.4);"></span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
         Facestock Value: <span style="color: #15803d;">₹<%= Number(facestockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+      </span>
+      <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px; box-shadow: 0 0 0 2px #044a78, 0 0 0 3.5px #fff;">
+        Adhesive Value: <span style="color: #15803d;">₹<%= Number(adhesiveValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
         Release Liner Value: <span style="color: #15803d;">₹<%= Number(releaseValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
+      </div>
     </div>
-    <span style="font-size: 14px; font-weight: 800; color: #fff; background: #044a78; padding: 6px 14px; border-radius: 8px;">
-      Total Value: ₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %>
-    </span>
   </div>
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>

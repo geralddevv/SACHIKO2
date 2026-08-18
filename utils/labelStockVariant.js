@@ -95,6 +95,65 @@ export function buildLabelStockSpecSignature(payload) {
   return hashSignature(labelStockSignatureParts(payload, { includeProductCode: false }));
 }
 
+// The six recipe layers, in labelStockSignatureParts order.
+const RECIPE_LAYER_KEYS = ["facestock", "adhesive", "releaseLiner", "facestock2", "adhesive2", "releaseLiner2"];
+
+const POOL_SIG_FIELDS = {
+  facestock: [FS_SIG_FIELDS, FS_SIG_NUM_FIELDS],
+  adhesive: [AD_SIG_FIELDS, AD_SIG_NUM_FIELDS],
+  release: [RL_SIG_FIELDS, RL_SIG_NUM_FIELDS],
+};
+
+// "Is this the same layer spec?" key for ONE resolved layer -- the same
+// canonicalization labelStockSignatureParts applies to it inside the full
+// signature, so two different reels that resolve to a materially identical
+// layer collapse to a single option (see resolveLabelStockCombinations).
+function layerOptionKey(pool, layer) {
+  const [strFields, numFields] = POOL_SIG_FIELDS[pool] || [[], []];
+  return layerSignaturePart(layer, strFields, numFields);
+}
+
+// Every signature this file compares must be computed off the shape the row
+// actually gets STORED as, not the shape it was assembled in -- the schema
+// fills in defaults on save (releaseLiner/releaseLiner2's `releaseLinerColor:
+// "WHITE"`, models/sachiko/sachikoLabelStock.js), so a payload hashed before
+// that default lands would never match its own row when re-read later, and
+// each production run would mint yet another "-B"/"-C" for the identical
+// combination. Running both sides of every comparison (and the row about to
+// be created) through the schema first removes that drift; it also levels
+// legacy rows saved before a default existed against freshly-built payloads.
+// Falls back to the raw object if the source can't be cast at all, so a
+// single odd row can't break variant resolution outright.
+function normalizeRecipe(source) {
+  try {
+    const obj = new SachikoLabelStock(source).toObject();
+    delete obj._id;
+    return obj;
+  } catch {
+    return { ...source };
+  }
+}
+
+// A label stock's full recipe with only the named layers swapped out.
+// Deliberately seeded from `labelStock`'s own six layers rather than built
+// from the resolved ones alone: a layer nobody picked a reel for is produced
+// to the SKU's own spec, so it has to compare equal to it -- and starting
+// from the stored row is what guarantees that, field for field.
+function rebuildRecipe(labelStock, layerOverrides = {}) {
+  const recipe = {
+    productCode: labelStock.productCode,
+    rollType: labelStock.rollType,
+    family: labelStock.family,
+    rollOrSheet: labelStock.rollOrSheet,
+    printingTechnology: labelStock.printingTechnology,
+    digitalPrintType: labelStock.digitalPrintType,
+  };
+  for (const key of RECIPE_LAYER_KEYS) {
+    recipe[key] = Object.prototype.hasOwnProperty.call(layerOverrides, key) ? layerOverrides[key] : labelStock[key];
+  }
+  return recipe;
+}
+
 // Material-only signature -- just the six facestock/adhesive/releaseLiner
 // layers, none of the product-level fields (Product Code, Roll Type, Family,
 // Roll/Sheet, Printing Technology) labelStockSignatureParts also hashes.
@@ -137,6 +196,17 @@ export function buildMaterialSignature(payload) {
 
 const escapeRegExpLS = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// The family a Product Code belongs to: "C011-A" -> "C011", but only when a
+// row actually named "C011" exists, so a code that genuinely ends in a single
+// letter after a hyphen ("PET-A" entered as its own product) isn't mistaken
+// for someone else's variant. Only single letters are stripped -- that's all
+// resolveLabelStockProductCode ever mints.
+async function variantFamilyRoot(productCode) {
+  const match = /^(.*[^-])-[A-Z]$/.exec(String(productCode || ""));
+  if (!match) return productCode;
+  return (await SachikoLabelStock.exists({ productCode: match[1] })) ? match[1] : productCode;
+}
+
 // See the file-level comment above for the two callers/two onExactMatch
 // behaviors. Groups every row already named `payload.productCode` or
 // `<that code>-<LETTERS>` (its variant family) and compares recipes with
@@ -148,17 +218,24 @@ const escapeRegExpLS = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 //     it.
 //   - none match -> the next unused single-letter suffix (code-A, code-B,
 //     ...).
-export async function resolveLabelStockProductCode(payload, { onExactMatch = "throw" } = {}) {
-  const base = payload.productCode;
+//
+// `familyRoot` is for the derived callers (production/allotment), where the
+// SKU being produced can itself already BE a variant: without it, an order on
+// "C011-A" would grow a second generation of suffixes ("C011-A-A") off its own
+// name instead of joining the C011 family and taking the next free letter in
+// it. The manual create dialog deliberately doesn't pass it -- a Product Code
+// typed by hand is the base the user meant, suffix-looking or not.
+export async function resolveLabelStockProductCode(payload, { onExactMatch = "throw", familyRoot = false } = {}) {
+  const base = familyRoot ? await variantFamilyRoot(payload.productCode) : payload.productCode;
   const family = await SachikoLabelStock.find({
     productCode: new RegExp(`^${escapeRegExpLS(base)}(-[A-Z]+)?$`),
   }).lean();
   if (!family.length) return base;
 
-  const specSignature = buildLabelStockSpecSignature(payload);
+  const specSignature = buildLabelStockSpecSignature(normalizeRecipe(payload));
   const suffixOf = (code) => (code === base ? "" : code.slice(base.length + 1));
 
-  const exactMatch = family.find((doc) => buildLabelStockSpecSignature(doc) === specSignature);
+  const exactMatch = family.find((doc) => buildLabelStockSpecSignature(normalizeRecipe(doc)) === specSignature);
   if (exactMatch) {
     if (onExactMatch === "reuse") return exactMatch.productCode;
     throw Object.assign(
@@ -246,12 +323,13 @@ const POOL_MASTER_MODELS = { facestock: FacestockMaster, adhesive: AdhesiveMaste
 
 // The reel-side fields NOT already pinned down by POOL_MATCH_FIELDS (utils/
 // labelStockProduction.js) -- used only to break a tie when a reel's core
-// spec (family/make/vendorSkuCode/type[/gsm/micron], vendor included here
-// since *that's* what's actually varying) still matches more than one master
-// (e.g. three Facestock Masters sharing everything but Size).
+// spec (Facestock family/make/vendorSkuCode/type/micron, Adhesive type,
+// Release type/make/vendorSkuCode/color -- vendor included here too, since
+// *that's* what's actually varying) still matches more than one master (e.g.
+// three Facestock Masters sharing everything but Size).
 const POOL_TIEBREAK_FIELDS = {
   facestock: ["size", "gsm", "micron"],
-  adhesive: ["shelfLife", "viscosity", "cohesion", "shear", "density"],
+  adhesive: ["make", "vendorSkuCode", "shelfLife", "viscosity", "cohesion", "shear", "density"],
   release: ["color", "size", "gsm"],
 };
 
@@ -354,32 +432,128 @@ export async function masterLayerForReel(pool, reel) {
 //     that row instead, so the produced Deckle is attributed to the material
 //     that actually went into it.
 export async function resolveActualLabelStock(labelStock, resolvedLayers) {
-  const rebuilt = {
-    productCode: labelStock.productCode,
-    rollType: labelStock.rollType,
-    family: labelStock.family,
-    rollOrSheet: labelStock.rollOrSheet,
-    printingTechnology: labelStock.printingTechnology,
-    digitalPrintType: labelStock.digitalPrintType,
-  };
+  const overrides = {};
   for (const { layerKey, meta, reel } of resolvedLayers) {
-    rebuilt[layerKey] = await masterLayerForReel(meta.pool, reel);
+    overrides[layerKey] = await masterLayerForReel(meta.pool, reel);
   }
+  const rebuilt = normalizeRecipe(rebuildRecipe(labelStock, overrides));
 
-  if (buildLabelStockSpecSignature(rebuilt) === buildLabelStockSpecSignature(labelStock)) {
+  if (buildLabelStockSpecSignature(rebuilt) === buildLabelStockSpecSignature(normalizeRecipe(labelStock))) {
     return labelStock;
   }
 
-  const resolvedCode = await resolveLabelStockProductCode(rebuilt, { onExactMatch: "reuse" });
+  const resolvedCode = await resolveLabelStockProductCode(rebuilt, { onExactMatch: "reuse", familyRoot: true });
   if (resolvedCode === labelStock.productCode) return labelStock; // guard only -- signatures already differ above
 
   const existing = await SachikoLabelStock.findOne({ productCode: resolvedCode }).lean();
   if (existing) return existing;
 
-  const payload = { ...rebuilt, productCode: resolvedCode };
-  const labelStockId = await generateLabelStockId();
-  const skuCode = await generateLabelStockSkuCode();
-  const labelStockSignature = buildLabelStockSignature(payload);
-  const created = await SachikoLabelStock.create({ labelStockId, skuCode, ...payload, labelStockSignature });
-  return created.toObject();
+  return createLabelStockVariant({ ...rebuilt, productCode: resolvedCode });
+}
+
+// The one place a derived (production/allotment) variant row is written.
+// Signatures are hashed off the DRAFT DOCUMENT's own toObject() rather than
+// the payload handed in, so what's stored and what was hashed are the same
+// thing by construction -- see normalizeRecipe above for why that matters.
+// materialSignature is filled in here too (routes/sachiko/sachiko_route.js
+// sets it on every manually created/edited row; a variant minted here is no
+// different, and leaving it blank would hide the row from anything keying off
+// "same physical material stack").
+async function createLabelStockVariant(payload) {
+  const doc = new SachikoLabelStock({
+    labelStockId: await generateLabelStockId(),
+    skuCode: await generateLabelStockSkuCode(),
+    ...payload,
+  });
+  const snapshot = doc.toObject();
+  doc.labelStockSignature = buildLabelStockSignature(snapshot);
+  doc.materialSignature = buildMaterialSignature(snapshot);
+  await doc.save();
+  return doc.toObject();
+}
+
+// ---------------------------------------------------------------------------
+// Every material combination a set of allotted reels can make.
+//
+// Assign Production's raw-material pickers are checkboxes, not single-select
+// (views/inventory/orders/assignProduction.ejs), so one order can hold several
+// reels per layer -- and the operator is free to laminate any facestock reel
+// against any adhesive drum against any release liner reel out of what's
+// allotted. Two facestock x two adhesive x two release liner isn't one
+// combination, it's eight, and each one that differs from the SKU's own stored
+// recipe is materially a different label stock that needs its own "-A"/"-B"/...
+// Product Code tracked up front -- not discovered later, one at a time, as
+// each Deckle happens to get laminated.
+//
+// `pickedLayers` is [{ layerKey, pool, reels: [...] }], only the layers that
+// actually have reels allotted; every other layer of the recipe is taken from
+// `labelStock` itself (it'll be produced to spec). Resolution is sequential on
+// purpose: each created variant claims a letter that the next combination's
+// lookup has to see.
+// ---------------------------------------------------------------------------
+export async function resolveLabelStockCombinations(labelStock, pickedLayers, { maxCombinations = 200 } = {}) {
+  const empty = { combinations: [], created: [], reused: [], truncated: false };
+  if (!labelStock || !pickedLayers?.length) return empty;
+
+  // One axis per picked layer. Several reels of a layer routinely resolve to
+  // the very same Master-based spec (two drums of the same adhesive, say) --
+  // those are one option, not two, or the product below would explode into
+  // duplicates of a single combination.
+  const axes = [];
+  for (const { layerKey, pool, reels } of pickedLayers) {
+    const options = new Map();
+    for (const reel of reels) {
+      const layer = await masterLayerForReel(pool, reel);
+      const key = layerOptionKey(pool, layer);
+      if (!options.has(key)) options.set(key, { layer, rollIds: [] });
+      options.get(key).rollIds.push(reel.rollId);
+    }
+    if (options.size) axes.push({ layerKey, options: [...options.values()] });
+  }
+  if (!axes.length) return empty;
+
+  const totalCombinations = axes.reduce((n, axis) => n * axis.options.length, 1);
+  let combos = [{ layers: {}, rollIds: {} }];
+  for (const axis of axes) {
+    const next = [];
+    for (const combo of combos) {
+      for (const option of axis.options) {
+        if (next.length >= maxCombinations) break;
+        next.push({
+          layers: { ...combo.layers, [axis.layerKey]: option.layer },
+          rollIds: { ...combo.rollIds, [axis.layerKey]: option.rollIds },
+        });
+      }
+    }
+    combos = next;
+  }
+
+  // The SKU's own spec seeds `seen`: the combination that reproduces it isn't
+  // a variant, it's the row we already have. Every later combination that
+  // collapses onto an earlier one's signature is skipped the same way, so a
+  // combination is only ever resolved (and at most one row written) once.
+  const seen = new Set([buildLabelStockSpecSignature(normalizeRecipe(labelStock))]);
+  const combinations = [];
+  for (const combo of combos) {
+    const recipe = normalizeRecipe(rebuildRecipe(labelStock, combo.layers));
+    const signature = buildLabelStockSpecSignature(recipe);
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+
+    const productCode = await resolveLabelStockProductCode(recipe, { onExactMatch: "reuse", familyRoot: true });
+    // "reuse" hands back an existing family member's code when this exact
+    // recipe is already tracked; anything else is a letter nothing holds yet.
+    const existing = await SachikoLabelStock.findOne({ productCode }).lean();
+    const row = existing || (await createLabelStockVariant({ ...recipe, productCode }));
+    combinations.push({ productCode, created: !existing, rollIds: combo.rollIds, labelStock: row });
+  }
+
+  return {
+    combinations,
+    created: combinations.filter((c) => c.created).map((c) => c.productCode),
+    reused: combinations.filter((c) => !c.created).map((c) => c.productCode),
+    // More combinations than were resolved -- the rest are left untracked
+    // rather than silently minting an unbounded number of Product Codes.
+    truncated: totalCombinations > combos.length,
+  };
 }

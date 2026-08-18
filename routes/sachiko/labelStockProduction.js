@@ -63,20 +63,23 @@ router.get("/raw-stock", async (req, res) => {
     const matched = reels.filter((r) => reelMatchesLayer(meta.pool, r, layerSpec) && !claimedIds.has(String(r._id)));
 
     // POOL_MATCH_FIELDS (utils/labelStockProduction.js) no longer narrows on
-    // every reel-side field a master carries -- Vendor/Size (Facestock),
-    // Shelf Life/Viscosity/Cohesion/Shear/Density (Adhesive), and Size/GSM
-    // (Release) can now differ between reels that still count as "the same"
-    // material for this layer. Send them along so assignProduction.ejs's
-    // roll picker can show whichever of those the picking user still needs
-    // to tell candidates apart by -- the fields already pinned down by the
-    // match (and so identical across every row here) aren't repeated.
+    // every reel-side field a master carries -- Vendor/Size/GSM (Facestock),
+    // Make/Vendor SKU Code/Shelf Life/Viscosity/Cohesion/Shear/Density
+    // (Adhesive, matched on Type alone), and Size/GSM (Release) can now
+    // differ between reels that still count as "the same" material for this
+    // layer. Send them along so assignProduction.ejs's roll picker can show
+    // whichever of those the picking user still needs to tell candidates
+    // apart by -- the fields already pinned down by the match (and so
+    // identical across every row here) aren't repeated.
     res.json({
       reels: matched.map((r) => ({
         _id: String(r._id),
         rollId: r.rollId,
         family: r.family,
         type: r.type,
+        make: r.make,
         vendorName: r.vendorName,
+        vendorSkuCode: r.vendorSkuCode,
         size: r.size,
         gsm: r.gsm,
         micron: r.micron,
