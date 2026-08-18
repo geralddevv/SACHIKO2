@@ -199,6 +199,14 @@ async function loadMastersWithStock(stock) {
   });
 }
 
+// Rupee value of stock actually on hand right now -- each lot's own quantity
+// (pieces, Core's stock unit -- see the schema note on models/inventory/
+// coreStock.js) times its own rate (rate can vary lot to lot, batch to
+// batch, so this sums per-lot rather than using one blended rate).
+function totalStockValueOf(stock) {
+  return stock.reduce((sum, s) => sum + (Number(s.quantity) || 0) * (Number(s.rate) || 0), 0);
+}
+
 router.get("/", async (req, res) => {
   const [locations, stock, specOptions] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
@@ -212,6 +220,7 @@ router.get("/", async (req, res) => {
     title: "Core Stock",
     locations,
     masters,
+    totalStockValue: totalStockValueOf(stock),
     ...specOptions,
     notification: req.flash("notification"),
   });

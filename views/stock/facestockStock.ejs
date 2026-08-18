@@ -317,7 +317,21 @@
        actions -- see routes/stock/facestockStock.js's loadMastersWithStock.
        Every master is listed here even with zero reels. -->
   <div class="indi-head">
-    <h1>Facestock Stock</h1>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <h1>Facestock Stock</h1>
+      <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
+        Facestock Value: <span style="color: #15803d;">₹<%= Number(facestockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+      </span>
+      <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
+        Release Liner Value: <span style="color: #15803d;">₹<%= Number(releaseValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+      </span>
+      <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
+        Adhesive Value: <span style="color: #15803d;">₹<%= Number(adhesiveValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+      </span>
+    </div>
+    <span style="font-size: 14px; font-weight: 800; color: #fff; background: #044a78; padding: 6px 14px; border-radius: 8px;">
+      Total Value: ₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %>
+    </span>
   </div>
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>

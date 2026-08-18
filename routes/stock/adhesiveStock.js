@@ -1,6 +1,8 @@
 import express from "express";
 import AdhesiveStock from "../../models/inventory/adhesiveStock.js";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
+import FacestockStock from "../../models/inventory/facestockStock.js";
+import ReleaseLinerStock from "../../models/inventory/releaseLinerStock.js";
 import Vendor from "../../models/users/vendor.js";
 import Location from "../../models/system/location.js";
 import PurchaseOrder from "../../models/inventory/PurchaseOrder.js";
@@ -331,19 +333,43 @@ async function loadMastersWithStock(stock) {
   });
 }
 
+// Rupee value of stock actually on hand right now -- each drum's own
+// reelMtrs (Kg) times its own rate (rate can vary drum to drum, batch to
+// batch, so this sums per-drum rather than using one blended rate). Drums
+// already emptied by Label Stock Production (quantity 0) hold nothing, so
+// they contribute nothing, same "quantity > 0" gate loadMastersWithStock
+// uses for Stock (Kg).
+function totalStockValueOf(stock) {
+  return stock.reduce((sum, s) => (s.quantity ? sum + (Number(s.reelMtrs) || 0) * (Number(s.rate) || 0) : sum), 0);
+}
+
 router.get("/", async (req, res) => {
-  const [locations, stock, specOptions] = await Promise.all([
+  const [locations, stock, facestockStock, releaseStock, specOptions] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
     AdhesiveStock.find().sort({ createdAt: -1 }).lean(),
+    // Facestock and Release Liner Stock's own value figures, shown alongside
+    // Adhesive's on this page's header (this is the shopfloor's one raw-
+    // material value overview -- see routes/stock/facestockStock.js's own
+    // header) -- each pool's rate can differ reel/drum to reel/drum, so this
+    // sums per-reel/drum, same as this page's own totalStockValueOf.
+    FacestockStock.find().select("quantity reelMtrs rate").lean(),
+    ReleaseLinerStock.find().select("quantity reelMtrs rate").lean(),
     loadSpecOptions({}),
   ]);
   const masters = await loadMastersWithStock(stock);
+  const adhesiveValue = totalStockValueOf(stock);
+  const facestockValue = totalStockValueOf(facestockStock);
+  const releaseValue = totalStockValueOf(releaseStock);
   res.render("stock/adhesiveStock.ejs", {
     JS: false,
     CSS: "tableDisp.css",
     title: "Adhesive Stock",
     locations,
     masters,
+    adhesiveValue,
+    facestockValue,
+    releaseValue,
+    totalStockValue: adhesiveValue + facestockValue + releaseValue,
     ...specOptions,
     notification: req.flash("notification"),
   });

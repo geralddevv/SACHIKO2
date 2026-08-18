@@ -293,6 +293,9 @@
        to net against stock (see loadMastersWithStock's comment). -->
   <div class="indi-head">
     <h1>Core Stock</h1>
+    <span style="margin-left: auto; font-size: 14px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 14px; border-radius: 8px;">
+      Total Stock Value: <span style="color: #15803d;">₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+    </span>
   </div>
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
