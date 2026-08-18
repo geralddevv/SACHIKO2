@@ -296,10 +296,17 @@
       font-weight: 700;
       color: #fff;
       background: #dc2626;
-      margin-left: auto;
     }
     .roll-edit-btn:hover {
       background: #b91c1c;
+    }
+    /* Reel already has its Invoice No -- blue instead of the red "needs
+       attention" color used for reels still missing one. */
+    .roll-edit-btn.has-invoice {
+      background: #044a78;
+    }
+    .roll-edit-btn.has-invoice:hover {
+      background: #03365a;
     }
   </style>
 
@@ -790,14 +797,12 @@
           data.remarks ? escapeHtml(data.remarks) : "",
         ].filter(Boolean);
         bar.innerHTML = parts.map((p, i) => (i === 0 ? p : `<span>${p}</span>`)).join('<span style="color:#334155; font-size:16px; font-weight:700; line-height:1;">&middot;</span>');
-        if (missingInvoice) {
-          const editBtn = document.createElement("button");
-          editBtn.type = "button";
-          editBtn.className = "roll-edit-btn";
-          editBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit';
-          editBtn.addEventListener("click", () => openEditRollDialog(data, row.getTreeParent()?.getData() || {}));
-          bar.appendChild(editBtn);
-        }
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = data.invoiceNo ? "roll-edit-btn has-invoice" : "roll-edit-btn";
+        editBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit';
+        editBtn.addEventListener("click", () => openEditRollDialog(data, row.getTreeParent()?.getData() || {}));
+        bar.insertBefore(editBtn, bar.firstChild);
       }
       el.appendChild(bar);
     },
