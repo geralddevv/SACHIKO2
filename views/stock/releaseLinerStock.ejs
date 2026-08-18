@@ -736,6 +736,15 @@
 
   const fmt = (n) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("en-IN"));
 
+  // Looks a reel's own Release Master back up by scanning mastersData's own
+  // rolls arrays, instead of Tabulator's row.getTreeParent() -- more direct
+  // for finding the spec (type/vendor/etc) a reel's Edit dialog summary
+  // needs, and avoids depending on the tree row's parent link still being
+  // intact after the row's own re-renders.
+  function findMasterForRoll(rollId) {
+    return mastersData.find((m) => (m.rolls || []).some((r) => r._id === rollId)) || {};
+  }
+
   // Flattens each master into Tabulator's dataTree shape: one row per
   // Release Master, with the individual ReleaseLinerStock reels behind its
   // stock count (see routes/stock/releaseLinerStock.js's loadMastersWithStock)
@@ -801,13 +810,19 @@
         editBtn.type = "button";
         editBtn.className = data.invoiceNo ? "roll-edit-btn has-invoice" : "roll-edit-btn";
         editBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit';
-        editBtn.addEventListener("click", () => openEditRollDialog(data, row.getTreeParent()?.getData() || {}));
+        editBtn.addEventListener("click", () => openEditRollDialog(data, findMasterForRoll(data._id)));
         bar.insertBefore(editBtn, bar.firstChild);
       }
       el.appendChild(bar);
     },
     columns: [
       { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false },
+      // getPosition(true) is the row's rank among currently sorted/filtered
+      // rows, re-evaluated on every redraw -- stays correct after sorting or
+      // filtering instead of a static index frozen at load time. Reel (child)
+      // rows don't get their own number, same as every other column here.
+      { title: "Sr. No.", field: "_srNo", width: 60, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
+        formatter: (cell) => (cell.getRow().getData().isParent ? cell.getRow().getPosition(true) : "") },
       {
         title: "Inward",
         width: 110,
@@ -904,6 +919,22 @@
         },
       },
     ],
+  });
+
+  // "renderComplete" is a Tabulator EVENT, not a constructor option -- a
+  // `renderComplete:` key inside the options object above is silently
+  // ignored (no error, callback just never runs). Subscribing via .on() is
+  // the only way it actually fires. Reads straight off the rendered DOM
+  // rather than Tabulator's row APIs (getRow().getPosition()/getRows("active")
+  // were both observed to go stale after a sort) -- whatever master rows
+  // are actually on screen, top to bottom, get renumbered 1..n every time
+  // the table redraws. Reel (child) rows are marked ".roll-detail-row" by
+  // rowFormatter above and skipped, same as every other master-only column.
+  mastersTable.on("renderComplete", function () {
+    document.querySelectorAll("#release-masters-table .tabulator-row:not(.roll-detail-row)").forEach((rowEl, i) => {
+      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
+      if (cell) cell.textContent = i + 1;
+    });
   });
 
   // ---- Create Purchase Order dialog ----

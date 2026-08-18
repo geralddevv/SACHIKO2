@@ -43,3 +43,19 @@ deckle type and size
 adhesive -> adh
 rate in the header of stock
 dashboard in stock summary
+
+
+sr.no in every table
+remove tape from the client and user detail view
+hide the other clients 
+option for sq mtr rate and rolls in sales order
+remove the stale entries
+add a rate in the masters of LS
+search filter in the allocation selection table
+add lowest, highest and last rate in client binding
+production usage logs
+if no invoice show warning while allocation
+value in the semi finished
+add size width in semi finished
+when clciked on the product show the material used (C011-A)
+ONLY WATERBASE MANDATORY IN THE ADHESIVE AND IN RELEASE LINER REMOVE COLOR

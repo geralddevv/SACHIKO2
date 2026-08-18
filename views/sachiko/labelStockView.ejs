@@ -342,6 +342,23 @@
         // it lands in the toggle column itself rather than the data column.
         formatter: (cell) => (cell.getRow().getTreeParent && cell.getRow().getTreeParent() ? "↳" : "") },
       {
+        // getPosition(true) reads the row's position among only the currently
+        // active (sorted + filtered) rows, re-evaluated on every redraw --
+        // so this stays correct after sorting any column or typing into any
+        // header filter, unlike a static index baked into the row data at
+        // load time. Variant children (nested under a Product Code's dataTree)
+        // aren't top-level rows, so they don't get their own number here --
+        // matches the "↳" toggle column's own parent/child distinction above.
+        title: "Sr. No.",
+        field: "_srNo",
+        width: 70,
+        hozAlign: "center",
+        headerHozAlign: "center",
+        headerSort: false,
+        headerFilter: false,
+        formatter: (cell) => (cell.getRow().getTreeParent && cell.getRow().getTreeParent() ? "" : cell.getRow().getPosition(true)),
+      },
+      {
         title: "Actions",
         hozAlign: "center",
         headerSort: false,
@@ -401,6 +418,26 @@
         }
       },
     ],
+  });
+
+  // "renderComplete" is a Tabulator EVENT, not a constructor option -- a
+  // `renderComplete:` key inside the options object above is silently
+  // ignored (no error, callback just never runs), which is why the column
+  // formatter's stale numbers kept showing after a sort. Subscribing via
+  // .on() is the only way it actually fires. Reads straight off the
+  // rendered DOM rather than Tabulator's row APIs -- getRow().getPosition()/
+  // getRows("active") both count a dataTree's collapsed children as
+  // occupying a position even while they're not on screen (e.g. a Product
+  // Code with 5 hidden variants pushes the NEXT visible row's number up by
+  // 5, so numbering jumped 1, 7 instead of 1, 2). Whatever's actually on
+  // screen, top to bottom, is renumbered 1..n every redraw; variant
+  // children are marked "data-variant-child" by rowFormatter above and
+  // skipped, same as the "↳" toggle column's own parent/child distinction.
+  table.on("renderComplete", function () {
+    document.querySelectorAll("#master-table .tabulator-row:not([data-variant-child])").forEach((rowEl, i) => {
+      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
+      if (cell) cell.textContent = i + 1;
+    });
   });
 
   document.getElementById("download-pdf").addEventListener("click", () =>

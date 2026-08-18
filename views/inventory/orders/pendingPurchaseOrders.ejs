@@ -530,6 +530,11 @@
     placeholder: "No pending purchase orders found",
     initialSort: [{ column: "createdAt", dir: "asc" }],
     columns: [
+      // getPosition(true) is the row's rank among currently sorted/filtered
+      // rows, re-evaluated on every redraw -- stays correct after sorting or
+      // filtering instead of a static index frozen at load time.
+      { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
+        formatter: (cell) => cell.getRow().getPosition(true) },
       {
         title: "Actions",
         hozAlign: "center",
@@ -663,6 +668,20 @@
         headerFilterPlaceholder: "Filter remarks...",
       },
     ],
+  });
+
+  // "renderComplete" is a Tabulator EVENT, not a constructor option -- a
+  // `renderComplete:` key inside the options object above is silently
+  // ignored (no error, callback just never runs). Subscribing via .on() is
+  // the only way it actually fires. Reads straight off the rendered DOM
+  // rather than Tabulator's row APIs (getRow().getPosition()/getRows("active")
+  // were both observed to go stale after a sort) -- whatever's actually on
+  // screen, top to bottom, is renumbered 1..n every time the table redraws.
+  table.on("renderComplete", function () {
+    document.querySelectorAll("#master-table .tabulator-row").forEach((rowEl, i) => {
+      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
+      if (cell) cell.textContent = i + 1;
+    });
   });
 
   document.getElementById("item-filter").addEventListener("change", function (e) {

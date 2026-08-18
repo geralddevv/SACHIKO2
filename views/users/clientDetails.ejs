@@ -481,7 +481,6 @@
     const inPageLocs = (loc) => pageLocs.some((pl) => sameLocPage(pl, loc));
     const grandTotal =
       (labels || []).filter((i) => inPageLocs(i.location)).length +
-      (tapes || []).filter((i) => inPageLocs(i.location)).length +
       (labelStocks || []).filter((i) => inPageLocs(i.location)).length;
   %>
 
@@ -497,9 +496,8 @@
     <div class="item-rows-container">
       <% pageLocs.forEach(loc => {
         const locLabels = (labels || []).filter(i => sameLocPage(i.location, loc));
-        const locTapes = (tapes || []).filter(i => sameLocPage(i.location, loc));
         const locLabelStocks = (labelStocks || []).filter(i => sameLocPage(i.location, loc));
-        const locTotal = locLabels.length + locTapes.length + locLabelStocks.length;
+        const locTotal = locLabels.length + locLabelStocks.length;
       %>
         <div class="location-group">
           <div class="location-group-header">
@@ -544,52 +542,6 @@
                         <td><%= i.OrderQty || '-' %></td>
                         <td><%= i.repOrderFq || '-' %></td>
                         <td><%= i.creditTerm || '-' %></td>
-                      </tr>
-                    <% }) %>
-                  </tbody>
-                </table>
-              </div>
-            <% } %>
-
-            <!-- Tape -->
-            <% if (locTapes.length > 0) { %>
-              <div class="item-category-group">
-                <div class="item-category-header">
-                  <span class="item-type-label">Tape</span>
-                  <span class="item-count-badge"><%= locTapes.length %></span>
-                </div>
-                <table class="inner-spec-table">
-                  <thead>
-                    <tr>
-                      <th style="width: 17%;">Item</th>
-                      <th>GSM</th>
-                      <th>Type</th>
-                      <th>Width</th>
-                      <th>Mtrs</th>
-                      <th>Finish</th>
-                      <th>Core</th>
-                      <th>Min</th>
-                      <th>Odr</th>
-                      <th>Freq</th>
-                      <th>Credit</th>
-                      <th>Rate</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% locTapes.forEach(i => { %>
-                      <tr>
-                        <td class="item-name-cell"><%= i.tapeClientPaperCode %></td>
-                        <td><%= i.clientTapeGsm || (i.tapeId ? i.tapeId.tapeGsm : '-') %></td>
-                        <td><%= i.tapeId ? i.tapeId.tapePaperType : '-' %></td>
-                        <td><%= i.tapeId ? i.tapeId.tapeWidth : '-' %></td>
-                        <td><%= i.tapeMtrsDel %></td>
-                        <td><%= i.tapeId ? i.tapeId.tapeFinish : '-' %></td>
-                        <td><%= i.tapeId ? i.tapeId.tapeCoreId : '-' %></td>
-                        <td><%= i.tapeMinQty %></td>
-                        <td><%= i.tapeOdrQty || '-' %></td>
-                        <td><%= i.tapeOdrFreq || '-' %></td>
-                        <td><%= i.tapeCreditTerm || '-' %></td>
-                        <td style="font-weight:600;">₹<%= i.tapeRatePerRoll %></td>
                       </tr>
                     <% }) %>
                   </tbody>

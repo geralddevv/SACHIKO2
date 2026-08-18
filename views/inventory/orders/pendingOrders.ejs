@@ -477,6 +477,11 @@
     placeholder: "No pending orders found",
     initialSort: [{ column: "poDate", dir: "asc" }],
     columns: [
+      // getPosition(true) is the row's rank among currently sorted/filtered
+      // rows, re-evaluated on every redraw -- stays correct after sorting or
+      // filtering instead of a static index frozen at load time.
+      { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
+        formatter: (cell) => cell.getRow().getPosition(true) },
       {
         title: "Actions",
         hozAlign: "center",
@@ -487,8 +492,12 @@
           const client = row.userId ? row.userId.clientName : "";
           const user = row.userId ? row.userId._id : "";
           const item = row.tapeBinding ? row.tapeBinding._id : "";
+          // Must match the salesOrderForm Item Type select's actual option
+          // values (ROLL/SHEET) -- "LABEL_STOCK" isn't one of them, so
+          // passing it as `type` left the select (and everything that reads
+          // off it) unset and broke prefill on edit/confirm.
           let itemType = "TAPE";
-          if (row.onModel === "SachikoLabelStock") itemType = "LABEL_STOCK";
+          if (row.onModel === "SachikoLabelStock") itemType = String(row.tapeId?.rollOrSheet || "").toUpperCase();
 
           const confirmUrl = `/sachiko/sales/order/confirm?orderId=${row._id}&type=${itemType}&client=${encodeURIComponent(client)}&user=${user}&item=${item}`;
           const editUrl = `/sachiko/sales/order?orderId=${row._id}&type=${itemType}&client=${encodeURIComponent(client)}&user=${user}&item=${item}`;
@@ -773,6 +782,20 @@
       },
       { title: "Remarks", field: "remarks", headerFilter: "input", headerFilterPlaceholder: "Search" },
     ],
+  });
+
+  // "renderComplete" is a Tabulator EVENT, not a constructor option -- a
+  // `renderComplete:` key inside the options object above is silently
+  // ignored (no error, callback just never runs). Subscribing via .on() is
+  // the only way it actually fires. Reads straight off the rendered DOM
+  // rather than Tabulator's row APIs (getRow().getPosition()/getRows("active")
+  // were both observed to go stale after a sort) -- whatever's actually on
+  // screen, top to bottom, is renumbered 1..n every time the table redraws.
+  table.on("renderComplete", function () {
+    document.querySelectorAll("#master-table .tabulator-row").forEach((rowEl, i) => {
+      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
+      if (cell) cell.textContent = i + 1;
+    });
   });
 
   // Event delegation for action buttons (avoids inline onclick with dynamic data)

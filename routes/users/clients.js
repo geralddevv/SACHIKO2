@@ -350,7 +350,6 @@ router.get("/profile/:id", async (req, res) => {
       path: "users",
       populate: [
         { path: "label" },
-        { path: "tape", populate: { path: "tapeId" } },
         { path: "labelStock", populate: { path: "labelStock", model: "SachikoLabelStock" } },
       ],
     });
@@ -379,10 +378,6 @@ router.get("/details/:userId", async (req, res) => {
   try {
     const user = await Username.findById(req.params.userId)
       .populate("label")
-      .populate({
-        path: "tape",
-        populate: { path: "tapeId" },
-      })
       .populate({
         path: "labelStock",
         populate: { path: "labelStock", model: "SachikoLabelStock" },
@@ -418,7 +413,6 @@ router.get("/details/:userId", async (req, res) => {
 
     const stats = {
       labels: (user.label || []).length,
-      tapes: (user.tape || []).length,
       labelStocks: (user.labelStock || []).length,
     };
 
@@ -428,7 +422,6 @@ router.get("/details/:userId", async (req, res) => {
       JS: false,
       userData,
       labels: user.label || [],
-      tapes: user.tape || [],
       labelStocks: user.labelStock || [],
       stats,
       filterLocation: req.query.location ? String(req.query.location).trim() : "",
