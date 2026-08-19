@@ -23,9 +23,11 @@ const numOrUndef = (value) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+const SENSING_VALUES = ["SENSING", "NON-SENSING"];
+
 // Fields shared by every reel in one inward batch (one spec, one invoice) --
 // every field Release Master itself carries (type/color/gsm/vendor/make/
-// vendorSkuCode), plus this batch's own location/rate/invoice.
+// vendorSkuCode/sensing), plus this batch's own location/rate/invoice.
 async function buildHeaderPayload(body) {
   const vendorId = String(body.vendorId || "").trim();
   const header = {
@@ -36,6 +38,12 @@ async function buildHeaderPayload(body) {
     vendorId: vendorId || undefined,
     make: String(body.make || "").trim(),
     vendorSkuCode: String(body.vendorSkuCode || "").trim(),
+    // Comes off the chosen Release Master (see the stock model's own note on
+    // this field). Anything that isn't one of the two known values is stored
+    // blank rather than failing the whole inward on a schema enum.
+    sensing: SENSING_VALUES.includes(String(body.sensing || "").trim().toUpperCase())
+      ? String(body.sensing).trim().toUpperCase()
+      : "",
     location: String(body.location || "").trim(),
     rate: numOrUndef(body.rate),
     invoiceNo: String(body.invoiceNo || "").trim(),

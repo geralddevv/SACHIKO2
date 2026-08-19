@@ -84,6 +84,7 @@ router.get("/raw-stock", async (req, res) => {
         gsm: r.gsm,
         micron: r.micron,
         color: r.color,
+        sensing: r.sensing,
         shelfLife: r.shelfLife,
         viscosity: r.viscosity,
         cohesion: r.cohesion,

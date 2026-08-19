@@ -46,6 +46,22 @@ const releaseLinerStockSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Mirrors Release Master's own `sensing` (models/inventory/
+    // releaseMaster.js) -- whether this liner carries the sensing mark the
+    // press's eye-mark sensor needs. Copied off the master the reel was
+    // inwarded against, and it is the ONE field a Label Stock recipe's
+    // Release Liner layer is matched on (utils/labelStockProduction.js's
+    // POOL_MATCH_FIELDS), so a reel with none recorded can't be allotted to
+    // a recipe that asks for one -- run
+    // scripts/backfill-releaselinerstock-sensing.js to fill it in on reels
+    // inwarded before this field existed.
+    sensing: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      enum: ["SENSING", "NON-SENSING", ""],
+      default: "",
+    },
     location: {
       type: String,
       required: true,

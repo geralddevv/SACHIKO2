@@ -79,6 +79,17 @@ const numOrUndef = (value) => {
 
 const trim = (value) => String(value ?? "").trim();
 
+// Release Liner Sensing -- the same two values Release Master offers (see
+// SENSING_OPTIONS in routes/system/releaseMaster.js). Anything else posted
+// (including the cascade's "-- None --" sentinel, which the dialog already
+// normalizes away, and the blank every recipe carries until its master has
+// Sensing filled in) is stored as "not stated".
+const SENSING_OPTIONS = ["SENSING", "NON-SENSING"];
+const sensingOrBlank = (value) => {
+  const v = trim(value).toUpperCase();
+  return SENSING_OPTIONS.includes(v) ? v : "";
+};
+
 // Normalize repeated form fields into an array (single value -> [value]).
 const toArray = (value) => {
   if (value === undefined || value === null) return [];
@@ -126,7 +137,7 @@ router.get("/label-stock/view", async (req, res) => {
     previewNextSkuCode(),
     FacestockMaster.find().select("skuId family type make vendorId vendorName vendorSkuCode size gsm micron").lean(),
     AdhesiveMaster.find().select("skuId type make vendorId vendorName vendorSkuCode shelfLife viscosity cohesion shear density").lean(),
-    ReleaseMaster.find().select("skuId type make vendorId vendorName vendorSkuCode color size gsm").lean(),
+    ReleaseMaster.find().select("skuId type make sensing vendorId vendorName vendorSkuCode color size gsm").lean(),
   ]);
   res.render("sachiko/labelStockView.ejs", {
     title: "Label Stock View",
@@ -205,6 +216,7 @@ async function buildLabelStockPayload(body) {
     releaseLiner: {
       releaseLinerType: trim(body.releaseLinerType),
       releaseLinerMake: trim(body.releaseLinerMake),
+      releaseLinerSensing: sensingOrBlank(body.releaseLinerSensing),
       releaseLinerVendorId: releaseLinerVendorId || undefined,
       releaseLinerVendorName: await resolveVendorName(releaseLinerVendorId),
       releaseLinerVendorSkuCode: trim(body.releaseLinerVendorSkuCode),
@@ -264,6 +276,7 @@ async function buildLabelStockPayload(body) {
     payload.releaseLiner2 = {
       releaseLinerType: trim(body.releaseLinerType2),
       releaseLinerMake: trim(body.releaseLinerMake2),
+      releaseLinerSensing: sensingOrBlank(body.releaseLinerSensing2),
       releaseLinerVendorId: releaseLinerVendorId2 || undefined,
       releaseLinerVendorName: await resolveVendorName(releaseLinerVendorId2),
       releaseLinerVendorSkuCode: trim(body.releaseLinerVendorSkuCode2),

@@ -44,7 +44,7 @@ const FS_SIG_FIELDS = ["facestockFamily", "facestockType", "facestockMake", "fac
 const FS_SIG_NUM_FIELDS = ["facestockGsm", "facestockMicron"];
 const AD_SIG_FIELDS = ["adhesiveType", "adhesiveMake", "adhesiveVendorId", "adhesiveVendorSkuCode", "adhesiveShelfLife"];
 const AD_SIG_NUM_FIELDS = ["adhesiveGsm", "adhesiveViscosity", "adhesiveCohesion", "adhesiveShear", "adhesiveDensity"];
-const RL_SIG_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerVendorId", "releaseLinerVendorSkuCode", "releaseLinerColor", "releaseLinerSize"];
+const RL_SIG_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerSensing", "releaseLinerVendorId", "releaseLinerVendorSkuCode", "releaseLinerColor", "releaseLinerSize"];
 const RL_SIG_NUM_FIELDS = ["releaseLinerGsm"];
 
 function layerSignaturePart(layer, strFields, numFields) {

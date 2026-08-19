@@ -61,10 +61,11 @@ export const POOL_MODELS = {
 // The deliberately narrow set of reel-side fields a recipe layer's material
 // is considered "the same as" for allocation purposes, paired with the
 // recipe's own (prefixed) field name for each -- Facestock: family/make/
-// vendor SKU code/type/micron; Adhesive: type alone; Release Liner: type/
-// make/vendor SKU code/color. Vendor itself and every other master field
+// vendor SKU code/type/micron; Adhesive: type alone; Release Liner: sensing
+// alone. Vendor itself and every other master field
 // (Facestock's size/gsm; Adhesive's make/vendor SKU code/shelf life/
-// viscosity/cohesion/shear/density; Release's size/gsm) are NOT checked here
+// viscosity/cohesion/shear/density; Release's type/make/vendor SKU code/
+// color/size/gsm) are NOT checked here
 // -- a reel only needs to agree with the recipe on this list to count as
 // usable, even if it differs from the recipe's exact master elsewhere.
 // Drives reelMatchesLayer() below, the single check both the raw-stock picker
@@ -90,11 +91,22 @@ export const POOL_MATCH_FIELDS = {
   adhesive: [
     { field: "type", recipe: "adhesiveType" },
   ],
+  // Sensing alone: whether the liner carries the mark the press's eye-mark
+  // sensor needs is the one property that decides whether a liner can run
+  // this job at all. Type/make/vendor SKU code/colour were dropped from this
+  // list on purpose -- they still take part in
+  // buildLabelStockSpecSignature (see the note above), so a liner that
+  // differs on them is allotted under its own "-A"/"-B" Product Code variant
+  // rather than being hidden from the picker.
+  //
+  // Reel-side this reads ReleaseLinerStock.sensing, which only exists on
+  // reels inwarded after that field was added -- run
+  // scripts/backfill-releaselinerstock-sensing.js so older reels aren't
+  // silently excluded from every SENSING/NON-SENSING recipe. A recipe with
+  // no Sensing recorded matches any liner, per reelMatchesLayer's own
+  // blank-recipe rule below.
   release: [
-    { field: "type", recipe: "releaseLinerType" },
-    { field: "make", recipe: "releaseLinerMake" },
-    { field: "vendorSkuCode", recipe: "releaseLinerVendorSkuCode" },
-    { field: "color", recipe: "releaseLinerColor" },
+    { field: "sensing", recipe: "releaseLinerSensing" },
   ],
 };
 

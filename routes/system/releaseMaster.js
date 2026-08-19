@@ -2,6 +2,8 @@ import express from "express";
 import crypto from "crypto";
 import ReleaseMaster from "../../models/inventory/releaseMaster.js";
 import ReleaseLinerStock from "../../models/inventory/releaseLinerStock.js";
+import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
+import { buildLabelStockSignature, buildMaterialSignature } from "../../utils/labelStockVariant.js";
 import Vendor from "../../models/users/vendor.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
@@ -67,6 +69,94 @@ function cascadeStockUpdate(before, payload) {
   if (Object.keys($set).length) update.$set = $set;
   if (Object.keys($unset).length) update.$unset = $unset;
   return { match, update };
+}
+
+// A SachikoLabelStock recipe carries its own denormalized copy of the
+// Release Master it was built from, on releaseLiner (and releaseLiner2 for
+// DOUBLE RELEASE) -- master field name -> recipe field name. Same idea as
+// STOCK_MIRROR_FIELDS above, one level further out: the reel copies the
+// master, and so does the recipe.
+//
+// `size` is deliberately absent: the Label Stock create/edit dialog has no
+// Release Liner Size field at all (see FS_ORDER/AD_ORDER/RL_ORDER in
+// views/sachiko/labelStockView.ejs and the comment there), so every
+// manually-created recipe leaves it blank -- writing the master's Size onto
+// those rows would change their labelStockSignature for a field the form
+// never let anyone set.
+const RECIPE_MIRROR_FIELDS = {
+  type: "releaseLinerType",
+  make: "releaseLinerMake",
+  sensing: "releaseLinerSensing",
+  vendorId: "releaseLinerVendorId",
+  vendorName: "releaseLinerVendorName",
+  vendorSkuCode: "releaseLinerVendorSkuCode",
+  color: "releaseLinerColor",
+  gsm: "releaseLinerGsm",
+};
+
+// Which of those identify "this recipe layer was built from THAT master" --
+// everything except vendorName, a denormalized display copy that vendorId
+// already pins down (a stale one is something this cascade should repair,
+// not something it should refuse to match on). Sensing is included: once
+// masters actually carry it, two masters can differ in nothing else, and a
+// recipe still blank on it genuinely doesn't say which of the two it meant --
+// better left alone than guessed at. Before any master has it, master and
+// recipe are both blank, so the first fill still lands.
+const RECIPE_MATCH_FIELDS = Object.keys(RECIPE_MIRROR_FIELDS).filter((f) => f !== "vendorName");
+
+const isBlank = (v) => v === undefined || v === null || String(v).trim() === "";
+
+// Carries a master edit onto every Label Stock recipe layer built from its
+// pre-edit spec, the same way cascadeStockUpdate does for physical reels --
+// otherwise a recipe quietly stops describing any master row that exists.
+// This is what fills Sensing in on recipes saved before any master had it:
+// blank on the master pre-edit matches blank on the recipe, so setting it on
+// the master pushes it down to every Label Stock using that liner.
+//
+// Not an updateMany: labelStockSignature/materialSignature are hashed off the
+// recipe's own fields (utils/labelStockVariant.js), so every touched row has
+// to be re-hashed or its signatures go stale and duplicate detection starts
+// comparing against something the row no longer is. A row whose new signature
+// would collide with an existing one is left untouched and counted separately
+// -- two masters can't converge (the duplicate check above blocks that), so
+// this only fires against a hand-built row that already looked like the
+// post-edit spec, which is a human decision, not a guess for this code.
+async function cascadeLabelStockRecipes(before, payload) {
+  let updated = 0;
+  let skipped = 0;
+
+  for (const layer of ["releaseLiner", "releaseLiner2"]) {
+    const query = {};
+    for (const field of RECIPE_MATCH_FIELDS) {
+      const oldVal = before[field];
+      // `$in: [null, ""]` also matches a row where the key is absent
+      // entirely -- both a legacy row saved before the field existed and a
+      // NORMAL/DOUBLE FACESTOCK row that has no releaseLiner2 at all. The
+      // latter can't slip through anyway: Release Master's `type` is
+      // required, so the type clause is always a concrete value and only
+      // matches rows that really do carry this layer.
+      query[`${layer}.${RECIPE_MIRROR_FIELDS[field]}`] = isBlank(oldVal) ? { $in: [null, ""] } : oldVal;
+    }
+
+    for (const doc of await SachikoLabelStock.find(query)) {
+      for (const [masterField, recipeField] of Object.entries(RECIPE_MIRROR_FIELDS)) {
+        const newVal = payload[masterField];
+        doc.set(`${layer}.${recipeField}`, isBlank(newVal) ? undefined : newVal);
+      }
+      const snapshot = doc.toObject();
+      doc.labelStockSignature = buildLabelStockSignature(snapshot);
+      doc.materialSignature = buildMaterialSignature(snapshot);
+      try {
+        await doc.save();
+        updated += 1;
+      } catch (err) {
+        console.error(`RELEASE MASTER -> LABEL STOCK CASCADE SKIPPED (${doc.productCode}):`, err.message);
+        skipped += 1;
+      }
+    }
+  }
+
+  return { updated, skipped };
 }
 
 // Same "SP | <CODE> | 000001" id scheme used for Machine/Label Stock/Job Card
@@ -213,10 +303,23 @@ router.put("/api/release/:id", requireAuth, requireReleaseMaster, updateLimiter,
       stockUpdated = result.modifiedCount || 0;
     }
 
+    // ...and the same edit onto every Label Stock recipe built from this
+    // master (see cascadeLabelStockRecipes) -- notably how Sensing reaches
+    // recipes that were saved while every master still had it blank.
+    const { updated: recipesUpdated, skipped: recipesSkipped } = await cascadeLabelStockRecipes(before, payload);
+
+    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    const carried = [
+      stockUpdated ? plural(stockUpdated, "stock reel") : null,
+      recipesUpdated ? plural(recipesUpdated, "label stock recipe") : null,
+    ].filter(Boolean).join(" and ");
+
     res.locals.auditDescription = `Updated release master "${updated.skuId}"`
-      + (stockUpdated ? ` -- carried the change onto ${stockUpdated} existing stock reel${stockUpdated === 1 ? "" : "s"}` : "");
-    req.flash("notification", stockUpdated
-      ? `Release master updated -- ${stockUpdated} existing stock reel${stockUpdated === 1 ? "" : "s"} updated to match.`
+      + (carried ? ` -- carried the change onto ${carried}` : "")
+      + (recipesSkipped ? ` (${plural(recipesSkipped, "label stock")} skipped -- see server log)` : "");
+    req.flash("notification", carried
+      ? `Release master updated -- ${carried} updated to match.`
+        + (recipesSkipped ? ` ${plural(recipesSkipped, "label stock")} could not be updated (would duplicate an existing recipe).` : "")
       : "Release master updated successfully!");
     res.json({ success: true });
   } catch (err) {

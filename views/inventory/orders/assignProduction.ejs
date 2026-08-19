@@ -596,12 +596,13 @@
     const ORDER_ID = JSON.parse(document.getElementById("order-id-data").textContent);
 
     // The one-line recipe this layer has to be matched against, shown beside
-    // the layer's name. Adhesive and Release Liner list exactly what
-    // reelMatchesLayer() (utils/labelStockProduction.js POOL_MATCH_FIELDS)
-    // checks -- Adhesive: type alone; Release Liner: type/make/vendor SKU
-    // code/color.
+    // the layer's name. Adhesive lists exactly what reelMatchesLayer()
+    // (utils/labelStockProduction.js POOL_MATCH_FIELDS) checks: type alone.
     //
-    // Facestock deliberately does NOT: it reads Family / GSM / Type only,
+    // Facestock and Release Liner deliberately do NOT. Release Liner reads
+    // Sensing only -- the one property of a liner the press itself cares
+    // about -- while type/make/vendor SKU code/colour go on being matched
+    // silently. Facestock reads Family / GSM / Type only,
     // the three a picker actually recognises the paper by. Make, Vendor SKU
     // Code and Micron are still part of the match (a reel failing them never
     // reaches the table below) -- they're just not spelled out here; the full
@@ -619,10 +620,12 @@
       } else if (layerKey.startsWith("adhesive")) {
         if (spec.adhesiveType) bits.push(spec.adhesiveType);
       } else {
-        if (spec.releaseLinerType) bits.push(spec.releaseLinerType);
-        if (spec.releaseLinerMake) bits.push(spec.releaseLinerMake);
-        if (spec.releaseLinerVendorSkuCode) bits.push(spec.releaseLinerVendorSkuCode);
-        if (spec.releaseLinerColor) bits.push(spec.releaseLinerColor);
+        // Sensing alone -- whether the liner carries the mark the press's
+        // eye-mark sensor needs (models/sachiko/sachikoLabelStock.js's
+        // releaseLinerSensing). Type/Make/Vendor SKU Code/Colour are still
+        // matched on (POOL_MATCH_FIELDS), they're just not spelled out here;
+        // the full spec is on the Material Details card at the top.
+        if (spec.releaseLinerSensing) bits.push(spec.releaseLinerSensing);
       }
       return bits.join(" · ") || "—";
     }

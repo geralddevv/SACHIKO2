@@ -48,7 +48,7 @@ const FS_SIG_FIELDS = ["facestockFamily", "facestockType", "facestockMake", "fac
 const FS_SIG_NUM_FIELDS = ["facestockGsm", "facestockMicron"];
 const AD_SIG_FIELDS = ["adhesiveType", "adhesiveMake", "adhesiveVendorId", "adhesiveVendorSkuCode", "adhesiveShelfLife"];
 const AD_SIG_NUM_FIELDS = ["adhesiveGsm", "adhesiveViscosity", "adhesiveCohesion", "adhesiveShear", "adhesiveDensity"];
-const RL_SIG_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerVendorId", "releaseLinerVendorSkuCode", "releaseLinerColor", "releaseLinerSize"];
+const RL_SIG_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerSensing", "releaseLinerVendorId", "releaseLinerVendorSkuCode", "releaseLinerColor", "releaseLinerSize"];
 const RL_SIG_NUM_FIELDS = ["releaseLinerGsm"];
 
 function layerSignaturePart(layer, strFields, numFields) {
@@ -173,7 +173,7 @@ const MAT_SIG_FS_FIELDS = ["facestockFamily", "facestockType", "facestockMake", 
 const MAT_SIG_FS_NUM_FIELDS = ["facestockGsm", "facestockMicron"];
 const MAT_SIG_AD_FIELDS = ["adhesiveType", "adhesiveMake", "adhesiveVendorId", "adhesiveVendorSkuCode"];
 const MAT_SIG_AD_NUM_FIELDS = ["adhesiveViscosity", "adhesiveCohesion", "adhesiveShear", "adhesiveDensity"];
-const MAT_SIG_RL_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerVendorId", "releaseLinerVendorSkuCode", "releaseLinerColor"];
+const MAT_SIG_RL_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerSensing", "releaseLinerVendorId", "releaseLinerVendorSkuCode", "releaseLinerColor"];
 const MAT_SIG_RL_NUM_FIELDS = ["releaseLinerGsm"];
 
 // Consumed by another module (not this file) as a stable "same physical
@@ -313,7 +313,7 @@ const LAYER_FIELD_MAP = {
     shear: "adhesiveShear", density: "adhesiveDensity",
   },
   release: {
-    type: "releaseLinerType", make: "releaseLinerMake",
+    type: "releaseLinerType", make: "releaseLinerMake", sensing: "releaseLinerSensing",
     vendorId: "releaseLinerVendorId", vendorName: "releaseLinerVendorName", vendorSkuCode: "releaseLinerVendorSkuCode",
     color: "releaseLinerColor", size: "releaseLinerSize", gsm: "releaseLinerGsm",
   },

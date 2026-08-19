@@ -501,6 +501,7 @@
     const release1Rows = [
       { label: "Type",  value: ds.releaseLiner?.releaseLinerType },
       { label: "Make",        value: ds.releaseLiner?.releaseLinerMake },
+      { label: "Sensing",     value: ds.releaseLiner?.releaseLinerSensing },
       { label: "Vendor Name", value: ds.releaseLiner?.releaseLinerVendorName },
       { label: "Vendor SKU Code", value: ds.releaseLiner?.releaseLinerVendorSkuCode },
       { label: "Color", value: ds.releaseLiner?.releaseLinerColor },
@@ -509,6 +510,7 @@
     const release2Rows = [
       { label: "Type (Layer 2)",  value: ds.releaseLiner2?.releaseLinerType },
       { label: "Make (Layer 2)",        value: ds.releaseLiner2?.releaseLinerMake },
+      { label: "Sensing (Layer 2)",     value: ds.releaseLiner2?.releaseLinerSensing },
       { label: "Vendor Name (Layer 2)", value: ds.releaseLiner2?.releaseLinerVendorName },
       { label: "Vendor SKU Code (Layer 2)", value: ds.releaseLiner2?.releaseLinerVendorSkuCode },
       { label: "Color (Layer 2)", value: ds.releaseLiner2?.releaseLinerColor },
@@ -905,7 +907,7 @@
     // into "no match"/"ambiguous" for every other field in the same card.
     const FS_ORDER = ["family", "type", "make", "vendorId", "vendorSkuCode", "gsm", "micron"];
     const AD_ORDER = ["type", "make", "vendorId", "vendorSkuCode", "viscosity", "cohesion", "shear", "density"];
-    const RL_ORDER = ["type", "make", "vendorId", "vendorSkuCode", "color", "gsm"];
+    const RL_ORDER = ["type", "make", "sensing", "vendorId", "vendorSkuCode", "color", "gsm"];
 
     function fsFieldMatches(key, record, value) {
       if (key === "vendorId") return String(record.vendorId ?? "") === value;
@@ -962,9 +964,30 @@
         // a reset, so the dialog never shows up pre-filled just because some
         // column happens to have a single value across the whole master.
         if (!want && skip && fieldOptions.length === 1) want = fieldOptions[0].value;
-        fsSetSelectOptions(els[key], "Search", fieldOptions, want);
+
+        // Seeding a saved record (Edit) leaves a field the row has no value
+        // for showing the bare "Search" placeholder, as if it still had to be
+        // answered -- but the row HAS answered it: with nothing. Show that as
+        // "-- None --" instead, so the card reads as the recipe it actually
+        // is. Gated on FS_NONE being one of this field's options: if every
+        // master row fills the field in, "blank" isn't a value it can take,
+        // the row simply predates the field, and the placeholder is right to
+        // keep asking. Never picks a REAL single option the row doesn't have
+        // -- that would rewrite the recipe on save, which is why the
+        // auto-fill above stays limited to an actual user pick.
+        //
+        // Display only: `current[key]` deliberately stays "" rather than
+        // FS_NONE, so this does NOT narrow the fields processed after it.
+        // Blank-because-the-field-is-new means "unconstrained", not
+        // "blank on the master too" -- conflating the two is the exact
+        // hard-filter fsDesiredValue's own comment above warns about, and it
+        // would bite the moment some Release Masters carry Sensing and others
+        // don't.
+        const seedNone = !want && desired && fieldOptions.some((o) => o.value === FS_NONE);
+
+        fsSetSelectOptions(els[key], "Search", fieldOptions, seedNone ? FS_NONE : want);
         reinit(els[key].id);
-        current[key] = els[key].value;
+        current[key] = seedNone ? "" : els[key].value;
         if (skip && current[key] && current[key] !== priorValue) autoFilled.push(key);
       });
 
@@ -1039,7 +1062,8 @@
     function lsRemapRlLayer(layer) {
       if (!layer) return null;
       return {
-        type: layer.releaseLinerType, make: layer.releaseLinerMake, vendorId: layer.releaseLinerVendorId,
+        type: layer.releaseLinerType, make: layer.releaseLinerMake, sensing: layer.releaseLinerSensing,
+        vendorId: layer.releaseLinerVendorId,
         vendorName: layer.releaseLinerVendorName, vendorSkuCode: layer.releaseLinerVendorSkuCode,
         color: layer.releaseLinerColor, gsm: layer.releaseLinerGsm,
       };
@@ -1088,6 +1112,7 @@
       return {
         type: document.getElementById("lsReleaseLinerType" + suffix),
         make: document.getElementById("lsReleaseLinerMake" + suffix),
+        sensing: document.getElementById("lsReleaseLinerSensing" + suffix),
         vendorId: document.getElementById("lsReleaseLinerVendorId" + suffix),
         vendorSkuCode: document.getElementById("lsReleaseLinerVendorSkuCode" + suffix),
         color: document.getElementById("lsReleaseLinerColor" + suffix),
@@ -1355,7 +1380,18 @@
       hideLsError();
       try {
         const url = lsEditId ? `/sachiko/label-stock/edit/${lsEditId}` : "/sachiko/label-stock/form";
-        const res = await fetch(url, { method: "POST", body: new FormData(lsForm) });
+        // "-- None --" is a UI sentinel (FS_NONE), not a value: it means the
+        // master rows this field could still resolve to leave it blank. Left
+        // as-is it would POST the literal "__FS_NONE__" and get stored as
+        // that field's value. Now that Sensing is on the cards this is no
+        // longer a corner case -- until a Release Master actually has Sensing
+        // filled in, "-- None --" is the ONLY option that field offers -- but
+        // the same swap applies to every cascade field, not just Sensing.
+        const lsPayload = new FormData(lsForm);
+        for (const [key, value] of [...lsPayload.entries()]) {
+          if (value === FS_NONE) lsPayload.set(key, "");
+        }
+        const res = await fetch(url, { method: "POST", body: lsPayload });
         const data = await res.json().catch(() => null);
         if (data?.success) {
           window.location.href = data.redirect || "/sachiko/label-stock/view";
@@ -1708,7 +1744,7 @@
       <!-- Release Liner -->
       <div class="ls-block layer-card layer-card--release" data-block="release1">
         <span class="layer-card__label">RELEASE LINER<span id="lsReleaseLinerSkuId" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('release1')">Reset</button></span>
-        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.4fr 1fr 0.8fr 0.6fr;">
+        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.1fr 1.4fr 1fr 0.8fr 0.6fr;">
           <div class="layer-field">
             <label for="lsReleaseLinerType">Type</label>
             <select id="lsReleaseLinerType" name="releaseLinerType" class="form-control select-tag" required>
@@ -1718,6 +1754,12 @@
           <div class="layer-field">
             <label for="lsReleaseLinerMake">Make</label>
             <select id="lsReleaseLinerMake" name="releaseLinerMake" class="form-control select-tag">
+              <option value="" disabled selected hidden>Search</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsReleaseLinerSensing">Sensing</label>
+            <select id="lsReleaseLinerSensing" name="releaseLinerSensing" class="form-control select-tag">
               <option value="" disabled selected hidden>Search</option>
             </select>
           </div>
@@ -1753,7 +1795,7 @@
       <!-- Release Liner (Layer 2) -- only for DOUBLE RELEASE -->
       <div class="ls-block layer-card layer-card--release" data-block="release2" style="display:none">
         <span class="layer-card__label">RELEASE LINER <span style="opacity:0.7;">(Layer 2)</span><span id="lsReleaseLinerSkuId2" class="layer-card__sku-badge" style="display:none;"></span><button type="button" class="layer-card__reset-btn" onclick="lsResetLayerGroup('release2')">Reset</button></span>
-        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.4fr 1fr 0.8fr 0.6fr;">
+        <div class="layer-card__fields" style="grid-template-columns: 1fr 1fr 1.1fr 1.4fr 1fr 0.8fr 0.6fr;">
           <div class="layer-field">
             <label for="lsReleaseLinerType2">Type</label>
             <select id="lsReleaseLinerType2" name="releaseLinerType2" class="form-control select-tag" data-required-when-visible>
@@ -1763,6 +1805,12 @@
           <div class="layer-field">
             <label for="lsReleaseLinerMake2">Make</label>
             <select id="lsReleaseLinerMake2" name="releaseLinerMake2" class="form-control select-tag">
+              <option value="" disabled selected hidden>Search</option>
+            </select>
+          </div>
+          <div class="layer-field">
+            <label for="lsReleaseLinerSensing2">Sensing</label>
+            <select id="lsReleaseLinerSensing2" name="releaseLinerSensing2" class="form-control select-tag">
               <option value="" disabled selected hidden>Search</option>
             </select>
           </div>

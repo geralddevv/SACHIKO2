@@ -86,6 +86,16 @@ const sachikoLabelStockSchema = new mongoose.Schema(
     releaseLiner: {
       releaseLinerType: { type: String, required: true, trim: true },
       releaseLinerMake: { type: String, trim: true },
+      // Mirrors Release Master's own `sensing` (models/inventory/
+      // releaseMaster.js) -- whether the liner carries the sensing mark the
+      // press's eye-mark sensor needs. A property of the material, so it's
+      // part of the recipe like every other layer field, and part of both
+      // labelStockSignature and materialSignature (utils/labelStockVariant.js).
+      // Blank both on rows saved before this field existed AND on any recipe
+      // whose Release Master hasn't had Sensing filled in yet -- the create/
+      // edit dialog's cascade offers only the values the master data actually
+      // holds, so "not stated" stays a first-class value here.
+      releaseLinerSensing: { type: String, trim: true, uppercase: true, enum: ["SENSING", "NON-SENSING", ""] },
       releaseLinerVendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
       releaseLinerVendorName: { type: String, trim: true },
       // Release Master's own Vendor SKU Code/Size weren't captured here at
@@ -126,6 +136,8 @@ const sachikoLabelStockSchema = new mongoose.Schema(
     releaseLiner2: {
       releaseLinerType: { type: String, trim: true },
       releaseLinerMake: { type: String, trim: true },
+      // See releaseLiner.releaseLinerSensing above.
+      releaseLinerSensing: { type: String, trim: true, uppercase: true, enum: ["SENSING", "NON-SENSING", ""] },
       releaseLinerVendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
       releaseLinerVendorName: { type: String, trim: true },
       releaseLinerVendorSkuCode: { type: String, trim: true },
