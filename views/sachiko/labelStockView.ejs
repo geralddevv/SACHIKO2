@@ -257,6 +257,7 @@
       const adType = ds.adhesive?.adhesiveType   || "";
       const adGsm = ds.adhesive?.adhesiveGsm || "";
       const rlType = ds.releaseLiner?.releaseLinerType || "";
+      const rlSensing = ds.releaseLiner?.releaseLinerSensing || "";
       const micPart = ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : "";
       const product = [fsType, micPart, adType, rlType].filter(Boolean).join(" / ");
 
@@ -272,6 +273,7 @@
         adhesiveType: adType,
         adhesiveGsm: adGsm,
         releaseLinerType: rlType,
+        releaseLinerSensing: rlSensing,
         product,
         wordFile: ds.wordFile || "",
       };
@@ -321,6 +323,10 @@
   }
 
   const treeData = buildLabelStockTreeData(tableData);
+
+  // Sentinel for the REL Sensing column's "Not set" filter option -- see the
+  // column definition below.
+  const LS_SENSING_UNSET = "__UNSET__";
 
   const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, hozAlign: "center", headerHozAlign: "center", ...col });
   const withSelectFilter = (col, values) => ({ headerFilter: "list", headerFilterParams: { values, clearable: true }, hozAlign: "center", headerHozAlign: "center", ...col });
@@ -406,6 +412,18 @@
       withTextFilter({ title: "ADH Type", field: "adhesiveType", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
       withTextFilter({ title: "ADH GSM", field: "adhesiveGsm", minWidth: 120, formatter: (cell) => cell.getValue() ? cell.getValue() + " GSM" : "—" }),
       withTextFilter({ title: "REL Type", field: "releaseLinerType", minWidth: 160, formatter: (cell) => cell.getValue() || "—" }),
+      // A list filter rather than a text one: Sensing has exactly three
+      // states, and a text search for "SENSING" would also match
+      // "NON-SENSING". "Not set" needs its own sentinel + headerFilterFunc --
+      // a list filter's own "" entry is what CLEARS the filter, so it can't
+      // double as "match the blank ones", which is precisely the set worth
+      // finding while the Release Masters are still being filled in.
+      withSelectFilter({
+        title: "REL Sensing", field: "releaseLinerSensing", minWidth: 150,
+        formatter: (cell) => cell.getValue() || "—",
+        headerFilterFunc: (selected, cellValue) =>
+          (selected === LS_SENSING_UNSET ? !cellValue : cellValue === selected),
+      }, { "": "All", "SENSING": "SENSING", "NON-SENSING": "NON-SENSING", [LS_SENSING_UNSET]: "Not set" }),
       withSelectFilter({ title: "Roll Type",  field: "rollType",  minWidth: 140,
         formatter: (cell) => {
           const v = cell.getValue() || "NORMAL";

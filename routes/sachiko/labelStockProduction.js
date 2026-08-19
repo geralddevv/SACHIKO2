@@ -2,9 +2,57 @@ import express from "express";
 import mongoose from "mongoose";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import PendingProduction from "../../models/inventory/pendingProduction.js";
+import LabelStockAdhesiveBinding from "../../models/sachiko/labelStockAdhesiveBinding.js";
+import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
 import { POOL_MODELS, LAYER_META, reelMatchesLayer, pickStockIds } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
+
+// Says whether an AdhesiveStock drum is an instance of a given Adhesive
+// Master: vendor + type + make + vendor SKU code, the fields that identify
+// WHICH adhesive it is.
+//
+// Deliberately narrower than routes/stock/adhesiveStock.js's own
+// adhesiveSpecKey(), which also hashes shelf life/viscosity/cohesion/shear/
+// density. Those are measured per inward batch, not properties of the spec --
+// live data has drums recorded at shelf life 60 against a master that says 30,
+// with only one master of that vendor/type/make/code in existence for them to
+// have come from. Including them here would drop such drums out of a binding
+// that plainly covers them.
+function adhesiveIdentityKey(o) {
+  const s = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
+  return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode)].join("||");
+}
+
+// Narrows a Label Stock's adhesive candidates to the Adhesive Master(s) it has
+// been bound to (models/sachiko/labelStockAdhesiveBinding.js).
+//
+// Opt-in per SKU: with no ACTIVE binding covering this location the drums come
+// back untouched, which is every SKU until someone binds one. A binding with a
+// blank location holds everywhere; one naming a location applies only there,
+// so a SKU can be restricted at the unit that stocks alternatives and left
+// open elsewhere.
+async function applyAdhesiveBindings(drums, labelStockId, location) {
+  if (!drums.length) return drums;
+
+  const bindings = await LabelStockAdhesiveBinding.find({
+    labelStock: labelStockId,
+    status: "ACTIVE",
+    $or: [{ location: "" }, { location: null }, { location }],
+  }).select("adhesive").lean();
+  if (!bindings.length) return drums;
+
+  const masters = await AdhesiveMaster.find({ _id: { $in: bindings.map((b) => b.adhesive) } })
+    .select("vendorId type make vendorSkuCode")
+    .lean();
+  // Every binding pointing at a master that has since been deleted would
+  // otherwise leave an empty allow-list and hide every drum -- treat that as
+  // "nothing effective is bound" rather than silently emptying the picker.
+  if (!masters.length) return drums;
+
+  const allowed = new Set(masters.map(adhesiveIdentityKey));
+  return drums.filter((d) => allowed.has(adhesiveIdentityKey(d)));
+}
 
 // Live reel pickers backing the Facestock/Adhesive/Release Liner columns on
 // Assign Production (views/inventory/orders/assignProduction.ejs). Actually
@@ -60,7 +108,16 @@ router.get("/raw-stock", async (req, res) => {
     const reels = await poolMeta.Model.find({ type, location, reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
       .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
       .lean();
-    const matched = reels.filter((r) => reelMatchesLayer(meta.pool, r, layerSpec) && !claimedIds.has(String(r._id)));
+    let matched = reels.filter((r) => reelMatchesLayer(meta.pool, r, layerSpec) && !claimedIds.has(String(r._id)));
+
+    // Label Stock <-> Adhesive bindings (models/sachiko/labelStockAdhesiveBinding.js).
+    // The adhesive layer is matched on Type alone, which offers every drum of
+    // that type here; a SKU that has been bound to specific Adhesive Masters
+    // is narrowed to drums of those. Opt-in per SKU: no ACTIVE binding for
+    // this Label Stock leaves the type-matched list exactly as it was.
+    if (meta.pool === "adhesive") {
+      matched = await applyAdhesiveBindings(matched, itemId, location);
+    }
 
     // POOL_MATCH_FIELDS (utils/labelStockProduction.js) no longer narrows on
     // every reel-side field a master carries -- Vendor/Size/GSM (Facestock),

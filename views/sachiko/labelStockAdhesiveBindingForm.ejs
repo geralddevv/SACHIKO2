@@ -1,0 +1,287 @@
+<% layout('/layout/boilerplate') %>
+
+<%
+  // Label Stock <-> Adhesive binding. Which adhesives a given Label Stock SKU
+  // is allowed to be made with -- see models/sachiko/labelStockAdhesiveBinding.js
+  // for why (the recipe's own adhesive layer only pins the TYPE, so without a
+  // binding Assign Production offers every drum of that type).
+  const dash = (v) => (v === undefined || v === null || String(v).trim() === "" ? "—" : v);
+  const stockLabel = (ls) =>
+    !ls ? "—" : [ls.productCode || ls.skuCode, ls.skuCode && ls.productCode ? `(${ls.skuCode})` : ""].filter(Boolean).join(" ");
+  const adhesiveLabel = (a) =>
+    !a ? "—" : [a.skuId, a.type, a.make].filter((v) => v && String(v).trim()).join(" · ");
+%>
+
+<style>
+  .lsab-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    margin: 14px 0; overflow: visible;
+  }
+  .lsab-card-title {
+    background: #044a78; color: #fff; font-size: 14px; font-weight: 600;
+    padding: 9px 16px; border-radius: 9px 9px 0 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .lsab-form { padding: 16px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; align-items: end; }
+  .lsab-field { min-width: 0; }
+  .lsab-field label { display: block; font-size: 12px; font-weight: 700; color: #044a78; margin-bottom: 4px; }
+  .lsab-hint { font-size: 11.5px; color: #64748b; margin-top: 4px; }
+  .lsab-btn {
+    background: #044a78; color: #fff; border: none; border-radius: 8px;
+    padding: 10px 18px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  }
+  .lsab-btn:hover { opacity: 0.9; }
+  .lsab-btn--ghost { background: #fff; color: #044a78; border: 1px solid #cbd5e1; }
+  .lsab-btn--danger { background: #ef4444; }
+
+  .lsab-table-wrap { overflow-x: auto; }
+  .lsab-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .lsab-table th, .lsab-table td {
+    padding: 9px 14px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: middle;
+  }
+  .lsab-table th { background: #f8fafc; color: #044a78; font-weight: 700; white-space: nowrap; }
+  .lsab-table td { color: #1f2a44; font-weight: 600; }
+  .lsab-table tbody tr:hover { background: #f8fafc; }
+  .lsab-pill { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  .lsab-pill--on { color: #16a34a; background: #dcfce7; }
+  .lsab-pill--off { color: #b45309; background: #fef3c7; }
+  .lsab-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .lsab-icon-btn {
+    border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px;
+    font-weight: 700; cursor: pointer; color: #fff; background: #044a78;
+  }
+  .lsab-icon-btn--muted { background: #64748b; }
+  .lsab-icon-btn--danger { background: #ef4444; }
+  .lsab-empty { padding: 22px 16px; text-align: center; color: #94a3b8; font-style: italic; }
+  /* Choices dropdowns inside the dialog have to clear its overlay
+     (CLAUDE.md "Choices.js"). */
+  .logout-dialog .choices__list--dropdown { z-index: 99999; }
+</style>
+
+<div class="indi-head" style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
+  <div>
+    <h1>Label Stock Adhesive Binding</h1>
+  </div>
+</div>
+
+<div class="lsab-card">
+  <div class="lsab-card-title"><i class="fa-solid fa-link"></i> Bind an Adhesive</div>
+  <form class="lsab-form" action="/sachiko/form/label-stock-adhesive-binding" method="post">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+    <div class="lsab-field" style="grid-column: span 4;">
+      <label for="labelStockSelect">Label Stock</label>
+      <select id="labelStockSelect" name="labelStockId" required>
+        <option value="" disabled selected hidden>Select Label Stock</option>
+        <% labelStocks.forEach((ls) => { %>
+          <option value="<%= ls._id %>"><%= stockLabel(ls) %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="lsab-field" style="grid-column: span 4;">
+      <label for="adhesiveSelect">Adhesive</label>
+      <select id="adhesiveSelect" name="adhesiveId" required>
+        <option value="" disabled selected hidden>Select Adhesive</option>
+        <% adhesives.forEach((a) => { %>
+          <option value="<%= a._id %>"><%= adhesiveLabel(a) %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="lsab-field" style="grid-column: span 2;">
+      <label for="locationSelect">Location</label>
+      <select id="locationSelect" name="location">
+        <option value="" selected>All locations</option>
+        <% locations.forEach((loc) => { %>
+          <option value="<%= loc %>"><%= loc %></option>
+        <% }) %>
+      </select>
+      <div class="lsab-hint">Leave as "All locations" unless this binding is unit-specific.</div>
+    </div>
+
+    <div class="lsab-field" style="grid-column: span 2;">
+      <button type="submit" class="lsab-btn" style="width: 100%;">
+        <i class="fa-solid fa-plus"></i> Bind
+      </button>
+    </div>
+  </form>
+</div>
+
+<div class="lsab-card">
+  <div class="lsab-card-title">
+    <i class="fa-solid fa-list"></i> Existing Bindings
+    <span style="margin-left:auto; font-weight:600; font-size:12.5px;"><%= bindings.length %> total</span>
+  </div>
+
+  <div class="lsab-table-wrap">
+    <table class="lsab-table">
+      <thead>
+        <tr>
+          <th>Label Stock</th>
+          <th>Adhesive</th>
+          <th>Location</th>
+          <th>Status</th>
+          <th style="width: 1%;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (!bindings.length) { %>
+          <tr><td colspan="5" class="lsab-empty">
+            Nothing bound yet — every Label Stock still offers any adhesive of its recipe's type.
+          </td></tr>
+        <% } %>
+        <% bindings.forEach((b) => { %>
+          <tr>
+            <td><%= stockLabel(b.labelStock) %></td>
+            <td><%= adhesiveLabel(b.adhesive) %></td>
+            <td><%= b.location ? b.location : "All locations" %></td>
+            <td>
+              <span class="lsab-pill <%= b.status === 'ACTIVE' ? 'lsab-pill--on' : 'lsab-pill--off' %>">
+                <%= b.status %>
+              </span>
+            </td>
+            <td>
+              <div class="lsab-actions">
+                <button type="button" class="lsab-icon-btn"
+                        data-id="<%= b._id %>"
+                        data-stock="<%= b.labelStock ? b.labelStock._id : '' %>"
+                        data-adhesive="<%= b.adhesive ? b.adhesive._id : '' %>"
+                        data-location="<%= b.location || '' %>"
+                        onclick="openEditDialog(this.dataset.id, this.dataset.stock, this.dataset.adhesive, this.dataset.location)">
+                  <i class="fa-solid fa-pen"></i> Edit
+                </button>
+
+                <form action="/sachiko/label-stock-adhesive-binding/status/<%= b._id %>" method="post" style="display:inline;">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <input type="hidden" name="status" value="<%= b.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' %>" />
+                  <button type="submit" class="lsab-icon-btn lsab-icon-btn--muted">
+                    <%= b.status === 'ACTIVE' ? 'Deactivate' : 'Activate' %>
+                  </button>
+                </form>
+
+                <button type="button" class="lsab-icon-btn lsab-icon-btn--danger"
+                        data-id="<%= b._id %>"
+                        data-label="<%= stockLabel(b.labelStock) %> / <%= adhesiveLabel(b.adhesive) %>"
+                        onclick="openDeleteDialog(this.dataset.id, this.dataset.label)">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ---- Edit dialog ---- -->
+<dialog id="editDialog" class="logout-modal" style="width: min(560px, 95vw); padding: 0; border-radius: 14px; border: none;">
+  <form id="editForm" method="post" class="logout-dialog" style="margin:0;">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0; background:#044a78; color:#fff; padding:12px 16px; font-weight:700;">
+      Edit Binding
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px; padding:16px; display:grid; gap:12px;">
+      <div class="lsab-field">
+        <label for="editLabelStockSelect">Label Stock</label>
+        <select id="editLabelStockSelect" name="labelStockId" required></select>
+      </div>
+      <div class="lsab-field">
+        <label for="editAdhesiveSelect">Adhesive</label>
+        <select id="editAdhesiveSelect" name="adhesiveId" required></select>
+      </div>
+      <div class="lsab-field">
+        <label for="editLocationSelect">Location</label>
+        <select id="editLocationSelect" name="location"></select>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
+        <button type="button" class="lsab-btn lsab-btn--ghost" onclick="document.getElementById('editDialog').close()">Cancel</button>
+        <button type="submit" class="lsab-btn">Save</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<!-- ---- Delete confirm ---- -->
+<dialog id="deleteDialog" class="logout-modal" style="width: min(440px, 95vw); padding: 0; border-radius: 14px; border: none;">
+  <form id="deleteForm" method="post" class="logout-dialog" style="margin:0;">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0; background:#ef4444; color:#fff; padding:12px 16px; font-weight:700;">
+      Delete Binding
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px; padding:16px;">
+      <p style="margin:0 0 14px; font-size:13.5px; color:#1f2a44;">
+        Remove <strong id="deleteTarget"></strong>? The Label Stock will go back to offering any adhesive
+        of its recipe's type unless another binding still covers it.
+      </p>
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="lsab-btn lsab-btn--ghost" onclick="document.getElementById('deleteDialog').close()">Cancel</button>
+        <button type="submit" class="lsab-btn lsab-btn--danger">Delete</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<script id="label-stocks-data" type="application/json"><%- safeJson(labelStocks.map((ls) => ({ id: String(ls._id), label: stockLabel(ls) }))) %></script>
+<script id="adhesives-data" type="application/json"><%- safeJson(adhesives.map((a) => ({ id: String(a._id), label: adhesiveLabel(a) }))) %></script>
+<script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
+
+<script>
+  const LABEL_STOCKS = JSON.parse(document.getElementById("label-stocks-data").textContent);
+  const ADHESIVES = JSON.parse(document.getElementById("adhesives-data").textContent);
+  const LOCATIONS = JSON.parse(document.getElementById("locations-data").textContent);
+
+  const escapeHtml = (v) =>
+    String(v == null ? "" : v)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+  // Create form -- searchable pickers, since both lists run long.
+  new Choices(document.getElementById("labelStockSelect"), { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+  new Choices(document.getElementById("adhesiveSelect"), { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+  new Choices(document.getElementById("locationSelect"), { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+  // Dialog selects follow the destroy/reinit pattern (CLAUDE.md "Choices.js"),
+  // with the current value marked `selected` in the option HTML before init --
+  // more reliable than setChoiceByValue afterwards.
+  let editStockChoices = null, editAdhesiveChoices = null, editLocationChoices = null;
+
+  function fillSelect(el, rows, currentValue, blankLabel) {
+    const options = [];
+    if (blankLabel !== undefined) {
+      options.push(`<option value=""${currentValue ? "" : " selected"}>${escapeHtml(blankLabel)}</option>`);
+    }
+    rows.forEach((r) => {
+      const value = r.id !== undefined ? r.id : r;
+      const label = r.label !== undefined ? r.label : r;
+      options.push(
+        `<option value="${escapeHtml(value)}"${String(value) === String(currentValue) ? " selected" : ""}>${escapeHtml(label)}</option>`,
+      );
+    });
+    el.innerHTML = options.join("");
+  }
+
+  function openEditDialog(id, stockId, adhesiveId, location) {
+    document.getElementById("editForm").action = `/sachiko/label-stock-adhesive-binding/edit/${id}`;
+
+    [editStockChoices, editAdhesiveChoices, editLocationChoices].forEach((c) => c && c.destroy());
+    editStockChoices = editAdhesiveChoices = editLocationChoices = null;
+
+    fillSelect(document.getElementById("editLabelStockSelect"), LABEL_STOCKS, stockId);
+    fillSelect(document.getElementById("editAdhesiveSelect"), ADHESIVES, adhesiveId);
+    fillSelect(document.getElementById("editLocationSelect"), LOCATIONS, location, "All locations");
+
+    editStockChoices = new Choices(document.getElementById("editLabelStockSelect"), { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    editAdhesiveChoices = new Choices(document.getElementById("editAdhesiveSelect"), { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    editLocationChoices = new Choices(document.getElementById("editLocationSelect"), { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    document.getElementById("editDialog").showModal();
+  }
+
+  function openDeleteDialog(id, label) {
+    document.getElementById("deleteForm").action = `/sachiko/label-stock-adhesive-binding/delete/${id}`;
+    document.getElementById("deleteTarget").textContent = label;
+    document.getElementById("deleteDialog").showModal();
+  }
+</script>
