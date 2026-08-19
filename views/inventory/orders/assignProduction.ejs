@@ -237,8 +237,15 @@
       grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px;
     }
     .raw-layer-col { min-width: 0; }
-    .raw-layer-title { font-size: 13px; font-weight: 700; color: #044a78; margin-bottom: 2px; }
-    .raw-layer-spec { font-size: 11.5px; color: #64748b; margin-bottom: 6px; }
+    /* Layer heading -- the layer's name and the recipe it has to match sit
+       on one line. They only drop onto a second line when the column is too
+       narrow to hold both, so nothing is ever clipped or hidden behind a
+       tooltip. */
+    .raw-layer-head {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-bottom: 6px;
+    }
+    .raw-layer-title { font-size: 13px; font-weight: 700; color: #044a78; }
+    .raw-layer-spec { font-size: 13px; font-weight: 600; color: #1f2a44; }
     .raw-layer-table td, .raw-layer-table th { white-space: normal; }
     /* ================= LAYER TABLE COLUMN WIDTHS -- THE knob =================
        Change the three px values below; that is the whole control.
@@ -254,8 +261,11 @@
        makes the numbers below authoritative, and neutralising that `1%`
        stops the leftover from being sprayed back over them.
 
-       Details deliberately has NO width -- it is the flexible column that
-       takes whatever the fixed ones leave over, and ellipsises past that. */
+       Columns with no width here are deliberate: Facestock's Details,
+       Adhesive's Vendor/Make/Code and Release Liner's Vendor are flexible
+       -- fixed table
+       layout splits whatever the fixed columns leave over equally between
+       them, and each ellipsises past its share. See POOL_COLUMNS. */
     .raw-layer-table.roll-table { table-layout: fixed; }
     .raw-layer-table.roll-table th,
     .raw-layer-table.roll-table td { width: auto; padding-left: 12px; padding-right: 12px; }
@@ -281,33 +291,56 @@
        going ragged -- a short one just leaves empty space under its last
        row. */
     .raw-layer-table-wrap { height: 320px; overflow-y: auto; }
+    /* Two sticky header rows: the column labels, and the search row directly
+       under them -- both stay put while the reels scroll past. */
     .raw-layer-table thead th {
       /* Just enough to sit over its own (unpositioned) rows -- anything
          higher starts fighting the Choices dropdowns above. */
-      position: sticky; top: 0; z-index: 1;
+      position: sticky; z-index: 1;
       background: #f8fafc;
       /* border-collapse: collapse drops the header's own bottom border once
          it goes sticky -- redraw it as an inset shadow so scrolled rows
          don't slide under a borderless header. */
       box-shadow: inset 0 -1px 0 #e5e7eb;
     }
-    /* Vendor Name (plus whatever else reelDetail() joins alongside it) can
-       run longer than this narrow column -- truncate with an ellipsis
-       instead of wrapping/pushing the table wider; the row's title
-       attribute carries the untruncated text as a hover tooltip. */
+    .raw-layer-table thead tr:first-child th { top: 0; }
+    /* Column headings sort their own table -- click once for ascending, again
+       for descending (see the th[data-sort] handler). No direction marker is
+       drawn on the heading; the pointer cursor and hover colour are all that
+       say it's clickable. */
+    .raw-layer-table th.rl-sortable { cursor: pointer; user-select: none; }
+    .raw-layer-table th.rl-sortable:hover { color: #0b6ea8; }
+    /* The search row's `top` is the labels row's own height, measured at
+       runtime into --rl-head-h by syncSearchRowOffset() -- a hard-coded px
+       would drift the moment the header's font or padding changes, leaving
+       either a gap or an overlap. The fallback only matters for the split
+       second before that first measurement. */
+    .raw-layer-table thead tr.raw-layer-search-row th {
+      top: var(--rl-head-h, 33px);
+      background: #fff;
+      /* Tighter than the 12px the data cells carry -- every px of a 58px
+         column is needed by the input itself. */
+      padding: 5px 5px;
+    }
+    .raw-layer-table thead tr.raw-layer-search-row th.roll-check-cell { padding: 5px 3px; }
+    /* Text cells (Details, and Adhesive's Vendor/Make/Code -- whichever
+       POOL_COLUMNS marks `trunc`) can run longer than these narrow columns.
+       Truncate with an ellipsis instead of wrapping or pushing the table
+       wider; the cell's title attribute carries the full text as a hover
+       tooltip, and the filter box above it searches that tooltip too, so
+       nothing becomes unfindable by being cut off. No max-width: the
+       <colgroup> and table-layout: fixed decide the width now. */
     .raw-layer-detail-cell {
-      max-width: 140px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     /* Per-layer search box -- one per raw-material column, filtering only
        that column's own candidate reels (see filterLayerRows below). */
-    .raw-layer-search-wrap { position: relative; margin: 4px 0 8px; }
-    .raw-layer-search-wrap > i {
-      position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
-      font-size: 12px; color: #94a3b8; pointer-events: none;
-    }
+    /* One filter box per searchable column, living in the table's own header
+       (a search row under the column labels, see layerColumnHtml) -- so no
+       outer margins, and no magnifier icon: Size/GSM/Kg are only ~60px wide
+       and an icon would eat the room the value needs. */
     .raw-layer-search {
       /* tableDisp.css (loaded by this page) pins every input to
          `height: 20px`, and common.css puts `box-sizing: border-box` on
@@ -316,14 +349,22 @@
          Background is left to that same global rule, which sets it
          !important. */
       height: auto;
-      width: 100%; padding: 9px 12px 9px 32px; font-size: 12.5px; line-height: 1.3;
+      width: 100%; padding: 6px 7px; font-size: 12px; line-height: 1.3;
       border: 1px solid #cbd5e1; border-radius: 6px; color: #0f172a;
+      /* Narrow columns: never let the box force the column wider than the
+         <colgroup> width it was given. */
+      min-width: 0;
     }
     .raw-layer-search:focus {
       outline: none; border-color: #044a78; box-shadow: 0 0 0 2px rgba(4, 74, 120, 0.12);
     }
     .raw-layer-search::-webkit-search-cancel-button { cursor: pointer; }
-    .raw-layer-hidden-note { font-size: 11px; color: #b45309; margin: -2px 0 6px; }
+    /* Rides under the search box in the same header cell. `white-space` is
+       reset because .roll-table's `th:not(.roll-fill) { white-space: nowrap }`
+       is inherited into it here, and this note is a sentence, not a value. */
+    .raw-layer-hidden-note {
+      font-size: 11px; color: #b45309; margin: 4px 0 0; white-space: normal; line-height: 1.35;
+    }
   </style>
 
   <div class="indi-head ap-head" style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
@@ -582,16 +623,17 @@
       return bits.join(" · ") || "—";
     }
 
-    // Per-candidate-reel counterpart to specSummary() above: shows exactly
-    // the fields specSummary DOESN'T (the ones POOL_MATCH_FIELDS no longer
-    // narrows on) -- Facestock: Vendor Name (Size and GSM have columns of
-    // their own, see layerColumnHtml); Adhesive: Make/Vendor SKU Code/
-    // Vendor Name/Viscosity/Cohesion/Shear/Density; Release Liner: Vendor
-    // Name/Size/GSM. Since those fields can now differ
+    // Per-candidate-reel counterpart to specSummary() above: shows the
+    // fields specSummary DOESN'T (the ones POOL_MATCH_FIELDS no longer
+    // narrows on) and that have no column of their own in POOL_COLUMNS
+    // below -- Facestock: Vendor Name (Size/GSM are columns); Adhesive:
+    // Viscosity/Cohesion/Shear/Density (Vendor/Make/Code are columns);
+    // Release Liner: nothing (Vendor/Size/GSM are all columns). Since those
+    // fields can differ
     // between reels that still count as a match, this is what a picker
-    // actually needs to tell candidates apart by -- replaces the system Roll
-    // ID (still available as this cell's hover tooltip) in the roll table
-    // below.
+    // actually needs to tell candidates apart by. For a pool whose columns
+    // cover everything visible, this is what the row's hover tooltip carries
+    // instead, alongside the system Roll ID.
     function reelDetail(layerKey, r) {
       const bits = [];
       if (layerKey.startsWith("facestock")) {
@@ -599,66 +641,149 @@
         // layerColumnHtml/renderLayerRows) -- not repeated here.
         if (r.vendorName) bits.push(r.vendorName);
       } else if (layerKey.startsWith("adhesive")) {
-        if (r.make) bits.push(r.make);
-        if (r.vendorSkuCode) bits.push(r.vendorSkuCode);
-        if (r.vendorName) bits.push(r.vendorName);
+        // Vendor/Make/Code each have their own column now -- not repeated here.
         if (r.viscosity) bits.push(`Visc ${r.viscosity}`);
         if (r.cohesion) bits.push(`Coh ${r.cohesion}`);
         if (r.shear) bits.push(`Shear ${r.shear}`);
         if (r.density) bits.push(`Dens ${r.density}`);
       } else {
-        if (r.vendorName) bits.push(r.vendorName);
-        if (r.size) bits.push(`Size ${r.size}`);
-        if (r.gsm) bits.push(`${r.gsm} GSM`);
+        // Release Liner: Vendor/Size/GSM are all columns of their own now,
+        // so nothing is left over -- reelTitle falls back to the bare Roll
+        // ID for these.
       }
       return bits.join(" · ") || "—";
     }
 
-    // Facestock reels get dedicated Size and GSM columns (produceDeckle
-    // matches on neither -- POOL_MATCH_FIELDS leaves both out on purpose,
-    // see utils/labelStockProduction.js -- so they're the fields that can
-    // legitimately differ between two otherwise-identical facestock reels,
-    // and are worth their own columns rather than living inside the
-    // truncated Details cell). Adhesive/Release Liner stay the plain 3
-    // columns, so their GSM (where they have one) stays in Details.
-    function layerHasSizeColumn(layerKey) {
-      return LAYER_META[layerKey].pool === "facestock";
-    }
-    function layerHasGsmColumn(layerKey) {
-      return LAYER_META[layerKey].pool === "facestock";
-    }
-    function layerColCount(layerKey) {
-      // checkbox + Details + Kg, plus whichever of Size/GSM this layer shows
-      return 3 + (layerHasSizeColumn(layerKey) ? 1 : 0) + (layerHasGsmColumn(layerKey) ? 1 : 0);
-    }
+    // ---- Columns, per raw-material pool ----
+    // The pools don't show the same fields, because a picker tells their
+    // candidates apart by different things: a facestock reel by Size/GSM
+    // beside its vendor line, an adhesive drum by Vendor/Make/Code outright.
+    // Everything downstream -- the <colgroup> widths, both header rows, the
+    // per-column filter boxes, the row cells and every colspan -- is derived
+    // from this one list, so a column can't go missing from one of them.
+    //
+    //   key   : ties a cell to the filter box above it (data-col)
+    //   col   : <colgroup> class, i.e. a fixed width from the stylesheet.
+    //           Omitted = flexible: fixed table layout splits whatever the
+    //           fixed columns leave over equally between them.
+    //   trunc : long text -- ellipsise rather than let it push the table
+    //   title : hover tooltip; also searchable, so the Roll ID rides here
+    // Tooltip for a row's first cell: the system Roll ID, plus whatever
+    // reelDetail still has to say that no column of this pool shows. Adhesive
+    // drums with no viscosity/cohesion/shear/density recorded have nothing
+    // left over, so they get the bare Roll ID rather than "ROLL -- —".
+    const reelTitle = (r, k) => {
+      const detail = reelDetail(k, r);
+      return detail === "—" ? String(r.rollId || "") : `${r.rollId} -- ${detail}`;
+    };
+    const POOL_COLUMNS = {
+      facestock: [
+        { key: "detail", label: "Details", trunc: true, value: (r, k) => reelDetail(k, r), title: reelTitle },
+        { key: "size", label: "Size", col: "rl-col-size", value: (r) => r.size },
+        { key: "gsm", label: "GSM", col: "rl-col-gsm", value: (r) => r.gsm },
+        { key: "kg", label: "Kg", col: "rl-col-kg", value: (r) => r.reelMtrs },
+      ],
+      adhesive: [
+        { key: "vendor", label: "Vendor", trunc: true, value: (r) => r.vendorName, title: reelTitle },
+        { key: "make", label: "Make", trunc: true, value: (r) => r.make },
+        { key: "code", label: "Code", trunc: true, value: (r) => r.vendorSkuCode },
+        { key: "kg", label: "Kg", col: "rl-col-kg", value: (r) => r.reelMtrs },
+      ],
+      release: [
+        { key: "vendor", label: "Vendor", trunc: true, value: (r) => r.vendorName, title: reelTitle },
+        { key: "size", label: "Size", col: "rl-col-size", value: (r) => r.size },
+        { key: "gsm", label: "GSM", col: "rl-col-gsm", value: (r) => r.gsm },
+        { key: "kg", label: "Kg", col: "rl-col-kg", value: (r) => r.reelMtrs },
+      ],
+    };
+    const layerColumns = (layerKey) => POOL_COLUMNS[LAYER_META[layerKey].pool];
+    // +1 for the checkbox column, which every table has and none of the
+    // lists above carries (nothing to search or size about it).
+    const layerColCount = (layerKey) => layerColumns(layerKey).length + 1;
+
+    // Reel values come straight from the raw-stock endpoint into innerHTML
+    // and into title="..." attributes -- escape so an apostrophe or quote in
+    // a vendor name can't break the row it's rendered into.
+    const escAttr = (v) =>
+      String(v == null ? "" : v)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/\'/g, "&#39;");
 
     function layerColumnHtml(layerKey, meta) {
-      const sizeHeader = layerHasSizeColumn(layerKey) ? "<th>Size</th>" : "";
-      const gsmHeader = layerHasGsmColumn(layerKey) ? "<th>GSM</th>" : "";
+      const columns = layerColumns(layerKey);
       // <colgroup> is what actually sets these columns' widths -- the table
       // runs table-layout: fixed, so the px values live in one place in the
       // stylesheet (see "LAYER TABLE COLUMN WIDTHS" above) instead of being
       // fought over by per-cell rules.
-      const sizeCol = layerHasSizeColumn(layerKey) ? `<col class="rl-col-size" />` : "";
-      const gsmCol = layerHasGsmColumn(layerKey) ? `<col class="rl-col-gsm" />` : "";
-      // The search box carries no `name` -- it's a view-only filter over the
-      // rows already fetched for this column, never part of the submit.
+      const cols = columns.map((c) => (c.col ? `<col class="${c.col}" />` : "<col />")).join("");
+      // Each column gets its own filter box, in a row inside the table's
+      // header under the labels -- they narrow independently and combine
+      // (Make "3M" + Kg "50" shows only drums that are both). The checkbox
+      // column has nothing to search, so its cell stays empty. Inputs carry
+      // no `name`: they're a view-only filter over the rows already fetched
+      // for this column, never part of the submit. The "n selected hidden"
+      // note rides under the first box, the widest cell to read it in.
+      const searchBox = (colKey, label) =>
+        `<input type="search" class="raw-layer-search" data-search="${layerKey}" data-col="${colKey}"`
+        + ` placeholder="${label}" title="Filter by ${label}" autocomplete="off" />`;
+      const note = `<div class="raw-layer-hidden-note" data-hidden-note="${layerKey}" hidden></div>`;
       return `
         <div class="raw-layer-col" data-layer="${layerKey}">
-          <div class="raw-layer-title">${meta.label}</div>
-          <div class="raw-layer-spec">${specSummary(ITEM[meta.specField], layerKey)}</div>
-          <div class="raw-layer-search-wrap">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="search" class="raw-layer-search" data-search="${layerKey}"
-                   placeholder="Search ${meta.label}" autocomplete="off" />
+          <div class="raw-layer-head">
+            <span class="raw-layer-title">${meta.label}</span>
+            <span class="raw-layer-spec">${specSummary(ITEM[meta.specField], layerKey)}</span>
           </div>
-          <div class="raw-layer-hidden-note" data-hidden-note="${layerKey}" hidden></div>
           <div class="ap-table-wrap raw-layer-table-wrap custom-scrollbar"><table class="ap-table roll-table raw-layer-table">
-            <colgroup><col class="rl-col-check" /><col class="rl-col-detail" />${sizeCol}${gsmCol}<col class="rl-col-kg" /></colgroup>
-            <thead><tr><th class="roll-check-cell"></th><th>Details</th>${sizeHeader}${gsmHeader}<th>Kg</th></tr></thead>
+            <colgroup><col class="rl-col-check" />${cols}</colgroup>
+            <thead>
+              <tr>
+                <th class="roll-check-cell"></th>
+                ${columns.map((c) => `<th class="rl-sortable" data-sort="${c.key}" title="Sort by ${c.label}">${c.label}</th>`).join("")}
+              </tr>
+              <tr class="raw-layer-search-row">
+                <th class="roll-check-cell"></th>
+                ${columns.map((c, i) => `<th>${searchBox(c.key, c.label)}${i === 0 ? note : ""}</th>`).join("")}
+              </tr>
+            </thead>
             <tbody data-body="${layerKey}"><tr><td colspan="${layerColCount(layerKey)}" style="color:#94a3b8; font-style:italic;">Select a machine first</td></tr></tbody>
           </table></div>
         </div>`;
+    }
+
+    // ---- Sorting ----
+    // One pick per layer table (column + direction), set by clicking a
+    // heading. Nothing here until a heading is clicked: the default order is
+    // whatever the raw-stock route sent, which is smallest reel first -- the
+    // one most worth using up.
+    const layerSort = {};
+
+    // Numbers compare as numbers (so Kg 90 sorts under 100, not between 10
+    // and 19) and everything else as text, case-insensitively, with embedded
+    // digits still read as numbers ("A2" before "A10"). Blanks are always
+    // last, in both directions -- a reel with no Size recorded is never the
+    // most interesting row in the table.
+    function compareReels(colDef, layerKey, dir) {
+      return (a, b) => {
+        const av = colDef.value(a, layerKey);
+        const bv = colDef.value(b, layerKey);
+        const aBlank = av == null || av === "";
+        const bBlank = bv == null || bv === "";
+        if (aBlank || bBlank) return aBlank && bBlank ? 0 : aBlank ? 1 : -1;
+        const an = Number(av);
+        const bn = Number(bv);
+        if (Number.isFinite(an) && Number.isFinite(bn)) return (an - bn) * dir;
+        return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" }) * dir;
+      };
+    }
+
+    // Sorts a copy, never layerReelsCache itself, so the cache keeps the
+    // server's own order intact underneath whatever the user is looking at.
+    function sortedReelsFor(layerKey, reels, columns) {
+      const state = layerSort[layerKey];
+      if (!state) return reels;
+      const colDef = columns.find((c) => c.key === state.colKey);
+      if (!colDef) return reels;
+      return [...reels].sort(compareReels(colDef, layerKey, state.dir));
     }
 
     // Renders (or re-renders) one layer column's rows from its cached reels.
@@ -700,23 +825,25 @@
         return;
       }
 
-      const sizeColumn = layerHasSizeColumn(layerKey);
-      const gsmColumn = layerHasGsmColumn(layerKey);
+      const columns = layerColumns(layerKey);
+      const orderedReels = sortedReelsFor(layerKey, reels, columns);
 
       // Checkboxes -- a layer can hold more than one picked reel at once,
       // so every row is independently selectable with no single-select
-      // enforcement (unlike a native radio group).
-      tbody.innerHTML = reels.map((r) => {
+      // enforcement (unlike a native radio group). data-col ties each cell
+      // to the header filter box above it.
+      tbody.innerHTML = orderedReels.map((r) => {
         const checked = previouslyChecked.has(r._id);
-        const detail = reelDetail(layerKey, r);
-        const sizeCell = sizeColumn ? `<td>${r.size || "—"}</td>` : "";
-        const gsmCell = gsmColumn ? `<td>${r.gsm || "—"}</td>` : "";
+        const cells = columns.map((c) => {
+          const raw = c.value(r, layerKey);
+          const text = raw == null || raw === "" ? "—" : escAttr(raw);
+          const title = c.title ? ` title="${escAttr(c.title(r, layerKey))}"` : "";
+          const cls = c.trunc ? ' class="raw-layer-detail-cell"' : "";
+          return `<td data-col="${c.key}"${cls}${title}>${text}</td>`;
+        }).join("");
         return `<tr>` +
           `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"${checked ? " checked" : ""} /></td>` +
-          `<td class="raw-layer-detail-cell" title="${r.rollId} -- ${detail}">${detail}</td>` +
-          sizeCell +
-          gsmCell +
-          `<td>${r.reelMtrs}</td>` +
+          cells +
         `</tr>`;
       }).join("");
 
@@ -726,29 +853,29 @@
       filterLayerRows(layerKey);
     }
 
-    // Filters one layer column's candidate reels by free text -- one box
-    // searching every field the column shows at once: the Details cell, the
-    // Size cell (facestock columns only), the Kg cell, and the Roll ID that
-    // otherwise only lives in the Details cell's tooltip. Every
-    // whitespace-separated term has to appear in at least one of those, so
-    // "3M 90" narrows on two fields at once. Cells are joined with a
-    // separator rather than read as one blob of row text, so a term can't
-    // match by straddling the boundary between two cells (e.g. a Size of
-    // "1020" running straight into a Kg of "500").
+    // Filters one layer column's candidate reels from its own header row of
+    // per-column boxes (whichever columns this pool has, see POOL_COLUMNS):
+    // each narrows its own column, and a row has to satisfy every box that
+    // has text in it (Size "1020" + GSM "90" = only reels that are both).
+    // Within one box, each whitespace-separated term must appear in that
+    // column -- so one box takes "3M ACME".
+    //
     // Rows are hidden, never removed: a reel already checked stays checked
     // (and stays submitted) while it's filtered out of view, which the note
-    // under the box calls out so nothing is silently allotted off-screen.
-    // Rows with no checkbox are the placeholder/empty-state ones and are
-    // never filtered.
+    // under the Details box calls out so nothing is silently allotted
+    // off-screen. Rows with no checkbox are the placeholder/empty-state ones
+    // and are never filtered.
     function filterLayerRows(layerKey) {
       const col = document.querySelector(`#rawLayersGrid .raw-layer-col[data-layer="${layerKey}"]`);
       if (!col) return;
       const tbody = col.querySelector(`tbody[data-body="${layerKey}"]`);
-      const searchEl = col.querySelector(".raw-layer-search");
       const note = col.querySelector(`[data-hidden-note="${layerKey}"]`);
-      if (!tbody || !searchEl) return;
+      const boxes = Array.from(col.querySelectorAll(".raw-layer-search"));
+      if (!tbody || !boxes.length) return;
 
-      const terms = searchEl.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const filters = boxes
+        .map((el) => ({ colKey: el.dataset.col, terms: el.value.trim().toLowerCase().split(/\s+/).filter(Boolean) }))
+        .filter((f) => f.terms.length);
       const rows = Array.from(tbody.querySelectorAll("tr")).filter((tr) => tr.querySelector("input[type='checkbox']"));
 
       tbody.querySelector("tr.raw-layer-noresult")?.remove();
@@ -756,10 +883,16 @@
       let visible = 0;
       let hiddenChecked = 0;
       rows.forEach((tr) => {
-        const rollId = tr.querySelector(".raw-layer-detail-cell")?.title || "";
-        const cells = Array.from(tr.cells).map((td) => td.textContent.trim());
-        const haystack = [...cells, rollId].join(" | ").toLowerCase();
-        const match = terms.every((t) => haystack.includes(t));
+        const match = filters.every(({ colKey, terms }) => {
+          const cell = tr.querySelector(`[data-col="${colKey}"]`);
+          if (!cell) return false;
+          // A cell's tooltip counts as part of it: that's where the full
+          // text of a truncated cell lives, and where the Roll ID rides
+          // (see POOL_COLUMNS) -- searching a reel by its ID is the one
+          // thing a picker most often has in hand.
+          const haystack = `${cell.textContent} ${cell.title || ""}`.toLowerCase();
+          return terms.every((t) => haystack.includes(t));
+        });
         tr.style.display = match ? "" : "none";
         if (match) visible += 1;
         else if (tr.querySelector("input[type='checkbox']").checked) hiddenChecked += 1;
@@ -830,6 +963,23 @@
       if (checkbox) checkbox.checked = !checkbox.checked;
     });
 
+    // Clicking a column heading sorts that table by it -- ascending on the
+    // first click, descending on the next, and it stays on that column until
+    // another heading is clicked. Only the rows are rebuilt, so whatever is
+    // ticked stays ticked (renderLayerRows carries the checked ids across)
+    // and the column's own filter is re-applied on the way out.
+    document.getElementById("rawLayersGrid").addEventListener("click", (e) => {
+      const th = e.target.closest("th[data-sort]");
+      if (!th) return;
+      const layerKey = th.closest(".raw-layer-col")?.dataset.layer;
+      if (!layerKey) return;
+      const colKey = th.dataset.sort;
+      const current = layerSort[layerKey];
+      const dir = current && current.colKey === colKey && current.dir === 1 ? -1 : 1;
+      layerSort[layerKey] = { colKey, dir };
+      renderLayerRows(layerKey);
+    });
+
     // Typing in a column's search box filters that column alone. Delegated,
     // since the columns are built (and their rows rebuilt) after this runs.
     // "input" covers the native clear (x) button on type=search as well as
@@ -842,10 +992,27 @@
       if (e.key === "Enter" && e.target.closest(".raw-layer-search")) e.preventDefault();
     });
 
+    // The search row is sticky directly beneath the column labels, so it
+    // needs their exact height as its `top` offset (see the
+    // .raw-layer-search-row rule). Measured rather than assumed -- a
+    // hard-coded px value misaligns the moment the header's font, padding
+    // or wrapping changes.
+    function syncSearchRowOffset() {
+      document.querySelectorAll("#rawLayersGrid .raw-layer-table").forEach((table) => {
+        const labelRow = table.querySelector("thead tr:first-child");
+        if (!labelRow) return;
+        table.style.setProperty("--rl-head-h", `${Math.round(labelRow.getBoundingClientRect().height)}px`);
+      });
+    }
+
     // Build the columns once -- they don't change shape after load, only
     // their reel options do, as the machine changes.
     document.getElementById("rawLayersGrid").innerHTML =
       requiredLayerKeys().map((key) => layerColumnHtml(key, LAYER_META[key])).join("");
+    syncSearchRowOffset();
+    // A narrower viewport can wrap a header label onto a second line, which
+    // changes that offset.
+    window.addEventListener("resize", syncSearchRowOffset);
 
     machineSelectEl.addEventListener("change", refreshAllLayerOptions);
     // Covers re-opening an order that already has a machine assigned --
