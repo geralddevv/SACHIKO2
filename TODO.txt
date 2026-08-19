@@ -55,8 +55,8 @@ production usage logs
 value in the semi finished
 add size width in semi finished
 when clciked on the product show the material used (C011-A) in the final audit
-ONLY WATERBASE MANDATORY IN THE ADHESIVE AND IN RELEASE LINER REMOVE COLOR
 
+ONLY WATERBASE MANDATORY IN THE ADHESIVE AND IN RELEASE LINER REMOVE COLOR
 option for sq mtr rate and rolls in sales order
 if no invoice show warning while allocation
 search filter in the allocation selection table
