@@ -48,16 +48,17 @@ dashboard in stock summary
 sr.no in every table ✔️
 remove tape from the client and user detail view ✔️
 hide the other clients 
-option for sq mtr rate and rolls in sales order
-remove the stale entries
-add a rate in the masters of LS
-search filter in the allocation selection table
+remove the stale entries ✔️
+remove arrow in the stock view ✔️
 add lowest, highest and last rate in client binding
 production usage logs
-if no invoice show warning while allocation
 value in the semi finished
 add size width in semi finished
-when clciked on the product show the material used (C011-A)
+when clciked on the product show the material used (C011-A) in the final audit
 ONLY WATERBASE MANDATORY IN THE ADHESIVE AND IN RELEASE LINER REMOVE COLOR
-remove arrow in the srock view 
+
+option for sq mtr rate and rolls in sales order
+if no invoice show warning while allocation
+search filter in the allocation selection table
+add a rate in the masters of LS
 add another options in th masters for assigning (high pressure, sensable, non sensable)

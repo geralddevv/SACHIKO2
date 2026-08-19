@@ -769,17 +769,15 @@
   // Release Master, with the individual ReleaseLinerStock reels behind its
   // stock count (see routes/stock/releaseLinerStock.js's loadMastersWithStock)
   // as _children rows -- same "Rolls" dropdown pattern as FAIRTECH's Paper
-  // Re-Order page (paperReorder.ejs). A master with no reels still gets a
-  // one-line placeholder child so its tree toggle has something to open onto
-  // (Tabulator draws the toggle for any array, regardless of length).
+  // Re-Order page (paperReorder.ejs). A master with no reels in stock gets no
+  // _children key at all (not even an empty array -- Tabulator still draws a
+  // toggle for that), so its leftmost column stays blank with nothing to open.
   function buildMastersTreeData(masters) {
     return masters.map((m) => {
       const rolls = Array.isArray(m.rolls) ? m.rolls : [];
-      return {
-        ...m,
-        isParent: true,
-        _children: rolls.length ? rolls.map((r) => ({ ...r, isParent: false })) : [{ isParent: false, noRolls: true }],
-      };
+      const row = { ...m, isParent: true };
+      if (rolls.length) row._children = rolls.map((r) => ({ ...r, isParent: false }));
+      return row;
     });
   }
 
@@ -804,7 +802,7 @@
       if (data.isParent) return;
       const el = row.getElement();
       if (el.querySelector(".roll-detail-span")) return;
-      const missingInvoice = !data.noRolls && !data.invoiceNo;
+      const missingInvoice = !data.invoiceNo;
       el.style.backgroundColor = missingInvoice ? "#fef2f2" : "#f8fafc";
       el.style.borderTop = missingInvoice ? "1px solid #fecaca" : "1px solid #e6eaf2";
       el.classList.add("roll-detail-row");
@@ -812,27 +810,23 @@
       const bar = document.createElement("div");
       bar.className = "roll-detail-span";
       bar.style.cssText = "flex:1; display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 12px; color:#4b5563; font-size:13px;";
-      if (data.noRolls) {
-        bar.innerHTML = `<span style="color:#94a3b8; font-style:italic;">No reels in stock for this spec.</span>`;
-      } else {
-        const parts = [
-          `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
-          data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
-          `Kg ${fmt(data.reelMtrs)}`,
-          data.location ? escapeHtml(data.location) : "",
-          data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
-          data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : `<span style="color:#dc2626; font-weight:700;">No Invoice</span>`,
-          `Date ${formatRollDate(data.inwardDate || data.createdAt)}`,
-          data.remarks ? escapeHtml(data.remarks) : "",
-        ].filter(Boolean);
-        bar.innerHTML = parts.map((p, i) => (i === 0 ? p : `<span>${p}</span>`)).join('<span style="color:#334155; font-size:16px; font-weight:700; line-height:1;">&middot;</span>');
-        const editBtn = document.createElement("button");
-        editBtn.type = "button";
-        editBtn.className = data.invoiceNo ? "roll-edit-btn has-invoice" : "roll-edit-btn";
-        editBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit';
-        editBtn.addEventListener("click", () => openEditRollDialog(data, findMasterForRoll(data._id)));
-        bar.insertBefore(editBtn, bar.firstChild);
-      }
+      const parts = [
+        `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
+        data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
+        `Kg ${fmt(data.reelMtrs)}`,
+        data.location ? escapeHtml(data.location) : "",
+        data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
+        data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : `<span style="color:#dc2626; font-weight:700;">No Invoice</span>`,
+        `Date ${formatRollDate(data.inwardDate || data.createdAt)}`,
+        data.remarks ? escapeHtml(data.remarks) : "",
+      ].filter(Boolean);
+      bar.innerHTML = parts.map((p, i) => (i === 0 ? p : `<span>${p}</span>`)).join('<span style="color:#334155; font-size:16px; font-weight:700; line-height:1;">&middot;</span>');
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = data.invoiceNo ? "roll-edit-btn has-invoice" : "roll-edit-btn";
+      editBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit';
+      editBtn.addEventListener("click", () => openEditRollDialog(data, findMasterForRoll(data._id)));
+      bar.insertBefore(editBtn, bar.firstChild);
       el.appendChild(bar);
     },
     columns: [

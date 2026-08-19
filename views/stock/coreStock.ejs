@@ -646,17 +646,15 @@
   // Master, with the individual CoreStock lots behind its stock count (see
   // routes/stock/coreStock.js's loadMastersWithStock) as _children rows --
   // same "Rolls" dropdown pattern as FAIRTECH's Paper Re-Order page
-  // (paperReorder.ejs). A master with no lots still gets a one-line
-  // placeholder child so its tree toggle has something to open onto
-  // (Tabulator draws the toggle for any array, regardless of length).
+  // (paperReorder.ejs). A master with no lots in stock gets no
+  // _children key at all (not even an empty array -- Tabulator still draws a
+  // toggle for that), so its leftmost column stays blank with nothing to open.
   function buildMastersTreeData(masters) {
     return masters.map((m) => {
       const rolls = Array.isArray(m.rolls) ? m.rolls : [];
-      return {
-        ...m,
-        isParent: true,
-        _children: rolls.length ? rolls.map((r) => ({ ...r, isParent: false })) : [{ isParent: false, noRolls: true }],
-      };
+      const row = { ...m, isParent: true };
+      if (rolls.length) row._children = rolls.map((r) => ({ ...r, isParent: false }));
+      return row;
     });
   }
 
@@ -687,21 +685,17 @@
       const bar = document.createElement("div");
       bar.className = "roll-detail-span";
       bar.style.cssText = "flex:1; display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 12px; color:#4b5563; font-size:13px;";
-      if (data.noRolls) {
-        bar.innerHTML = `<span style="color:#94a3b8; font-style:italic;">No lots in stock for this spec.</span>`;
-      } else {
-        const parts = [
-          `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
-          data.vendorRollId ? `Vendor Batch No: ${escapeHtml(data.vendorRollId)}` : "",
-          `Pcs ${fmt(data.quantity)}`,
-          data.location ? escapeHtml(data.location) : "",
-          data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
-          data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : "",
-          `Added ${formatRollDate(data.createdAt)}`,
-          data.remarks ? escapeHtml(data.remarks) : "",
-        ].filter(Boolean);
-        bar.innerHTML = parts.map((p, i) => (i === 0 ? p : `<span>${p}</span>`)).join('<span style="color:#334155; font-size:16px; font-weight:700; line-height:1;">&middot;</span>');
-      }
+      const parts = [
+        `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
+        data.vendorRollId ? `Vendor Batch No: ${escapeHtml(data.vendorRollId)}` : "",
+        `Pcs ${fmt(data.quantity)}`,
+        data.location ? escapeHtml(data.location) : "",
+        data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
+        data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : "",
+        `Added ${formatRollDate(data.createdAt)}`,
+        data.remarks ? escapeHtml(data.remarks) : "",
+      ].filter(Boolean);
+      bar.innerHTML = parts.map((p, i) => (i === 0 ? p : `<span>${p}</span>`)).join('<span style="color:#334155; font-size:16px; font-weight:700; line-height:1;">&middot;</span>');
       el.appendChild(bar);
     },
     columns: [
