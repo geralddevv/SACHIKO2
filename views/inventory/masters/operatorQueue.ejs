@@ -233,13 +233,19 @@
                   <td data-label="Balance Rolls"><%= row.balanceRolls %></td>
                   <td>
                     <div class="mq-actions">
-                      <% const rollsAllotted = (row.allottedRollDetails || []).length > 0; %>
-                      <% if (rollsAllotted) { %>
+                      <%
+                        // Ready to start once every raw-material layer this
+                        // SKU needs is allotted (or an older-flow Deckle roll
+                        // was ticked on) -- computed server-side as
+                        // row.canStart in buildQueueRows, the same flag the
+                        // machine queue and both job-card guards use.
+                      %>
+                      <% if (row.canStart) { %>
                       <a href="/sachiko/machine/jobcard/form?pendingId=<%= row._id %>" class="mq-start-btn" title="Initiate Production">
                         <i class="fa-solid fa-play"></i> start
                       </a>
                       <% } else { %>
-                      <a href="javascript:void(0)" class="mq-start-btn mq-start-disabled" title="Assign facestock rolls before starting production" aria-disabled="true">
+                      <a href="javascript:void(0)" class="mq-start-btn mq-start-disabled" title="Raw material must be allotted to this order before starting production" aria-disabled="true">
                         <i class="fa-solid fa-play"></i> start
                       </a>
                       <% } %>
@@ -336,10 +342,13 @@
 
     // One line per raw-material layer this item's recipe calls for --
     // Facestock/Release Liner are rolls, Adhesive is a drum (row.unit names
-    // whichever it actually is, see LAYER_META in utils/labelStockProduction.js).
-    // Only allocated layers show a Roll/Drum ID; anything not yet picked
-    // reads "Not Allotted" instead of a blank cell, so a partial pick (e.g.
-    // Facestock done, Adhesive still open) is unambiguous.
+    // whichever it actually is, see LAYER_META in utils/labelStockProduction.js),
+    // and the quantity on each is a weight in kg. A layer can hold more than
+    // one picked reel (Assign Production's pickers are checkboxes), so Qty/ID
+    // summarize across l.reels instead of assuming exactly one -- same table
+    // the machine queue's dialog renders. Anything not yet picked reads "Not
+    // Allotted" instead of a blank cell, so a partial pick (e.g. Facestock
+    // done, Adhesive still open) is unambiguous.
     const layersHtml = layers.length
       ? `<table class="rd-table">` +
         `<thead><tr><th>Layer</th><th>Status</th><th>Qty</th><th>ID</th></tr></thead>` +
@@ -347,12 +356,16 @@
           const statusHtml = l.allocated
             ? `<span style="color:#16a34a;">Allotted</span>`
             : `<span style="color:#dc2626;">Not Allotted</span>`;
-          const qty = l.allocated ? `1 ${escapeHtml(l.unit)}${l.reelMtrs != null ? ` (${escapeHtml(l.reelMtrs)} m)` : ""}` : "—";
+          const totalKg = (l.reels || []).reduce((sum, r) => sum + (r.reelMtrs || 0), 0);
+          const qty = l.allocated
+            ? `${l.reels.length} ${escapeHtml(l.unit)}${l.reels.length === 1 ? "" : "s"} (${escapeHtml(totalKg)} kg)`
+            : "—";
+          const ids = l.allocated ? l.reels.map((r) => escapeHtml(dash(r.rollId))).join(", ") : "—";
           return `<tr>` +
             `<td>${escapeHtml(l.label)}</td>` +
             `<td>${statusHtml}</td>` +
             `<td>${qty}</td>` +
-            `<td>${l.allocated ? escapeHtml(dash(l.rollId)) : "—"}</td>` +
+            `<td>${ids}</td>` +
           `</tr>`;
         }).join("") + `</tbody></table>`
       : `<div class="ap-notice"><i class="fa-solid fa-circle-info"></i> ` +

@@ -205,13 +205,20 @@
                 <td data-label="Balance Rolls"><%= row.balanceRolls %></td>
                 <td>
                   <div class="mq-actions">
-                    <% const rollsAllotted = (row.allottedRollDetails || []).length > 0; %>
-                    <% if (rollsAllotted) { %>
+                    <%
+                      // Ready to start once every raw-material layer this SKU
+                      // needs is allotted -- i.e. the three badges left of
+                      // here are green (or an older-flow Deckle roll was
+                      // ticked on). Computed server-side as row.canStart, see
+                      // buildQueueRows in routes/system/machine.js, so this
+                      // button and the two job-card guards can't drift apart.
+                    %>
+                    <% if (row.canStart) { %>
                     <a href="/sachiko/machine/jobcard/form?pendingId=<%= row._id %>" class="mq-start-btn" title="Initiate Production">
                       <i class="fa-solid fa-play"></i> start
                     </a>
                     <% } else { %>
-                    <a href="javascript:void(0)" class="mq-start-btn mq-start-disabled" title="Assign facestock rolls before starting production" aria-disabled="true">
+                    <a href="javascript:void(0)" class="mq-start-btn mq-start-disabled" title="Allot every raw material to this order before starting production" aria-disabled="true">
                       <i class="fa-solid fa-play"></i> start
                     </a>
                     <% } %>
@@ -306,7 +313,7 @@
             : `<span style="color:#dc2626;">Not Allotted</span>`;
           const totalMtrs = l.reels.reduce((sum, r) => sum + (r.reelMtrs || 0), 0);
           const qty = l.allocated
-            ? `${l.reels.length} ${escapeHtml(l.unit)}${l.reels.length === 1 ? "" : "s"} (${escapeHtml(totalMtrs)} m)`
+            ? `${l.reels.length} ${escapeHtml(l.unit)}${l.reels.length === 1 ? "" : "s"} (${escapeHtml(totalMtrs)} kg)`
             : "—";
           const ids = l.allocated ? l.reels.map((r) => escapeHtml(dash(r.rollId))).join(", ") : "—";
           return `<tr>` +

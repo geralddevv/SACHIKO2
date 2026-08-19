@@ -19,6 +19,21 @@ import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds } from "../../
 
 const router = express.Router();
 
+// Whether an order has the material it needs actually set aside to start.
+// Assign Production stops at recording reel picks per raw-material layer
+// (PendingProduction.allottedLayers -- it no longer laminates a Deckle on
+// submit, see the doc comment above #rawLayersGrid in
+// assignProduction.ejs), so "every layer this SKU's recipe calls for holds
+// at least one allotted reel" is what readiness means now. allottedRollIds
+// (a finished Deckle roll ticked on) still counts on its own, for orders
+// assigned through the older flow. Used by the queue's Start button and by
+// both job-card guards, so all three agree.
+function hasStartableAllotment({ rollType, allottedLayers, allottedRollIds }) {
+  if (Array.isArray(allottedRollIds) && allottedRollIds.length) return true;
+  const required = requiredLayersFor(rollType);
+  return required.length > 0 && required.every((key) => pickStockIds(allottedLayers?.[key]).length > 0);
+}
+
 // Generate a sequential id of the form `SP | <CODE> | 000001`, matching the
 // convention already used for Label Stock/Job Card ids in
 // routes/sachiko/sachiko_route.js's generateId/previewId.
@@ -454,6 +469,10 @@ async function buildQueueRows(match) {
       facestockStatus,
       adhesiveStatus,
       releaseStatus,
+      // Same rule as hasStartableAllotment(), but off the live-resolved
+      // layerAllotments above -- so a pick whose reel doc has since been
+      // deleted stops counting here too.
+      canStart: materialStatus === "match" || allottedRollDetails.length > 0,
       quantity: qty,
       balanceQuantity: balanceQty,
       clientName: p.userId?.clientName || p.userId?.userName || "—",
@@ -533,12 +552,12 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
     return res.redirect("/sachiko/machine/queue");
   }
 
-  // No physical reels ticked on Assign Production yet -- starting the job
-  // card would let the operator scan against material that was never
-  // actually set aside, so send them back to the queue instead of opening
-  // the form.
-  if (prefill && (!prefill.allottedRollDetails || prefill.allottedRollDetails.length === 0)) {
-    req.flash("notification", "Assign facestock rolls to this order before starting production.");
+  // Not every raw-material layer has a reel set aside on Assign Production
+  // yet -- starting the job card would let the operator scan against
+  // material that was never actually reserved, so send them back to the
+  // queue instead of opening the form.
+  if (prefill && !prefill.canStart) {
+    req.flash("notification", "Allot every raw material (Facestock / Adhesive / Release Liner) to this order before starting production.");
     return res.redirect(
       prefill.machineId ? `/sachiko/machine/${prefill.machineId}/queue` : "/sachiko/machine/queue"
     );
@@ -690,9 +709,16 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     // Mirror the GET guard -- a direct POST (bypassing the form) still can't
     // start a job with no reels actually set aside for it.
     if (mongoose.isValidObjectId(b.pendingId)) {
-      const pendingDoc = await PendingProduction.findById(b.pendingId).select("allottedRollIds").lean();
-      if (!pendingDoc?.allottedRollIds?.length) {
-        req.flash("notification", "Assign facestock rolls to this order before starting production.");
+      const pendingDoc = await PendingProduction.findById(b.pendingId)
+        .select("allottedRollIds allottedLayers itemId")
+        .populate({ path: "itemId", select: "rollType" })
+        .lean();
+      if (!pendingDoc || !hasStartableAllotment({
+        rollType: pendingDoc.itemId?.rollType,
+        allottedLayers: pendingDoc.allottedLayers,
+        allottedRollIds: pendingDoc.allottedRollIds,
+      })) {
+        req.flash("notification", "Allot every raw material (Facestock / Adhesive / Release Liner) to this order before starting production.");
         return res.redirect(
           mongoose.isValidObjectId(b.machineId) ? `/sachiko/machine/${b.machineId}/queue` : "/sachiko/machine/queue"
         );

@@ -502,9 +502,21 @@
                     <span style="color:#dc2626; font-weight:700;">Not Allotted</span>
                   <% } %>
                 </td>
-                <td data-label="Qty"><%= l.allocated ? `1 ${l.unit}${l.reelMtrs != null ? ` (${fmtQty(l.reelMtrs)} m)` : ""}` : "—" %></td>
-                <td data-label="Roll / Drum ID"><%= l.allocated ? dash(l.rollId) : "—" %></td>
-                <td data-label="Location"><%= l.allocated ? dash(l.location) : "—" %></td>
+                <%
+                  // A layer can hold more than one reel (Assign Production's
+                  // layer pickers are checkboxes -- combining two undersized
+                  // drums onto one order is the whole point), so these read
+                  // the `reels` list buildQueueRows hands over rather than a
+                  // single roll. Same summary the machine queue's allotment
+                  // dialog shows.
+                  const reels = l.allocated ? l.reels || [] : [];
+                  const totalMtrs = reels.reduce((sum, r) => sum + (Number(r.reelMtrs) || 0), 0);
+                  const reelIds = reels.map((r) => r.rollId).filter(Boolean);
+                  const reelLocations = [...new Set(reels.map((r) => r.location).filter(Boolean))];
+                %>
+                <td data-label="Qty"><%= reels.length ? `${reels.length} ${l.unit}${reels.length === 1 ? "" : "s"}${totalMtrs ? ` (${fmtQty(totalMtrs)} kg)` : ""}` : "—" %></td>
+                <td data-label="Roll / Drum ID"><%= reelIds.length ? reelIds.join(", ") : "—" %></td>
+                <td data-label="Location"><%= reelLocations.length ? reelLocations.join(", ") : "—" %></td>
               </tr>
             <% }) %>
           </tbody>
