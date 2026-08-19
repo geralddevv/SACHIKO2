@@ -94,6 +94,12 @@
       border-radius: 9px 9px 0 0;
     }
     .ap-card .choices__list--dropdown { z-index: 60; }
+    /* Choices ships its dropdown at z-index: 1 (choices.min.css), which the
+       layer tables' sticky header (z-index below) beat -- so the Machine/
+       Operator/Helper lists opened *behind* those headers. The .ap-card rule
+       above only covers the two cards up top, not the form, so the form's
+       selects need their own lift. Keep this above the sticky header. */
+    #assign-form .choices__list--dropdown { z-index: 60; }
 
     .ap-table-wrap { overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 8px; }
     .ap-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
@@ -276,7 +282,9 @@
        row. */
     .raw-layer-table-wrap { height: 320px; overflow-y: auto; }
     .raw-layer-table thead th {
-      position: sticky; top: 0; z-index: 2;
+      /* Just enough to sit over its own (unpositioned) rows -- anything
+         higher starts fighting the Choices dropdowns above. */
+      position: sticky; top: 0; z-index: 1;
       background: #f8fafc;
       /* border-collapse: collapse drops the header's own bottom border once
          it goes sticky -- redraw it as an inset shadow so scrolled rows
