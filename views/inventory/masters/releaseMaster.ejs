@@ -85,9 +85,18 @@
     }
 
     /* Match Choices.js selects to the .premium-input look used by the rest
-       of this dialog's fields. */
+       of this dialog's fields -- including height, so a select and a text
+       input sitting side by side in a .dialog-field-row line up exactly:
+       12px + 12px padding + a 21px line + 2 x 1.5px border = 48px, the same
+       as .premium-input (see boilerplate.ejs). Choices ships both
+       .choices__inner and .choices__list--single as inline-block, and an
+       inline-block box sits on the text baseline, leaving a few px of
+       descender space beneath it -- forcing both to block and pinning
+       line-height drops that phantom gap. */
     .dialog-body .choices__inner {
-      padding: 11px 14px !important;
+      display: block !important;
+      padding: 12px 14px !important;
+      line-height: 21px !important;
       border-radius: 10px !important;
       border: 1.5px solid #e2e8f0 !important;
       background-color: #f8fafc !important;
@@ -96,6 +105,7 @@
       transition: all 0.2s ease !important;
     }
     .dialog-body .choices__list--single {
+      display: block !important;
       padding: 0 !important;
     }
     .dialog-body .choices.is-focused .choices__inner,
@@ -216,8 +226,20 @@
         </div>
       </div>
 
-      <label class="dialog-field-label" for="addMakeInput">Make</label>
-      <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="addMakeInput">Make</label>
+          <input type="text" id="addMakeInput" class="form-control premium-input" placeholder="Enter make" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addSensingSelect">Sensing</label>
+          <select id="addSensingSelect">
+            <option value="">Not specified</option>
+            <option value="SENSING">SENSING</option>
+            <option value="NON-SENSING">NON-SENSING</option>
+          </select>
+        </div>
+      </div>
 
       <label class="dialog-field-label" for="addVendorSelect">Vendor Name</label>
       <div class="vendor-field-fixed" style="margin-bottom: 16px;">
@@ -303,8 +325,20 @@
         </select>
       </div>
 
-      <label class="dialog-field-label" for="editMakeInput">Make</label>
-      <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" style="margin-bottom: 16px;" />
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editMakeInput">Make</label>
+          <input type="text" id="editMakeInput" class="form-control premium-input" placeholder="Enter make" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editSensingSelect">Sensing</label>
+          <select id="editSensingSelect">
+            <option value="">Not specified</option>
+            <option value="SENSING">SENSING</option>
+            <option value="NON-SENSING">NON-SENSING</option>
+          </select>
+        </div>
+      </div>
 
       <div class="dialog-field-row">
         <div>
@@ -396,8 +430,8 @@
   const releasesData = JSON.parse(document.getElementById("releases-data").textContent);
   let previewSkuId = JSON.parse(document.getElementById("preview-skuid-data").textContent);
 
-  let addTypeChoices = null, addColorChoices = null, addVendorChoices = null;
-  let editTypeChoices = null, editColorChoices = null, editVendorChoices = null;
+  let addTypeChoices = null, addColorChoices = null, addVendorChoices = null, addSensingChoices = null;
+  let editTypeChoices = null, editColorChoices = null, editVendorChoices = null, editSensingChoices = null;
 
   // ---- Table ----
   const table = new Tabulator("#release-master-table", {
@@ -453,6 +487,7 @@
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Sensing", field: "sensing", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
       { title: "Color", field: "color", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
       { title: "Size", field: "size", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110, formatter: (cell) => cell.getValue() || "—" },
@@ -536,6 +571,7 @@
       detailRow("Vendor Name", row.vendorName || "—"),
       detailRow("Type", row.type || "—"),
       detailRow("Make", row.make || "—"),
+      detailRow("Sensing", row.sensing || "—"),
       detailRow("Vendor SKU Code", row.vendorSkuCode || "—"),
       detailRow("Color", row.color || "—"),
       detailRow("Size", row.size || "—"),
@@ -574,6 +610,10 @@
     document.getElementById("addTypeSelect").value = "";
     addTypeChoices = new Choices("#addTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
+    if (addSensingChoices) { addSensingChoices.destroy(); addSensingChoices = null; }
+    document.getElementById("addSensingSelect").value = "";
+    addSensingChoices = new Choices("#addSensingSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
     if (addColorChoices) { addColorChoices.destroy(); addColorChoices = null; }
     document.getElementById("addColorSelect").value = "WHITE";
     addColorChoices = new Choices("#addColorSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
@@ -605,6 +645,7 @@
           vendorId,
           type,
           make: document.getElementById("addMakeInput").value.trim(),
+          sensing: document.getElementById("addSensingSelect").value,
           vendorSkuCode: document.getElementById("addVendorSkuCodeInput").value.trim(),
           color: document.getElementById("addColorSelect").value,
           size: document.getElementById("addSizeInput").value.trim(),
@@ -641,6 +682,10 @@
     document.getElementById("editTypeSelect").value = row.type || "";
     editTypeChoices = new Choices("#editTypeSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
 
+    if (editSensingChoices) { editSensingChoices.destroy(); editSensingChoices = null; }
+    document.getElementById("editSensingSelect").value = row.sensing || "";
+    editSensingChoices = new Choices("#editSensingSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
+
     if (editColorChoices) { editColorChoices.destroy(); editColorChoices = null; }
     document.getElementById("editColorSelect").value = row.color || "WHITE";
     editColorChoices = new Choices("#editColorSelect", { searchEnabled: false, shouldSort: false, itemSelectText: "" });
@@ -674,6 +719,7 @@
           vendorId,
           type,
           make: document.getElementById("editMakeInput").value.trim(),
+          sensing: document.getElementById("editSensingSelect").value,
           vendorSkuCode: document.getElementById("editVendorSkuCodeInput").value.trim(),
           color: document.getElementById("editColorSelect").value,
           size: document.getElementById("editSizeInput").value.trim(),

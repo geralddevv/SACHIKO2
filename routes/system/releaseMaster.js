@@ -27,6 +27,7 @@ function buildReleaseSignature(payload) {
       String(payload.vendorId || ""),
       canonStr(payload.type),
       canonStr(payload.make),
+      canonStr(payload.sensing),
       canonStr(payload.vendorSkuCode),
       canonStr(payload.color),
       canonStr(payload.size),
@@ -104,6 +105,10 @@ async function previewId(key, code) {
 
 const requireReleaseMaster = requireRole(["proprietor", "admin", "hod"]);
 
+// The only two values the Sensing select offers -- anything else posted is
+// treated as "not stated" (blank), matching the enum on releaseMaster.js.
+const SENSING_OPTIONS = ["SENSING", "NON-SENSING"];
+
 const numOrUndef = (value) => {
   if (value === undefined || value === null || String(value).trim() === "") return undefined;
   const n = Number(value);
@@ -116,6 +121,9 @@ async function buildPayload(body) {
     vendorId,
     type: String(body.type || "").trim(),
     make: String(body.make || "").trim(),
+    sensing: SENSING_OPTIONS.includes(String(body.sensing || "").trim().toUpperCase())
+      ? String(body.sensing).trim().toUpperCase()
+      : "",
     vendorSkuCode: String(body.vendorSkuCode || "").trim(),
     color: String(body.color || "WHITE").trim() || "WHITE",
     size: String(body.size || "").trim(),

@@ -36,6 +36,18 @@ const releaseMasterSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Whether this liner carries the sensing mark/transparency the press's
+    // eye-mark sensor needs. Part of releaseSignature below -- it's a
+    // property of the material itself, not an operational setting, so a
+    // SENSING and a NON-SENSING liner are two genuinely different specs.
+    // Blank on legacy rows entered before the field existed.
+    sensing: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      enum: ["SENSING", "NON-SENSING", ""],
+      default: "",
+    },
     // The vendor's own code for this spec -- optional, purely a
     // cross-reference against the vendor's own paperwork.
     vendorSkuCode: {

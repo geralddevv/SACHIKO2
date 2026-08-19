@@ -62,3 +62,6 @@ if no invoice show warning while allocation
 search filter in the allocation selection table
 add a rate in the masters of LS
 add another options in th masters for assigning (high pressure, sensable, non sensable)
+
+
+FLow chart in FS: loc, emp name, 

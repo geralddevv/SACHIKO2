@@ -434,15 +434,16 @@
           <div style="margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; overflow: hidden;">
             <table id="releaseMastersRef" style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; font-weight: 600;">
               <colgroup>
+                <col style="width: 13%;" />
                 <col style="width: 15%;" />
-                <col style="width: 18%;" />
-                <col style="width: 18%;" />
-                <col style="width: 14%;" />
+                <col style="width: 15%;" />
+                <col style="width: 15%;" />
                 <col style="width: 12%;" />
+                <col style="width: 14%;" />
                 <col style="width: 16%;" />
               </colgroup>
               <tbody style="color: #0f172a;">
-                <tr><td colspan="6" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>
+                <tr><td colspan="7" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>
               </tbody>
             </table>
           </div>
@@ -858,6 +859,7 @@
       { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Sensing", field: "sensing", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
       { title: "Color", field: "color", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
       { title: "Size", field: "size", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() || "—" },
       { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
@@ -1100,11 +1102,12 @@
       tbody.innerHTML = `
         <tr style="border-bottom: 1px solid #e2e8f0;">
           <td style="padding: 10px; font-weight: 700; color: #044a78; border-right: 1px solid #e2e8f0;">Vendor</td>
-          <td style="padding: 10px; color: #0f172a;" colspan="5">${selectedReleaseMaster.vendorName || "—"}</td>
+          <td style="padding: 10px; color: #0f172a;" colspan="6">${selectedReleaseMaster.vendorName || "—"}</td>
         </tr>
         <tr style="border-bottom: 1px solid #e2e8f0;">
           <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Type</td>
           <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Make</td>
+          <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Sensing</td>
           <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">SKU</td>
           <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Color</td>
           <td style="padding: 8px 10px; font-weight: 700; color: #044a78; font-size: 14px; border-right: 1px solid #e2e8f0;">Size</td>
@@ -1113,6 +1116,7 @@
         <tr>
           <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.type || ""}">${selectedReleaseMaster.type || "—"}</td>
           <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.make || ""}">${selectedReleaseMaster.make || "—"}</td>
+          <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.sensing || ""}">${selectedReleaseMaster.sensing || "—"}</td>
           <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.vendorSkuCode || ""}">${selectedReleaseMaster.vendorSkuCode || "—"}</td>
           <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.color || ""}">${selectedReleaseMaster.color || "—"}</td>
           <td style="padding: 8px 10px; color: #0f172a; font-size: 13px; border-right: 1px solid #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${selectedReleaseMaster.size || ""}">${selectedReleaseMaster.size || "—"}</td>
@@ -1120,7 +1124,7 @@
         </tr>
       `;
     } else {
-      tbody.innerHTML = '<tr><td colspan="6" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="padding: 12px; text-align: center; color: #64748b;">Select a master to inward</td></tr>';
     }
 
     document.getElementById("addDateInput").value = new Date().toISOString().slice(0, 10);

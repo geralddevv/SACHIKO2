@@ -261,8 +261,8 @@
        makes the numbers below authoritative, and neutralising that `1%`
        stops the leftover from being sprayed back over them.
 
-       Columns with no width here are deliberate: Facestock's Details,
-       Adhesive's Vendor/Make/Code and Release Liner's Vendor are flexible
+       Columns with no width here are deliberate: Facestock's and
+       Adhesive's Vendor/Make/Code, and Release Liner's Vendor, are flexible
        -- fixed table
        layout splits whatever the fixed columns leave over equally between
        them, and each ellipsises past its share. See POOL_COLUMNS. */
@@ -595,23 +595,27 @@
     const ALLOTTED_LAYERS = JSON.parse(document.getElementById("allotted-layers-data").textContent) || {};
     const ORDER_ID = JSON.parse(document.getElementById("order-id-data").textContent);
 
-    // Shows exactly the fields reelMatchesLayer() (utils/labelStockProduction.js
-    // POOL_MATCH_FIELDS) actually checks to decide a reel counts as this
-    // layer's material -- Facestock: family/make/vendor SKU code/type/micron;
-    // Adhesive: type alone; Release Liner: type/make/vendor SKU code/color.
-    // Nothing else (Vendor Name, Size, Facestock's gsm, Adhesive's make/
-    // vendor SKU code/shelf life/viscosity/cohesion/shear/density, Release's
-    // size/gsm) is part of that match, so it isn't shown here either -- it
-    // belongs in reelDetail() below instead. Keep all three in step.
+    // The one-line recipe this layer has to be matched against, shown beside
+    // the layer's name. Adhesive and Release Liner list exactly what
+    // reelMatchesLayer() (utils/labelStockProduction.js POOL_MATCH_FIELDS)
+    // checks -- Adhesive: type alone; Release Liner: type/make/vendor SKU
+    // code/color.
+    //
+    // Facestock deliberately does NOT: it reads Family / GSM / Type only,
+    // the three a picker actually recognises the paper by. Make, Vendor SKU
+    // Code and Micron are still part of the match (a reel failing them never
+    // reaches the table below) -- they're just not spelled out here; the full
+    // spec is on the Material Details card at the top of the page. GSM is the
+    // other way round: shown here, but NOT matched on, so a reel whose GSM
+    // differs can still be a candidate. Everything else per-reel (Vendor
+    // Name, Size, ...) belongs in reelDetail() below instead.
     function specSummary(spec, layerKey) {
       if (!spec) return "—";
       const bits = [];
       if (layerKey.startsWith("facestock")) {
         if (spec.facestockFamily) bits.push(spec.facestockFamily);
-        if (spec.facestockMake) bits.push(spec.facestockMake);
-        if (spec.facestockVendorSkuCode) bits.push(spec.facestockVendorSkuCode);
+        if (spec.facestockGsm) bits.push(`${spec.facestockGsm} GSM`);
         if (spec.facestockType) bits.push(spec.facestockType);
-        if (spec.facestockMicron) bits.push(`${spec.facestockMicron} MIC`);
       } else if (layerKey.startsWith("adhesive")) {
         if (spec.adhesiveType) bits.push(spec.adhesiveType);
       } else {
@@ -626,10 +630,10 @@
     // Per-candidate-reel counterpart to specSummary() above: shows the
     // fields specSummary DOESN'T (the ones POOL_MATCH_FIELDS no longer
     // narrows on) and that have no column of their own in POOL_COLUMNS
-    // below -- Facestock: Vendor Name (Size/GSM are columns); Adhesive:
-    // Viscosity/Cohesion/Shear/Density (Vendor/Make/Code are columns);
-    // Release Liner: nothing (Vendor/Size/GSM are all columns). Since those
-    // fields can differ
+    // below -- Facestock: nothing (Vendor/Make/Code/Size/GSM are all
+    // columns); Adhesive: Viscosity/Cohesion/Shear/Density (Vendor/Make/Code
+    // are columns); Release Liner: nothing (Vendor/Size/GSM are all
+    // columns). Since those fields can differ
     // between reels that still count as a match, this is what a picker
     // actually needs to tell candidates apart by. For a pool whose columns
     // cover everything visible, this is what the row's hover tooltip carries
@@ -637,9 +641,8 @@
     function reelDetail(layerKey, r) {
       const bits = [];
       if (layerKey.startsWith("facestock")) {
-        // Size and GSM each have their own column for facestock reels (see
-        // layerColumnHtml/renderLayerRows) -- not repeated here.
-        if (r.vendorName) bits.push(r.vendorName);
+        // Vendor/Make/Code/Size/GSM are all columns of their own now, so
+        // nothing is left over -- reelTitle falls back to the bare Roll ID.
       } else if (layerKey.startsWith("adhesive")) {
         // Vendor/Make/Code each have their own column now -- not repeated here.
         if (r.viscosity) bits.push(`Visc ${r.viscosity}`);
@@ -678,7 +681,9 @@
     };
     const POOL_COLUMNS = {
       facestock: [
-        { key: "detail", label: "Details", trunc: true, value: (r, k) => reelDetail(k, r), title: reelTitle },
+        { key: "vendor", label: "Vendor", trunc: true, value: (r) => r.vendorName, title: reelTitle },
+        { key: "make", label: "Make", trunc: true, value: (r) => r.make },
+        { key: "code", label: "Code", trunc: true, value: (r) => r.vendorSkuCode },
         { key: "size", label: "Size", col: "rl-col-size", value: (r) => r.size },
         { key: "gsm", label: "GSM", col: "rl-col-gsm", value: (r) => r.gsm },
         { key: "kg", label: "Kg", col: "rl-col-kg", value: (r) => r.reelMtrs },
