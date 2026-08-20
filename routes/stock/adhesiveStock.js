@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import AdhesiveStock from "../../models/inventory/adhesiveStock.js";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
 import FacestockStock from "../../models/inventory/facestockStock.js";
@@ -12,6 +13,15 @@ import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
 import { pickStockIds } from "../../utils/labelStockProduction.js";
+import {
+  LABEL_HEIGHT_MM,
+  LABEL_WIDTH_MM,
+  buildLabelFields,
+  buildQrPayload,
+  labelLayoutMm,
+  rollLabelModuleCount,
+  rollLabelQrDataUrl,
+} from "../../utils/adhesiveRollLabel.js";
 
 const router = express.Router();
 const ROLL_ID_PREFIX = "ADHESIVE";
@@ -308,6 +318,10 @@ router.get("/", async (req, res) => {
     facestockValue,
     releaseValue,
     totalStockValue: adhesiveValue + facestockValue + releaseValue,
+    // Sizes the Print dialog's preview frame to the real sticker. Passed
+    // from utils/adhesiveRollLabel.js rather than written into the view, so
+    // the frame can't quietly disagree with the label inside it.
+    labelSizeMm: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM },
     ...specOptions,
     notification: req.flash("notification"),
   });
@@ -453,6 +467,75 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     console.error("ADHESIVE STOCK CREATE ERROR:", err);
     const msg = err.code === 11000 ? "Roll ID collision, please retry." : "Failed to add adhesive stock.";
     res.status(400).json({ success: false, message: msg });
+  }
+});
+
+// No X-Frame-Options exception is needed for this route, and none should be
+// added. The Print dialog does not navigate an iframe here -- it fetches
+// this HTML and writes it in as srcdoc (see openLabelDialog in
+// views/stock/adhesiveStock.ejs), and X-Frame-Options governs navigations,
+// not inline documents. Pointing a frame at this URL instead would follow
+// whatever came back, and an expired session answers 302 -> /sachiko/login,
+// which is DENY like the rest of the app: the frame dies on the redirect
+// target, where no header set here can reach.
+
+// Failures here are read inside that iframe, so they have to BE the page.
+// A flash-and-redirect (this file's pattern everywhere else) is invisible in
+// a frame -- the operator would get the stock page rendered at sticker size,
+// or another blocked navigation -- so this states the problem in the frame
+// where the label would have been.
+function sendLabelError(res, status, message) {
+  res.status(status).type("html").send(
+    `<!DOCTYPE html><meta charset="utf-8">`
+    + `<div style="font:600 13px/1.5 Arial,Helvetica,sans-serif;color:#b91c1c;`
+    + `display:flex;align-items:center;justify-content:center;height:100vh;`
+    + `margin:0;text-align:center;padding:0 12px;">${message}</div>`,
+  );
+}
+
+// The drum's printed sticker, as a page the browser prints: opened in its
+// own tab by the Print button on the stock page, it fires the print dialog
+// on load so the operator just picks the label printer.
+//
+// The page is the sticker and nothing else -- one 101.5 x 75.1 mm sheet,
+// with each value positioned in the pre-printed box it belongs to. All of
+// that geometry comes from utils/adhesiveRollLabel.js (over the shared
+// utils/materialRollLabel.js), which derives it from the very coordinates
+// SOFT.prn uses, so the browser-printed label and the thermal-printed one
+// land identically. This route only looks the drum up and renders the QR.
+router.get("/label/:stockId", requireAuth, async (req, res) => {
+  try {
+    const { stockId } = req.params;
+    if (!mongoose.isValidObjectId(stockId)) return sendLabelError(res, 404, "Drum not found.");
+
+    const reel = await AdhesiveStock.findById(stockId)
+      .select("rollId vendorName vendorSkuCode invoiceNo reelMtrs")
+      .lean();
+    if (!reel) return sendLabelError(res, 404, "Drum not found.");
+
+    const labelInput = {
+      vendorName: reel.vendorName,
+      vendorSkuCode: reel.vendorSkuCode,
+      invoiceNo: reel.invoiceNo,
+      reelMtrs: reel.reelMtrs,
+      rollId: reel.rollId,
+    };
+    // The QR's module count depends on the whole payload's length, so the
+    // box can only be sized once the payload exists -- hence building the
+    // payload here rather than letting the view ask for a data URL.
+    const qrPayload = buildQrPayload(labelInput);
+
+    res.render("stock/adhesiveRollLabel.ejs", {
+      rollId: reel.rollId,
+      fields: buildLabelFields(labelInput),
+      // Named `mm`, not `layout` -- `layout` is ejs-mate's own helper and a
+      // local of that name breaks rendering.
+      mm: labelLayoutMm(rollLabelModuleCount(qrPayload)),
+      qrDataUrl: await rollLabelQrDataUrl(qrPayload),
+    });
+  } catch (err) {
+    console.error("ADHESIVE ROLL LABEL ERROR:", err);
+    sendLabelError(res, 500, "Failed to build the label.");
   }
 });
 

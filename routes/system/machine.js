@@ -66,6 +66,21 @@ const toArray = (value) => {
   return Array.isArray(value) ? value : [value];
 };
 
+// A browser normally contributes one usage row per physical reel, but POST
+// bodies are not a trusted source. Collapse repeated ids before they reach a
+// stock mutation so one reel can never receive two competing deductions (or
+// two outward logs) in the same job card.
+const consolidateUsageRows = (rows, amountKey) => {
+  const byStockId = new Map();
+  for (const row of rows) {
+    const stockId = trim(row?.stockId);
+    const amount = Number(row?.[amountKey]);
+    if (!stockId || !Number.isFinite(amount) || amount <= 0) continue;
+    byStockId.set(stockId, round2((byStockId.get(stockId) || 0) + amount));
+  }
+  return [...byStockId].map(([stockId, amount]) => ({ stockId, [amountKey]: amount }));
+};
+
 // ----------------------------------Machine Master---------------------------------->
 
 // This router is mounted on the bare "/sachiko" prefix with no role gate (see
@@ -415,6 +430,7 @@ async function buildQueueRows(match) {
         : [];
       return {
         key,
+        pool: meta.pool,
         label: meta.label,
         unit: meta.unit,
         allocated: reels.length > 0,
@@ -690,71 +706,94 @@ async function consumeAllottedRollMeters({ pendingProductionId, logRows, jobCard
   return result;
 }
 
-// Deducts the kg the operator reports using off each Adhesive drum this job
-// had reserved -- the "Adhesive Used" dialog on Save Production Entry
-// (views/inventory/masters/jobCardForm.ejs) is the only place raw adhesive
-// ever actually leaves Stock. Unlike Facestock/Release Liner, there's no
-// scanned length to derive this from (a drum has no roll-length reading to
-// clock a start/stop against); the operator has to say how much of the
-// drum's weight the job actually used.
+// Deducts the mtrs/kg the operator reports using off each reel this job had
+// reserved for one raw-material pool (Facestock, Adhesive, or Release Liner)
+// -- the "Material Used" dialog on Save Production Entry
+// (views/inventory/masters/jobCardForm.ejs) is the only place any of these
+// three pools' reels actually leave Stock for an order allotted through the
+// newer layerAllotments picker (PendingProduction.allottedLayers): unlike
+// the older allottedRollIds flow, consumeAllottedRollMeters above has no
+// scanned Deckle roll length to derive Facestock/Release Liner consumption
+// from here -- and Adhesive never had one to begin with (a drum has no
+// length reading to scan, only a weight). The operator has to say how much
+// of each reel the job actually used.
 //
-// `rows` is [{ stockId, kgUsed }], already validated against the job's own
-// PendingProduction.allottedLayers.adhesive by the caller -- this only
-// re-reads the live drums to know how much is really left on each and
-// mirrors produceDeckle's own deduction shape (utils/labelStockProduction.js)
-// so the two paths that can reduce an AdhesiveStock drum agree on how they do
-// it (reelMtrs clamped at 0, quantity zeroed once emptied, one OUTWARD
-// AdhesiveStockLog line per drum).
-async function consumeAdhesiveUsage({ rows, jobCardId, createdBy }) {
-  const result = { deducted: 0, emptied: 0, kg: 0, rows: [] };
+// `rows` is [{ stockId, used }], already validated against the job's own
+// PendingProduction.allottedLayers[pool] by the caller -- this only re-reads
+// the live reels to know how much is really left on each and mirrors
+// produceDeckle's own deduction shape (utils/labelStockProduction.js) so
+// every path that can reduce one of these reels agrees on how it does it
+// (reelMtrs clamped at 0, quantity zeroed once emptied, one OUTWARD
+// *StockLog line per reel). Facestock/Release Liner reels count reelMtrs in
+// metres; Adhesive drums count it in kg -- same field, different unit, hence
+// the caller-supplied `pool` picking the right word for the log remark.
+async function consumePoolUsage({ pool, rows, jobCardId, createdBy }) {
+  const result = { deducted: 0, emptied: 0, used: 0, rows: [], limited: [] };
   if (!Array.isArray(rows) || rows.length === 0) return result;
 
-  const { Model, LogModel } = POOL_MODELS.adhesive;
-  const stockIds = rows.map((r) => r.stockId).filter(Boolean);
-  const drums = stockIds.length
+  const { Model, LogModel } = POOL_MODELS[pool];
+  const unitLabel = pool === "adhesive" ? "kg" : "mtrs";
+  const requestedByStockId = new Map();
+  for (const row of rows) {
+    const stockId = trim(row?.stockId);
+    const used = round2(Number(row?.used) || 0);
+    if (stockId && used > 0) requestedByStockId.set(stockId, round2((requestedByStockId.get(stockId) || 0) + used));
+  }
+  const stockIds = [...requestedByStockId.keys()];
+  const reels = stockIds.length
     ? await Model.find({ _id: { $in: stockIds } }).select("rollId type location quantity reelMtrs rate").lean()
     : [];
-  const drumById = new Map(drums.map((d) => [String(d._id), d]));
+  const reelById = new Map(reels.map((d) => [String(d._id), d]));
 
-  for (const row of rows) {
-    const used = round2(Number(row.kgUsed) || 0);
-    const drum = row.stockId ? drumById.get(String(row.stockId)) : null;
-    if (used <= 0 || !drum) continue;
+  for (const [stockId, requested] of requestedByStockId) {
+    const reel = reelById.get(stockId);
+    if (!reel) continue;
 
-    const remaining = round2((Number(drum.reelMtrs) || 0) - used);
+    // The dialog validates this in the browser, but stock can change between
+    // opening it and saving. Record only what is really available; never let
+    // a stale/tampered request create a negative balance or an overstated log.
+    const available = Math.max(round2(Number(reel.reelMtrs) || 0), 0);
+    const used = Math.min(requested, available);
+    if (used <= 0) {
+      result.limited.push({ stockId: reel._id, rollId: reel.rollId, requested, used: 0 });
+      continue;
+    }
+    if (used < requested) result.limited.push({ stockId: reel._id, rollId: reel.rollId, requested, used });
+
+    const remaining = round2(available - used);
     const emptied = remaining <= 0;
 
     const bal = await Model.aggregate([
-      { $match: { type: drum.type, location: drum.location } },
+      { $match: { type: reel.type, location: reel.location } },
       { $group: { _id: null, qty: { $sum: "$quantity" } } },
     ]);
     const openingStock = bal[0]?.qty || 0;
-    const rollsOut = emptied ? Number(drum.quantity) || 0 : 0;
+    const rollsOut = emptied ? Number(reel.quantity) || 0 : 0;
     const closingStock = openingStock - rollsOut;
 
     await Model.updateOne(
-      { _id: drum._id },
+      { _id: reel._id },
       emptied ? { $set: { reelMtrs: 0, quantity: 0 } } : { $set: { reelMtrs: remaining } },
     );
 
     await LogModel.create({
-      location: drum.location,
+      location: reel.location,
       openingStock,
       quantity: rollsOut,
       closingStock,
       reelMtrs: used,
-      rate: drum.rate,
-      rollId: drum.rollId,
+      rate: reel.rate,
+      rollId: reel.rollId,
       type: "OUTWARD",
       source: "SYSTEM",
-      remarks: `${jobCardId ? `${jobCardId}: ` : ""}${used} kg consumed${emptied ? " — drum emptied" : ""}`,
+      remarks: `${jobCardId ? `${jobCardId}: ` : ""}${used} ${unitLabel} consumed${emptied ? " — reel emptied" : ""}`,
       createdBy: createdBy || "SYSTEM",
     });
 
     result.deducted += 1;
-    result.kg = round2(result.kg + used);
+    result.used = round2(result.used + used);
     if (emptied) result.emptied += 1;
-    result.rows.push({ stockId: drum._id, rollId: drum.rollId, kgUsed: used });
+    result.rows.push({ stockId: reel._id, rollId: reel.rollId, used });
   }
   return result;
 }
@@ -764,9 +803,10 @@ async function consumeAdhesiveUsage({ rows, jobCardId, createdBy }) {
 // says as much: "Production Log: one row per deckle produced"), not a
 // pre-existing reel merely being drawn down. Raw material for this job was
 // already reserved at Assign Production and already deducted elsewhere
-// (Facestock/Release Liner via consumeAllottedRollMeters off the job's own
-// allottedRollIds if any; Adhesive via consumeAdhesiveUsage above) -- this
-// only creates the finished-goods side: one MaterialStock (Deckle) + one
+// (the older allottedRollIds flow via consumeAllottedRollMeters; the newer
+// layerAllotments flow -- Facestock/Adhesive/Release Liner alike -- via
+// consumePoolUsage above) -- this only creates the finished-goods side: one
+// MaterialStock (Deckle) + one
 // INWARD MaterialStockLog per row, at the location the job's own raw
 // material sits at. Mirrors produceDeckle's own inward-write half
 // (utils/labelStockProduction.js) without repeating its raw-material
@@ -888,22 +928,50 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       }
     }
 
-    // Adhesive Used dialog rows -- one per drum this order actually had
-    // reserved (adhesiveStockId[]/adhesiveKgUsed[], parallel arrays, same
-    // convention as Job Setting/Production Log above). Only a stockId that's
-    // genuinely one of this order's own allottedLayers.adhesive/adhesive2
-    // picks is kept -- the dialog only ever offers those, but the form is
-    // still a POST body, not a trusted source.
-    const validAdhesiveStockIds = new Set(
-      [pendingDoc?.allottedLayers?.adhesive, pendingDoc?.allottedLayers?.adhesive2]
-        .filter((pick) => pick?.pool === "adhesive")
+    // Material Used dialog rows -- one per reel this order actually had
+    // reserved, per pool (facestockStockId[]/facestockMtrsUsed[],
+    // adhesiveStockId[]/adhesiveKgUsed[], releaseStockId[]/
+    // releaseMtrsUsed[], each its own parallel-array pair, same convention as
+    // Job Setting/Production Log above). Only a stockId that's genuinely one
+    // of this order's own allottedLayers picks for that pool is kept -- the
+    // dialog only ever offers those, but the form is still a POST body, not
+    // a trusted source.
+    const validStockIdsForPool = (pool, keys) => new Set(
+      keys
+        .map((key) => pendingDoc?.allottedLayers?.[key])
+        .filter((pick) => pick?.pool === pool)
         .flatMap((pick) => pickStockIds(pick)),
     );
+
+    const validFacestockStockIds = validStockIdsForPool("facestock", ["facestock", "facestock2"]);
+    const fsStockId = toArray(b.facestockStockId);
+    const fsMtrsUsed = toArray(b.facestockMtrsUsed);
+    const facestockUsage = consolidateUsageRows(
+      fsStockId
+        .map((sid, i) => ({ stockId: trim(sid), mtrsUsed: numOrUndef(fsMtrsUsed[i]) }))
+        .filter((row) => row.stockId && validFacestockStockIds.has(row.stockId) && row.mtrsUsed != null && row.mtrsUsed > 0),
+      "mtrsUsed",
+    );
+
+    const validAdhesiveStockIds = validStockIdsForPool("adhesive", ["adhesive", "adhesive2"]);
     const adKgStockId = toArray(b.adhesiveStockId);
     const adKgUsed = toArray(b.adhesiveKgUsed);
-    const adhesiveUsage = adKgStockId
-      .map((sid, i) => ({ stockId: trim(sid), kgUsed: numOrUndef(adKgUsed[i]) }))
-      .filter((row) => row.stockId && validAdhesiveStockIds.has(row.stockId) && row.kgUsed != null && row.kgUsed > 0);
+    const adhesiveUsage = consolidateUsageRows(
+      adKgStockId
+        .map((sid, i) => ({ stockId: trim(sid), kgUsed: numOrUndef(adKgUsed[i]) }))
+        .filter((row) => row.stockId && validAdhesiveStockIds.has(row.stockId) && row.kgUsed != null && row.kgUsed > 0),
+      "kgUsed",
+    );
+
+    const validReleaseStockIds = validStockIdsForPool("release", ["releaseLiner", "releaseLiner2"]);
+    const rlStockId = toArray(b.releaseStockId);
+    const rlMtrsUsed = toArray(b.releaseMtrsUsed);
+    const releaseUsage = consolidateUsageRows(
+      rlStockId
+        .map((sid, i) => ({ stockId: trim(sid), mtrsUsed: numOrUndef(rlMtrsUsed[i]) }))
+        .filter((row) => row.stockId && validReleaseStockIds.has(row.stockId) && row.mtrsUsed != null && row.mtrsUsed > 0),
+      "mtrsUsed",
+    );
 
     const jobCardId = await generateId("machineJobCardId", "JC");
 
@@ -989,7 +1057,9 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       },
       jobSetting,
       productionLog,
+      facestockUsage,
       adhesiveUsage,
+      releaseUsage,
       totalMeter: trim(b.totalMeter),
       sqMtr: trim(b.sqMtr),
     });
@@ -1009,29 +1079,66 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       console.error("JOB CARD STOCK DEDUCTION ERROR:", stockErr);
     }
 
-    // Deduct the adhesive kg the operator reported in the "Adhesive Used"
-    // dialog. Same isolation as above -- the job card and its meter deduction
-    // are already committed, so this can't turn a successful save into an
-    // apparent failure.
-    let adhesiveConsumption = { deducted: 0, emptied: 0, kg: 0, rows: [] };
+    // Deduct the mtrs/kg the operator reported in the "Material Used" dialog,
+    // per pool. Same isolation as above -- the job card and its meter
+    // deduction are already committed, so none of these three can turn a
+    // successful save into an apparent failure.
+    let facestockConsumption = { deducted: 0, emptied: 0, used: 0, rows: [] };
     try {
-      adhesiveConsumption = await consumeAdhesiveUsage({
-        rows: adhesiveUsage,
+      facestockConsumption = await consumePoolUsage({
+        pool: "facestock",
+        rows: facestockUsage.map((r) => ({ stockId: r.stockId, used: r.mtrsUsed })),
         jobCardId,
         createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
       });
-      // Fills in the rollId snapshot the create above couldn't (the drum
-      // docs are only read inside consumeAdhesiveUsage itself) -- purely
+      // Fills in the rollId snapshot the create above couldn't (the reel
+      // docs are only read inside consumePoolUsage itself) -- purely
       // cosmetic for the saved card, the deduction already happened above
       // regardless of whether this write succeeds.
+      if (facestockConsumption.rows.length) {
+        await MachineJobCard.updateOne(
+          { jobCardId },
+          { $set: { facestockUsage: facestockConsumption.rows.map((r) => ({ stockId: r.stockId, rollId: r.rollId, mtrsUsed: r.used })) } },
+        );
+      }
+    } catch (fsErr) {
+      console.error("JOB CARD FACESTOCK DEDUCTION ERROR:", fsErr);
+    }
+
+    let adhesiveConsumption = { deducted: 0, emptied: 0, used: 0, rows: [] };
+    try {
+      adhesiveConsumption = await consumePoolUsage({
+        pool: "adhesive",
+        rows: adhesiveUsage.map((r) => ({ stockId: r.stockId, used: r.kgUsed })),
+        jobCardId,
+        createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+      });
       if (adhesiveConsumption.rows.length) {
         await MachineJobCard.updateOne(
           { jobCardId },
-          { $set: { adhesiveUsage: adhesiveConsumption.rows } },
+          { $set: { adhesiveUsage: adhesiveConsumption.rows.map((r) => ({ stockId: r.stockId, rollId: r.rollId, kgUsed: r.used })) } },
         );
       }
     } catch (adErr) {
       console.error("JOB CARD ADHESIVE DEDUCTION ERROR:", adErr);
+    }
+
+    let releaseConsumption = { deducted: 0, emptied: 0, used: 0, rows: [] };
+    try {
+      releaseConsumption = await consumePoolUsage({
+        pool: "release",
+        rows: releaseUsage.map((r) => ({ stockId: r.stockId, used: r.mtrsUsed })),
+        jobCardId,
+        createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+      });
+      if (releaseConsumption.rows.length) {
+        await MachineJobCard.updateOne(
+          { jobCardId },
+          { $set: { releaseUsage: releaseConsumption.rows.map((r) => ({ stockId: r.stockId, rollId: r.rollId, mtrsUsed: r.used })) } },
+        );
+      }
+    } catch (rlErr) {
+      console.error("JOB CARD RELEASE LINER DEDUCTION ERROR:", rlErr);
     }
 
     // Lamination: one new Deckle per Production Log row that actually made
@@ -1088,10 +1195,20 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       const uniq = [...new Set(consumption.unmatched)];
       message += ` Note: stock not deducted for roll${uniq.length === 1 ? "" : "s"} ${uniq.join(", ")} (not among this job's allotted reels).`;
     }
+    if (facestockConsumption.deducted) {
+      message +=
+        ` Facestock: ${facestockConsumption.used} mtrs off ${facestockConsumption.deducted} reel${facestockConsumption.deducted === 1 ? "" : "s"}` +
+        `${facestockConsumption.emptied ? ` (${facestockConsumption.emptied} emptied)` : ""}.`;
+    }
     if (adhesiveConsumption.deducted) {
       message +=
-        ` Adhesive: ${adhesiveConsumption.kg} kg off ${adhesiveConsumption.deducted} drum${adhesiveConsumption.deducted === 1 ? "" : "s"}` +
+        ` Adhesive: ${adhesiveConsumption.used} kg off ${adhesiveConsumption.deducted} drum${adhesiveConsumption.deducted === 1 ? "" : "s"}` +
         `${adhesiveConsumption.emptied ? ` (${adhesiveConsumption.emptied} emptied)` : ""}.`;
+    }
+    if (releaseConsumption.deducted) {
+      message +=
+        ` Release Liner: ${releaseConsumption.used} mtrs off ${releaseConsumption.deducted} reel${releaseConsumption.deducted === 1 ? "" : "s"}` +
+        `${releaseConsumption.emptied ? ` (${releaseConsumption.emptied} emptied)` : ""}.`;
     }
     if (deckleProduction.created) {
       const ids = deckleProduction.rows.filter(Boolean);

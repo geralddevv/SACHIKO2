@@ -1,8 +1,18 @@
 import express from "express";
+import mongoose from "mongoose";
 import MaterialStock from "../../models/inventory/materialStock.js";
 import Location from "../../models/system/location.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { updateLimiter, deleteLimiter } from "../../utils/limiters.js";
+import {
+  LABEL_HEIGHT_MM,
+  LABEL_WIDTH_MM,
+  buildLabelFields,
+  buildQrPayload,
+  labelLayoutMm,
+  rollLabelModuleCount,
+  rollLabelQrDataUrl,
+} from "../../utils/materialStockRollLabel.js";
 
 const router = express.Router();
 
@@ -27,6 +37,11 @@ router.get("/", async (req, res) => {
     JS: false,
     CSS: "tableDisp.css",
     title: "Semi Finished Goods Stock",
+    // Passed through rather than hardcoded in the view's CSS, so the label
+    // preview frame (see the Print dialog) can never quietly disagree with
+    // the label rendered inside it -- both come from
+    // utils/materialStockRollLabel.js.
+    labelSizeMm: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM },
     locations,
     stock: stock.map((s) => ({
       _id: String(s._id),
@@ -66,6 +81,66 @@ router.put("/:id", requireAuth, updateLimiter, async (req, res) => {
   } catch (err) {
     console.error("SEMI FINISHED STOCK UPDATE ERROR:", err);
     res.status(400).json({ success: false, message: "Failed to update Deckle reel." });
+  }
+});
+
+// Failures here are read inside the Print dialog's iframe (see
+// openLabelDialog in views/stock/semiFinishedStock.ejs), which fetches this
+// route and writes the response in as srcdoc rather than navigating a frame
+// to it -- see routes/stock/facestockStock.js's own sendLabelError for why
+// (an expired session's redirect would otherwise just kill the frame).
+function sendLabelError(res, status, message) {
+  res.status(status).type("html").send(
+    `<!DOCTYPE html><meta charset="utf-8">`
+    + `<div style="font:600 13px/1.5 Arial,Helvetica,sans-serif;color:#b91c1c;`
+    + `display:flex;align-items:center;justify-content:center;height:100vh;`
+    + `margin:0;text-align:center;padding:0 12px;">${message}</div>`,
+  );
+}
+
+// The Deckle's printed sticker, as a page the browser prints -- see
+// routes/stock/facestockStock.js's own /label/:stockId, which this mirrors.
+// FACE/ADHESIVE/RELEASE come from the reel's own SachikoLabelStock recipe
+// (populated below), not left "-" like a raw-material reel's, since a
+// Deckle IS the finished label stock these boxes were designed for.
+router.get("/label/:stockId", requireAuth, async (req, res) => {
+  try {
+    const { stockId } = req.params;
+    if (!mongoose.isValidObjectId(stockId)) return sendLabelError(res, 404, "Deckle reel not found.");
+
+    const reel = await MaterialStock.findById(stockId)
+      .select("rollId reelMtrs")
+      .populate({
+        path: "material",
+        select: "productCode skuCode facestock.facestockType adhesive.adhesiveType releaseLiner.releaseLinerType",
+      })
+      .lean();
+    if (!reel) return sendLabelError(res, 404, "Deckle reel not found.");
+
+    const labelInput = {
+      rollId: reel.rollId,
+      reelMtrs: reel.reelMtrs,
+      prodCode: reel.material?.productCode || reel.material?.skuCode,
+      face: reel.material?.facestock?.facestockType,
+      adhesive: reel.material?.adhesive?.adhesiveType,
+      release: reel.material?.releaseLiner?.releaseLinerType,
+    };
+    // The QR's module count depends on the whole payload's length, so the
+    // box can only be sized once the payload exists -- hence building the
+    // payload here rather than letting the view ask for a data URL.
+    const qrPayload = buildQrPayload(labelInput);
+
+    res.render("stock/materialStockRollLabel.ejs", {
+      rollId: reel.rollId,
+      fields: buildLabelFields(labelInput),
+      // Named `mm`, not `layout` -- `layout` is ejs-mate's own helper and a
+      // local of that name breaks rendering.
+      mm: labelLayoutMm(rollLabelModuleCount(qrPayload)),
+      qrDataUrl: await rollLabelQrDataUrl(qrPayload),
+    });
+  } catch (err) {
+    console.error("SEMI FINISHED STOCK LABEL ERROR:", err);
+    sendLabelError(res, 500, "Failed to build the label.");
   }
 });
 

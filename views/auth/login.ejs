@@ -27,17 +27,6 @@
       </div>
     </div>
 
-    <div class="brand-switcher">
-      <button class="brand-option <%= self === 'fairdesk' ? 'active' : '' %>" data-brand="fairdesk" data-href="<%= urlFor.fairdesk %>" type="button">
-        <img src="/assets/fairfavicon.png" alt="Fairtech Systems" width="18" height="18" />
-        <span>Fairtech Systems</span>
-      </button>
-      <button class="brand-option <%= self === 'sachiko' ? 'active' : '' %>" data-brand="sachiko" data-href="<%= urlFor.sachiko %>" type="button">
-        <img src="/assets/sachikofavicon.png" alt="Sachiko Packaging" width="18" height="18" />
-        <span>Sachiko Packaging</span>
-      </button>
-    </div>
-
   <% if (typeof error !== 'undefined' && error.length) { %>
     <div class="login-alert">
       <i class="fa-solid fa-circle-exclamation"></i>
@@ -140,20 +129,6 @@
       toggle.innerHTML = isPassword
         ? '<i class="fa-regular fa-eye-slash" aria-hidden="true"></i>'
         : '<i class="fa-regular fa-eye" aria-hidden="true"></i>';
-    });
-  })();
-
-  (function () {
-    // The company toggle switches portals. The active company is served by
-    // THIS app; choosing the other company navigates to its own server, where
-    // it authenticates against its own database with a valid CSRF token.
-    const selfBrand = document.getElementById('loginShell').dataset.brand;
-    document.querySelectorAll('.brand-option').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        if (btn.dataset.brand === selfBrand) return; // already here
-        const target = btn.dataset.href;
-        if (target) window.location.href = target;
-      });
     });
   })();
 

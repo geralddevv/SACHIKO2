@@ -4551,16 +4551,22 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     // can't leave a broken reference on the order, and dropped (left
     // unallotted) if another order already claimed it.
     let allottedLayers = {};
+    const pickedForThisOrder = new Set();
     for (const key of required) {
       const meta = LAYER_META[key];
       const submitted = rawLayers?.[key];
-      const candidateIds = (Array.isArray(submitted) ? submitted : submitted ? [submitted] : [])
+      const candidateIds = [...new Set((Array.isArray(submitted) ? submitted : submitted ? [submitted] : [])
         .filter((sid) => mongoose.isValidObjectId(sid))
-        .filter((sid) => !claimedKeySet.has(`${meta.pool}|${sid}`));
+        .filter((sid) => !claimedKeySet.has(`${meta.pool}|${sid}`)))];
       if (!candidateIds.length) continue;
       const { Model } = POOL_MODELS[meta.pool];
       const existingIds = new Set((await Model.find({ _id: { $in: candidateIds } }).distinct("_id")).map(String));
       const validIds = candidateIds.filter((sid) => existingIds.has(String(sid)));
+      if (validIds.some((sid) => pickedForThisOrder.has(`${meta.pool}|${sid}`))) {
+        req.flash("notification", "The same raw-material reel or drum cannot be allotted to more than one layer.");
+        return res.redirect(`/sachiko/labels/production/assign/${id}`);
+      }
+      validIds.forEach((sid) => pickedForThisOrder.add(`${meta.pool}|${sid}`));
       if (validIds.length) allottedLayers[key] = { pool: meta.pool, stockIds: validIds.map(String) };
     }
 

@@ -88,6 +88,32 @@
       border: 1.5px solid #e2e8f0 !important;
       z-index: 99999 !important;
     }
+    /* Exactly the physical sticker, so the preview is honestly "actual
+       size". The dashed edge is an outline, not a border: a border would be
+       inside the iframe's box and steal millimetres from the label, pushing
+       every value off its pre-printed box. */
+    .label-preview-frame {
+      width: <%= labelSizeMm.width %>mm;
+      height: <%= labelSizeMm.height %>mm;
+      max-width: 100%;
+      margin: 0 auto;
+      background: #fff;
+      outline: 1px dashed #94a3b8;
+      box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18);
+    }
+    #labelFrame {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+    .label-preview-caption {
+      margin-top: 14px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+    }
   </style>
 
   <div class="indi-head">
@@ -152,6 +178,37 @@
   </div>
 </div>
 
+<!-- ============ PRINT ROLL LABEL DIALOG ============ -->
+<!-- The sticker itself is an iframe onto /label/:stockId (views/stock/
+     materialStockRollLabel.ejs), not markup repeated here. That page is the
+     print target, so previewing the very same document is what makes "what
+     you see is what prints" true rather than merely intended -- and printing
+     an iframe prints only its own document, at its own @page size, so the
+     surrounding app never reaches the paper. It detects being framed and
+     drops its standalone toolbar; the controls below drive it instead. -->
+<div class="logout-modal" id="labelDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="labelDialogTitle"
+    style="width: min(520px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="labelDialogTitle">Deckle Label</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeLabelDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div class="label-preview-frame">
+        <iframe id="labelFrame" title="Deckle label preview"></iframe>
+      </div>
+      <div class="label-preview-caption" id="labelLoading" style="display: none;">Loading label…</div>
+      <div class="label-preview-caption">Size — <%= labelSizeMm.width %> × <%= labelSizeMm.height %> mm</div>
+
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" id="labelRotateBtn" onclick="toggleLabelRotation()">Rotate 180°</button>
+        <button class="logout-btn" type="button" onclick="closeLabelDialog()">Close</button>
+        <button class="logout-btn primary" type="button" id="labelPrintBtn" onclick="printLabel()">Print</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
@@ -188,13 +245,20 @@
       { title: "Remarks", field: "remarks", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160, formatter: (cell) => cell.getValue() || "—" },
       {
         title: "Actions",
-        width: 110,
+        width: 150,
         hozAlign: "center",
         headerSort: false,
         formatter: function (cell) {
           const row = cell.getRow().getData();
           const wrap = document.createElement("div");
           wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const printBtn = document.createElement("button");
+          printBtn.className = "loc-btn";
+          printBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#475569;";
+          printBtn.title = "Print this reel's label";
+          printBtn.innerHTML = '<i class="fa-solid fa-print"></i>';
+          printBtn.addEventListener("click", () => openLabelDialog(row));
 
           const editBtn = document.createElement("button");
           editBtn.className = "loc-btn";
@@ -210,6 +274,7 @@
           deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
           deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.rollId));
 
+          wrap.appendChild(printBtn);
           wrap.appendChild(editBtn);
           wrap.appendChild(deleteBtn);
           return wrap;
@@ -257,7 +322,7 @@
     btn.style.opacity = loading ? "0.7" : "";
   }
 
-  ["editDialog", "deleteDialog"].forEach(id => {
+  ["editDialog", "deleteDialog", "labelDialog"].forEach(id => {
     document.getElementById(id).addEventListener("click", function (e) {
       if (e.target === this) closeModal(id);
     });
@@ -265,10 +330,117 @@
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    ["editDialog", "deleteDialog"].forEach(id => {
+    ["editDialog", "deleteDialog", "labelDialog"].forEach(id => {
       if (document.getElementById(id).classList.contains("show")) closeModal(id);
     });
   });
+
+  // ---- Print Roll Label dialog ----
+  // Nothing about the label is built here: the iframe loads
+  // /label/:stockId, which is the print target itself, and everything --
+  // values, positions, the fit-to-box pass, the rotation state -- lives in
+  // that page (views/stock/materialStockRollLabel.ejs) behind
+  // window.labelApi. This only opens it, forwards the two buttons, and
+  // tears it down.
+  function labelWindow() {
+    const frame = document.getElementById("labelFrame");
+    // try/catch, not just a null check: if the frame ends up on a document
+    // the browser treats as another origin -- which is what a blocked or
+    // errored frame becomes -- then merely READING .labelApi throws a
+    // SecurityError. Returning null instead lets the caller report "couldn't
+    // load" rather than the dialog dying with an uncaught exception.
+    try {
+      return frame.contentWindow && frame.contentWindow.labelApi ? frame.contentWindow : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function syncLabelRotateBtn() {
+    const win = labelWindow();
+    const btn = document.getElementById("labelRotateBtn");
+    const flipped = Boolean(win && win.labelApi.isFlipped());
+    btn.textContent = flipped ? "Rotated 180°" : "Rotate 180°";
+  }
+
+  // Both controls drive the framed document, so neither can do anything
+  // until it has loaded. Disabled rather than left clickable-but-inert:
+  // a button that silently does nothing reads as broken.
+  function setLabelControlsReady(ready) {
+    ["labelPrintBtn", "labelRotateBtn"].forEach((id) => {
+      const btn = document.getElementById(id);
+      btn.disabled = !ready;
+      btn.style.opacity = ready ? "" : "0.6";
+      btn.style.cursor = ready ? "" : "not-allowed";
+    });
+    document.getElementById("labelLoading").style.display = ready ? "none" : "block";
+  }
+
+  function labelMessage(text) {
+    document.getElementById("labelLoading").textContent = text;
+  }
+
+  // Fetched and written in as srcdoc rather than pointed at with frame.src --
+  // see openLabelDialog in views/stock/facestockStock.ejs for why (a frame
+  // navigated straight to the URL dies on an expired session's redirect,
+  // since the app sends X-Frame-Options: DENY on every page including the
+  // login screen it would land on).
+  async function openLabelDialog(row) {
+    document.getElementById("labelDialogTitle").textContent = `Deckle Label — ${row.rollId || ""}`;
+    setLabelControlsReady(false);
+    labelMessage("Loading label…");
+    const frame = document.getElementById("labelFrame");
+    frame.removeAttribute("srcdoc");
+    openModal("labelDialog");
+
+    let res;
+    try {
+      res = await fetch(`/sachiko/semifinishedstock/label/${row._id}`, { credentials: "same-origin" });
+    } catch (e) {
+      return labelMessage("Couldn't reach the server to build this label.");
+    }
+    // A redirect here is the app bouncing us to the login page -- the
+    // request went out without a valid session.
+    if (res.redirected || !res.ok) {
+      if (res.redirected) {
+        return labelMessage("Your session has ended. Reload this page and sign in again to print.");
+      }
+      // The route answers failures as a small HTML document (it normally
+      // renders into this frame), so strip the markup to get the sentence.
+      const detail = (await res.text()).replace(/<[^>]*>/g, " ").trim();
+      return labelMessage(`Couldn't load the label (${res.status}). ${detail}`);
+    }
+
+    frame.onload = () => {
+      if (!labelWindow()) return labelMessage("The label loaded but couldn't be read.");
+      setLabelControlsReady(true);
+      syncLabelRotateBtn();
+    };
+    // Always re-fetched rather than reused: Mfg Date is generated per
+    // request, so a stale document would print the wrong reel.
+    frame.srcdoc = await res.text();
+  }
+
+  function closeLabelDialog() {
+    const frame = document.getElementById("labelFrame");
+    frame.onload = null;
+    // Dropped so the next open can't flash the previous reel's label.
+    frame.removeAttribute("srcdoc");
+    closeModal("labelDialog");
+  }
+
+  function printLabel() {
+    const win = labelWindow();
+    if (!win) return; // controls are disabled until the frame is ready
+    win.labelApi.print();
+  }
+
+  function toggleLabelRotation() {
+    const win = labelWindow();
+    if (!win) return;
+    win.labelApi.toggleFlip();
+    syncLabelRotateBtn();
+  }
 
   // ---- EDIT ----
   let editId = null;

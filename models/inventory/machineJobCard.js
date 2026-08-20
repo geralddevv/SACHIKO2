@@ -59,21 +59,43 @@ const productionLogRowSchema = new mongoose.Schema(
   { _id: false },
 );
 
-// How much of each reserved Adhesive drum this job actually used, entered by
-// the operator in the "Adhesive Used" dialog when Save Production Entry is
-// clicked (views/inventory/masters/jobCardForm.ejs) -- raw adhesive is only
-// ever *reserved* at Assign Production (routes/sachiko/labelStockProduction.js's
-// applyAdhesiveBindings), never automatically deducted the way facestock/
-// release liner are (consumeAllottedRollMeters, off the scanned Deckle roll
-// IDs) -- there's no length reading to scan for a drum, only a weight the
-// operator has to report. `stockId` is the live traceability link
-// (AdhesiveStock._id); rollId/kgUsed are a snapshot so the printed card stays
-// stable if the drum is edited or emptied later.
+// How much of each reserved Facestock/Adhesive/Release Liner reel this job
+// actually used, entered by the operator in the "Material Used" dialog when
+// Save Production Entry is clicked (views/inventory/masters/jobCardForm.ejs)
+// -- for an order allotted through the newer layerAllotments picker
+// (PendingProduction.allottedLayers, set by Assign Production's raw-material
+// reel checkboxes), none of these three pools has a scanned Deckle roll
+// length to derive consumption from: consumeAllottedRollMeters (routes/
+// system/machine.js) only covers the older allottedRollIds flow, and
+// Adhesive never had a length reading to scan to begin with (a drum has only
+// a weight). The operator has to report how much of each reel the job
+// actually used, for all three pools alike. `stockId` is the live
+// traceability link (Facestock/Adhesive/ReleaseLinerStock._id); rollId/
+// mtrsUsed|kgUsed are a snapshot so the printed card stays stable if the
+// reel is edited or emptied later.
+const facestockUsageRowSchema = new mongoose.Schema(
+  {
+    stockId: { type: mongoose.Schema.Types.ObjectId, ref: "FacestockStock" },
+    rollId: { type: String, trim: true },
+    mtrsUsed: { type: Number },
+  },
+  { _id: false },
+);
+
 const adhesiveUsageRowSchema = new mongoose.Schema(
   {
     stockId: { type: mongoose.Schema.Types.ObjectId, ref: "AdhesiveStock" },
     rollId: { type: String, trim: true },
     kgUsed: { type: Number },
+  },
+  { _id: false },
+);
+
+const releaseUsageRowSchema = new mongoose.Schema(
+  {
+    stockId: { type: mongoose.Schema.Types.ObjectId, ref: "ReleaseLinerStock" },
+    rollId: { type: String, trim: true },
+    mtrsUsed: { type: Number },
   },
   { _id: false },
 );
@@ -124,7 +146,9 @@ const machineJobCardSchema = new mongoose.Schema(
 
     jobSetting: [rollRowSchema],
     productionLog: [productionLogRowSchema],
+    facestockUsage: [facestockUsageRowSchema],
     adhesiveUsage: [adhesiveUsageRowSchema],
+    releaseUsage: [releaseUsageRowSchema],
 
     totalMeter: { type: String, trim: true },
     sqMtr: { type: String, trim: true },

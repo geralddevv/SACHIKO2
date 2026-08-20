@@ -1,0 +1,343 @@
+<%
+  /* Deliberately NO `layout('/layout/boilerplate')` call -- ejs-mate renders
+     a view standalone when one is absent, which is what this page needs: the
+     boilerplate's nav, Bootstrap and common.css would all land inside the
+     printed page. This is a print target, not an app screen.
+
+     Note the layout data is named `mm`, not `layout` -- `layout` is
+     ejs-mate's own helper function and shadowing it breaks rendering. */
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Label — <%= rollId %></title>
+  <script>
+    /* This page serves two callers: the Print dialog on the stock page,
+       which embeds it in an iframe and drives it through window.labelApi
+       below, and direct navigation to the URL, which gets its own toolbar
+       and prints itself. Embedded, the page is nothing but the sticker.
+
+       Set here in <head>, before the body is painted, so the embedded rules
+       are already in force on first paint rather than flashing the
+       standalone layout first. */
+    if (window.self !== window.top) document.documentElement.classList.add("embedded");
+  </script>
+  <style>
+    /* The sheet IS the label: one 101.5 x 75.1 mm sticker, zero margins, so
+       Chrome maps the page 1:1 onto the pre-printed stock. Without this the
+       browser defaults to A4 and scales everything down. */
+    @page {
+      size: <%= mm.labelWidth %>mm <%= mm.labelHeight %>mm;
+      margin: 0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #eef2f7;
+      font-family: Arial, Helvetica, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      padding: 24px 16px 40px;
+    }
+
+    /* Exact physical size. Every child is positioned in mm from the top-left
+       by utils/materialRollLabel.js's labelLayoutMm(), which converts the
+       same dot coordinates the .prn uses -- so a value lands in the same
+       pre-printed box either way. Nothing here should be nudged by eye; fix
+       LABEL_SLOTS in that file instead. */
+    .label {
+      position: relative;
+      width: <%= mm.labelWidth %>mm;
+      height: <%= mm.labelHeight %>mm;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    /* Screen-only sticker outline, so the operator can see the label's real
+       edges against the page. Must never print -- it isn't on the blank. */
+    .label-frame {
+      box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18);
+      outline: 1px dashed #94a3b8;
+    }
+
+    .label-inner {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Set when the pre-printed stock feeds the other way round -- see the
+       Rotate 180 control below. */
+    .label-inner.flipped {
+      transform: rotate(180deg);
+    }
+
+    .slot {
+      position: absolute;
+      white-space: nowrap;
+      line-height: 1;
+      color: #000;
+      /* inline-block + a real max-width is what makes overflow measurable:
+         the fit-to-box pass below compares scrollWidth against clientWidth,
+         and neither is meaningful on a plain inline span. */
+      display: inline-block;
+      overflow: hidden;
+      /* The thermal printer's own scalable font is a plain proportional
+         sans; the pt sizes come straight from the TSPL command, which sizes
+         font "0" in points -- the same unit CSS uses, so they pass through
+         unconverted. */
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .slot img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      /* Keep the modules crisp instead of blurring them into each other at
+         print resolution -- a smoothed QR scans worse. */
+      image-rendering: pixelated;
+    }
+
+    /* ---- screen furniture (never printed) ---- */
+    .toolbar {
+      width: min(760px, 100%);
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+      padding: 16px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    .toolbar h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+      color: #0f172a;
+      flex: 1 1 auto;
+    }
+    .toolbar h1 small {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+      margin-top: 3px;
+    }
+    .tb-btn {
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #fff;
+      background: #475569;
+    }
+    .tb-btn:hover { background: #334155; }
+    .tb-btn.primary { background: #044a78; }
+    .tb-btn.primary:hover { background: #03365a; }
+    .tb-btn.ghost {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    .tb-btn.ghost:hover { background: #cbd5e1; }
+    .tb-btn.on {
+      background: #15803d;
+    }
+    .hint {
+      width: min(760px, 100%);
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #78350f;
+    }
+    .hint b { color: #92400e; }
+    .caption {
+      font-size: 12px;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    /* ---- embedded in the stock page's Print dialog ---- */
+    /* The iframe is sized to the label exactly, so the document collapses to
+       just the sticker: no page padding, no backdrop, and none of the screen
+       furniture, which the dialog supplies instead. The dashed edge comes
+       from the dialog too -- drawn around the iframe rather than inside it,
+       where a border would eat into the label's own 101.5 mm and shift every
+       value out of its pre-printed box. */
+    .embedded body {
+      display: block;
+      width: <%= mm.labelWidth %>mm;
+      height: <%= mm.labelHeight %>mm;
+      padding: 0;
+      background: #fff;
+      overflow: hidden;
+    }
+    .embedded .screen-only { display: none !important; }
+    .embedded .label-frame {
+      box-shadow: none;
+      outline: none;
+    }
+
+    @media print {
+      /* Collapse the page down to nothing but the sticker. */
+      body {
+        background: #fff;
+        padding: 0;
+        gap: 0;
+        display: block;
+        width: <%= mm.labelWidth %>mm;
+        height: <%= mm.labelHeight %>mm;
+      }
+      .screen-only { display: none !important; }
+      .label-frame {
+        box-shadow: none;
+        outline: none;
+      }
+      /* Chrome drops backgrounds and lightens greys by default; the QR must
+         come out solid black or it will not scan. */
+      * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="toolbar screen-only">
+    <h1>
+      Roll Label — <%= rollId %>
+      <small>Pick the label printer in the print dialog. Set <b>Scale: 100%</b> (or Default) and <b>Margins: None</b>.</small>
+    </h1>
+    <button type="button" class="tb-btn primary" id="printBtn">Print</button>
+    <button type="button" class="tb-btn" id="rotateBtn">Rotate 180°</button>
+    <button type="button" class="tb-btn ghost" id="closeBtn">Close</button>
+  </div>
+
+  <div class="label label-frame">
+    <div class="label-inner" id="labelInner">
+      <% for (const [key, slot] of Object.entries(mm.slots)) { %>
+        <span class="slot" data-fit
+              style="left: <%= slot.left %>mm; top: <%= slot.top %>mm; max-width: <%= slot.maxWidth %>mm; font-size: <%= slot.pt %>pt;"><%= fields[key] %></span>
+      <% } %>
+      <span class="slot" style="left: <%= mm.qr.left %>mm; top: <%= mm.qr.top %>mm; width: <%= mm.qr.size %>mm; height: <%= mm.qr.size %>mm;">
+        <img src="<%= qrDataUrl %>" alt="Roll QR" />
+      </span>
+    </div>
+  </div>
+
+  <span class="caption screen-only">Actual size — <%= mm.labelWidth %> × <%= mm.labelHeight %> mm</span>
+
+  <div class="hint screen-only">
+    The dashed outline and this text are on screen only and never print. Only the values print —
+    the boxes and captions are already on the blank label.
+    <br />
+    If the first test comes out upside down relative to the pre-printed boxes, hit
+    <b>Rotate 180°</b> and print again. That choice is remembered on this PC for every label from
+    then on, so it only needs setting once.
+  </div>
+
+  <script>
+    // Whether this PC's label stock feeds the other way round. The .prn
+    // rotates its output 180 because of the printer's own feed direction;
+    // going through the Windows driver instead, the driver decides that, and
+    // which way it lands depends on how the roll is loaded. Rather than
+    // guess, this is a one-time per-machine setting -- hence localStorage,
+    // not a server-side field: it is a property of the printer in front of
+    // the operator, not of the reel being printed. Its own key (distinct
+    // from Facestock/Adhesive's) so the remembered orientation doesn't
+    // cross-apply between pools.
+    var FLIP_KEY = "releaseLinerLabelFlip180";
+    var embedded = document.documentElement.classList.contains("embedded");
+    var inner = document.getElementById("labelInner");
+    var rotateBtn = document.getElementById("rotateBtn");
+
+    function isFlipped() {
+      return inner.classList.contains("flipped");
+    }
+
+    function applyFlip(flipped) {
+      inner.classList.toggle("flipped", flipped);
+      // The toolbar only exists when this page stands alone; embedded, the
+      // dialog owns the button and reads the state back through labelApi.
+      if (rotateBtn) {
+        rotateBtn.classList.toggle("on", flipped);
+        rotateBtn.textContent = flipped ? "Rotated 180°" : "Rotate 180°";
+      }
+    }
+
+    function toggleFlip() {
+      var flipped = !isFlipped();
+      localStorage.setItem(FLIP_KEY, flipped ? "1" : "0");
+      applyFlip(flipped);
+      return flipped;
+    }
+
+    applyFlip(localStorage.getItem(FLIP_KEY) === "1");
+
+    if (rotateBtn) rotateBtn.addEventListener("click", toggleFlip);
+    if (!embedded) {
+      document.getElementById("printBtn").addEventListener("click", function () {
+        window.print();
+      });
+      document.getElementById("closeBtn").addEventListener("click", function () {
+        window.close();
+      });
+    }
+
+    // What the stock page's Print dialog drives this label through. Same
+    // origin, so the parent can call straight in -- no postMessage handshake
+    // needed. print() lives here rather than the parent calling
+    // frame.contentWindow.print() directly so that the fit pass is
+    // guaranteed to have run against THIS document first.
+    window.labelApi = {
+      print: function () {
+        window.focus();
+        window.print();
+      },
+      toggleFlip: toggleFlip,
+      isFlipped: isFlipped,
+    };
+
+    // Shrink any value too long for its pre-printed box until it fits.
+    //
+    // The boxes were sized for the sample label's values and ours are not
+    // the same length -- measured rather than estimated from character
+    // counts: the browser knows the real advance widths, and this has to be
+    // right for vendor names too, which are free text and can be any length.
+    //
+    // Only ever shrinks. A value that already fits keeps the exact size the
+    // .prn would print it at, so the common case matches the thermal label
+    // rather than being re-fitted to something slightly different.
+    var MIN_PT = 6;
+    function fitToBox(el) {
+      var pt = parseFloat(el.style.fontSize);
+      while (el.scrollWidth > el.clientWidth && pt > MIN_PT) {
+        pt -= 0.5;
+        el.style.fontSize = pt + "pt";
+      }
+    }
+
+    window.addEventListener("load", function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".slot[data-fit]"), fitToBox);
+      // Fitting first is load-bearing, not just tidy: print() blocks, so
+      // anything resized after it would only affect the NEXT print.
+      //
+      // Embedded, the dialog decides when to print -- firing the dialog
+      // automatically would ambush someone who only opened it to check the
+      // label reads right.
+      if (!embedded) window.print();
+    });
+  </script>
+</body>
+</html>
