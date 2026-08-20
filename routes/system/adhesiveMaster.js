@@ -28,7 +28,6 @@ function buildAdhesiveSignature(payload) {
       canonStr(payload.type),
       canonStr(payload.make),
       canonStr(payload.vendorSkuCode),
-      canonStr(payload.shelfLife),
       String(Number(payload.viscosity ?? "")),
       String(Number(payload.cohesion ?? "")),
       String(Number(payload.shear ?? "")),
@@ -41,13 +40,12 @@ const DUPLICATE_ADHESIVE_MESSAGE = "This adhesive already exists (every field ma
 
 // Every field AdhesiveStock mirrors from its master (see adhesiveSpecKey,
 // routes/stock/adhesiveStock.js -- stock is grouped under a master by
-// matching all of these exactly, including Shelf Life, since two masters can
-// legitimately differ only by it). Editing a master must carry the same edit
+// matching all of these exactly). Editing a master must carry the same edit
 // onto any drum still recorded under the pre-edit spec, or that drum quietly
 // stops matching any master row and vanishes from the Stock/Allotted/
 // Available columns (and everywhere else Stock is grouped by master) even
 // though the physical drum is still sitting there.
-const STOCK_MIRROR_FIELDS = ["vendorId", "vendorName", "type", "make", "vendorSkuCode", "shelfLife", "viscosity", "cohesion", "shear", "density"];
+const STOCK_MIRROR_FIELDS = ["vendorId", "vendorName", "type", "make", "vendorSkuCode", "viscosity", "cohesion", "shear", "density"];
 
 // Builds the query that finds every AdhesiveStock drum still carrying the
 // master's PRE-edit identity, and the $set/$unset that brings them onto the
@@ -120,7 +118,6 @@ async function buildPayload(body) {
     type: String(body.type || "").trim(),
     make: String(body.make || "").trim(),
     vendorSkuCode: String(body.vendorSkuCode || "").trim(),
-    shelfLife: String(body.shelfLife || "").trim(),
     viscosity: numOrUndef(body.viscosity),
     cohesion: numOrUndef(body.cohesion),
     shear: numOrUndef(body.shear),
@@ -140,7 +137,6 @@ function validatePayload(payload) {
   if (!payload.vendorId || !payload.vendorName) return "Vendor Name is required.";
   if (!payload.type) return "Type is required.";
   if (!payload.vendorSkuCode) return "Vendor SKU Code is required.";
-  if (!payload.shelfLife) return "Shelf Life is required.";
   return null;
 }
 

@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 // One doc = one physical reel of raw Adhesive material. Generic raw-material
 // inventory (see facestockStock.js for the fuller comment) -- its Type/Vendor/
-// Make/Vendor SKU Code/Shelf Life/Viscosity/Cohesion/Shear/Density are
+// Make/Vendor SKU Code/Viscosity/Cohesion/Shear/Density are
 // entered directly at inward, smart-filtered against Adhesive Master (see
 // routes/stock/adhesiveStock.js's /filter-specs) so every field here mirrors
 // one on models/inventory/adhesiveMaster.js. GSM is the one exception --
@@ -35,10 +35,6 @@ const adhesiveStockSchema = new mongoose.Schema(
     // The vendor's own code for this spec -- purely a cross-reference
     // against the vendor's paperwork, same as Adhesive Master's own field.
     vendorSkuCode: {
-      type: String,
-      trim: true,
-    },
-    shelfLife: {
       type: String,
       trim: true,
     },

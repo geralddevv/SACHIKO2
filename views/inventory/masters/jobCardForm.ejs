@@ -272,6 +272,60 @@
   .jc-material-used-amount:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
   .jc-material-used-amount.jc-material-used-over { border-color: #dc2626; }
   .jc-material-used-error { color: #dc2626; font-size: 12px; margin-top: 10px; min-height: 16px; }
+  .jc-material-confirm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 9px 18px;
+    border: 0;
+    border-radius: 8px;
+    background: #044a78 !important;
+    box-shadow: 0 3px 9px rgba(4, 74, 120, 0.28);
+    color: #fff;
+    font-size: 13.5px;
+    font-weight: 700;
+  }
+  .jc-material-confirm:focus-visible {
+    outline: 3px solid rgba(4, 74, 120, 0.32);
+    outline-offset: 2px;
+  }
+
+  /* Final production action: make the only stock-affecting submit clearly
+     visible and comfortably tappable without changing the shared .btn-grp
+     treatment used elsewhere in the app. */
+  .jc-save-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 14px;
+    border: 0;
+    background: #eff8ff;
+    box-shadow: 0 4px 16px rgba(4, 74, 120, 0.13);
+  }
+  .jc-save-wrap .jc-save-action {
+    width: min(100%, 360px);
+    min-height: 48px;
+    padding: 12px 22px;
+    border: 0;
+    border-radius: 9px;
+    background: #044a78;
+    box-shadow: 0 4px 10px rgba(4, 74, 120, 0.28);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+  .jc-save-wrap .jc-save-action:focus-visible {
+    outline: 3px solid rgba(8, 112, 174, 0.35);
+    outline-offset: 3px;
+  }
+  .jc-save-wrap .jc-save-action:disabled {
+    cursor: wait;
+    opacity: 0.72;
+    transform: none;
+    box-shadow: none;
+  }
 
   .scan-video-wrap {
     position: relative; width: 100%; aspect-ratio: 4 / 3;
@@ -676,8 +730,8 @@
       </table>
     </div>
 
-    <div class="btn-grp span-full jc-hidden" id="saveBtnWrap">
-      <button type="submit">Save Production Entry</button>
+    <div class="btn-grp jc-save-wrap span-full jc-hidden" id="saveBtnWrap">
+      <button type="submit" class="jc-save-action"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Production Entry</button>
     </div>
   </form>
 </div>
@@ -741,7 +795,7 @@
       <div class="jc-material-used-error" id="materialUsedError"></div>
       <div class="dialog-actions">
         <button type="button" class="btn-cancel" onclick="closeMaterialUsedDialog()">Cancel</button>
-        <button type="button" class="btn-primary" id="materialUsedConfirmBtn" onclick="submitMaterialUsage()">Confirm & Save</button>
+        <button type="button" class="btn-primary jc-material-confirm" id="materialUsedConfirmBtn" onclick="submitMaterialUsage()"><i class="fa-solid fa-check" aria-hidden="true"></i> Confirm &amp; Save</button>
       </div>
     </div>
   </div>

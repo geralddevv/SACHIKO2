@@ -136,7 +136,7 @@ router.get("/label-stock/view", async (req, res) => {
     SachikoLabelStock.find().sort({ skuCode: 1 }).lean(),
     previewNextSkuCode(),
     FacestockMaster.find().select("skuId family type make vendorId vendorName vendorSkuCode size gsm micron").lean(),
-    AdhesiveMaster.find().select("skuId type make vendorId vendorName vendorSkuCode shelfLife viscosity cohesion shear density").lean(),
+    AdhesiveMaster.find().select("skuId type make vendorId vendorName vendorSkuCode viscosity cohesion shear density").lean(),
     ReleaseMaster.find().select("skuId type make sensing vendorId vendorName vendorSkuCode color size gsm").lean(),
   ]);
   res.render("sachiko/labelStockView.ejs", {
@@ -206,7 +206,6 @@ async function buildLabelStockPayload(body) {
       adhesiveVendorId: adhesiveVendorId || undefined,
       adhesiveVendorName: await resolveVendorName(adhesiveVendorId),
       adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode),
-      adhesiveShelfLife: trim(body.adhesiveShelfLife),
       adhesiveViscosity: numOrUndef(body.adhesiveViscosity),
       adhesiveCohesion: numOrUndef(body.adhesiveCohesion),
       adhesiveShear: numOrUndef(body.adhesiveShear),
@@ -250,7 +249,6 @@ async function buildLabelStockPayload(body) {
       adhesiveVendorId: adhesiveVendorId2 || undefined,
       adhesiveVendorName: await resolveVendorName(adhesiveVendorId2),
       adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode2),
-      adhesiveShelfLife: trim(body.adhesiveShelfLife2),
       adhesiveViscosity: numOrUndef(body.adhesiveViscosity2),
       adhesiveCohesion: numOrUndef(body.adhesiveCohesion2),
       adhesiveShear: numOrUndef(body.adhesiveShear2),
@@ -266,7 +264,6 @@ async function buildLabelStockPayload(body) {
       adhesiveVendorId: adhesiveVendorId2 || undefined,
       adhesiveVendorName: await resolveVendorName(adhesiveVendorId2),
       adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode2),
-      adhesiveShelfLife: trim(body.adhesiveShelfLife2),
       adhesiveViscosity: numOrUndef(body.adhesiveViscosity2),
       adhesiveCohesion: numOrUndef(body.adhesiveCohesion2),
       adhesiveShear: numOrUndef(body.adhesiveShear2),

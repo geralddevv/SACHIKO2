@@ -13,12 +13,8 @@ const router = express.Router();
 // WHICH adhesive it is.
 //
 // Deliberately narrower than routes/stock/adhesiveStock.js's own
-// adhesiveSpecKey(), which also hashes shelf life/viscosity/cohesion/shear/
-// density. Those are measured per inward batch, not properties of the spec --
-// live data has drums recorded at shelf life 60 against a master that says 30,
-// with only one master of that vendor/type/make/code in existence for them to
-// have come from. Including them here would drop such drums out of a binding
-// that plainly covers them.
+// stock-page grouping. Viscosity, cohesion, shear and density are measured
+// per inward batch and do not decide whether a drum belongs to a binding.
 function adhesiveIdentityKey(o) {
   const s = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
   return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode)].join("||");
@@ -136,7 +132,7 @@ router.get("/raw-stock", async (req, res) => {
 
     // POOL_MATCH_FIELDS (utils/labelStockProduction.js) no longer narrows on
     // every reel-side field a master carries -- Vendor/Size/GSM (Facestock),
-    // Make/Vendor SKU Code/Shelf Life/Viscosity/Cohesion/Shear/Density
+    // Make/Vendor SKU Code/Viscosity/Cohesion/Shear/Density
     // (Adhesive, matched on Type alone), and Size/GSM (Release) can now
     // differ between reels that still count as "the same" material for this
     // layer. Send them along so assignProduction.ejs's roll picker can show
@@ -157,7 +153,6 @@ router.get("/raw-stock", async (req, res) => {
         micron: r.micron,
         color: r.color,
         sensing: r.sensing,
-        shelfLife: r.shelfLife,
         viscosity: r.viscosity,
         cohesion: r.cohesion,
         shear: r.shear,

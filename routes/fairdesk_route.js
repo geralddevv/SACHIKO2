@@ -3084,7 +3084,7 @@ router.get("/purchase/pending", async (req, res) => {
         path: "itemId",
         select:
           "tapeProductId tapePaperCode tapeGsm ttrProductId ttrType ttrWidth ttrMtrs" +
-          " skuId family type size gsm micron make vendorSkuCode shelfLife color msq",
+          " skuId family type size gsm micron make vendorSkuCode color msq",
       })
       .sort({ createdAt: -1 })
       .lean();
@@ -3211,7 +3211,6 @@ router.post("/purchase/receive", async (req, res) => {
         vendorName: item.vendorName,
         make: item.make,
         vendorSkuCode: item.vendorSkuCode,
-        shelfLife: item.shelfLife,
         viscosity: item.viscosity,
         cohesion: item.cohesion,
         shear: item.shear,
@@ -4608,6 +4607,7 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
             labelStock,
             location,
             reelMtrs: rawProduceMtrs,
+            size: pendingProduction.paperSize,
             layers: rawLayers,
             createdBy: req.user?.username || "SYSTEM",
             // Stamps the reel as this order's own work, so sending the order

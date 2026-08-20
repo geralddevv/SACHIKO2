@@ -87,7 +87,6 @@ router.get("/form/label-stock-adhesive-binding", async (req, res) => {
           type: 1,
           make: 1,
           vendorSkuCode: 1,
-          shelfLife: 1,
           viscosity: 1,
           cohesion: 1,
           shear: 1,

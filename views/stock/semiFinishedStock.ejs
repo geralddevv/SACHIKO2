@@ -239,8 +239,13 @@
       { title: "Deckle ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 170 },
       { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
       { title: "Family", field: "family", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
+      { title: "Size", field: "size", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110, formatter: (cell) => cell.getValue() || "—" },
       { title: "Mtrs", field: "reelMtrs", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100 },
       { title: "Rate", field: "rate", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Value", field: "value", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 115, hozAlign: "right", formatter: (cell) => {
+        const value = cell.getValue();
+        return value == null ? "—" : `₹${Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      } },
       { title: "Location", field: "location", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130 },
       { title: "Remarks", field: "remarks", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160, formatter: (cell) => cell.getValue() || "—" },
       {

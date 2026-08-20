@@ -10,7 +10,7 @@ import { buildMaterialSignature } from "../utils/labelStockVariant.js";
 // Backfill for SachikoLabelStock.materialSignature -- added so another
 // module can key off "same physical material stack" (see buildMaterialSignature
 // in utils/labelStockVariant.js for the exact field list: the six facestock/
-// adhesive/releaseLiner layers, minus Size/Shelf Life, no product-level
+// adhesive/releaseLiner layers, minus Size, no product-level
 // fields). Every row created before this field existed has no
 // materialSignature -- this fills it in from the row's own current data.
 // Re-run any time buildMaterialSignature's field list changes, same as

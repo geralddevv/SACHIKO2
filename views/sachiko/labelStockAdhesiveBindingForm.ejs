@@ -110,13 +110,13 @@
   }
   .layer-card__reset-btn:hover { background: rgba(15,23,42,0.12); }
   /* 20-col grid so row 1 (Type/Make/Vendor Name/Vendor SKU Code, 4 fields
-     @ span 5) and row 2 (Shelf Life/Viscosity/Cohesion/Shear/Density, 5
-     fields @ span 4) each fill the full width on their own row -- a plain
+     @ span 5) and row 2 (Viscosity/Cohesion/Shear/Density, 4 fields
+     @ span 5) each fill the full width on their own row -- a plain
      repeat() wouldn't let a 4-field row and a 5-field row both span edge to
      edge. */
   .layer-card__fields { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 14px; }
   .layer-card__fields .layer-field--row1 { grid-column: span 5; }
-  .layer-card__fields .layer-field--row2 { grid-column: span 4; }
+  .layer-card__fields .layer-field--row2 { grid-column: span 5; }
   .layer-field label { display: block; font-size: 12px; font-weight: 700; color: #334155; text-transform: uppercase; margin-bottom: 4px; }
   @media (max-width: 640px) { .layer-card__fields { grid-template-columns: 1fr !important; } }
 
@@ -202,7 +202,6 @@
           <div class="layer-field layer-field--row1"><label for="adMake">Make</label><select id="adMake"><option value="" disabled selected hidden>Search</option></select></div>
           <div class="layer-field layer-field--row1"><label for="adVendorId">Vendor Name</label><select id="adVendorId"><option value="" disabled selected hidden>Search</option></select></div>
           <div class="layer-field layer-field--row1"><label for="adVendorSkuCode">Vendor SKU Code</label><select id="adVendorSkuCode"><option value="" disabled selected hidden>Search</option></select></div>
-          <div class="layer-field layer-field--row2"><label for="adShelfLife">Shelf Life</label><select id="adShelfLife"><option value="" disabled selected hidden>Search</option></select></div>
           <div class="layer-field layer-field--row2"><label for="adViscosity">Viscosity</label><select id="adViscosity"><option value="" disabled selected hidden>Search</option></select></div>
           <div class="layer-field layer-field--row2"><label for="adCohesion">Cohesion</label><select id="adCohesion"><option value="" disabled selected hidden>Search</option></select></div>
           <div class="layer-field layer-field--row2"><label for="adShear">Shear</label><select id="adShear"><option value="" disabled selected hidden>Search</option></select></div>
@@ -295,7 +294,6 @@
     type: a.type,
     make: a.make,
     vendorSkuCode: a.vendorSkuCode,
-    shelfLife: a.shelfLife,
     viscosity: a.viscosity,
     cohesion: a.cohesion,
     shear: a.shear,
@@ -360,14 +358,9 @@
      order, auto-fill on narrowing to one option" engine as the layer cards on
      /sachiko/label-stock/view's create dialog (fsRebuildGroup there), just
      against AdhesiveMaster rows directly rather than a saved recipe layer, so
-     it can hand back that row's own _id/skuId once resolved. Shelf Life is
-     included here (label-stock/view's own AD_ORDER leaves it out, since that
-     page only needs to confirm "a matching recipe exists") because
-     buildAdhesiveSignature (routes/system/adhesiveMaster.js) hashes Shelf
-     Life along with every field below -- narrowing on all of them together is
-     what guarantees this cascade always lands on at most one real master. ── */
+     it can hand back that row's own _id/skuId once resolved. ── */
   const AD_NONE = "__AD_NONE__";
-  const AD_ORDER = ["type", "make", "vendorId", "vendorSkuCode", "shelfLife", "viscosity", "cohesion", "shear", "density"];
+  const AD_ORDER = ["type", "make", "vendorId", "vendorSkuCode", "viscosity", "cohesion", "shear", "density"];
 
   function adFieldOptions(pool, field) {
     const seen = new Map();
@@ -431,7 +424,6 @@
     make: document.getElementById("adMake"),
     vendorId: document.getElementById("adVendorId"),
     vendorSkuCode: document.getElementById("adVendorSkuCode"),
-    shelfLife: document.getElementById("adShelfLife"),
     viscosity: document.getElementById("adViscosity"),
     cohesion: document.getElementById("adCohesion"),
     shear: document.getElementById("adShear"),
@@ -619,7 +611,7 @@
       rebuildAdhesiveCascade({
         desired: {
           type: master.type, make: master.make, vendorId: master.vendorId,
-          vendorSkuCode: master.vendorSkuCode, shelfLife: master.shelfLife,
+          vendorSkuCode: master.vendorSkuCode,
           viscosity: master.viscosity, cohesion: master.cohesion,
           shear: master.shear, density: master.density,
         },

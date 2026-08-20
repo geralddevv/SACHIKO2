@@ -607,7 +607,7 @@
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
-<script id="adhesive-specs-data" type="application/json"><%- safeJson({ types, vendors, makes, vendorSkuCodes, shelfLifes, viscosities, cohesions, shears, densities }) %></script>
+<script id="adhesive-specs-data" type="application/json"><%- safeJson({ types, vendors, makes, vendorSkuCodes, viscosities, cohesions, shears, densities }) %></script>
 <script id="adhesive-masters-data" type="application/json"><%- safeJson(masters) %></script>
 <script>
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
@@ -636,25 +636,24 @@
   }
 
   let addTypeChoices = null, addVendorChoices = null, addMakeChoices = null, addVendorSkuCodeChoices = null;
-  let addShelfLifeChoices = null, addViscosityChoices = null, addCohesionChoices = null, addShearChoices = null, addDensityChoices = null;
+  let addViscosityChoices = null, addCohesionChoices = null, addShearChoices = null, addDensityChoices = null;
   let addLocationChoices = null;
 
   // ---- Add (inward) dialog: smart filter for Type/Vendor/Make/Vendor SKU
-  // Code/Shelf Life/Viscosity/Cohesion/Shear/Density ---- Narrows each
+  // Code/Viscosity/Cohesion/Shear/Density ---- Narrows each
   // field's options to combinations that actually exist in Adhesive Master
   // as the others are picked -- same pattern as Tape Stock inward
   // (routes/stock/tapeStock.js) and Facestock Stock inward
   // (routes/stock/facestockStock.js).
   const addSpecFields = [
     "addTypeSelect", "addVendorSelect", "addMakeSelect", "addVendorSkuCodeSelect",
-    "addShelfLifeSelect", "addViscositySelect", "addCohesionSelect", "addShearSelect", "addDensitySelect",
+    "addViscositySelect", "addCohesionSelect", "addShearSelect", "addDensitySelect",
   ];
   const addSpecFieldToKey = {
     addTypeSelect: "type",
     addVendorSelect: "vendorId",
     addMakeSelect: "make",
     addVendorSkuCodeSelect: "vendorSkuCode",
-    addShelfLifeSelect: "shelfLife",
     addViscositySelect: "viscosity",
     addCohesionSelect: "cohesion",
     addShearSelect: "shear",
@@ -665,7 +664,6 @@
     addVendorSelect: "vendors",
     addMakeSelect: "makes",
     addVendorSkuCodeSelect: "vendorSkuCodes",
-    addShelfLifeSelect: "shelfLifes",
     addViscositySelect: "viscosities",
     addCohesionSelect: "cohesions",
     addShearSelect: "shears",
@@ -689,7 +687,6 @@
     addVendorSelect: { label: "— None —", disabled: false },
     addMakeSelect: { label: "— None —", disabled: false },
     addVendorSkuCodeSelect: { label: "— None —", disabled: false },
-    addShelfLifeSelect: { label: "— None —", disabled: false },
     addViscositySelect: { label: "— None —", disabled: false },
     addCohesionSelect: { label: "— None —", disabled: false },
     addShearSelect: { label: "— None —", disabled: false },
@@ -700,7 +697,6 @@
     if (id === "addVendorSelect") return addVendorChoices;
     if (id === "addMakeSelect") return addMakeChoices;
     if (id === "addVendorSkuCodeSelect") return addVendorSkuCodeChoices;
-    if (id === "addShelfLifeSelect") return addShelfLifeChoices;
     if (id === "addViscositySelect") return addViscosityChoices;
     if (id === "addCohesionSelect") return addCohesionChoices;
     if (id === "addShearSelect") return addShearChoices;
@@ -937,7 +933,6 @@
       { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
-      { title: "Shelf Life", field: "shelfLife", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Stock (Kg)", field: "currentStock", headerFilter: "input", headerFilterPlaceholder: "Search", hozAlign: "center", minWidth: 130 },
       {
         title: "Stock (Drums)",
@@ -1467,7 +1462,6 @@
           vendorId: editingRollSpec.vendorId,
           make: editingRollSpec.make,
           vendorSkuCode: editingRollSpec.vendorSkuCode,
-          shelfLife: editingRollSpec.shelfLife,
           viscosity: editingRollSpec.viscosity,
           cohesion: editingRollSpec.cohesion,
           shear: editingRollSpec.shear,

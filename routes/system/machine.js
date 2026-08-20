@@ -846,6 +846,7 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, location, jobC
       location,
       quantity: 1,
       reelMtrs: meters,
+      size: trim(pendingDoc.paperSize),
       rollId: deckleId,
       producedFor: pendingDoc._id,
     });
@@ -895,7 +896,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     let pendingDoc = null;
     if (mongoose.isValidObjectId(b.pendingId)) {
       pendingDoc = await PendingProduction.findById(b.pendingId)
-        .select("allottedRollIds allottedLayers itemId")
+        .select("allottedRollIds allottedLayers itemId paperSize")
         .populate({ path: "itemId", select: "rollType" })
         .lean();
       if (!pendingDoc || !hasStartableAllotment({

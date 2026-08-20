@@ -36,6 +36,12 @@ const materialStockSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    // Finished web size captured from the production order. This stays with
+    // the physical Deckle even if the source order is edited later.
+    size: {
+      type: String,
+      trim: true,
+    },
     rate: {
       type: Number,
     },

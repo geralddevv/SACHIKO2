@@ -45,11 +45,6 @@ const adhesiveMasterSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    shelfLife: {
-      type: String,
-      required: true,
-      trim: true,
-    },
     viscosity: {
       type: Number,
     },

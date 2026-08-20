@@ -29,6 +29,7 @@ router.get("/", async (req, res) => {
     Location.find().sort({ locationName: 1 }).lean(),
     MaterialStock.find()
       .populate({ path: "material", select: "productCode skuCode family" })
+      .populate({ path: "producedFor", select: "paperSize" })
       .sort({ createdAt: -1 })
       .lean(),
   ]);
@@ -48,9 +49,15 @@ router.get("/", async (req, res) => {
       rollId: s.rollId,
       productCode: s.material?.productCode || s.material?.skuCode || "",
       family: s.material?.family || "",
+      // Existing Deckles can fall back to the production order while all new
+      // production saves the size directly on MaterialStock.
+      size: s.size || s.producedFor?.paperSize || "",
       location: s.location,
       reelMtrs: s.reelMtrs,
       rate: s.rate,
+      value: Number.isFinite(Number(s.reelMtrs)) && Number.isFinite(Number(s.rate))
+        ? Number(s.reelMtrs) * Number(s.rate)
+        : null,
       remarks: s.remarks || "",
       createdAt: s.createdAt,
     })),

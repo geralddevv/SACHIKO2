@@ -46,7 +46,7 @@ function canonNum(value) {
 
 const FS_SIG_FIELDS = ["facestockFamily", "facestockType", "facestockMake", "facestockVendorId", "facestockVendorSkuCode", "facestockSize"];
 const FS_SIG_NUM_FIELDS = ["facestockGsm", "facestockMicron"];
-const AD_SIG_FIELDS = ["adhesiveType", "adhesiveMake", "adhesiveVendorId", "adhesiveVendorSkuCode", "adhesiveShelfLife"];
+const AD_SIG_FIELDS = ["adhesiveType", "adhesiveMake", "adhesiveVendorId", "adhesiveVendorSkuCode"];
 const AD_SIG_NUM_FIELDS = ["adhesiveGsm", "adhesiveViscosity", "adhesiveCohesion", "adhesiveShear", "adhesiveDensity"];
 const RL_SIG_FIELDS = ["releaseLinerType", "releaseLinerMake", "releaseLinerSensing", "releaseLinerVendorId", "releaseLinerVendorSkuCode", "releaseLinerColor", "releaseLinerSize"];
 const RL_SIG_NUM_FIELDS = ["releaseLinerGsm"];
@@ -164,11 +164,9 @@ function rebuildRecipe(labelStock, layerOverrides = {}) {
 // a real, expected case, not a duplicate to reject.
 //
 // Also deliberately narrower than FS_SIG_FIELDS/AD_SIG_FIELDS/RL_SIG_FIELDS
-// above: Size (Facestock/Release Liner) and Shelf Life (Adhesive) are left
-// out, matching FS_ORDER/AD_ORDER/RL_ORDER in views/sachiko/labelStockView.ejs
-// -- fields already established there as not meaningfully identifying the
-// recipe (several real Master rows differ only in one of those two). Keep
-// all three field lists in step if that ever changes.
+// above: Size (Facestock/Release Liner) is left out, matching
+// FS_ORDER/AD_ORDER/RL_ORDER in views/sachiko/labelStockView.ejs. Keep all
+// three field lists in step if that ever changes.
 const MAT_SIG_FS_FIELDS = ["facestockFamily", "facestockType", "facestockMake", "facestockVendorId", "facestockVendorSkuCode"];
 const MAT_SIG_FS_NUM_FIELDS = ["facestockGsm", "facestockMicron"];
 const MAT_SIG_AD_FIELDS = ["adhesiveType", "adhesiveMake", "adhesiveVendorId", "adhesiveVendorSkuCode"];
@@ -309,7 +307,7 @@ const LAYER_FIELD_MAP = {
   adhesive: {
     type: "adhesiveType", make: "adhesiveMake",
     vendorId: "adhesiveVendorId", vendorName: "adhesiveVendorName", vendorSkuCode: "adhesiveVendorSkuCode",
-    shelfLife: "adhesiveShelfLife", viscosity: "adhesiveViscosity", cohesion: "adhesiveCohesion",
+    viscosity: "adhesiveViscosity", cohesion: "adhesiveCohesion",
     shear: "adhesiveShear", density: "adhesiveDensity",
   },
   release: {
@@ -329,7 +327,7 @@ const POOL_MASTER_MODELS = { facestock: FacestockMaster, adhesive: AdhesiveMaste
 // three Facestock Masters sharing everything but Size).
 const POOL_TIEBREAK_FIELDS = {
   facestock: ["size", "gsm", "micron"],
-  adhesive: ["make", "vendorSkuCode", "shelfLife", "viscosity", "cohesion", "shear", "density"],
+  adhesive: ["make", "vendorSkuCode", "viscosity", "cohesion", "shear", "density"],
   release: ["color", "size", "gsm"],
 };
 

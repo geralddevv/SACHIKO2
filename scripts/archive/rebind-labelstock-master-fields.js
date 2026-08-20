@@ -58,12 +58,12 @@ function canonNum(v) {
 // same as the view's own comment notes), so it can't be resolved from a
 // Master match.
 //
-// Facestock/Release Liner Size and Adhesive Shelf Life are deliberately
-// excluded entirely -- removed from the Edit dialog's form and cascade too
+// Facestock/Release Liner Size is deliberately excluded entirely -- removed
+// from the Edit dialog's form and cascade too
 // (see FS_ORDER/AD_ORDER/RL_ORDER there). Several real Master rows can share
-// every other identity field and differ only in Size, or in Shelf Life
-// having drifted stale, either of which used to turn an otherwise-clean
-// match into "no match"/"ambiguous" for every other field in the same card.
+// every other identity field and differ only in Size, which would otherwise
+// turn an otherwise-clean match into "no match"/"ambiguous" for every
+// other field in the same card.
 const LAYER_KINDS = {
   FACESTOCK: {
     label: "Facestock",

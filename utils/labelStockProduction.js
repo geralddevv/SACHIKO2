@@ -63,7 +63,7 @@ export const POOL_MODELS = {
 // recipe's own (prefixed) field name for each -- Facestock: family/make/
 // vendor SKU code/type/micron; Adhesive: type alone; Release Liner: sensing
 // alone. Vendor itself and every other master field
-// (Facestock's size/gsm; Adhesive's make/vendor SKU code/shelf life/
+// (Facestock's size/gsm; Adhesive's make/vendor SKU code/
 // viscosity/cohesion/shear/density; Release's type/make/vendor SKU code/
 // color/size/gsm) are NOT checked here
 // -- a reel only needs to agree with the recipe on this list to count as
@@ -206,7 +206,7 @@ export function requiredLayersFor(rollType) {
 // projection) -- every layer's spec is read off it. `layers` is
 // { layerKey: rawStockId }, one entry per key requiredLayersFor(rollType)
 // calls for.
-export async function produceDeckle({ labelStock, location, reelMtrs, rate, remarks, layers, createdBy, producedFor }) {
+export async function produceDeckle({ labelStock, location, reelMtrs, size, rate, remarks, layers, createdBy, producedFor }) {
   if (!labelStock) throw new Error("Label Stock SKU not found.");
   if (!location) throw new Error("A stock location is required.");
   reelMtrs = Number(reelMtrs);
@@ -307,6 +307,7 @@ export async function produceDeckle({ labelStock, location, reelMtrs, rate, rema
     location,
     quantity: 1,
     reelMtrs,
+    size: String(size ?? "").trim() || undefined,
     rate: numOrUndef(rate),
     rollId: deckleId,
     remarks: remarks?.trim() || undefined,

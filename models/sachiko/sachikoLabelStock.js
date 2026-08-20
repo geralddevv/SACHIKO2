@@ -66,10 +66,9 @@ const sachikoLabelStockSchema = new mongoose.Schema(
       adhesiveVendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
       adhesiveVendorName: { type: String, trim: true },
       adhesiveVendorSkuCode: { type: String, trim: true },
-      adhesiveShelfLife: { type: String, trim: true },
       // Adhesive Master's own Viscosity/Cohesion/Shear/Density weren't
       // captured here at all until these fields were added -- same gap as
-      // facestockSize below: Type/Make/Vendor/Vendor SKU Code/Shelf Life
+      // facestockSize below: Type/Make/Vendor/Vendor SKU Code
       // alone can't tell apart two Adhesive Masters that differ only in one
       // of these four physical properties, so matching (routes/stock/
       // adhesiveStock.js's adhesiveRecipeKey, utils/labelStockProduction.js's
@@ -126,7 +125,6 @@ const sachikoLabelStockSchema = new mongoose.Schema(
       adhesiveVendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
       adhesiveVendorName: { type: String, trim: true },
       adhesiveVendorSkuCode: { type: String, trim: true },
-      adhesiveShelfLife: { type: String, trim: true },
       adhesiveViscosity: { type: Number },
       adhesiveCohesion: { type: Number },
       adhesiveShear: { type: Number },

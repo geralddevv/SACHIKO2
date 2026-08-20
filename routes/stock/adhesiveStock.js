@@ -35,7 +35,7 @@ const numOrUndef = (value) => {
 
 // Fields shared by every drum in one inward batch (one spec, one invoice) --
 // every field Adhesive Master itself carries (type/vendor/make/vendorSkuCode/
-// shelfLife/viscosity/cohesion/shear/density), plus this batch's own GSM
+// viscosity/cohesion/shear/density), plus this batch's own GSM
 // (Adhesive Master has no gsm field, so it stays a plain typed value) and
 // location/rate/invoice.
 async function buildHeaderPayload(body) {
@@ -46,7 +46,6 @@ async function buildHeaderPayload(body) {
     vendorId: vendorId || undefined,
     make: String(body.make || "").trim(),
     vendorSkuCode: String(body.vendorSkuCode || "").trim(),
-    shelfLife: String(body.shelfLife || "").trim(),
     viscosity: numOrUndef(body.viscosity),
     cohesion: numOrUndef(body.cohesion),
     shear: numOrUndef(body.shear),
@@ -123,7 +122,7 @@ async function distinctVendorPairs(filter) {
 }
 
 // Single source of truth for the Add dialog's Type/Vendor/Make/Vendor SKU
-// Code/Shelf Life/Viscosity/Cohesion/Shear/Density pickers -- every field
+// Code/Viscosity/Cohesion/Shear/Density pickers -- every field
 // Adhesive Master itself carries (GSM excepted -- see buildHeaderPayload),
 // sourced from it instead of a hardcoded list or free typing, so inward
 // entry only ever selects a real cataloged spec. Used both for the initial
@@ -133,12 +132,11 @@ async function distinctVendorPairs(filter) {
 // Tape Stock inward (routes/stock/tapeStock.js's /filter-specs) and
 // Facestock Stock inward (routes/stock/facestockStock.js's /filter-specs).
 async function loadSpecOptions(filter) {
-  const [types, vendors, makes, vendorSkuCodes, shelfLifes, viscosities, cohesions, shears, densities] = await Promise.all([
+  const [types, vendors, makes, vendorSkuCodes, viscosities, cohesions, shears, densities] = await Promise.all([
     AdhesiveMaster.distinct("type", omit(filter, "type")),
     distinctVendorPairs(omit(filter, "vendorId")),
     AdhesiveMaster.distinct("make", omit(filter, "make")),
     AdhesiveMaster.distinct("vendorSkuCode", omit(filter, "vendorSkuCode")),
-    AdhesiveMaster.distinct("shelfLife", omit(filter, "shelfLife")),
     AdhesiveMaster.distinct("viscosity", omit(filter, "viscosity")),
     AdhesiveMaster.distinct("cohesion", omit(filter, "cohesion")),
     AdhesiveMaster.distinct("shear", omit(filter, "shear")),
@@ -149,7 +147,6 @@ async function loadSpecOptions(filter) {
     vendors,
     makes: cleanDistinct(makes),
     vendorSkuCodes: cleanDistinct(vendorSkuCodes),
-    shelfLifes: cleanDistinct(shelfLifes),
     viscosities: cleanDistinct(viscosities, { numeric: true }),
     cohesions: cleanDistinct(cohesions, { numeric: true }),
     shears: cleanDistinct(shears, { numeric: true }),
@@ -157,17 +154,15 @@ async function loadSpecOptions(filter) {
   };
 }
 
-// Groups an Adhesive Master row and an AdhesiveStock drum as "the same
-// spec" using exactly the fields buildAdhesiveSignature() (routes/system/
-// adhesiveMaster.js) hashes -- every field the stock schema mirrors from
-// the master (GSM excepted -- not part of the master, see
-// buildHeaderPayload above), so a drum entered against a spec always lands
-// in that spec's bucket. Not the hash itself (no need to match the master's
-// stored signature, just to group consistently within this one request).
+// Groups an Adhesive Master row and an AdhesiveStock drum as the same
+// purchasable material. Viscosity, cohesion, shear and density
+// are recorded per inward batch and can legitimately differ from the master
+// differ between inward batches. Vendor + type + make + the vendor's code
+// are the stable identity, matching the binding/picker logic in
+// routes/sachiko/labelStockProduction.js.
 function adhesiveSpecKey(o) {
   const s = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
-  const n = (v) => (v === undefined || v === null || v === "" ? "" : String(Number(v)));
-  return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode), s(o.shelfLife), n(o.viscosity), n(o.cohesion), n(o.shear), n(o.density)].join("||");
+  return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode)].join("||");
 }
 
 // mtrs actually reserved on WIP Label Stock orders, per Adhesive Master spec
@@ -202,7 +197,7 @@ async function loadAllottedByKey() {
       .flatMap((pick) => pickStockIds(pick)),
   );
   const pickedReels = pickedIds.length
-    ? await AdhesiveStock.find({ _id: { $in: pickedIds } }).select("type vendorId make vendorSkuCode shelfLife viscosity cohesion shear density reelMtrs").lean()
+    ? await AdhesiveStock.find({ _id: { $in: pickedIds } }).select("type vendorId make vendorSkuCode viscosity cohesion shear density reelMtrs").lean()
     : [];
 
   const allottedByKey = new Map();
@@ -377,13 +372,12 @@ router.post("/purchase-order", requireAuth, createLimiter, async (req, res) => {
 
 router.get("/filter-specs", async (req, res) => {
   try {
-    const { type, vendorId, make, vendorSkuCode, shelfLife, viscosity, cohesion, shear, density } = req.query;
+    const { type, vendorId, make, vendorSkuCode, viscosity, cohesion, shear, density } = req.query;
     const filter = {};
     if (type) filter.type = type;
     if (vendorId) filter.vendorId = vendorId;
     if (make) filter.make = make;
     if (vendorSkuCode) filter.vendorSkuCode = vendorSkuCode;
-    if (shelfLife) filter.shelfLife = shelfLife;
     if (viscosity) filter.viscosity = Number(viscosity);
     if (cohesion) filter.cohesion = Number(cohesion);
     if (shear) filter.shear = Number(shear);
@@ -416,7 +410,6 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
       req.body.vendorId = req.body.vendorId || master.vendorId;
       req.body.make = req.body.make || master.make;
       req.body.vendorSkuCode = req.body.vendorSkuCode || master.vendorSkuCode;
-      req.body.shelfLife = req.body.shelfLife || master.shelfLife;
       req.body.viscosity = req.body.viscosity || master.viscosity;
       req.body.cohesion = req.body.cohesion || master.cohesion;
       req.body.shear = req.body.shear || master.shear;

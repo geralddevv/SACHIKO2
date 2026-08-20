@@ -43,7 +43,6 @@ function buildAdhesiveSignature(doc) {
       canonStr(doc.type),
       canonStr(doc.make),
       canonStr(doc.vendorSkuCode),
-      canonStr(doc.shelfLife),
       String(Number(doc.viscosity ?? "")),
       String(Number(doc.cohesion ?? "")),
       String(Number(doc.shear ?? "")),

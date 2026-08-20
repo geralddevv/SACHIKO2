@@ -244,7 +244,7 @@
 
   // Table stays to bare identity columns -- the full spec (Family, Roll/Sheet,
   // Printing Technology, every FS/AD/RL Family/Type/Make/Vendor/GSM/Micron/
-  // Color/Shelf-Life field) lives in the View button's modal (viewLabelStock
+  // Color field) lives in the View button's modal (viewLabelStock
   // below, reading straight from `raw`) instead of being duplicated here.
   // Factored into a function (not a one-off const) so a delete can rebuild
   // both the flat row list and the variant tree below from the trimmed
@@ -916,13 +916,13 @@
     // position) and the skuBadge's "all resolved" check. GSM has no Adhesive
     // Master equivalent, so it's excluded there and stays a plain typed
     // number.
-    // Size (Facestock/Release Liner) and Shelf Life (Adhesive) are
-    // deliberately excluded from all three -- removed from the form
+    // Size (Facestock/Release Liner) is deliberately excluded from all three
+    // -- removed from the form
     // entirely (see their layer-field markup below, or lack of it), not
     // just left out of narrowing: several real Master rows can share every
-    // other identity field and differ only in Size, or in Shelf Life having
-    // drifted stale, either of which used to turn an otherwise-clean match
-    // into "no match"/"ambiguous" for every other field in the same card.
+    // other identity field and differ only in Size, which would otherwise
+    // turn an otherwise-clean match into "no match"/"ambiguous" for every
+    // other field in the same card.
     const FS_ORDER = ["family", "type", "make", "vendorId", "vendorSkuCode", "gsm", "micron"];
     const AD_ORDER = ["type", "make", "vendorId", "vendorSkuCode", "viscosity", "cohesion", "shear", "density"];
     const RL_ORDER = ["type", "make", "sensing", "vendorId", "vendorSkuCode", "color", "gsm"];
