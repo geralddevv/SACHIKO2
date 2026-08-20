@@ -11,7 +11,7 @@ import PendingProduction from "../../models/inventory/pendingProduction.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
-import { requiredLayersFor, reelMatchesLayer, pickStockIds } from "../../utils/labelStockProduction.js";
+import { pickStockIds } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
 const ROLL_ID_PREFIX = "ADHESIVE";
@@ -160,107 +160,49 @@ function adhesiveSpecKey(o) {
   return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode), s(o.shelfLife), n(o.viscosity), n(o.cohesion), n(o.shear), n(o.density)].join("||");
 }
 
-// mtrs committed to WIP Label Stock orders, per Adhesive Master spec, split
-// into everything committed (allottedByKey -- the Allotted column) and the
-// part already laminated into a Deckle (drawnByKey). Scoped to
+// mtrs actually reserved on WIP Label Stock orders, per Adhesive Master spec
+// -- the sum of the picked drums' own reelMtrs, not any estimate of what the
+// job will eventually need (there isn't one to know in advance). Scoped to
 // assignedMachineId being set -- an order still in Pending (not yet assigned
 // to a machine) hasn't committed to a location/timeline yet, so it doesn't
-// reserve stock here. A PendingProduction's own runningMeters is exactly how
-// much every layer of its recipe draws off its drum (all layers run through
-// the laminator together for the same length), so it's added once per matching
-// adhesive/adhesive2 layer.
+// reserve stock here. Nothing picked yet = nothing allocated for that order,
+// even once it's assigned to a machine.
 //
-// The split exists because raw adhesive is never held in a reserved state --
-// Assign & Continue draws it straight out, so the drawn part has already left
-// Stock and Available must not subtract it again. See the fuller note on
-// routes/stock/facestockStock.js's own loadAllottedByKey.
-async function loadAllottedByKey(masters, stockByKey) {
-  const pending = await PendingProduction.find({ producedAt: null, assignedMachineId: { $ne: null } })
-    .select("itemId runningMeters allottedRollIds allottedLayers")
-    .populate({ path: "itemId", select: "rollType adhesive adhesive2" })
+// Once an order is drawn (produceDeckle already laminated a Deckle from it --
+// see utils/labelStockProduction.js), its picked drum's own reelMtrs was
+// already reduced on the drum itself, so currentStock already reflects that
+// consumption. A drawn order is excluded here entirely rather than needing a
+// separate "drawn" correction: the alternative (still counting it as
+// Allocated) would double-subtract material that's already gone from Stock.
+async function loadAllottedByKey() {
+  const pending = await PendingProduction.find({
+    producedAt: null,
+    assignedMachineId: { $ne: null },
+    allottedRollIds: { $size: 0 },
+  })
+    .select("allottedLayers")
     .lean();
 
   // The actual drums set aside on the assign form, batched in one query --
-  // where an order names one it beats spec matching outright, and is what
-  // makes the drum count a real count. A layer can hold more than one
-  // picked drum now (Assign Production's pickers are checkboxes). Same
-  // shape as Facestock Stock's own loadAllottedByKey.
+  // a layer can hold more than one picked drum (Assign Production's pickers
+  // are checkboxes). Same shape as Facestock Stock's own loadAllottedByKey.
   const pickedIds = pending.flatMap((p) =>
     Object.values(p.allottedLayers || {})
       .filter((pick) => pick?.pool === "adhesive")
       .flatMap((pick) => pickStockIds(pick)),
   );
   const pickedReels = pickedIds.length
-    ? await AdhesiveStock.find({ _id: { $in: pickedIds } }).lean()
+    ? await AdhesiveStock.find({ _id: { $in: pickedIds } }).select("type vendorId make vendorSkuCode shelfLife viscosity cohesion shear density reelMtrs").lean()
     : [];
-  const reelById = new Map(pickedReels.map((r) => [String(r._id), r]));
 
   const allottedByKey = new Map();
-  const drawnByKey = new Map();
   const rollsByKey = new Map();
-  // reelMatchesLayer() (utils/labelStockProduction.js) checks whichever of
-  // POOL_MATCH_FIELDS' fields the recipe layer actually specifies -- Adhesive
-  // is matched on Type alone -- and treats a blank one as "no constraint", so
-  // one recipe layer routinely matches several masters. That's deliberate on
-  // the matching side: a
-  // plain key-equality lookup (comparing a recipe-built key against each
-  // master's full spec key) would require the master's field to be blank too,
-  // which no real master ever is, and would silently drop the demand instead.
-  //
-  // An order's metres (its own requirement) belong on one master row --
-  // charging every match inflates the column by the number of candidates.
-  // Pick one instead: preferably a candidate that actually holds stock
-  // (that's the one the raw-stock picker will offer at Assign & Continue),
-  // and with none or several stocked, the lowest skuId so the row it lands
-  // on is stable between requests. Same rule as Facestock Stock's own
-  // loadAllottedByKey (routes/stock/facestockStock.js).
-  const pickDemandTarget = (matches) => {
-    const stocked = matches.filter((m) => (stockByKey.get(adhesiveSpecKey(m)) || 0) > 0);
-    const pool = stocked.length ? stocked : matches;
-    return pool
-      .slice()
-      .sort((a, b) => String(a.skuId || "").localeCompare(String(b.skuId || "")))[0];
-  };
-
-  // `pick` can now name more than one drum (Assign Production's checkboxes
-  // let a layer combine several undersized drums onto one order) -- the
-  // order's own mtrs requirement is still just charged once (picking more
-  // drums for the same layer doesn't mean the order needs more material),
-  // but every picked drum counts toward rollsByKey so the "Rolls" column
-  // reflects how many are physically reserved.
-  const addDemand = (layer, mtrs, drawn, pick) => {
-    if (!layer || !layer.adhesiveType || !mtrs) return;
-    const reels = pick?.pool === "adhesive" ? pickStockIds(pick).map((sid) => reelById.get(sid)).filter(Boolean) : [];
-
-    let specKey;
-    if (reels.length) {
-      specKey = adhesiveSpecKey(reels[0]);
-    } else {
-      const matches = masters.filter((m) => reelMatchesLayer("adhesive", m, layer));
-      if (!matches.length) return;
-      specKey = adhesiveSpecKey(pickDemandTarget(matches));
-    }
-
-    allottedByKey.set(specKey, (allottedByKey.get(specKey) || 0) + mtrs);
-    if (reels.length) rollsByKey.set(specKey, (rollsByKey.get(specKey) || 0) + reels.length);
-    if (drawn) drawnByKey.set(specKey, (drawnByKey.get(specKey) || 0) + mtrs);
-  };
-
-  for (const p of pending) {
-    const labelStock = p.itemId;
-    if (!labelStock) continue;
-    const mtrs = Number(p.runningMeters) || 0;
-    if (!mtrs) continue;
-    // A Deckle reel on the order proves its adhesive has already been
-    // laminated and taken out of Stock. Not keyed on allottedLayers -- that
-    // records drums merely *picked* on the assign form, which haven't been
-    // drawn from yet.
-    const drawn = (p.allottedRollIds || []).length > 0;
-    const layers = requiredLayersFor(labelStock.rollType);
-    if (layers.includes("adhesive")) addDemand(labelStock.adhesive, mtrs, drawn, p.allottedLayers?.adhesive);
-    if (layers.includes("adhesive2")) addDemand(labelStock.adhesive2, mtrs, drawn, p.allottedLayers?.adhesive2);
+  for (const reel of pickedReels) {
+    const key = adhesiveSpecKey(reel);
+    allottedByKey.set(key, (allottedByKey.get(key) || 0) + (Number(reel.reelMtrs) || 0));
+    rollsByKey.set(key, (rollsByKey.get(key) || 0) + 1);
   }
-  return { allottedByKey, drawnByKey, rollsByKey };
+  return { allottedByKey, rollsByKey };
 }
 
 // Reorder view for the Masters panel -- current stock (total mtrs still on
@@ -305,7 +247,7 @@ async function loadMastersWithStock(stock) {
   }).select("itemId").lean();
   const activePOSet = new Set(activePOs.map((po) => String(po.itemId)));
   // `rollsByKey` is already taken above (drums in stock), hence the rename.
-  const { allottedByKey, drawnByKey, rollsByKey: allottedRollsByKey } = await loadAllottedByKey(masters, stockByKey);
+  const { allottedByKey, rollsByKey: allottedRollsByKey } = await loadAllottedByKey();
 
   return masters.map((m) => {
     const key = adhesiveSpecKey(m);
@@ -314,10 +256,7 @@ async function loadMastersWithStock(stock) {
     const msq = Number(m.msq) || 0;
     const rolls = (rollsByKey.get(key) || []).slice().sort((a, b) => String(a.rollId).localeCompare(String(b.rollId)));
     const allotted = allottedByKey.get(key) || 0;
-    // Only the committed mtrs still waiting to be drawn come off Stock -- the
-    // drawn part already left it at lamination (see loadAllottedByKey).
-    const drawn = drawnByKey.get(key) || 0;
-    const available = currentStock - (allotted - drawn);
+    const available = currentStock - allotted;
     return {
       ...m,
       currentStock,
@@ -325,7 +264,6 @@ async function loadMastersWithStock(stock) {
       rolls,
       allotted,
       allottedRolls: allottedRollsByKey.get(key) || 0,
-      drawn,
       available,
       shortage: Math.max(0, msq - currentStock),
       hasActivePO: activePOSet.has(String(m._id)),

@@ -59,6 +59,25 @@ const productionLogRowSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// How much of each reserved Adhesive drum this job actually used, entered by
+// the operator in the "Adhesive Used" dialog when Save Production Entry is
+// clicked (views/inventory/masters/jobCardForm.ejs) -- raw adhesive is only
+// ever *reserved* at Assign Production (routes/sachiko/labelStockProduction.js's
+// applyAdhesiveBindings), never automatically deducted the way facestock/
+// release liner are (consumeAllottedRollMeters, off the scanned Deckle roll
+// IDs) -- there's no length reading to scan for a drum, only a weight the
+// operator has to report. `stockId` is the live traceability link
+// (AdhesiveStock._id); rollId/kgUsed are a snapshot so the printed card stays
+// stable if the drum is edited or emptied later.
+const adhesiveUsageRowSchema = new mongoose.Schema(
+  {
+    stockId: { type: mongoose.Schema.Types.ObjectId, ref: "AdhesiveStock" },
+    rollId: { type: String, trim: true },
+    kgUsed: { type: Number },
+  },
+  { _id: false },
+);
+
 const machineJobCardSchema = new mongoose.Schema(
   {
     jobCardId: {
@@ -105,6 +124,7 @@ const machineJobCardSchema = new mongoose.Schema(
 
     jobSetting: [rollRowSchema],
     productionLog: [productionLogRowSchema],
+    adhesiveUsage: [adhesiveUsageRowSchema],
 
     totalMeter: { type: String, trim: true },
     sqMtr: { type: String, trim: true },

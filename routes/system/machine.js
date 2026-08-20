@@ -14,7 +14,7 @@ import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { normalizeLocationName } from "../../utils/locations.js";
-import { normalizeRollId, extractScannedRollId } from "../../utils/rollId.js";
+import { normalizeRollId, extractScannedRollId, generateRollId } from "../../utils/rollId.js";
 import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
@@ -411,7 +411,7 @@ async function buildQueueRows(match) {
         ? pickStockIds(pick)
             .map((sid) => layerDocMaps[pick.pool]?.get(sid))
             .filter(Boolean)
-            .map((doc) => ({ rollId: doc.rollId || "", reelMtrs: Number(doc.reelMtrs) || 0, location: doc.location || "" }))
+            .map((doc) => ({ _id: String(doc._id), rollId: doc.rollId || "", reelMtrs: Number(doc.reelMtrs) || 0, location: doc.location || "" }))
         : [];
       return {
         key,
@@ -690,6 +690,147 @@ async function consumeAllottedRollMeters({ pendingProductionId, logRows, jobCard
   return result;
 }
 
+// Deducts the kg the operator reports using off each Adhesive drum this job
+// had reserved -- the "Adhesive Used" dialog on Save Production Entry
+// (views/inventory/masters/jobCardForm.ejs) is the only place raw adhesive
+// ever actually leaves Stock. Unlike Facestock/Release Liner, there's no
+// scanned length to derive this from (a drum has no roll-length reading to
+// clock a start/stop against); the operator has to say how much of the
+// drum's weight the job actually used.
+//
+// `rows` is [{ stockId, kgUsed }], already validated against the job's own
+// PendingProduction.allottedLayers.adhesive by the caller -- this only
+// re-reads the live drums to know how much is really left on each and
+// mirrors produceDeckle's own deduction shape (utils/labelStockProduction.js)
+// so the two paths that can reduce an AdhesiveStock drum agree on how they do
+// it (reelMtrs clamped at 0, quantity zeroed once emptied, one OUTWARD
+// AdhesiveStockLog line per drum).
+async function consumeAdhesiveUsage({ rows, jobCardId, createdBy }) {
+  const result = { deducted: 0, emptied: 0, kg: 0, rows: [] };
+  if (!Array.isArray(rows) || rows.length === 0) return result;
+
+  const { Model, LogModel } = POOL_MODELS.adhesive;
+  const stockIds = rows.map((r) => r.stockId).filter(Boolean);
+  const drums = stockIds.length
+    ? await Model.find({ _id: { $in: stockIds } }).select("rollId type location quantity reelMtrs rate").lean()
+    : [];
+  const drumById = new Map(drums.map((d) => [String(d._id), d]));
+
+  for (const row of rows) {
+    const used = round2(Number(row.kgUsed) || 0);
+    const drum = row.stockId ? drumById.get(String(row.stockId)) : null;
+    if (used <= 0 || !drum) continue;
+
+    const remaining = round2((Number(drum.reelMtrs) || 0) - used);
+    const emptied = remaining <= 0;
+
+    const bal = await Model.aggregate([
+      { $match: { type: drum.type, location: drum.location } },
+      { $group: { _id: null, qty: { $sum: "$quantity" } } },
+    ]);
+    const openingStock = bal[0]?.qty || 0;
+    const rollsOut = emptied ? Number(drum.quantity) || 0 : 0;
+    const closingStock = openingStock - rollsOut;
+
+    await Model.updateOne(
+      { _id: drum._id },
+      emptied ? { $set: { reelMtrs: 0, quantity: 0 } } : { $set: { reelMtrs: remaining } },
+    );
+
+    await LogModel.create({
+      location: drum.location,
+      openingStock,
+      quantity: rollsOut,
+      closingStock,
+      reelMtrs: used,
+      rate: drum.rate,
+      rollId: drum.rollId,
+      type: "OUTWARD",
+      source: "SYSTEM",
+      remarks: `${jobCardId ? `${jobCardId}: ` : ""}${used} kg consumed${emptied ? " — drum emptied" : ""}`,
+      createdBy: createdBy || "SYSTEM",
+    });
+
+    result.deducted += 1;
+    result.kg = round2(result.kg + used);
+    if (emptied) result.emptied += 1;
+    result.rows.push({ stockId: drum._id, rollId: drum.rollId, kgUsed: used });
+  }
+  return result;
+}
+
+// This machine IS the laminator -- every Production Log row is one finished
+// Deckle coming off the run right now (the model's own doc comment already
+// says as much: "Production Log: one row per deckle produced"), not a
+// pre-existing reel merely being drawn down. Raw material for this job was
+// already reserved at Assign Production and already deducted elsewhere
+// (Facestock/Release Liner via consumeAllottedRollMeters off the job's own
+// allottedRollIds if any; Adhesive via consumeAdhesiveUsage above) -- this
+// only creates the finished-goods side: one MaterialStock (Deckle) + one
+// INWARD MaterialStockLog per row, at the location the job's own raw
+// material sits at. Mirrors produceDeckle's own inward-write half
+// (utils/labelStockProduction.js) without repeating its raw-material
+// deduction half, since that already happened through a different path here.
+//
+// A row with no `meters` (Job Setting-style rows, or a Production Log row
+// still mid-entry) produces nothing -- there's no length to inward. The
+// generated Deckle ID is written back onto the row it came from (by index)
+// so the saved job card records which Deckle each row actually became.
+async function produceDecklesFromLog({ pendingDoc, productionLog, location, jobCardId, createdBy }) {
+  const result = { rows: [], created: 0, meters: 0 };
+  const labelStockId = pendingDoc?.itemId?._id || pendingDoc?.itemId;
+  if (!labelStockId || !location || !Array.isArray(productionLog) || !productionLog.length) return result;
+
+  const labelStock = await SachikoLabelStock.findById(labelStockId).select("productCode skuCode").lean();
+  const itemCode = labelStock?.productCode || labelStock?.skuCode;
+  if (!itemCode) return result;
+
+  for (let i = 0; i < productionLog.length; i++) {
+    const row = productionLog[i];
+    const meters = round2(Number(row.meters) || 0);
+    if (meters <= 0) {
+      result.rows.push(null);
+      continue;
+    }
+
+    const deckleId = await generateRollId(itemCode);
+
+    const bal = await MaterialStock.aggregate([
+      { $match: { material: labelStock._id, location } },
+      { $group: { _id: null, qty: { $sum: "$quantity" } } },
+    ]);
+    const openingStock = bal[0]?.qty || 0;
+
+    await MaterialStock.create({
+      material: labelStock._id,
+      location,
+      quantity: 1,
+      reelMtrs: meters,
+      rollId: deckleId,
+      producedFor: pendingDoc._id,
+    });
+
+    await MaterialStockLog.create({
+      material: labelStock._id,
+      location,
+      openingStock,
+      quantity: 1,
+      closingStock: openingStock + 1,
+      reelMtrs: meters,
+      rollId: deckleId,
+      type: "INWARD",
+      source: "SYSTEM",
+      remarks: `${jobCardId ? `${jobCardId}: ` : ""}Deckle produced from Production Log row ${i + 1}`,
+      createdBy: createdBy || "SYSTEM",
+    });
+
+    result.rows.push(deckleId);
+    result.created += 1;
+    result.meters = round2(result.meters + meters);
+  }
+  return result;
+}
+
 router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
   try {
     const b = req.body;
@@ -707,9 +848,13 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     }
 
     // Mirror the GET guard -- a direct POST (bypassing the form) still can't
-    // start a job with no reels actually set aside for it.
+    // start a job with no reels actually set aside for it. Kept in scope past
+    // this block (not just re-checked here) -- the Adhesive Used dialog's
+    // rows get validated against this same order's own allottedLayers below,
+    // rather than trusting whatever stockIds the client posted.
+    let pendingDoc = null;
     if (mongoose.isValidObjectId(b.pendingId)) {
-      const pendingDoc = await PendingProduction.findById(b.pendingId)
+      pendingDoc = await PendingProduction.findById(b.pendingId)
         .select("allottedRollIds allottedLayers itemId")
         .populate({ path: "itemId", select: "rollType" })
         .lean();
@@ -724,6 +869,41 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
         );
       }
     }
+
+    // Where each new Deckle this job produces gets inwarded -- the same
+    // location its own raw material already sits at (Assign Production's
+    // reel pickers are scoped to one location per order, so every layer
+    // agrees anyway). Facestock is checked first since every roll type calls
+    // for it; release liner is the fallback for the one hypothetical recipe
+    // that somehow doesn't (there isn't one today, but nothing enforces it).
+    let deckleLocation = "";
+    if (pendingDoc?.allottedLayers) {
+      for (const key of ["facestock", "facestock2", "adhesive", "adhesive2", "releaseLiner", "releaseLiner2"]) {
+        const pick = pendingDoc.allottedLayers[key];
+        const sids = pickStockIds(pick);
+        if (!pick?.pool || !sids.length) continue;
+        const { Model } = POOL_MODELS[pick.pool];
+        const doc = await Model.findById(sids[0]).select("location").lean();
+        if (doc?.location) { deckleLocation = doc.location; break; }
+      }
+    }
+
+    // Adhesive Used dialog rows -- one per drum this order actually had
+    // reserved (adhesiveStockId[]/adhesiveKgUsed[], parallel arrays, same
+    // convention as Job Setting/Production Log above). Only a stockId that's
+    // genuinely one of this order's own allottedLayers.adhesive/adhesive2
+    // picks is kept -- the dialog only ever offers those, but the form is
+    // still a POST body, not a trusted source.
+    const validAdhesiveStockIds = new Set(
+      [pendingDoc?.allottedLayers?.adhesive, pendingDoc?.allottedLayers?.adhesive2]
+        .filter((pick) => pick?.pool === "adhesive")
+        .flatMap((pick) => pickStockIds(pick)),
+    );
+    const adKgStockId = toArray(b.adhesiveStockId);
+    const adKgUsed = toArray(b.adhesiveKgUsed);
+    const adhesiveUsage = adKgStockId
+      .map((sid, i) => ({ stockId: trim(sid), kgUsed: numOrUndef(adKgUsed[i]) }))
+      .filter((row) => row.stockId && validAdhesiveStockIds.has(row.stockId) && row.kgUsed != null && row.kgUsed > 0);
 
     const jobCardId = await generateId("machineJobCardId", "JC");
 
@@ -809,6 +989,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       },
       jobSetting,
       productionLog,
+      adhesiveUsage,
       totalMeter: trim(b.totalMeter),
       sqMtr: trim(b.sqMtr),
     });
@@ -826,6 +1007,62 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       });
     } catch (stockErr) {
       console.error("JOB CARD STOCK DEDUCTION ERROR:", stockErr);
+    }
+
+    // Deduct the adhesive kg the operator reported in the "Adhesive Used"
+    // dialog. Same isolation as above -- the job card and its meter deduction
+    // are already committed, so this can't turn a successful save into an
+    // apparent failure.
+    let adhesiveConsumption = { deducted: 0, emptied: 0, kg: 0, rows: [] };
+    try {
+      adhesiveConsumption = await consumeAdhesiveUsage({
+        rows: adhesiveUsage,
+        jobCardId,
+        createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+      });
+      // Fills in the rollId snapshot the create above couldn't (the drum
+      // docs are only read inside consumeAdhesiveUsage itself) -- purely
+      // cosmetic for the saved card, the deduction already happened above
+      // regardless of whether this write succeeds.
+      if (adhesiveConsumption.rows.length) {
+        await MachineJobCard.updateOne(
+          { jobCardId },
+          { $set: { adhesiveUsage: adhesiveConsumption.rows } },
+        );
+      }
+    } catch (adErr) {
+      console.error("JOB CARD ADHESIVE DEDUCTION ERROR:", adErr);
+    }
+
+    // Lamination: one new Deckle per Production Log row that actually made
+    // metres (produceDecklesFromLog above), inwarded to Semi-Finished Stock.
+    // Same isolation as the deductions above -- the job card is already
+    // saved, so a hiccup here can't turn a successful save into an apparent
+    // failure. The generated ids replace whatever the operator typed into
+    // each row's Deckle ID box (see productionLog's own `deckleId` above) --
+    // system-issued now, the same way jobCardId itself is.
+    let deckleProduction = { rows: [], created: 0, meters: 0 };
+    try {
+      deckleProduction = await produceDecklesFromLog({
+        pendingDoc,
+        productionLog,
+        location: deckleLocation,
+        jobCardId,
+        createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+      });
+      if (deckleProduction.created) {
+        await MachineJobCard.updateOne(
+          { jobCardId },
+          {
+            $set: productionLog.reduce((set, _row, i) => {
+              if (deckleProduction.rows[i]) set[`productionLog.${i}.deckleId`] = deckleProduction.rows[i];
+              return set;
+            }, {}),
+          },
+        );
+      }
+    } catch (deckleErr) {
+      console.error("JOB CARD DECKLE PRODUCTION ERROR:", deckleErr);
     }
 
     // The job is done: take it off the machine and operator queues by
@@ -850,6 +1087,17 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     if (consumption.unmatched.length) {
       const uniq = [...new Set(consumption.unmatched)];
       message += ` Note: stock not deducted for roll${uniq.length === 1 ? "" : "s"} ${uniq.join(", ")} (not among this job's allotted reels).`;
+    }
+    if (adhesiveConsumption.deducted) {
+      message +=
+        ` Adhesive: ${adhesiveConsumption.kg} kg off ${adhesiveConsumption.deducted} drum${adhesiveConsumption.deducted === 1 ? "" : "s"}` +
+        `${adhesiveConsumption.emptied ? ` (${adhesiveConsumption.emptied} emptied)` : ""}.`;
+    }
+    if (deckleProduction.created) {
+      const ids = deckleProduction.rows.filter(Boolean);
+      message +=
+        ` Produced: ${deckleProduction.meters} mtrs as ${deckleProduction.created} Deckle${deckleProduction.created === 1 ? "" : "s"}` +
+        `${ids.length ? ` (${ids.join(", ")})` : ""} — inwarded to Semi-Finished Stock.`;
     }
     req.flash("notification", message);
     const savedFor = mongoose.isValidObjectId(b.pendingId) ? String(b.pendingId) : "new";

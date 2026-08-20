@@ -83,6 +83,24 @@
     return uniq.length ? uniq.join(", ") : "-";
   };
 
+  // Every Deckle this job card actually produced -- one per Production Log
+  // row that made metres (routes/system/machine.js's produceDecklesFromLog,
+  // system-generated on save), distinct and joined the same way rollsUsed
+  // above reads the raw material side.
+  const decklesProduced = (jc) => {
+    const ids = (Array.isArray(jc.productionLog) ? jc.productionLog : [])
+      .map((r) => String(r?.deckleId || "").trim())
+      .filter(Boolean);
+    const seen = new Set();
+    const uniq = ids.filter((id) => {
+      const key = id.toUpperCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return uniq.length ? uniq.join(", ") : "-";
+  };
+
   const tableData = raw.map(jc => ({
     jobCardId:    jc.jobCardId,
     date:         jc.date ? new Date(jc.date).toLocaleDateString("en-GB") : "-",
@@ -93,6 +111,7 @@
     paperSize:    jc.paperSize || "-",
     rolls:        jc.rolls || "-",
     rollIdUsed:   rollsUsed(jc),
+    decklesProduced: decklesProduced(jc),
     operatorName: jc.operatorName || "-",
     helperName:   jc.helperName || "-",
     totalMeter:   jc.totalMeter || "-",
@@ -121,6 +140,8 @@
       withTextFilter({ title: "Paper Size",    field: "paperSize",    minWidth: 110 }),
       withTextFilter({ title: "Rolls",         field: "rolls",        width: 90 }),
       withTextFilter({ title: "Roll ID Used", field: "rollIdUsed",   minWidth: 150 }),
+      withTextFilter({ title: "Deckle(s) Produced", field: "decklesProduced", minWidth: 160,
+        formatter: (cell) => cell.getValue() === "-" ? "-" : `<span style="font-weight:600;color:#15803d;">${cell.getValue()}</span>` }),
       withTextFilter({ title: "Operator",      field: "operatorName", minWidth: 120 }),
       withTextFilter({ title: "Helper",        field: "helperName",   minWidth: 120 }),
       withTextFilter({ title: "Running Meters", field: "totalMeter",  minWidth: 120 }),

@@ -5,9 +5,14 @@ import mongoose from "mongoose";
 // FAIRTECH's PaperStock, but scoped to that SKU instead of a separate Paper
 // master -- Sachiko has no such master, the label stock's own facestock/
 // adhesive/releaseLiner fields (via `material`) are the spec identity.
-// Created by Label Stock Production (routes/sachiko/labelStockProduction.js),
-// which allocates and deducts one raw-material reel per recipe layer from
-// FacestockStock/AdhesiveStock/ReleaseLinerStock to laminate it.
+// Created two ways: utils/labelStockProduction.js's produceDeckle() (the
+// legacy Assign Production "Produce New Deckle" path, which also allocates
+// and deducts the raw-material reels it laminates from), and -- the normal
+// path now -- routes/system/machine.js's produceDecklesFromLog, one Deckle
+// per Production Log row on the machine job card once a job finishes. Raw
+// material for that path was already reserved/deducted earlier (Assign
+// Production + the job card's own Adhesive Used dialog), so it only writes
+// the finished-goods side.
 const materialStockSchema = new mongoose.Schema(
   {
     material: {

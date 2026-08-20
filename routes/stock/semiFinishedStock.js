@@ -6,11 +6,14 @@ import { updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 
 const router = express.Router();
 
-// Semi Finished Goods = Deckle stock (MaterialStock). Deckles are only ever
-// created via Assign Production's "Produce New Deckle" section
+// Semi Finished Goods = Deckle stock (MaterialStock). Deckles are created two
+// ways: Assign Production's legacy "Produce New Deckle" section
 // (routes/fairdesk_route.js POST /labels/production/assign/:id ->
-// produceDeckle() in utils/labelStockProduction.js) -- this page is a
-// list/edit/delete view onto that same data, not a second way to create one.
+// produceDeckle() in utils/labelStockProduction.js), and -- the normal path
+// now -- one per Production Log row on the machine job card, once the job
+// finishes (routes/system/machine.js's produceDecklesFromLog, called from
+// POST /machine/jobcard/form). This page is a list/edit/delete view onto
+// that same MaterialStock data either way, not a third way to create one.
 router.get("/", async (req, res) => {
   const [locations, stock] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),

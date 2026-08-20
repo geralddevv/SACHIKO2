@@ -256,6 +256,23 @@
     cursor: pointer; border: none; background: #f1f5f9; color: #44506b;
   }
 
+  .jc-adhesive-used-hint { margin: 0 0 14px; font-size: 12.5px; color: #5a6586; }
+  .jc-adhesive-used-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid #eef1f6;
+  }
+  .jc-adhesive-used-row:last-child { border-bottom: none; }
+  .jc-adhesive-used-meta { flex: 1; min-width: 0; }
+  .jc-adhesive-used-rollid { font-size: 13px; font-weight: 700; color: #03365a; }
+  .jc-adhesive-used-left { font-size: 12px; color: #5a6586; margin-top: 2px; }
+  .jc-adhesive-used-kg {
+    width: 100px; flex: 0 0 auto; padding: 8px 10px; font-size: 13.5px;
+    border: 1.5px solid #d7deea; border-radius: 8px; text-align: right;
+  }
+  .jc-adhesive-used-kg:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+  .jc-adhesive-used-kg.jc-adhesive-used-over { border-color: #dc2626; }
+  .jc-adhesive-used-error { color: #dc2626; font-size: 12px; margin-top: 10px; min-height: 16px; }
+
   .scan-video-wrap {
     position: relative; width: 100%; aspect-ratio: 4 / 3;
     background: #0b1220; border-radius: 10px; overflow: hidden;
@@ -475,6 +492,16 @@
          (PendingProduction.allottedLayers, resolved live in buildQueueRows).
          The machine queue's allotment dialog shows the same table. -->
     <% const allocLayers = jc.layerAllotments || []; %>
+    <%
+      // Every drum reserved across the adhesive layer(s) this SKU's recipe
+      // calls for (adhesive, +adhesive2 on DOUBLE FACESTOCK/DOUBLE RELEASE) --
+      // feeds the "Adhesive Used" dialog below, one row per drum. Flattened
+      // rather than kept per-layer: the dialog just needs "which drums, how
+      // much kg used off each", not which recipe layer they belong to.
+      const adhesiveDrums = allocLayers
+        .filter((l) => l.key === "adhesive" || l.key === "adhesive2")
+        .flatMap((l) => l.reels || []);
+    %>
     <div class="span-full form-subheading">
       <h1>Material Allocation</h1>
     </div>
@@ -539,6 +566,7 @@
       <% }) %>
     </datalist>
     <script id="allotted-rolls-data" type="application/json"><%- safeJson(jc.allottedRollDetails || []) %></script>
+    <script id="adhesive-drums-data" type="application/json"><%- safeJson(adhesiveDrums) %></script>
 
     <!-- Job Setting Table -->
     <div class="span-full form-subheading" style="display: flex; align-items: center; gap: 12px;">
@@ -661,6 +689,40 @@
   </div>
 </div>
 
+<!-- ============ ADHESIVE USED DIALOG ============
+     Shown once, right when Save Production Entry is clicked, only if this
+     job had an adhesive drum reserved (adhesiveDrums.length -- see
+     ADHESIVE_DRUMS below). There's no scanned length to derive adhesive
+     consumption from the way Facestock/Release Liner mtrs are (Job Setting/
+     Production Log rows) -- a drum has no roll-length reading to clock a
+     start/stop against, only a weight, and only the operator standing at the
+     machine knows how much of it the job actually used. Confirming here is
+     what lets Save Production Entry actually submit; the values ride along
+     as adhesiveStockId[]/adhesiveKgUsed[] hidden inputs on the real form
+     (see submitAdhesiveUsage below), and routes/system/machine.js's
+     consumeAdhesiveUsage() does the real deduction once the form posts. -->
+<div class="logout-modal" id="adhesiveUsedDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="adhesiveUsedDialogTitle"
+    style="width: min(480px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="adhesiveUsedDialogTitle">Adhesive Used</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeAdhesiveUsedDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <p class="jc-adhesive-used-hint">
+        How many kg of each reserved drum did this job use? This comes off
+        that drum's stock once saved.
+      </p>
+      <div id="adhesiveUsedRows"></div>
+      <div class="jc-adhesive-used-error" id="adhesiveUsedError"></div>
+      <div class="dialog-actions">
+        <button type="button" class="btn-cancel" onclick="closeAdhesiveUsedDialog()">Cancel</button>
+        <button type="button" class="btn-primary" id="adhesiveUsedConfirmBtn" onclick="submitAdhesiveUsage()">Confirm & Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/js/jsQR.min.js" defer></script>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
@@ -740,6 +802,89 @@
     /* ── Roll ID scanning via the phone camera ── */
     function openModal(id)  { const d = document.getElementById(id); if (!d) return; d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
     function closeModal(id) { const d = document.getElementById(id); if (!d) return; d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
+
+    /* ── Adhesive Used dialog ──
+       Raw adhesive is only ever *reserved* at Assign Production, never
+       automatically deducted the way Facestock/Release Liner are (those come
+       off the scanned Deckle roll's Job Setting/Production Log meterage) --
+       a drum has no length reading to scan, only a weight, and only the
+       operator at the machine knows how much of it this job actually used.
+       Intercepted on the real submit handler above: if this order has any
+       adhesive drum reserved (ADHESIVE_DRUMS.length), Save Production Entry
+       opens this instead of posting straight away. Confirming builds
+       adhesiveStockId[]/adhesiveKgUsed[] hidden inputs on the real form and
+       re-submits it -- routes/system/machine.js's consumeAdhesiveUsage()
+       does the actual stock deduction once that post lands. */
+    const ADHESIVE_DRUMS = JSON.parse(document.getElementById("adhesive-drums-data").textContent);
+
+    function escAdhesiveKey(v) {
+      return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function renderAdhesiveUsedRows() {
+      const wrap = document.getElementById("adhesiveUsedRows");
+      wrap.innerHTML = ADHESIVE_DRUMS.map((d, i) => `
+        <div class="jc-adhesive-used-row">
+          <div class="jc-adhesive-used-meta">
+            <div class="jc-adhesive-used-rollid">${escAdhesiveKey(d.rollId || "—")}</div>
+            <div class="jc-adhesive-used-left">${d.reelMtrs} kg on this drum${d.location ? " · " + escAdhesiveKey(d.location) : ""}</div>
+          </div>
+          <input type="number" class="jc-adhesive-used-kg" id="adhesiveUsedKg-${i}"
+                 min="0" step="0.01" max="${d.reelMtrs}" placeholder="0" inputmode="decimal" />
+        </div>
+      `).join("");
+    }
+
+    function openAdhesiveUsedDialog() {
+      renderAdhesiveUsedRows();
+      document.getElementById("adhesiveUsedError").textContent = "";
+      openModal("adhesiveUsedDialog");
+      document.getElementById(`adhesiveUsedKg-0`)?.focus();
+    }
+    function closeAdhesiveUsedDialog() { closeModal("adhesiveUsedDialog"); }
+
+    // Confirming doesn't require every drum to have a value -- a job might
+    // genuinely have only drawn from one of two reserved drums. Zero/blank
+    // rows just don't get a hidden input (see the POST handler's own filter,
+    // which drops anything <= 0 too), so nothing gets deducted for them.
+    function submitAdhesiveUsage() {
+      const errorEl = document.getElementById("adhesiveUsedError");
+      errorEl.textContent = "";
+
+      const rows = [];
+      for (let i = 0; i < ADHESIVE_DRUMS.length; i++) {
+        const input = document.getElementById(`adhesiveUsedKg-${i}`);
+        const raw = input.value.trim();
+        input.classList.remove("jc-adhesive-used-over");
+        if (!raw) continue;
+        const kg = Number(raw);
+        if (!Number.isFinite(kg) || kg < 0) {
+          errorEl.textContent = "Enter a valid kg amount.";
+          input.focus();
+          return;
+        }
+        if (kg > ADHESIVE_DRUMS[i].reelMtrs) {
+          input.classList.add("jc-adhesive-used-over");
+          errorEl.textContent = `${ADHESIVE_DRUMS[i].rollId || "That drum"} only has ${ADHESIVE_DRUMS[i].reelMtrs} kg left.`;
+          input.focus();
+          return;
+        }
+        if (kg > 0) rows.push({ stockId: ADHESIVE_DRUMS[i]._id, kg });
+      }
+
+      rows.forEach(({ stockId, kg }) => {
+        const sidInput = document.createElement("input");
+        sidInput.type = "hidden"; sidInput.name = "adhesiveStockId"; sidInput.value = stockId;
+        const kgInput = document.createElement("input");
+        kgInput.type = "hidden"; kgInput.name = "adhesiveKgUsed"; kgInput.value = kg;
+        jcForm.appendChild(sidInput);
+        jcForm.appendChild(kgInput);
+      });
+
+      adhesiveUsedCleared = true;
+      closeAdhesiveUsedDialog();
+      jcForm.requestSubmit ? jcForm.requestSubmit() : jcForm.submit();
+    }
 
     const scanDialog = document.getElementById("scanDialog");
     const scanVideo = document.getElementById("scanVideo");
@@ -1358,8 +1503,18 @@
     if (jcForm) {
       ["input", "change", "click"].forEach((evt) => jcForm.addEventListener(evt, scheduleSave));
       let jcSubmitting = false;
+      // Set once the Adhesive Used dialog has been shown and either
+      // confirmed or found to have nothing to ask about (no drums reserved)
+      // -- lets the real submit straight through on its second pass, without
+      // re-opening the dialog on the programmatic .submit() that follows.
+      let adhesiveUsedCleared = false;
       jcForm.addEventListener("submit", (e) => {
         if (jcSubmitting) { e.preventDefault(); return; }
+        if (ADHESIVE_DRUMS.length && !adhesiveUsedCleared) {
+          e.preventDefault();
+          openAdhesiveUsedDialog();
+          return;
+        }
         jcSubmitting = true;
         clearTimeout(draftTimer);
         saveDraft();

@@ -227,6 +227,15 @@
     .roll-table tbody tr.roll-locked td { color: #94a3b8; }
     .roll-table tbody tr.roll-locked input[type="checkbox"] { cursor: not-allowed; }
 
+    /* A reel with no invoice number recorded can't be assigned -- flagged
+       red rather than the greyed-out .roll-locked treatment above, since
+       this signals a data problem to go fix (missing invoice), not just
+       "unavailable right now". */
+    .raw-layer-table tbody tr.raw-layer-row-no-invoice,
+    .raw-layer-table tbody tr.raw-layer-row-no-invoice:hover { background: #fef2f2; cursor: not-allowed; }
+    .raw-layer-table tbody tr.raw-layer-row-no-invoice td { color: #b91c1c; }
+    .raw-layer-table tbody tr.raw-layer-row-no-invoice input[type="checkbox"] { cursor: not-allowed; }
+
     /* ---- Raw Material Allotment -- one inline column per raw-material
        layer, styled like .roll-table above. NORMAL needs 3 (Facestock/
        Adhesive/Release Liner); DOUBLE RELEASE and DOUBLE FACESTOCK need 5 --
@@ -290,39 +299,45 @@
        has two candidate reels or fifty, so the columns line up instead of
        going ragged -- a short one just leaves empty space under its last
        row. */
-    .raw-layer-table-wrap { height: 320px; overflow-y: auto; }
-    /* Two sticky header rows: the column labels, and the search row directly
-       under them -- both stay put while the reels scroll past. */
-    .raw-layer-table thead th {
-      /* Just enough to sit over its own (unpositioned) rows -- anything
-         higher starts fighting the Choices dropdowns above. */
-      position: sticky; z-index: 1;
-      background: #f8fafc;
-      /* border-collapse: collapse drops the header's own bottom border once
-         it goes sticky -- redraw it as an inset shadow so scrolled rows
-         don't slide under a borderless header. */
-      box-shadow: inset 0 -1px 0 #e5e7eb;
+    .raw-layer-table-wrap {
+      height: 320px; overflow-y: auto;
+      /* Loses the top corners/border edge to the header table sitting
+         directly above it (see .raw-layer-table-head below), so the seam
+         between the two is a single hairline instead of a doubled-up border. */
+      border-top: none; border-radius: 0 0 8px 8px;
     }
-    .raw-layer-table thead tr:first-child th { top: 0; }
+    /* Header rows aren't "stuck" over a scrolling table at all -- they live
+       in their own separate, non-scrolling <table> directly above the
+       scrollable body table (see layerColumnHtml's raw-layer-table-head),
+       both sharing one <colgroup> so their columns line up. That replaces
+       position: sticky entirely: a sticky header re-pins itself against the
+       viewport on every scroll frame, and any sub-pixel rounding in that
+       process is what made the header and search row visibly drift apart
+       and back together while scrolling. A header that was never part of
+       the scrolling content in the first place has nothing left to drift
+       against.
+       Border/radius: .ap-table-wrap (below) still frames the body table with
+       its own border+radius; this table gets the matching top corners and a
+       border on the three sides the wrap doesn't share, so the two tables
+       read as one continuous box with a seam exactly where the header ends. */
+    .raw-layer-table-head {
+      border: 1px solid #e5e7eb; border-bottom: none;
+      border-radius: 8px 8px 0 0;
+    }
+    .raw-layer-table-head th { background: #f8fafc; }
     /* Column headings sort their own table -- click once for ascending, again
        for descending (see the th[data-sort] handler). No direction marker is
        drawn on the heading; the pointer cursor and hover colour are all that
        say it's clickable. */
     .raw-layer-table th.rl-sortable { cursor: pointer; user-select: none; }
     .raw-layer-table th.rl-sortable:hover { color: #0b6ea8; }
-    /* The search row's `top` is the labels row's own height, measured at
-       runtime into --rl-head-h by syncSearchRowOffset() -- a hard-coded px
-       would drift the moment the header's font or padding changes, leaving
-       either a gap or an overlap. The fallback only matters for the split
-       second before that first measurement. */
-    .raw-layer-table thead tr.raw-layer-search-row th {
-      top: var(--rl-head-h, 33px);
+    .raw-layer-table-head tr.raw-layer-search-row th {
       background: #fff;
       /* Tighter than the 12px the data cells carry -- every px of a 58px
          column is needed by the input itself. */
       padding: 5px 5px;
     }
-    .raw-layer-table thead tr.raw-layer-search-row th.roll-check-cell { padding: 5px 3px; }
+    .raw-layer-table-head tr.raw-layer-search-row th.roll-check-cell { padding: 5px 3px; }
     /* Text cells (Details, and Adhesive's Vendor/Make/Code -- whichever
        POOL_COLUMNS marks `trunc`) can run longer than these narrow columns.
        Truncate with an ellipsis instead of wrapping or pushing the table
@@ -584,6 +599,14 @@
     const ITEM = JSON.parse(document.getElementById("item-data").textContent);
     const requiredLayerKeys = () => LAYER_ORDER[ITEM.rollType] || LAYER_ORDER.NORMAL;
     const layerReelsCache = {}; // layerKey -> reels fetched for the current machine's location
+    // layerKey -> whether the adhesive layer's Label Stock has a binding
+    // configured (models/sachiko/labelStockAdhesiveBinding.js) -- a binding
+    // is mandatory for the adhesive pool now, so an empty reel list has two
+    // different real causes the empty-state message has to tell apart: "no
+    // binding set yet" vs. "bound, but nothing in stock matches it".
+    // Irrelevant (stays true) for Facestock/Release Liner, which have no
+    // binding concept.
+    const layerHasBindingCache = {};
 
     // What this order already had picked per raw-material layer (see
     // models/inventory/pendingProduction.js's allottedLayers) -- so
@@ -618,7 +641,13 @@
         if (spec.facestockGsm) bits.push(`${spec.facestockGsm} GSM`);
         if (spec.facestockType) bits.push(spec.facestockType);
       } else if (layerKey.startsWith("adhesive")) {
-        if (spec.adhesiveType) bits.push(spec.adhesiveType);
+        // Nothing shown here for adhesive -- the recipe's own Type is no
+        // longer what decides which drums are offered (a Label Stock <->
+        // Adhesive binding is, and one SKU can carry more than one binding,
+        // potentially spanning different types -- see
+        // /sachiko/form/label-stock-adhesive-binding). Printing the recipe's
+        // single Type next to the heading implied it still gated the picker,
+        // which it doesn't anymore.
       } else {
         // Sensing alone -- whether the liner carries the mark the press's
         // eye-mark sensor needs (models/sachiko/sachikoLabelStock.js's
@@ -741,7 +770,14 @@
             <span class="raw-layer-title">${meta.label}</span>
             <span class="raw-layer-spec">${specSummary(ITEM[meta.specField], layerKey)}</span>
           </div>
-          <div class="ap-table-wrap raw-layer-table-wrap custom-scrollbar"><table class="ap-table roll-table raw-layer-table">
+          <!-- Header lives in its own, non-scrolling table -- entirely
+               outside the scrollable body below, rather than "stuck" on top
+               of it via position: sticky. Sticky positioning inside a
+               scrolling table fights the table's own layout/paint and drifted
+               visibly on scroll; two stacked tables that share the same
+               <colgroup> column widths just can't drift, because the header
+               was never part of the thing that scrolls in the first place. -->
+          <table class="ap-table roll-table raw-layer-table raw-layer-table-head">
             <colgroup><col class="rl-col-check" />${cols}</colgroup>
             <thead>
               <tr>
@@ -753,6 +789,9 @@
                 ${columns.map((c, i) => `<th>${searchBox(c.key, c.label)}${i === 0 ? note : ""}</th>`).join("")}
               </tr>
             </thead>
+          </table>
+          <div class="ap-table-wrap raw-layer-table-wrap custom-scrollbar"><table class="ap-table roll-table raw-layer-table">
+            <colgroup><col class="rl-col-check" />${cols}</colgroup>
             <tbody data-body="${layerKey}"><tr><td colspan="${layerColCount(layerKey)}" style="color:#94a3b8; font-style:italic;">Select a machine first</td></tr></tbody>
           </table></div>
         </div>`;
@@ -828,7 +867,21 @@
         return;
       }
       if (!reels.length) {
-        tbody.innerHTML = `<tr><td colspan="${layerColCount(layerKey)}" style="color:#94a3b8; font-style:italic;">No reels in stock at this location</td></tr>`;
+        // The adhesive pool requires a binding (models/sachiko/labelStockAdhesiveBinding.js)
+        // -- an empty list here has two different real causes, and only one
+        // of them is "nothing in stock". Distinguish them so the operator
+        // isn't left guessing whether to look for stock or go configure a
+        // binding.
+        const message = layerKey.startsWith("adhesive") && layerHasBindingCache[layerKey] === false
+          ? 'No binding configured for this Label Stock — set one at <a href="/sachiko/form/label-stock-adhesive-binding" target="_blank" rel="noopener">Label Stock Adhesive Binding</a> before assigning.'
+          : "No reels in stock at this location";
+        // table-layout: fixed (see .raw-layer-table.roll-table above) means a
+        // long, unbroken run of text -- the binding link's full sentence in
+        // particular -- would otherwise push past this cell instead of
+        // wrapping inside it. white-space: normal is already the table
+        // default, but word-break/overflow-wrap are what actually force a
+        // break rather than letting the cell's fixed width overflow.
+        tbody.innerHTML = `<tr><td colspan="${layerColCount(layerKey)}" style="color:#94a3b8; font-style:italic; white-space:normal; word-break:break-word; overflow-wrap:break-word;">${message}</td></tr>`;
         filterLayerRows(layerKey);
         return;
       }
@@ -840,8 +893,15 @@
       // so every row is independently selectable with no single-select
       // enforcement (unlike a native radio group). data-col ties each cell
       // to the header filter box above it.
+      //
+      // A reel with no invoice number recorded can't be assigned -- inward
+      // without an invoice usually means the entry is still incomplete/
+      // provisional, so the row is shown (an operator can see it's there and
+      // go fix the stock record) but marked unselectable rather than offered
+      // as a normal candidate.
       tbody.innerHTML = orderedReels.map((r) => {
-        const checked = previouslyChecked.has(r._id);
+        const checked = previouslyChecked.has(r._id) && !!r.invoiceNo;
+        const noInvoice = !r.invoiceNo;
         const cells = columns.map((c) => {
           const raw = c.value(r, layerKey);
           const text = raw == null || raw === "" ? "—" : escAttr(raw);
@@ -849,8 +909,11 @@
           const cls = c.trunc ? ' class="raw-layer-detail-cell"' : "";
           return `<td data-col="${c.key}"${cls}${title}>${text}</td>`;
         }).join("");
-        return `<tr>` +
-          `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"${checked ? " checked" : ""} /></td>` +
+        const rowAttrs = noInvoice
+          ? ` class="raw-layer-row-no-invoice" title="No invoice"`
+          : "";
+        return `<tr${rowAttrs}>` +
+          `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"${checked ? " checked" : ""}${noInvoice ? " disabled" : ""} /></td>` +
           cells +
         `</tr>`;
       }).join("");
@@ -930,11 +993,17 @@
 
       if (!location) {
         layerReelsCache[layerKey] = null;
+        layerHasBindingCache[layerKey] = true;
         renderLayerRows(layerKey);
         return;
       }
-      if (!type) {
+      // Adhesive no longer needs the recipe's own Type -- a binding decides
+      // the drums now (see the matching server-side change in
+      // routes/sachiko/labelStockProduction.js's /raw-stock), so a blank
+      // adhesiveType here isn't an incomplete spec for this layer anymore.
+      if (!type && !layerKey.startsWith("adhesive")) {
         layerReelsCache[layerKey] = [];
+        layerHasBindingCache[layerKey] = true;
         tbody.innerHTML = `<tr><td colspan="${layerColCount(layerKey)}" style="color:#ef4444;">Spec incomplete on this SKU</td></tr>`;
         filterLayerRows(layerKey);
         return;
@@ -944,8 +1013,10 @@
         const res = await fetch(`/sachiko/labelstockproduction/raw-stock?layerKey=${encodeURIComponent(layerKey)}&itemId=${encodeURIComponent(ITEM._id)}&location=${encodeURIComponent(location)}&orderId=${encodeURIComponent(ORDER_ID)}`);
         const data = await res.json();
         layerReelsCache[layerKey] = data.reels || [];
+        layerHasBindingCache[layerKey] = data.hasBinding !== false;
       } catch {
         layerReelsCache[layerKey] = [];
+        layerHasBindingCache[layerKey] = true;
       }
       renderLayerRows(layerKey);
     }
@@ -968,7 +1039,7 @@
       if (e.target.closest("input[type='checkbox']")) return; // browser toggles it natively
       const row = e.target.closest(".raw-layer-table tbody tr");
       const checkbox = row?.querySelector("input[type='checkbox']");
-      if (checkbox) checkbox.checked = !checkbox.checked;
+      if (checkbox && !checkbox.disabled) checkbox.checked = !checkbox.checked;
     });
 
     // Clicking a column heading sorts that table by it -- ascending on the
@@ -1000,27 +1071,13 @@
       if (e.key === "Enter" && e.target.closest(".raw-layer-search")) e.preventDefault();
     });
 
-    // The search row is sticky directly beneath the column labels, so it
-    // needs their exact height as its `top` offset (see the
-    // .raw-layer-search-row rule). Measured rather than assumed -- a
-    // hard-coded px value misaligns the moment the header's font, padding
-    // or wrapping changes.
-    function syncSearchRowOffset() {
-      document.querySelectorAll("#rawLayersGrid .raw-layer-table").forEach((table) => {
-        const labelRow = table.querySelector("thead tr:first-child");
-        if (!labelRow) return;
-        table.style.setProperty("--rl-head-h", `${Math.round(labelRow.getBoundingClientRect().height)}px`);
-      });
-    }
-
     // Build the columns once -- they don't change shape after load, only
-    // their reel options do, as the machine changes.
+    // their reel options do, as the machine changes. Both header rows stick
+    // together as one block now (see `.raw-layer-table thead` above), so
+    // there's no offset to measure or keep in sync on resize/font-load
+    // anymore -- the browser just handles it.
     document.getElementById("rawLayersGrid").innerHTML =
       requiredLayerKeys().map((key) => layerColumnHtml(key, LAYER_META[key])).join("");
-    syncSearchRowOffset();
-    // A narrower viewport can wrap a header label onto a second line, which
-    // changes that offset.
-    window.addEventListener("resize", syncSearchRowOffset);
 
     machineSelectEl.addEventListener("change", refreshAllLayerOptions);
     // Covers re-opening an order that already has a machine assigned --

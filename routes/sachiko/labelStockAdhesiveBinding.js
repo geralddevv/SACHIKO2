@@ -4,7 +4,6 @@ import crypto from "crypto";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
 import LabelStockAdhesiveBinding from "../../models/sachiko/labelStockAdhesiveBinding.js";
-import Location from "../../models/system/location.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 
@@ -14,21 +13,16 @@ const PAGE = "/sachiko/form/label-stock-adhesive-binding";
 
 // Same sha256 signature scheme the Client Label Stock binding uses (see
 // routes/sachiko/labelStockBinding.js) -- applied here to "same SKU, same
-// adhesive, same location".
+// adhesive".
 function hashSignature(rawSignature) {
   return `sha256:${crypto.createHash("sha256").update(String(rawSignature ?? "")).digest("hex")}`;
 }
 
-function canonLocation(value) {
-  return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+function buildBindingSignature({ labelStock, adhesive }) {
+  return hashSignature([String(labelStock || ""), String(adhesive || "")].join("||"));
 }
 
-function buildBindingSignature({ labelStock, adhesive, location }) {
-  return hashSignature([String(labelStock || ""), String(adhesive || ""), canonLocation(location)].join("||"));
-}
-
-const DUPLICATE_MESSAGE =
-  "This adhesive is already bound to that Label Stock for the same location.";
+const DUPLICATE_MESSAGE = "This adhesive is already bound to that Label Stock.";
 
 // One row's worth of the submitted form, validated. Returns { payload } or
 // { error } -- never throws, so every caller can flash-and-redirect the same
@@ -36,7 +30,6 @@ const DUPLICATE_MESSAGE =
 async function readBindingBody(body) {
   const labelStockId = String(body.labelStockId || "").trim();
   const adhesiveId = String(body.adhesiveId || "").trim();
-  const location = String(body.location || "").trim();
 
   if (!mongoose.isValidObjectId(labelStockId)) return { error: "Please select a Label Stock." };
   if (!mongoose.isValidObjectId(adhesiveId)) return { error: "Please select an Adhesive." };
@@ -48,36 +41,61 @@ async function readBindingBody(body) {
   if (!labelStock) return { error: "That Label Stock no longer exists." };
   if (!adhesive) return { error: "That Adhesive Master no longer exists." };
 
-  // Blank is a real value here -- "binds everywhere" -- so only a location
-  // that was actually typed gets checked against the master list.
-  if (location) {
-    const known = await Location.exists({ locationName: location });
-    if (!known) return { error: "Invalid location." };
-  }
-
   return {
     payload: {
       labelStock: labelStockId,
       adhesive: adhesiveId,
-      location,
-      bindingSignature: buildBindingSignature({ labelStock: labelStockId, adhesive: adhesiveId, location }),
+      bindingSignature: buildBindingSignature({ labelStock: labelStockId, adhesive: adhesiveId }),
     },
   };
 }
 
 // The form plus everything already bound, on one page -- these bindings are
-// short rows (SKU, adhesive, location) with nothing worth its own view screen,
+// short rows (SKU, adhesive) with nothing worth its own view screen,
 // so the list lives under the form and edits happen in a dialog on it.
 router.get("/form/label-stock-adhesive-binding", async (req, res) => {
   try {
-    const [labelStocks, adhesives, locations, bindings] = await Promise.all([
-      SachikoLabelStock.find({}, { skuCode: 1, productCode: 1, rollType: 1, adhesive: 1 })
+    const [labelStocks, adhesives, bindings] = await Promise.all([
+      // Full recipe layers included (not just `adhesive`) -- the Bind dialog
+      // shows the whole layer stack for context once a Product Code is picked
+      // (see views/sachiko/labelStockAdhesiveBindingForm.ejs's layer preview).
+      SachikoLabelStock.find(
+        {},
+        {
+          skuCode: 1,
+          productCode: 1,
+          rollType: 1,
+          facestock: 1,
+          adhesive: 1,
+          releaseLiner: 1,
+          facestock2: 1,
+          adhesive2: 1,
+          releaseLiner2: 1,
+        },
+      )
         .sort({ productCode: 1, skuCode: 1 })
         .lean(),
-      AdhesiveMaster.find({}, { skuId: 1, type: 1, make: 1, vendorName: 1, vendorSkuCode: 1 })
+      // Every field the Bind dialog's smart cascading filter narrows on (see
+      // AD_ORDER in the view) plus vendorId, so the cascade can resolve down
+      // to one Adhesive Master and read off its skuId.
+      AdhesiveMaster.find(
+        {},
+        {
+          skuId: 1,
+          vendorId: 1,
+          vendorName: 1,
+          type: 1,
+          make: 1,
+          vendorSkuCode: 1,
+          shelfLife: 1,
+          viscosity: 1,
+          cohesion: 1,
+          shear: 1,
+          density: 1,
+        },
+      )
         .sort({ skuId: 1 })
         .lean(),
-      Location.find({}, { locationName: 1 }).sort({ locationName: 1 }).lean(),
       LabelStockAdhesiveBinding.find()
         .populate({ path: "labelStock", select: "skuCode productCode adhesive" })
         .populate({ path: "adhesive", select: "skuId type make vendorName vendorSkuCode" })
@@ -91,7 +109,6 @@ router.get("/form/label-stock-adhesive-binding", async (req, res) => {
       JS: false,
       labelStocks,
       adhesives,
-      locations: locations.map((l) => l.locationName),
       bindings,
       notification: req.flash("notification"),
     });
@@ -172,34 +189,6 @@ router.post("/label-stock-adhesive-binding/edit/:id", requireAuth, updateLimiter
     }
     console.error("LABEL STOCK ADHESIVE BINDING EDIT ERROR:", err);
     req.flash("notification", "Failed to update the binding.");
-    res.redirect(PAGE);
-  }
-});
-
-// ACTIVE/INACTIVE rather than delete-only: switching a binding off narrows
-// nothing (an inactive one is ignored by the picker) but keeps the record of
-// what was once allowed.
-router.post("/label-stock-adhesive-binding/status/:id", requireAuth, updateLimiter, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const status = String(req.body.status || "").trim().toUpperCase();
-    if (!mongoose.isValidObjectId(id) || !["ACTIVE", "INACTIVE"].includes(status)) {
-      req.flash("notification", "Invalid request.");
-      return res.redirect(PAGE);
-    }
-
-    const updated = await LabelStockAdhesiveBinding.findByIdAndUpdate(id, { $set: { status } }, { new: true });
-    if (!updated) {
-      req.flash("notification", "Binding not found.");
-      return res.redirect(PAGE);
-    }
-
-    res.locals.auditDescription = `Set label stock adhesive binding ${id} to ${status}`;
-    req.flash("notification", `Binding set to ${status}.`);
-    res.redirect(PAGE);
-  } catch (err) {
-    console.error("LABEL STOCK ADHESIVE BINDING STATUS ERROR:", err);
-    req.flash("notification", "Failed to change the binding's status.");
     res.redirect(PAGE);
   }
 });

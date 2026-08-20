@@ -295,6 +295,29 @@
         pointer-events: auto;
       }
 
+      /* A native <dialog> shows itself via the `open` attribute (set by
+         .showModal()), not the .show class the div-based modals above rely
+         on -- without this, .logout-modal's opacity:0/pointer-events:none
+         never lifts and the dialog opens invisibly.
+
+         Also: .logout-modal's position:fixed:inset:0;display:flex turns the
+         <dialog> box itself into a viewport-spanning flex wrapper, which
+         fights the browser's own top-layer centering (UA default
+         margin:auto + width/height:fit-content) -- the dialog ends up
+         shrunk to fit-content and stuck near its pre-promotion position
+         (top-left-ish) instead of centered, with its real content clipped
+         inside. Native <dialog> centers itself via UA margin:auto once
+         width/height are pinned, so undo the flex-wrapper properties here
+         and let that happen. */
+      dialog.logout-modal[open] {
+        opacity: 1;
+        pointer-events: auto;
+        position: fixed;
+        inset: 0;
+        display: block;
+        margin: auto;
+      }
+
       .logout-dialog {
         width: min(560px, 94vw);
         background: #ffffff;
