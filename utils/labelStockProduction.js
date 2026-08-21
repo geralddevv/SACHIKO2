@@ -7,7 +7,7 @@ import AdhesiveStock from "../models/inventory/adhesiveStock.js";
 import AdhesiveStockLog from "../models/inventory/adhesiveStockLog.js";
 import ReleaseLinerStock from "../models/inventory/releaseLinerStock.js";
 import ReleaseLinerStockLog from "../models/inventory/releaseLinerStockLog.js";
-import { generateRollId } from "./rollId.js";
+import { generateDeckleId } from "./rollId.js";
 import { resolveActualLabelStock, resolveLabelStockCombinations } from "./labelStockVariant.js";
 
 // ---------------------------------------------------------------------------
@@ -16,8 +16,8 @@ import { resolveActualLabelStock, resolveLabelStockCombinations } from "./labelS
 // allocates one physical reel of each raw-material layer it calls for,
 // laminating them (in the real-world process) into one finished reel of
 // label stock: a "Deckle" -- a MaterialStock row, identified by a Deckle ID
-// (MaterialStock.rollId, generated the same way FAIRTECH generates paper
-// roll ids -- see utils/rollId.js). All layers run through the laminator
+// (MaterialStock.rollId, generated in the production lot format by
+// utils/rollId.js). All layers run through the laminator
 // together, so they all consume the same length; the mtrs produced is the
 // mtrs drawn off every allocated reel.
 //
@@ -206,7 +206,7 @@ export function requiredLayersFor(rollType) {
 // projection) -- every layer's spec is read off it. `layers` is
 // { layerKey: rawStockId }, one entry per key requiredLayersFor(rollType)
 // calls for.
-export async function produceDeckle({ labelStock, location, reelMtrs, size, rate, remarks, layers, createdBy, producedFor }) {
+export async function produceDeckle({ labelStock, location, reelMtrs, lotNo, size, rate, remarks, layers, createdBy, producedFor }) {
   if (!labelStock) throw new Error("Label Stock SKU not found.");
   if (!location) throw new Error("A stock location is required.");
   reelMtrs = Number(reelMtrs);
@@ -261,7 +261,7 @@ export async function produceDeckle({ labelStock, location, reelMtrs, size, rate
   const actualLabelStock = await resolveActualLabelStock(labelStock, resolved);
 
   const by = createdBy || "SYSTEM";
-  const deckleId = await generateRollId(actualLabelStock.productCode);
+  const deckleId = await generateDeckleId(actualLabelStock.productCode, lotNo);
 
   for (const { meta, Model, LogModel, reel } of resolved) {
     const remaining = round2(reel.reelMtrs - reelMtrs);
@@ -308,6 +308,7 @@ export async function produceDeckle({ labelStock, location, reelMtrs, size, rate
     quantity: 1,
     reelMtrs,
     size: String(size ?? "").trim() || undefined,
+    lotNo: String(lotNo ?? "").trim() || undefined,
     rate: numOrUndef(rate),
     rollId: deckleId,
     remarks: remarks?.trim() || undefined,

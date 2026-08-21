@@ -560,6 +560,17 @@
         </div>
       </div>
 
+      <div class="dialog-field-row">
+        <div>
+          <label class="dialog-field-label" for="editJointInput">Joint</label>
+          <input type="text" id="editJointInput" class="form-control premium-input" placeholder="Optional joint detail" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="editWrinkleInput">Wrinkle</label>
+          <input type="text" id="editWrinkleInput" class="form-control premium-input" placeholder="Optional wrinkle detail" />
+        </div>
+      </div>
+
       <label class="dialog-field-label" for="editRemarksInput">Remarks</label>
       <input type="text" id="editRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
 
@@ -882,6 +893,8 @@
         `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
         data.vendorRollId ? `Vendor Drum ID: ${escapeHtml(data.vendorRollId)}` : "",
         `Kg ${fmt(data.reelMtrs)}`,
+        `Joint: ${escapeHtml(data.joint || "—")}`,
+        `Wrinkle: ${escapeHtml(data.wrinkle || "—")}`,
         data.location ? escapeHtml(data.location) : "",
         data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
         data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : `<span style="color:#dc2626; font-weight:700;">No Invoice</span>`,
@@ -1103,6 +1116,10 @@
         <input type="text" class="form-control premium-input drum-vendor-id" placeholder="Vendor's own drum no" value="${prev.vendorRollId || ""}" style="margin-bottom: 10px;" />
         <label class="dialog-field-label">Kg</label>
         <input type="number" class="form-control premium-input drum-mtrs" min="0" step="any" placeholder="Enter Kg" value="${prev.mtrs || ""}" />
+        <label class="dialog-field-label">Joint</label>
+        <input type="text" class="form-control premium-input drum-joint" placeholder="Optional joint detail" value="${prev.joint || ""}" style="margin-bottom: 10px;" />
+        <label class="dialog-field-label">Wrinkle</label>
+        <input type="text" class="form-control premium-input drum-wrinkle" placeholder="Optional wrinkle detail" value="${prev.wrinkle || ""}" />
       </div>`;
   }
 
@@ -1116,6 +1133,8 @@
       ? Array.from(container.querySelectorAll(".drum-row")).map((row) => ({
           vendorRollId: row.querySelector(".drum-vendor-id").value,
           mtrs: row.querySelector(".drum-mtrs").value,
+          joint: row.querySelector(".drum-joint").value,
+          wrinkle: row.querySelector(".drum-wrinkle").value,
         }))
       : [];
     container.innerHTML = Array.from({ length: count }, (_, i) => drumRowHtml(i, existing[i] || {})).join("");
@@ -1230,6 +1249,8 @@
     const rolls = drumRows.map((row) => ({
       reelMtrs: row.querySelector(".drum-mtrs").value,
       vendorRollId: row.querySelector(".drum-vendor-id").value.trim(),
+      joint: row.querySelector(".drum-joint").value.trim(),
+      wrinkle: row.querySelector(".drum-wrinkle").value.trim(),
     }));
     const emptyIndex = rolls.findIndex((r) => !r.reelMtrs || Number(r.reelMtrs) <= 0);
     if (emptyIndex !== -1) return showError("addAdhesiveError", `Kg is required for drum ${emptyIndex + 1}.`);
@@ -1422,6 +1443,8 @@
     document.getElementById("editRateInput").value = reel.rate != null ? reel.rate : "";
     document.getElementById("editVendorRollIdInput").value = reel.vendorRollId || "";
     document.getElementById("editKgInput").value = reel.reelMtrs != null ? reel.reelMtrs : "";
+    document.getElementById("editJointInput").value = reel.joint || "";
+    document.getElementById("editWrinkleInput").value = reel.wrinkle || "";
     document.getElementById("editRemarksInput").value = reel.remarks || "";
 
     hideError("editRollError");
@@ -1473,6 +1496,8 @@
           remarks: document.getElementById("editRemarksInput").value,
           reelMtrs,
           vendorRollId,
+          joint: document.getElementById("editJointInput").value,
+          wrinkle: document.getElementById("editWrinkleInput").value,
         }),
       });
       const data = await res.json();

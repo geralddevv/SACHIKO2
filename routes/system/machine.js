@@ -14,7 +14,7 @@ import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { normalizeLocationName } from "../../utils/locations.js";
-import { normalizeRollId, extractScannedRollId, generateRollId } from "../../utils/rollId.js";
+import { normalizeRollId, extractScannedRollId, generateDeckleId } from "../../utils/rollId.js";
 import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds } from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
@@ -374,7 +374,9 @@ async function buildQueueRows(match) {
   const layerDocMaps = {};
   for (const [pool, ids] of Object.entries(stockIdsByPool)) {
     const { Model } = POOL_MODELS[pool];
-    const docs = await Model.find({ _id: { $in: ids } }).select("rollId reelMtrs location").lean();
+    const docs = await Model.find({ _id: { $in: ids } })
+      .select("rollId reelMtrs location size gsm make vendorSkuCode")
+      .lean();
     layerDocMaps[pool] = new Map(docs.map((d) => [String(d._id), d]));
   }
 
@@ -426,7 +428,16 @@ async function buildQueueRows(match) {
         ? pickStockIds(pick)
             .map((sid) => layerDocMaps[pick.pool]?.get(sid))
             .filter(Boolean)
-            .map((doc) => ({ _id: String(doc._id), rollId: doc.rollId || "", reelMtrs: Number(doc.reelMtrs) || 0, location: doc.location || "" }))
+            .map((doc) => ({
+              _id: String(doc._id),
+              rollId: doc.rollId || "",
+              reelMtrs: Number(doc.reelMtrs) || 0,
+              location: doc.location || "",
+              code: doc.vendorSkuCode || "",
+              gsm: doc.gsm,
+              size: doc.size || "",
+              make: doc.make || "",
+            }))
         : [];
       return {
         key,
@@ -833,7 +844,14 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, location, jobC
       continue;
     }
 
-    const deckleId = await generateRollId(itemCode);
+    const deckleId = await generateDeckleId(itemCode, pendingDoc.lotNo);
+    // The job card records the status of both webs. Preserve the actual
+    // selected value(s) on this particular finished reel for its SOFT.prn
+    // JOINTS field, while omitting it completely for a clean run.
+    const joints = [...new Set([row.face?.joint, row.release?.joint]
+      .map((value) => trim(value))
+      .filter(Boolean))]
+      .join(" / ") || undefined;
 
     const bal = await MaterialStock.aggregate([
       { $match: { material: labelStock._id, location } },
@@ -847,6 +865,8 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, location, jobC
       quantity: 1,
       reelMtrs: meters,
       size: trim(pendingDoc.paperSize),
+      joints,
+      lotNo: trim(pendingDoc.lotNo),
       rollId: deckleId,
       producedFor: pendingDoc._id,
     });
@@ -896,7 +916,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     let pendingDoc = null;
     if (mongoose.isValidObjectId(b.pendingId)) {
       pendingDoc = await PendingProduction.findById(b.pendingId)
-        .select("allottedRollIds allottedLayers itemId paperSize")
+        .select("allottedRollIds allottedLayers itemId paperSize lotNo")
         .populate({ path: "itemId", select: "rollType" })
         .lean();
       if (!pendingDoc || !hasStartableAllotment({

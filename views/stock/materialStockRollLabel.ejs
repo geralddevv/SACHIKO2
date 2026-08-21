@@ -103,6 +103,11 @@
       image-rendering: pixelated;
     }
 
+    /* The Deckle ID occupies the free space to the left of the QR on the
+       lowest SOFT.prn row. It uses that whole space and is centered within
+       it, rather than appearing to hug the QR's new lower position. */
+    .deckle-id-slot { text-align: center; }
+
     /* ---- screen furniture (never printed) ---- */
     .toolbar {
       width: min(760px, 100%);
@@ -227,10 +232,13 @@
   <div class="label label-frame">
     <div class="label-inner" id="labelInner">
       <% for (const [key, slot] of Object.entries(mm.slots)) { %>
-        <span class="slot" data-fit
-              style="left: <%= slot.left %>mm; top: <%= slot.top %>mm; max-width: <%= slot.maxWidth %>mm; font-size: <%= slot.pt %>pt;"><%= fields[key] %></span>
+        <% const isDeckleId = key === "rollId"; %>
+        <span class="slot<%= isDeckleId ? " deckle-id-slot" : "" %>" data-fit
+              style="left: <%= slot.left %>mm; top: <%= isDeckleId ? slot.top + 2 : slot.top %>mm; max-width: <%= slot.maxWidth %>mm;<%= isDeckleId ? ` width: ${slot.maxWidth}mm;` : "" %> font-size: <%= slot.pt %>pt;"><%= fields[key] %></span>
       <% } %>
-      <span class="slot" style="left: <%= mm.qr.left %>mm; top: <%= mm.qr.top %>mm; width: <%= mm.qr.size %>mm; height: <%= mm.qr.size %>mm;">
+      <!-- The Deckle QR sits 1 mm higher than the prior placement; the
+           Deckle ID remains centered in its full adjacent field. -->
+      <span class="slot" style="left: <%= mm.qr.left %>mm; top: <%= mm.qr.top + 1 %>mm; width: <%= mm.qr.size %>mm; height: <%= mm.qr.size %>mm;">
         <img src="<%= qrDataUrl %>" alt="Deckle QR" />
       </span>
     </div>

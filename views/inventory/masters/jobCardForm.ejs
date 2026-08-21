@@ -195,6 +195,25 @@
   .jc-roll-table th:last-child,
   .jc-roll-table td:last-child { border-right: none; }
   .jc-roll-table tr:last-child td { border-bottom: none; }
+  .jc-allocation-wrap {
+    width: 100%;
+    align-self: stretch;
+    padding: 0;
+  }
+  .jc-allocation-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .jc-roll-table.jc-allocation-table {
+    min-width: 1050px;
+    table-layout: auto;
+  }
+  .jc-roll-table.jc-allocation-table td {
+    white-space: nowrap;
+    word-break: normal;
+    vertical-align: middle;
+  }
   .jc-no-rolls {
     padding: 10px 12px;
     font-size: 13px;
@@ -378,6 +397,20 @@
       flex: 0 0 34%; color: #5a6586; font-weight: 700; font-size: 12px;
     }
     .jc-roll-table td:first-child { background: #f0f7ff; color: #03365a; font-weight: 700; }
+
+    /* Allocation is an at-a-glance machine checklist: retain each material
+       as one horizontal row on small screens and let the wrapper scroll,
+       instead of splitting its fields into several stacked rows. */
+    .jc-roll-table.jc-allocation-table { min-width: 1050px; table-layout: auto; }
+    .jc-roll-table.jc-allocation-table thead { display: table-header-group; }
+    .jc-roll-table.jc-allocation-table tbody { display: table-row-group; }
+    .jc-roll-table.jc-allocation-table tr { display: table-row; border-bottom: none; }
+    .jc-roll-table.jc-allocation-table td {
+      display: table-cell; width: auto; padding: 7px 12px; border-right: 1px solid #e2e8f0;
+      white-space: nowrap; word-break: normal; font-size: 12.5px;
+    }
+    .jc-roll-table.jc-allocation-table td::before { display: none; }
+    .jc-roll-table.jc-allocation-table td:first-child { background: #f0f7ff; color: #03365a; font-weight: 700; }
 
     .jc-log-table thead { display: none; }
     .jc-log-table tbody,
@@ -577,15 +610,20 @@
       <h1>Material Allocation</h1>
     </div>
 
-    <div class="span-full jc-info-wrap">
+    <div class="span-full jc-info-wrap jc-allocation-wrap">
       <% if (allocLayers.length) { %>
-        <table class="jc-roll-table">
+        <div class="jc-allocation-scroll">
+        <table class="jc-roll-table jc-allocation-table">
           <thead>
             <tr>
               <th style="width:150px;">Layer</th>
               <th style="width:120px;">Status</th>
               <th>Qty</th>
               <th>Roll / Drum ID</th>
+              <th>Code</th>
+              <th>GSM</th>
+              <th>Size</th>
+              <th>Make</th>
               <th>Location</th>
             </tr>
           </thead>
@@ -611,14 +649,24 @@
                   const totalMtrs = reels.reduce((sum, r) => sum + (Number(r.reelMtrs) || 0), 0);
                   const reelIds = reels.map((r) => r.rollId).filter(Boolean);
                   const reelLocations = [...new Set(reels.map((r) => r.location).filter(Boolean))];
+                  const reelCodes = reels.map((r) => r.code).filter(Boolean);
+                  const reelGsms = reels.map((r) => r.gsm).filter((v) => v !== undefined && v !== null && v !== "");
+                  const reelSizes = reels.map((r) => r.size).filter(Boolean);
+                  const reelMakes = reels.map((r) => r.make).filter(Boolean);
+                  const quantityUnit = l.pool === "adhesive" ? "kg" : "mtrs";
                 %>
-                <td data-label="Qty"><%= reels.length ? `${reels.length} ${l.unit}${reels.length === 1 ? "" : "s"}${totalMtrs ? ` (${fmtQty(totalMtrs)} kg)` : ""}` : "—" %></td>
+                <td data-label="Qty"><%= reels.length ? `${reels.length} ${l.unit}${reels.length === 1 ? "" : "s"}${totalMtrs ? ` (${fmtQty(totalMtrs)} ${quantityUnit})` : ""}` : "—" %></td>
                 <td data-label="Roll / Drum ID"><%= reelIds.length ? reelIds.join(", ") : "—" %></td>
+                <td data-label="Code"><%= reelCodes.length ? reelCodes.join(", ") : "—" %></td>
+                <td data-label="GSM"><%= reelGsms.length ? reelGsms.map((gsm) => `${fmtQty(gsm)} GSM`).join(", ") : "—" %></td>
+                <td data-label="Size"><%= reelSizes.length ? reelSizes.join(", ") : "—" %></td>
+                <td data-label="Make"><%= reelMakes.length ? reelMakes.join(", ") : "—" %></td>
                 <td data-label="Location"><%= reelLocations.length ? reelLocations.join(", ") : "—" %></td>
               </tr>
             <% }) %>
           </tbody>
         </table>
+        </div>
       <% } else { %>
         <div class="jc-no-rolls">
           This SKU has no raw-material recipe to allocate.
@@ -1158,11 +1206,10 @@
 
     /* A Production Log row unlocks on the same left-to-right principle, but
        around a single timer rather than a start/stop pair: naming the roll arms
-       the Timer, and starting it opens the deckle's id, its metres and the two
-       joint columns. So the sheet can never hold production figures for a
+       the Timer, and starting it opens the metres and the two joint columns.
+       The Deckle ID is issued by the server on save. So the sheet can never hold production figures for a
        deckle that was never actually run. */
     const LOG_RUN_FIELDS = [
-      ".log-deckle-id",
       ".log-meters",
       ".log-face-joint",
       ".log-face-mtr",
@@ -1348,7 +1395,7 @@
           </div>
           <span class="roll-note"></span>
         </td>
-        <td data-label="Deckle ID"><input type="text" name="deckleId" class="form-control log-deckle-id" placeholder="Deckle ID" autocomplete="off" /></td>
+        <td data-label="Deckle ID"><input type="text" name="deckleId" class="form-control log-deckle-id" placeholder="Generated on save" autocomplete="off" readonly /></td>
         <td style="text-align:center; font-size:12px; font-weight:700; white-space:nowrap; min-width:70px;" data-label="Start Time">
           <span class="log-start-display" style="color:#03365a;">—</span>
           <input type="hidden" name="logStart" class="log-start-input" />

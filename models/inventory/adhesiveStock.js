@@ -81,6 +81,15 @@ const adhesiveStockSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Drum-specific quality details supplied at inward.
+    joint: {
+      type: String,
+      trim: true,
+    },
+    wrinkle: {
+      type: String,
+      trim: true,
+    },
     invoiceNo: {
       type: String,
       trim: true,

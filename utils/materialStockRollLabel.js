@@ -17,28 +17,29 @@ import {
 // (+ its populated SachikoLabelStock recipe's) own fields go in which box;
 // see utils/facestockRollLabel.js for the sibling this was modeled on.
 //
-// Unlike a raw-material reel, a Deckle IS the finished label stock these
-// boxes were designed for: FACE/ADHESIVE/RELEASE come straight from its
-// SachikoLabelStock recipe, and reelMtrs is metres of finished stock (not
-// kilos, unlike the raw-material pools), so it fills LENGTH rather than
-// WEIGHT. A Deckle has no vendor/client and isn't invoiced, so CLIENT NAME,
-// LOT NO and WEIGHT print "-".
+// A Deckle's reelMtrs is metres of finished stock (not kilos, unlike raw
+// material), so it fills LENGTH rather than WEIGHT. Following SOFT.prn's
+// requested mapping, WIDTH uses the Deckle size and JOINTS uses the status
+// noted on its production-log row. A Deckle has no vendor/client or invoice,
+// while FACE/ADHESIVE/RELEASE are deliberately kept "-".
 export { LABEL_WIDTH_MM, LABEL_HEIGHT_MM, labelLayoutMm, rollLabelQrDataUrl, rollLabelModuleCount };
 
-export function buildLabelFields({ prodCode, reelMtrs, rollId, printedOn, face, adhesive, release }) {
+export function buildLabelFields({ prodCode, reelMtrs, rollId, printedOn, size, joints, lotNo }) {
   const length = fieldOrDash(reelMtrs);
   return {
     clientName: "-",                    // CLIENT NAME box <- no vendor/client on a produced Deckle
     prodCode: fieldOrDash(prodCode),    // PROD CODE box   <- its SachikoLabelStock recipe's own code
     mfgDate: formatLabelDate(printedOn),
-    lotNo: "-",                         // LOT NO box      <- not invoiced, it's produced in-house
-    face: fieldOrDash(face),
-    adhesive: fieldOrDash(adhesive),
-    release: fieldOrDash(release),
-    joints: "-",                        // JOINTS box      <- splice count isn't tracked
+    lotNo: fieldOrDash(lotNo),           // LOT NO box      <- the Deckle's production lot
+    // These three SOFT.prn boxes describe raw layers; the Semi Finished
+    // Deckle label intentionally keeps them blank as requested.
+    face: "-",
+    adhesive: "-",
+    release: "-",
+    joints: fieldOrDash(joints),         // JOINTS box <- status captured on the production-log row
     length: length === "-" ? "-" : `${length}MTR`, // LENGTH box <- reelMtrs is metres in this pool
     weight: "-",                        // WEIGHT box      <- not tracked for a Deckle
-    width: "-",                         // WIDTH box       <- not on MaterialStock's schema
+    width: fieldOrDash(size),            // WIDTH box       <- Deckle's finished size
     rollId: fieldOrDash(rollId),
   };
 }

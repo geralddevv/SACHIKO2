@@ -105,6 +105,11 @@
   <div id="pending-order-details-body" style="width: min(1180px, 100%); animation: detailsPopIn 0.2s ease-out"></div>
 </div>
 
+<!-- Live Status production-log dialog -->
+<div id="live-status-dialog" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.54); z-index: 10001; justify-content: center; align-items: center; padding: 24px; backdrop-filter: blur(6px);">
+  <div id="live-status-dialog-body" style="width: min(1120px, 100%); animation: detailsPopIn 0.2s ease-out"></div>
+</div>
+
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -170,6 +175,56 @@
     document.getElementById("pending-order-details-dialog").style.display = "flex";
   };
   window.closeOrderDetailsDialog = () => (document.getElementById("pending-order-details-dialog").style.display = "none");
+
+  /* ----- WIP live-status log ----- */
+  const liveStatusEscape = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[char]);
+  const liveStatusValue = (value) => value === undefined || value === null || value === "" ? "—" : liveStatusEscape(value);
+  const liveStatusMtrs = (value) => Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
+  window.openLiveStatus = function (orderId) {
+    const order = wipTable?.getRow(String(orderId))?.getData()
+      || wipData.find((row) => String(row._id) === String(orderId));
+    const progress = order?.liveUpdate;
+    if (!order || !progress) return;
+
+    const settings = Array.isArray(progress.settings) ? progress.settings : [];
+    const production = Array.isArray(progress.production) ? progress.production : [];
+    const settingRows = settings.length
+      ? settings.map((row) => `
+          <tr><td>${row.index}</td><td>${liveStatusValue(row.rollId)}</td>
+          <td>${row.startMtrs != null ? `${liveStatusMtrs(row.startMtrs)} mtrs` : "—"}</td>
+          <td>${row.stopMtrs != null ? `${liveStatusMtrs(row.stopMtrs)} mtrs` : "—"}</td>
+          <td>${liveStatusValue(row.startTime)}</td><td>${liveStatusValue(row.stopTime)}</td>
+          <td><span style="font-weight:700; color:${row.completed ? "#16a34a" : "#a16207"};">${row.completed ? "Completed" : "In progress"}</span></td></tr>`).join("")
+      : `<tr><td colspan="7" style="color:#64748b; text-align:center;">No Job Setting entry recorded.</td></tr>`;
+    const productionRows = production.length
+      ? production.map((row) => `
+          <tr><td>${row.index}</td><td>${liveStatusValue(row.deckleId)}</td><td>${liveStatusValue(row.rollId)}</td>
+          <td style="font-weight:700;">${liveStatusMtrs(row.meters)} mtrs</td>
+          <td>${liveStatusValue(row.startTime)}</td><td>${liveStatusValue(row.endTime)}</td>
+          <td>${liveStatusValue(row.faceJoint)}${row.faceMtrs != null ? ` · ${liveStatusMtrs(row.faceMtrs)} mtrs` : ""}</td>
+          <td>${liveStatusValue(row.releaseJoint)}${row.releaseMtrs != null ? ` · ${liveStatusMtrs(row.releaseMtrs)} mtrs` : ""}</td></tr>`).join("")
+      : `<tr><td colspan="8" style="color:#64748b; text-align:center;">No completed Production Log row yet.</td></tr>`;
+
+    document.getElementById("live-status-dialog-body").innerHTML = `
+      <div class="tape-details-card"><div class="details-scroll-area">
+        <div class="tape-details-header"><div class="header-copy"><h1>Live Production Status</h1>
+          <div class="header-subtitle">${liveStatusEscape(order.productCode || "Label Stock")} · Job Card ${liveStatusValue(progress.jobCardId)}</div></div>
+          <div class="header-actions"><span class="header-action-link" style="pointer-events:none;"><i class="fa-solid fa-ruler-horizontal"></i> Total: ${liveStatusMtrs(progress.totalMeters)} mtrs</span>
+          <button type="button" onclick="closeLiveStatusDialog()" class="header-action-link" style="border:none; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button></div></div>
+        <div class="tape-details-body"><h3 class="section-title">Job Setting</h3>
+          <div style="overflow-x:auto; margin-bottom:22px;"><table class="diff-table"><thead><tr><th>#</th><th>Roll ID</th><th>Start Meter</th><th>Stop Meter</th><th>Start Time</th><th>Stop Time</th><th>Status</th></tr></thead><tbody>${settingRows}</tbody></table></div>
+          <h3 class="section-title">Production Log</h3>
+          <div style="overflow-x:auto;"><table class="diff-table"><thead><tr><th>#</th><th>Deckle ID</th><th>Roll ID</th><th>Made</th><th>Start Time</th><th>End Time</th><th>Face</th><th>Release</th></tr></thead><tbody>${productionRows}</tbody></table></div>
+        </div></div></div>`;
+    document.getElementById("live-status-dialog").style.display = "flex";
+  };
+  window.closeLiveStatusDialog = () => (document.getElementById("live-status-dialog").style.display = "none");
+  document.getElementById("live-status-dialog").addEventListener("click", function (event) {
+    if (event.target === this) closeLiveStatusDialog();
+  });
 
   /* ----- Assign/start production ----- */
   window.startProduction = function (orderId) {
@@ -338,6 +393,10 @@
       { title: "User", field: "userName", headerFilter: "input", headerFilterPlaceholder: "Filter user..." },
       { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter product...", formatter: (cell) => cell.getValue() || "—" },
       { title: "Paper Size", field: "paperSize", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "Size", formatter: (cell) => cell.getValue() || "—" },
+      { title: "Total Mtrs Required", field: "runningMeters", hozAlign: "right", headerFilter: "input", headerFilterPlaceholder: "Mtrs", formatter: (cell) => {
+        const value = cell.getValue();
+        return Number.isFinite(Number(value)) ? `${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })} mtrs` : "—";
+      } },
       { title: "Qty", field: "quantity", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#" },
       {
         title: "Bal",
@@ -377,20 +436,27 @@
       { title: "Operator", field: "operatorName", headerFilter: "input", headerFilterPlaceholder: "Filter...", formatter: (cell) => cell.getValue() || "—" },
       { title: "Helper", field: "helperName", headerFilter: "input", headerFilterPlaceholder: "Filter...", formatter: (cell) => cell.getValue() || "—" },
       {
-        title: "Live Update",
+        title: "Live Status",
         field: "liveUpdate",
         headerSort: false,
         formatter: (cell) => {
+          const orderId = cell.getRow().getData()._id;
           const val = cell.getValue();
           if (!val) return `<span style="color:#9ca3af;">Not started</span>`;
-          const meter = val.totalMeter ? `${val.totalMeter} m` : "—";
+          const fmtMtrs = (value) => Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+          const settings = Array.isArray(val.settings) ? val.settings : [];
+          const production = Array.isArray(val.production) ? val.production : [];
           const when = val.updatedAt ? new Date(val.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "";
+          if (!production.length && settings.length) {
+            return `<button type="button" onclick="openLiveStatus('${orderId}')" title="View Job Setting log" style="display:inline-flex; align-items:center; gap:6px; padding:0; border:none; background:transparent; color:#a16207; font-weight:700; cursor:pointer;"><span style="width:7px; height:7px; border-radius:50%; background:#eab308; display:inline-block;"></span>In Setting</button>`;
+          }
+          if (!production.length) return `<span style="color:#9ca3af;">Not started</span>`;
           return `
-            <span style="display:inline-flex; align-items:center; gap:6px;">
+            <button type="button" onclick="openLiveStatus('${orderId}')" title="View production log" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap; padding:0; border:none; background:transparent; cursor:pointer;">
               <span style="width:7px; height:7px; border-radius:50%; background:#16a34a; display:inline-block; flex-shrink:0;"></span>
-              <span style="font-weight:600; color:#1f2a44;">${meter}</span>
+              <span style="font-weight:700; color:#1f2a44; text-decoration:underline;">${fmtMtrs(val.totalMeters)} mtrs</span>
               ${when ? `<span style="color:#9ca3af; font-size:11px;">@ ${when}</span>` : ""}
-            </span>
+            </button>
           `;
         },
       },
@@ -412,8 +478,8 @@
     });
   });
 
-  // Job Cards are filed once from the shop floor, not streamed -- this just
-  // polls periodically so a freshly-filed Job Card's total shows up here
+  // Job Cards are filed once from the shop floor, not streamed -- poll so a
+  // freshly filed card's Setting and Production Log rows show up here
   // without the operator having to reload the page.
   setInterval(async () => {
     try {

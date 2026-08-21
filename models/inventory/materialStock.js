@@ -42,10 +42,23 @@ const materialStockSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Joint / wrinkle statuses recorded for this physical Deckle on its
+    // machine production-log row. Kept with the reel so its printed label
+    // remains accurate after the job card is filed.
+    joints: {
+      type: String,
+      trim: true,
+    },
+    // Production lot carried onto the physical Deckle and its SOFT.prn label.
+    lotNo: {
+      type: String,
+      trim: true,
+    },
     rate: {
       type: Number,
     },
-    // System-generated CODE/YY-YY/NNN, printed on the reel's QR label.
+    // System-generated Deckle ID: CODE/YY-YY/<year-letter><lot>/NNNNN,
+    // printed on the reel's QR label.
     rollId: {
       type: String,
       required: true,

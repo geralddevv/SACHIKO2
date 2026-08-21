@@ -4209,18 +4209,59 @@ router.get("/prodcalc/details/:id", async (req, res) => {
 // CLAUDE.md's "Production pipeline" section for the full order -> assign ->
 // job card lifecycle.
 
-// Every JobCard is write-once, so "live" here just means "poll and pick up
-// the fact a card now exists" -- see GET /labels/production/wip-progress.
+// Every JobCard is write-once, so "live" here means the WIP page polls for
+// a newly filed card and then shows its actual Setting and Production Log
+// progress -- see GET /labels/production/wip-progress.
 async function buildJobCardProgressMap(pendingIds) {
   if (!pendingIds.length) return new Map();
   const cards = await MachineJobCard.find({ pendingProductionId: { $in: pendingIds } })
-    .select("pendingProductionId jobCardId totalMeter updatedAt")
+    .select("pendingProductionId jobCardId jobSetting productionLog updatedAt")
     .sort({ updatedAt: -1 })
     .lean();
   const map = new Map();
   cards.forEach((card) => {
     const key = String(card.pendingProductionId);
-    if (!map.has(key)) map.set(key, { jobCardId: card.jobCardId, totalMeter: card.totalMeter, updatedAt: card.updatedAt });
+    if (map.has(key)) return;
+
+    const numberOrNull = (value) => (
+      value !== undefined && value !== null && value !== "" && Number.isFinite(Number(value))
+        ? Number(value)
+        : null
+    );
+    const settings = (card.jobSetting || [])
+      .filter((row) => row?.rollId || row?.mtrs1 != null || row?.mtrs2 != null || row?.startTime || row?.stopTime)
+      .map((row, index) => ({
+        index: index + 1,
+        rollId: row.rollId || "",
+        startMtrs: numberOrNull(row.mtrs1),
+        stopMtrs: numberOrNull(row.mtrs2),
+        startTime: row.startTime || "",
+        stopTime: row.stopTime || "",
+        completed: Boolean(row.stopTime),
+      }));
+    const production = (card.productionLog || [])
+      .filter((row) => Number.isFinite(Number(row?.meters)) && Number(row.meters) > 0)
+      .map((row, index) => ({
+        index: index + 1,
+        rollId: row.rollId || "",
+        deckleId: row.deckleId || "",
+        meters: Number(row.meters),
+        startTime: row.time?.startTime || "",
+        endTime: row.time?.endTime || "",
+        faceJoint: row.face?.joint || "",
+        faceMtrs: numberOrNull(row.face?.mtr),
+        releaseJoint: row.release?.joint || "",
+        releaseMtrs: numberOrNull(row.release?.mtr),
+      }));
+    const totalMeters = production.reduce((sum, row) => sum + row.meters, 0);
+
+    map.set(key, {
+      jobCardId: card.jobCardId,
+      settings,
+      production,
+      totalMeters,
+      updatedAt: card.updatedAt,
+    });
   });
   return map;
 }
@@ -4293,6 +4334,7 @@ router.get("/labels/production/pending", async (req, res) => {
     const adhesiveStatus = poolStatus("adhesive");
     const releaseStatus = poolStatus("release");
 
+    const progress = jobCardProgress.get(String(r._id)) || null;
     return {
       _id: String(r._id),
       productCode: item.productCode || item.skuCode || "—",
@@ -4300,6 +4342,7 @@ router.get("/labels/production/pending", async (req, res) => {
       userName: r.userId?.userName || "—",
       clientType: r.userId?.clientType || "",
       paperSize: r.paperSize || "—",
+      runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
       noOfRolls: r.noOfRolls ?? "—",
       allottedRolls: rollsAllotted,
       rollsStatus,
@@ -4319,7 +4362,7 @@ router.get("/labels/production/pending", async (req, res) => {
       producedAt: r.producedAt || null,
       createdAt: r.createdAt,
       assignedAt: r.assignedAt || null,
-      liveUpdate: jobCardProgress.get(String(r._id)) || null,
+      liveUpdate: progress,
     };
   });
 
@@ -4348,7 +4391,10 @@ router.get("/labels/production/wip-progress", async (req, res) => {
   try {
     const wipIds = await PendingProduction.find({ assignedMachineId: { $ne: null } }).distinct("_id");
     const progress = await buildJobCardProgressMap(wipIds);
-    res.json(wipIds.map((id) => ({ _id: String(id), liveUpdate: progress.get(String(id)) || null })));
+    res.json(wipIds.map((id) => {
+      const liveUpdate = progress.get(String(id)) || null;
+      return { _id: String(id), liveUpdate };
+    }));
   } catch (err) {
     console.error("WIP PROGRESS ERROR:", err);
     res.status(500).json([]);
@@ -4594,6 +4640,7 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     let deckleId = null;
     let variantProductCode = null;
     let stockWarning = null;
+    const lotNo = pendingProduction.lotNo || (await generateLotNo());
     if (rawProduceMtrs > 0) {
       const layersPicked = required.length > 0 && required.every((key) => rawLayers && rawLayers[key]);
 
@@ -4607,6 +4654,7 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
             labelStock,
             location,
             reelMtrs: rawProduceMtrs,
+            lotNo,
             size: pendingProduction.paperSize,
             layers: rawLayers,
             createdBy: req.user?.username || "SYSTEM",
@@ -4623,8 +4671,6 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
         }
       }
     }
-
-    const lotNo = pendingProduction.lotNo || (await generateLotNo());
 
     await PendingProduction.findByIdAndUpdate(id, {
       $set: {

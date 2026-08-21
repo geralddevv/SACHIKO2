@@ -18,7 +18,10 @@ import MaterialStock from "../models/inventory/materialStock.js";
 // one's high numbers).
 // ---------------------------------------------------------------------------
 
-export const ROLL_ID_RE = /^[A-Z0-9]+\/\d{2}-\d{2}\/\d{3,}$/;
+// Accepts both pre-existing three-part roll IDs and the current five-part
+// Deckle IDs, so stock already created before the format change remains
+// scannable and searchable.
+export const ROLL_ID_RE = /^(?:[A-Z0-9-]+\/\d{2}-\d{2}\/\d{3,}|[A-Z0-9-]+\/\d{2}-\d{2}\/[A-Z]+\d{4,}\/\d{5,})$/;
 
 const normalizeItemCode = (value) => String(value ?? "").trim().toUpperCase();
 
@@ -30,6 +33,21 @@ export function financialYearLabel(date = new Date()) {
   const startYear = date.getMonth() >= 3 ? year : year - 1; // getMonth() 3 = April
   const two = (y) => String(y).slice(-2);
   return `${two(startYear)}-${two(startYear + 1)}`;
+}
+
+// Financial-year letter used in a Deckle ID. A = FY 2020-21, so FY 2026-27
+// is G as specified: C001/26-27/G0001/00001. Continue alphabetically after
+// Z (AA, AB, ...) rather than silently wrapping and risking duplicate IDs.
+export function financialYearLetter(date = new Date()) {
+  const startYear = date.getFullYear() - (date.getMonth() >= 3 ? 0 : 1);
+  let n = startYear - 2020 + 1;
+  let letters = "";
+  while (n > 0) {
+    n -= 1;
+    letters = String.fromCharCode(65 + (n % 26)) + letters;
+    n = Math.floor(n / 26);
+  }
+  return letters || "A";
 }
 
 // One counter per item code per financial year, so the sequence resets each
@@ -72,6 +90,40 @@ export async function generateRollId(itemCodeRaw) {
     if (!(await MaterialStock.exists({ rollId: candidate }))) return candidate;
   }
   throw new Error("Unable to generate a unique roll id");
+}
+
+const deckleLotNumber = (lotNoRaw) => {
+  const match = String(lotNoRaw ?? "").trim().match(/(\d+)$/);
+  if (!match) throw new Error("A production lot number is required to generate a Deckle ID");
+  return match[1].padStart(4, "0");
+};
+
+const deckleCounterKey = (itemCode, fy, yearLetter, lotNo) =>
+  `deckleId:${itemCode}:${fy}:${yearLetter}:${lotNo}`;
+
+// Deckle IDs are distinct from normal raw-material/finished roll IDs:
+// PRODUCT/FY/<year-letter><lot-number>/<five-digit reel sequence>.
+// Example for product C001, FY 2026-27 and lot 1:
+// C001/26-27/G0001/00001.
+export async function generateDeckleId(itemCodeRaw, lotNoRaw, date = new Date()) {
+  const itemCode = normalizeItemCode(itemCodeRaw).replace(/\//g, "");
+  if (!itemCode) throw new Error("A product code is required to generate a Deckle ID");
+
+  const fy = financialYearLabel(date);
+  const lotNo = deckleLotNumber(lotNoRaw);
+  const yearLetter = financialYearLetter(date);
+  const key = deckleCounterKey(itemCode, fy, yearLetter, lotNo);
+
+  for (let attempt = 0; attempt < 10000; attempt++) {
+    const counter = await Counter.findOneAndUpdate(
+      { key },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    ).lean();
+    const candidate = `${itemCode}/${fy}/${yearLetter}${lotNo}/${String(counter.seq).padStart(5, "0")}`;
+    if (!(await MaterialStock.exists({ rollId: candidate }))) return candidate;
+  }
+  throw new Error("Unable to generate a unique Deckle ID");
 }
 
 // What the next reel for this item code would be called, without consuming a

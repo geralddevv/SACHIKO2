@@ -1,6 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import MaterialStock from "../../models/inventory/materialStock.js";
+import MachineJobCard from "../../models/inventory/machineJobCard.js";
 import Location from "../../models/system/location.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -107,30 +108,50 @@ function sendLabelError(res, status, message) {
 
 // The Deckle's printed sticker, as a page the browser prints -- see
 // routes/stock/facestockStock.js's own /label/:stockId, which this mirrors.
-// FACE/ADHESIVE/RELEASE come from the reel's own SachikoLabelStock recipe
-// (populated below), not left "-" like a raw-material reel's, since a
-// Deckle IS the finished label stock these boxes were designed for.
+// The SOFT.prn layout is used exactly as-is: WIDTH receives the Deckle's
+// finished size, JOINTS receives the production-log status when recorded,
+// and FACE/ADHESIVE/RELEASE intentionally remain "-".
 router.get("/label/:stockId", requireAuth, async (req, res) => {
   try {
     const { stockId } = req.params;
     if (!mongoose.isValidObjectId(stockId)) return sendLabelError(res, 404, "Deckle reel not found.");
 
     const reel = await MaterialStock.findById(stockId)
-      .select("rollId reelMtrs")
+      .select("rollId reelMtrs size joints lotNo producedFor")
       .populate({
         path: "material",
-        select: "productCode skuCode facestock.facestockType adhesive.adhesiveType releaseLiner.releaseLinerType",
+        select: "productCode skuCode",
       })
+      .populate({ path: "producedFor", select: "lotNo" })
       .lean();
     if (!reel) return sendLabelError(res, 404, "Deckle reel not found.");
+
+    // Deckles created before MaterialStock.joints was introduced still have
+    // their status on the immutable production log. Read it as a fallback so
+    // their label is just as complete as a newly produced Deckle's label.
+    let joints = reel.joints;
+    let lotNo = reel.lotNo || reel.producedFor?.lotNo;
+    if (!joints || !lotNo) {
+      const jobCard = await MachineJobCard.findOne({ "productionLog.deckleId": reel.rollId })
+        .select("lotNo productionLog")
+        .lean();
+      const logRow = jobCard?.productionLog?.find((row) => row.deckleId === reel.rollId);
+      if (!joints) {
+        joints = [...new Set([logRow?.face?.joint, logRow?.release?.joint]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean))]
+          .join(" / ") || undefined;
+      }
+      lotNo ||= jobCard?.lotNo;
+    }
 
     const labelInput = {
       rollId: reel.rollId,
       reelMtrs: reel.reelMtrs,
+      size: reel.size,
+      joints,
+      lotNo,
       prodCode: reel.material?.productCode || reel.material?.skuCode,
-      face: reel.material?.facestock?.facestockType,
-      adhesive: reel.material?.adhesive?.adhesiveType,
-      release: reel.material?.releaseLiner?.releaseLinerType,
     };
     // The QR's module count depends on the whole payload's length, so the
     // box can only be sized once the payload exists -- hence building the

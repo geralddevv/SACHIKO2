@@ -76,6 +76,8 @@ function buildDrumPayload(raw) {
   return {
     reelMtrs: Number(raw?.reelMtrs),
     vendorRollId: String(raw?.vendorRollId || "").trim(),
+    joint: String(raw?.joint || "").trim(),
+    wrinkle: String(raw?.wrinkle || "").trim(),
   };
 }
 
@@ -228,6 +230,8 @@ async function loadMastersWithStock(stock) {
       _id: s._id,
       rollId: s.rollId,
       vendorRollId: s.vendorRollId,
+      joint: s.joint || "",
+      wrinkle: s.wrinkle || "",
       reelMtrs: s.reelMtrs,
       location: s.location,
       rate: s.rate,
