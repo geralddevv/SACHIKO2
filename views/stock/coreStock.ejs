@@ -642,6 +642,11 @@
 
   const fmt = (n) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("en-IN"));
 
+  const fmtQty = (n) => {
+    const value = Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100;
+    return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  };
+
   // Flattens each master into Tabulator's dataTree shape: one row per Core
   // Master, with the individual CoreStock lots behind its stock count (see
   // routes/stock/coreStock.js's loadMastersWithStock) as _children rows --
@@ -688,7 +693,7 @@
       const parts = [
         `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
         data.vendorRollId ? `Vendor Batch No: ${escapeHtml(data.vendorRollId)}` : "",
-        `Pcs ${fmt(data.quantity)}`,
+        `Pcs ${fmtQty(data.quantity)}`,
         data.location ? escapeHtml(data.location) : "",
         data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
         data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : "",
@@ -737,7 +742,7 @@
         headerFilterPlaceholder: "Search",
         hozAlign: "center",
         minWidth: 110,
-        formatter: (cell) => (cell.getRow().getData().isParent ? (cell.getValue() || 0) : ""),
+        formatter: (cell) => (cell.getRow().getData().isParent ? fmtQty(cell.getValue()) : ""),
       },
       {
         title: "Stock (Lots)",
@@ -755,7 +760,7 @@
         headerFilterPlaceholder: "Search",
         hozAlign: "center",
         minWidth: 110,
-        formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>` : ""),
+        formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${fmtQty(cell.getValue())}</span>` : ""),
       },
       { title: "MSQ", field: "msq", headerFilter: "input", headerFilterPlaceholder: "Search", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {

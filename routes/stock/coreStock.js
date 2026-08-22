@@ -19,6 +19,8 @@ const numOrUndef = (value) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+const roundQty = (value) => Math.round(((Number(value) || 0) + Number.EPSILON) * 100) / 100;
+
 // Fields shared by every lot in one inward batch (one spec, one invoice) --
 // every field Core Master itself carries (type/vendor/make/printType/
 // thickness/od/length), plus this batch's own location/rate/invoice.
@@ -184,7 +186,7 @@ async function loadMastersWithStock(stock) {
 
   return masters.map((m) => {
     const key = coreSpecKey(m);
-    const currentStock = stockByKey.get(key) || 0;
+    const currentStock = roundQty(stockByKey.get(key) || 0);
     const lotCount = lotCountByKey.get(key) || 0;
     const msq = Number(m.msq) || 0;
     const rolls = (rollsByKey.get(key) || []).slice().sort((a, b) => String(a.rollId).localeCompare(String(b.rollId)));
@@ -193,7 +195,7 @@ async function loadMastersWithStock(stock) {
       currentStock,
       rollCount: lotCount,
       rolls,
-      shortage: Math.max(0, msq - currentStock),
+      shortage: roundQty(Math.max(0, msq - currentStock)),
       hasActivePO: activePOSet.has(String(m._id)),
     };
   });

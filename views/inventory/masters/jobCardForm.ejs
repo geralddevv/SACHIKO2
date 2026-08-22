@@ -276,14 +276,30 @@
   }
 
   .jc-material-used-hint { margin: 0 0 14px; font-size: 12.5px; color: #5a6586; }
-  .jc-material-used-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 0; border-bottom: 1px solid #eef1f6;
+  .jc-material-used-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
   }
-  .jc-material-used-row:last-child { border-bottom: none; }
-  .jc-material-used-meta { flex: 1; min-width: 0; }
-  .jc-material-used-rollid { font-size: 13px; font-weight: 700; color: #03365a; }
-  .jc-material-used-left { font-size: 12px; color: #5a6586; margin-top: 2px; }
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+  .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #044A78 #f1f5f9; }
+  .jc-roll-table.jc-material-used-table {
+    min-width: 1160px;
+    table-layout: auto;
+  }
+  .jc-roll-table.jc-material-used-table th,
+  .jc-roll-table.jc-material-used-table td {
+    white-space: nowrap;
+    word-break: normal;
+    vertical-align: middle;
+  }
+  .jc-material-used-status {
+    color: #16a34a;
+    font-weight: 700;
+  }
   .jc-material-used-amount {
     width: 100px; flex: 0 0 auto; padding: 8px 10px; font-size: 13.5px;
     border: 1.5px solid #d7deea; border-radius: 8px; text-align: right;
@@ -411,6 +427,17 @@
     }
     .jc-roll-table.jc-allocation-table td::before { display: none; }
     .jc-roll-table.jc-allocation-table td:first-child { background: #f0f7ff; color: #03365a; font-weight: 700; }
+
+    .jc-roll-table.jc-material-used-table { min-width: 1160px; table-layout: auto; }
+    .jc-roll-table.jc-material-used-table thead { display: table-header-group; }
+    .jc-roll-table.jc-material-used-table tbody { display: table-row-group; }
+    .jc-roll-table.jc-material-used-table tr { display: table-row; border-bottom: none; }
+    .jc-roll-table.jc-material-used-table td {
+      display: table-cell; width: auto; padding: 7px 12px; border-right: 1px solid #e2e8f0;
+      white-space: nowrap; word-break: normal; font-size: 12.5px;
+    }
+    .jc-roll-table.jc-material-used-table td::before { display: none; }
+    .jc-roll-table.jc-material-used-table td:first-child { background: #f0f7ff; color: #03365a; font-weight: 700; }
 
     .jc-log-table thead { display: none; }
     .jc-log-table tbody,
@@ -828,7 +855,7 @@
      posts. -->
 <div class="logout-modal" id="materialUsedDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="materialUsedDialogTitle"
-    style="width: min(480px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    style="width: min(1280px, 96vw); padding: 0; border-radius: 14px; border: none;">
     <div class="dialog-header">
       <h2 id="materialUsedDialogTitle">Material Used</h2>
       <button class="dialog-close-btn" type="button" onclick="closeMaterialUsedDialog()" aria-label="Close">×</button>
@@ -970,12 +997,23 @@
       adhesive: { stockId: "adhesiveStockId", used: "adhesiveKgUsed", unit: "kg" },
       release: { stockId: "releaseStockId", used: "releaseMtrsUsed", unit: "mtrs" },
     };
+    const MATERIAL_DIALOG_UNIT = "kg";
 
     function escAdhesiveKey(v) {
       return String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 
-    function renderMaterialUsedRows() {
+    function fmtMaterialCell(v) {
+      const text = String(v ?? "").trim();
+      return text ? escAdhesiveKey(text) : "-";
+    }
+
+    function fmtMaterialGsm(v) {
+      const text = String(v ?? "").trim();
+      return text ? `${escAdhesiveKey(fmtMtrs(v))} GSM` : "-";
+    }
+
+    function renderCompactMaterialUsedRows() {
       const wrap = document.getElementById("materialUsedRows");
       wrap.innerHTML = USAGE_ITEMS.map((d, i) => {
         const unit = POOL_FIELDS[d.pool]?.unit || "mtrs";
@@ -990,6 +1028,52 @@
         </div>
       `;
       }).join("");
+    }
+
+    function renderMaterialUsedRows() {
+      const wrap = document.getElementById("materialUsedRows");
+      const rows = USAGE_ITEMS.map((d, i) => {
+        const itemUnit = d.unit || (d.pool === "adhesive" ? "Drum" : "Roll");
+        const qty = `1 ${itemUnit}${d.reelMtrs ? ` (${fmtMtrs(d.reelMtrs)} ${MATERIAL_DIALOG_UNIT})` : ""}`;
+        return `
+        <tr>
+          <td data-label="Layer">${fmtMaterialCell(d.layerLabel)}</td>
+          <td data-label="Status"><span class="jc-material-used-status">Allotted</span></td>
+          <td data-label="Qty">${escAdhesiveKey(qty)}</td>
+          <td data-label="Roll / Drum ID">${fmtMaterialCell(d.rollId)}</td>
+          <td data-label="Code">${fmtMaterialCell(d.code)}</td>
+          <td data-label="GSM">${fmtMaterialGsm(d.gsm)}</td>
+          <td data-label="Size">${fmtMaterialCell(d.size)}</td>
+          <td data-label="Make">${fmtMaterialCell(d.make)}</td>
+          <td data-label="Location">${fmtMaterialCell(d.location)}</td>
+          <td data-label="Deduct">
+            <input type="number" class="jc-material-used-amount" id="materialUsedAmount-${i}"
+                   min="0" step="0.01" max="${escAdhesiveKey(d.reelMtrs)}" placeholder="${MATERIAL_DIALOG_UNIT} to deduct" aria-label="${escAdhesiveKey(d.layerLabel || "Material")} ${escAdhesiveKey(d.rollId || "")} amount to deduct in ${MATERIAL_DIALOG_UNIT}" inputmode="decimal" />
+          </td>
+        </tr>
+      `;
+      }).join("");
+      wrap.innerHTML = `
+        <div class="jc-material-used-scroll custom-scrollbar">
+          <table class="jc-roll-table jc-material-used-table">
+            <thead>
+              <tr>
+                <th style="width:150px;">Layer</th>
+                <th style="width:120px;">Status</th>
+                <th>Qty</th>
+                <th>Roll / Drum ID</th>
+                <th>Code</th>
+                <th>GSM</th>
+                <th>Size</th>
+                <th>Make</th>
+                <th>Location</th>
+                <th>Deduct</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
     }
 
     function openMaterialUsedDialog() {
@@ -1024,17 +1108,22 @@
         if (!raw) continue;
         const amount = Number(raw);
         if (!Number.isFinite(amount) || amount < 0) {
-          errorEl.textContent = `Enter a valid ${fields.unit} amount.`;
+          errorEl.textContent = `Enter a valid ${MATERIAL_DIALOG_UNIT} amount.`;
           input.focus();
           return;
         }
         if (amount > item.reelMtrs) {
           input.classList.add("jc-material-used-over");
-          errorEl.textContent = `${item.rollId || "That reel"} only has ${item.reelMtrs} ${fields.unit} left.`;
+          errorEl.textContent = `${item.rollId || "That reel"} only has ${item.reelMtrs} ${MATERIAL_DIALOG_UNIT} left.`;
           input.focus();
           return;
         }
         if (amount > 0) rows.push({ fields, stockId: item._id, amount });
+      }
+      if (!rows.length) {
+        errorEl.textContent = `Enter ${MATERIAL_DIALOG_UNIT} used for at least one allocated material.`;
+        document.getElementById("materialUsedAmount-0")?.focus();
+        return;
       }
 
       rows.forEach(({ fields, stockId, amount }) => {

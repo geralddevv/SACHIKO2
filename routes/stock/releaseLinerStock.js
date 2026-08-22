@@ -33,6 +33,8 @@ const numOrUndef = (value) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+const roundKg = (value) => Math.round(((Number(value) || 0) + Number.EPSILON) * 100) / 100;
+
 const SENSING_VALUES = ["SENSING", "NON-SENSING"];
 
 // Fields shared by every reel in one inward batch (one spec, one invoice) --
@@ -253,12 +255,12 @@ async function loadMastersWithStock(stock) {
 
   return masters.map((m) => {
     const key = releaseSpecKey(m);
-    const currentStock = stockByKey.get(key) || 0;
+    const currentStock = roundKg(stockByKey.get(key) || 0);
     const rollCount = rollCountByKey.get(key) || 0;
     const msq = Number(m.msq) || 0;
     const rolls = (rollsByKey.get(key) || []).slice().sort((a, b) => String(a.rollId).localeCompare(String(b.rollId)));
-    const allotted = allottedByKey.get(key) || 0;
-    const available = currentStock - allotted;
+    const allotted = roundKg(allottedByKey.get(key) || 0);
+    const available = roundKg(currentStock - allotted);
     return {
       ...m,
       currentStock,
@@ -267,7 +269,7 @@ async function loadMastersWithStock(stock) {
       allotted,
       allottedRolls: allottedRollsByKey.get(key) || 0,
       available,
-      shortage: Math.max(0, msq - currentStock),
+      shortage: roundKg(Math.max(0, msq - currentStock)),
       hasActivePO: activePOSet.has(String(m._id)),
     };
   });

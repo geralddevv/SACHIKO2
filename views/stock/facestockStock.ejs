@@ -844,6 +844,11 @@
 
   const fmt = (n) => (n === null || n === undefined ? "—" : Number(n).toLocaleString("en-IN"));
 
+  const fmtKg = (n) => {
+    const value = Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100;
+    return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  };
+
   // Looks a reel's own Facestock Master back up by scanning mastersData's own
   // rolls arrays, instead of Tabulator's row.getTreeParent() -- more direct
   // for finding the spec (family/vendor/etc) a reel's Edit dialog summary
@@ -904,7 +909,7 @@
       const parts = [
         `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
         data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
-        `Kg ${fmt(data.reelMtrs)}`,
+        `Kg ${fmtKg(data.reelMtrs)}`,
         data.location ? escapeHtml(data.location) : "",
         data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
         data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : `<span style="color:#dc2626; font-weight:700;">No Invoice</span>`,
@@ -967,7 +972,7 @@
         headerFilterPlaceholder: "Search",
         hozAlign: "center",
         minWidth: 150,
-        formatter: (cell) => String(cell.getValue() || 0),
+        formatter: (cell) => (cell.getRow().getData().isParent ? fmtKg(cell.getValue()) : ""),
       },
       {
         title: "Stock (Rolls)",
@@ -995,7 +1000,7 @@
           const rollPart = rolls
             ? ` <span style="font-size:11px; font-weight:600; color:#b45309;">(${rolls} roll${rolls === 1 ? "" : "s"})</span>`
             : "";
-          return `<span style="font-weight:700; color:#92400e;">${value}</span>${rollPart}`;
+          return `<span style="font-weight:700; color:#92400e;">${fmtKg(value)}</span>${rollPart}`;
         },
       },
       {
@@ -1010,7 +1015,7 @@
           if (!cell.getRow().getData().isParent) return "";
           const value = cell.getValue() || 0;
           const color = value < 0 ? "#dc2626" : "#15803d";
-          return `<span style="font-weight:800; color:${color};">${value}</span>`;
+          return `<span style="font-weight:800; color:${color};">${fmtKg(value)}</span>`;
         },
       },
       {
@@ -1020,7 +1025,7 @@
         headerFilterPlaceholder: "Search",
         hozAlign: "center",
         minWidth: 110,
-        formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${cell.getValue() || 0}</span>` : ""),
+        formatter: (cell) => (cell.getRow().getData().isParent ? `<span style="font-weight:800; color:#dc2626;">${fmtKg(cell.getValue())}</span>` : ""),
       },
       { title: "MSQ", field: "msq", headerFilter: "input", headerFilterPlaceholder: "Search", hozAlign: "center", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       {
