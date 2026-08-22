@@ -9,6 +9,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 
 const router = express.Router();
+const TEMP_CLIENT_VIEW_ONLY_NAME = "FAIRTECH SYSTEMS";
 
 function normalizeClientPart(value) {
   if (value === undefined || value === null) return "";
@@ -86,7 +87,7 @@ router.get("/view", async (req, res) => {
   try {
     const [clients, userCounts, tapeCounts] = await Promise.all([
       Client.find(
-        {},
+        { clientName: new RegExp(`^${escapeRegex(TEMP_CLIENT_VIEW_ONLY_NAME)}$`, "i") },
         {
           clientId: 1,
           clientName: 1,
