@@ -4,50 +4,16 @@ import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import PendingProduction from "../../models/inventory/pendingProduction.js";
 import LabelStockAdhesiveBinding from "../../models/sachiko/labelStockAdhesiveBinding.js";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
-import { POOL_MODELS, LAYER_META, reelMatchesLayer, pickStockIds } from "../../utils/labelStockProduction.js";
+import {
+  POOL_MODELS,
+  LAYER_META,
+  reelMatchesLayer,
+  pickStockIds,
+  applyAdhesiveBindings,
+  adhesiveIdentityKey,
+} from "../../utils/labelStockProduction.js";
 
 const router = express.Router();
-
-// Says whether an AdhesiveStock drum is an instance of a given Adhesive
-// Master: vendor + type + make + vendor SKU code, the fields that identify
-// WHICH adhesive it is.
-//
-// Deliberately narrower than routes/stock/adhesiveStock.js's own
-// stock-page grouping. Viscosity, cohesion, shear and density are measured
-// per inward batch and do not decide whether a drum belongs to a binding.
-function adhesiveIdentityKey(o) {
-  const s = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
-  return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode)].join("||");
-}
-
-// Narrows a Label Stock's adhesive candidates to the Adhesive Master(s) it has
-// been bound to (models/sachiko/labelStockAdhesiveBinding.js).
-//
-// Mandatory per SKU: a recipe's adhesive layer only pins the TYPE, which
-// alone isn't enough to say which specific adhesive a SKU should run --
-// without a binding telling us exactly which Adhesive Master(s) are correct,
-// showing "every drum of that type" would be a guess, not a fact, so an
-// unbound SKU gets nothing instead. Returns { drums, hasBinding } so the
-// route can tell the frontend "no binding configured" apart from "bound, but
-// zero drums in stock currently match".
-async function applyAdhesiveBindings(drums, labelStockId) {
-  const bindings = await LabelStockAdhesiveBinding.find({
-    labelStock: labelStockId,
-  }).select("adhesive").lean();
-  if (!bindings.length) return { drums: [], hasBinding: false };
-  if (!drums.length) return { drums, hasBinding: true };
-
-  const masters = await AdhesiveMaster.find({ _id: { $in: bindings.map((b) => b.adhesive) } })
-    .select("vendorId type make vendorSkuCode")
-    .lean();
-  // Every binding pointing at a master that has since been deleted would
-  // otherwise leave an empty allow-list and hide every drum -- treat that the
-  // same as "no binding" rather than a silent, unexplained empty picker.
-  if (!masters.length) return { drums: [], hasBinding: false };
-
-  const allowed = new Set(masters.map(adhesiveIdentityKey));
-  return { drums: drums.filter((d) => allowed.has(adhesiveIdentityKey(d))), hasBinding: true };
-}
 
 // Live reel pickers backing the Facestock/Adhesive/Release Liner columns on
 // Assign Production (views/inventory/orders/assignProduction.ejs). Actually

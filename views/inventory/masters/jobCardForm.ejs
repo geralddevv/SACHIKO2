@@ -103,41 +103,30 @@
   .jc-log-table th {
     background: #044a78;
     color: #ffffff;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
-    padding: 9px 10px;
+    padding: 7px 6px;
     text-align: center;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
     border-right: 1px solid rgba(255,255,255,0.25);
   }
   .jc-log-table th:last-child {
     border-right: none;
   }
-  /* Two-tier head on the Production Log: Time / Face / Release each span
-     their sub-columns. */
   .jc-log-table th.group-head {
     border-bottom: 1px solid rgba(255,255,255,0.3);
   }
   .jc-log-table th.sub-head {
     background: #055690;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 500;
-    padding: 7px 10px;
+    padding: 5px 6px;
   }
 
   .jc-hidden { display: none !important; }
 
-  .jc-start-prod-wrap {
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-    border: none;
-    padding: 6px 0;
-  }
-
   .jc-log-table td {
-    padding: 6px 8px;
+    padding: 5px 6px;
     border-bottom: 1px solid #e2e8f0;
     border-right: 1px solid #e2e8f0;
     vertical-align: middle;
@@ -150,9 +139,9 @@
   }
   .jc-log-table input.form-control,
   .jc-log-table select.form-control {
-    padding: 6px 8px !important;
-    font-size: 13px !important;
-    height: auto !important;
+    padding: 4px 6px !important;
+    font-size: 12.5px !important;
+    height: 30px !important;
     min-width: 0;
   }
 
@@ -161,7 +150,8 @@
   .jc-log-table .log-start-display,
   .jc-log-table .log-end-display {
     display: inline-block;
-    min-width: 62px;
+    min-width: 50px;
+    font-size: 11.5px;
     text-align: center;
     font-variant-numeric: tabular-nums;
   }
@@ -231,28 +221,28 @@
 
   .roll-note {
     display: block;
-    margin-top: 3px;
-    font-size: 11px;
+    margin-top: 2px;
+    font-size: 10.5px;
     font-weight: 600;
-    line-height: 1.35;
+    line-height: 1.25;
   }
   .roll-note:empty { display: none; }
   .roll-note.ok { color: #047857; }
   .roll-note.warn { color: #b45309; }
 
-  .roll-id-field { display: flex; align-items: center; gap: 6px; }
+  .roll-id-field { display: flex; align-items: center; gap: 4px; width: 100%; min-width: 80px; }
   .roll-scan-btn {
-    display: none;
+    display: inline-flex;
     flex: 0 0 auto;
-    width: 34px;
-    height: 34px;
+    width: 26px;
+    height: 26px;
     align-items: center;
     justify-content: center;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     background: #044a78;
     color: #fff;
-    font-size: 14px;
+    font-size: 11px;
     cursor: pointer;
   }
   .roll-scan-btn:hover { opacity: 0.88; }
@@ -300,6 +290,50 @@
     color: #16a34a;
     font-weight: 700;
   }
+  .jc-material-used-status.status-not-used {
+    color: #b91c1c;
+    background: #fee2e2;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid #fca5a5;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-block;
+  }
+  .jc-material-used-status.status-used {
+    color: #15803d;
+    background: #dcfce7;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid #bbf7d0;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-block;
+  }
+  .jc-material-used-status.status-newly-used {
+    color: #0369a1;
+    background: #e0f2fe;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid #bae6fd;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-block;
+  }
+  .jc-material-row-not-used {
+    background-color: #fef2f2 !important;
+  }
+  .jc-material-row-not-used td {
+    background-color: #fef2f2 !important;
+    color: #991b1b !important;
+  }
+  .jc-material-row-not-used strong {
+    color: #b91c1c !important;
+  }
+  .jc-material-row-not-used .jc-material-used-amount {
+    border-color: #fca5a5;
+    background-color: #ffffff;
+  }
   .jc-material-used-amount {
     width: 100px; flex: 0 0 auto; padding: 8px 10px; font-size: 13.5px;
     border: 1.5px solid #d7deea; border-radius: 8px; text-align: right;
@@ -327,9 +361,6 @@
     outline-offset: 2px;
   }
 
-  /* Final production action: make the only stock-affecting submit clearly
-     visible and comfortably tappable without changing the shared .btn-grp
-     treatment used elsewhere in the app. */
   .jc-save-wrap {
     display: flex;
     justify-content: center;
@@ -414,9 +445,6 @@
     }
     .jc-roll-table td:first-child { background: #f0f7ff; color: #03365a; font-weight: 700; }
 
-    /* Allocation is an at-a-glance machine checklist: retain each material
-       as one horizontal row on small screens and let the wrapper scroll,
-       instead of splitting its fields into several stacked rows. */
     .jc-roll-table.jc-allocation-table { min-width: 1050px; table-layout: auto; }
     .jc-roll-table.jc-allocation-table thead { display: table-header-group; }
     .jc-roll-table.jc-allocation-table tbody { display: table-row-group; }
@@ -455,12 +483,23 @@
       border-right: 1px solid #cbd5e1;
       border-radius: 7px 0 0 0;
     }
-    .jc-log-table tbody td[data-label="Row"],
-    .jc-log-table tbody td[data-label="Roll ID"] { border-bottom: 1px solid #cbd5e1; }
+    .jc-log-table tbody td[data-label="Row"] { border-bottom: 1px solid #cbd5e1; }
     .jc-log-table tbody td[data-label="Row"]::before { content: none; }
-    .jc-log-table tbody td[data-label="Roll ID"] { flex: 1 1 60%; flex-wrap: wrap; }
-    .jc-log-table tbody td[data-label="Roll ID"]::before { flex: 0 0 auto; }
-    .jc-log-table tbody td[data-label="Roll ID"] .roll-note { flex: 1 1 100%; }
+
+    .jc-log-table tbody td[data-label="Jumbo FS id"],
+    .jc-log-table tbody td[data-label="Drum id"],
+    .jc-log-table tbody td[data-label="Jumbo REL id"] {
+      flex: 1 1 100%;
+      border-bottom: 1px solid #cbd5e1;
+      flex-wrap: wrap;
+    }
+    .jc-log-table tbody td[data-label="Jumbo FS id"]::before,
+    .jc-log-table tbody td[data-label="Drum id"]::before,
+    .jc-log-table tbody td[data-label="Jumbo REL id"]::before { flex: 0 0 auto; }
+    .jc-log-table tbody td[data-label="Jumbo FS id"] .roll-note,
+    .jc-log-table tbody td[data-label="Drum id"] .roll-note,
+    .jc-log-table tbody td[data-label="Jumbo REL id"] .roll-note { flex: 1 1 100%; }
+
     .jc-log-table tbody td[data-label="Mtrs"],
     .jc-log-table tbody td[data-label="Start"],
     .jc-log-table tbody td[data-label="Stop"] { flex: 1 1 40%; }
@@ -469,9 +508,6 @@
     .jc-log-table tbody td[data-label="Start"]::before,
     .jc-log-table tbody td[data-label="Stop"]::before { content: none; }
 
-    /* Production Log only -- the clock trio rides on one line, everything
-       else stacks. Its labels are deliberately distinct from Job Setting's
-       ("Start Time" vs "Start") so the rules above don't catch them. */
     .jc-log-table tbody td[data-label="Deckle ID"] { border-bottom: 1px solid #cbd5e1; }
     .jc-log-table tbody td[data-label="Start Time"],
     .jc-log-table tbody td[data-label="End Time"],
@@ -507,14 +543,14 @@
     .jc-log-table tbody td:last-child { border-bottom: none; }
     .jc-log-table input.form-control,
     .jc-log-table select.form-control { width: 100% !important; flex: 1 1 auto; min-width: 0 !important; }
-    .roll-scan-btn { display: inline-flex; width: 40px; height: 40px; font-size: 16px; }
+    .roll-scan-btn { display: inline-flex; width: 36px; height: 36px; font-size: 14px; }
     .jc-log-table .js-start-btn,
     .jc-log-table .js-stop-btn,
     .jc-log-table .log-timer-btn {
       flex: 1 1 auto;
       width: auto !important;
-      height: 38px !important;
-      font-size: 15px !important;
+      height: 36px !important;
+      font-size: 14px !important;
     }
     .jc-log-table .js-start-display,
     .jc-log-table .js-stop-display,
@@ -540,18 +576,6 @@
 </style>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
-  <!-- Deliberately NOT class="needs-validation" -- public/js/BTStrap.js
-       auto-attaches its own submit listener to every such form on the page
-       and fetch()-submits it (then redirects on the plain-HTML/redirect
-       response BTStrap.js gets back, since this route isn't JSON) with
-       whatever data is on the form *right now*, completely independent of
-       this file's own submit handler below. With that class here, it raced
-       the Adhesive Used dialog below: the dialog would open, then BTStrap's
-       own handler saved the job card (with no adhesive kg entered yet, since
-       the dialog was never confirmed) and navigated to jobcard/view out from
-       under the operator a moment later -- the dialog "opening then closing
-       itself" with no way to actually enter anything. Looked up by id
-       (#jcForm) below instead of the class this used to be selected by. -->
   <form
     id="jcForm"
     action="/sachiko/machine/jobcard/form"
@@ -613,22 +637,9 @@
       </table>
     </div>
 
-    <!-- Material Allocation — the raw-material reels ticked on Assign
-         Production, one line per layer this SKU's recipe actually calls for
-         (PendingProduction.allottedLayers, resolved live in buildQueueRows).
-         The machine queue's allotment dialog shows the same table. -->
+    <!-- Material Allocation -->
     <% const allocLayers = jc.layerAllotments || []; %>
     <%
-      // Every reel reserved across every raw-material layer this SKU's
-      // recipe calls for (Facestock, Adhesive, Release Liner, +2 more on
-      // DOUBLE FACESTOCK/DOUBLE RELEASE) -- feeds the "Material Used" dialog
-      // below, one row per physical reel. Flattened rather than kept per-layer
-      // so the dialog shows every allocated thing that can be deducted, while
-      // still carrying the layer label beside it. `pool`
-      // (facestock/adhesive/release, from buildQueueRows' layerAllotments)
-      // and `unit` (Roll/Drum, from LAYER_META) let the client JS pick the
-      // right hidden field names and unit word per row without hardcoding the
-      // key->pool mapping a second time.
       const usageItems = allocLayers.flatMap((l) =>
         (l.reels || []).map((r) => ({ ...r, pool: l.pool, unit: l.unit, layerLabel: l.label }))
       );
@@ -666,12 +677,6 @@
                   <% } %>
                 </td>
                 <%
-                  // A layer can hold more than one reel (Assign Production's
-                  // layer pickers are checkboxes -- combining two undersized
-                  // drums onto one order is the whole point), so these read
-                  // the `reels` list buildQueueRows hands over rather than a
-                  // single roll. Same summary the machine queue's allotment
-                  // dialog shows.
                   const reels = l.allocated ? l.reels || [] : [];
                   const totalMtrs = reels.reduce((sum, r) => sum + (Number(r.reelMtrs) || 0), 0);
                   const reelIds = reels.map((r) => r.rollId).filter(Boolean);
@@ -701,125 +706,129 @@
       <% } %>
     </div>
 
-    <!-- Roll IDs this job was allotted (from Assign Production). Both the Job
-         Setting and Production Log "Roll ID" inputs are normally filled by
-         scanning the QR label pasted on the reel; the datalist backs that up
-         for typing when a label is damaged, and the same list drives the
-         live match check beside each input (see checkRollId below). -->
-    <datalist id="allottedRollList">
-      <% (jc.allottedRollDetails || []).forEach((r) => { %>
-        <% if (r.rollId) { %><option value="<%= r.rollId %>"><%= fmtQty(r.reelMtrs) %> mtrs<%= r.location ? " · " + r.location : "" %></option><% } %>
+    <%
+      const eligibleFs = (typeof eligibleRawStock !== 'undefined' && eligibleRawStock.facestock) ? eligibleRawStock.facestock : (allocLayers.filter(l => l.pool === 'facestock').flatMap(l => l.reels || []));
+      const eligibleAd = (typeof eligibleRawStock !== 'undefined' && eligibleRawStock.adhesive) ? eligibleRawStock.adhesive : (allocLayers.filter(l => l.pool === 'adhesive').flatMap(l => l.reels || []));
+      const eligibleRl = (typeof eligibleRawStock !== 'undefined' && eligibleRawStock.release) ? eligibleRawStock.release : (allocLayers.filter(l => l.pool === 'release').flatMap(l => l.reels || []));
+
+      const sortedFs = [...eligibleFs].sort((a, b) => (b.allotted ? 1 : 0) - (a.allotted ? 1 : 0));
+      const sortedAd = [...eligibleAd].sort((a, b) => (b.allotted ? 1 : 0) - (a.allotted ? 1 : 0));
+      const sortedRl = [...eligibleRl].sort((a, b) => (b.allotted ? 1 : 0) - (a.allotted ? 1 : 0));
+    %>
+
+    <datalist id="allottedFsRollList">
+      <% sortedFs.forEach((r) => { %>
+        <% if (r.rollId) { %><option value="<%= r.rollId %>"><%= r.allotted ? "[Allotted] " : "[Stock] " %><%= fmtQty(r.reelMtrs) %> mtrs<%= r.location ? " · " + r.location : "" %><%= r.family ? " · " + r.family : "" %><%= r.gsm ? " · " + r.gsm + " GSM" : (r.micron ? " · " + r.micron + " mic" : "") %><%= r.type ? " · " + r.type : "" %><%= r.size ? " · " + r.size : "" %></option><% } %>
+      <% }) %>
+    </datalist>
+    <datalist id="allottedAdRollList">
+      <% sortedAd.forEach((r) => { %>
+        <% if (r.rollId) { %><option value="<%= r.rollId %>"><%= r.allotted ? "[Allotted] " : "[Stock] " %><%= fmtQty(r.reelMtrs) %> kg<%= r.location ? " · " + r.location : "" %><%= r.make ? " · " + r.make : "" %><%= r.code ? " · " + r.code : (r.type ? " · " + r.type : "") %></option><% } %>
+      <% }) %>
+    </datalist>
+    <datalist id="allottedRlRollList">
+      <% sortedRl.forEach((r) => { %>
+        <% if (r.rollId) { %><option value="<%= r.rollId %>"><%= r.allotted ? "[Allotted] " : "[Stock] " %><%= fmtQty(r.reelMtrs) %> mtrs<%= r.location ? " · " + r.location : "" %><%= r.sensing ? " · " + r.sensing : "" %><%= r.type ? " · " + r.type : "" %><%= r.size ? " · " + r.size : "" %></option><% } %>
       <% }) %>
     </datalist>
     <script id="allotted-rolls-data" type="application/json"><%- safeJson(jc.allottedRollDetails || []) %></script>
+    <script id="allotted-fs-rolls-data" type="application/json"><%- safeJson(eligibleFs) %></script>
+    <script id="allotted-ad-rolls-data" type="application/json"><%- safeJson(eligibleAd) %></script>
+    <script id="allotted-rl-rolls-data" type="application/json"><%- safeJson(eligibleRl) %></script>
     <script id="material-usage-data" type="application/json"><%- safeJson(usageItems) %></script>
 
-    <!-- Job Setting Table -->
+    <!-- Job Setting -->
     <div class="span-full form-subheading" style="display: flex; align-items: center; gap: 12px;">
       <h1>Job Setting</h1>
       <div style="display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;">
-        <button type="button" id="jsMinus" style="width: 30px; height: 30px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 18px; line-height: 1; cursor: pointer;">-</button>
-        <input type="text" id="jsCount" style="width: 56px; height: 30px; text-align: center; border: 1px solid #044A78; border-radius: 4px; font-size: 14px;" class="form-control" value="1" readonly />
-        <button type="button" id="jsPlus" style="width: 30px; height: 30px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 18px; line-height: 1; cursor: pointer;">+</button>
+        <button type="button" id="jsMinus" style="width: 28px; height: 28px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 16px; line-height: 1; cursor: pointer;">-</button>
+        <input type="text" id="jsCount" style="width: 48px; height: 28px; text-align: center; border: 1px solid #044A78; border-radius: 4px; font-size: 13px;" class="form-control" value="1" readonly />
+        <button type="button" id="jsPlus" style="width: 28px; height: 28px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 16px; line-height: 1; cursor: pointer;">+</button>
       </div>
     </div>
 
-    <div class="span-full">
+    <div class="span-full" style="overflow-x: auto;">
       <table class="jc-log-table">
         <thead>
           <tr>
             <th style="width:36px; text-align:center;">#</th>
-            <th style="width:240px;">Roll ID</th>
+            <th style="width:14%; min-width:115px; text-align:left; padding-left:8px;">Jumbo FS id</th>
+            <th style="width:14%; min-width:115px; text-align:left; padding-left:8px;">Drum id</th>
+            <th style="width:14%; min-width:115px; text-align:left; padding-left:8px;">Jumbo REL id</th>
             <th>Mtrs</th>
-            <th style="text-align:center;">Start</th>
+            <th style="text-align:center; white-space:nowrap;">Start</th>
             <th>Mtrs</th>
-            <th style="text-align:center;">Stop</th>
+            <th style="text-align:center; white-space:nowrap;">Stop</th>
           </tr>
         </thead>
         <tbody id="jsTableBody">
-          <!-- rows injected by JS -->
         </tbody>
       </table>
     </div>
 
-    <!-- Appears only once every Job Setting row has both Start and Stop
-         recorded; clicking it reveals the Production Log below. -->
-    <div class="span-full jc-start-prod-wrap jc-hidden" id="startProdWrap">
-      <button type="button" id="startProdBtn"
-        style="display:inline-flex; align-items:center; gap:8px; padding:10px 26px; border:none; border-radius:6px; background:#10b981; color:#fff; font-size:14px; font-weight:600; cursor:pointer;">
-        <i class="fa-solid fa-play"></i> Start Production
-      </button>
-    </div>
-
-    <!-- Production Log Table -->
-    <div class="span-full form-subheading jc-hidden" id="prodLogHead" style="display: flex; align-items: center; gap: 12px;">
+    <!-- Production Log -->
+    <div class="span-full form-subheading" id="prodLogHead" style="display: flex; align-items: center; gap: 12px; margin-top: 10px;">
       <h1>Production Log</h1>
       <div style="display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;">
-        <button type="button" id="logMinus" style="width: 30px; height: 30px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 18px; line-height: 1; cursor: pointer;">-</button>
-        <input type="text" id="logCount" style="width: 56px; height: 30px; text-align: center; border: 1px solid #044A78; border-radius: 4px; font-size: 14px;" class="form-control" value="1" readonly />
-        <button type="button" id="logPlus" style="width: 30px; height: 30px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 18px; line-height: 1; cursor: pointer;">+</button>
+        <button type="button" id="logMinus" style="width: 28px; height: 28px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 16px; line-height: 1; cursor: pointer;">-</button>
+        <input type="text" id="logCount" style="width: 48px; height: 28px; text-align: center; border: 1px solid #044A78; border-radius: 4px; font-size: 13px;" class="form-control" value="1" readonly />
+        <button type="button" id="logPlus" style="width: 28px; height: 28px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 16px; line-height: 1; cursor: pointer;">+</button>
       </div>
     </div>
 
-    <!-- One row per deckle produced: which reel it came off (Roll ID), the
-         deckle's own id, the run it was clocked over, the metres it made and
-         any joint/wrinkle found on either web. -->
-    <div class="span-full jc-hidden" id="prodLogBody">
+    <div class="span-full" id="prodLogBody" style="overflow-x: auto;">
       <table class="jc-log-table">
         <thead>
           <tr>
-            <th rowspan="2" style="vertical-align: middle; width:36px; text-align:center;">#</th>
-            <th rowspan="2" style="vertical-align: middle; width:240px; text-align:left; padding-left:12px;">Roll ID</th>
-            <th rowspan="2" style="vertical-align: middle; text-align:left; padding-left:12px;">Deckle ID</th>
+            <th rowspan="2" style="vertical-align: middle; width:32px; text-align:center;">#</th>
+            <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Jumbo FS id</th>
+            <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Drum id</th>
+            <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Jumbo REL id</th>
+            <th rowspan="2" style="vertical-align: middle; width:100px; text-align:left; padding-left:8px;">Deckle ID</th>
             <th colspan="3" class="group-head">Time</th>
-            <th rowspan="2" style="vertical-align: middle;">Meters</th>
+            <th rowspan="2" style="vertical-align: middle; width:75px;">Meters</th>
             <th colspan="2" class="group-head">Face</th>
             <th colspan="2" class="group-head">Release</th>
           </tr>
           <tr>
-            <th class="sub-head">Start</th>
-            <th class="sub-head">End</th>
-            <th class="sub-head">Timer</th>
-            <th class="sub-head">Joint</th>
-            <th class="sub-head">Mtr</th>
-            <th class="sub-head">Joint</th>
-            <th class="sub-head">Mtr</th>
+            <th class="sub-head" style="width:58px;">Start</th>
+            <th class="sub-head" style="width:58px;">End</th>
+            <th class="sub-head" style="width:36px;">Timer</th>
+            <th class="sub-head" style="width:80px;">Joint</th>
+            <th class="sub-head" style="width:65px;">Mtr</th>
+            <th class="sub-head" style="width:80px;">Joint</th>
+            <th class="sub-head" style="width:65px;">Mtr</th>
           </tr>
         </thead>
         <tbody id="logTableBody">
-          <!-- rows injected by JS -->
         </tbody>
         <tfoot>
           <tr class="jc-total-row" style="background: #044a78;">
             <td class="jc-total-label" style="text-align:center; font-size:12px; font-weight:700; color:#ffffff; white-space:nowrap; padding: 6px 8px;">Total</td>
-            <td colspan="8" style="padding: 6px 8px" data-label="RM">
+            <td colspan="9" style="padding: 6px 8px" data-label="RM">
               <input type="text" name="totalMeter" class="form-control jc-readonly" readonly
-                     placeholder="RM" style="padding:6px 8px !important; font-size:13px !important; height:auto !important;" />
+                     placeholder="RM" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
             </td>
-            <td colspan="2" style="padding: 6px 8px" data-label="SQ Mtrs">
+            <td colspan="3" style="padding: 6px 8px" data-label="SQ Mtrs">
               <input type="text" name="sqMtr" class="form-control jc-readonly" readonly
-                     placeholder="SQ Mtrs" style="padding:6px 8px !important; font-size:13px !important; height:auto !important;" />
+                     placeholder="SQ Mtrs" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
             </td>
           </tr>
         </tfoot>
       </table>
     </div>
 
-    <div class="btn-grp jc-save-wrap span-full jc-hidden" id="saveBtnWrap">
+    <div class="btn-grp jc-save-wrap span-full" id="saveBtnWrap" style="margin-top: 10px;">
       <button type="submit" class="jc-save-action"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Production Entry</button>
     </div>
   </form>
 </div>
 
-<!-- ============ SCAN ROLL ID (CAMERA) DIALOG ============
-     Mobile-only affordance -- the button that opens this is hidden on desktop
-     (see .roll-scan-btn above), where the keyboard-wedge hardware scanner
-     already types straight into the Roll ID box. -->
 <div class="logout-modal" id="scanDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="scanDialogTitle"
     style="width: min(420px, 95vw); padding: 0; border-radius: 14px; border: none;">
     <div class="dialog-header">
-      <h2 id="scanDialogTitle">Scan Roll ID</h2>
+      <h2 id="scanDialogTitle">Scan QR / Barcode</h2>
       <button class="dialog-close-btn" type="button" onclick="closeScanDialog()" aria-label="Close">×</button>
     </div>
     <div class="dialog-body">
@@ -827,7 +836,7 @@
         <video id="scanVideo" playsinline muted autoplay></video>
         <div class="scan-frame"></div>
       </div>
-      <div class="scan-status" id="scanStatus">Point the camera at the QR code on the roll label.</div>
+      <div class="scan-status" id="scanStatus">Point the camera at the QR code on the roll/drum label.</div>
       <div class="dialog-actions">
         <button type="button" class="btn-cancel" onclick="closeScanDialog()">Cancel</button>
       </div>
@@ -835,36 +844,17 @@
   </div>
 </div>
 
-<!-- ============ MATERIAL USED DIALOG ============
-     Shown once, right when Save Production Entry is clicked, if this job had
-     ANY raw-material reel reserved -- Facestock, Adhesive, or Release Liner
-     alike (usageItems.length -- see USAGE_ITEMS below). None of the three has
-     a scanned length to derive consumption from for an order allotted
-     through the newer layerAllotments picker: Adhesive never did (a drum has
-     no roll-length reading to clock a start/stop against, only a weight),
-     and Facestock/Release Liner's usual source -- the Job Setting/Production
-     Log rows' scanned Roll ID + mtrs, via consumeAllottedRollMeters -- only
-     covers the older allottedRollIds flow, not these pool-based reels. Only
-     the operator standing at the machine knows how much of each reel the job
-     actually used. Confirming here is what lets Save Production Entry
-     actually submit; the values ride along as facestockStockId[]/
-     facestockMtrsUsed[], adhesiveStockId[]/adhesiveKgUsed[], and
-     releaseStockId[]/releaseMtrsUsed[] hidden inputs on the real form (see
-     submitMaterialUsage below), and routes/system/machine.js's
-     consumePoolUsage() does the real deduction, once per pool, once the form
-     posts. -->
 <div class="logout-modal" id="materialUsedDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="materialUsedDialogTitle"
     style="width: min(1280px, 96vw); padding: 0; border-radius: 14px; border: none;">
     <div class="dialog-header">
-      <h2 id="materialUsedDialogTitle">Material Used</h2>
+      <h2 id="materialUsedDialogTitle">Material Remaining Stock (kg)</h2>
       <button class="dialog-close-btn" type="button" onclick="closeMaterialUsedDialog()" aria-label="Close">×</button>
     </div>
     <div class="dialog-body">
       <p class="jc-material-used-hint">
-        Every allocated raw-material reel and drum is listed below. Enter the
-        amount used from each one; only a value above zero is deducted when
-        this production entry is saved.
+        Enter the remaining weight (kg) left for each used material reel/drum. The stock balance
+        in inventory will be updated directly to this remaining value, and the consumed quantity will be deducted.
       </p>
       <div id="materialUsedRows"></div>
       <div class="jc-material-used-error" id="materialUsedError"></div>
@@ -879,123 +869,107 @@
 <script src="/js/jsQR.min.js" defer></script>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
-    /* ── Row gating ──
-       Both tables unlock a row left to right, so it can never end up holding
-       figures for a roll that was never named. They differ in what comes
-       after the roll, because they measure different things: a Job Setting row
-       is a counter run (Mtrs -> Start -> Mtrs -> Stop, see syncRowGating), a
-       Production Log row is one deckle clocked on a single timer (Timer ->
-       deckle id, metres and joints, see syncLogRowGating). Clearing a field
-       re-locks and wipes everything downstream of it either way. */
-    const filled = (el) => Boolean(el && String(el.value).trim() !== "");
-
-    /* ── Roll ID scanning ──
-       The Roll ID is normally not typed at all: the operator scans the QR label
-       pasted on the reel and a keyboard-wedge scanner types it into whichever
-       box has focus. Three things follow.
-
-       First, scanners finish their payload with Enter, and Enter in a text
-       input submits the form -- which here would save a half-filled job card
-       and deduct against it. So Enter inside a Roll ID box is swallowed and
-       moves focus to whatever comes next on that row (see nextAfterRoll),
-       which is where the operator is headed anyway.
-
-       Second, the QR doesn't carry the Roll ID alone -- its payload is
-       "rollId vendorRollId paperSize reelMtrs" (utils/rollLabel.js's
-       buildQrPayload), so a scan lands the whole string in the box. The Roll
-       ID is always the first token; extractScannedRollId pulls just that out
-       for matching, and once Enter confirms the scan the box is tidied down
-       to that clean id too.
-
-       Third, only reels allotted to this job are deducted on save. Checking
-       the scan against that list here catches a reel off the wrong pallet
-       while it is still in the operator's hands, instead of in a note after
-       saving. */
     const ALLOTTED_ROLLS = JSON.parse(document.getElementById("allotted-rolls-data")?.textContent || "[]");
-    // Must stay in step with normalizeRollId / extractScannedRollId in
-    // utils/rollId.js -- what matches here is what will match on save.
+    const ALLOTTED_FS_ROLLS = JSON.parse(document.getElementById("allotted-fs-rolls-data")?.textContent || "[]");
+    const ALLOTTED_AD_ROLLS = JSON.parse(document.getElementById("allotted-ad-rolls-data")?.textContent || "[]");
+    const ALLOTTED_RL_ROLLS = JSON.parse(document.getElementById("allotted-rl-rolls-data")?.textContent || "[]");
+
     const normRollId = (v) => String(v ?? "").trim().replace(/\s+/g, "").toUpperCase();
     const extractScannedRollId = (v) => normRollId(String(v ?? "").trim().split(/\s+/)[0] || "");
-    const rollById = new Map(ALLOTTED_ROLLS.filter((r) => r.rollId).map((r) => [normRollId(r.rollId), r]));
     const fmtMtrs = (v) => Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
-    function checkRollId(row, p) {
-      const input = row?.querySelector(`.${p}-roll-id`);
-      const note = row?.querySelector(".roll-note");
-      if (!input || !note) return;
+    const fsRollById = new Map(ALLOTTED_FS_ROLLS.filter((r) => r.rollId).map((r) => [normRollId(r.rollId), r]));
+    const adRollById = new Map(ALLOTTED_AD_ROLLS.filter((r) => r.rollId).map((r) => [normRollId(r.rollId), r]));
+    const rlRollById = new Map(ALLOTTED_RL_ROLLS.filter((r) => r.rollId).map((r) => [normRollId(r.rollId), r]));
+    const rollById = new Map(ALLOTTED_ROLLS.filter((r) => r.rollId).map((r) => [normRollId(r.rollId), r]));
+
+    function getRollPoolInfo(pool) {
+      if (pool === "fs") return { map: fsRollById, unit: "mtrs", name: "Jumbo FS" };
+      if (pool === "ad") return { map: adRollById, unit: "kg", name: "Drum" };
+      if (pool === "rl") return { map: rlRollById, unit: "mtrs", name: "Jumbo REL" };
+      return { map: rollById, unit: "mtrs", name: "Roll" };
+    }
+
+    function checkMaterialInput(input, pool) {
+      if (!input) return;
+      const td = input.closest("td");
+      const note = td?.querySelector(".roll-note");
+      if (!note) return;
       const key = extractScannedRollId(input.value);
       if (!key) {
         note.textContent = "";
         note.className = "roll-note";
         return;
       }
-      const reel = rollById.get(key);
-      note.textContent = reel
-        ? `${fmtMtrs(reel.reelMtrs)} mtrs left${reel.location ? ` · ${reel.location}` : ""}`
-        : "Not allotted to this job — nothing will be deducted for it.";
-      note.className = `roll-note ${reel ? "ok" : "warn"}`;
+      const info = getRollPoolInfo(pool);
+      const reel = info.map.get(key) || rollById.get(key);
+      if (reel) {
+        const tag = reel.allotted ? " · Allotted" : " · In Stock (Matching Spec)";
+        note.textContent = `${fmtMtrs(reel.reelMtrs)} ${info.unit} left${reel.location ? " · " + reel.location : ""}${tag}`;
+        note.className = "roll-note ok";
+      } else {
+        note.textContent = `Invalid / Not matching recipe — verify ${info.name}.`;
+        note.className = "roll-note warn";
+      }
     }
 
-    // Where the operator is headed once the roll is named: the counter reading
-    // on a Job Setting row, the deckle's id on a Production Log one.
-    const nextAfterRoll = (row, p) =>
-      row?.querySelector(p === "js" ? ".js-mtrs1" : ".log-deckle-id");
+    function handleMaterialEnter(e) {
+      if (e.key !== "Enter") return;
+      const input = e.target;
+      const row = input.closest("tr");
+      if (!row) return;
 
-    function handleRollIdEnter(e, p) {
-      if (e.key !== "Enter" || !e.target.classList?.contains(`${p}-roll-id`)) return;
-      e.preventDefault();
-      const row = e.target.closest("tr");
-      checkRollId(row, p);
-      const cleanId = extractScannedRollId(e.target.value);
-      if (cleanId) e.target.value = cleanId;
-      const next = nextAfterRoll(row, p);
-      if (next && !next.readOnly) next.focus();
+      if (input.classList.contains("js-fs-roll-id")) {
+        e.preventDefault();
+        checkMaterialInput(input, "fs");
+        const cleanId = extractScannedRollId(input.value);
+        if (cleanId) input.value = cleanId;
+        row.querySelector(".js-ad-roll-id")?.focus();
+      } else if (input.classList.contains("js-ad-roll-id")) {
+        e.preventDefault();
+        checkMaterialInput(input, "ad");
+        const cleanId = extractScannedRollId(input.value);
+        if (cleanId) input.value = cleanId;
+        row.querySelector(".js-rl-roll-id")?.focus();
+      } else if (input.classList.contains("js-rl-roll-id")) {
+        e.preventDefault();
+        checkMaterialInput(input, "rl");
+        const cleanId = extractScannedRollId(input.value);
+        if (cleanId) input.value = cleanId;
+        const next = row.querySelector(".js-mtrs1");
+        if (next && !next.readOnly) next.focus();
+      } else if (input.classList.contains("log-fs-roll-id")) {
+        e.preventDefault();
+        checkMaterialInput(input, "fs");
+        const cleanId = extractScannedRollId(input.value);
+        if (cleanId) input.value = cleanId;
+        row.querySelector(".log-ad-roll-id")?.focus();
+      } else if (input.classList.contains("log-ad-roll-id")) {
+        e.preventDefault();
+        checkMaterialInput(input, "ad");
+        const cleanId = extractScannedRollId(input.value);
+        if (cleanId) input.value = cleanId;
+        row.querySelector(".log-rl-roll-id")?.focus();
+      } else if (input.classList.contains("log-rl-roll-id")) {
+        e.preventDefault();
+        checkMaterialInput(input, "rl");
+        const cleanId = extractScannedRollId(input.value);
+        if (cleanId) input.value = cleanId;
+        const next = row.querySelector(".log-deckle-id") || row.querySelector(".log-meters");
+        if (next && !next.readOnly) next.focus();
+      }
     }
 
-    /* ── Roll ID scanning via the phone camera ── */
     function openModal(id)  { const d = document.getElementById(id); if (!d) return; d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
     function closeModal(id) { const d = document.getElementById(id); if (!d) return; d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
 
-    /* ── Material Used dialog ──
-       Facestock/Adhesive/Release Liner reels allotted through the newer
-       layerAllotments picker (PendingProduction.allottedLayers, set by
-       Assign Production's raw-material reel checkboxes) are only ever
-       *reserved* there, never automatically deducted: Adhesive never had a
-       length reading to derive consumption from (a drum has only a weight),
-       and Facestock/Release Liner's usual source for that -- the scanned
-       Roll ID + mtrs on Job Setting/Production Log rows, via
-       consumeAllottedRollMeters -- only covers the older allottedRollIds
-       flow, not these pool-based reels. Only the operator at the machine
-       knows how much of each reel this job actually used. Intercepted on the
-       real submit handler above: if this order has ANY reel reserved across
-       any of the three pools (USAGE_ITEMS.length), Save Production Entry
-       opens this instead of posting straight away. Confirming builds
-       facestockStockId[]/facestockMtrsUsed[], adhesiveStockId[]/
-       adhesiveKgUsed[], and releaseStockId[]/releaseMtrsUsed[] hidden inputs
-       on the real form (one triplet of names per pool -- see POOL_FIELDS
-       below) and re-submits it -- routes/system/machine.js's
-       consumePoolUsage() does the actual stock deduction, once per pool,
-       once that post lands. */
-    const USAGE_ITEMS = JSON.parse(document.getElementById("material-usage-data").textContent);
-    // Set once the dialog has been confirmed (or found to have nothing to ask
-    // about) -- lets the real submit through on its second pass without
-    // reopening the dialog. Declared here, not inside the submit listener
-    // below, so submitMaterialUsage() (which sets it) and the listener (which
-    // reads it) share the same binding -- they used to be two separate `let`s
-    // in different blocks, so confirming never actually registered and the
-    // dialog just reopened itself in a loop instead of letting the save through.
+    const USAGE_ITEMS = JSON.parse(document.getElementById("material-usage-data").textContent || "[]");
     let materialUsedCleared = false;
 
-    // Per-pool hidden-input field name pair and the word each pool's amount
-    // is measured in -- Facestock/Release Liner reels in metres, Adhesive
-    // drums in kg (see LAYER_META's `unit`/routes/system/machine.js's
-    // consumePoolUsage, same split). Single source of truth for both, so the
-    // render/validate/submit steps below can't drift out of step with each
-    // other or with what the POST handler parses.
     const POOL_FIELDS = {
-      facestock: { stockId: "facestockStockId", used: "facestockMtrsUsed", unit: "mtrs" },
-      adhesive: { stockId: "adhesiveStockId", used: "adhesiveKgUsed", unit: "kg" },
-      release: { stockId: "releaseStockId", used: "releaseMtrsUsed", unit: "mtrs" },
+      facestock: { stockId: "facestockStockId", used: "facestockMtrsUsed", remaining: "facestockRemainingKg", unit: "kg" },
+      adhesive: { stockId: "adhesiveStockId", used: "adhesiveKgUsed", remaining: "adhesiveRemainingKg", unit: "kg" },
+      release: { stockId: "releaseStockId", used: "releaseMtrsUsed", remaining: "releaseRemainingKg", unit: "kg" },
     };
     const MATERIAL_DIALOG_UNIT = "kg";
 
@@ -1005,50 +979,161 @@
 
     function fmtMaterialCell(v) {
       const text = String(v ?? "").trim();
-      return text ? escAdhesiveKey(text) : "-";
+      return (text && text !== "-" && text !== "—") ? escAdhesiveKey(text) : "—";
     }
 
     function fmtMaterialGsm(v) {
-      const text = String(v ?? "").trim();
-      return text ? `${escAdhesiveKey(fmtMtrs(v))} GSM` : "-";
+      if (v === undefined || v === null || String(v).trim() === "" || String(v).trim() === "-" || String(v).trim() === "—") {
+        return "—";
+      }
+      const num = Number(v);
+      if (Number.isFinite(num) && num > 0) {
+        return `${escAdhesiveKey(fmtMtrs(num))} GSM`;
+      }
+      return escAdhesiveKey(String(v));
     }
 
-    function renderCompactMaterialUsedRows() {
-      const wrap = document.getElementById("materialUsedRows");
-      wrap.innerHTML = USAGE_ITEMS.map((d, i) => {
-        const unit = POOL_FIELDS[d.pool]?.unit || "mtrs";
-        return `
-        <div class="jc-material-used-row">
-          <div class="jc-material-used-meta">
-            <div class="jc-material-used-rollid">Allocated ${escAdhesiveKey(d.layerLabel || "material")} — ${escAdhesiveKey(d.rollId || "—")}</div>
-            <div class="jc-material-used-left">Available to deduct: ${fmtMtrs(d.reelMtrs)} ${unit} on this ${escAdhesiveKey((d.unit || "reel").toLowerCase())}${d.location ? " · " + escAdhesiveKey(d.location) : ""}</div>
-          </div>
-          <input type="number" class="jc-material-used-amount" id="materialUsedAmount-${i}"
-                 min="0" step="0.01" max="${d.reelMtrs}" placeholder="${unit} to deduct" aria-label="${escAdhesiveKey(d.layerLabel || "Material")} ${escAdhesiveKey(d.rollId || "")} amount to deduct in ${unit}" inputmode="decimal" />
-        </div>
-      `;
-      }).join("");
+    let activeUsageList = [];
+
+    function getUsedRollIdsFromForm() {
+      const usedKeys = new Set();
+      document.querySelectorAll(".js-fs-roll-id, .js-ad-roll-id, .js-rl-roll-id, .log-fs-roll-id, .log-ad-roll-id, .log-rl-roll-id").forEach((input) => {
+        const key = extractScannedRollId(input.value);
+        if (key) usedKeys.add(key);
+      });
+      return usedKeys;
     }
+
+    function getActiveUsageItems() {
+      const seenIds = new Set();
+      const items = [];
+      const usedFormKeys = getUsedRollIdsFromForm();
+
+      USAGE_ITEMS.forEach((item) => {
+        if (item._id && !seenIds.has(String(item._id))) {
+          seenIds.add(String(item._id));
+          const isUsed = usedFormKeys.has(normRollId(item.rollId));
+          items.push({
+            ...item,
+            isUsedInProduction: isUsed,
+            status: isUsed ? "Allotted" : "Not Used",
+          });
+        }
+      });
+
+      const checkAndAdd = (input, pool) => {
+        if (!input) return;
+        const key = extractScannedRollId(input.value);
+        if (!key) return;
+        const info = getRollPoolInfo(pool);
+        const reel = info.map.get(key) || rollById.get(key);
+        if (reel && reel._id && !seenIds.has(String(reel._id))) {
+          seenIds.add(String(reel._id));
+          items.push({
+            _id: String(reel._id),
+            rollId: reel.rollId || key,
+            reelMtrs: Number(reel.reelMtrs) || 0,
+            pool: reel.pool || (pool === "fs" ? "facestock" : pool === "ad" ? "adhesive" : "release"),
+            layerKey: reel.layerKey || (pool === "fs" ? "facestock" : pool === "ad" ? "adhesive" : "releaseLiner"),
+            layerLabel: reel.layerLabel || (pool === "fs" ? "Facestock" : pool === "ad" ? "Adhesive" : "Release Liner"),
+            unit: reel.unit || (pool === "ad" ? "Drum" : "Roll"),
+            code: reel.code || reel.vendorSkuCode || "",
+            gsm: reel.gsm,
+            size: reel.size || "",
+            make: reel.make || "",
+            location: reel.location || "",
+            isUsedInProduction: true,
+            status: reel.allotted ? "Allotted" : "Newly Used",
+          });
+        }
+      };
+
+      document.querySelectorAll(".js-fs-roll-id, .log-fs-roll-id").forEach((el) => checkAndAdd(el, "fs"));
+      document.querySelectorAll(".js-ad-roll-id, .log-ad-roll-id").forEach((el) => checkAndAdd(el, "ad"));
+      document.querySelectorAll(".js-rl-roll-id, .log-rl-roll-id").forEach((el) => checkAndAdd(el, "rl"));
+
+      return items;
+    }
+
+    window.onRemainingKgInput = function onRemainingKgInput(input, index, currentStock) {
+      const note = document.getElementById(`remainingCalcNote-${index}`);
+      if (!note) return;
+      const val = input.value.trim();
+      if (!val && val !== "0") {
+        note.textContent = "";
+        note.className = "jc-remaining-calc-note";
+        input.classList.remove("jc-material-used-over");
+        return;
+      }
+      const remaining = Number(val);
+      if (!Number.isFinite(remaining) || remaining < 0) {
+        note.textContent = "Invalid amount";
+        note.style.color = "#dc2626";
+        input.classList.add("jc-material-used-over");
+        return;
+      }
+      if (remaining > currentStock) {
+        note.textContent = `Exceeds stock of ${fmtMtrs(currentStock)} kg`;
+        note.style.color = "#dc2626";
+        input.classList.add("jc-material-used-over");
+        return;
+      }
+      input.classList.remove("jc-material-used-over");
+      const used = Math.max(0, round2(currentStock - remaining));
+      if (remaining === 0) {
+        note.textContent = `Used: ${fmtMtrs(used)} kg (Emptied)`;
+        note.style.color = "#b45309";
+      } else if (used === 0) {
+        note.textContent = `Used: 0 kg (Full)`;
+        note.style.color = "#64748b";
+      } else {
+        note.textContent = `Used: ${fmtMtrs(used)} kg`;
+        note.style.color = "#047857";
+      }
+    };
 
     function renderMaterialUsedRows() {
       const wrap = document.getElementById("materialUsedRows");
-      const rows = USAGE_ITEMS.map((d, i) => {
+      activeUsageList = getActiveUsageItems();
+      const rows = activeUsageList.map((d, i) => {
         const itemUnit = d.unit || (d.pool === "adhesive" ? "Drum" : "Roll");
-        const qty = `1 ${itemUnit}${d.reelMtrs ? ` (${fmtMtrs(d.reelMtrs)} ${MATERIAL_DIALOG_UNIT})` : ""}`;
+        const currentStock = Number(d.reelMtrs) || 0;
+        const qty = `1 ${itemUnit} (${fmtMtrs(currentStock)} kg)`;
+        
+        let statusBadge = "";
+        let rowClass = "";
+        let rowStyle = "";
+
+        if (!d.isUsedInProduction) {
+          rowClass = "jc-material-row-not-used";
+          rowStyle = "background-color: #fef2f2; color: #991b1b;";
+          statusBadge = `<span class="jc-material-used-status status-not-used">Not Used</span>`;
+        } else if (d.status === "Newly Used") {
+          statusBadge = `<span class="jc-material-used-status status-newly-used">Newly Used</span>`;
+        } else {
+          statusBadge = `<span class="jc-material-used-status status-used">Allotted</span>`;
+        }
+
         return `
-        <tr>
+        <tr class="${rowClass}" style="${rowStyle}">
           <td data-label="Layer">${fmtMaterialCell(d.layerLabel)}</td>
-          <td data-label="Status"><span class="jc-material-used-status">Allotted</span></td>
-          <td data-label="Qty">${escAdhesiveKey(qty)}</td>
-          <td data-label="Roll / Drum ID">${fmtMaterialCell(d.rollId)}</td>
+          <td data-label="Status">${statusBadge}</td>
+          <td data-label="Current Stock"><strong>${escAdhesiveKey(qty)}</strong></td>
+          <td data-label="Roll / Drum ID"><strong>${fmtMaterialCell(d.rollId)}</strong></td>
           <td data-label="Code">${fmtMaterialCell(d.code)}</td>
           <td data-label="GSM">${fmtMaterialGsm(d.gsm)}</td>
           <td data-label="Size">${fmtMaterialCell(d.size)}</td>
           <td data-label="Make">${fmtMaterialCell(d.make)}</td>
           <td data-label="Location">${fmtMaterialCell(d.location)}</td>
-          <td data-label="Deduct">
-            <input type="number" class="jc-material-used-amount" id="materialUsedAmount-${i}"
-                   min="0" step="0.01" max="${escAdhesiveKey(d.reelMtrs)}" placeholder="${MATERIAL_DIALOG_UNIT} to deduct" aria-label="${escAdhesiveKey(d.layerLabel || "Material")} ${escAdhesiveKey(d.rollId || "")} amount to deduct in ${MATERIAL_DIALOG_UNIT}" inputmode="decimal" />
+          <td data-label="Remaining (kg)">
+            <div class="remaining-input-wrap" style="display:flex; flex-direction:column; gap:2px;">
+              <input type="number" class="jc-material-used-amount jc-material-remaining-amount" id="materialRemainingAmount-${i}"
+                     data-index="${i}" data-current="${escAdhesiveKey(currentStock)}"
+                     min="0" step="0.01" max="${escAdhesiveKey(currentStock)}" placeholder="kg left"
+                     aria-label="${escAdhesiveKey(d.layerLabel || "Material")} ${escAdhesiveKey(d.rollId || "")} remaining kg left"
+                     inputmode="decimal" oninput="onRemainingKgInput(this, ${i}, ${currentStock})" />
+              <span class="jc-remaining-calc-note" id="remainingCalcNote-${i}" style="font-size:10.5px; font-weight:600; min-height:14px;"></span>
+            </div>
           </td>
         </tr>
       `;
@@ -1058,16 +1143,16 @@
           <table class="jc-roll-table jc-material-used-table">
             <thead>
               <tr>
-                <th style="width:150px;">Layer</th>
-                <th style="width:120px;">Status</th>
-                <th>Qty</th>
+                <th style="width:140px;">Layer</th>
+                <th style="width:110px;">Status</th>
+                <th>Current Stock</th>
                 <th>Roll / Drum ID</th>
                 <th>Code</th>
                 <th>GSM</th>
                 <th>Size</th>
                 <th>Make</th>
                 <th>Location</th>
-                <th>Deduct</th>
+                <th style="width:130px;">Remaining (kg)</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -1080,59 +1165,55 @@
       renderMaterialUsedRows();
       document.getElementById("materialUsedError").textContent = "";
       openModal("materialUsedDialog");
-      document.getElementById(`materialUsedAmount-0`)?.focus();
+      document.getElementById("materialRemainingAmount-0")?.focus();
     }
-    // Exposed on window -- the Cancel/×/Confirm buttons above call these via
-    // inline onclick="", which (per spec) resolves in the global scope, not
-    // the closure of this DOMContentLoaded callback. Without this, every
-    // click threw "closeMaterialUsedDialog is not defined" straight to the
-    // console and did nothing -- the dialog opened but nothing inside it
-    // (typing an amount then confirming, cancelling, the × button) worked.
     window.closeMaterialUsedDialog = function closeMaterialUsedDialog() { closeModal("materialUsedDialog"); };
 
-    // Confirming doesn't require every reel to have a value -- a job might
-    // genuinely have only drawn from some of what was reserved. Zero/blank
-    // rows just don't get hidden inputs (see the POST handler's own filter,
-    // which drops anything <= 0 too), so nothing gets deducted for them.
     window.submitMaterialUsage = function submitMaterialUsage() {
       const errorEl = document.getElementById("materialUsedError");
       errorEl.textContent = "";
 
       const rows = [];
-      for (let i = 0; i < USAGE_ITEMS.length; i++) {
-        const item = USAGE_ITEMS[i];
-        const fields = POOL_FIELDS[item.pool];
-        const input = document.getElementById(`materialUsedAmount-${i}`);
-        const raw = input.value.trim();
-        input.classList.remove("jc-material-used-over");
-        if (!raw) continue;
-        const amount = Number(raw);
-        if (!Number.isFinite(amount) || amount < 0) {
-          errorEl.textContent = `Enter a valid ${MATERIAL_DIALOG_UNIT} amount.`;
-          input.focus();
+      for (let i = 0; i < activeUsageList.length; i++) {
+        const item = activeUsageList[i];
+        const fields = POOL_FIELDS[item.pool] || POOL_FIELDS.facestock;
+        const input = document.getElementById(`materialRemainingAmount-${i}`);
+        const raw = input ? input.value.trim() : "";
+        if (input) input.classList.remove("jc-material-used-over");
+        if (!raw && raw !== "0") continue;
+
+        const remaining = Number(raw);
+        if (!Number.isFinite(remaining) || remaining < 0) {
+          errorEl.textContent = `Enter a valid non-negative kg amount for ${item.rollId || "all items"}.`;
+          if (input) input.focus();
           return;
         }
-        if (amount > item.reelMtrs) {
-          input.classList.add("jc-material-used-over");
-          errorEl.textContent = `${item.rollId || "That reel"} only has ${item.reelMtrs} ${MATERIAL_DIALOG_UNIT} left.`;
-          input.focus();
+        const current = Number(item.reelMtrs) || 0;
+        if (remaining > current) {
+          if (input) input.classList.add("jc-material-used-over");
+          errorEl.textContent = `${item.rollId || "Item"} remaining kg cannot exceed current stock (${fmtMtrs(current)} kg).`;
+          if (input) input.focus();
           return;
         }
-        if (amount > 0) rows.push({ fields, stockId: item._id, amount });
+        const used = Math.max(0, round2(current - remaining));
+        rows.push({ fields, stockId: item._id, remainingKg: remaining, usedKg: used });
       }
       if (!rows.length) {
-        errorEl.textContent = `Enter ${MATERIAL_DIALOG_UNIT} used for at least one allocated material.`;
-        document.getElementById("materialUsedAmount-0")?.focus();
+        errorEl.textContent = `Enter remaining kg for at least one used raw material.`;
+        document.getElementById("materialRemainingAmount-0")?.focus();
         return;
       }
 
-      rows.forEach(({ fields, stockId, amount }) => {
+      rows.forEach(({ fields, stockId, remainingKg, usedKg }) => {
         const sidInput = document.createElement("input");
         sidInput.type = "hidden"; sidInput.name = fields.stockId; sidInput.value = stockId;
         const usedInput = document.createElement("input");
-        usedInput.type = "hidden"; usedInput.name = fields.used; usedInput.value = amount;
+        usedInput.type = "hidden"; usedInput.name = fields.used; usedInput.value = usedKg;
+        const remInput = document.createElement("input");
+        remInput.type = "hidden"; remInput.name = fields.remaining; remInput.value = remainingKg;
         jcForm.appendChild(sidInput);
         jcForm.appendChild(usedInput);
+        jcForm.appendChild(remInput);
       });
 
       materialUsedCleared = true;
@@ -1147,8 +1228,7 @@
 
     let scanStream = null;
     let scanRafId = null;
-    let scanTargetRow = null;
-    let scanTargetPrefix = null;
+    let scanTargetInput = null;
 
     function setScanStatus(text, isError) {
       if (!scanStatus) return;
@@ -1166,17 +1246,14 @@
       if (scanVideo) scanVideo.srcObject = null;
     }
 
-    // Exposed on window -- see the same note on closeMaterialUsedDialog above;
-    // the Cancel/× buttons call this via inline onclick="".
     window.closeScanDialog = function closeScanDialog() {
       closeModal("scanDialog");
       stopScanCamera();
-      scanTargetRow = null;
-      scanTargetPrefix = null;
+      scanTargetInput = null;
     };
 
     function scanFrame() {
-      if (!scanStream) return; // dialog was closed mid-loop
+      if (!scanStream) return;
       if (scanVideo.readyState === scanVideo.HAVE_ENOUGH_DATA) {
         const vw = scanVideo.videoWidth;
         const vh = scanVideo.videoHeight;
@@ -1200,39 +1277,42 @@
     }
 
     function handleScanSuccess(rawText) {
-      const row = scanTargetRow;
-      const p = scanTargetPrefix;
+      const input = scanTargetInput;
       closeScanDialog();
-      if (!row || !p) return;
+      if (!input) return;
 
       const cleanId = extractScannedRollId(rawText);
       if (!cleanId) {
-        if (typeof showToast === "function") showToast("That QR code isn't a roll label.", "error");
+        if (typeof showToast === "function") showToast("That QR code isn't a valid label.", "error");
         return;
       }
 
-      const input = row.querySelector(`.${p}-roll-id`);
-      if (!input) return;
       input.value = cleanId;
       input.dispatchEvent(new Event("input", { bubbles: true }));
 
-      const next = nextAfterRoll(row, p);
-      if (next && !next.readOnly) next.focus();
-      if (typeof showToast === "function") showToast(`Scanned Roll ID: ${cleanId}`, "success");
+      const row = input.closest("tr");
+      if (row) {
+        if (input.classList.contains("js-fs-roll-id")) row.querySelector(".js-ad-roll-id")?.focus();
+        else if (input.classList.contains("js-ad-roll-id")) row.querySelector(".js-rl-roll-id")?.focus();
+        else if (input.classList.contains("js-rl-roll-id")) row.querySelector(".js-mtrs1")?.focus();
+        else if (input.classList.contains("log-fs-roll-id")) row.querySelector(".log-ad-roll-id")?.focus();
+        else if (input.classList.contains("log-ad-roll-id")) row.querySelector(".log-rl-roll-id")?.focus();
+        else if (input.classList.contains("log-rl-roll-id")) (row.querySelector(".log-deckle-id") || row.querySelector(".log-meters"))?.focus();
+      }
+      if (typeof showToast === "function") showToast(`Scanned ID: ${cleanId}`, "success");
     }
 
-    async function openScanDialog(row, p) {
-      scanTargetRow = row;
-      scanTargetPrefix = p;
-      setScanStatus("Point the camera at the QR code on the roll label.");
+    async function openScanDialog(input, title) {
+      scanTargetInput = input;
+      setScanStatus(`Point the camera at the QR code on the ${title || "material"} label.`);
       openModal("scanDialog");
 
       if (!navigator.mediaDevices?.getUserMedia) {
-        setScanStatus("Camera scanning needs a secure (https) connection here. Please type the Roll ID instead.", true);
+        setScanStatus("Camera scanning needs a secure (https) connection here. Please type the ID instead.", true);
         return;
       }
       if (typeof window.jsQR !== "function") {
-        setScanStatus("Scanner failed to load. Please type the Roll ID instead.", true);
+        setScanStatus("Scanner failed to load. Please type the ID instead.", true);
         return;
       }
 
@@ -1245,87 +1325,13 @@
         await scanVideo.play();
         scanRafId = requestAnimationFrame(scanFrame);
       } catch (err) {
-        setScanStatus("Couldn't open the camera. Please allow camera access, or type the Roll ID instead.", true);
+        setScanStatus("Couldn't open the camera. Please allow camera access, or type the ID instead.", true);
       }
     }
 
     scanDialog.addEventListener("click", (e) => { if (e.target === scanDialog) closeScanDialog(); });
     document.addEventListener("visibilitychange", () => { if (document.hidden) closeScanDialog(); });
 
-    function setInputLocked(input, locked) {
-      if (!input) return;
-      if (input.tagName === "SELECT") {
-        // A <select> has no readOnly, and disabling one drops it from the POST
-        // -- which would slide every later row's joint up an index on save. So
-        // lock it by putting it out of reach instead, leaving it submittable.
-        input.style.pointerEvents = locked ? "none" : "";
-        input.tabIndex = locked ? -1 : 0;
-      } else {
-        input.readOnly = locked;
-      }
-      input.style.background = locked ? "#f1f5f9" : "";
-      input.style.cursor = locked ? "not-allowed" : "";
-      if (locked) input.value = "";
-    }
-
-    function setBtnArmed(btn, armed, color) {
-      if (!btn) return;
-      btn.disabled = !armed;
-      btn.style.background = armed ? color : "#d1d5db";
-      btn.style.cursor = armed ? "pointer" : "not-allowed";
-    }
-
-    function syncRowGating(row, p) {
-      if (!row) return;
-      const rollId = row.querySelector(`.${p}-roll-id`);
-      const mtrs1  = row.querySelector(`.${p}-mtrs1`);
-      const mtrs2  = row.querySelector(`.${p}-mtrs2`);
-      const started = filled(row.querySelector(`.${p}-start-input`));
-      const stopped = filled(row.querySelector(`.${p}-stop-input`));
-
-      if (!started) {
-        setInputLocked(mtrs1, !filled(rollId));
-        setBtnArmed(row.querySelector(`.${p}-start-btn`), filled(mtrs1), "#10b981");
-      }
-      if (!stopped) {
-        setInputLocked(mtrs2, !filled(mtrs1));
-        setBtnArmed(row.querySelector(`.${p}-stop-btn`), filled(mtrs2), "#ef4444");
-      }
-    }
-
-    /* A Production Log row unlocks on the same left-to-right principle, but
-       around a single timer rather than a start/stop pair: naming the roll arms
-       the Timer, and starting it opens the metres and the two joint columns.
-       The Deckle ID is issued by the server on save. So the sheet can never hold production figures for a
-       deckle that was never actually run. */
-    const LOG_RUN_FIELDS = [
-      ".log-meters",
-      ".log-face-joint",
-      ".log-face-mtr",
-      ".log-release-joint",
-      ".log-release-mtr",
-    ];
-
-    function syncLogRowGating(row) {
-      if (!row) return;
-      const started = filled(row.querySelector(".log-start-input"));
-      const ended = filled(row.querySelector(".log-end-input"));
-      const timer = row.querySelector(".log-timer-btn");
-
-      // Once the run has ended the timer is spent -- leave it as the click
-      // handler left it (a grey tick) rather than re-arming it here.
-      if (timer && !ended) {
-        setBtnArmed(
-          timer,
-          started || filled(row.querySelector(".log-roll-id")),
-          started ? "#ef4444" : "#10b981",
-        );
-      }
-
-      LOG_RUN_FIELDS.forEach((sel) => setInputLocked(row.querySelector(sel), !started));
-    }
-
-    /* ── Job Setting dynamic rows ── */
     const jsBody  = document.getElementById("jsTableBody");
     const jsCount = document.getElementById("jsCount");
     const jsPlus  = document.getElementById("jsPlus");
@@ -1340,51 +1346,75 @@
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td style="text-align:center; font-weight:600; color:#03365a; background:#f0f7ff;" data-label="Row"></td>
-        <td data-label="Roll ID">
+        <td data-label="Jumbo FS id">
           <div class="roll-id-field">
-            <input type="text" name="jsRollId" class="form-control js-roll-id" list="allottedRollList"
-                   placeholder="Scan Roll ID" autocomplete="off" style="width:240px;" />
-            <button type="button" class="roll-scan-btn js-roll-scan-btn" aria-label="Scan Roll ID with camera" title="Scan QR with camera">
+            <input type="text" name="jsFsRollId" class="form-control js-fs-roll-id" list="allottedFsRollList"
+                   placeholder="Scan FS" autocomplete="off" />
+            <button type="button" class="roll-scan-btn js-fs-scan-btn" aria-label="Scan Jumbo FS ID with camera" title="Scan QR with camera">
               <i class="fa-solid fa-camera"></i>
             </button>
           </div>
           <span class="roll-note"></span>
         </td>
-        <td data-label="Mtrs"><input type="number" name="jsMtrs1" class="form-control js-mtrs1" placeholder="Mtrs" min="0" step="any" required /></td>
-        <td style="text-align:center; white-space:nowrap; min-width:110px;" data-label="Start">
-          <span class="js-start-display" style="font-size:12px; font-weight:700; color:#03365a; margin-right:4px;">—</span>
+        <td data-label="Drum id">
+          <div class="roll-id-field">
+            <input type="text" name="jsAdRollId" class="form-control js-ad-roll-id" list="allottedAdRollList"
+                   placeholder="Scan Drum" autocomplete="off" />
+            <button type="button" class="roll-scan-btn js-ad-scan-btn" aria-label="Scan Drum ID with camera" title="Scan QR with camera">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+          <span class="roll-note"></span>
+        </td>
+        <td data-label="Jumbo REL id">
+          <div class="roll-id-field">
+            <input type="text" name="jsRlRollId" class="form-control js-rl-roll-id" list="allottedRlRollList"
+                   placeholder="Scan REL" autocomplete="off" />
+            <button type="button" class="roll-scan-btn js-rl-scan-btn" aria-label="Scan Jumbo REL ID with camera" title="Scan QR with camera">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+          <span class="roll-note"></span>
+        </td>
+        <td data-label="Mtrs"><input type="number" name="jsMtrs1" class="form-control js-mtrs1" placeholder="Mtrs" min="0" step="any" /></td>
+        <td style="text-align:center; white-space:nowrap;" data-label="Start">
+          <span class="js-start-display" style="font-size:11.5px; font-weight:700; color:#03365a; margin-right:3px;">—</span>
           <input type="hidden" name="jsStart" class="js-start-input" />
-          <button type="button" class="js-start-btn" disabled
-            style="width:32px; height:26px; padding:0; font-size:12px; border:none; border-radius:4px; cursor:not-allowed; background:#d1d5db; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <button type="button" class="js-start-btn"
+            style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:pointer; background:#10b981; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-play"></i>
           </button>
         </td>
         <td data-label="Mtrs"><input type="number" name="jsMtrs2" class="form-control js-mtrs2" placeholder="Mtrs" min="0" step="any" /></td>
-        <td style="text-align:center; white-space:nowrap; min-width:110px;" data-label="Stop">
-          <span class="js-stop-display" style="font-size:12px; font-weight:700; color:#dc2626; margin-right:4px;">—</span>
+        <td style="text-align:center; white-space:nowrap;" data-label="Stop">
+          <span class="js-stop-display" style="font-size:11.5px; font-weight:700; color:#dc2626; margin-right:3px;">—</span>
           <input type="hidden" name="jsStop" class="js-stop-input" />
-          <button type="button" class="js-stop-btn" disabled
-            style="width:32px; height:26px; padding:0; font-size:12px; border:none; border-radius:4px; cursor:not-allowed; background:#d1d5db; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <button type="button" class="js-stop-btn"
+            style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:pointer; background:#ef4444; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-stop"></i>
           </button>
         </td>`;
-      syncRowGating(tr, "js");
       return tr;
     }
 
     jsBody.addEventListener("input", (e) => {
-      const row = e.target.closest("tr");
-      syncRowGating(row, "js");
-      checkRollId(row, "js");
+      if (e.target.classList.contains("js-fs-roll-id")) checkMaterialInput(e.target, "fs");
+      else if (e.target.classList.contains("js-ad-roll-id")) checkMaterialInput(e.target, "ad");
+      else if (e.target.classList.contains("js-rl-roll-id")) checkMaterialInput(e.target, "rl");
     });
 
-    jsBody.addEventListener("keydown", (e) => handleRollIdEnter(e, "js"));
+    jsBody.addEventListener("keydown", handleMaterialEnter);
 
     jsBody.addEventListener("click", (e) => {
-      const scanBtn = e.target.closest(".js-roll-scan-btn");
-      if (scanBtn) { openScanDialog(scanBtn.closest("tr"), "js"); return; }
+      const fsScan = e.target.closest(".js-fs-scan-btn");
+      if (fsScan) { openScanDialog(fsScan.closest("td")?.querySelector(".js-fs-roll-id"), "Jumbo FS"); return; }
+      const adScan = e.target.closest(".js-ad-scan-btn");
+      if (adScan) { openScanDialog(adScan.closest("td")?.querySelector(".js-ad-roll-id"), "Drum"); return; }
+      const rlScan = e.target.closest(".js-rl-scan-btn");
+      if (rlScan) { openScanDialog(rlScan.closest("td")?.querySelector(".js-rl-roll-id"), "Jumbo REL"); return; }
+
       const startBtn = e.target.closest(".js-start-btn");
-      if (startBtn && !startBtn.disabled) {
+      if (startBtn) {
         const row = startBtn.closest("tr");
         const time = nowHHMM();
         row.querySelector(".js-start-input").value = time;
@@ -1393,11 +1423,10 @@
         startBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         startBtn.style.background = "#6b7280";
         startBtn.style.cursor = "default";
-        refreshStartProdBtn();
         return;
       }
       const stopBtn = e.target.closest(".js-stop-btn");
-      if (stopBtn && !stopBtn.disabled) {
+      if (stopBtn) {
         const row = stopBtn.closest("tr");
         const time = nowHHMM();
         row.querySelector(".js-stop-input").value = time;
@@ -1406,49 +1435,14 @@
         stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         stopBtn.style.background = "#6b7280";
         stopBtn.style.cursor = "default";
-        refreshStartProdBtn();
       }
     });
 
-    /* ── Start Production gate ── */
-    const startProdWrap = document.getElementById("startProdWrap");
-    const startProdBtn  = document.getElementById("startProdBtn");
-    const prodLogHead   = document.getElementById("prodLogHead");
-    const prodLogBody   = document.getElementById("prodLogBody");
-    const saveBtnWrap   = document.getElementById("saveBtnWrap");
-    let productionStarted = false;
-
-    function jobSettingComplete() {
-      const rows = Array.from(jsBody.rows);
-      if (!rows.length) return false;
-      return rows.every((row) => {
-        const start = row.querySelector(".js-start-input");
-        const stop  = row.querySelector(".js-stop-input");
-        return start && stop && start.value.trim() !== "" && stop.value.trim() !== "";
-      });
-    }
-
-    function refreshStartProdBtn() {
-      if (productionStarted) return;
-      startProdWrap.classList.toggle("jc-hidden", !jobSettingComplete());
-    }
-
-    startProdBtn.addEventListener("click", () => {
-      productionStarted = true;
-      startProdWrap.classList.add("jc-hidden");
-      prodLogHead.classList.remove("jc-hidden");
-      prodLogBody.classList.remove("jc-hidden");
-      saveBtnWrap.classList.remove("jc-hidden");
-      prodLogHead.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
-
-    jsPlus.addEventListener("click", () => { jsBody.appendChild(createJsRow()); jsRenumber(); refreshStartProdBtn(); });
-    jsMinus.addEventListener("click", () => { if (jsBody.rows.length > 1) { jsBody.removeChild(jsBody.lastElementChild); jsRenumber(); refreshStartProdBtn(); } });
+    jsPlus.addEventListener("click", () => { jsBody.appendChild(createJsRow()); jsRenumber(); });
+    jsMinus.addEventListener("click", () => { if (jsBody.rows.length > 1) { jsBody.removeChild(jsBody.lastElementChild); jsRenumber(); } });
     jsBody.appendChild(createJsRow());
     jsRenumber();
-    refreshStartProdBtn();
 
-    /* ── Production Log dynamic rows ── */
     const logBody   = document.getElementById("logTableBody");
     const logCount  = document.getElementById("logCount");
     const logPlus   = document.getElementById("logPlus");
@@ -1461,10 +1455,6 @@
       logCount.value = logBody.rows.length;
     }
 
-    // Values match Sachiko's own job card (routes/sachiko/sachiko_route.js), so
-    // the two collections read the same. "—" stays selectable rather than
-    // `hidden` as it is there: a blank joint means the web ran clean, which is
-    // both the normal case and the only way back from a mis-pick.
     const jointOptionHtml = `
       <option value="" selected>—</option>
       <option value="Joint">Joint</option>
@@ -1474,37 +1464,56 @@
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td style="text-align:center; font-weight:600; color:#03365a; background:#f0f7ff;" data-label="Row"></td>
-        <td data-label="Roll ID">
+        <td data-label="Jumbo FS id">
           <div class="roll-id-field">
-            <input type="text" name="rollId" class="form-control log-roll-id" list="allottedRollList"
-                   placeholder="Scan Roll ID" autocomplete="off" style="width:240px;" />
-            <button type="button" class="roll-scan-btn log-roll-scan-btn" aria-label="Scan Roll ID with camera" title="Scan QR with camera">
+            <input type="text" name="fsRollId" class="form-control log-fs-roll-id" list="allottedFsRollList"
+                   placeholder="Scan FS" autocomplete="off" />
+            <button type="button" class="roll-scan-btn log-fs-scan-btn" aria-label="Scan Jumbo FS ID with camera" title="Scan QR with camera">
               <i class="fa-solid fa-camera"></i>
             </button>
           </div>
           <span class="roll-note"></span>
         </td>
-        <td data-label="Deckle ID"><input type="text" name="deckleId" class="form-control log-deckle-id" placeholder="Generated on save" autocomplete="off" readonly /></td>
-        <td style="text-align:center; font-size:12px; font-weight:700; white-space:nowrap; min-width:70px;" data-label="Start Time">
+        <td data-label="Drum id">
+          <div class="roll-id-field">
+            <input type="text" name="adRollId" class="form-control log-ad-roll-id" list="allottedAdRollList"
+                   placeholder="Scan Drum" autocomplete="off" />
+            <button type="button" class="roll-scan-btn log-ad-scan-btn" aria-label="Scan Drum ID with camera" title="Scan QR with camera">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+          <span class="roll-note"></span>
+        </td>
+        <td data-label="Jumbo REL id">
+          <div class="roll-id-field">
+            <input type="text" name="rlRollId" class="form-control log-rl-roll-id" list="allottedRlRollList"
+                   placeholder="Scan REL" autocomplete="off" />
+            <button type="button" class="roll-scan-btn log-rl-scan-btn" aria-label="Scan Jumbo REL ID with camera" title="Scan QR with camera">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+          <span class="roll-note"></span>
+        </td>
+        <td data-label="Deckle ID"><input type="text" name="deckleId" class="form-control log-deckle-id" placeholder="Auto" autocomplete="off" readonly /></td>
+        <td style="text-align:center; font-size:11.5px; font-weight:700; white-space:nowrap;" data-label="Start Time">
           <span class="log-start-display" style="color:#03365a;">—</span>
           <input type="hidden" name="logStart" class="log-start-input" />
         </td>
-        <td style="text-align:center; font-size:12px; font-weight:700; white-space:nowrap; min-width:70px;" data-label="End Time">
+        <td style="text-align:center; font-size:11.5px; font-weight:700; white-space:nowrap;" data-label="End Time">
           <span class="log-end-display" style="color:#dc2626;">—</span>
           <input type="hidden" name="logEnd" class="log-end-input" />
         </td>
         <td style="text-align:center; white-space:nowrap;" data-label="Timer">
-          <button type="button" class="log-timer-btn" data-state="idle" disabled
-            style="width:32px; height:26px; padding:0; font-size:12px; border:none; border-radius:4px; cursor:not-allowed; background:#d1d5db; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <button type="button" class="log-timer-btn" data-state="idle"
+            style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:pointer; background:#10b981; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-play"></i>
           </button>
         </td>
         <td data-label="Meters"><input type="number" name="logMeters" class="form-control log-meters" placeholder="Meters" min="0" step="any" /></td>
-        <td data-label="Face Joint"><select name="faceJoint" class="form-control log-face-joint" style="min-width:100px;">${jointOptionHtml}</select></td>
+        <td data-label="Face Joint"><select name="faceJoint" class="form-control log-face-joint" style="min-width:0;">${jointOptionHtml}</select></td>
         <td data-label="Face Mtr"><input type="number" name="faceMtr" class="form-control log-face-mtr" placeholder="Mtr" min="0" step="any" /></td>
-        <td data-label="Rel. Joint"><select name="releaseJoint" class="form-control log-release-joint" style="min-width:100px;">${jointOptionHtml}</select></td>
+        <td data-label="Rel. Joint"><select name="releaseJoint" class="form-control log-release-joint" style="min-width:0;">${jointOptionHtml}</select></td>
         <td data-label="Rel. Mtr"><input type="number" name="releaseMtr" class="form-control log-release-mtr" placeholder="Mtr" min="0" step="any" /></td>`;
-      syncLogRowGating(tr);
       return tr;
     }
 
@@ -1517,14 +1526,11 @@
       return `${h}:${m} ${ampm}`;
     }
 
-    /* ── Production Log totals ── */
     const totalMeterInput = document.querySelector('input[name="totalMeter"]');
     const sqMtrInput = document.querySelector('input[name="sqMtr"]');
     const paperSizeVal = Number(document.querySelector('input[name="paperSize"]')?.value) || 0;
     const round2 = (n) => String(Math.round(n * 100) / 100);
 
-    // Each log row now states the metres its deckle made outright, so the
-    // running total is their sum -- no start/stop counter arithmetic.
     function recalcLogTotals() {
       let runningMtrs = 0;
       Array.from(logBody.rows).forEach((row) => {
@@ -1536,24 +1542,25 @@
       if (sqMtrInput) sqMtrInput.value = runningMtrs ? round2(paperSizeVal * (runningMtrs / 100)) : "";
     }
 
-    // Selects fire "input" too, so this covers the joint columns as well.
     logBody.addEventListener("input", (e) => {
-      const row = e.target.closest("tr");
-      syncLogRowGating(row);
-      checkRollId(row, "log");
+      if (e.target.classList.contains("log-fs-roll-id")) checkMaterialInput(e.target, "fs");
+      else if (e.target.classList.contains("log-ad-roll-id")) checkMaterialInput(e.target, "ad");
+      else if (e.target.classList.contains("log-rl-roll-id")) checkMaterialInput(e.target, "rl");
       recalcLogTotals();
     });
 
-    logBody.addEventListener("keydown", (e) => handleRollIdEnter(e, "log"));
+    logBody.addEventListener("keydown", handleMaterialEnter);
 
     logBody.addEventListener("click", (e) => {
-      const scanBtn = e.target.closest(".log-roll-scan-btn");
-      if (scanBtn) { openScanDialog(scanBtn.closest("tr"), "log"); return; }
+      const fsScan = e.target.closest(".log-fs-scan-btn");
+      if (fsScan) { openScanDialog(fsScan.closest("td")?.querySelector(".log-fs-roll-id"), "Jumbo FS"); return; }
+      const adScan = e.target.closest(".log-ad-scan-btn");
+      if (adScan) { openScanDialog(adScan.closest("td")?.querySelector(".log-ad-roll-id"), "Drum"); return; }
+      const rlScan = e.target.closest(".log-rl-scan-btn");
+      if (rlScan) { openScanDialog(rlScan.closest("td")?.querySelector(".log-rl-roll-id"), "Jumbo REL"); return; }
 
-      // One button walks the run: play starts the clock, stop ends it, and
-      // then it's spent.
       const timerBtn = e.target.closest(".log-timer-btn");
-      if (!timerBtn || timerBtn.disabled) return;
+      if (!timerBtn) return;
       const row = timerBtn.closest("tr");
       const time = nowHHMM();
 
@@ -1562,7 +1569,7 @@
         row.querySelector(".log-start-display").textContent = time;
         timerBtn.dataset.state = "running";
         timerBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
-        syncLogRowGating(row);
+        timerBtn.style.background = "#ef4444";
       } else if (timerBtn.dataset.state === "running") {
         row.querySelector(".log-end-input").value = time;
         row.querySelector(".log-end-display").textContent = time;
@@ -1592,7 +1599,6 @@
     renumber();
     recalcLogTotals();
 
-    /* ── Draft autosave ── */
     const DRAFT_KEY = `jc-draft:${document.querySelector('input[name="pendingId"]')?.value || "new"}`;
 
     function readDraft() {
@@ -1608,7 +1614,10 @@
     const val = (row, sel) => row.querySelector(sel)?.value || "";
 
     const readJsRows = () => Array.from(jsBody.rows).map((row) => ({
-      rollId: val(row, ".js-roll-id"),
+      fsRollId: val(row, ".js-fs-roll-id"),
+      adRollId: val(row, ".js-ad-roll-id"),
+      rlRollId: val(row, ".js-rl-roll-id"),
+      rollId: val(row, ".js-fs-roll-id") || val(row, ".js-roll-id"),
       mtrs1: val(row, ".js-mtrs1"),
       start: val(row, ".js-start-input"),
       mtrs2: val(row, ".js-mtrs2"),
@@ -1616,7 +1625,10 @@
     }));
 
     const readLogRows = () => Array.from(logBody.rows).map((row) => ({
-      rollId: val(row, ".log-roll-id"),
+      fsRollId: val(row, ".log-fs-roll-id"),
+      adRollId: val(row, ".log-ad-roll-id"),
+      rlRollId: val(row, ".log-rl-roll-id"),
+      rollId: val(row, ".log-fs-roll-id") || val(row, ".log-roll-id"),
       deckleId: val(row, ".log-deckle-id"),
       start: val(row, ".log-start-input"),
       end: val(row, ".log-end-input"),
@@ -1634,7 +1646,6 @@
       const draft = {
         jsRows: readJsRows(),
         logRows: readLogRows(),
-        productionStarted,
         savedAt: Date.now(),
       };
       if (!anyEntry(draft.jsRows) && !anyEntry(draft.logRows)) { dropDraft(); return; }
@@ -1654,18 +1665,9 @@
       btn.style.cursor = "default";
     }
 
-    // Unlock before writing: gating locked these on the fresh row, and a locked
-    // field is wiped on the next sync. syncRowGating/syncLogRowGating below
-    // then settles each row back to the state its own values imply.
     const putValue = (row, sel, value) => {
       const el = row.querySelector(sel);
       if (!el) return;
-      if (el.tagName === "SELECT") {
-        el.style.pointerEvents = "";
-        el.tabIndex = 0;
-      } else {
-        el.readOnly = false;
-      }
       el.value = value ?? "";
     };
 
@@ -1675,7 +1677,9 @@
       rows.forEach((data, i) => {
         const row = jsBody.rows[i];
         if (!row) return;
-        putValue(row, ".js-roll-id", data.rollId);
+        putValue(row, ".js-fs-roll-id", data.fsRollId || data.rollId);
+        putValue(row, ".js-ad-roll-id", data.adRollId);
+        putValue(row, ".js-rl-roll-id", data.rlRollId);
         putValue(row, ".js-mtrs1", data.mtrs1);
         putValue(row, ".js-mtrs2", data.mtrs2);
         markPunched(
@@ -1690,15 +1694,13 @@
           row.querySelector(".js-stop-input"),
           data.stop,
         );
-        syncRowGating(row, "js");
-        checkRollId(row, "js");
+        checkMaterialInput(row.querySelector(".js-fs-roll-id"), "fs");
+        checkMaterialInput(row.querySelector(".js-ad-roll-id"), "ad");
+        checkMaterialInput(row.querySelector(".js-rl-roll-id"), "rl");
       });
       jsRenumber();
     }
 
-    // The log's single timer has three resting states, so it can't go through
-    // markPunched -- a run that started but hadn't ended when the page died
-    // must come back mid-run, still stoppable.
     function restoreLogTimer(row, start, end) {
       const btn = row.querySelector(".log-timer-btn");
       if (!btn || !start) return;
@@ -1706,6 +1708,7 @@
       row.querySelector(".log-start-display").textContent = start;
       btn.dataset.state = "running";
       btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+      btn.style.background = "#ef4444";
       if (!end) return;
       row.querySelector(".log-end-input").value = end;
       row.querySelector(".log-end-display").textContent = end;
@@ -1723,15 +1726,18 @@
         const row = logBody.rows[i];
         if (!row) return;
         restoreLogTimer(row, data.start, data.end);
-        putValue(row, ".log-roll-id", data.rollId);
+        putValue(row, ".log-fs-roll-id", data.fsRollId || data.rollId);
+        putValue(row, ".log-ad-roll-id", data.adRollId);
+        putValue(row, ".log-rl-roll-id", data.rlRollId);
         putValue(row, ".log-deckle-id", data.deckleId);
         putValue(row, ".log-meters", data.meters);
         putValue(row, ".log-face-joint", data.faceJoint);
         putValue(row, ".log-face-mtr", data.faceMtr);
         putValue(row, ".log-release-joint", data.releaseJoint);
         putValue(row, ".log-release-mtr", data.releaseMtr);
-        syncLogRowGating(row);
-        checkRollId(row, "log");
+        checkMaterialInput(row.querySelector(".log-fs-roll-id"), "fs");
+        checkMaterialInput(row.querySelector(".log-ad-roll-id"), "ad");
+        checkMaterialInput(row.querySelector(".log-rl-roll-id"), "rl");
       });
       renumber();
     }
@@ -1742,14 +1748,6 @@
 
       if (Array.isArray(draft.jsRows) && draft.jsRows.length) applyJsRows(draft.jsRows);
       if (Array.isArray(draft.logRows) && draft.logRows.length) applyLogRows(draft.logRows);
-      if (draft.productionStarted) {
-        productionStarted = true;
-        startProdWrap.classList.add("jc-hidden");
-        prodLogHead.classList.remove("jc-hidden");
-        prodLogBody.classList.remove("jc-hidden");
-        saveBtnWrap.classList.remove("jc-hidden");
-      }
-      refreshStartProdBtn();
       recalcLogTotals();
       if (typeof showToast === "function") showToast("Restored your unsaved entry", "success");
     }
@@ -1760,7 +1758,7 @@
       let jcSubmitting = false;
       jcForm.addEventListener("submit", (e) => {
         if (jcSubmitting) { e.preventDefault(); return; }
-        if (USAGE_ITEMS.length && !materialUsedCleared) {
+        if ((USAGE_ITEMS.length || (typeof getActiveUsageItems === "function" && getActiveUsageItems().length)) && !materialUsedCleared) {
           e.preventDefault();
           openMaterialUsedDialog();
           return;

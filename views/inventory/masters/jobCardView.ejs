@@ -71,7 +71,8 @@
     const ids = []
       .concat(Array.isArray(jc.productionLog) ? jc.productionLog : [])
       .concat(Array.isArray(jc.jobSetting) ? jc.jobSetting : [])
-      .map((r) => String(r?.rollId || "").trim())
+      .flatMap((r) => [r?.fsRollId, r?.adRollId, r?.rlRollId, r?.rollId])
+      .map((id) => String(id || "").trim())
       .filter(Boolean);
     const seen = new Set();
     const uniq = ids.filter((id) => {

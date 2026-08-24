@@ -989,7 +989,6 @@
         headerFilterPlaceholder: "Search",
         hozAlign: "center",
         minWidth: 130,
-        headerTooltip: "What's actually free to commit: Stock (Kg) minus the Allotted kg still waiting to be drawn. Material already laminated into a Deckle has left Stock, so it isn't subtracted a second time.",
         formatter: (cell) => {
           if (!cell.getRow().getData().isParent) return "";
           const value = cell.getValue() || 0;

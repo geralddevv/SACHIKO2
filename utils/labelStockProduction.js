@@ -7,6 +7,9 @@ import AdhesiveStock from "../models/inventory/adhesiveStock.js";
 import AdhesiveStockLog from "../models/inventory/adhesiveStockLog.js";
 import ReleaseLinerStock from "../models/inventory/releaseLinerStock.js";
 import ReleaseLinerStockLog from "../models/inventory/releaseLinerStockLog.js";
+import SachikoLabelStock from "../models/sachiko/sachikoLabelStock.js";
+import LabelStockAdhesiveBinding from "../models/sachiko/labelStockAdhesiveBinding.js";
+import AdhesiveMaster from "../models/inventory/adhesiveMaster.js";
 import { generateDeckleId } from "./rollId.js";
 import { resolveActualLabelStock, resolveLabelStockCombinations } from "./labelStockVariant.js";
 
@@ -83,28 +86,13 @@ export const POOL_MODELS = {
 export const POOL_MATCH_FIELDS = {
   facestock: [
     { field: "family", recipe: "facestockFamily" },
-    { field: "make", recipe: "facestockMake" },
-    { field: "vendorSkuCode", recipe: "facestockVendorSkuCode" },
-    { field: "type", recipe: "facestockType" },
+    { field: "gsm", recipe: "facestockGsm", numeric: true },
     { field: "micron", recipe: "facestockMicron", numeric: true },
+    { field: "type", recipe: "facestockType" },
   ],
   adhesive: [
     { field: "type", recipe: "adhesiveType" },
   ],
-  // Sensing alone: whether the liner carries the mark the press's eye-mark
-  // sensor needs is the one property that decides whether a liner can run
-  // this job at all. Type/make/vendor SKU code/colour were dropped from this
-  // list on purpose -- they still take part in
-  // buildLabelStockSpecSignature (see the note above), so a liner that
-  // differs on them is allotted under its own "-A"/"-B" Product Code variant
-  // rather than being hidden from the picker.
-  //
-  // Reel-side this reads ReleaseLinerStock.sensing, which only exists on
-  // reels inwarded after that field was added -- run
-  // scripts/backfill-releaselinerstock-sensing.js so older reels aren't
-  // silently excluded from every SENSING/NON-SENSING recipe. A recipe with
-  // no Sensing recorded matches any liner, per reelMatchesLayer's own
-  // blank-recipe rule below.
   release: [
     { field: "sensing", recipe: "releaseLinerSensing" },
   ],
@@ -146,6 +134,160 @@ export function pickStockIds(pick) {
   if (!pick) return [];
   if (Array.isArray(pick.stockIds)) return pick.stockIds.filter(Boolean).map(String);
   return pick.stockId ? [String(pick.stockId)] : [];
+}
+
+export function adhesiveIdentityKey(o) {
+  const s = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
+  return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode)].join("||");
+}
+
+export async function applyAdhesiveBindings(drums, labelStockId) {
+  const bindings = await LabelStockAdhesiveBinding.find({
+    labelStock: labelStockId,
+  }).select("adhesive").lean();
+  if (!bindings.length) return { drums: [], hasBinding: false };
+  if (!drums.length) return { drums, hasBinding: true };
+
+  const masters = await AdhesiveMaster.find({ _id: { $in: bindings.map((b) => b.adhesive) } })
+    .select("vendorId type make vendorSkuCode")
+    .lean();
+  if (!masters.length) return { drums: [], hasBinding: false };
+
+  const allowed = new Set(masters.map(adhesiveIdentityKey));
+  return { drums: drums.filter((d) => allowed.has(adhesiveIdentityKey(d))), hasBinding: true };
+}
+
+// Resolves all raw-material reels/drums eligible for an order's Label Stock SKU --
+// both currently allotted reels and unallocated warehouse stock that satisfies the
+// SKU's restrictions:
+// - Facestock: matches the core fields (family, make, vendorSkuCode, type, micron) of the product code recipe
+// - Adhesive: matches the Adhesive Master(s) bound to the product code
+// - Release Liner: matches sensing (SENSING / NON-SENSING) and type
+export async function getEligibleRawMaterials({ labelStock, allottedLayers }) {
+  if (!labelStock) return { facestock: [], adhesive: [], release: [], validStockIds: { facestock: new Set(), adhesive: new Set(), release: new Set() } };
+
+  const labelStockDoc = (labelStock && typeof labelStock === "object" && labelStock.rollType)
+    ? labelStock
+    : await SachikoLabelStock.findById(labelStock).lean();
+
+  if (!labelStockDoc) {
+    return { facestock: [], adhesive: [], release: [], validStockIds: { facestock: new Set(), adhesive: new Set(), release: new Set() } };
+  }
+
+  const layers = requiredLayersFor(labelStockDoc.rollType);
+  const allottedIdsByPool = { facestock: new Set(), adhesive: new Set(), release: new Set() };
+  if (allottedLayers) {
+    for (const key of layers) {
+      const pick = allottedLayers[key];
+      const pool = LAYER_META[key]?.pool;
+      if (pool && pick) {
+        pickStockIds(pick).forEach((id) => allottedIdsByPool[pool].add(String(id)));
+      }
+    }
+  }
+
+  // 1. Facestock (allotted + reels matching core fields of C011/recipe)
+  const fsLayers = layers.filter((k) => LAYER_META[k]?.pool === "facestock");
+  const fsAllottedIds = [...allottedIdsByPool.facestock];
+  const fsDocs = await FacestockStock.find({
+    $or: [
+      { quantity: { $gt: 0 }, reelMtrs: { $gt: 0 } },
+      ...(fsAllottedIds.length ? [{ _id: { $in: fsAllottedIds } }] : []),
+    ],
+  }).sort({ reelMtrs: -1, rollId: 1 }).lean();
+  const facestock = fsDocs
+    .filter((r) =>
+      allottedIdsByPool.facestock.has(String(r._id)) ||
+      fsLayers.some((k) => reelMatchesLayer("facestock", r, labelStockDoc[LAYER_META[k].specField]))
+    )
+    .map((r) => ({
+      _id: String(r._id),
+      rollId: r.rollId || "",
+      reelMtrs: Number(r.reelMtrs) || 0,
+      location: r.location || "",
+      code: r.vendorSkuCode || "",
+      gsm: r.gsm,
+      micron: r.micron,
+      size: r.size || "",
+      make: r.make || "",
+      type: r.type || "",
+      family: r.family || "",
+      unit: "Roll",
+      pool: "facestock",
+      layerLabel: "Facestock",
+      allotted: allottedIdsByPool.facestock.has(String(r._id)),
+    }));
+
+  // 2. Adhesive (allotted + drums matching binding with product code)
+  const adLayers = layers.filter((k) => LAYER_META[k]?.pool === "adhesive");
+  const adAllottedIds = [...allottedIdsByPool.adhesive];
+  const adDocs = await AdhesiveStock.find({
+    $or: [
+      { quantity: { $gt: 0 }, reelMtrs: { $gt: 0 } },
+      ...(adAllottedIds.length ? [{ _id: { $in: adAllottedIds } }] : []),
+    ],
+  }).sort({ reelMtrs: -1, rollId: 1 }).lean();
+  const { drums: boundAdDrums, hasBinding } = await applyAdhesiveBindings(adDocs, labelStockDoc._id);
+  const boundAdSet = new Set(boundAdDrums.map((d) => String(d._id)));
+  const adhesive = adDocs
+    .filter((r) =>
+      allottedIdsByPool.adhesive.has(String(r._id)) ||
+      (hasBinding ? boundAdSet.has(String(r._id)) : adLayers.some((k) => reelMatchesLayer("adhesive", r, labelStockDoc[LAYER_META[k].specField])))
+    )
+    .map((r) => ({
+      _id: String(r._id),
+      rollId: r.rollId || "",
+      reelMtrs: Number(r.reelMtrs) || 0,
+      location: r.location || "",
+      code: r.vendorSkuCode || "",
+      gsm: r.gsm,
+      size: r.size || "",
+      make: r.make || "",
+      type: r.type || "",
+      unit: "Drum",
+      pool: "adhesive",
+      layerLabel: "Adhesive",
+      allotted: allottedIdsByPool.adhesive.has(String(r._id)),
+    }));
+
+  // 3. Release Liner (allotted + reels matching sensing/type)
+  const rlLayers = layers.filter((k) => LAYER_META[k]?.pool === "release");
+  const rlAllottedIds = [...allottedIdsByPool.release];
+  const rlDocs = await ReleaseLinerStock.find({
+    $or: [
+      { quantity: { $gt: 0 }, reelMtrs: { $gt: 0 } },
+      ...(rlAllottedIds.length ? [{ _id: { $in: rlAllottedIds } }] : []),
+    ],
+  }).sort({ reelMtrs: -1, rollId: 1 }).lean();
+  const release = rlDocs
+    .filter((r) =>
+      allottedIdsByPool.release.has(String(r._id)) ||
+      rlLayers.some((k) => reelMatchesLayer("release", r, labelStockDoc[LAYER_META[k].specField]))
+    )
+    .map((r) => ({
+      _id: String(r._id),
+      rollId: r.rollId || "",
+      reelMtrs: Number(r.reelMtrs) || 0,
+      location: r.location || "",
+      code: r.vendorSkuCode || "",
+      gsm: r.gsm,
+      size: r.size || "",
+      make: r.make || "",
+      type: r.type || "",
+      sensing: r.sensing || "",
+      unit: "Roll",
+      pool: "release",
+      layerLabel: "Release Liner",
+      allotted: allottedIdsByPool.release.has(String(r._id)),
+    }));
+
+  const validStockIds = {
+    facestock: new Set(facestock.map((r) => r._id)),
+    adhesive: new Set(adhesive.map((r) => r._id)),
+    release: new Set(release.map((r) => r._id)),
+  };
+
+  return { facestock, adhesive, release, validStockIds };
 }
 
 // Reads an order's just-saved allottedLayers back into real reel documents and

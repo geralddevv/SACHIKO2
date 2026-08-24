@@ -23,6 +23,9 @@ const materialBlockSchema = new mongoose.Schema(
 const rollRowSchema = new mongoose.Schema(
   {
     rollId: { type: String, trim: true },
+    fsRollId: { type: String, trim: true },
+    adRollId: { type: String, trim: true },
+    rlRollId: { type: String, trim: true },
     mtrs1: { type: Number },
     startTime: { type: String, trim: true },
     mtrs2: { type: Number },
@@ -33,14 +36,13 @@ const rollRowSchema = new mongoose.Schema(
 
 // Production Log: one row per deckle produced, not per counter run -- the
 // deckle's id, the run's clocked start/end, the metres it made, and any
-// joint/wrinkle found on the face and release webs. Same shape as Sachiko's
-// own job card (models/sachiko/sachikoJobcard.js), which is where this layout
-// comes from, plus the rollId SACHIKO2 needs on top: it names which of the
-// job's allotted reels the deckle came off, and is what
-// consumeAllottedRollMeters deducts `meters` against.
+// joint/wrinkle found on the face and release webs.
 const productionLogRowSchema = new mongoose.Schema(
   {
     rollId: { type: String, trim: true },
+    fsRollId: { type: String, trim: true },
+    adRollId: { type: String, trim: true },
+    rlRollId: { type: String, trim: true },
     deckleId: { type: String, trim: true },
     meters: { type: Number },
     face: {
@@ -78,6 +80,7 @@ const facestockUsageRowSchema = new mongoose.Schema(
     stockId: { type: mongoose.Schema.Types.ObjectId, ref: "FacestockStock" },
     rollId: { type: String, trim: true },
     mtrsUsed: { type: Number },
+    remainingKg: { type: Number },
   },
   { _id: false },
 );
@@ -87,6 +90,7 @@ const adhesiveUsageRowSchema = new mongoose.Schema(
     stockId: { type: mongoose.Schema.Types.ObjectId, ref: "AdhesiveStock" },
     rollId: { type: String, trim: true },
     kgUsed: { type: Number },
+    remainingKg: { type: Number },
   },
   { _id: false },
 );
@@ -96,6 +100,7 @@ const releaseUsageRowSchema = new mongoose.Schema(
     stockId: { type: mongoose.Schema.Types.ObjectId, ref: "ReleaseLinerStock" },
     rollId: { type: String, trim: true },
     mtrsUsed: { type: Number },
+    remainingKg: { type: Number },
   },
   { _id: false },
 );

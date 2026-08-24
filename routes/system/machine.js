@@ -8,6 +8,9 @@ import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import PendingProduction from "../../models/inventory/pendingProduction.js";
 import MaterialStock from "../../models/inventory/materialStock.js";
 import MaterialStockLog from "../../models/inventory/materialStockLog.js";
+import FacestockStock from "../../models/inventory/facestockStock.js";
+import AdhesiveStock from "../../models/inventory/adhesiveStock.js";
+import ReleaseLinerStock from "../../models/inventory/releaseLinerStock.js";
 import MachineJobCard from "../../models/inventory/machineJobCard.js";
 import MaintenanceRequest from "../../models/system/maintenanceRequest.js";
 import Counter from "../../models/system/counter.js";
@@ -15,7 +18,8 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { normalizeLocationName } from "../../utils/locations.js";
 import { normalizeRollId, extractScannedRollId, generateDeckleId } from "../../utils/rollId.js";
-import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds } from "../../utils/labelStockProduction.js";
+import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds, getEligibleRawMaterials } from "../../utils/labelStockProduction.js";
+import { resolveActualLabelStock, resolveLabelStockCombinations } from "../../utils/labelStockVariant.js";
 
 const router = express.Router();
 
@@ -75,10 +79,17 @@ const consolidateUsageRows = (rows, amountKey) => {
   for (const row of rows) {
     const stockId = trim(row?.stockId);
     const amount = Number(row?.[amountKey]);
-    if (!stockId || !Number.isFinite(amount) || amount <= 0) continue;
-    byStockId.set(stockId, round2((byStockId.get(stockId) || 0) + amount));
+    if (!stockId) continue;
+    const remainingKg = row?.remainingKg !== undefined && Number.isFinite(Number(row.remainingKg)) ? Number(row.remainingKg) : undefined;
+    const existing = byStockId.get(stockId);
+    if (!existing) {
+      byStockId.set(stockId, { stockId, [amountKey]: Number.isFinite(amount) ? amount : 0, remainingKg });
+    } else {
+      existing[amountKey] = round2(existing[amountKey] + (Number.isFinite(amount) ? amount : 0));
+      if (remainingKg !== undefined) existing.remainingKg = remainingKg;
+    }
   }
-  return [...byStockId].map(([stockId, amount]) => ({ stockId, [amountKey]: amount }));
+  return [...byStockId.values()].filter((r) => r[amountKey] > 0 || r.remainingKg !== undefined);
 };
 
 // ----------------------------------Machine Master---------------------------------->
@@ -559,12 +570,19 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
   let machine = null;
   let prefill = null;
 
+  let eligibleRawStock = { facestock: [], adhesive: [], release: [] };
   if (pendingId && mongoose.isValidObjectId(pendingId)) {
-    const pendingDoc = await PendingProduction.findById(pendingId).select("assignedMachineId").lean();
+    const pendingDoc = await PendingProduction.findById(pendingId).select("assignedMachineId itemId allottedLayers").lean();
     if (pendingDoc?.assignedMachineId) {
       machine = await Machine.findById(pendingDoc.assignedMachineId).lean();
       const rows = await buildQueueRows({ assignedMachineId: pendingDoc.assignedMachineId });
       prefill = rows.find((r) => r._id === String(pendingId)) || null;
+      if (pendingDoc.itemId) {
+        eligibleRawStock = await getEligibleRawMaterials({
+          labelStock: pendingDoc.itemId,
+          allottedLayers: pendingDoc.allottedLayers,
+        });
+      }
     }
   }
 
@@ -600,6 +618,7 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
     machine,
     prefill,
     previewJobCardId,
+    eligibleRawStock,
     // One-shot token so a double-submit of this page can't save (or deduct) twice.
     submissionToken: randomUUID(),
     notification: req.flash("notification"),
@@ -717,38 +736,24 @@ async function consumeAllottedRollMeters({ pendingProductionId, logRows, jobCard
   return result;
 }
 
-// Deducts the mtrs/kg the operator reports using off each reel this job had
-// reserved for one raw-material pool (Facestock, Adhesive, or Release Liner)
-// -- the "Material Used" dialog on Save Production Entry
-// (views/inventory/masters/jobCardForm.ejs) is the only place any of these
-// three pools' reels actually leave Stock for an order allotted through the
-// newer layerAllotments picker (PendingProduction.allottedLayers): unlike
-// the older allottedRollIds flow, consumeAllottedRollMeters above has no
-// scanned Deckle roll length to derive Facestock/Release Liner consumption
-// from here -- and Adhesive never had one to begin with (a drum has no
-// length reading to scan, only a weight). The operator has to say how much
-// of each reel the job actually used.
-//
-// `rows` is [{ stockId, used }], already validated against the job's own
-// PendingProduction.allottedLayers[pool] by the caller -- this only re-reads
-// the live reels to know how much is really left on each and mirrors
-// produceDeckle's own deduction shape (utils/labelStockProduction.js) so
-// every path that can reduce one of these reels agrees on how it does it
-// (reelMtrs clamped at 0, quantity zeroed once emptied, one OUTWARD
-// *StockLog line per reel). Facestock/Release Liner reels count reelMtrs in
-// metres; Adhesive drums count it in kg -- same field, different unit, hence
-// the caller-supplied `pool` picking the right word for the log remark.
+// Deducts the operator-reported usage from each Facestock/Adhesive/Release
+// Liner reel/drum recorded in the Material Stock dialog. Directly updates the
+// stock balance to the remaining kg entered by the operator.
 async function consumePoolUsage({ pool, rows, jobCardId, createdBy }) {
   const result = { deducted: 0, emptied: 0, used: 0, rows: [], limited: [] };
   if (!Array.isArray(rows) || rows.length === 0) return result;
 
   const { Model, LogModel } = POOL_MODELS[pool];
-  const unitLabel = pool === "adhesive" ? "kg" : "mtrs";
+  const unitLabel = "kg";
   const requestedByStockId = new Map();
   for (const row of rows) {
     const stockId = trim(row?.stockId);
+    if (!stockId) continue;
+    const remainingKg = row?.remainingKg !== undefined && row?.remainingKg !== null && Number.isFinite(Number(row.remainingKg))
+      ? round2(Number(row.remainingKg))
+      : undefined;
     const used = round2(Number(row?.used) || 0);
-    if (stockId && used > 0) requestedByStockId.set(stockId, round2((requestedByStockId.get(stockId) || 0) + used));
+    requestedByStockId.set(stockId, { remainingKg, used });
   }
   const stockIds = [...requestedByStockId.keys()];
   const reels = stockIds.length
@@ -756,23 +761,23 @@ async function consumePoolUsage({ pool, rows, jobCardId, createdBy }) {
     : [];
   const reelById = new Map(reels.map((d) => [String(d._id), d]));
 
-  for (const [stockId, requested] of requestedByStockId) {
+  for (const [stockId, reqData] of requestedByStockId) {
     const reel = reelById.get(stockId);
     if (!reel) continue;
 
-    // The dialog validates this in the browser, but stock can change between
-    // opening it and saving. Record only what is really available; never let
-    // a stale/tampered request create a negative balance or an overstated log.
     const available = Math.max(round2(Number(reel.reelMtrs) || 0), 0);
-    const used = Math.min(requested, available);
-    if (used <= 0) {
-      result.limited.push({ stockId: reel._id, rollId: reel.rollId, requested, used: 0 });
-      continue;
-    }
-    if (used < requested) result.limited.push({ stockId: reel._id, rollId: reel.rollId, requested, used });
+    let newRemaining;
+    let used;
 
-    const remaining = round2(available - used);
-    const emptied = remaining <= 0;
+    if (reqData.remainingKg !== undefined) {
+      newRemaining = Math.max(0, Math.min(reqData.remainingKg, available));
+      used = round2(available - newRemaining);
+    } else {
+      used = Math.min(Math.max(0, reqData.used || 0), available);
+      newRemaining = round2(available - used);
+    }
+
+    const emptied = newRemaining <= 0;
 
     const bal = await Model.aggregate([
       { $match: { type: reel.type, location: reel.location } },
@@ -782,29 +787,32 @@ async function consumePoolUsage({ pool, rows, jobCardId, createdBy }) {
     const rollsOut = emptied ? Number(reel.quantity) || 0 : 0;
     const closingStock = openingStock - rollsOut;
 
+    // Directly update the stock to the remaining kg (new value in stock)
     await Model.updateOne(
       { _id: reel._id },
-      emptied ? { $set: { reelMtrs: 0, quantity: 0 } } : { $set: { reelMtrs: remaining } },
+      emptied ? { $set: { reelMtrs: 0, quantity: 0 } } : { $set: { reelMtrs: newRemaining } },
     );
 
-    await LogModel.create({
-      location: reel.location,
-      openingStock,
-      quantity: rollsOut,
-      closingStock,
-      reelMtrs: used,
-      rate: reel.rate,
-      rollId: reel.rollId,
-      type: "OUTWARD",
-      source: "SYSTEM",
-      remarks: `${jobCardId ? `${jobCardId}: ` : ""}${used} ${unitLabel} consumed${emptied ? " — reel emptied" : ""}`,
-      createdBy: createdBy || "SYSTEM",
-    });
+    if (used > 0 || emptied) {
+      await LogModel.create({
+        location: reel.location,
+        openingStock,
+        quantity: rollsOut,
+        closingStock,
+        reelMtrs: used,
+        rate: reel.rate,
+        rollId: reel.rollId,
+        type: "OUTWARD",
+        source: "SYSTEM",
+        remarks: `${jobCardId ? `${jobCardId}: ` : ""}${used} ${unitLabel} consumed (${newRemaining} ${unitLabel} remaining in stock)${emptied ? " — reel emptied" : ""}`,
+        createdBy: createdBy || "SYSTEM",
+      });
+    }
 
     result.deducted += 1;
     result.used = round2(result.used + used);
     if (emptied) result.emptied += 1;
-    result.rows.push({ stockId: reel._id, rollId: reel.rollId, used });
+    result.rows.push({ stockId: reel._id, rollId: reel.rollId, used, remainingKg: newRemaining });
   }
   return result;
 }
@@ -827,14 +835,94 @@ async function consumePoolUsage({ pool, rows, jobCardId, createdBy }) {
 // still mid-entry) produces nothing -- there's no length to inward. The
 // generated Deckle ID is written back onto the row it came from (by index)
 // so the saved job card records which Deckle each row actually became.
-async function produceDecklesFromLog({ pendingDoc, productionLog, location, jobCardId, createdBy }) {
-  const result = { rows: [], created: 0, meters: 0 };
+async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [], facestockUsage = [], adhesiveUsage = [], releaseUsage = [], location, jobCardId, createdBy }) {
+  const result = { rows: [], created: 0, meters: 0, resolvedProductCode: null };
   const labelStockId = pendingDoc?.itemId?._id || pendingDoc?.itemId;
   if (!labelStockId || !location || !Array.isArray(productionLog) || !productionLog.length) return result;
 
-  const labelStock = await SachikoLabelStock.findById(labelStockId).select("productCode skuCode").lean();
-  const itemCode = labelStock?.productCode || labelStock?.skuCode;
-  if (!itemCode) return result;
+  const baseLabelStock = await SachikoLabelStock.findById(labelStockId).lean();
+  if (!baseLabelStock) return result;
+
+  const allFsRollIds = new Set();
+  const allAdRollIds = new Set();
+  const allRlRollIds = new Set();
+  const allFsStockIds = new Set();
+  const allAdStockIds = new Set();
+  const allRlStockIds = new Set();
+
+  const collectPoolId = (str, rollSet) => {
+    const key = extractScannedRollId(str);
+    if (key) rollSet.add(key);
+  };
+
+  [...jobSetting, ...productionLog].forEach((r) => {
+    collectPoolId(r.fsRollId, allFsRollIds);
+    collectPoolId(r.adRollId, allAdRollIds);
+    collectPoolId(r.rlRollId, allRlRollIds);
+  });
+
+  (facestockUsage || []).forEach((u) => { if (u.stockId) allFsStockIds.add(String(u.stockId)); if (u.rollId) collectPoolId(u.rollId, allFsRollIds); });
+  (adhesiveUsage || []).forEach((u) => { if (u.stockId) allAdStockIds.add(String(u.stockId)); if (u.rollId) collectPoolId(u.rollId, allAdRollIds); });
+  (releaseUsage || []).forEach((u) => { if (u.stockId) allRlStockIds.add(String(u.stockId)); if (u.rollId) collectPoolId(u.rollId, allRlRollIds); });
+
+  if (pendingDoc?.allottedLayers) {
+    pickStockIds(pendingDoc.allottedLayers.facestock).forEach((id) => allFsStockIds.add(String(id)));
+    pickStockIds(pendingDoc.allottedLayers.facestock2).forEach((id) => allFsStockIds.add(String(id)));
+    pickStockIds(pendingDoc.allottedLayers.adhesive).forEach((id) => allAdStockIds.add(String(id)));
+    pickStockIds(pendingDoc.allottedLayers.adhesive2).forEach((id) => allAdStockIds.add(String(id)));
+    pickStockIds(pendingDoc.allottedLayers.releaseLiner).forEach((id) => allRlStockIds.add(String(id)));
+    pickStockIds(pendingDoc.allottedLayers.releaseLiner2).forEach((id) => allRlStockIds.add(String(id)));
+  }
+
+  const fsQuery = [];
+  if (allFsStockIds.size) fsQuery.push({ _id: { $in: [...allFsStockIds] } });
+  if (allFsRollIds.size) fsQuery.push({ rollId: { $in: [...allFsRollIds] } });
+  const fsDocs = fsQuery.length ? await FacestockStock.find({ $or: fsQuery }).lean() : [];
+  const fsByRollId = new Map();
+  fsDocs.forEach((d) => {
+    const k = normalizeRollId(d.rollId);
+    if (k) fsByRollId.set(k, d);
+    fsByRollId.set(String(d._id), d);
+  });
+
+  const adQuery = [];
+  if (allAdStockIds.size) adQuery.push({ _id: { $in: [...allAdStockIds] } });
+  if (allAdRollIds.size) adQuery.push({ rollId: { $in: [...allAdRollIds] } });
+  const adDocs = adQuery.length ? await AdhesiveStock.find({ $or: adQuery }).lean() : [];
+  const adByRollId = new Map();
+  adDocs.forEach((d) => {
+    const k = normalizeRollId(d.rollId);
+    if (k) adByRollId.set(k, d);
+    adByRollId.set(String(d._id), d);
+  });
+
+  const rlQuery = [];
+  if (allRlStockIds.size) rlQuery.push({ _id: { $in: [...allRlStockIds] } });
+  if (allRlRollIds.size) rlQuery.push({ rollId: { $in: [...allRlRollIds] } });
+  const rlDocs = rlQuery.length ? await ReleaseLinerStock.find({ $or: rlQuery }).lean() : [];
+  const rlByRollId = new Map();
+  rlDocs.forEach((d) => {
+    const k = normalizeRollId(d.rollId);
+    if (k) rlByRollId.set(k, d);
+    rlByRollId.set(String(d._id), d);
+  });
+
+  // Track / create all combinations of materials used in this job (same method as Assign Production)
+  const pickedLayers = [];
+  if (fsDocs.length) pickedLayers.push({ layerKey: "facestock", pool: "facestock", reels: fsDocs });
+  if (adDocs.length) pickedLayers.push({ layerKey: "adhesive", pool: "adhesive", reels: adDocs });
+  if (rlDocs.length) pickedLayers.push({ layerKey: "releaseLiner", pool: "release", reels: rlDocs });
+  if (pickedLayers.length) {
+    try {
+      await resolveLabelStockCombinations(baseLabelStock, pickedLayers);
+    } catch (comboErr) {
+      console.error("RESOLVE COMBINATIONS ERROR:", comboErr);
+    }
+  }
+
+  let lastFsReel = fsDocs[0] || null;
+  let lastAdReel = adDocs[0] || null;
+  let lastRlReel = rlDocs[0] || null;
 
   for (let i = 0; i < productionLog.length; i++) {
     const row = productionLog[i];
@@ -844,7 +932,34 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, location, jobC
       continue;
     }
 
+    const fsKey = extractScannedRollId(row.fsRollId);
+    if (fsKey && fsByRollId.has(fsKey)) lastFsReel = fsByRollId.get(fsKey);
+
+    const adKey = extractScannedRollId(row.adRollId);
+    if (adKey && adByRollId.has(adKey)) lastAdReel = adByRollId.get(adKey);
+
+    const rlKey = extractScannedRollId(row.rlRollId);
+    if (rlKey && rlByRollId.has(rlKey)) lastRlReel = rlByRollId.get(rlKey);
+
+    const resolvedLayers = [
+      lastFsReel ? { layerKey: "facestock", meta: LAYER_META.facestock, reel: lastFsReel } : null,
+      lastAdReel ? { layerKey: "adhesive", meta: LAYER_META.adhesive, reel: lastAdReel } : null,
+      lastRlReel ? { layerKey: "releaseLiner", meta: LAYER_META.releaseLiner, reel: lastRlReel } : null,
+    ].filter(Boolean);
+
+    let actualLabelStock = baseLabelStock;
+    if (resolvedLayers.length) {
+      try {
+        actualLabelStock = await resolveActualLabelStock(baseLabelStock, resolvedLayers);
+      } catch (variantErr) {
+        console.error("VARIANT RESOLUTION ERROR ON ROW:", variantErr);
+        actualLabelStock = baseLabelStock;
+      }
+    }
+
+    const itemCode = actualLabelStock?.productCode || baseLabelStock.productCode || baseLabelStock.skuCode;
     const deckleId = await generateDeckleId(itemCode, pendingDoc.lotNo);
+
     // The job card records the status of both webs. Preserve the actual
     // selected value(s) on this particular finished reel for its SOFT.prn
     // JOINTS field, while omitting it completely for a clean run.
@@ -854,13 +969,13 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, location, jobC
       .join(" / ") || undefined;
 
     const bal = await MaterialStock.aggregate([
-      { $match: { material: labelStock._id, location } },
+      { $match: { material: actualLabelStock._id, location } },
       { $group: { _id: null, qty: { $sum: "$quantity" } } },
     ]);
     const openingStock = bal[0]?.qty || 0;
 
     await MaterialStock.create({
-      material: labelStock._id,
+      material: actualLabelStock._id,
       location,
       quantity: 1,
       reelMtrs: meters,
@@ -872,7 +987,7 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, location, jobC
     });
 
     await MaterialStockLog.create({
-      material: labelStock._id,
+      material: actualLabelStock._id,
       location,
       openingStock,
       quantity: 1,
@@ -888,6 +1003,7 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, location, jobC
     result.rows.push(deckleId);
     result.created += 1;
     result.meters = round2(result.meters + meters);
+    if (actualLabelStock?.productCode) result.resolvedProductCode = actualLabelStock.productCode;
   }
   return result;
 }
@@ -957,64 +1073,107 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     // of this order's own allottedLayers picks for that pool is kept -- the
     // dialog only ever offers those, but the form is still a POST body, not
     // a trusted source.
-    const validStockIdsForPool = (pool, keys) => new Set(
-      keys
-        .map((key) => pendingDoc?.allottedLayers?.[key])
-        .filter((pick) => pick?.pool === pool)
-        .flatMap((pick) => pickStockIds(pick)),
-    );
+    let eligiblePostStock = { facestock: [], adhesive: [], release: [], validStockIds: { facestock: new Set(), adhesive: new Set(), release: new Set() } };
+    if (pendingDoc?.itemId) {
+      eligiblePostStock = await getEligibleRawMaterials({
+        labelStock: pendingDoc.itemId,
+        allottedLayers: pendingDoc.allottedLayers,
+      });
+    }
+
+    const validStockIdsForPool = (pool, keys) => {
+      const allotted = new Set(
+        keys
+          .map((key) => pendingDoc?.allottedLayers?.[key])
+          .filter((pick) => pick?.pool === pool)
+          .flatMap((pick) => pickStockIds(pick)),
+      );
+      const eligible = eligiblePostStock.validStockIds?.[pool] || new Set();
+      return new Set([...allotted, ...eligible]);
+    };
 
     const validFacestockStockIds = validStockIdsForPool("facestock", ["facestock", "facestock2"]);
     const fsStockId = toArray(b.facestockStockId);
     const fsMtrsUsed = toArray(b.facestockMtrsUsed);
+    const fsRemainingKg = toArray(b.facestockRemainingKg);
     const facestockUsage = consolidateUsageRows(
       fsStockId
-        .map((sid, i) => ({ stockId: trim(sid), mtrsUsed: numOrUndef(fsMtrsUsed[i]) }))
-        .filter((row) => row.stockId && validFacestockStockIds.has(row.stockId) && row.mtrsUsed != null && row.mtrsUsed > 0),
+        .map((sid, i) => ({
+          stockId: trim(sid),
+          mtrsUsed: numOrUndef(fsMtrsUsed[i]),
+          remainingKg: numOrUndef(fsRemainingKg[i]),
+        }))
+        .filter((row) => row.stockId && validFacestockStockIds.has(row.stockId)),
       "mtrsUsed",
     );
 
     const validAdhesiveStockIds = validStockIdsForPool("adhesive", ["adhesive", "adhesive2"]);
     const adKgStockId = toArray(b.adhesiveStockId);
     const adKgUsed = toArray(b.adhesiveKgUsed);
+    const adRemainingKg = toArray(b.adhesiveRemainingKg);
     const adhesiveUsage = consolidateUsageRows(
       adKgStockId
-        .map((sid, i) => ({ stockId: trim(sid), kgUsed: numOrUndef(adKgUsed[i]) }))
-        .filter((row) => row.stockId && validAdhesiveStockIds.has(row.stockId) && row.kgUsed != null && row.kgUsed > 0),
+        .map((sid, i) => ({
+          stockId: trim(sid),
+          kgUsed: numOrUndef(adKgUsed[i]),
+          remainingKg: numOrUndef(adRemainingKg[i]),
+        }))
+        .filter((row) => row.stockId && validAdhesiveStockIds.has(row.stockId)),
       "kgUsed",
     );
 
     const validReleaseStockIds = validStockIdsForPool("release", ["releaseLiner", "releaseLiner2"]);
     const rlStockId = toArray(b.releaseStockId);
     const rlMtrsUsed = toArray(b.releaseMtrsUsed);
+    const rlRemainingKg = toArray(b.releaseRemainingKg);
     const releaseUsage = consolidateUsageRows(
       rlStockId
-        .map((sid, i) => ({ stockId: trim(sid), mtrsUsed: numOrUndef(rlMtrsUsed[i]) }))
-        .filter((row) => row.stockId && validReleaseStockIds.has(row.stockId) && row.mtrsUsed != null && row.mtrsUsed > 0),
+        .map((sid, i) => ({
+          stockId: trim(sid),
+          mtrsUsed: numOrUndef(rlMtrsUsed[i]),
+          remainingKg: numOrUndef(rlRemainingKg[i]),
+        }))
+        .filter((row) => row.stockId && validReleaseStockIds.has(row.stockId)),
       "mtrsUsed",
     );
 
     const jobCardId = await generateId("machineJobCardId", "JC");
 
     // Job Setting rows
+    const jsFsRollId = toArray(b.jsFsRollId);
+    const jsAdRollId = toArray(b.jsAdRollId);
+    const jsRlRollId = toArray(b.jsRlRollId);
     const jsRollId = toArray(b.jsRollId);
     const jsMtrs1 = toArray(b.jsMtrs1);
     const jsStart = toArray(b.jsStart);
     const jsMtrs2 = toArray(b.jsMtrs2);
     const jsStop = toArray(b.jsStop);
     const jobSetting = jsMtrs1
-      .map((_, i) => ({
-        rollId: trim(jsRollId[i]),
-        mtrs1: numOrUndef(jsMtrs1[i]),
-        startTime: trim(jsStart[i]),
-        mtrs2: numOrUndef(jsMtrs2[i]),
-        stopTime: trim(jsStop[i]),
-      }))
-      .filter((row) => row.rollId || row.mtrs1 != null || row.mtrs2 != null || row.startTime || row.stopTime);
+      .map((_, i) => {
+        const fs = trim(jsFsRollId[i]);
+        const ad = trim(jsAdRollId[i]);
+        const rl = trim(jsRlRollId[i]);
+        const legacyRoll = trim(jsRollId[i]);
+        const mainRoll = fs || legacyRoll || [fs, ad, rl].filter(Boolean).join(", ");
+        return {
+          rollId: mainRoll,
+          fsRollId: fs,
+          adRollId: ad,
+          rlRollId: rl,
+          mtrs1: numOrUndef(jsMtrs1[i]),
+          startTime: trim(jsStart[i]),
+          mtrs2: numOrUndef(jsMtrs2[i]),
+          stopTime: trim(jsStop[i]),
+        };
+      })
+      .filter((row) => row.rollId || row.fsRollId || row.adRollId || row.rlRollId || row.mtrs1 != null || row.mtrs2 != null || row.startTime || row.stopTime);
 
     // Production Log rows -- one per deckle produced, so unlike Job Setting
     // above these carry the deckle's own metres rather than a start/stop
     // counter pair, plus the joint/wrinkle noted on each web.
+    const fsRollId = toArray(b.fsRollId);
+    const adRollId = toArray(b.adRollId);
+    const rlRollId = toArray(b.rlRollId);
     const rollId = toArray(b.rollId);
     const deckleId = toArray(b.deckleId);
     const logStart = toArray(b.logStart);
@@ -1024,18 +1183,31 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     const faceMtr = toArray(b.faceMtr);
     const releaseJoint = toArray(b.releaseJoint);
     const releaseMtr = toArray(b.releaseMtr);
-    const productionLog = rollId
-      .map((_, i) => ({
-        rollId: trim(rollId[i]),
-        deckleId: trim(deckleId[i]),
-        meters: numOrUndef(logMeters[i]),
-        face: { joint: trim(faceJoint[i]), mtr: numOrUndef(faceMtr[i]) },
-        release: { joint: trim(releaseJoint[i]), mtr: numOrUndef(releaseMtr[i]) },
-        time: { startTime: trim(logStart[i]), endTime: trim(logEnd[i]) },
-      }))
+    const productionLog = logMeters
+      .map((_, i) => {
+        const fs = trim(fsRollId[i]);
+        const ad = trim(adRollId[i]);
+        const rl = trim(rlRollId[i]);
+        const legacyRoll = trim(rollId[i]);
+        const mainRoll = fs || legacyRoll || [fs, ad, rl].filter(Boolean).join(", ");
+        return {
+          rollId: mainRoll,
+          fsRollId: fs,
+          adRollId: ad,
+          rlRollId: rl,
+          deckleId: trim(deckleId[i]),
+          meters: numOrUndef(logMeters[i]),
+          face: { joint: trim(faceJoint[i]), mtr: numOrUndef(faceMtr[i]) },
+          release: { joint: trim(releaseJoint[i]), mtr: numOrUndef(releaseMtr[i]) },
+          time: { startTime: trim(logStart[i]), endTime: trim(logEnd[i]) },
+        };
+      })
       .filter(
         (row) =>
           row.rollId ||
+          row.fsRollId ||
+          row.adRollId ||
+          row.rlRollId ||
           row.deckleId ||
           row.meters != null ||
           row.face.mtr != null ||
@@ -1059,19 +1231,19 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       operatorName: trim(b.operatorName),
       helperName: trim(b.helperName),
       faceStock: {
-        rollDrumNo: trim(b.fsRollDrumNo),
+        rollDrumNo: trim(b.fsRollDrumNo) || [...new Set([...jobSetting, ...productionLog].map((r) => r.fsRollId).filter(Boolean))].join(", "),
         code: trim(b.fsCode),
         gsmMic: trim(b.fsGsmMic),
         size: trim(b.fsSize),
       },
       adhesive: {
-        rollDrumNo: trim(b.adRollDrumNo),
+        rollDrumNo: trim(b.adRollDrumNo) || [...new Set([...jobSetting, ...productionLog].map((r) => r.adRollId).filter(Boolean))].join(", "),
         code: trim(b.adCode),
         gsmMic: trim(b.adGsmMic),
         size: trim(b.adSize),
       },
       releaseLiner: {
-        rollDrumNo: trim(b.rlRollDrumNo),
+        rollDrumNo: trim(b.rlRollDrumNo) || [...new Set([...jobSetting, ...productionLog].map((r) => r.rlRollId).filter(Boolean))].join(", "),
         code: trim(b.rlCode),
         gsmMic: trim(b.rlGsmMic),
         size: trim(b.rlSize),
@@ -1108,7 +1280,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     try {
       facestockConsumption = await consumePoolUsage({
         pool: "facestock",
-        rows: facestockUsage.map((r) => ({ stockId: r.stockId, used: r.mtrsUsed })),
+        rows: facestockUsage.map((r) => ({ stockId: r.stockId, used: r.mtrsUsed, remainingKg: r.remainingKg })),
         jobCardId,
         createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
       });
@@ -1119,7 +1291,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       if (facestockConsumption.rows.length) {
         await MachineJobCard.updateOne(
           { jobCardId },
-          { $set: { facestockUsage: facestockConsumption.rows.map((r) => ({ stockId: r.stockId, rollId: r.rollId, mtrsUsed: r.used })) } },
+          { $set: { facestockUsage: facestockConsumption.rows.map((r) => ({ stockId: r.stockId, rollId: r.rollId, mtrsUsed: r.used, remainingKg: r.remainingKg })) } },
         );
       }
     } catch (fsErr) {
@@ -1130,14 +1302,14 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     try {
       adhesiveConsumption = await consumePoolUsage({
         pool: "adhesive",
-        rows: adhesiveUsage.map((r) => ({ stockId: r.stockId, used: r.kgUsed })),
+        rows: adhesiveUsage.map((r) => ({ stockId: r.stockId, used: r.kgUsed, remainingKg: r.remainingKg })),
         jobCardId,
         createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
       });
       if (adhesiveConsumption.rows.length) {
         await MachineJobCard.updateOne(
           { jobCardId },
-          { $set: { adhesiveUsage: adhesiveConsumption.rows.map((r) => ({ stockId: r.stockId, rollId: r.rollId, kgUsed: r.used })) } },
+          { $set: { adhesiveUsage: adhesiveConsumption.rows.map((r) => ({ stockId: r.stockId, rollId: r.rollId, kgUsed: r.used, remainingKg: r.remainingKg })) } },
         );
       }
     } catch (adErr) {
@@ -1148,14 +1320,14 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     try {
       releaseConsumption = await consumePoolUsage({
         pool: "release",
-        rows: releaseUsage.map((r) => ({ stockId: r.stockId, used: r.mtrsUsed })),
+        rows: releaseUsage.map((r) => ({ stockId: r.stockId, used: r.mtrsUsed, remainingKg: r.remainingKg })),
         jobCardId,
         createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
       });
       if (releaseConsumption.rows.length) {
         await MachineJobCard.updateOne(
           { jobCardId },
-          { $set: { releaseUsage: releaseConsumption.rows.map((r) => ({ stockId: r.stockId, rollId: r.rollId, mtrsUsed: r.used })) } },
+          { $set: { releaseUsage: releaseConsumption.rows.map((r) => ({ stockId: r.stockId, rollId: r.rollId, mtrsUsed: r.used, remainingKg: r.remainingKg })) } },
         );
       }
     } catch (rlErr) {
@@ -1174,19 +1346,25 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       deckleProduction = await produceDecklesFromLog({
         pendingDoc,
         productionLog,
+        jobSetting,
+        facestockUsage,
+        adhesiveUsage,
+        releaseUsage,
         location: deckleLocation,
         jobCardId,
         createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
       });
       if (deckleProduction.created) {
+        const updateSet = productionLog.reduce((set, _row, i) => {
+          if (deckleProduction.rows[i]) set[`productionLog.${i}.deckleId`] = deckleProduction.rows[i];
+          return set;
+        }, {});
+        if (deckleProduction.resolvedProductCode) {
+          updateSet.productCode = deckleProduction.resolvedProductCode;
+        }
         await MachineJobCard.updateOne(
           { jobCardId },
-          {
-            $set: productionLog.reduce((set, _row, i) => {
-              if (deckleProduction.rows[i]) set[`productionLog.${i}.deckleId`] = deckleProduction.rows[i];
-              return set;
-            }, {}),
-          },
+          { $set: updateSet },
         );
       }
     } catch (deckleErr) {
@@ -1218,7 +1396,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     }
     if (facestockConsumption.deducted) {
       message +=
-        ` Facestock: ${facestockConsumption.used} mtrs off ${facestockConsumption.deducted} reel${facestockConsumption.deducted === 1 ? "" : "s"}` +
+        ` Facestock: ${facestockConsumption.used} kg off ${facestockConsumption.deducted} reel${facestockConsumption.deducted === 1 ? "" : "s"}` +
         `${facestockConsumption.emptied ? ` (${facestockConsumption.emptied} emptied)` : ""}.`;
     }
     if (adhesiveConsumption.deducted) {
@@ -1228,7 +1406,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     }
     if (releaseConsumption.deducted) {
       message +=
-        ` Release Liner: ${releaseConsumption.used} mtrs off ${releaseConsumption.deducted} reel${releaseConsumption.deducted === 1 ? "" : "s"}` +
+        ` Release Liner: ${releaseConsumption.used} kg off ${releaseConsumption.deducted} reel${releaseConsumption.deducted === 1 ? "" : "s"}` +
         `${releaseConsumption.emptied ? ` (${releaseConsumption.emptied} emptied)` : ""}.`;
     }
     if (deckleProduction.created) {

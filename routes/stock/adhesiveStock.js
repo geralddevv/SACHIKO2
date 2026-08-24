@@ -267,7 +267,7 @@ async function loadMastersWithStock(stock) {
     const msq = Number(m.msq) || 0;
     const rolls = (rollsByKey.get(key) || []).slice().sort((a, b) => String(a.rollId).localeCompare(String(b.rollId)));
     const allotted = roundKg(allottedByKey.get(key) || 0);
-    const available = roundKg(currentStock - allotted);
+    const available = currentStock;
     return {
       ...m,
       currentStock,
