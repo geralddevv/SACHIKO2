@@ -276,6 +276,7 @@
         releaseLinerSensing: rlSensing,
         product,
         wordFile: ds.wordFile || "",
+        pdfFile: ds.pdfFile || "",
       };
     });
   }
@@ -432,10 +433,16 @@
           return `<span style="font-weight:600;color:${color};">${label}</span>`;
         } },
         { "": "All", "NORMAL": "STANDARD", "DOUBLE RELEASE": "DOUBLE RELEASE", "DOUBLE FACESTOCK": "DOUBLE FACESTOCK" }),
-      { title: "File", field: "wordFile", minWidth: 110, headerFilter: false, hozAlign: "center", headerHozAlign: "center",
+      { title: "Word File", field: "wordFile", minWidth: 110, headerFilter: false, hozAlign: "center", headerHozAlign: "center",
         formatter: (cell) => {
           const v = cell.getValue();
           return v ? `<a href="/sachiko/label-stock/file/${v}" target="_blank" style="color:#044a78;font-weight:600;text-decoration:none;" title="View file"><i class="fa-solid fa-file" style="margin-right:4px;"></i>View</a>` : `<span style="color:#aaa;">—</span>`;
+        }
+      },
+      { title: "PDF File", field: "pdfFile", minWidth: 110, headerFilter: false, hozAlign: "center", headerHozAlign: "center",
+        formatter: (cell) => {
+          const v = cell.getValue();
+          return v ? `<a href="/sachiko/label-stock/file/${v}" target="_blank" style="color:#044a78;font-weight:600;text-decoration:none;" title="View file"><i class="fa-solid fa-file-pdf" style="margin-right:4px;"></i>View</a>` : `<span style="color:#aaa;">—</span>`;
         }
       },
     ],
@@ -671,12 +678,18 @@
               </div>
             </div>`).join("")}
         </div>
-        ${ds.wordFile ? `
-          <div>
+        ${(ds.wordFile || ds.pdfFile) ? `
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${ds.wordFile ? `
             <a href="/sachiko/label-stock/file/${esc(ds.wordFile)}" target="_blank"
               style="display:inline-flex;align-items:center;gap:8px;color:#044a78;font-weight:600;text-decoration:none;font-size:14px;">
               <i class="fa-solid fa-file"></i> ${esc(ds.wordFileOriginalName || ds.wordFile)}
-            </a>
+            </a>` : ""}
+            ${ds.pdfFile ? `
+            <a href="/sachiko/label-stock/file/${esc(ds.pdfFile)}" target="_blank"
+              style="display:inline-flex;align-items:center;gap:8px;color:#044a78;font-weight:600;text-decoration:none;font-size:14px;">
+              <i class="fa-solid fa-file-pdf"></i> ${esc(ds.pdfFileOriginalName || ds.pdfFile)}
+            </a>` : ""}
           </div>` : ""}
       </div>`;
     modal.style.display = "flex";
@@ -1292,7 +1305,8 @@
     function lsResetForm() {
       lsForm.reset();
       lsEditId = null;
-      document.getElementById("lsCurrentFileLink").style.display = "none";
+      document.getElementById("lsCurrentWordFileLink").style.display = "none";
+      document.getElementById("lsCurrentPdfFileLink").style.display = "none";
       hideLsError();
 
       ["lsRollType", "lsFamily", "lsRollOrSheet"].forEach((id) => lsInitChoices(id));
@@ -1335,13 +1349,22 @@
       document.getElementById("lsSkuCode").value = ds.skuCode || "";
       document.getElementById("lsProductCode").value = ds.productCode || "";
 
-      const fileLink = document.getElementById("lsCurrentFileLink");
+      const wordFileLink = document.getElementById("lsCurrentWordFileLink");
       if (ds.wordFile) {
-        fileLink.href = `/sachiko/label-stock/file/${ds.wordFile}`;
-        fileLink.title = ds.wordFileOriginalName || ds.wordFile;
-        fileLink.style.display = "inline-flex";
+        wordFileLink.href = `/sachiko/label-stock/file/${ds.wordFile}`;
+        wordFileLink.title = ds.wordFileOriginalName || ds.wordFile;
+        wordFileLink.style.display = "inline-flex";
       } else {
-        fileLink.style.display = "none";
+        wordFileLink.style.display = "none";
+      }
+
+      const pdfFileLink = document.getElementById("lsCurrentPdfFileLink");
+      if (ds.pdfFile) {
+        pdfFileLink.href = `/sachiko/label-stock/file/${ds.pdfFile}`;
+        pdfFileLink.title = ds.pdfFileOriginalName || ds.pdfFile;
+        pdfFileLink.style.display = "inline-flex";
+      } else {
+        pdfFileLink.style.display = "none";
       }
 
       const rollType = ds.rollType || "NORMAL";
@@ -1455,7 +1478,7 @@
     </div>
 
     <form id="ls-create-form" class="custom-scrollbar" style="padding:22px 24px;overflow-y:auto;flex:1 1 auto;display:flex;flex-direction:column;gap:16px;border-top:none;border-top-left-radius:0;border-top-right-radius:0;" novalidate>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:14px;">
         <div class="dialog-field">
           <label class="dialog-field-label" for="lsSkuCode">SKU Code</label>
           <input type="text" id="lsSkuCode" class="form-control" readonly />
@@ -1466,12 +1489,21 @@
         </div>
         <div class="dialog-field">
           <div style="display:flex;align-items:center;justify-content:space-between;">
-            <label class="dialog-field-label" for="lsWordFile" style="margin:0;">Attach Word or PDF File</label>
-            <a id="lsCurrentFileLink" href="#" target="_blank" style="display:none;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#044a78;text-decoration:none;">
-              <i class="fa-solid fa-file"></i> View current file
+            <label class="dialog-field-label" for="lsWordFile" style="margin:0;">Attach Word File</label>
+            <a id="lsCurrentWordFileLink" href="#" target="_blank" style="display:none;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#044a78;text-decoration:none;">
+              <i class="fa-solid fa-file"></i> View current
             </a>
           </div>
-          <input type="file" id="lsWordFile" name="wordFile" class="form-control" accept=".doc,.docx,.pdf" />
+          <input type="file" id="lsWordFile" name="wordFile" class="form-control" accept=".doc,.docx" />
+        </div>
+        <div class="dialog-field">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <label class="dialog-field-label" for="lsPdfFile" style="margin:0;">Attach PDF File</label>
+            <a id="lsCurrentPdfFileLink" href="#" target="_blank" style="display:none;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#044a78;text-decoration:none;">
+              <i class="fa-solid fa-file-pdf"></i> View current
+            </a>
+          </div>
+          <input type="file" id="lsPdfFile" name="pdfFile" class="form-control" accept=".pdf" />
         </div>
         <div class="dialog-field">
           <label class="dialog-field-label" for="lsRollType">Type</label>

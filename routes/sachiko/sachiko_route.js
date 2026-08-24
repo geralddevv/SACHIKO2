@@ -19,7 +19,7 @@ import { buildLabelStockSignature, buildMaterialSignature, resolveLabelStockProd
 
 const router = express.Router();
 
-/* ================= FILE UPLOAD (LABEL STOCK WORD FILE) ================= */
+/* ================= FILE UPLOAD (LABEL STOCK WORD/PDF FILES) ================= */
 const LABEL_STOCK_UPLOAD_DIR = path.resolve("uploads/sachiko/labelstocks");
 fs.mkdirSync(LABEL_STOCK_UPLOAD_DIR, { recursive: true });
 
@@ -30,28 +30,45 @@ const storage = multer.diskStorage({
   },
 });
 
+// Two independent attachment slots -- wordFile only takes .doc/.docx,
+// pdfFile only .pdf, each checked by its own field name.
+const LABEL_STOCK_FIELD_EXTS = {
+  wordFile: { exts: [".doc", ".docx"], label: "Word (.doc, .docx)" },
+  pdfFile: { exts: [".pdf"], label: "PDF (.pdf)" },
+};
+
 const fileFilter = (req, file, cb) => {
-  const allowedExts = [".doc", ".docx", ".pdf"];
+  const rule = LABEL_STOCK_FIELD_EXTS[file.fieldname];
   const ext = path.extname(file.originalname).toLowerCase();
-  if (!allowedExts.includes(ext)) {
-    return cb(new Error("Only Word (.doc, .docx) and PDF files are allowed"), false);
+  if (!rule || !rule.exts.includes(ext)) {
+    return cb(new Error(`Only ${rule?.label || "the expected file type"} is allowed for this field`), false);
   }
   cb(null, true);
 };
 
 const upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
+const uploadLabelStockFiles = upload.fields([
+  { name: "wordFile", maxCount: 1 },
+  { name: "pdfFile", maxCount: 1 },
+]);
 
 // Label Stock create/edit both happen in the same dialog (labelStockView.ejs)
 // and submit via fetch, so both need a JSON error response instead of a
 // redirect.
 const handleWordUploadJson = (req, res, next) => {
-  upload.single("wordFile")(req, res, (err) => {
+  uploadLabelStockFiles(req, res, (err) => {
     if (err) {
       return res.status(400).json({ success: false, message: err.message });
     }
     next();
   });
 };
+
+// req.files is { wordFile: [file], pdfFile: [file] } (only the fields that
+// were actually posted) -- used both to pick the just-uploaded file for each
+// slot and to clean up on a failed save.
+const labelStockFile = (req, field) => req.files?.[field]?.[0];
+const allLabelStockFiles = (req) => Object.values(req.files || {}).flat();
 
 /* ================= HELPERS ================= */
 // Generate a sequential id of the form `SP | <CODE> | 000001`.
@@ -320,9 +337,15 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
     if (payload.rollOrSheet === "SHEET" && payload.printingTechnology === "DIGITAL" && !payload.digitalPrintType) {
       throw Object.assign(new Error("Laser or Ink is required"), { userMessage: "Laser or Ink is required" });
     }
-    if (req.file) {
-      payload.wordFile = req.file.filename;
-      payload.wordFileOriginalName = req.file.originalname;
+    const newWordFile = labelStockFile(req, "wordFile");
+    const newPdfFile = labelStockFile(req, "pdfFile");
+    if (newWordFile) {
+      payload.wordFile = newWordFile.filename;
+      payload.wordFileOriginalName = newWordFile.originalname;
+    }
+    if (newPdfFile) {
+      payload.pdfFile = newPdfFile.filename;
+      payload.pdfFileOriginalName = newPdfFile.originalname;
     }
 
     // Same Product Code, different recipe (e.g. C011 re-entered against a
@@ -349,7 +372,10 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
     res.json({ success: true, redirect: "/sachiko/label-stock/view" });
   } catch (err) {
     console.error("SACHIKO LABEL STOCK CREATE ERROR:", err);
-    if (req.file) fs.existsSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename)) && fs.unlinkSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename));
+    allLabelStockFiles(req).forEach((f) => {
+      const p = path.join(LABEL_STOCK_UPLOAD_DIR, f.filename);
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    });
     if (err?.code === 11000 && err?.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "labelStockSignature")) {
       return res.status(400).json({ success: false, message: DUPLICATE_LABELSTOCK_MESSAGE });
     }
@@ -389,14 +415,24 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
       throw Object.assign(new Error("Laser or Ink is required"), { userMessage: "Laser or Ink is required" });
     }
 
-    if (req.file) {
+    const newWordFile = labelStockFile(req, "wordFile");
+    const newPdfFile = labelStockFile(req, "pdfFile");
+    if (newWordFile) {
       // Remove the previous file before swapping in the new one.
       if (existing.wordFile) {
         const oldPath = path.join(LABEL_STOCK_UPLOAD_DIR, existing.wordFile);
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
-      payload.wordFile = req.file.filename;
-      payload.wordFileOriginalName = req.file.originalname;
+      payload.wordFile = newWordFile.filename;
+      payload.wordFileOriginalName = newWordFile.originalname;
+    }
+    if (newPdfFile) {
+      if (existing.pdfFile) {
+        const oldPath = path.join(LABEL_STOCK_UPLOAD_DIR, existing.pdfFile);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      payload.pdfFile = newPdfFile.filename;
+      payload.pdfFileOriginalName = newPdfFile.originalname;
     }
 
     const labelStockSignature = buildLabelStockSignature(payload);
@@ -424,7 +460,10 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
     res.json({ success: true, redirect: "/sachiko/label-stock/view" });
   } catch (err) {
     console.error("SACHIKO LABEL STOCK UPDATE ERROR:", err);
-    if (req.file) fs.existsSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename)) && fs.unlinkSync(path.join(LABEL_STOCK_UPLOAD_DIR, req.file.filename));
+    allLabelStockFiles(req).forEach((f) => {
+      const p = path.join(LABEL_STOCK_UPLOAD_DIR, f.filename);
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    });
     if (err?.code === 11000 && err?.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "labelStockSignature")) {
       return res.status(400).json({ success: false, message: DUPLICATE_LABELSTOCK_MESSAGE });
     }
@@ -438,8 +477,10 @@ router.get("/label-stock/file/:filename", async (req, res) => {
   if (!fs.existsSync(filePath)) {
     return res.status(404).send("File not found");
   }
-  const ds = await SachikoLabelStock.findOne({ wordFile: filename }).select("wordFileOriginalName").lean();
-  const originalName = ds?.wordFileOriginalName || filename;
+  const ds = await SachikoLabelStock.findOne({ $or: [{ wordFile: filename }, { pdfFile: filename }] })
+    .select("wordFile wordFileOriginalName pdfFile pdfFileOriginalName")
+    .lean();
+  const originalName = (ds?.wordFile === filename ? ds.wordFileOriginalName : ds?.pdfFileOriginalName) || filename;
   res.setHeader("Content-Disposition", `inline; filename="${originalName}"`);
   res.sendFile(filePath);
 });
@@ -450,8 +491,9 @@ router.delete("/label-stock/:id", requireAuth, deleteLimiter, async (req, res) =
     if (!ds) {
       return res.status(404).json({ success: false, message: "Label Stock not found" });
     }
-    if (ds.wordFile) {
-      const filePath = path.join(LABEL_STOCK_UPLOAD_DIR, ds.wordFile);
+    for (const field of ["wordFile", "pdfFile"]) {
+      if (!ds[field]) continue;
+      const filePath = path.join(LABEL_STOCK_UPLOAD_DIR, ds[field]);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
     res.json({ success: true });

@@ -784,7 +784,10 @@
                too now, rather than leaving a toggle that opens onto nothing. */ %>
         <% if (canView && (isAdmin || isHod)) { %>
         <div class="nav-opt-wrap">
-          <div title="View" class="view-toggle nav-items">
+          <%# Tape View below is hidden app-wide, so Label Stock is the only
+              item this dropdown ever opens onto -- skip the toggle and go
+              straight there. %>
+          <div title="View" class="view-toggle nav-items" onclick="window.location.href = '/sachiko/label-stock/view'">
             <i class="fa-solid fa-boxes-stacked" style="color: #ffffff"></i>
             <p class="nav-items-para">SKUs List</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>

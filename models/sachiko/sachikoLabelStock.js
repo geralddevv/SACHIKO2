@@ -26,8 +26,15 @@ const sachikoLabelStockSchema = new mongoose.Schema(
     // scripts/backfill-labelstock-material-signature.js.
     materialSignature: { type: String, trim: true, index: true },
     rollType: { type: String, trim: true, enum: ["NORMAL", "DOUBLE RELEASE", "DOUBLE FACESTOCK"], default: "NORMAL" },
+    // Two separate attachment slots -- wordFile takes only .doc/.docx,
+    // pdfFile only .pdf (see fileFilter in routes/sachiko/sachiko_route.js).
+    // Before this split both lived in wordFile regardless of extension; see
+    // scripts/backfill-labelstock-pdf-field.js for the one-time move of
+    // already-saved *.pdf rows out of wordFile into here.
     wordFile: { type: String },
     wordFileOriginalName: { type: String },
+    pdfFile: { type: String },
+    pdfFileOriginalName: { type: String },
     family: { type: String, required: true, trim: true },
     // ROLL or SHEET -- determines which Printing Technology options apply.
     // No enum: the create/edit dialogs already constrain this to a fixed

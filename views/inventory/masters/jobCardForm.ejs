@@ -754,8 +754,17 @@
       </table>
     </div>
 
+    <!-- Shown once every Job Setting row is punched (both its Start and Stop
+         readings taken) -- clicking it is what reveals Production Log below,
+         so setup and actual production are entered as two distinct steps. -->
+    <div class="btn-grp jc-save-wrap span-full jc-hidden" id="startProdLogWrap" style="margin-top: 10px;">
+      <button type="button" id="startProdLogBtn" class="jc-save-action">
+        <i class="fa-solid fa-play" aria-hidden="true"></i> Start Production Log
+      </button>
+    </div>
+
     <!-- Production Log -->
-    <div class="span-full form-subheading" id="prodLogHead" style="display: flex; align-items: center; gap: 12px; margin-top: 10px;">
+    <div class="span-full form-subheading jc-hidden" id="prodLogHead" style="display: flex; align-items: center; gap: 12px; margin-top: 10px;">
       <h1>Production Log</h1>
       <div style="display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;">
         <button type="button" id="logMinus" style="width: 28px; height: 28px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 16px; line-height: 1; cursor: pointer;">-</button>
@@ -764,7 +773,7 @@
       </div>
     </div>
 
-    <div class="span-full" id="prodLogBody" style="overflow-x: auto;">
+    <div class="span-full jc-hidden" id="prodLogBody" style="overflow-x: auto;">
       <table class="jc-log-table">
         <thead>
           <tr>
@@ -807,7 +816,7 @@
     </div>
 
     <div class="btn-grp jc-save-wrap span-full" id="saveBtnWrap" style="margin-top: 10px;">
-      <button type="submit" class="jc-save-action"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Production Entry</button>
+      <button type="submit" id="saveEntryBtn" class="jc-save-action" disabled><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Production Entry</button>
     </div>
   </form>
 </div>
@@ -1356,6 +1365,40 @@
       jsCount.value = jsBody.rows.length;
     }
 
+    // Production Log starts hidden behind this button -- setup (Job Setting)
+    // and actual production are entered as two distinct steps, not one long
+    // form. `prodLogStarted` sticks once true (see markPunched-style buttons
+    // above: nothing here un-punches a row), so a later edit that makes a row
+    // look "unfinished" again can't yank the log section back out from under
+    // an operator already filling it in.
+    const startProdLogWrap = document.getElementById("startProdLogWrap");
+    const startProdLogBtn = document.getElementById("startProdLogBtn");
+    const prodLogHead = document.getElementById("prodLogHead");
+    const prodLogBodyEl = document.getElementById("prodLogBody");
+    let prodLogStarted = false;
+
+    function jsAllRowsPunched() {
+      const rows = Array.from(jsBody.rows);
+      if (!rows.length) return false;
+      return rows.every((row) =>
+        row.querySelector(".js-start-btn")?.dataset.punched === "1" &&
+        row.querySelector(".js-stop-btn")?.dataset.punched === "1");
+    }
+
+    function updateStartProdLogButton() {
+      if (prodLogStarted) return;
+      startProdLogWrap.classList.toggle("jc-hidden", !jsAllRowsPunched());
+    }
+
+    function revealProdLogSection() {
+      prodLogStarted = true;
+      startProdLogWrap.classList.add("jc-hidden");
+      prodLogHead.classList.remove("jc-hidden");
+      prodLogBodyEl.classList.remove("jc-hidden");
+    }
+
+    startProdLogBtn.addEventListener("click", revealProdLogSection);
+
     function createJsRow() {
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -1448,6 +1491,7 @@
         startBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         startBtn.style.background = "#6b7280";
         startBtn.style.cursor = "default";
+        updateStartProdLogButton();
         return;
       }
       const stopBtn = e.target.closest(".js-stop-btn");
@@ -1468,11 +1512,12 @@
         stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         stopBtn.style.background = "#6b7280";
         stopBtn.style.cursor = "default";
+        updateStartProdLogButton();
       }
     });
 
-    jsPlus.addEventListener("click", () => { jsBody.appendChild(createJsRow()); jsRenumber(); });
-    jsMinus.addEventListener("click", () => { if (jsBody.rows.length > 1) { jsBody.removeChild(jsBody.lastElementChild); jsRenumber(); } });
+    jsPlus.addEventListener("click", () => { jsBody.appendChild(createJsRow()); jsRenumber(); updateStartProdLogButton(); });
+    jsMinus.addEventListener("click", () => { if (jsBody.rows.length > 1) { jsBody.removeChild(jsBody.lastElementChild); jsRenumber(); updateStartProdLogButton(); } });
     jsBody.appendChild(createJsRow());
     jsRenumber();
 
@@ -1701,13 +1746,24 @@
     const anyEntry = (rows) =>
       rows.some((r) => Object.values(r).some((v) => String(v ?? "").trim() !== ""));
 
+    // Nothing to save until something's actually been entered -- an empty
+    // Job Setting/Production Log wouldn't produce a meaningful job card.
+    const saveEntryBtn = document.getElementById("saveEntryBtn");
+    function updateSaveButtonState() {
+      if (!saveEntryBtn || saveEntryBtn.dataset.submitting === "1") return;
+      const ready = anyEntry(readJsRows()) || anyEntry(readLogRows());
+      saveEntryBtn.disabled = !ready;
+      saveEntryBtn.title = ready ? "" : "Enter at least one Job Setting or Production Log value first.";
+    }
+
     function saveDraft() {
       const draft = {
         jsRows: readJsRows(),
         logRows: readLogRows(),
+        prodLogStarted,
         savedAt: Date.now(),
       };
-      if (!anyEntry(draft.jsRows) && !anyEntry(draft.logRows)) { dropDraft(); return; }
+      if (!anyEntry(draft.jsRows) && !anyEntry(draft.logRows) && !prodLogStarted) { dropDraft(); return; }
       writeDraft(draft);
     }
 
@@ -1761,6 +1817,7 @@
         checkMaterialInput(row.querySelector(".js-rl-roll-id"), "rl");
       });
       jsRenumber();
+      updateStartProdLogButton();
     }
 
     function applyLogRows(rows) {
@@ -1805,6 +1862,7 @@
 
       if (Array.isArray(draft.jsRows) && draft.jsRows.length) applyJsRows(draft.jsRows);
       if (Array.isArray(draft.logRows) && draft.logRows.length) applyLogRows(draft.logRows);
+      if (draft.prodLogStarted) revealProdLogSection();
       recalcLogTotals();
       if (typeof showToast === "function") showToast("Restored your unsaved entry", "success");
     }
@@ -1812,6 +1870,7 @@
     const jcForm = document.getElementById("jcForm");
     if (jcForm) {
       ["input", "change", "click"].forEach((evt) => jcForm.addEventListener(evt, scheduleSave));
+      ["input", "change", "click"].forEach((evt) => jcForm.addEventListener(evt, updateSaveButtonState));
       let jcSubmitting = false;
       jcForm.addEventListener("submit", (e) => {
         if (jcSubmitting) { e.preventDefault(); return; }
@@ -1825,6 +1884,7 @@
         saveDraft();
         const saveBtn = jcForm.querySelector('button[type="submit"]');
         if (saveBtn) {
+          saveBtn.dataset.submitting = "1";
           saveBtn.disabled = true;
           saveBtn.textContent = "Saving…";
         }
@@ -1833,6 +1893,7 @@
     window.addEventListener("pagehide", () => { clearTimeout(draftTimer); saveDraft(); });
 
     restoreDraft();
+    updateSaveButtonState();
   });
 </script>
 
