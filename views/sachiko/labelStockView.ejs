@@ -1520,23 +1520,9 @@
           <label class="dialog-field-label" for="lsFamily">Family</label>
           <select id="lsFamily" name="family" class="form-control select-tag" required>
             <option value="" disabled selected hidden>Select family</option>
-            <option value="CHROMO">CHROMO</option>
-            <option value="CHROMO (D. R)">CHROMO (D. R)</option>
-            <option value="CLEAR PP">CLEAR PP</option>
-            <option value="DOUBLE RELEASE">DOUBLE RELEASE</option>
-            <option value="DT">DT</option>
-            <option value="DT. PP">DT. PP</option>
-            <option value="GLOSSY PP">GLOSSY PP</option>
-            <option value="GLOSSY PP PARTIAL">GLOSSY PP PARTIAL</option>
-            <option value="INKJET MATT FILM">INKJET MATT FILM</option>
-            <option value="MAPLITO">MAPLITO</option>
-            <option value="MATT PP">MATT PP</option>
-            <option value="MATT PP (HT)">MATT PP (HT)</option>
-            <option value="MATT PP PARTIAL">MATT PP PARTIAL</option>
-            <option value="PP">PP</option>
-            <option value="REMOVABLE">REMOVABLE</option>
-            <option value="SILVER VOID">SILVER VOID</option>
-            <option value="SUPER HOTMELT">SUPER HOTMELT</option>
+            <% families?.forEach(f => { %>
+              <option value="<%= f.familyName %>"><%= f.familyName %></option>
+            <% }) %>
           </select>
         </div>
         <div class="dialog-field">

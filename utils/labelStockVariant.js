@@ -267,7 +267,7 @@ export async function generateLabelStockId() {
 }
 
 const parseSkuSeq = (skuCode) => {
-  const match = String(skuCode || "").match(/(\d{6})$/);
+  const match = String(skuCode || "").match(/(\d{6})(?:-[A-Z]+)?$/);
   return match ? Number(match[1]) : 0;
 };
 
@@ -449,6 +449,24 @@ export async function resolveActualLabelStock(labelStock, resolvedLayers) {
   return createLabelStockVariant({ ...rebuilt, productCode: resolvedCode });
 }
 
+// A variant Product Code's SKU mirrors its base row's own SKU with the same
+// letter suffix ("SP | LS | 000002" -> "SP | LS | 000002-A") instead of
+// taking the next sequential number off the whole collection -- keeps a
+// variant's SKU visibly tied to the base it was minted from. Falls back to a
+// fresh sequential SKU (generateLabelStockSkuCode) when productCode isn't a
+// suffixed variant, or its base row can't be found (e.g. since deleted).
+const VARIANT_SKU_SUFFIX_RE = /^(.*[^-])-([A-Z]+)$/;
+
+export async function resolveLabelStockSkuCode(productCode) {
+  const match = VARIANT_SKU_SUFFIX_RE.exec(String(productCode || ""));
+  if (match) {
+    const [, base, suffix] = match;
+    const baseRow = await SachikoLabelStock.findOne({ productCode: base }).select("skuCode").lean();
+    if (baseRow?.skuCode) return `${baseRow.skuCode}-${suffix}`;
+  }
+  return generateLabelStockSkuCode();
+}
+
 // The one place a derived (production/allotment) variant row is written.
 // Signatures are hashed off the DRAFT DOCUMENT's own toObject() rather than
 // the payload handed in, so what's stored and what was hashed are the same
@@ -460,7 +478,7 @@ export async function resolveActualLabelStock(labelStock, resolvedLayers) {
 async function createLabelStockVariant(payload) {
   const doc = new SachikoLabelStock({
     labelStockId: await generateLabelStockId(),
-    skuCode: await generateLabelStockSkuCode(),
+    skuCode: await resolveLabelStockSkuCode(payload.productCode),
     ...payload,
   });
   const snapshot = doc.toObject();

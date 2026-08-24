@@ -363,6 +363,9 @@
         <i class="fa-solid fa-layer-group" style="font-size: 1.1rem; opacity: 0.9;"></i>
         <h1 style="margin: 0; letter-spacing: 0.02em;">Facestock Stock</h1>
       </div>
+      <a class="header-action-btn" href="/sachiko/facestockstock/used" style="text-decoration: none;">
+        <i class="fa-solid fa-industry" style="margin-right: 6px;"></i> Used Stock
+      </a>
       <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
         Total Value: <span style="color: #15803d; font-size: 15px;">₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
@@ -906,8 +909,29 @@
       const bar = document.createElement("div");
       bar.className = "roll-detail-span";
       bar.style.cssText = "flex:1; display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 12px; color:#4b5563; font-size:13px;";
+      // "Running Stock": is THIS reel currently reserved on paper for a
+      // still-in-progress order (allottedTo), and/or does it already have
+      // usage against it (usedBy)? usedBy itself has two flavours -- `live`
+      // (an operator already scanned this reel and punched Start on a Job
+      // Setting/Production Log row, but Save Production Entry hasn't run
+      // yet, so there's no kg amount to show) vs. confirmed (a job card's
+      // Material Used dialog actually recorded consumption, permanent).
+      // See loadFacestockReelUsage in routes/stock/facestockStock.js. A
+      // reel that's allottedTo an order but has no usedBy at all is exactly
+      // the "reserved but sitting untouched" case -- still full, safe to go
+      // re-pick for a different order in Assign Production.
+      const allottedBadge = data.allottedTo
+        ? `<span style="background:#fef3c7;color:#92400e;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11.5px;white-space:nowrap;" title="Reserved for this order, not yet drawn on -- free to re-pick in Assign Production if it can't be reached.">ALLOTTED · ${escapeHtml(data.allottedTo.lotNo || data.allottedTo.productCode || "—")}</span>`
+        : "";
+      const usedBadge = data.usedBy
+        ? (data.usedBy.live
+            ? `<span style="background:#ccfbf1;color:#0f766e;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11.5px;white-space:nowrap;" title="Scanned and Start was just punched on a job card for this order -- Kg used isn't reported until Save Production Entry.">IN USE NOW · ${escapeHtml(data.usedBy.lots.join(", ") || "—")}</span>`
+            : `<span style="background:#ede9fe;color:#6d28d9;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11.5px;white-space:nowrap;" title="Kg drawn off this reel via a job card's Material Used dialog -- still in stock at the reduced Kg shown, not fully consumed.">PARTIALLY USED · ${escapeHtml(data.usedBy.lots.join(", ") || "—")} (${fmtKg(data.usedBy.totalKg)})</span>`)
+        : "";
       const parts = [
         `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
+        allottedBadge,
+        usedBadge,
         data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
         `Kg ${fmtKg(data.reelMtrs)}`,
         data.location ? escapeHtml(data.location) : "",
@@ -1001,6 +1025,22 @@
             ? ` <span style="font-size:11px; font-weight:600; color:#b45309;">(${rolls} roll${rolls === 1 ? "" : "s"})</span>`
             : "";
           return `<span style="font-weight:700; color:#92400e;">${fmtKg(value)}</span>${rollPart}`;
+        },
+      },
+      {
+        title: "Used (Kg)",
+        field: "liveRolls",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        hozAlign: "center",
+        minWidth: 170,
+        headerTooltip: "Rolls of this spec currently scanned and Start-punched on a job that's still in progress -- no Kg reported yet (see each reel's own badge under the dropdown). A reel goes back to plain Available stock, at its reduced Kg, once Save Production Entry runs.",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isParent) return "";
+          const liveRolls = row.liveRolls || 0;
+          if (!liveRolls) return "—";
+          return `<span style="font-size:11px; font-weight:700; color:#0f766e;">${liveRolls} in use now</span>`;
         },
       },
       {

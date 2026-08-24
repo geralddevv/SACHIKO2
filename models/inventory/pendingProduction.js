@@ -92,6 +92,23 @@ const pendingProductionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: undefined,
     },
+    // Best-effort "someone has already started drawing on this reel for
+    // this order" hint -- set the instant an operator scans a roll and
+    // presses Start on a Job Setting/Production Log row (POST /sachiko/
+    // machine/jobcard/mark-in-use), long before the real consumption
+    // (facestockUsage/adhesiveUsage/releaseUsage on MachineJobCard) exists,
+    // which only gets written once the whole card is saved. Pool-keyed
+    // (facestock/adhesive/release -- not per recipe layer: Start doesn't
+    // know which layer a scanned reel belongs to any more than the Material
+    // Used dialog does), each an array of that pool's Stock _ids. Cleared
+    // the moment the real job card save happens, superseded by the
+    // permanent record -- see POST /sachiko/machine/jobcard/form. Never
+    // itself read for deduction -- purely a live visibility hint for
+    // /sachiko/facestockstock (and Adhesive/Release Liner Stock).
+    liveMaterialInUse: {
+      type: mongoose.Schema.Types.Mixed,
+      default: undefined,
+    },
     lotNo: {
       type: String,
       trim: true,

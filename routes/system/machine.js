@@ -422,7 +422,7 @@ async function buildQueueRows(match) {
       .sort((a, b) => a.reelMtrs - b.reelMtrs || String(a.rollId).localeCompare(String(b.rollId)));
 
     const runningMetersLabel =
-      p.runningMeters != null ? `${Number(p.runningMeters).toLocaleString("en-IN")} m` : "";
+      p.runningMeters != null ? `${Number(p.runningMeters).toLocaleString("en-IN")} kg` : "";
 
     // Per-layer allocation -- one row per raw-material layer this item's
     // recipe actually calls for (facestock/adhesive/releaseLiner, +2 more
@@ -941,6 +941,17 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
     const rlKey = extractScannedRollId(row.rlRollId);
     if (rlKey && rlByRollId.has(rlKey)) lastRlReel = rlByRollId.get(rlKey);
 
+    // Already inwarded to Semi-Finished Stock the instant its Stop was
+    // punched (POST /machine/jobcard/log/produce below) -- just carry its
+    // Deckle ID through rather than producing (and inwarding) it again here.
+    // The lastFsReel/lastAdReel/lastRlReel carry-forward above still ran for
+    // this row first, so a later row with blank roll ids still inherits the
+    // right reel.
+    if (row.alreadyProduced && row.deckleId) {
+      result.rows.push(row.deckleId);
+      continue;
+    }
+
     const resolvedLayers = [
       lastFsReel ? { layerKey: "facestock", meta: LAYER_META.facestock, reel: lastFsReel } : null,
       lastAdReel ? { layerKey: "adhesive", meta: LAYER_META.adhesive, reel: lastAdReel } : null,
@@ -1008,6 +1019,132 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
   return result;
 }
 
+// Where a Deckle produced for this order gets inwarded -- the same location
+// its own raw material already sits at (Assign Production's reel pickers are
+// scoped to one location per order, so every layer agrees anyway). Facestock
+// is checked first since every roll type calls for it; release liner is the
+// fallback for the one hypothetical recipe that somehow doesn't (there isn't
+// one today, but nothing enforces it). Shared by the final bulk save below
+// and the per-row instant-produce endpoint right after it.
+async function resolveDeckleLocation(pendingDoc) {
+  if (!pendingDoc?.allottedLayers) return "";
+  for (const key of ["facestock", "facestock2", "adhesive", "adhesive2", "releaseLiner", "releaseLiner2"]) {
+    const pick = pendingDoc.allottedLayers[key];
+    const sids = pickStockIds(pick);
+    if (!pick?.pool || !sids.length) continue;
+    const { Model } = POOL_MODELS[pick.pool];
+    const doc = await Model.findById(sids[0]).select("location").lean();
+    if (doc?.location) return doc.location;
+  }
+  return "";
+}
+
+// Fires the moment a Job Setting/Production Log row's Start is punched (see
+// the .js-start-btn/.log-start-btn handlers in jobCardForm.ejs), for
+// whichever of that row's Jumbo FS id/Drum id/Jumbo REL id are already
+// filled in -- long before Save Production Entry exists to record real
+// consumption. Purely a live "this reel is now actually being drawn on"
+// hint (PendingProduction.liveMaterialInUse, see its own schema comment),
+// read by /sachiko/facestockstock (and Adhesive/Release Liner Stock) to
+// show which specific reel a job is running against, distinct from
+// whichever reel was merely allotted on paper at Assign Production. A
+// scanned id that isn't a real reel, or a pool this order has no live use
+// for yet, is simply ignored -- this never blocks the operator from
+// continuing to fill in the card.
+router.post("/machine/jobcard/mark-in-use", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
+  try {
+    const { pendingId, pool, rollId } = req.body || {};
+    if (!mongoose.isValidObjectId(pendingId)) return res.status(400).json({ success: false });
+    const poolInfo = POOL_MODELS[pool];
+    if (!poolInfo) return res.status(400).json({ success: false });
+
+    const cleanId = extractScannedRollId(rollId);
+    if (!cleanId) return res.status(400).json({ success: false });
+
+    const reel = await poolInfo.Model.findOne({ rollId: cleanId }).select("_id").lean();
+    if (!reel) return res.status(404).json({ success: false });
+
+    await PendingProduction.updateOne(
+      { _id: pendingId },
+      { $addToSet: { [`liveMaterialInUse.${pool}`]: reel._id } },
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("JOB CARD MARK-IN-USE ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Fires the moment a Production Log row's Stop is punched (with its Meters
+// already filled in) -- see the .log-stop-btn handler in jobCardForm.ejs --
+// rather than waiting for the whole Job Card to be saved. On a job that runs
+// a full shift, that's the difference between a Deckle showing up on Semi
+// Finished Stock right away and it not existing anywhere until the operator
+// eventually hits "Save Production Entry" hours later. Reuses
+// produceDecklesFromLog for a single row; the job card doesn't exist yet at
+// this point (it's only created on final save), so its remarks simply omit a
+// job card id prefix. The final save then skips re-producing any row this
+// endpoint already inwarded -- see productionLog's `alreadyProduced` in
+// POST /machine/jobcard/form below -- so it's recorded once, not twice.
+router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
+  try {
+    const b = req.body;
+    if (!mongoose.isValidObjectId(b.pendingId)) {
+      return res.status(400).json({ success: false, message: "Missing or invalid production order." });
+    }
+    const meters = numOrUndef(b.meters);
+    if (!meters || meters <= 0) {
+      return res.status(400).json({ success: false, message: "Enter the produced metres first." });
+    }
+
+    const pendingDoc = await PendingProduction.findById(b.pendingId)
+      .select("allottedLayers itemId paperSize lotNo")
+      .lean();
+    if (!pendingDoc) {
+      return res.status(404).json({ success: false, message: "That production order no longer exists." });
+    }
+
+    const deckleLocation = await resolveDeckleLocation(pendingDoc);
+    if (!deckleLocation) {
+      return res.status(400).json({ success: false, message: "Couldn't resolve a stock location for this order." });
+    }
+
+    const fs = trim(b.fsRollId);
+    const ad = trim(b.adRollId);
+    const rl = trim(b.rlRollId);
+    const row = {
+      rollId: fs || [fs, ad, rl].filter(Boolean).join(", "),
+      fsRollId: fs,
+      adRollId: ad,
+      rlRollId: rl,
+      deckleId: "",
+      startMtrs: numOrUndef(b.startMtrs),
+      stopMtrs: numOrUndef(b.stopMtrs),
+      meters,
+      face: { joint: trim(b.faceJoint), mtr: numOrUndef(b.faceMtr) },
+      release: { joint: trim(b.releaseJoint), mtr: numOrUndef(b.releaseMtr) },
+      time: { startTime: trim(b.startTime), endTime: trim(b.endTime) },
+    };
+
+    const production = await produceDecklesFromLog({
+      pendingDoc,
+      productionLog: [row],
+      location: deckleLocation,
+      createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+    });
+
+    const deckleId = production.rows[0];
+    if (!deckleId) {
+      return res.status(400).json({ success: false, message: "Couldn't produce a Deckle for this row." });
+    }
+
+    res.json({ success: true, deckleId, meters: production.meters, location: deckleLocation });
+  } catch (err) {
+    console.error("JOB CARD INSTANT DECKLE ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to move this Deckle to Semi Finished Stock." });
+  }
+});
+
 router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
   try {
     const b = req.body;
@@ -1047,23 +1184,9 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       }
     }
 
-    // Where each new Deckle this job produces gets inwarded -- the same
-    // location its own raw material already sits at (Assign Production's
-    // reel pickers are scoped to one location per order, so every layer
-    // agrees anyway). Facestock is checked first since every roll type calls
-    // for it; release liner is the fallback for the one hypothetical recipe
-    // that somehow doesn't (there isn't one today, but nothing enforces it).
-    let deckleLocation = "";
-    if (pendingDoc?.allottedLayers) {
-      for (const key of ["facestock", "facestock2", "adhesive", "adhesive2", "releaseLiner", "releaseLiner2"]) {
-        const pick = pendingDoc.allottedLayers[key];
-        const sids = pickStockIds(pick);
-        if (!pick?.pool || !sids.length) continue;
-        const { Model } = POOL_MODELS[pick.pool];
-        const doc = await Model.findById(sids[0]).select("location").lean();
-        if (doc?.location) { deckleLocation = doc.location; break; }
-      }
-    }
+    // Where each new Deckle this job produces gets inwarded -- see
+    // resolveDeckleLocation above.
+    const deckleLocation = await resolveDeckleLocation(pendingDoc);
 
     // Material Used dialog rows -- one per reel this order actually had
     // reserved, per pool (facestockStockId[]/facestockMtrsUsed[],
@@ -1176,6 +1299,12 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     const rlRollId = toArray(b.rlRollId);
     const rollId = toArray(b.rollId);
     const deckleId = toArray(b.deckleId);
+    // Set by the instant-produce call the moment this row's Stop was punched
+    // (see the .log-stop-btn handler in jobCardForm.ejs and POST
+    // /machine/jobcard/log/produce above) -- a row carrying both this and its
+    // system-issued deckleId already has its Deckle inwarded to Semi Finished
+    // Stock, so produceDecklesFromLog below must not do it again.
+    const logInstantProduced = toArray(b.logInstantProduced);
     const logStart = toArray(b.logStart);
     const logStartMtrs = toArray(b.logStartMtrs);
     const logEnd = toArray(b.logEnd);
@@ -1192,12 +1321,14 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
         const rl = trim(rlRollId[i]);
         const legacyRoll = trim(rollId[i]);
         const mainRoll = fs || legacyRoll || [fs, ad, rl].filter(Boolean).join(", ");
+        const rowDeckleId = trim(deckleId[i]);
         return {
           rollId: mainRoll,
           fsRollId: fs,
           adRollId: ad,
           rlRollId: rl,
-          deckleId: trim(deckleId[i]),
+          deckleId: rowDeckleId,
+          alreadyProduced: trim(logInstantProduced[i]) === "1" && Boolean(rowDeckleId),
           startMtrs: numOrUndef(logStartMtrs[i]),
           stopMtrs: numOrUndef(logStopMtrs[i]),
           meters: numOrUndef(logMeters[i]),
@@ -1378,12 +1509,15 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     }
 
     // The job is done: take it off the machine and operator queues by
-    // stamping the pending order as produced.
+    // stamping the pending order as produced, and drop the live
+    // in-use hint (liveMaterialInUse) -- the real consumption just saved
+    // above (facestockUsage etc.) is now the permanent record, so the
+    // Start-punch hint that stood in for it has nothing left to add.
     if (mongoose.isValidObjectId(b.pendingId)) {
       try {
         await PendingProduction.updateOne(
           { _id: b.pendingId },
-          { $set: { producedAt: new Date() } },
+          { $set: { producedAt: new Date() }, $unset: { liveMaterialInUse: "" } },
         );
       } catch (prodErr) {
         console.error("JOB CARD MARK-PRODUCED ERROR:", prodErr);

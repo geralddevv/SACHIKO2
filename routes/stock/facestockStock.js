@@ -9,6 +9,7 @@ import Location from "../../models/system/location.js";
 import PurchaseOrder from "../../models/inventory/PurchaseOrder.js";
 import PurchaseOrderLog from "../../models/inventory/PurchaseOrderLog.js";
 import PendingProduction from "../../models/inventory/pendingProduction.js";
+import MachineJobCard from "../../models/inventory/machineJobCard.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
@@ -211,20 +212,114 @@ async function loadAllottedByKey() {
   return { allottedByKey, rollsByKey };
 }
 
+// Per-REEL (not per-spec) allotment/usage, so a specific reel's row can show
+// "this one's on paper for order X" vs. "this one's what actually got drawn
+// on for order X" -- the mismatch the shopfloor runs into when the reel an
+// order was allotted at Assign Production turns out to be physically
+// inaccessible, so the operator scans a different same-spec reel instead
+// (already allowed at Save Production Entry time -- see getEligibleRawMaterials
+// in routes/system/machine.js). Nothing here changes what gets consumed;
+// it only surfaces, per reel, what's already true in PendingProduction/
+// MachineJobCard so a still-full "allotted" reel can be visibly freed up and
+// re-picked for a different order via Assign Production.
+//
+// "Allotted" is scoped exactly like loadAllottedByKey above (assigned to a
+// machine, not yet produced) -- once an order is produced, its reel
+// automatically stops counting as reserved, same self-healing the Master-
+// level "Allotted (Kg)" column already relies on, so a reel that turned out
+// unused reverts to plain available stock on its own the moment the job's
+// card is saved, with nothing here needing to clean it up.
+//
+// "Used" combines two sources, both keyed into the same map so a reel only
+// ever shows one "in use" badge:
+//   - live: PendingProduction.liveMaterialInUse, set the instant an operator
+//     scans a reel and punches Start on a Job Setting/Production Log row
+//     (POST /sachiko/machine/jobcard/mark-in-use) -- true right now, but no
+//     kg amount yet, since consumption isn't reported until Save Production
+//     Entry. Cleared the moment that save happens.
+//   - confirmed: a permanent historical fact read off every job card's own
+//     facestockUsage (the reel(s) the Material Used dialog actually
+//     recorded consumption against) -- kept even after the order is long
+//     since produced, so a reel sitting at less than its inward reelMtrs
+//     always has an answer for "who took the rest". Supersedes the live
+//     hint for the same reel (a reel can't still be "live" once the card
+//     that would have cleared its order's liveMaterialInUse is saved).
+async function loadFacestockReelUsage() {
+  const pending = await PendingProduction.find({
+    producedAt: null,
+    assignedMachineId: { $ne: null },
+    allottedRollIds: { $size: 0 },
+  })
+    .select("allottedLayers liveMaterialInUse lotNo itemId")
+    .populate({ path: "itemId", select: "productCode" })
+    .lean();
+
+  const allottedByReel = new Map();
+  const usedByReel = new Map();
+  const touchUsed = (id, lotNo) => {
+    const key = String(id);
+    const entry = usedByReel.get(key) || { totalKg: 0, lots: new Set() };
+    if (lotNo) entry.lots.add(lotNo);
+    usedByReel.set(key, entry);
+    return entry;
+  };
+
+  for (const p of pending) {
+    for (const pick of Object.values(p.allottedLayers || {})) {
+      if (pick?.pool !== "facestock") continue;
+      for (const id of pickStockIds(pick)) {
+        const key = String(id);
+        if (!allottedByReel.has(key)) {
+          allottedByReel.set(key, { lotNo: p.lotNo || "", productCode: p.itemId?.productCode || "" });
+        }
+      }
+    }
+    const liveFs = Array.isArray(p.liveMaterialInUse?.facestock) ? p.liveMaterialInUse.facestock : [];
+    for (const id of liveFs) touchUsed(id, p.lotNo);
+  }
+
+  const jobCards = await MachineJobCard.find({ "facestockUsage.0": { $exists: true } })
+    .select("facestockUsage lotNo productCode")
+    .lean();
+
+  for (const jc of jobCards) {
+    for (const u of jc.facestockUsage || []) {
+      const used = Number(u.mtrsUsed) || 0;
+      if (!u.stockId || used <= 0) continue;
+      touchUsed(u.stockId, jc.lotNo).totalKg += used;
+    }
+  }
+
+  return { allottedByReel, usedByReel };
+}
+
 // Reorder view for the Masters panel -- current stock (total mtrs still on
 // non-empty reels) per master spec vs. its MSQ, plus whether a PO is already
 // in flight for it (see models/inventory/PurchaseOrder.js's onModel
 // extension for Facestock/Adhesive/Release Master).
-async function loadMastersWithStock(stock) {
+async function loadMastersWithStock(stock, reelUsage) {
   const stockByKey = new Map();
   const rollCountByKey = new Map();
   const rollsByKey = new Map();
+  // Master-level rollup of the same per-reel usedBy below, "in use now"
+  // only -- a reel with CONFIRMED usage (Save Production Entry already ran)
+  // is back to being plain, still-in-stock material at a reduced reelMtrs
+  // (already counted in Stock/Available (Kg)), not something to roll up
+  // separately; only a reel still "live" (Start punched, job still open, no
+  // kg reported yet) is worth flagging here, same idea as the existing
+  // "Allotted (Kg)" column.
+  const liveRollsByKey = new Map();
   for (const s of stock) {
     if (!s.quantity) continue;
     const key = facestockSpecKey(s);
     stockByKey.set(key, (stockByKey.get(key) || 0) + (Number(s.reelMtrs) || 0));
     rollCountByKey.set(key, (rollCountByKey.get(key) || 0) + (Number(s.quantity) || 0));
     if (!rollsByKey.has(key)) rollsByKey.set(key, []);
+    const allottedTo = reelUsage?.allottedByReel?.get(String(s._id)) || null;
+    const usedEntry = reelUsage?.usedByReel?.get(String(s._id));
+    if (usedEntry && usedEntry.totalKg <= 0) {
+      liveRollsByKey.set(key, (liveRollsByKey.get(key) || 0) + 1);
+    }
     rollsByKey.get(key).push({
       _id: s._id,
       rollId: s.rollId,
@@ -236,6 +331,10 @@ async function loadMastersWithStock(stock) {
       remarks: s.remarks,
       createdAt: s.createdAt,
       inwardDate: s.inwardDate,
+      allottedTo,
+      usedBy: usedEntry
+        ? { totalKg: roundKg(usedEntry.totalKg), lots: [...usedEntry.lots], live: usedEntry.totalKg <= 0 }
+        : null,
     });
   }
 
@@ -264,6 +363,7 @@ async function loadMastersWithStock(stock) {
       rolls,
       allotted,
       allottedRolls: allottedRollsByKey.get(key) || 0,
+      liveRolls: liveRollsByKey.get(key) || 0,
       available,
       shortage: roundKg(Math.max(0, msq - currentStock)),
       hasActivePO: activePOSet.has(String(m._id)),
@@ -281,8 +381,103 @@ function totalStockValueOf(stock) {
   return stock.reduce((sum, s) => (s.quantity ? sum + (Number(s.reelMtrs) || 0) * (Number(s.rate) || 0) : sum), 0);
 }
 
+// Flat, per-usage-event listing for the "Used Stock" page (GET /used) --
+// unlike loadFacestockReelUsage's per-reel rollup above (one badge per
+// reel), this is one row per (reel, job) pairing, so a reel drawn on by two
+// different orders over time shows up twice, once for each. Two kinds of
+// row, same split as the badge:
+//   - USED: a permanent row read off every job card's own facestockUsage --
+//     the reel, how much was actually drawn, and which job/lot it was for.
+//   - LIVE: a reel that's been scanned and Start-punched on a still-open
+//     job (PendingProduction.liveMaterialInUse), no Kg yet since that isn't
+//     reported until Save Production Entry.
+// Not facestock-only -- every raw-material pool a job card can report usage
+// against (see POOL_MODELS in utils/labelStockProduction.js and the three
+// *Usage arrays on models/inventory/machineJobCard.js), each with its own
+// Stock model/usage array/consumed-amount field name. `item` is the column
+// the Used Stock page filters on to pick one pool out of the three, or
+// leaves blank for all.
+const USAGE_POOL_CONFIG = {
+  facestock: { item: "Facestock", Model: FacestockStock, usageField: "facestockUsage", amountField: "mtrsUsed", specFields: "rollId type make vendorName vendorSkuCode location" },
+  adhesive: { item: "Adhesive", Model: AdhesiveStock, usageField: "adhesiveUsage", amountField: "kgUsed", specFields: "rollId type make vendorName vendorSkuCode location" },
+  release: { item: "Release Liner", Model: ReleaseLinerStock, usageField: "releaseUsage", amountField: "mtrsUsed", specFields: "rollId type make vendorName vendorSkuCode location" },
+};
+
+async function loadFacestockUsageRows() {
+  const usageExistsOr = Object.values(USAGE_POOL_CONFIG).map((cfg) => ({ [`${cfg.usageField}.0`]: { $exists: true } }));
+  const jobCards = await MachineJobCard.find({ $or: usageExistsOr })
+    .select(["jobCardId date lotNo productCode", ...Object.values(USAGE_POOL_CONFIG).map((cfg) => cfg.usageField)].join(" "))
+    .sort({ date: -1 })
+    .lean();
+
+  const liveExistsOr = Object.keys(USAGE_POOL_CONFIG).map((pool) => ({ [`liveMaterialInUse.${pool}.0`]: { $exists: true } }));
+  const pending = await PendingProduction.find({ producedAt: null, $or: liveExistsOr })
+    .select("lotNo itemId liveMaterialInUse updatedAt")
+    .populate({ path: "itemId", select: "productCode" })
+    .lean();
+
+  const rows = [];
+  for (const [pool, cfg] of Object.entries(USAGE_POOL_CONFIG)) {
+    const stockIds = new Set();
+    jobCards.forEach((jc) => (jc[cfg.usageField] || []).forEach((u) => { if (u.stockId) stockIds.add(String(u.stockId)); }));
+    pending.forEach((p) => (p.liveMaterialInUse?.[pool] || []).forEach((id) => stockIds.add(String(id))));
+
+    const reels = stockIds.size
+      ? await cfg.Model.find({ _id: { $in: [...stockIds] } }).select(cfg.specFields).lean()
+      : [];
+    const reelById = new Map(reels.map((r) => [String(r._id), r]));
+    const reelFields = (reel) => ({
+      type: reel?.type || "",
+      make: reel?.make || "",
+      vendorName: reel?.vendorName || "",
+      vendorSkuCode: reel?.vendorSkuCode || "",
+      location: reel?.location || "",
+    });
+
+    for (const jc of jobCards) {
+      for (const u of jc[cfg.usageField] || []) {
+        const kgUsed = Number(u[cfg.amountField]) || 0;
+        if (!u.stockId || kgUsed <= 0) continue;
+        const reel = reelById.get(String(u.stockId));
+        rows.push({
+          item: cfg.item,
+          status: "USED",
+          rollId: u.rollId || reel?.rollId || "",
+          ...reelFields(reel),
+          kgUsed: roundKg(kgUsed),
+          remainingKg: u.remainingKg != null ? roundKg(u.remainingKg) : null,
+          lotNo: jc.lotNo || "",
+          productCode: jc.productCode || "",
+          jobCardId: jc.jobCardId || "",
+          date: jc.date || null,
+        });
+      }
+    }
+    for (const p of pending) {
+      for (const id of p.liveMaterialInUse?.[pool] || []) {
+        const reel = reelById.get(String(id));
+        rows.push({
+          item: cfg.item,
+          status: "LIVE",
+          rollId: reel?.rollId || "",
+          ...reelFields(reel),
+          kgUsed: null,
+          remainingKg: null,
+          lotNo: p.lotNo || "",
+          productCode: p.itemId?.productCode || "",
+          jobCardId: "",
+          date: p.updatedAt || null,
+        });
+      }
+    }
+  }
+
+  rows.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  return rows;
+}
+
 router.get("/", async (req, res) => {
-  const [locations, stock, releaseStock, adhesiveStock, specOptions] = await Promise.all([
+  const [locations, stock, releaseStock, adhesiveStock, specOptions, reelUsage] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
     FacestockStock.find().sort({ createdAt: -1 }).lean(),
     // Release Liner and Adhesive Stock's own value figures, shown alongside
@@ -293,8 +488,9 @@ router.get("/", async (req, res) => {
     ReleaseLinerStock.find().select("quantity reelMtrs rate").lean(),
     AdhesiveStock.find().select("quantity reelMtrs rate").lean(),
     loadSpecOptions({}),
+    loadFacestockReelUsage(),
   ]);
-  const masters = await loadMastersWithStock(stock);
+  const masters = await loadMastersWithStock(stock, reelUsage);
   const facestockValue = totalStockValueOf(stock);
   const releaseValue = totalStockValueOf(releaseStock);
   const adhesiveValue = totalStockValueOf(adhesiveStock);
@@ -313,6 +509,21 @@ router.get("/", async (req, res) => {
     // the frame can't quietly disagree with the label inside it.
     labelSizeMm: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM },
     ...specOptions,
+    notification: req.flash("notification"),
+  });
+});
+
+// Flat "which stock is being used, and for which job" listing -- the same
+// USED/LIVE signal each reel's dropdown badge on the page above already
+// carries, just laid out one row per usage event instead of needing every
+// master's dropdown opened to find it. See loadFacestockUsageRows.
+router.get("/used", async (req, res) => {
+  const rows = await loadFacestockUsageRows();
+  res.render("stock/facestockStockUsed.ejs", {
+    JS: false,
+    CSS: "tableDisp.css",
+    title: "Used Stock",
+    rows,
     notification: req.flash("notification"),
   });
 });

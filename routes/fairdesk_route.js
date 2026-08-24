@@ -4562,28 +4562,33 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
 
     // Reels already claimed by another still-open WIP order's own raw-
     // material picks -- a physical reel/drum can only be mounted on one
-    // machine at a time, so once ANY other order holds it (assigned to a
-    // machine, not yet produced), it can't also land on this order. Same
-    // "race-guard against stale page state" the selectedRolls/takenSet check
-    // above already does for finished Deckle rolls; this is its counterpart
-    // for raw facestock/adhesive/release liner reels. Scoped to producedAt:
-    // null, same as loadAllottedByKey (routes/stock/facestockStock.js etc.)
-    // -- once an order has actually finished drawing from a reel, whatever
-    // is physically left on it goes back to being free stock, not locked to
+    // machine at a time. Picking one of these for THIS order is a swap, not
+    // a free pick: mandatory once submitted checked (see assignProduction.ejs,
+    // which shows it as a badge before the operator ever gets here) -- it's
+    // pulled off the other order's allottedLayers below, right after this
+    // order's own save succeeds. Same "race-guard against stale page state"
+    // the selectedRolls/takenSet check above already does for finished
+    // Deckle rolls; this is its counterpart for raw facestock/adhesive/
+    // release liner reels. Scoped to producedAt: null, same as
+    // loadAllottedByKey (routes/stock/facestockStock.js etc.) -- once an
+    // order has actually finished drawing from a reel, whatever is
+    // physically left on it goes back to being free stock, not locked to
     // that (now complete) order forever.
     const otherPendingLayers = await PendingProduction.find({
       assignedMachineId: { $ne: null },
       producedAt: null,
       _id: { $ne: pendingProduction._id },
       allottedLayers: { $ne: null },
-    }).select("allottedLayers").lean();
-    const claimedKeySet = new Set(
-      otherPendingLayers.flatMap((p) =>
-        Object.values(p.allottedLayers || {})
-          .filter((pick) => pick?.pool)
-          .flatMap((pick) => pickStockIds(pick).map((sid) => `${pick.pool}|${sid}`)),
-      ),
-    );
+    }).select("allottedLayers lotNo").lean();
+    const claimedByKey = new Map();
+    for (const p of otherPendingLayers) {
+      for (const [layerKey, pick] of Object.entries(p.allottedLayers || {})) {
+        if (!pick?.pool) continue;
+        for (const sid of pickStockIds(pick)) {
+          claimedByKey.set(`${pick.pool}|${sid}`, { orderId: String(p._id), layerKey, lotNo: p.lotNo || "" });
+        }
+      }
+    }
 
     // Record whichever raw-material layer reels were picked on the assign
     // form, independent of whether every layer got picked -- lets the
@@ -4593,16 +4598,18 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     // more than one reel now -- e.g. combining two undersized drums onto one
     // order -- so `rawLayers[key]` may be a single id or an array of them.
     // Existence-checked against the right pool model so a stale/tampered id
-    // can't leave a broken reference on the order, and dropped (left
-    // unallotted) if another order already claimed it.
+    // can't leave a broken reference on the order. A reel already claimed by
+    // another order is still accepted (not dropped) -- it's queued in
+    // `swaps` below and pulled off that order once this one's own save
+    // succeeds.
     let allottedLayers = {};
     const pickedForThisOrder = new Set();
+    const swaps = [];
     for (const key of required) {
       const meta = LAYER_META[key];
       const submitted = rawLayers?.[key];
       const candidateIds = [...new Set((Array.isArray(submitted) ? submitted : submitted ? [submitted] : [])
-        .filter((sid) => mongoose.isValidObjectId(sid))
-        .filter((sid) => !claimedKeySet.has(`${meta.pool}|${sid}`)))];
+        .filter((sid) => mongoose.isValidObjectId(sid)))];
       if (!candidateIds.length) continue;
       const { Model } = POOL_MODELS[meta.pool];
       const existingIds = new Set((await Model.find({ _id: { $in: candidateIds } }).distinct("_id")).map(String));
@@ -4611,7 +4618,11 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
         req.flash("notification", "The same raw-material reel or drum cannot be allotted to more than one layer.");
         return res.redirect(`/sachiko/labels/production/assign/${id}`);
       }
-      validIds.forEach((sid) => pickedForThisOrder.add(`${meta.pool}|${sid}`));
+      validIds.forEach((sid) => {
+        pickedForThisOrder.add(`${meta.pool}|${sid}`);
+        const claim = claimedByKey.get(`${meta.pool}|${sid}`);
+        if (claim) swaps.push({ ...claim, pool: meta.pool, stockId: sid });
+      });
       if (validIds.length) allottedLayers[key] = { pool: meta.pool, stockIds: validIds.map(String) };
     }
 
@@ -4685,9 +4696,44 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       },
     });
 
+    // Complete the swap for every claimed reel that was just accepted onto
+    // this order (see `swaps`/claimedByKey above): pull it out of whichever
+    // layer the other order had it under, dropping that layer entirely if
+    // it held nothing else. Done only now, after this order's own save
+    // succeeded, so a failure earlier in this request can't strand a reel
+    // pulled from another order without it actually landing here. Grouped by
+    // order so an order that lost more than one reel to this submit (e.g.
+    // both its facestock and adhesive picks) only gets touched once.
+    const swappedFromLots = [];
+    if (swaps.length) {
+      const byOrder = new Map();
+      for (const s of swaps) {
+        if (!byOrder.has(s.orderId)) byOrder.set(s.orderId, []);
+        byOrder.get(s.orderId).push(s);
+      }
+      for (const [otherOrderId, entries] of byOrder) {
+        const other = await PendingProduction.findById(otherOrderId).select("allottedLayers lotNo").lean();
+        if (!other) continue;
+        const updatedLayers = { ...(other.allottedLayers || {}) };
+        for (const { layerKey, stockId } of entries) {
+          const pick = updatedLayers[layerKey];
+          if (!pick) continue;
+          const remaining = pickStockIds(pick).filter((sid) => String(sid) !== String(stockId));
+          if (remaining.length) updatedLayers[layerKey] = { pool: pick.pool, stockIds: remaining.map(String) };
+          else delete updatedLayers[layerKey];
+        }
+        await PendingProduction.updateOne({ _id: otherOrderId }, { $set: { allottedLayers: updatedLayers } });
+        swappedFromLots.push(other.lotNo || otherOrderId);
+      }
+    }
+
     // Reported alongside whatever the assignment itself did, not instead of
     // it -- minting these variants is a side effect of the reels picked, and
     // whoever assigned the order is the one who needs to know it happened.
+    const swapNote = swappedFromLots.length
+      ? ` Note: ${swaps.length === 1 ? "one reel/drum" : `${swaps.length} reels/drums`} moved here off`
+        + ` ${swappedFromLots.length === 1 ? "order" : "orders"} ${[...new Set(swappedFromLots)].map((l) => `"${l}"`).join(", ")}.`
+      : "";
     const variantNote = variantWarning
       ? ` Note: the allotted material combinations couldn't be checked against Label Stock (${variantWarning}).`
       : newVariantCodes.length
@@ -4699,13 +4745,14 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
 
     res.locals.auditDescription = `Assigned production order ${id} to machine ${machineId}`
       + (deckleId ? ` (produced Deckle ${deckleId}${variantProductCode ? `, tracked as variant ${variantProductCode}` : ""})` : stockWarning ? " (stock not fully allocated)" : "")
-      + (newVariantCodes.length ? ` (label stock variants added: ${newVariantCodes.join(", ")})` : "");
+      + (newVariantCodes.length ? ` (label stock variants added: ${newVariantCodes.join(", ")})` : "")
+      + (swappedFromLots.length ? ` (swapped ${swaps.length} reel(s)/drum(s) off ${[...new Set(swappedFromLots)].join(", ")})` : "");
     req.flash("notification", (deckleId
       ? `Machine assigned — Deckle ${deckleId} produced.`
         + (variantProductCode ? ` Note: the raw material picked doesn't exactly match this SKU's own spec (e.g. a different vendor) -- tracked as variant "${variantProductCode}" instead of plain ${labelStock?.productCode || "this SKU"}.` : "")
       : stockWarning
         ? `Machine assigned, but stock wasn't allocated (${stockWarning}) — this order is on the queue as short-allotted. Re-open it to produce a Deckle once material is available.`
-        : "Machine assigned successfully.") + variantNote);
+        : "Machine assigned successfully.") + variantNote + swapNote);
     res.redirect("/sachiko/machine/queue");
   } catch (err) {
     console.error("ASSIGN PRODUCTION SAVE ERROR:", err);

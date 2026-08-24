@@ -9,6 +9,7 @@ import Location from "../../models/system/location.js";
 import PurchaseOrder from "../../models/inventory/PurchaseOrder.js";
 import PurchaseOrderLog from "../../models/inventory/PurchaseOrderLog.js";
 import PendingProduction from "../../models/inventory/pendingProduction.js";
+import MachineJobCard from "../../models/inventory/machineJobCard.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
@@ -214,20 +215,85 @@ async function loadAllottedByKey() {
   return { allottedByKey, rollsByKey };
 }
 
+// Per-DRUM (not per-spec) allotment/usage -- same idea, and same "Allotted"
+// vs. "Used"/"Live" split, as loadFacestockReelUsage in routes/stock/
+// facestockStock.js: "Allotted" is a drum still reserved on paper (assigned
+// to a machine, not yet produced -- self-heals once the order is produced,
+// same scope as loadAllottedByKey above); "Used" is either permanent (a job
+// card's own adhesiveUsage, kgUsed > 0) or live (Start already punched on a
+// still-open job -- PendingProduction.liveMaterialInUse.adhesive, no Kg yet).
+async function loadAdhesiveReelUsage() {
+  const pending = await PendingProduction.find({
+    producedAt: null,
+    assignedMachineId: { $ne: null },
+    allottedRollIds: { $size: 0 },
+  })
+    .select("allottedLayers liveMaterialInUse lotNo itemId")
+    .populate({ path: "itemId", select: "productCode" })
+    .lean();
+
+  const allottedByReel = new Map();
+  const usedByReel = new Map();
+  const touchUsed = (id, lotNo) => {
+    const key = String(id);
+    const entry = usedByReel.get(key) || { totalKg: 0, lots: new Set() };
+    if (lotNo) entry.lots.add(lotNo);
+    usedByReel.set(key, entry);
+    return entry;
+  };
+
+  for (const p of pending) {
+    for (const pick of Object.values(p.allottedLayers || {})) {
+      if (pick?.pool !== "adhesive") continue;
+      for (const id of pickStockIds(pick)) {
+        const key = String(id);
+        if (!allottedByReel.has(key)) {
+          allottedByReel.set(key, { lotNo: p.lotNo || "", productCode: p.itemId?.productCode || "" });
+        }
+      }
+    }
+    const liveAd = Array.isArray(p.liveMaterialInUse?.adhesive) ? p.liveMaterialInUse.adhesive : [];
+    for (const id of liveAd) touchUsed(id, p.lotNo);
+  }
+
+  const jobCards = await MachineJobCard.find({ "adhesiveUsage.0": { $exists: true } })
+    .select("adhesiveUsage lotNo productCode")
+    .lean();
+
+  for (const jc of jobCards) {
+    for (const u of jc.adhesiveUsage || []) {
+      const used = Number(u.kgUsed) || 0;
+      if (!u.stockId || used <= 0) continue;
+      touchUsed(u.stockId, jc.lotNo).totalKg += used;
+    }
+  }
+
+  return { allottedByReel, usedByReel };
+}
+
 // Reorder view for the Masters panel -- current stock (total mtrs still on
 // non-empty drums) per master spec vs. its MSQ, plus whether a PO is already
 // in flight for it (see models/inventory/PurchaseOrder.js's onModel
 // extension for Facestock/Adhesive/Release Master).
-async function loadMastersWithStock(stock) {
+async function loadMastersWithStock(stock, reelUsage) {
   const stockByKey = new Map();
   const rollCountByKey = new Map();
   const rollsByKey = new Map();
+  // Master-level rollup of usedBy below, "in use now" only -- see
+  // routes/stock/facestockStock.js's loadMastersWithStock for the fuller
+  // comment.
+  const liveRollsByKey = new Map();
   for (const s of stock) {
     if (!s.quantity) continue;
     const key = adhesiveSpecKey(s);
     stockByKey.set(key, (stockByKey.get(key) || 0) + (Number(s.reelMtrs) || 0));
     rollCountByKey.set(key, (rollCountByKey.get(key) || 0) + (Number(s.quantity) || 0));
     if (!rollsByKey.has(key)) rollsByKey.set(key, []);
+    const allottedTo = reelUsage?.allottedByReel?.get(String(s._id)) || null;
+    const usedEntry = reelUsage?.usedByReel?.get(String(s._id));
+    if (usedEntry && usedEntry.totalKg <= 0) {
+      liveRollsByKey.set(key, (liveRollsByKey.get(key) || 0) + 1);
+    }
     rollsByKey.get(key).push({
       _id: s._id,
       rollId: s.rollId,
@@ -247,6 +313,10 @@ async function loadMastersWithStock(stock) {
       // from the parent row -- carried here so the Edit dialog can resubmit
       // it unchanged (it has no input for this field).
       gsm: s.gsm,
+      allottedTo,
+      usedBy: usedEntry
+        ? { totalKg: roundKg(usedEntry.totalKg), lots: [...usedEntry.lots], live: usedEntry.totalKg <= 0 }
+        : null,
     });
   }
 
@@ -275,6 +345,7 @@ async function loadMastersWithStock(stock) {
       rolls,
       allotted,
       allottedRolls: allottedRollsByKey.get(key) || 0,
+      liveRolls: liveRollsByKey.get(key) || 0,
       available,
       shortage: roundKg(Math.max(0, msq - currentStock)),
       hasActivePO: activePOSet.has(String(m._id)),
@@ -293,7 +364,7 @@ function totalStockValueOf(stock) {
 }
 
 router.get("/", async (req, res) => {
-  const [locations, stock, facestockStock, releaseStock, specOptions] = await Promise.all([
+  const [locations, stock, facestockStock, releaseStock, specOptions, reelUsage] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
     AdhesiveStock.find().sort({ createdAt: -1 }).lean(),
     // Facestock and Release Liner Stock's own value figures, shown alongside
@@ -304,8 +375,9 @@ router.get("/", async (req, res) => {
     FacestockStock.find().select("quantity reelMtrs rate").lean(),
     ReleaseLinerStock.find().select("quantity reelMtrs rate").lean(),
     loadSpecOptions({}),
+    loadAdhesiveReelUsage(),
   ]);
-  const masters = await loadMastersWithStock(stock);
+  const masters = await loadMastersWithStock(stock, reelUsage);
   const adhesiveValue = totalStockValueOf(stock);
   const facestockValue = totalStockValueOf(facestockStock);
   const releaseValue = totalStockValueOf(releaseStock);

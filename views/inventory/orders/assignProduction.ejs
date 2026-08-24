@@ -163,6 +163,26 @@
     .material-wordfile { margin-top: 12px; }
     .material-wordfile a { display: inline-flex; align-items: center; gap: 6px; color: #044a78; font-weight: 600; text-decoration: none; font-size: 13px; }
 
+    /* ---- Deckle Size dialog -- shown once, on load, before the rest of the
+       page is worth acting on: the value it captures is echoed onto the
+       Material Details card (mid-item below) and pre-fills the Size filter
+       box on every Facestock/Release Liner allotment column further down
+       (see the DOMContentLoaded handler). No close button/backdrop-dismiss
+       -- unlike every other dialog on this page there's nothing sensible to
+       fall back to if it's dismissed unanswered, so it isn't offered. ---- */
+    .dialog-header {
+      background: #044a78; padding: 18px 22px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-radius: 14px 14px 0 0;
+    }
+    .dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #fff; }
+    .dialog-body { padding: 18px 20px; background: #fff; border-radius: 0 0 14px 14px; }
+    .dialog-field-label {
+      display: block; font-size: 13px; font-weight: 800; letter-spacing: 0.02em;
+      color: #334155; text-transform: uppercase; margin-bottom: 7px;
+    }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+
     .ap-form-card {
       width: 100%; background: #fff; border-radius: 10px;
       border: 1px solid #e2e8f0; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px;
@@ -235,6 +255,17 @@
     .raw-layer-table tbody tr.raw-layer-row-no-invoice:hover { background: #fef2f2; cursor: not-allowed; }
     .raw-layer-table tbody tr.raw-layer-row-no-invoice td { color: #b91c1c; }
     .raw-layer-table tbody tr.raw-layer-row-no-invoice input[type="checkbox"] { cursor: not-allowed; }
+
+    /* A reel/drum still selectable, but currently allotted to a DIFFERENT
+       still-open order -- ticking it is a swap (mandatory once submitted,
+       see POST /labels/production/assign/:id in routes/fairdesk_route.js),
+       not a free pick, so it's tinted rather than left looking like plain
+       stock. The small swap icon in the checkbox cell carries the claiming
+       order's lot in its title; the row's own title repeats it. */
+    .raw-layer-table tbody tr.raw-layer-row-claimed,
+    .raw-layer-table tbody tr.raw-layer-row-claimed:hover { background: #fffbeb; }
+    .raw-layer-table tbody tr.raw-layer-row-claimed:has(input:checked) { background: #fef3c7; }
+    .raw-layer-claim-icon { margin-left: 3px; font-size: 10.5px; color: #b45309; cursor: help; }
 
     /* ---- Raw Material Allotment -- one inline column per raw-material
        layer, styled like .roll-table above. NORMAL needs 3 (Facestock/
@@ -431,6 +462,9 @@
         <div class="mid-item"><span class="mid-label">Label Stock ID</span><span class="mid-value"><%= dash(item.labelStockId) %></span></div>
         <div class="mid-item"><span class="mid-label">SKU Code</span><span class="mid-value"><%= dash(item.skuCode) %></span></div>
         <div class="mid-item"><span class="mid-label">Roll Type</span><span class="mid-value"><%= dash(rollType) %></span></div>
+        <!-- Filled in by the Deckle Size dialog's Continue handler once
+             answered -- not known at render time, so it starts blank. -->
+        <div class="mid-item"><span class="mid-label">Deckle Size</span><span class="mid-value" id="midDeckleSize">—</span></div>
       </div>
 
       <div class="layer-stack custom-scrollbar">
@@ -510,6 +544,28 @@
       <button type="button" id="assignSubmitBtn" class="ap-submit-btn">Assign &amp; Continue</button>
     </div>
   </form>
+</div>
+
+<!-- Deckle Size dialog -- opened automatically on load (see the
+     DOMContentLoaded handler below), before anything else on this page is
+     worth acting on. Its answer is echoed onto the Material Details card
+     above (#midDeckleSize) and pre-fills the Size filter box on every
+     Facestock/Release Liner allotment column further down. -->
+<div class="logout-modal" id="deckleSizeDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deckleSizeDialogTitle"
+    style="width: min(420px, 94vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="deckleSizeDialogTitle">Enter Deckle Size</h2>
+    </div>
+    <div class="dialog-body">
+      <label class="dialog-field-label" for="deckleSizeInput">Deckle Size</label>
+      <input type="text" id="deckleSizeInput" class="form-control premium-input" placeholder="Enter deckle size" autocomplete="off" />
+      <div id="deckleSizeError" style="color: #dc2626; font-size: 12px; margin-top: 8px; min-height: 16px;"></div>
+      <div class="dialog-actions">
+        <button type="button" class="ap-submit-btn" id="deckleSizeConfirmBtn" style="width: 100%; justify-content: center;">Continue</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script id="all-machines-data" type="application/json"><%- safeJson(allMachines) %></script>
@@ -909,11 +965,23 @@
           const cls = c.trunc ? ' class="raw-layer-detail-cell"' : "";
           return `<td data-col="${c.key}"${cls}${title}>${text}</td>`;
         }).join("");
+        // Still allotted to a different still-open order (see `claimedBy` on
+        // the /raw-stock response) -- selectable, but ticking it moves it off
+        // that order and onto this one, mandatorily, once submitted (see the
+        // POST handler in routes/fairdesk_route.js). Never true at the same
+        // time as noInvoice -- a reel with no invoice can't have been
+        // allotted to anything in the first place.
+        const claimLabel = r.claimedBy ? (r.claimedBy.lotNo || r.claimedBy.productCode || "another order") : "";
         const rowAttrs = noInvoice
           ? ` class="raw-layer-row-no-invoice" title="No invoice"`
+          : r.claimedBy
+            ? ` class="raw-layer-row-claimed" title="Currently allotted to ${escAttr(claimLabel)} -- selecting it moves it here instead."`
+            : "";
+        const claimIcon = r.claimedBy && !noInvoice
+          ? ` <i class="fa-solid fa-right-left raw-layer-claim-icon" title="Allotted to ${escAttr(claimLabel)} -- selecting it moves it here instead."></i>`
           : "";
         return `<tr${rowAttrs}>` +
-          `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"${checked ? " checked" : ""}${noInvoice ? " disabled" : ""} /></td>` +
+          `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"${checked ? " checked" : ""}${noInvoice ? " disabled" : ""} />${claimIcon}</td>` +
           cells +
         `</tr>`;
       }).join("");
@@ -1093,5 +1161,54 @@
     const assignForm = document.getElementById("assign-form");
     const assignSubmitBtn = document.getElementById("assignSubmitBtn");
     assignSubmitBtn.addEventListener("click", () => assignForm.requestSubmit());
+
+    // ---- Deckle Size dialog ----
+    // Opens automatically, before anything else on this page is worth
+    // acting on -- purely a client-side convenience, never submitted: it
+    // just echoes onto the Material Details card above and pre-fills the
+    // Size filter box on every Facestock/Release Liner allotment column
+    // (whichever layer keys this recipe actually has -- DOUBLE FACESTOCK
+    // adds facestock2, DOUBLE RELEASE adds releaseLiner2), so picking the
+    // right-width reel doesn't need re-typing the size once a machine is
+    // chosen and those columns' reels are fetched. No close button/backdrop
+    // -dismiss -- there's nothing sensible to fall back to unanswered.
+    const deckleSizeDialog = document.getElementById("deckleSizeDialog");
+    const deckleSizeInput = document.getElementById("deckleSizeInput");
+    const deckleSizeError = document.getElementById("deckleSizeError");
+    const deckleSizeConfirmBtn = document.getElementById("deckleSizeConfirmBtn");
+
+    function applyDeckleSize(value) {
+      document.getElementById("midDeckleSize").textContent = value;
+      requiredLayerKeys().forEach((key) => {
+        const pool = LAYER_META[key].pool;
+        if (pool !== "facestock" && pool !== "release") return;
+        const box = document.querySelector(`.raw-layer-col[data-layer="${key}"] .raw-layer-search[data-col="size"]`);
+        if (!box) return;
+        box.value = value;
+        filterLayerRows(key);
+      });
+    }
+
+    function confirmDeckleSize() {
+      const value = deckleSizeInput.value.trim();
+      if (!value) {
+        deckleSizeError.textContent = "Enter the deckle size to continue.";
+        deckleSizeInput.focus();
+        return;
+      }
+      deckleSizeError.textContent = "";
+      applyDeckleSize(value);
+      deckleSizeDialog.classList.remove("show");
+      deckleSizeDialog.setAttribute("aria-hidden", "true");
+    }
+
+    deckleSizeConfirmBtn.addEventListener("click", confirmDeckleSize);
+    deckleSizeInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); confirmDeckleSize(); }
+    });
+
+    deckleSizeDialog.classList.add("show");
+    deckleSizeDialog.setAttribute("aria-hidden", "false");
+    deckleSizeInput.focus();
   });
 </script>

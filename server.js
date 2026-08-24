@@ -8,6 +8,7 @@ import sachikoRoute from "./routes/sachiko/sachiko_route.js";
 import machineRoutes from "./routes/system/machine.js";
 import maintenanceRoutes from "./routes/system/maintenance.js";
 import facestockMasterRoutes from "./routes/system/facestockMaster.js";
+import familyMasterRoutes from "./routes/system/familyMaster.js";
 import coreMasterRoutes from "./routes/system/coreMaster.js";
 import adhesiveMasterRoutes from "./routes/system/adhesiveMaster.js";
 import releaseMasterRoutes from "./routes/system/releaseMaster.js";
@@ -883,6 +884,7 @@ app.use("/sachiko", requireAuth, machineRoutes);
 // would turn them away.
 app.use("/sachiko", requireAuth, maintenanceRoutes);
 app.use("/sachiko", requireAuth, facestockMasterRoutes);
+app.use("/sachiko", requireAuth, familyMasterRoutes);
 app.use("/sachiko", requireAuth, coreMasterRoutes);
 app.use("/sachiko", requireAuth, adhesiveMasterRoutes);
 app.use("/sachiko", requireAuth, releaseMasterRoutes);

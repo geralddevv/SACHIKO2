@@ -10,12 +10,13 @@ import Counter from "../../models/system/counter.js";
 import FacestockMaster from "../../models/inventory/facestockMaster.js";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
 import ReleaseMaster from "../../models/inventory/releaseMaster.js";
+import Family from "../../models/system/family.js";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import SachikoJobcard from "../../models/sachiko/sachikoJobcard.js";
 import SachikoSalesOrder from "../../models/sachiko/sachikoSalesOrder.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
-import { buildLabelStockSignature, buildMaterialSignature, resolveLabelStockProductCode } from "../../utils/labelStockVariant.js";
+import { buildLabelStockSignature, buildMaterialSignature, resolveLabelStockProductCode, resolveLabelStockSkuCode } from "../../utils/labelStockVariant.js";
 
 const router = express.Router();
 
@@ -120,7 +121,7 @@ const toArray = (value) => {
 // SKU, not the row's own generated identifier.
 const formatSkuCode = (n) => `SP | LS | ${String(n).padStart(6, "0")}`;
 const parseSkuSeq = (skuCode) => {
-  const match = String(skuCode || "").match(/(\d{6})$/);
+  const match = String(skuCode || "").match(/(\d{6})(?:-[A-Z]+)?$/);
   return match ? Number(match[1]) : 0;
 };
 
@@ -133,28 +134,15 @@ async function previewNextSkuCode() {
   return formatSkuCode(nextSeq);
 }
 
-async function generateSkuCode() {
-  let nextSeq = parseSkuSeq(
-    (await SachikoLabelStock.findOne().sort({ skuCode: -1 }).select("skuCode").lean())?.skuCode,
-  ) + 1;
-
-  const maxAttempts = 10000;
-  for (let i = 0; i < maxAttempts; i++) {
-    const candidate = formatSkuCode(nextSeq);
-    if (!(await SachikoLabelStock.exists({ skuCode: candidate }))) return candidate;
-    nextSeq += 1;
-  }
-  throw new Error("Unable to generate unique Label Stock SKU code");
-}
-
 /* ================= LABEL STOCK ================= */
 router.get("/label-stock/view", async (req, res) => {
-  const [jsonData, previewSkuCode, facestockMasters, adhesiveMasters, releaseMasters] = await Promise.all([
+  const [jsonData, previewSkuCode, facestockMasters, adhesiveMasters, releaseMasters, families] = await Promise.all([
     SachikoLabelStock.find().sort({ skuCode: 1 }).lean(),
     previewNextSkuCode(),
     FacestockMaster.find().select("skuId family type make vendorId vendorName vendorSkuCode size gsm micron").lean(),
     AdhesiveMaster.find().select("skuId type make vendorId vendorName vendorSkuCode viscosity cohesion shear density").lean(),
     ReleaseMaster.find().select("skuId type make sensing vendorId vendorName vendorSkuCode color size gsm").lean(),
+    Family.find().sort({ familyName: 1 }).lean(),
   ]);
   res.render("sachiko/labelStockView.ejs", {
     title: "Label Stock View",
@@ -165,6 +153,7 @@ router.get("/label-stock/view", async (req, res) => {
     facestockMasters,
     adhesiveMasters,
     releaseMasters,
+    families,
     notification: req.flash("notification"),
   });
 });
@@ -320,7 +309,6 @@ const DUPLICATE_LABELSTOCK_MESSAGE = "This Label Stock already exists (every fie
 router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJson, async (req, res) => {
   try {
     const labelStockId = await generateId("sachikoLabelStockId", "LS");
-    const skuCode = await generateSkuCode();
     const payload = await buildLabelStockPayload(req.body);
     if (!payload.productCode) {
       throw Object.assign(new Error("Product Code is required"), { userMessage: "Product Code is required" });
@@ -354,6 +342,11 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
     // duplicate of one already in that code's family. See its own comment.
     const enteredProductCode = payload.productCode;
     payload.productCode = await resolveLabelStockProductCode(payload);
+    // A variant Product Code ("C011-A") takes its base row's own SKU with the
+    // same letter suffix ("SP | LS | 000002-A") instead of the next
+    // sequential number, so the SKU family stays visibly tied to its base --
+    // see resolveLabelStockSkuCode's own comment.
+    const skuCode = await resolveLabelStockSkuCode(payload.productCode);
 
     const labelStockSignature = buildLabelStockSignature(payload);
     const existingSignature = await SachikoLabelStock.findOne({ labelStockSignature }).select("_id").lean();

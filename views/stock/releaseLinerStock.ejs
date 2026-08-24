@@ -897,8 +897,22 @@
       const bar = document.createElement("div");
       bar.className = "roll-detail-span";
       bar.style.cssText = "flex:1; display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:6px 12px; color:#4b5563; font-size:13px;";
+      // "Running Stock" -- same ALLOTTED/USED/IN USE NOW badges as Facestock
+      // Stock's own rowFormatter (views/stock/facestockStock.ejs); see
+      // loadReleaseReelUsage in routes/stock/releaseLinerStock.js for how
+      // both are derived.
+      const allottedBadge = data.allottedTo
+        ? `<span style="background:#fef3c7;color:#92400e;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11.5px;white-space:nowrap;" title="Reserved for this order, not yet drawn on -- free to re-pick in Assign Production if it can't be reached.">ALLOTTED · ${escapeHtml(data.allottedTo.lotNo || data.allottedTo.productCode || "—")}</span>`
+        : "";
+      const usedBadge = data.usedBy
+        ? (data.usedBy.live
+            ? `<span style="background:#ccfbf1;color:#0f766e;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11.5px;white-space:nowrap;" title="Scanned and Start was just punched on a job card for this order -- Kg used isn't reported until Save Production Entry.">IN USE NOW · ${escapeHtml(data.usedBy.lots.join(", ") || "—")}</span>`
+            : `<span style="background:#ede9fe;color:#6d28d9;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11.5px;white-space:nowrap;" title="Kg drawn off this reel via a job card's Material Used dialog -- still in stock at the reduced Kg shown, not fully consumed.">PARTIALLY USED · ${escapeHtml(data.usedBy.lots.join(", ") || "—")} (${fmtKg(data.usedBy.totalKg)})</span>`)
+        : "";
       const parts = [
         `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
+        allottedBadge,
+        usedBadge,
         data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
         `Kg ${fmtKg(data.reelMtrs)}`,
         data.location ? escapeHtml(data.location) : "",
@@ -985,6 +999,22 @@
             ? ` <span style="font-size:11px; font-weight:600; color:#b45309;">(${rolls} roll${rolls === 1 ? "" : "s"})</span>`
             : "";
           return `<span style="font-weight:700; color:#92400e;">${fmtKg(value)}</span>${rollPart}`;
+        },
+      },
+      {
+        title: "Used (Kg)",
+        field: "liveRolls",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        hozAlign: "center",
+        minWidth: 170,
+        headerTooltip: "Rolls of this spec currently scanned and Start-punched on a job that's still in progress -- no Kg reported yet (see each reel's own badge under the dropdown). A reel goes back to plain Available stock, at its reduced Kg, once Save Production Entry runs.",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isParent) return "";
+          const liveRolls = row.liveRolls || 0;
+          if (!liveRolls) return "—";
+          return `<span style="font-size:11px; font-weight:700; color:#0f766e;">${liveRolls} in use now</span>`;
         },
       },
       {

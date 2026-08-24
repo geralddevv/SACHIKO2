@@ -52,26 +52,38 @@ router.get("/raw-stock", async (req, res) => {
     const type = String(layerSpec?.[meta.typeField] || "").trim();
     if (meta.pool !== "adhesive" && !type) return res.json({ reels: [], hasBinding: true });
 
-    // A physical reel/drum can only be mounted on one machine at a time --
+    // A physical reel/drum can only be mounted on one machine at a time, so
     // once another still-open WIP order (assigned to a machine, not yet
-    // produced) holds it, however little of it that order actually needs,
-    // it doesn't belong in this picker at all (mirrors the server-side
-    // race-guard in fairdesk_route.js's POST /labels/production/assign/:id).
-    // Excludes this same order's own pick, so re-opening Assign Production
-    // for the order that already holds a reel still offers it back.
+    // produced) holds it, picking it here for THIS order is a swap, not a
+    // free pick -- Assign & Continue (POST /labels/production/assign/:id in
+    // routes/fairdesk_route.js) pulls it off that other order automatically
+    // when it's submitted checked. Still offered here, not excluded, so the
+    // operator can see and choose it -- `claimedBy` names which order/lot
+    // currently holds it (assignProduction.ejs shows this as a badge and
+    // warns before the swap happens). Excludes this same order's own pick,
+    // so re-opening Assign Production for the order that already holds a
+    // reel still shows it as plain, unclaimed.
     const otherPendingLayers = await PendingProduction.find({
       assignedMachineId: { $ne: null },
       producedAt: null,
       ...(mongoose.isValidObjectId(orderId) ? { _id: { $ne: orderId } } : {}),
       allottedLayers: { $ne: null },
-    }).select("allottedLayers").lean();
-    const claimedIds = new Set(
-      otherPendingLayers.flatMap((p) =>
-        Object.values(p.allottedLayers || {})
-          .filter((pick) => pick?.pool === meta.pool)
-          .flatMap((pick) => pickStockIds(pick)),
-      ),
-    );
+    })
+      .select("allottedLayers lotNo itemId")
+      .populate({ path: "itemId", select: "productCode" })
+      .lean();
+    const claimedByReel = new Map();
+    for (const p of otherPendingLayers) {
+      for (const pick of Object.values(p.allottedLayers || {})) {
+        if (pick?.pool !== meta.pool) continue;
+        for (const sid of pickStockIds(pick)) {
+          const key = String(sid);
+          if (!claimedByReel.has(key)) {
+            claimedByReel.set(key, { lotNo: p.lotNo || "", productCode: p.itemId?.productCode || "" });
+          }
+        }
+      }
+    }
 
     // Label Stock <-> Adhesive bindings (models/sachiko/labelStockAdhesiveBinding.js).
     // A binding is mandatory before any drum is offered here, and decides
@@ -87,13 +99,12 @@ router.get("/raw-stock", async (req, res) => {
       const reels = await poolMeta.Model.find({ location, reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
         .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
         .lean();
-      const candidates = reels.filter((r) => !claimedIds.has(String(r._id)));
-      ({ drums: matched, hasBinding } = await applyAdhesiveBindings(candidates, itemId));
+      ({ drums: matched, hasBinding } = await applyAdhesiveBindings(reels, itemId));
     } else {
       const reels = await poolMeta.Model.find({ type, location, reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
         .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
         .lean();
-      matched = reels.filter((r) => reelMatchesLayer(meta.pool, r, layerSpec) && !claimedIds.has(String(r._id)));
+      matched = reels.filter((r) => reelMatchesLayer(meta.pool, r, layerSpec));
     }
 
     // POOL_MATCH_FIELDS (utils/labelStockProduction.js) no longer narrows on
@@ -126,6 +137,7 @@ router.get("/raw-stock", async (req, res) => {
         reelMtrs: r.reelMtrs,
         rate: r.rate,
         invoiceNo: r.invoiceNo || "",
+        claimedBy: claimedByReel.get(String(r._id)) || null,
       })),
       // Only meaningful for the adhesive pool -- Facestock/Release Liner have
       // no binding concept, so they're always effectively "true" here.

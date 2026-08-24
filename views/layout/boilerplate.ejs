@@ -948,6 +948,16 @@
               <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
               <p class="nav-items-para">Facestock</p>
             </div>
+            <!-- Flat "which reel is used/being used, and for which job" listing,
+                 common to all three raw-material pools (an Item column filters
+                 Facestock/Adhesive/Release Liner) -- see routes/stock/
+                 facestockStock.js's loadFacestockUsageRows and the "Used (Kg)"
+                 column on the Facestock Stock page above, which this is the
+                 drill-down for. -->
+            <div title="Used Stock" class="<%= title === 'Used Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/facestockstock/used'">
+              <i class="fa-solid fa-industry" style="color: #ffffff"></i>
+              <p class="nav-items-para">Used Stock</p>
+            </div>
             <div title="Adhesive Stock" class="<%= title === 'Adhesive Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/adhesivestock'">
               <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
               <p class="nav-items-para">Adhesive</p>
@@ -999,6 +1009,11 @@
             <div title="Facestock Master" class="<%= title === 'Facestock Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/facestock'">
               <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
               <p class="nav-items-para">Facestock</p>
+            </div>
+
+            <div title="Family Master" class="<%= title === 'Family Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/family'">
+              <i class="fa-solid fa-tags" style="color: #ffffff"></i>
+              <p class="nav-items-para">Family</p>
             </div>
 
             <div title="Adhesive Master" class="<%= title === 'Adhesive Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/adhesive'">

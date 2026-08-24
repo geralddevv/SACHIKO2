@@ -270,6 +270,12 @@
     width: 100%;
     max-width: 100%;
     overflow-x: auto;
+    /* Caps the row list so a recipe with many layers/reels scrolls inside
+       the dialog instead of growing the dialog past the viewport -- the
+       hint text above and Confirm/Cancel below stay reachable without
+       having to scroll the page itself. */
+    max-height: min(50vh, 420px);
+    overflow-y: auto;
   }
   .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
   .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
@@ -500,22 +506,23 @@
     .jc-log-table tbody td[data-label="Drum id"] .roll-note,
     .jc-log-table tbody td[data-label="Jumbo REL id"] .roll-note { flex: 1 1 100%; }
 
-    .jc-log-table tbody td[data-label="Mtrs"],
+    .jc-log-table tbody td[data-label="Kg"],
     .jc-log-table tbody td[data-label="Start"],
-    .jc-log-table tbody td[data-label="Stop"] { flex: 1 1 40%; }
-    .jc-log-table tbody td[data-label="Mtrs"] { border-right: 1px solid #cbd5e1; }
-    .jc-log-table tbody td[data-label="Mtrs"]::before { flex: 0 0 auto; }
+    .jc-log-table tbody td[data-label="Stop"] { flex: 1 1 40%; flex-wrap: wrap; }
+    .jc-log-table tbody td[data-label="Kg"] { border-right: 1px solid #cbd5e1; }
+    .jc-log-table tbody td[data-label="Kg"]::before { flex: 0 0 auto; }
     .jc-log-table tbody td[data-label="Start"]::before,
     .jc-log-table tbody td[data-label="Stop"]::before { content: none; }
+    .jc-log-table tbody td[data-label="Stop"] .log-deckle-note { flex: 1 1 100%; }
 
     .jc-log-table tbody td[data-label="Face Joint"],
-    .jc-log-table tbody td[data-label="Face Mtr"],
+    .jc-log-table tbody td[data-label="Face Kg"],
     .jc-log-table tbody td[data-label="Rel. Joint"],
-    .jc-log-table tbody td[data-label="Rel. Mtr"] { flex: 1 1 50%; }
+    .jc-log-table tbody td[data-label="Rel. Kg"] { flex: 1 1 50%; }
     .jc-log-table tbody td[data-label="Face Joint"],
     .jc-log-table tbody td[data-label="Rel. Joint"] { border-right: 1px solid #cbd5e1; }
     .jc-log-table tbody td[data-label="Face Joint"],
-    .jc-log-table tbody td[data-label="Face Mtr"] { border-bottom: 1px solid #cbd5e1; }
+    .jc-log-table tbody td[data-label="Face Kg"] { border-bottom: 1px solid #cbd5e1; }
     .jc-log-table td {
       display: flex; align-items: center; gap: 10px;
       padding: 7px 10px; border-right: none; min-width: 0 !important;
@@ -599,7 +606,7 @@
           </tr>
           <tr>
             <th>Balance Qty</th><td><%= fmtQty(jc.balanceQuantity) %></td>
-            <th>Running Mtrs</th><td><%= dash(ref.runningMeters) %></td>
+            <th>Running Kg</th><td><%= dash(ref.runningMeters) %></td>
             <th>Machine</th><td><%= dash(machine ? machine.machineName : "") %></td>
           </tr>
           <tr>
@@ -617,7 +624,7 @@
                 <div class="jc-ref-item"><span class="jc-ref-label">Facestock Family</span><span class="jc-ref-value"><%= dash(ref.facestockFamily) %></span></div>
                 <div class="jc-ref-item"><span class="jc-ref-label">Adhesive Type</span><span class="jc-ref-value"><%= dash(ref.adhesiveType) %></span></div>
                 <div class="jc-ref-item"><span class="jc-ref-label">Release Liner Type</span><span class="jc-ref-value"><%= dash(ref.releaseLinerType) %></span></div>
-                <div class="jc-ref-item"><span class="jc-ref-label">Running Meters</span><span class="jc-ref-value"><%= dash(ref.runningMeters) %></span></div>
+                <div class="jc-ref-item"><span class="jc-ref-label">Running Kg</span><span class="jc-ref-value"><%= dash(ref.runningMeters) %></span></div>
               </div>
             </td>
           </tr>
@@ -666,16 +673,15 @@
                 </td>
                 <%
                   const reels = l.allocated ? l.reels || [] : [];
-                  const totalMtrs = reels.reduce((sum, r) => sum + (Number(r.reelMtrs) || 0), 0);
+                  const totalKg = reels.reduce((sum, r) => sum + (Number(r.reelMtrs) || 0), 0);
                   const reelIds = reels.map((r) => r.rollId).filter(Boolean);
                   const reelLocations = [...new Set(reels.map((r) => r.location).filter(Boolean))];
                   const reelCodes = reels.map((r) => r.code).filter(Boolean);
                   const reelGsms = reels.map((r) => r.gsm).filter((v) => v !== undefined && v !== null && v !== "");
                   const reelSizes = reels.map((r) => r.size).filter(Boolean);
                   const reelMakes = reels.map((r) => r.make).filter(Boolean);
-                  const quantityUnit = l.pool === "adhesive" ? "kg" : "mtrs";
                 %>
-                <td data-label="Qty"><%= reels.length ? `${reels.length} ${l.unit}${reels.length === 1 ? "" : "s"}${totalMtrs ? ` (${fmtQty(totalMtrs)} ${quantityUnit})` : ""}` : "—" %></td>
+                <td data-label="Qty"><%= reels.length ? `${reels.length} ${l.unit}${reels.length === 1 ? "" : "s"}${totalKg ? ` (${fmtQty(totalKg)} kg)` : ""}` : "—" %></td>
                 <td data-label="Roll / Drum ID"><%= reelIds.length ? reelIds.join(", ") : "—" %></td>
                 <td data-label="Code"><%= reelCodes.length ? reelCodes.join(", ") : "—" %></td>
                 <td data-label="GSM"><%= reelGsms.length ? reelGsms.map((gsm) => `${fmtQty(gsm)} GSM`).join(", ") : "—" %></td>
@@ -706,7 +712,7 @@
 
     <datalist id="allottedFsRollList">
       <% sortedFs.forEach((r) => { %>
-        <% if (r.rollId) { %><option value="<%= r.rollId %>"><%= r.allotted ? "[Allotted] " : "[Stock] " %><%= fmtQty(r.reelMtrs) %> mtrs<%= r.location ? " · " + r.location : "" %><%= r.family ? " · " + r.family : "" %><%= r.gsm ? " · " + r.gsm + " GSM" : (r.micron ? " · " + r.micron + " mic" : "") %><%= r.type ? " · " + r.type : "" %><%= r.size ? " · " + r.size : "" %></option><% } %>
+        <% if (r.rollId) { %><option value="<%= r.rollId %>"><%= r.allotted ? "[Allotted] " : "[Stock] " %><%= fmtQty(r.reelMtrs) %> kg<%= r.location ? " · " + r.location : "" %><%= r.family ? " · " + r.family : "" %><%= r.gsm ? " · " + r.gsm + " GSM" : (r.micron ? " · " + r.micron + " mic" : "") %><%= r.type ? " · " + r.type : "" %><%= r.size ? " · " + r.size : "" %></option><% } %>
       <% }) %>
     </datalist>
     <datalist id="allottedAdRollList">
@@ -716,7 +722,7 @@
     </datalist>
     <datalist id="allottedRlRollList">
       <% sortedRl.forEach((r) => { %>
-        <% if (r.rollId) { %><option value="<%= r.rollId %>"><%= r.allotted ? "[Allotted] " : "[Stock] " %><%= fmtQty(r.reelMtrs) %> mtrs<%= r.location ? " · " + r.location : "" %><%= r.sensing ? " · " + r.sensing : "" %><%= r.type ? " · " + r.type : "" %><%= r.size ? " · " + r.size : "" %></option><% } %>
+        <% if (r.rollId) { %><option value="<%= r.rollId %>"><%= r.allotted ? "[Allotted] " : "[Stock] " %><%= fmtQty(r.reelMtrs) %> kg<%= r.location ? " · " + r.location : "" %><%= r.sensing ? " · " + r.sensing : "" %><%= r.type ? " · " + r.type : "" %><%= r.size ? " · " + r.size : "" %></option><% } %>
       <% }) %>
     </datalist>
     <script id="allotted-rolls-data" type="application/json"><%- safeJson(jc.allottedRollDetails || []) %></script>
@@ -743,9 +749,9 @@
             <th style="width:14%; min-width:115px; text-align:left; padding-left:8px;">Jumbo FS id</th>
             <th style="width:14%; min-width:115px; text-align:left; padding-left:8px;">Drum id</th>
             <th style="width:14%; min-width:115px; text-align:left; padding-left:8px;">Jumbo REL id</th>
-            <th>Mtrs</th>
+            <th>Kg</th>
             <th style="text-align:center; white-space:nowrap;">Start</th>
-            <th>Mtrs</th>
+            <th>Kg</th>
             <th style="text-align:center; white-space:nowrap;">Stop</th>
           </tr>
         </thead>
@@ -782,19 +788,19 @@
             <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Drum id</th>
             <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Jumbo REL id</th>
             <th colspan="4" class="group-head">Start / Stop</th>
-            <th rowspan="2" style="vertical-align: middle; width:75px;">Meters</th>
+            <th rowspan="2" style="vertical-align: middle; width:75px;">Kg</th>
             <th colspan="2" class="group-head">Face</th>
             <th colspan="2" class="group-head">Release</th>
           </tr>
           <tr>
-            <th class="sub-head" style="width:70px;">Mtrs</th>
+            <th class="sub-head" style="width:70px;">Kg</th>
             <th class="sub-head" style="width:92px;">Start</th>
-            <th class="sub-head" style="width:70px;">Mtrs</th>
+            <th class="sub-head" style="width:70px;">Kg</th>
             <th class="sub-head" style="width:92px;">Stop</th>
             <th class="sub-head" style="width:80px;">Joint</th>
-            <th class="sub-head" style="width:65px;">Mtr</th>
+            <th class="sub-head" style="width:65px;">Kg</th>
             <th class="sub-head" style="width:80px;">Joint</th>
-            <th class="sub-head" style="width:65px;">Mtr</th>
+            <th class="sub-head" style="width:65px;">Kg</th>
           </tr>
         </thead>
         <tbody id="logTableBody">
@@ -802,20 +808,20 @@
         <tfoot>
           <tr class="jc-total-row" style="background: #044a78;">
             <td class="jc-total-label" style="text-align:center; font-size:12px; font-weight:700; color:#ffffff; white-space:nowrap; padding: 6px 8px;">Total</td>
-            <td colspan="9" style="padding: 6px 8px" data-label="RM">
+            <td colspan="9" style="padding: 6px 8px" data-label="Total Kg">
               <input type="text" name="totalMeter" class="form-control jc-readonly" readonly
-                     placeholder="RM" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
+                     placeholder="Total Kg" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
             </td>
-            <td colspan="3" style="padding: 6px 8px" data-label="SQ Mtrs">
+            <td colspan="3" style="padding: 6px 8px" data-label="SQ Kg">
               <input type="text" name="sqMtr" class="form-control jc-readonly" readonly
-                     placeholder="SQ Mtrs" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
+                     placeholder="SQ Kg" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
             </td>
           </tr>
         </tfoot>
       </table>
     </div>
 
-    <div class="btn-grp jc-save-wrap span-full" id="saveBtnWrap" style="margin-top: 10px;">
+    <div class="btn-grp jc-save-wrap span-full" id="saveBtnWrap" style="margin-top: 10px; display: none;">
       <button type="submit" id="saveEntryBtn" class="jc-save-action" disabled><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Production Entry</button>
     </div>
   </form>
@@ -873,7 +879,35 @@
 
     const normRollId = (v) => String(v ?? "").trim().replace(/\s+/g, "").toUpperCase();
     const extractScannedRollId = (v) => normRollId(String(v ?? "").trim().split(/\s+/)[0] || "");
-    const fmtMtrs = (v) => Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+    const fmtKg = (v) => Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+    const fmtMtrs = fmtKg;
+
+    const pendingId = document.querySelector('input[name="pendingId"]')?.value || "";
+
+    // Fires the instant Start is punched on a Job Setting/Production Log
+    // row, for whichever of Jumbo FS id/Drum id/Jumbo REL id that row
+    // already has scanned in -- see POST /sachiko/machine/jobcard/mark-
+    // in-use's own comment for why this exists separately from the real
+    // consumption only recorded at Save Production Entry time. Best-effort:
+    // a failed/racing call never blocks the operator, it only feeds the
+    // "which stock is actually running" visibility on the raw-material
+    // stock pages.
+    function markRowMaterialsInUse(row, prefix) {
+      if (!pendingId || !row) return;
+      [
+        ["facestock", `.${prefix}-fs-roll-id`],
+        ["adhesive", `.${prefix}-ad-roll-id`],
+        ["release", `.${prefix}-rl-roll-id`],
+      ].forEach(([pool, sel]) => {
+        const rollId = row.querySelector(sel)?.value?.trim();
+        if (!rollId) return;
+        fetch("/sachiko/machine/jobcard/mark-in-use", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pendingId, pool, rollId }),
+        }).catch(() => {});
+      });
+    }
 
     const fsRollById = new Map(ALLOTTED_FS_ROLLS.filter((r) => r.rollId).map((r) => [normRollId(r.rollId), r]));
     const adRollById = new Map(ALLOTTED_AD_ROLLS.filter((r) => r.rollId).map((r) => [normRollId(r.rollId), r]));
@@ -881,10 +915,10 @@
     const rollById = new Map(ALLOTTED_ROLLS.filter((r) => r.rollId).map((r) => [normRollId(r.rollId), r]));
 
     function getRollPoolInfo(pool) {
-      if (pool === "fs") return { map: fsRollById, unit: "mtrs", name: "Jumbo FS" };
+      if (pool === "fs") return { map: fsRollById, unit: "kg", name: "Jumbo FS" };
       if (pool === "ad") return { map: adRollById, unit: "kg", name: "Drum" };
-      if (pool === "rl") return { map: rlRollById, unit: "mtrs", name: "Jumbo REL" };
-      return { map: rollById, unit: "mtrs", name: "Roll" };
+      if (pool === "rl") return { map: rlRollById, unit: "kg", name: "Jumbo REL" };
+      return { map: rollById, unit: "kg", name: "Roll" };
     }
 
     function checkMaterialInput(input, pool) {
@@ -1345,14 +1379,14 @@
 
     function syncJsRowButtons(row) {
       if (!row) return;
-      setPunchBtnReady(row.querySelector(".js-start-btn"), hasValue(row, ".js-mtrs1"), "Enter the start metre first");
-      setPunchBtnReady(row.querySelector(".js-stop-btn"), hasValue(row, ".js-mtrs2"), "Enter the stop metre first");
+      setPunchBtnReady(row.querySelector(".js-start-btn"), hasValue(row, ".js-mtrs1"), "Enter the start kg first");
+      setPunchBtnReady(row.querySelector(".js-stop-btn"), hasValue(row, ".js-mtrs2"), "Enter the stop kg first");
     }
 
     function syncLogRowButtons(row) {
       if (!row) return;
-      setPunchBtnReady(row.querySelector(".log-start-btn"), hasValue(row, ".log-start-mtrs"), "Enter the start metre first");
-      setPunchBtnReady(row.querySelector(".log-stop-btn"), hasValue(row, ".log-stop-mtrs"), "Enter the stop metre first");
+      setPunchBtnReady(row.querySelector(".log-start-btn"), hasValue(row, ".log-start-mtrs"), "Enter the start kg first");
+      setPunchBtnReady(row.querySelector(".log-stop-btn"), hasValue(row, ".log-stop-mtrs"), "Enter the stop kg first");
     }
 
     const jsBody  = document.getElementById("jsTableBody");
@@ -1433,20 +1467,20 @@
           </div>
           <span class="roll-note"></span>
         </td>
-        <td data-label="Mtrs"><input type="number" name="jsMtrs1" class="form-control js-mtrs1" placeholder="Mtrs" min="0" step="any" /></td>
+        <td data-label="Kg"><input type="number" name="jsMtrs1" class="form-control js-mtrs1" placeholder="Kg" min="0" step="any" /></td>
         <td style="text-align:center; white-space:nowrap;" data-label="Start">
           <span class="js-start-display" style="font-size:11.5px; font-weight:700; color:#03365a; margin-right:3px;">—</span>
           <input type="hidden" name="jsStart" class="js-start-input" />
-          <button type="button" class="js-start-btn" data-color="#10b981" disabled title="Enter the start metre first"
+          <button type="button" class="js-start-btn" data-color="#10b981" disabled title="Enter the start kg first"
             style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:not-allowed; background:#cbd5e1; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-play"></i>
           </button>
         </td>
-        <td data-label="Mtrs"><input type="number" name="jsMtrs2" class="form-control js-mtrs2" placeholder="Mtrs" min="0" step="any" /></td>
+        <td data-label="Kg"><input type="number" name="jsMtrs2" class="form-control js-mtrs2" placeholder="Kg" min="0" step="any" /></td>
         <td style="text-align:center; white-space:nowrap;" data-label="Stop">
           <span class="js-stop-display" style="font-size:11.5px; font-weight:700; color:#dc2626; margin-right:3px;">—</span>
           <input type="hidden" name="jsStop" class="js-stop-input" />
-          <button type="button" class="js-stop-btn" data-color="#ef4444" disabled title="Enter the stop metre first"
+          <button type="button" class="js-stop-btn" data-color="#ef4444" disabled title="Enter the stop kg first"
             style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:not-allowed; background:#cbd5e1; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-stop"></i>
           </button>
@@ -1478,7 +1512,7 @@
         if (startBtn.disabled) return;
         const row = startBtn.closest("tr");
         if (!hasValue(row, ".js-mtrs1")) {
-          if (typeof showToast === "function") showToast("Enter the start metre first.", "error");
+          if (typeof showToast === "function") showToast("Enter the start kg first.", "error");
           row.querySelector(".js-mtrs1")?.focus();
           return;
         }
@@ -1491,6 +1525,7 @@
         startBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         startBtn.style.background = "#6b7280";
         startBtn.style.cursor = "default";
+        markRowMaterialsInUse(row, "js");
         updateStartProdLogButton();
         return;
       }
@@ -1499,7 +1534,7 @@
         if (stopBtn.disabled) return;
         const row = stopBtn.closest("tr");
         if (!hasValue(row, ".js-mtrs2")) {
-          if (typeof showToast === "function") showToast("Enter the stop metre first.", "error");
+          if (typeof showToast === "function") showToast("Enter the stop kg first.", "error");
           row.querySelector(".js-mtrs2")?.focus();
           return;
         }
@@ -1572,29 +1607,32 @@
           </div>
           <span class="roll-note"></span>
         </td>
-        <td data-label="Mtrs"><input type="number" name="logStartMtrs" class="form-control log-start-mtrs" placeholder="Mtrs" min="0" step="any" /></td>
+        <td data-label="Kg"><input type="number" name="logStartMtrs" class="form-control log-start-mtrs" placeholder="Kg" min="0" step="any" /></td>
         <td style="text-align:center; white-space:nowrap;" data-label="Start">
           <span class="log-start-display" style="font-size:11.5px; font-weight:700; color:#03365a; margin-right:3px;">—</span>
           <input type="hidden" name="logStart" class="log-start-input" />
-          <button type="button" class="log-start-btn" data-color="#10b981" disabled title="Enter the start metre first"
+          <button type="button" class="log-start-btn" data-color="#10b981" disabled title="Enter the start kg first"
             style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:not-allowed; background:#cbd5e1; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-play"></i>
           </button>
         </td>
-        <td data-label="Mtrs"><input type="number" name="logStopMtrs" class="form-control log-stop-mtrs" placeholder="Mtrs" min="0" step="any" /></td>
+        <td data-label="Kg"><input type="number" name="logStopMtrs" class="form-control log-stop-mtrs" placeholder="Kg" min="0" step="any" /></td>
         <td style="text-align:center; white-space:nowrap;" data-label="Stop">
           <span class="log-end-display" style="font-size:11.5px; font-weight:700; color:#dc2626; margin-right:3px;">—</span>
           <input type="hidden" name="logEnd" class="log-end-input" />
-          <button type="button" class="log-stop-btn" data-color="#ef4444" disabled title="Enter the stop metre first"
+          <input type="hidden" name="deckleId" class="log-deckle-id-input" />
+          <input type="hidden" name="logInstantProduced" class="log-instant-produced-input" />
+          <button type="button" class="log-stop-btn" data-color="#ef4444" disabled title="Enter the stop kg first"
             style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:not-allowed; background:#cbd5e1; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-stop"></i>
           </button>
+          <span class="log-deckle-note" style="display:block; font-size:9px; font-weight:700; margin-top:2px; white-space:normal; line-height:1.3;"></span>
         </td>
-        <td data-label="Meters"><input type="number" name="logMeters" class="form-control log-meters" placeholder="Meters" min="0" step="any" /></td>
+        <td data-label="Kg"><input type="number" name="logMeters" class="form-control log-meters" placeholder="Kg" min="0" step="any" /></td>
         <td data-label="Face Joint"><select name="faceJoint" class="form-control log-face-joint" style="min-width:0;">${jointOptionHtml}</select></td>
-        <td data-label="Face Mtr"><input type="number" name="faceMtr" class="form-control log-face-mtr" placeholder="Mtr" min="0" step="any" /></td>
+        <td data-label="Face Kg"><input type="number" name="faceMtr" class="form-control log-face-mtr" placeholder="Kg" min="0" step="any" /></td>
         <td data-label="Rel. Joint"><select name="releaseJoint" class="form-control log-release-joint" style="min-width:0;">${jointOptionHtml}</select></td>
-        <td data-label="Rel. Mtr"><input type="number" name="releaseMtr" class="form-control log-release-mtr" placeholder="Mtr" min="0" step="any" /></td>`;
+        <td data-label="Rel. Kg"><input type="number" name="releaseMtr" class="form-control log-release-mtr" placeholder="Kg" min="0" step="any" /></td>`;
       return tr;
     }
 
@@ -1623,12 +1661,98 @@
       if (sqMtrInput) sqMtrInput.value = runningMtrs ? round2(paperSizeVal * (runningMtrs / 100)) : "";
     }
 
+    const logRowVal = (row, sel) => row.querySelector(sel)?.value || "";
+
+    // Meters is derived from Start/Stop mtrs until the operator types into it
+    // directly -- once they do (log-meters gets .dataset.userEdited), further
+    // Start/Stop changes stop overwriting their own entry.
+    function autoFillMeters(row) {
+      const metersInput = row.querySelector(".log-meters");
+      if (!metersInput || metersInput.dataset.userEdited === "1") return;
+      const start = parseFloat(row.querySelector(".log-start-mtrs")?.value);
+      const stop = parseFloat(row.querySelector(".log-stop-mtrs")?.value);
+      metersInput.value =
+        Number.isFinite(start) && Number.isFinite(stop) && stop > start ? round2(stop - start) : "";
+    }
+
+    // Once a row's Deckle is actually inwarded, its material/meters can't
+    // change without desyncing the stock that's already been created for it.
+    function lockProducedRow(row) {
+      [".log-fs-roll-id", ".log-ad-roll-id", ".log-rl-roll-id", ".log-meters", ".log-start-mtrs", ".log-stop-mtrs"]
+        .forEach((sel) => { const el = row.querySelector(sel); if (el) el.readOnly = true; });
+    }
+
+    function setLogDeckleNote(row, text, color) {
+      const note = row.querySelector(".log-deckle-note");
+      if (!note) return;
+      note.textContent = text;
+      note.style.color = color;
+    }
+
+    // Fires the instant a row's Stop is punched (see the .log-stop-btn
+    // handler below) -- POSTs just this one row to
+    // /machine/jobcard/log/produce so its Deckle is created and inwarded to
+    // Semi Finished Stock right away, rather than waiting for the whole Job
+    // Card to be saved. A row with no pendingId (a blank/new entry, not tied
+    // to any production order) has nothing to attach a Deckle to, so it's
+    // left for the final save as before. A failed call also falls back to
+    // the final save -- the row's hidden deckleId/logInstantProduced stay
+    // empty, so produceDecklesFromLog there still produces it.
+    async function produceRowDeckleInstantly(row) {
+      const pendingId = document.querySelector('input[name="pendingId"]')?.value || "";
+      if (!pendingId) return;
+
+      setLogDeckleNote(row, "Moving to Semi Finished Stock…", "#64748b");
+      try {
+        const res = await fetch("/sachiko/machine/jobcard/log/produce", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pendingId,
+            fsRollId: logRowVal(row, ".log-fs-roll-id"),
+            adRollId: logRowVal(row, ".log-ad-roll-id"),
+            rlRollId: logRowVal(row, ".log-rl-roll-id"),
+            startMtrs: logRowVal(row, ".log-start-mtrs"),
+            stopMtrs: logRowVal(row, ".log-stop-mtrs"),
+            meters: logRowVal(row, ".log-meters"),
+            faceJoint: logRowVal(row, ".log-face-joint"),
+            faceMtr: logRowVal(row, ".log-face-mtr"),
+            releaseJoint: logRowVal(row, ".log-release-joint"),
+            releaseMtr: logRowVal(row, ".log-release-mtr"),
+            startTime: logRowVal(row, ".log-start-input"),
+            endTime: logRowVal(row, ".log-end-input"),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          setLogDeckleNote(row, "Not moved yet — will be created on Save.", "#b45309");
+          if (typeof showToast === "function") {
+            showToast(data.message || "Couldn't move this Deckle to Semi Finished Stock yet — it will be created when you Save.", "error");
+          }
+          return;
+        }
+        row.querySelector(".log-deckle-id-input").value = data.deckleId;
+        row.querySelector(".log-instant-produced-input").value = "1";
+        setLogDeckleNote(row, `✓ ${data.deckleId} — in Semi Finished Stock`, "#059669");
+        lockProducedRow(row);
+        if (typeof showToast === "function") showToast(`${data.deckleId} moved to Semi Finished Stock.`, "success");
+      } catch (err) {
+        setLogDeckleNote(row, "Not moved yet — will be created on Save.", "#b45309");
+      } finally {
+        if (typeof scheduleSave === "function") scheduleSave();
+      }
+    }
+
     logBody.addEventListener("input", (e) => {
       if (e.target.classList.contains("log-fs-roll-id")) checkMaterialInput(e.target, "fs");
       else if (e.target.classList.contains("log-ad-roll-id")) checkMaterialInput(e.target, "ad");
       else if (e.target.classList.contains("log-rl-roll-id")) checkMaterialInput(e.target, "rl");
       else if (e.target.classList.contains("log-start-mtrs") || e.target.classList.contains("log-stop-mtrs")) {
-        syncLogRowButtons(e.target.closest("tr"));
+        const row = e.target.closest("tr");
+        syncLogRowButtons(row);
+        autoFillMeters(row);
+      } else if (e.target.classList.contains("log-meters")) {
+        e.target.dataset.userEdited = "1";
       }
       recalcLogTotals();
     });
@@ -1648,7 +1772,7 @@
         if (startBtn.disabled) return;
         const row = startBtn.closest("tr");
         if (!hasValue(row, ".log-start-mtrs")) {
-          if (typeof showToast === "function") showToast("Enter the start metre first.", "error");
+          if (typeof showToast === "function") showToast("Enter the start kg first.", "error");
           row.querySelector(".log-start-mtrs")?.focus();
           return;
         }
@@ -1661,6 +1785,7 @@
         startBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         startBtn.style.background = "#6b7280";
         startBtn.style.cursor = "default";
+        markRowMaterialsInUse(row, "log");
         return;
       }
       const stopBtn = e.target.closest(".log-stop-btn");
@@ -1668,8 +1793,16 @@
         if (stopBtn.disabled) return;
         const row = stopBtn.closest("tr");
         if (!hasValue(row, ".log-stop-mtrs")) {
-          if (typeof showToast === "function") showToast("Enter the stop metre first.", "error");
+          if (typeof showToast === "function") showToast("Enter the stop kg first.", "error");
           row.querySelector(".log-stop-mtrs")?.focus();
+          return;
+        }
+        // Every Production Log row is one Deckle -- Stop is what moves it to
+        // Semi Finished Stock, so its produced length has to be on the row
+        // before that can happen.
+        if (!hasValue(row, ".log-meters")) {
+          if (typeof showToast === "function") showToast("Enter the produced Kg first.", "error");
+          row.querySelector(".log-meters")?.focus();
           return;
         }
         const time = nowHHMM();
@@ -1681,6 +1814,7 @@
         stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         stopBtn.style.background = "#6b7280";
         stopBtn.style.cursor = "default";
+        produceRowDeckleInstantly(row);
       }
     });
 
@@ -1741,19 +1875,24 @@
       faceMtr: val(row, ".log-face-mtr"),
       releaseJoint: val(row, ".log-release-joint"),
       releaseMtr: val(row, ".log-release-mtr"),
+      deckleId: val(row, ".log-deckle-id-input"),
+      instantProduced: val(row, ".log-instant-produced-input"),
     }));
 
     const anyEntry = (rows) =>
       rows.some((r) => Object.values(r).some((v) => String(v ?? "").trim() !== ""));
 
-    // Nothing to save until something's actually been entered -- an empty
-    // Job Setting/Production Log wouldn't produce a meaningful job card.
+    // Hidden until at least one Production Log row has something in it --
+    // every Production Log row is a Deckle, so a Job Setting entry alone
+    // (setup wastage, no deckle) has nothing yet worth saving.
     const saveEntryBtn = document.getElementById("saveEntryBtn");
+    const saveBtnWrap = document.getElementById("saveBtnWrap");
     function updateSaveButtonState() {
       if (!saveEntryBtn || saveEntryBtn.dataset.submitting === "1") return;
-      const ready = anyEntry(readJsRows()) || anyEntry(readLogRows());
+      const ready = anyEntry(readLogRows());
+      if (saveBtnWrap) saveBtnWrap.style.display = ready ? "" : "none";
       saveEntryBtn.disabled = !ready;
-      saveEntryBtn.title = ready ? "" : "Enter at least one Job Setting or Production Log value first.";
+      saveEntryBtn.title = ready ? "" : "Enter at least one Production Log value first.";
     }
 
     function saveDraft() {
@@ -1848,6 +1987,12 @@
         putValue(row, ".log-face-mtr", data.faceMtr);
         putValue(row, ".log-release-joint", data.releaseJoint);
         putValue(row, ".log-release-mtr", data.releaseMtr);
+        putValue(row, ".log-deckle-id-input", data.deckleId);
+        putValue(row, ".log-instant-produced-input", data.instantProduced);
+        if (data.deckleId && data.instantProduced === "1") {
+          setLogDeckleNote(row, `✓ ${data.deckleId} — in Semi Finished Stock`, "#059669");
+          lockProducedRow(row);
+        }
         syncLogRowButtons(row);
         checkMaterialInput(row.querySelector(".log-fs-roll-id"), "fs");
         checkMaterialInput(row.querySelector(".log-ad-roll-id"), "ad");

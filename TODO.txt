@@ -41,28 +41,27 @@ if deckle free and set if set ask for size
 deckle type and size
 
 adhesive -> adh
-rate in the header of stock
-dashboard in stock summary
-
 
 sr.no in every table ✔️
 remove tape from the client and user detail view ✔️
 hide the other clients 
 remove the stale entries ✔️
 remove arrow in the stock view ✔️
-add lowest, highest and last rate in client binding
+
+ONLY WATERBASE MANDATORY IN THE ADHESIVE AND IN RELEASE LINER REMOVE COLOR ✔️
+option for sq mtr rate and rolls in sales order
+if no invoice show warning while allocation ✔️
+search filter in the allocation selection table ✔️
+add a rate in the masters of LS
+add another options in th masters for assigning (high pressure, sensable, non sensable) ✔️
+when clciked on the product show the material used (C011-A) in the final audit ✔️
+multi-file in the ls master ✔️
+
 production usage logs
 value in the semi finished
+add lowest, highest and last rate in client binding
 add size width in semi finished
-when clciked on the product show the material used (C011-A) in the final audit
-
-ONLY WATERBASE MANDATORY IN THE ADHESIVE AND IN RELEASE LINER REMOVE COLOR
-option for sq mtr rate and rolls in sales order
-if no invoice show warning while allocation
-search filter in the allocation selection table
-add a rate in the masters of LS
-add another options in th masters for assigning (high pressure, sensable, non sensable)
-
+rate in the header of stock
+dashboard in stock summary
 
 FLow chart in FS: loc, emp name
-multi-file in the ls master
