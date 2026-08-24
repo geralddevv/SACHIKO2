@@ -508,19 +508,6 @@
     .jc-log-table tbody td[data-label="Start"]::before,
     .jc-log-table tbody td[data-label="Stop"]::before { content: none; }
 
-    .jc-log-table tbody td[data-label="Deckle ID"] { border-bottom: 1px solid #cbd5e1; }
-    .jc-log-table tbody td[data-label="Start Time"],
-    .jc-log-table tbody td[data-label="End Time"],
-    .jc-log-table tbody td[data-label="Timer"] {
-      flex: 1 1 30%;
-      border-bottom: 1px solid #cbd5e1;
-      justify-content: center;
-    }
-    .jc-log-table tbody td[data-label="Start Time"],
-    .jc-log-table tbody td[data-label="End Time"] { border-right: 1px solid #cbd5e1; }
-    .jc-log-table tbody td[data-label="Start Time"]::before,
-    .jc-log-table tbody td[data-label="End Time"]::before,
-    .jc-log-table tbody td[data-label="Timer"]::before { flex: 0 0 auto; font-size: 11px; }
     .jc-log-table tbody td[data-label="Face Joint"],
     .jc-log-table tbody td[data-label="Face Mtr"],
     .jc-log-table tbody td[data-label="Rel. Joint"],
@@ -546,7 +533,8 @@
     .roll-scan-btn { display: inline-flex; width: 36px; height: 36px; font-size: 14px; }
     .jc-log-table .js-start-btn,
     .jc-log-table .js-stop-btn,
-    .jc-log-table .log-timer-btn {
+    .jc-log-table .log-start-btn,
+    .jc-log-table .log-stop-btn {
       flex: 1 1 auto;
       width: auto !important;
       height: 36px !important;
@@ -784,16 +772,16 @@
             <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Jumbo FS id</th>
             <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Drum id</th>
             <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Jumbo REL id</th>
-            <th rowspan="2" style="vertical-align: middle; width:100px; text-align:left; padding-left:8px;">Deckle ID</th>
-            <th colspan="3" class="group-head">Time</th>
+            <th colspan="4" class="group-head">Start / Stop</th>
             <th rowspan="2" style="vertical-align: middle; width:75px;">Meters</th>
             <th colspan="2" class="group-head">Face</th>
             <th colspan="2" class="group-head">Release</th>
           </tr>
           <tr>
-            <th class="sub-head" style="width:58px;">Start</th>
-            <th class="sub-head" style="width:58px;">End</th>
-            <th class="sub-head" style="width:36px;">Timer</th>
+            <th class="sub-head" style="width:70px;">Mtrs</th>
+            <th class="sub-head" style="width:92px;">Start</th>
+            <th class="sub-head" style="width:70px;">Mtrs</th>
+            <th class="sub-head" style="width:92px;">Stop</th>
             <th class="sub-head" style="width:80px;">Joint</th>
             <th class="sub-head" style="width:65px;">Mtr</th>
             <th class="sub-head" style="width:80px;">Joint</th>
@@ -955,7 +943,7 @@
         checkMaterialInput(input, "rl");
         const cleanId = extractScannedRollId(input.value);
         if (cleanId) input.value = cleanId;
-        const next = row.querySelector(".log-deckle-id") || row.querySelector(".log-meters");
+        const next = row.querySelector(".log-start-mtrs");
         if (next && !next.readOnly) next.focus();
       }
     }
@@ -1297,7 +1285,7 @@
         else if (input.classList.contains("js-rl-roll-id")) row.querySelector(".js-mtrs1")?.focus();
         else if (input.classList.contains("log-fs-roll-id")) row.querySelector(".log-ad-roll-id")?.focus();
         else if (input.classList.contains("log-ad-roll-id")) row.querySelector(".log-rl-roll-id")?.focus();
-        else if (input.classList.contains("log-rl-roll-id")) (row.querySelector(".log-deckle-id") || row.querySelector(".log-meters"))?.focus();
+        else if (input.classList.contains("log-rl-roll-id")) row.querySelector(".log-start-mtrs")?.focus();
       }
       if (typeof showToast === "function") showToast(`Scanned ID: ${cleanId}`, "success");
     }
@@ -1331,6 +1319,32 @@
 
     scanDialog.addEventListener("click", (e) => { if (e.target === scanDialog) closeScanDialog(); });
     document.addEventListener("visibilitychange", () => { if (document.hidden) closeScanDialog(); });
+
+    const hasValue = (row, sel) => String(row?.querySelector(sel)?.value ?? "").trim() !== "";
+
+    // A punched time only means something next to the counter reading it was
+    // taken at, so in both tables each button stays locked until its own metre
+    // box is filled in. Once punched the button is done -- never re-opened by
+    // a later edit.
+    function setPunchBtnReady(btn, ready, lockedTitle) {
+      if (!btn || btn.dataset.punched === "1") return;
+      btn.disabled = !ready;
+      btn.style.background = ready ? (btn.dataset.color || "#10b981") : "#cbd5e1";
+      btn.style.cursor = ready ? "pointer" : "not-allowed";
+      btn.title = ready ? "" : lockedTitle;
+    }
+
+    function syncJsRowButtons(row) {
+      if (!row) return;
+      setPunchBtnReady(row.querySelector(".js-start-btn"), hasValue(row, ".js-mtrs1"), "Enter the start metre first");
+      setPunchBtnReady(row.querySelector(".js-stop-btn"), hasValue(row, ".js-mtrs2"), "Enter the stop metre first");
+    }
+
+    function syncLogRowButtons(row) {
+      if (!row) return;
+      setPunchBtnReady(row.querySelector(".log-start-btn"), hasValue(row, ".log-start-mtrs"), "Enter the start metre first");
+      setPunchBtnReady(row.querySelector(".log-stop-btn"), hasValue(row, ".log-stop-mtrs"), "Enter the stop metre first");
+    }
 
     const jsBody  = document.getElementById("jsTableBody");
     const jsCount = document.getElementById("jsCount");
@@ -1380,8 +1394,8 @@
         <td style="text-align:center; white-space:nowrap;" data-label="Start">
           <span class="js-start-display" style="font-size:11.5px; font-weight:700; color:#03365a; margin-right:3px;">—</span>
           <input type="hidden" name="jsStart" class="js-start-input" />
-          <button type="button" class="js-start-btn"
-            style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:pointer; background:#10b981; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <button type="button" class="js-start-btn" data-color="#10b981" disabled title="Enter the start metre first"
+            style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:not-allowed; background:#cbd5e1; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-play"></i>
           </button>
         </td>
@@ -1389,8 +1403,8 @@
         <td style="text-align:center; white-space:nowrap;" data-label="Stop">
           <span class="js-stop-display" style="font-size:11.5px; font-weight:700; color:#dc2626; margin-right:3px;">—</span>
           <input type="hidden" name="jsStop" class="js-stop-input" />
-          <button type="button" class="js-stop-btn"
-            style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:pointer; background:#ef4444; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <button type="button" class="js-stop-btn" data-color="#ef4444" disabled title="Enter the stop metre first"
+            style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:not-allowed; background:#cbd5e1; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-stop"></i>
           </button>
         </td>`;
@@ -1401,6 +1415,9 @@
       if (e.target.classList.contains("js-fs-roll-id")) checkMaterialInput(e.target, "fs");
       else if (e.target.classList.contains("js-ad-roll-id")) checkMaterialInput(e.target, "ad");
       else if (e.target.classList.contains("js-rl-roll-id")) checkMaterialInput(e.target, "rl");
+      else if (e.target.classList.contains("js-mtrs1") || e.target.classList.contains("js-mtrs2")) {
+        syncJsRowButtons(e.target.closest("tr"));
+      }
     });
 
     jsBody.addEventListener("keydown", handleMaterialEnter);
@@ -1415,11 +1432,19 @@
 
       const startBtn = e.target.closest(".js-start-btn");
       if (startBtn) {
+        if (startBtn.disabled) return;
         const row = startBtn.closest("tr");
+        if (!hasValue(row, ".js-mtrs1")) {
+          if (typeof showToast === "function") showToast("Enter the start metre first.", "error");
+          row.querySelector(".js-mtrs1")?.focus();
+          return;
+        }
         const time = nowHHMM();
         row.querySelector(".js-start-input").value = time;
         row.querySelector(".js-start-display").textContent = time;
+        startBtn.dataset.punched = "1";
         startBtn.disabled = true;
+        startBtn.title = "";
         startBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         startBtn.style.background = "#6b7280";
         startBtn.style.cursor = "default";
@@ -1427,11 +1452,19 @@
       }
       const stopBtn = e.target.closest(".js-stop-btn");
       if (stopBtn) {
+        if (stopBtn.disabled) return;
         const row = stopBtn.closest("tr");
+        if (!hasValue(row, ".js-mtrs2")) {
+          if (typeof showToast === "function") showToast("Enter the stop metre first.", "error");
+          row.querySelector(".js-mtrs2")?.focus();
+          return;
+        }
         const time = nowHHMM();
         row.querySelector(".js-stop-input").value = time;
         row.querySelector(".js-stop-display").textContent = time;
+        stopBtn.dataset.punched = "1";
         stopBtn.disabled = true;
+        stopBtn.title = "";
         stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         stopBtn.style.background = "#6b7280";
         stopBtn.style.cursor = "default";
@@ -1494,19 +1527,22 @@
           </div>
           <span class="roll-note"></span>
         </td>
-        <td data-label="Deckle ID"><input type="text" name="deckleId" class="form-control log-deckle-id" placeholder="Auto" autocomplete="off" readonly /></td>
-        <td style="text-align:center; font-size:11.5px; font-weight:700; white-space:nowrap;" data-label="Start Time">
-          <span class="log-start-display" style="color:#03365a;">—</span>
+        <td data-label="Mtrs"><input type="number" name="logStartMtrs" class="form-control log-start-mtrs" placeholder="Mtrs" min="0" step="any" /></td>
+        <td style="text-align:center; white-space:nowrap;" data-label="Start">
+          <span class="log-start-display" style="font-size:11.5px; font-weight:700; color:#03365a; margin-right:3px;">—</span>
           <input type="hidden" name="logStart" class="log-start-input" />
-        </td>
-        <td style="text-align:center; font-size:11.5px; font-weight:700; white-space:nowrap;" data-label="End Time">
-          <span class="log-end-display" style="color:#dc2626;">—</span>
-          <input type="hidden" name="logEnd" class="log-end-input" />
-        </td>
-        <td style="text-align:center; white-space:nowrap;" data-label="Timer">
-          <button type="button" class="log-timer-btn" data-state="idle"
-            style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:pointer; background:#10b981; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <button type="button" class="log-start-btn" data-color="#10b981" disabled title="Enter the start metre first"
+            style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:not-allowed; background:#cbd5e1; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
             <i class="fa-solid fa-play"></i>
+          </button>
+        </td>
+        <td data-label="Mtrs"><input type="number" name="logStopMtrs" class="form-control log-stop-mtrs" placeholder="Mtrs" min="0" step="any" /></td>
+        <td style="text-align:center; white-space:nowrap;" data-label="Stop">
+          <span class="log-end-display" style="font-size:11.5px; font-weight:700; color:#dc2626; margin-right:3px;">—</span>
+          <input type="hidden" name="logEnd" class="log-end-input" />
+          <button type="button" class="log-stop-btn" data-color="#ef4444" disabled title="Enter the stop metre first"
+            style="width:26px; height:24px; padding:0; font-size:11px; border:none; border-radius:4px; cursor:not-allowed; background:#cbd5e1; color:white; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <i class="fa-solid fa-stop"></i>
           </button>
         </td>
         <td data-label="Meters"><input type="number" name="logMeters" class="form-control log-meters" placeholder="Meters" min="0" step="any" /></td>
@@ -1546,6 +1582,9 @@
       if (e.target.classList.contains("log-fs-roll-id")) checkMaterialInput(e.target, "fs");
       else if (e.target.classList.contains("log-ad-roll-id")) checkMaterialInput(e.target, "ad");
       else if (e.target.classList.contains("log-rl-roll-id")) checkMaterialInput(e.target, "rl");
+      else if (e.target.classList.contains("log-start-mtrs") || e.target.classList.contains("log-stop-mtrs")) {
+        syncLogRowButtons(e.target.closest("tr"));
+      }
       recalcLogTotals();
     });
 
@@ -1559,25 +1598,44 @@
       const rlScan = e.target.closest(".log-rl-scan-btn");
       if (rlScan) { openScanDialog(rlScan.closest("td")?.querySelector(".log-rl-roll-id"), "Jumbo REL"); return; }
 
-      const timerBtn = e.target.closest(".log-timer-btn");
-      if (!timerBtn) return;
-      const row = timerBtn.closest("tr");
-      const time = nowHHMM();
-
-      if (timerBtn.dataset.state === "idle") {
+      const startBtn = e.target.closest(".log-start-btn");
+      if (startBtn) {
+        if (startBtn.disabled) return;
+        const row = startBtn.closest("tr");
+        if (!hasValue(row, ".log-start-mtrs")) {
+          if (typeof showToast === "function") showToast("Enter the start metre first.", "error");
+          row.querySelector(".log-start-mtrs")?.focus();
+          return;
+        }
+        const time = nowHHMM();
         row.querySelector(".log-start-input").value = time;
         row.querySelector(".log-start-display").textContent = time;
-        timerBtn.dataset.state = "running";
-        timerBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
-        timerBtn.style.background = "#ef4444";
-      } else if (timerBtn.dataset.state === "running") {
+        startBtn.dataset.punched = "1";
+        startBtn.disabled = true;
+        startBtn.title = "";
+        startBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        startBtn.style.background = "#6b7280";
+        startBtn.style.cursor = "default";
+        return;
+      }
+      const stopBtn = e.target.closest(".log-stop-btn");
+      if (stopBtn) {
+        if (stopBtn.disabled) return;
+        const row = stopBtn.closest("tr");
+        if (!hasValue(row, ".log-stop-mtrs")) {
+          if (typeof showToast === "function") showToast("Enter the stop metre first.", "error");
+          row.querySelector(".log-stop-mtrs")?.focus();
+          return;
+        }
+        const time = nowHHMM();
         row.querySelector(".log-end-input").value = time;
         row.querySelector(".log-end-display").textContent = time;
-        timerBtn.dataset.state = "done";
-        timerBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
-        timerBtn.disabled = true;
-        timerBtn.style.background = "#6b7280";
-        timerBtn.style.cursor = "default";
+        stopBtn.dataset.punched = "1";
+        stopBtn.disabled = true;
+        stopBtn.title = "";
+        stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        stopBtn.style.background = "#6b7280";
+        stopBtn.style.cursor = "default";
       }
     });
 
@@ -1629,8 +1687,9 @@
       adRollId: val(row, ".log-ad-roll-id"),
       rlRollId: val(row, ".log-rl-roll-id"),
       rollId: val(row, ".log-fs-roll-id") || val(row, ".log-roll-id"),
-      deckleId: val(row, ".log-deckle-id"),
+      startMtrs: val(row, ".log-start-mtrs"),
       start: val(row, ".log-start-input"),
+      stopMtrs: val(row, ".log-stop-mtrs"),
       end: val(row, ".log-end-input"),
       meters: val(row, ".log-meters"),
       faceJoint: val(row, ".log-face-joint"),
@@ -1659,7 +1718,9 @@
       if (!btn || !input || !time) return;
       input.value = time;
       if (display) display.textContent = time;
+      btn.dataset.punched = "1";
       btn.disabled = true;
+      btn.title = "";
       btn.innerHTML = '<i class="fa-solid fa-check"></i>';
       btn.style.background = "#6b7280";
       btn.style.cursor = "default";
@@ -1694,29 +1755,12 @@
           row.querySelector(".js-stop-input"),
           data.stop,
         );
+        syncJsRowButtons(row);
         checkMaterialInput(row.querySelector(".js-fs-roll-id"), "fs");
         checkMaterialInput(row.querySelector(".js-ad-roll-id"), "ad");
         checkMaterialInput(row.querySelector(".js-rl-roll-id"), "rl");
       });
       jsRenumber();
-    }
-
-    function restoreLogTimer(row, start, end) {
-      const btn = row.querySelector(".log-timer-btn");
-      if (!btn || !start) return;
-      row.querySelector(".log-start-input").value = start;
-      row.querySelector(".log-start-display").textContent = start;
-      btn.dataset.state = "running";
-      btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
-      btn.style.background = "#ef4444";
-      if (!end) return;
-      row.querySelector(".log-end-input").value = end;
-      row.querySelector(".log-end-display").textContent = end;
-      btn.dataset.state = "done";
-      btn.innerHTML = '<i class="fa-solid fa-check"></i>';
-      btn.disabled = true;
-      btn.style.background = "#6b7280";
-      btn.style.cursor = "default";
     }
 
     function applyLogRows(rows) {
@@ -1725,16 +1769,29 @@
       rows.forEach((data, i) => {
         const row = logBody.rows[i];
         if (!row) return;
-        restoreLogTimer(row, data.start, data.end);
+        markPunched(
+          row.querySelector(".log-start-btn"),
+          row.querySelector(".log-start-display"),
+          row.querySelector(".log-start-input"),
+          data.start,
+        );
+        markPunched(
+          row.querySelector(".log-stop-btn"),
+          row.querySelector(".log-end-display"),
+          row.querySelector(".log-end-input"),
+          data.end,
+        );
         putValue(row, ".log-fs-roll-id", data.fsRollId || data.rollId);
         putValue(row, ".log-ad-roll-id", data.adRollId);
         putValue(row, ".log-rl-roll-id", data.rlRollId);
-        putValue(row, ".log-deckle-id", data.deckleId);
+        putValue(row, ".log-start-mtrs", data.startMtrs);
+        putValue(row, ".log-stop-mtrs", data.stopMtrs);
         putValue(row, ".log-meters", data.meters);
         putValue(row, ".log-face-joint", data.faceJoint);
         putValue(row, ".log-face-mtr", data.faceMtr);
         putValue(row, ".log-release-joint", data.releaseJoint);
         putValue(row, ".log-release-mtr", data.releaseMtr);
+        syncLogRowButtons(row);
         checkMaterialInput(row.querySelector(".log-fs-roll-id"), "fs");
         checkMaterialInput(row.querySelector(".log-ad-roll-id"), "ad");
         checkMaterialInput(row.querySelector(".log-rl-roll-id"), "rl");

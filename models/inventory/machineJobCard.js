@@ -37,6 +37,11 @@ const rollRowSchema = new mongoose.Schema(
 // Production Log: one row per deckle produced, not per counter run -- the
 // deckle's id, the run's clocked start/end, the metres it made, and any
 // joint/wrinkle found on the face and release webs.
+//
+// startMtrs/stopMtrs are the machine counter readings taken at the moment the
+// operator punched start and stop (the form won't let either be punched
+// without its reading). `meters` stays the deckle's own produced length as
+// entered -- it is not derived from these two.
 const productionLogRowSchema = new mongoose.Schema(
   {
     rollId: { type: String, trim: true },
@@ -44,6 +49,8 @@ const productionLogRowSchema = new mongoose.Schema(
     adRollId: { type: String, trim: true },
     rlRollId: { type: String, trim: true },
     deckleId: { type: String, trim: true },
+    startMtrs: { type: Number },
+    stopMtrs: { type: Number },
     meters: { type: Number },
     face: {
       joint: { type: String, trim: true },

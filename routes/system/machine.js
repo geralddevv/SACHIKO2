@@ -1168,16 +1168,18 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       })
       .filter((row) => row.rollId || row.fsRollId || row.adRollId || row.rlRollId || row.mtrs1 != null || row.mtrs2 != null || row.startTime || row.stopTime);
 
-    // Production Log rows -- one per deckle produced, so unlike Job Setting
-    // above these carry the deckle's own metres rather than a start/stop
-    // counter pair, plus the joint/wrinkle noted on each web.
+    // Production Log rows -- one per deckle produced, so alongside Job
+    // Setting's start/stop counter pair these also carry the deckle's own
+    // produced metres, plus the joint/wrinkle noted on each web.
     const fsRollId = toArray(b.fsRollId);
     const adRollId = toArray(b.adRollId);
     const rlRollId = toArray(b.rlRollId);
     const rollId = toArray(b.rollId);
     const deckleId = toArray(b.deckleId);
     const logStart = toArray(b.logStart);
+    const logStartMtrs = toArray(b.logStartMtrs);
     const logEnd = toArray(b.logEnd);
+    const logStopMtrs = toArray(b.logStopMtrs);
     const logMeters = toArray(b.logMeters);
     const faceJoint = toArray(b.faceJoint);
     const faceMtr = toArray(b.faceMtr);
@@ -1196,6 +1198,8 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
           adRollId: ad,
           rlRollId: rl,
           deckleId: trim(deckleId[i]),
+          startMtrs: numOrUndef(logStartMtrs[i]),
+          stopMtrs: numOrUndef(logStopMtrs[i]),
           meters: numOrUndef(logMeters[i]),
           face: { joint: trim(faceJoint[i]), mtr: numOrUndef(faceMtr[i]) },
           release: { joint: trim(releaseJoint[i]), mtr: numOrUndef(releaseMtr[i]) },
@@ -1209,6 +1213,8 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
           row.adRollId ||
           row.rlRollId ||
           row.deckleId ||
+          row.startMtrs != null ||
+          row.stopMtrs != null ||
           row.meters != null ||
           row.face.mtr != null ||
           row.release.mtr != null ||

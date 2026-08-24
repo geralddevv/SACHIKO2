@@ -64,4 +64,5 @@ add a rate in the masters of LS
 add another options in th masters for assigning (high pressure, sensable, non sensable)
 
 
-FLow chart in FS: loc, emp name, 
+FLow chart in FS: loc, emp name
+multi-file in the ls master
