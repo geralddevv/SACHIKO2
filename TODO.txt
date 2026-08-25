@@ -67,7 +67,7 @@ dashboard in stock summary
 FLow chart in FS: loc, emp name
 
 
-
+DONE YESTERDAY - 24-aug
 family master
 serialized the label stock
 added the both files
@@ -75,3 +75,11 @@ added deckle dialog
 added the used and partially used tag
 used stock dashboard
 archive for items
+
+DONE TODAY - 25-aug
+wip stock
+removed the used stock and allocated from the allocation page
+refined the prod entry page
+
+in .side-nav stock summary, facestock, adhesive, release, wip stock, semi finished, finised srock, core, 
+remove the things inside the calc

@@ -242,6 +242,15 @@
     align-self: stretch;
     padding: 0;
   }
+  /* Collapsible "Material Allocation" header -- click to shrink the table
+     away when you don't need it on screen. */
+  .jc-collapsible-header:hover { filter: brightness(1.08); }
+  .jc-collapse-icon {
+    font-size: 14px;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+  }
+  .jc-collapse-icon.collapsed { transform: rotate(-90deg); }
   .jc-allocation-scroll {
     width: 100%;
     max-width: 100%;
@@ -847,11 +856,14 @@
         (l.reels || []).map((r) => ({ ...r, pool: l.pool, unit: l.unit, layerLabel: l.label }))
       );
     %>
-    <div class="span-full form-subheading">
+    <div class="span-full form-subheading jc-collapsible-header" id="allocationHeader"
+         style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;"
+         role="button" tabindex="0" aria-expanded="true" aria-controls="allocationWrap">
       <h1>Material Allocation</h1>
+      <i class="fa-solid fa-chevron-down jc-collapse-icon" id="allocationChevron" aria-hidden="true"></i>
     </div>
 
-    <div class="span-full jc-info-wrap jc-allocation-wrap">
+    <div class="span-full jc-info-wrap jc-allocation-wrap" id="allocationWrap">
       <% if (allocLayers.length) { %>
         <div class="jc-allocation-scroll">
         <table class="jc-roll-table jc-allocation-table">
@@ -1080,6 +1092,7 @@
               <input type="text" name="sqMtr" class="form-control jc-readonly" readonly
                      placeholder="SQ Mtrs" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
             </td>
+            <td style="padding: 6px 8px"></td>
             <td style="padding: 6px 8px"></td>
           </tr>
         </tfoot>
@@ -1633,6 +1646,25 @@
 
     function openModal(id)  { const d = document.getElementById(id); if (!d) return; d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
     function closeModal(id) { const d = document.getElementById(id); if (!d) return; d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
+
+    // "Material Allocation" header -- click (or Enter/Space) to shrink the
+    // table out of the way, click again to bring it back.
+    const allocationHeader = document.getElementById("allocationHeader");
+    const allocationWrap = document.getElementById("allocationWrap");
+    const allocationChevron = document.getElementById("allocationChevron");
+    if (allocationHeader && allocationWrap) {
+      const toggleAllocation = () => {
+        const collapsed = allocationWrap.classList.toggle("jc-hidden");
+        allocationChevron?.classList.toggle("collapsed", collapsed);
+        allocationHeader.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      };
+      allocationHeader.addEventListener("click", toggleAllocation);
+      allocationHeader.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        toggleAllocation();
+      });
+    }
 
     const USAGE_ITEMS = JSON.parse(document.getElementById("material-usage-data").textContent || "[]");
     let materialUsedCleared = false;
