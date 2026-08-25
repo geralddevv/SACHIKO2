@@ -3,6 +3,7 @@ import crypto from "crypto";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
 import AdhesiveStock from "../../models/inventory/adhesiveStock.js";
 import Vendor from "../../models/users/vendor.js";
+import Type from "../../models/system/type.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -141,10 +142,11 @@ function validatePayload(payload) {
 }
 
 router.get("/form/adhesive", requireAdhesiveMaster, async (req, res) => {
-  const [adhesives, previewSkuId, vendors] = await Promise.all([
+  const [adhesives, previewSkuId, vendors, types] = await Promise.all([
     AdhesiveMaster.find().sort({ skuId: 1 }).lean(),
     previewId("adhesiveMasterSkuId", "ADH"),
     Vendor.find({ commodities: "ADHESIVE" }, { vendorName: 1 }).sort({ vendorName: 1 }).lean(),
+    Type.find().sort({ typeName: 1 }).lean(),
   ]);
   res.render("inventory/masters/adhesiveMaster.ejs", {
     JS: false,
@@ -153,6 +155,7 @@ router.get("/form/adhesive", requireAdhesiveMaster, async (req, res) => {
     adhesives,
     previewSkuId,
     vendors,
+    types,
     notification: req.flash("notification"),
   });
 });

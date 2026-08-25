@@ -1,0 +1,427 @@
+<% layout('/layout/boilerplate') %>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 2px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .header-action-btn:hover {
+      background-color: #e4e4e4;
+    }
+    #type-table {
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .loc-btn {
+      padding: 3px 8px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #fff;
+      transition: opacity 0.15s;
+    }
+    .loc-btn:hover {
+      opacity: 0.85;
+    }
+    .dialog-header {
+      background: #044A78;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .dialog-close-btn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 2px;
+      opacity: 0.8;
+      transition: opacity 0.15s;
+    }
+    .dialog-close-btn:hover {
+      opacity: 1;
+    }
+    .dialog-body {
+      padding: 24px;
+      background: #fff;
+    }
+    .dialog-field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 8px;
+    }
+    .dialog-error {
+      color: #ef4444;
+      font-size: 12px;
+      margin-top: 5px;
+      display: none;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+  </style>
+
+  <div class="indi-head">
+    <h1>Type Master</h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <button class="header-action-btn" onclick="openAddDialog()">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Type
+      </button>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="type-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- ============ ADD TYPE DIALOG ============ -->
+<div class="logout-modal" id="addDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
+    style="width: min(420px, 95vw); padding: 0; border-radius: 14px; overflow: hidden;">
+    <div class="dialog-header">
+      <h2 id="addDialogTitle">Add Type</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <label class="dialog-field-label" for="addTypeInput">Type Name</label>
+      <input
+        type="text"
+        id="addTypeInput"
+        class="form-control premium-input"
+        placeholder="Enter type name"
+        autocomplete="off"
+        maxlength="100"
+      />
+      <div id="addTypeError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Type</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EDIT TYPE DIALOG ============ -->
+<div class="logout-modal" id="editDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="editDialogTitle"
+    style="width: min(420px, 95vw); padding: 0; border-radius: 14px; overflow: hidden;">
+    <div class="dialog-header">
+      <h2 id="editDialogTitle">Edit Type</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeEditDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <label class="dialog-field-label" for="editTypeInput">Type Name</label>
+      <input
+        type="text"
+        id="editTypeInput"
+        class="form-control premium-input"
+        placeholder="Enter type name"
+        autocomplete="off"
+        maxlength="100"
+      />
+      <div id="editTypeError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Type</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DELETE CONFIRMATION DIALOG ============ -->
+<div class="logout-modal" id="deleteDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle"
+    style="width: min(400px, 95vw);">
+    <h2 class="logout-title" id="deleteDialogTitle">
+      <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 8px;"></i>Delete Type?
+    </h2>
+    <p class="logout-text">
+      Are you sure you want to delete <strong id="deleteTypeName"></strong>? This action cannot be undone.
+    </p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" onclick="closeDeleteDialog()">Cancel</button>
+      <button
+        class="logout-btn"
+        type="button"
+        id="deleteConfirmBtn"
+        onclick="submitDelete()"
+        style="background: #ef4444; color: #fff; border-color: #ef4444;">
+        Yes, Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Tabulator JS -->
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+<script id="types-data" type="application/json"><%- safeJson(types) %></script>
+<script>
+  const typesData = JSON.parse(document.getElementById("types-data").textContent);
+
+  // ---- Table ----
+  const table = new Tabulator("#type-table", {
+    data: typesData,
+    height: "100%",
+    responsiveLayout: false,
+    movableColumns: true,
+    placeholder: "No types added yet.",
+    columns: [
+      // getPosition(true) is the row's rank among currently sorted/filtered
+      // rows, re-evaluated on every redraw -- stays correct after sorting or
+      // filtering instead of a static index frozen at load time.
+      { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
+        formatter: (cell) => cell.getRow().getPosition(true) },
+      {
+        title: "Type Name",
+        field: "typeName",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        minWidth: 200,
+      },
+      {
+        title: "Actions",
+        width: 110,
+        hozAlign: "center",
+        headerSort: false,
+        formatter: function (cell) {
+          const row = cell.getRow().getData();
+          const wrap = document.createElement("div");
+          wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const editBtn = document.createElement("button");
+          editBtn.className = "loc-btn";
+          editBtn.style.background = "#e67e22";
+          editBtn.title = "Edit Type";
+          editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
+          editBtn.addEventListener("click", () => openEditDialog(row._id, row.typeName));
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "loc-btn";
+          deleteBtn.style.background = "#d9534f";
+          deleteBtn.title = "Delete Type";
+          deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+          deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.typeName));
+
+          wrap.appendChild(editBtn);
+          wrap.appendChild(deleteBtn);
+          return wrap;
+        },
+      },
+    ],
+  });
+
+  // "renderComplete" is a Tabulator EVENT, not a constructor option -- a
+  // `renderComplete:` key inside the options object above is silently
+  // ignored (no error, callback just never runs). Subscribing via .on() is
+  // the only way it actually fires. Reads straight off the rendered DOM
+  // rather than Tabulator's row APIs (getRow().getPosition()/getRows("active")
+  // were both observed to go stale after a sort) -- whatever's actually on
+  // screen, top to bottom, is renumbered 1..n every time the table redraws.
+  table.on("renderComplete", function () {
+    document.querySelectorAll("#type-table .tabulator-row").forEach((rowEl, i) => {
+      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
+      if (cell) cell.textContent = i + 1;
+    });
+  });
+
+  // ---- Helpers ----
+  function openModal(id) {
+    const d = document.getElementById(id);
+    d.classList.add("show");
+    d.setAttribute("aria-hidden", "false");
+  }
+  function closeModal(id) {
+    const d = document.getElementById(id);
+    d.classList.remove("show");
+    d.setAttribute("aria-hidden", "true");
+  }
+  function showError(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+  function hideError(elId) {
+    document.getElementById(elId).style.display = "none";
+  }
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.style.opacity = loading ? "0.7" : "";
+  }
+
+  // Dismiss on backdrop click
+  ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+    document.getElementById(id).addEventListener("click", function (e) {
+      if (e.target === this) closeModal(id);
+    });
+  });
+
+  // Dismiss on ESC
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    ["addDialog", "editDialog", "deleteDialog"].forEach(id => {
+      if (document.getElementById(id).classList.contains("show")) closeModal(id);
+    });
+  });
+
+  // ---- ADD ----
+  function openAddDialog() {
+    document.getElementById("addTypeInput").value = "";
+    hideError("addTypeError");
+    openModal("addDialog");
+    setTimeout(() => document.getElementById("addTypeInput").focus(), 60);
+  }
+  function closeAddDialog() {
+    closeModal("addDialog");
+  }
+
+  document.getElementById("addTypeInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") submitAdd();
+  });
+
+  async function submitAdd() {
+    const name = document.getElementById("addTypeInput").value.trim();
+    if (!name) {
+      showError("addTypeError", "Type name is required.");
+      return;
+    }
+    hideError("addTypeError");
+    setLoading("addSubmitBtn", true);
+    try {
+      const res = await fetch("/sachiko/form/type", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ typeName: name }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = data.redirect || "/sachiko/form/type";
+      } else {
+        showError("addTypeError", data.message || "Failed to add type.");
+      }
+    } catch {
+      showError("addTypeError", "Server error. Please try again.");
+    } finally {
+      setLoading("addSubmitBtn", false);
+    }
+  }
+
+  // ---- EDIT ----
+  let editId = null;
+
+  function openEditDialog(id, name) {
+    editId = id;
+    document.getElementById("editTypeInput").value = name;
+    hideError("editTypeError");
+    openModal("editDialog");
+    setTimeout(() => {
+      const inp = document.getElementById("editTypeInput");
+      inp.focus();
+      inp.select();
+    }, 60);
+  }
+  function closeEditDialog() {
+    closeModal("editDialog");
+    editId = null;
+  }
+
+  document.getElementById("editTypeInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") submitEdit();
+  });
+
+  async function submitEdit() {
+    const name = document.getElementById("editTypeInput").value.trim();
+    if (!name) {
+      showError("editTypeError", "Type name is required.");
+      return;
+    }
+    if (!editId) return;
+    hideError("editTypeError");
+    setLoading("editSubmitBtn", true);
+    try {
+      const res = await fetch(`/sachiko/api/type/${editId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ typeName: name }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        showError("editTypeError", data.message || "Failed to update type.");
+      }
+    } catch {
+      showError("editTypeError", "Server error. Please try again.");
+    } finally {
+      setLoading("editSubmitBtn", false);
+    }
+  }
+
+  // ---- DELETE ----
+  let deleteId = null;
+
+  function openDeleteDialog(id, name) {
+    deleteId = id;
+    document.getElementById("deleteTypeName").textContent = name;
+    openModal("deleteDialog");
+  }
+  function closeDeleteDialog() {
+    closeModal("deleteDialog");
+    deleteId = null;
+  }
+
+  async function submitDelete() {
+    if (!deleteId) return;
+    setLoading("deleteConfirmBtn", true);
+    try {
+      const res = await fetch(`/sachiko/api/type/${deleteId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        closeDeleteDialog();
+        alert(data.message || "Failed to delete type.");
+      }
+    } catch {
+      closeDeleteDialog();
+      alert("Error deleting type.");
+    } finally {
+      setLoading("deleteConfirmBtn", false);
+    }
+  }
+</script>

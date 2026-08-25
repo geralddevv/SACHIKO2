@@ -5,6 +5,7 @@ import ReleaseLinerStock from "../../models/inventory/releaseLinerStock.js";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import { buildLabelStockSignature, buildMaterialSignature } from "../../utils/labelStockVariant.js";
 import Vendor from "../../models/users/vendor.js";
+import Type from "../../models/system/type.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -236,10 +237,11 @@ function validatePayload(payload) {
 }
 
 router.get("/form/release", requireReleaseMaster, async (req, res) => {
-  const [releases, previewSkuId, vendors] = await Promise.all([
+  const [releases, previewSkuId, vendors, types] = await Promise.all([
     ReleaseMaster.find().sort({ skuId: 1 }).lean(),
     previewId("releaseMasterSkuId", "REL"),
     Vendor.find({ commodities: "RELEASE PAPER" }, { vendorName: 1 }).sort({ vendorName: 1 }).lean(),
+    Type.find().sort({ typeName: 1 }).lean(),
   ]);
   res.render("inventory/masters/releaseMaster.ejs", {
     JS: false,
@@ -248,6 +250,7 @@ router.get("/form/release", requireReleaseMaster, async (req, res) => {
     releases,
     previewSkuId,
     vendors,
+    types,
     notification: req.flash("notification"),
   });
 });

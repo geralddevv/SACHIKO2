@@ -951,12 +951,12 @@
             <!-- Flat "which reel is used/being used, and for which job" listing,
                  common to all three raw-material pools (an Item column filters
                  Facestock/Adhesive/Release Liner) -- see routes/stock/
-                 facestockStock.js's loadFacestockUsageRows and the "Used (Kg)"
+                 wipStock.js's loadFacestockUsageRows and the "Used (Kg)"
                  column on the Facestock Stock page above, which this is the
                  drill-down for. -->
-            <div title="Used Stock" class="<%= title === 'Used Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/facestockstock/used'">
+            <div title="WIP Stock" class="<%= title === 'WIP Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/stock/wip'">
               <i class="fa-solid fa-industry" style="color: #ffffff"></i>
-              <p class="nav-items-para">Used Stock</p>
+              <p class="nav-items-para">WIP Stock</p>
             </div>
             <div title="Adhesive Stock" class="<%= title === 'Adhesive Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/adhesivestock'">
               <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
@@ -1011,11 +1011,6 @@
               <p class="nav-items-para">Facestock</p>
             </div>
 
-            <div title="Family Master" class="<%= title === 'Family Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/family'">
-              <i class="fa-solid fa-tags" style="color: #ffffff"></i>
-              <p class="nav-items-para">Family</p>
-            </div>
-
             <div title="Adhesive Master" class="<%= title === 'Adhesive Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/adhesive'">
               <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
               <p class="nav-items-para">Adhesive</p>
@@ -1024,6 +1019,16 @@
             <div title="Release Master" class="<%= title === 'Release Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/release'">
               <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
               <p class="nav-items-para">Release</p>
+            </div>
+
+            <div title="Family Master" class="<%= title === 'Family Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/family'">
+              <i class="fa-solid fa-tags" style="color: #ffffff"></i>
+              <p class="nav-items-para">Family</p>
+            </div>
+
+            <div title="Type Master" class="<%= title === 'Type Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/type'">
+              <i class="fa-solid fa-shapes" style="color: #ffffff"></i>
+              <p class="nav-items-para">Type</p>
             </div>
 
             <div title="Core Master" class="<%= title === 'Core Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/core'">

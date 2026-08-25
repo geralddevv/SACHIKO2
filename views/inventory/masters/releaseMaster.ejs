@@ -219,9 +219,9 @@
           <label class="dialog-field-label" for="addTypeSelect">Type</label>
           <select id="addTypeSelect">
             <option value="" disabled selected hidden>Select type</option>
-            <option value="CCK">CCK</option>
-            <option value="GLASSINE">GLASSINE</option>
-            <option value="SCK">SCK</option>
+            <% types?.forEach(t => { %>
+              <option value="<%= t.typeName %>"><%= t.typeName %></option>
+            <% }) %>
           </select>
         </div>
       </div>
@@ -308,9 +308,9 @@
           <label class="dialog-field-label" for="editTypeSelect">Type</label>
           <select id="editTypeSelect">
             <option value="" disabled hidden>Select type</option>
-            <option value="CCK">CCK</option>
-            <option value="GLASSINE">GLASSINE</option>
-            <option value="SCK">SCK</option>
+            <% types?.forEach(t => { %>
+              <option value="<%= t.typeName %>"><%= t.typeName %></option>
+            <% }) %>
           </select>
         </div>
       </div>

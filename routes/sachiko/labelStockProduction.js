@@ -54,25 +54,30 @@ router.get("/raw-stock", async (req, res) => {
 
     // A physical reel/drum can only be mounted on one machine at a time, so
     // once another still-open WIP order (assigned to a machine, not yet
-    // produced) holds it, picking it here for THIS order is a swap, not a
-    // free pick -- Assign & Continue (POST /labels/production/assign/:id in
-    // routes/fairdesk_route.js) pulls it off that other order automatically
-    // when it's submitted checked. Still offered here, not excluded, so the
-    // operator can see and choose it -- `claimedBy` names which order/lot
-    // currently holds it (assignProduction.ejs shows this as a badge and
-    // warns before the swap happens). Excludes this same order's own pick,
-    // so re-opening Assign Production for the order that already holds a
-    // reel still shows it as plain, unclaimed.
+    // produced) holds it -- either just allotted on paper (`claimedBy`) or
+    // actively being drawn on right now (`inUseBy`) -- it's excluded below:
+    // this table only ever offers free stock. Excludes this same order's own
+    // pick, so re-opening Assign Production for the order that already holds
+    // a reel still shows it as plain, unclaimed.
     const otherPendingLayers = await PendingProduction.find({
       assignedMachineId: { $ne: null },
       producedAt: null,
       ...(mongoose.isValidObjectId(orderId) ? { _id: { $ne: orderId } } : {}),
-      allottedLayers: { $ne: null },
     })
-      .select("allottedLayers lotNo itemId")
+      .select("allottedLayers liveMaterialInUse lotNo itemId")
       .populate({ path: "itemId", select: "productCode" })
       .lean();
     const claimedByReel = new Map();
+    // Reels another still-open order has already started physically drawing
+    // on (PendingProduction.liveMaterialInUse, set the instant an operator
+    // scans it and punches Start on a Job Setting/Production Log row -- see
+    // POST /sachiko/machine/jobcard/mark-in-use). Unlike claimedByReel above
+    // (a paper allotment, still swappable), a reel actually mounted and
+    // running on another machine right now can't be pulled onto this order
+    // too -- inUseByReel below is what keeps those rows out of this table,
+    // and POST /labels/production/assign/:id (routes/fairdesk_route.js)
+    // enforces the same thing server-side.
+    const inUseByReel = new Map();
     for (const p of otherPendingLayers) {
       for (const pick of Object.values(p.allottedLayers || {})) {
         if (pick?.pool !== meta.pool) continue;
@@ -81,6 +86,13 @@ router.get("/raw-stock", async (req, res) => {
           if (!claimedByReel.has(key)) {
             claimedByReel.set(key, { lotNo: p.lotNo || "", productCode: p.itemId?.productCode || "" });
           }
+        }
+      }
+      const liveIds = Array.isArray(p.liveMaterialInUse?.[meta.pool]) ? p.liveMaterialInUse[meta.pool] : [];
+      for (const sid of liveIds) {
+        const key = String(sid);
+        if (!inUseByReel.has(key)) {
+          inUseByReel.set(key, { lotNo: p.lotNo || "", productCode: p.itemId?.productCode || "" });
         }
       }
     }
@@ -106,6 +118,14 @@ router.get("/raw-stock", async (req, res) => {
         .lean();
       matched = reels.filter((r) => reelMatchesLayer(meta.pool, r, layerSpec));
     }
+
+    // Drop reels another still-open WIP order already holds -- claimed
+    // (allotted on paper) or in use (physically mounted right now) -- so
+    // this table only ever offers stock actually free to pick.
+    matched = matched.filter((r) => {
+      const key = String(r._id);
+      return !claimedByReel.has(key) && !inUseByReel.has(key);
+    });
 
     // POOL_MATCH_FIELDS (utils/labelStockProduction.js) no longer narrows on
     // every reel-side field a master carries -- Vendor/Size/GSM (Facestock),
@@ -137,7 +157,6 @@ router.get("/raw-stock", async (req, res) => {
         reelMtrs: r.reelMtrs,
         rate: r.rate,
         invoiceNo: r.invoiceNo || "",
-        claimedBy: claimedByReel.get(String(r._id)) || null,
       })),
       // Only meaningful for the adhesive pool -- Facestock/Release Liner have
       // no binding concept, so they're always effectively "true" here.

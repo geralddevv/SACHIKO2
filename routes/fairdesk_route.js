@@ -4578,14 +4578,28 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       assignedMachineId: { $ne: null },
       producedAt: null,
       _id: { $ne: pendingProduction._id },
-      allottedLayers: { $ne: null },
-    }).select("allottedLayers lotNo").lean();
+    }).select("allottedLayers liveMaterialInUse lotNo").lean();
     const claimedByKey = new Map();
+    // Reels another still-open order has already started physically drawing
+    // on (liveMaterialInUse, set the instant an operator scans it and
+    // punches Start on a Job Setting/Production Log row -- see POST
+    // /sachiko/machine/jobcard/mark-in-use). Unlike claimedByKey above (a
+    // paper allotment, swappable via `swaps` below), a reel actually running
+    // on another machine right now can never be accepted onto this order --
+    // dropped outright further down, same as a stale/nonexistent id. This is
+    // the server-side backstop for the disabled checkboxes assignProduction.ejs
+    // already renders for these rows.
+    const liveByKey = new Map();
     for (const p of otherPendingLayers) {
       for (const [layerKey, pick] of Object.entries(p.allottedLayers || {})) {
         if (!pick?.pool) continue;
         for (const sid of pickStockIds(pick)) {
           claimedByKey.set(`${pick.pool}|${sid}`, { orderId: String(p._id), layerKey, lotNo: p.lotNo || "" });
+        }
+      }
+      for (const [pool, ids] of Object.entries(p.liveMaterialInUse || {})) {
+        for (const sid of ids || []) {
+          liveByKey.set(`${pool}|${sid}`, { orderId: String(p._id), lotNo: p.lotNo || "" });
         }
       }
     }
@@ -4605,6 +4619,7 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     let allottedLayers = {};
     const pickedForThisOrder = new Set();
     const swaps = [];
+    let droppedInUseCount = 0;
     for (const key of required) {
       const meta = LAYER_META[key];
       const submitted = rawLayers?.[key];
@@ -4613,7 +4628,12 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       if (!candidateIds.length) continue;
       const { Model } = POOL_MODELS[meta.pool];
       const existingIds = new Set((await Model.find({ _id: { $in: candidateIds } }).distinct("_id")).map(String));
-      const validIds = candidateIds.filter((sid) => existingIds.has(String(sid)));
+      // Dropped silently, same as a stale/nonexistent id -- a reel currently
+      // running on another order's machine can't be accepted here no matter
+      // what the client submitted (see liveByKey above); droppedInUseCount
+      // just lets the user know afterwards, via variantNote-style messaging.
+      const validIds = candidateIds.filter((sid) => existingIds.has(String(sid)) && !liveByKey.has(`${meta.pool}|${sid}`));
+      droppedInUseCount += candidateIds.filter((sid) => existingIds.has(String(sid)) && liveByKey.has(`${meta.pool}|${sid}`)).length;
       if (validIds.some((sid) => pickedForThisOrder.has(`${meta.pool}|${sid}`))) {
         req.flash("notification", "The same raw-material reel or drum cannot be allotted to more than one layer.");
         return res.redirect(`/sachiko/labels/production/assign/${id}`);
@@ -4734,6 +4754,9 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       ? ` Note: ${swaps.length === 1 ? "one reel/drum" : `${swaps.length} reels/drums`} moved here off`
         + ` ${swappedFromLots.length === 1 ? "order" : "orders"} ${[...new Set(swappedFromLots)].map((l) => `"${l}"`).join(", ")}.`
       : "";
+    const inUseNote = droppedInUseCount
+      ? ` Note: ${droppedInUseCount === 1 ? "one reel/drum was" : `${droppedInUseCount} reels/drums were`} skipped -- currently in use on another job and can't be allotted here.`
+      : "";
     const variantNote = variantWarning
       ? ` Note: the allotted material combinations couldn't be checked against Label Stock (${variantWarning}).`
       : newVariantCodes.length
@@ -4746,13 +4769,14 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     res.locals.auditDescription = `Assigned production order ${id} to machine ${machineId}`
       + (deckleId ? ` (produced Deckle ${deckleId}${variantProductCode ? `, tracked as variant ${variantProductCode}` : ""})` : stockWarning ? " (stock not fully allocated)" : "")
       + (newVariantCodes.length ? ` (label stock variants added: ${newVariantCodes.join(", ")})` : "")
-      + (swappedFromLots.length ? ` (swapped ${swaps.length} reel(s)/drum(s) off ${[...new Set(swappedFromLots)].join(", ")})` : "");
+      + (swappedFromLots.length ? ` (swapped ${swaps.length} reel(s)/drum(s) off ${[...new Set(swappedFromLots)].join(", ")})` : "")
+      + (droppedInUseCount ? ` (${droppedInUseCount} reel(s)/drum(s) skipped -- in use on another job)` : "");
     req.flash("notification", (deckleId
       ? `Machine assigned — Deckle ${deckleId} produced.`
         + (variantProductCode ? ` Note: the raw material picked doesn't exactly match this SKU's own spec (e.g. a different vendor) -- tracked as variant "${variantProductCode}" instead of plain ${labelStock?.productCode || "this SKU"}.` : "")
       : stockWarning
         ? `Machine assigned, but stock wasn't allocated (${stockWarning}) — this order is on the queue as short-allotted. Re-open it to produce a Deckle once material is available.`
-        : "Machine assigned successfully.") + variantNote + swapNote);
+        : "Machine assigned successfully.") + variantNote + swapNote + inUseNote);
     res.redirect("/sachiko/machine/queue");
   } catch (err) {
     console.error("ASSIGN PRODUCTION SAVE ERROR:", err);

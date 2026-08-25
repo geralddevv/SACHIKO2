@@ -4,6 +4,7 @@ import FacestockMaster from "../../models/inventory/facestockMaster.js";
 import FacestockStock from "../../models/inventory/facestockStock.js";
 import Vendor from "../../models/users/vendor.js";
 import Family from "../../models/system/family.js";
+import Type from "../../models/system/type.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -142,11 +143,12 @@ function validatePayload(payload) {
 }
 
 router.get("/form/facestock", requireFacestockMaster, async (req, res) => {
-  const [facestocks, previewSkuId, vendors, families] = await Promise.all([
+  const [facestocks, previewSkuId, vendors, families, types] = await Promise.all([
     FacestockMaster.find().sort({ skuId: 1 }).lean(),
     previewId("facestockMasterSkuId", "FCS"),
     Vendor.find({ commodities: "FACE PAPER" }, { vendorName: 1 }).sort({ vendorName: 1 }).lean(),
     Family.find().sort({ familyName: 1 }).lean(),
+    Type.find().sort({ typeName: 1 }).lean(),
   ]);
   res.render("inventory/masters/facestockMaster.ejs", {
     JS: false,
@@ -156,6 +158,7 @@ router.get("/form/facestock", requireFacestockMaster, async (req, res) => {
     previewSkuId,
     vendors,
     families,
+    types,
     notification: req.flash("notification"),
   });
 });

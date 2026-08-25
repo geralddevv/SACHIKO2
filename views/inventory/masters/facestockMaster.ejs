@@ -293,12 +293,9 @@
           <label class="dialog-field-label" for="addTypeSelect">Type</label>
           <select id="addTypeSelect">
             <option value="" disabled selected hidden>Select type</option>
-            <option value="CLEAR">CLEAR</option>
-            <option value="GLOSSY">GLOSSY</option>
-            <option value="GLOSSY DT">GLOSSY DT</option>
-            <option value="MATT">MATT</option>
-            <option value="MATT DT">MATT DT</option>
-            <option value="SEMI GLOSSY">SEMI GLOSSY</option>
+            <% types?.forEach(t => { %>
+              <option value="<%= t.typeName %>"><%= t.typeName %></option>
+            <% }) %>
           </select>
         </div>
       </div>
@@ -382,12 +379,9 @@
           <label class="dialog-field-label" for="editTypeSelect">Type</label>
           <select id="editTypeSelect">
             <option value="" disabled hidden>Select type</option>
-            <option value="CLEAR">CLEAR</option>
-            <option value="GLOSSY">GLOSSY</option>
-            <option value="GLOSSY DT">GLOSSY DT</option>
-            <option value="MATT">MATT</option>
-            <option value="MATT DT">MATT DT</option>
-            <option value="SEMI GLOSSY">SEMI GLOSSY</option>
+            <% types?.forEach(t => { %>
+              <option value="<%= t.typeName %>"><%= t.typeName %></option>
+            <% }) %>
           </select>
         </div>
       </div>

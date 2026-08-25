@@ -256,17 +256,6 @@
     .raw-layer-table tbody tr.raw-layer-row-no-invoice td { color: #b91c1c; }
     .raw-layer-table tbody tr.raw-layer-row-no-invoice input[type="checkbox"] { cursor: not-allowed; }
 
-    /* A reel/drum still selectable, but currently allotted to a DIFFERENT
-       still-open order -- ticking it is a swap (mandatory once submitted,
-       see POST /labels/production/assign/:id in routes/fairdesk_route.js),
-       not a free pick, so it's tinted rather than left looking like plain
-       stock. The small swap icon in the checkbox cell carries the claiming
-       order's lot in its title; the row's own title repeats it. */
-    .raw-layer-table tbody tr.raw-layer-row-claimed,
-    .raw-layer-table tbody tr.raw-layer-row-claimed:hover { background: #fffbeb; }
-    .raw-layer-table tbody tr.raw-layer-row-claimed:has(input:checked) { background: #fef3c7; }
-    .raw-layer-claim-icon { margin-left: 3px; font-size: 10.5px; color: #b45309; cursor: help; }
-
     /* ---- Raw Material Allotment -- one inline column per raw-material
        layer, styled like .roll-table above. NORMAL needs 3 (Facestock/
        Adhesive/Release Liner); DOUBLE RELEASE and DOUBLE FACESTOCK need 5 --
@@ -956,8 +945,8 @@
       // go fix the stock record) but marked unselectable rather than offered
       // as a normal candidate.
       tbody.innerHTML = orderedReels.map((r) => {
-        const checked = previouslyChecked.has(r._id) && !!r.invoiceNo;
         const noInvoice = !r.invoiceNo;
+        const checked = previouslyChecked.has(r._id) && !!r.invoiceNo;
         const cells = columns.map((c) => {
           const raw = c.value(r, layerKey);
           const text = raw == null || raw === "" ? "—" : escAttr(raw);
@@ -965,23 +954,9 @@
           const cls = c.trunc ? ' class="raw-layer-detail-cell"' : "";
           return `<td data-col="${c.key}"${cls}${title}>${text}</td>`;
         }).join("");
-        // Still allotted to a different still-open order (see `claimedBy` on
-        // the /raw-stock response) -- selectable, but ticking it moves it off
-        // that order and onto this one, mandatorily, once submitted (see the
-        // POST handler in routes/fairdesk_route.js). Never true at the same
-        // time as noInvoice -- a reel with no invoice can't have been
-        // allotted to anything in the first place.
-        const claimLabel = r.claimedBy ? (r.claimedBy.lotNo || r.claimedBy.productCode || "another order") : "";
-        const rowAttrs = noInvoice
-          ? ` class="raw-layer-row-no-invoice" title="No invoice"`
-          : r.claimedBy
-            ? ` class="raw-layer-row-claimed" title="Currently allotted to ${escAttr(claimLabel)} -- selecting it moves it here instead."`
-            : "";
-        const claimIcon = r.claimedBy && !noInvoice
-          ? ` <i class="fa-solid fa-right-left raw-layer-claim-icon" title="Allotted to ${escAttr(claimLabel)} -- selecting it moves it here instead."></i>`
-          : "";
+        const rowAttrs = noInvoice ? ` class="raw-layer-row-no-invoice" title="No invoice"` : "";
         return `<tr${rowAttrs}>` +
-          `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"${checked ? " checked" : ""}${noInvoice ? " disabled" : ""} />${claimIcon}</td>` +
+          `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"${checked ? " checked" : ""}${noInvoice ? " disabled" : ""} /></td>` +
           cells +
         `</tr>`;
       }).join("");

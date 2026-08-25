@@ -65,3 +65,13 @@ rate in the header of stock
 dashboard in stock summary
 
 FLow chart in FS: loc, emp name
+
+
+
+family master
+serialized the label stock
+added the both files
+added deckle dialog
+added the used and partially used tag
+used stock dashboard
+archive for items

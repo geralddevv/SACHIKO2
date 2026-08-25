@@ -18,10 +18,16 @@
 
 <style>
   .jc-info-wrap {
-    border: 2px solid #044a78;
     border-radius: 10px;
     overflow: hidden;
     box-shadow: 0 1px 4px rgba(4,74,120,0.08);
+  }
+  .span-full {
+    padding: 0 !important;
+  }
+  .span-full.form-heading,
+  .span-full.form-subheading {
+    padding: 10px !important;
   }
   .jc-info-table {
     width: 100%;
@@ -96,9 +102,6 @@
     width: 100%;
     border-collapse: collapse;
     background: #ffffff;
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 1px 4px rgba(4,74,120,0.08);
   }
   .jc-log-table th {
     background: #044a78;
@@ -154,6 +157,46 @@
     font-size: 11.5px;
     text-align: center;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Production Log rows once moved into the "already entered" table above
+     the single entry row -- read as plain text until Edit is punched. */
+  .jc-row-readonly td {
+    background: #f8fafc;
+  }
+  .jc-row-readonly input.form-control,
+  .jc-row-readonly select.form-control {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: #1f2a44;
+    pointer-events: none;
+  }
+  .jc-row-edit-cell {
+    text-align: center;
+    width: 44px;
+  }
+  .jc-row-edit-btn {
+    width: 28px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid #044A78;
+    background: #ffffff;
+    color: #044A78;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .jc-row-edit-btn:hover {
+    background: #044A78;
+    color: #ffffff;
+  }
+  .jc-row-edit-btn.editing {
+    background: #10b981;
+    border-color: #10b981;
+    color: #ffffff;
   }
 
   .jc-roll-table {
@@ -246,6 +289,67 @@
     cursor: pointer;
   }
   .roll-scan-btn:hover { opacity: 0.88; }
+
+  /* Materials-in-use panel -- Jumbo FS / Drum / Jumbo REL id are scanned
+     ONCE here and carried into every Job Setting row and the single
+     Production Log entry row automatically, instead of being re-scanned on
+     every line. Add swaps in a new roll once the current one runs out. */
+  .jc-materials-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 12px;
+    background: #f0f7ff;
+    border: 1px solid #d7e6f5;
+    border-radius: 10px;
+  }
+  .jc-material-slot {
+    flex: 1 1 220px;
+    min-width: 200px;
+  }
+  .jc-material-slot-label {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #03365a;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+  }
+  .jc-material-slot-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .jc-material-slot-row .roll-id-field { flex: 1 1 auto; }
+  .jc-material-slot input.form-control {
+    padding: 6px 8px !important;
+    font-size: 13px !important;
+    height: 32px !important;
+  }
+  .jc-material-slot input.form-control[readonly] {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    color: #03365a;
+    font-weight: 700;
+  }
+  .jc-material-add-btn {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid #044A78;
+    background: #ffffff;
+    color: #044A78;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .jc-material-add-btn:hover { background: #044A78; color: #ffffff; }
 
   .dialog-header {
     background: #044a78; padding: 18px 22px;
@@ -492,20 +596,6 @@
     .jc-log-table tbody td[data-label="Row"] { border-bottom: 1px solid #cbd5e1; }
     .jc-log-table tbody td[data-label="Row"]::before { content: none; }
 
-    .jc-log-table tbody td[data-label="Jumbo FS id"],
-    .jc-log-table tbody td[data-label="Drum id"],
-    .jc-log-table tbody td[data-label="Jumbo REL id"] {
-      flex: 1 1 100%;
-      border-bottom: 1px solid #cbd5e1;
-      flex-wrap: wrap;
-    }
-    .jc-log-table tbody td[data-label="Jumbo FS id"]::before,
-    .jc-log-table tbody td[data-label="Drum id"]::before,
-    .jc-log-table tbody td[data-label="Jumbo REL id"]::before { flex: 0 0 auto; }
-    .jc-log-table tbody td[data-label="Jumbo FS id"] .roll-note,
-    .jc-log-table tbody td[data-label="Drum id"] .roll-note,
-    .jc-log-table tbody td[data-label="Jumbo REL id"] .roll-note { flex: 1 1 100%; }
-
     .jc-log-table tbody td[data-label="Kg"],
     .jc-log-table tbody td[data-label="Start"],
     .jc-log-table tbody td[data-label="Stop"] { flex: 1 1 40%; flex-wrap: wrap; }
@@ -731,8 +821,65 @@
     <script id="allotted-rl-rolls-data" type="application/json"><%- safeJson(eligibleRl) %></script>
     <script id="material-usage-data" type="application/json"><%- safeJson(usageItems) %></script>
 
-    <!-- Job Setting -->
+    <!-- Materials in Use -- Jumbo FS / Drum / Jumbo REL id are scanned once
+         here and feed both Job Setting and Production Log below. Click Add
+         once the mounted roll is finished to scan the next one in. -->
     <div class="span-full form-subheading" style="display: flex; align-items: center; gap: 12px;">
+      <h1>Materials in Use</h1>
+    </div>
+    <div class="span-full jc-materials-panel" id="curMaterialsPanel">
+      <div class="jc-material-slot" data-pool="fs">
+        <label class="jc-material-slot-label">Jumbo FS id</label>
+        <div class="jc-material-slot-row">
+          <div class="roll-id-field">
+            <input type="text" class="form-control jc-cur-roll-input" data-pool="fs" list="allottedFsRollList"
+                   placeholder="Scan FS" autocomplete="off" />
+            <button type="button" class="roll-scan-btn jc-cur-scan-btn" data-pool="fs" aria-label="Scan Jumbo FS ID with camera" title="Scan QR with camera">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+          <button type="button" class="jc-material-add-btn" data-pool="fs" style="display:none;" title="This roll is finished — scan the next one">
+            <i class="fa-solid fa-plus"></i> Add
+          </button>
+        </div>
+        <span class="roll-note"></span>
+      </div>
+      <div class="jc-material-slot" data-pool="ad">
+        <label class="jc-material-slot-label">Drum id</label>
+        <div class="jc-material-slot-row">
+          <div class="roll-id-field">
+            <input type="text" class="form-control jc-cur-roll-input" data-pool="ad" list="allottedAdRollList"
+                   placeholder="Scan Drum" autocomplete="off" />
+            <button type="button" class="roll-scan-btn jc-cur-scan-btn" data-pool="ad" aria-label="Scan Drum ID with camera" title="Scan QR with camera">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+          <button type="button" class="jc-material-add-btn" data-pool="ad" style="display:none;" title="This drum is finished — scan the next one">
+            <i class="fa-solid fa-plus"></i> Add
+          </button>
+        </div>
+        <span class="roll-note"></span>
+      </div>
+      <div class="jc-material-slot" data-pool="rl">
+        <label class="jc-material-slot-label">Jumbo REL id</label>
+        <div class="jc-material-slot-row">
+          <div class="roll-id-field">
+            <input type="text" class="form-control jc-cur-roll-input" data-pool="rl" list="allottedRlRollList"
+                   placeholder="Scan REL" autocomplete="off" />
+            <button type="button" class="roll-scan-btn jc-cur-scan-btn" data-pool="rl" aria-label="Scan Jumbo REL ID with camera" title="Scan QR with camera">
+              <i class="fa-solid fa-camera"></i>
+            </button>
+          </div>
+          <button type="button" class="jc-material-add-btn" data-pool="rl" style="display:none;" title="This roll is finished — scan the next one">
+            <i class="fa-solid fa-plus"></i> Add
+          </button>
+        </div>
+        <span class="roll-note"></span>
+      </div>
+    </div>
+
+    <!-- Job Setting -->
+    <div class="span-full form-subheading" style="display: flex; align-items: center; gap: 12px; margin-top: 10px;">
       <h1>Job Setting</h1>
       <div style="display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;">
         <button type="button" id="jsMinus" style="width: 28px; height: 28px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 16px; line-height: 1; cursor: pointer;">-</button>
@@ -745,10 +892,7 @@
       <table class="jc-log-table">
         <thead>
           <tr>
-            <th style="width:36px; text-align:center;">#</th>
-            <th style="width:14%; min-width:115px; text-align:left; padding-left:8px;">Jumbo FS id</th>
-            <th style="width:14%; min-width:115px; text-align:left; padding-left:8px;">Drum id</th>
-            <th style="width:14%; min-width:115px; text-align:left; padding-left:8px;">Jumbo REL id</th>
+            <th style="width:60px; text-align:center;">#</th>
             <th>Kg</th>
             <th style="text-align:center; white-space:nowrap;">Start</th>
             <th>Kg</th>
@@ -772,21 +916,60 @@
     <!-- Production Log -->
     <div class="span-full form-subheading jc-hidden" id="prodLogHead" style="display: flex; align-items: center; gap: 12px; margin-top: 10px;">
       <h1>Production Log</h1>
-      <div style="display: inline-flex; align-items: center; gap: 6px; margin-left: 10px;">
-        <button type="button" id="logMinus" style="width: 28px; height: 28px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 16px; line-height: 1; cursor: pointer;">-</button>
-        <input type="text" id="logCount" style="width: 48px; height: 28px; text-align: center; border: 1px solid #044A78; border-radius: 4px; font-size: 13px;" class="form-control" value="1" readonly />
-        <button type="button" id="logPlus" style="width: 28px; height: 28px; border: 1px solid #044A78; background: white; color: #044A78; border-radius: 4px; font-size: 16px; line-height: 1; cursor: pointer;">+</button>
-      </div>
     </div>
 
-    <div class="span-full jc-hidden" id="prodLogBody" style="overflow-x: auto;">
+    <!-- Already-entered Production Log rows -- a running record of every roll
+         punched so far this job. Read/edit here; the single row below is
+         only ever for the next roll being entered. Hidden until the first
+         row is punched Stop and moved up into it. -->
+    <div class="span-full jc-hidden" id="prodLogDoneWrap" style="overflow-x: auto;">
       <table class="jc-log-table">
         <thead>
           <tr>
             <th rowspan="2" style="vertical-align: middle; width:32px; text-align:center;">#</th>
-            <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Jumbo FS id</th>
-            <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Drum id</th>
-            <th rowspan="2" style="vertical-align: middle; width:115px; text-align:left; padding-left:8px;">Jumbo REL id</th>
+            <th colspan="4" class="group-head">Start / Stop</th>
+            <th rowspan="2" style="vertical-align: middle; width:75px;">Kg</th>
+            <th colspan="2" class="group-head">Face</th>
+            <th colspan="2" class="group-head">Release</th>
+            <th rowspan="2" style="vertical-align: middle; width:44px; text-align:center;">Edit</th>
+          </tr>
+          <tr>
+            <th class="sub-head" style="width:70px;">Kg</th>
+            <th class="sub-head" style="width:92px;">Start</th>
+            <th class="sub-head" style="width:70px;">Kg</th>
+            <th class="sub-head" style="width:92px;">Stop</th>
+            <th class="sub-head" style="width:80px;">Joint</th>
+            <th class="sub-head" style="width:65px;">Kg</th>
+            <th class="sub-head" style="width:80px;">Joint</th>
+            <th class="sub-head" style="width:65px;">Kg</th>
+          </tr>
+        </thead>
+        <tbody id="logDoneTableBody">
+        </tbody>
+        <tfoot>
+          <tr class="jc-total-row" style="background: #044a78;">
+            <td class="jc-total-label" style="text-align:center; font-size:12px; font-weight:700; color:#ffffff; white-space:nowrap; padding: 6px 8px;">Total</td>
+            <td colspan="5" style="padding: 6px 8px" data-label="Total Kg">
+              <input type="text" name="totalMeter" class="form-control jc-readonly" readonly
+                     placeholder="Total Kg" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
+            </td>
+            <td colspan="4" style="padding: 6px 8px" data-label="SQ Kg">
+              <input type="text" name="sqMtr" class="form-control jc-readonly" readonly
+                     placeholder="SQ Kg" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
+            </td>
+            <td style="padding: 6px 8px"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- The one row used to enter the next Production Log line. On Stop it
+         moves up into the table above and this resets blank. -->
+    <div class="span-full jc-hidden" id="prodLogBody" style="overflow-x: auto; margin-top: 10px;">
+      <table class="jc-log-table">
+        <thead>
+          <tr>
+            <th rowspan="2" style="vertical-align: middle; width:32px; text-align:center;">#</th>
             <th colspan="4" class="group-head">Start / Stop</th>
             <th rowspan="2" style="vertical-align: middle; width:75px;">Kg</th>
             <th colspan="2" class="group-head">Face</th>
@@ -805,19 +988,6 @@
         </thead>
         <tbody id="logTableBody">
         </tbody>
-        <tfoot>
-          <tr class="jc-total-row" style="background: #044a78;">
-            <td class="jc-total-label" style="text-align:center; font-size:12px; font-weight:700; color:#ffffff; white-space:nowrap; padding: 6px 8px;">Total</td>
-            <td colspan="9" style="padding: 6px 8px" data-label="Total Kg">
-              <input type="text" name="totalMeter" class="form-control jc-readonly" readonly
-                     placeholder="Total Kg" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
-            </td>
-            <td colspan="3" style="padding: 6px 8px" data-label="SQ Kg">
-              <input type="text" name="sqMtr" class="form-control jc-readonly" readonly
-                     placeholder="SQ Kg" style="padding:4px 6px !important; font-size:12.5px !important; height:30px !important;" />
-            </td>
-          </tr>
-        </tfoot>
       </table>
     </div>
 
@@ -923,8 +1093,7 @@
 
     function checkMaterialInput(input, pool) {
       if (!input) return;
-      const td = input.closest("td");
-      const note = td?.querySelector(".roll-note");
+      const note = input.closest(".jc-material-slot")?.querySelector(".roll-note");
       if (!note) return;
       const key = extractScannedRollId(input.value);
       if (!key) {
@@ -944,52 +1113,107 @@
       }
     }
 
-    function handleMaterialEnter(e) {
-      if (e.key !== "Enter") return;
-      const input = e.target;
-      const row = input.closest("tr");
-      if (!row) return;
+    // Materials in Use -- Jumbo FS / Drum / Jumbo REL id are scanned ONCE
+    // here instead of on every Job Setting / Production Log row. Every row
+    // still carries its own hidden fsRollId/adRollId/rlRollId (unchanged
+    // server contract), it's just filled in from here instead of scanned
+    // per line -- see applyCurrentMaterialsToRow / syncCurrentMaterialsToOpenRows.
+    const curMaterialsPanel = document.getElementById("curMaterialsPanel");
+    const currentMaterials = { fs: "", ad: "", rl: "" };
+    const MATERIAL_POOL_ORDER = ["fs", "ad", "rl"];
 
-      if (input.classList.contains("js-fs-roll-id")) {
-        e.preventDefault();
-        checkMaterialInput(input, "fs");
-        const cleanId = extractScannedRollId(input.value);
-        if (cleanId) input.value = cleanId;
-        row.querySelector(".js-ad-roll-id")?.focus();
-      } else if (input.classList.contains("js-ad-roll-id")) {
-        e.preventDefault();
-        checkMaterialInput(input, "ad");
-        const cleanId = extractScannedRollId(input.value);
-        if (cleanId) input.value = cleanId;
-        row.querySelector(".js-rl-roll-id")?.focus();
-      } else if (input.classList.contains("js-rl-roll-id")) {
-        e.preventDefault();
-        checkMaterialInput(input, "rl");
-        const cleanId = extractScannedRollId(input.value);
-        if (cleanId) input.value = cleanId;
-        const next = row.querySelector(".js-mtrs1");
-        if (next && !next.readOnly) next.focus();
-      } else if (input.classList.contains("log-fs-roll-id")) {
-        e.preventDefault();
-        checkMaterialInput(input, "fs");
-        const cleanId = extractScannedRollId(input.value);
-        if (cleanId) input.value = cleanId;
-        row.querySelector(".log-ad-roll-id")?.focus();
-      } else if (input.classList.contains("log-ad-roll-id")) {
-        e.preventDefault();
-        checkMaterialInput(input, "ad");
-        const cleanId = extractScannedRollId(input.value);
-        if (cleanId) input.value = cleanId;
-        row.querySelector(".log-rl-roll-id")?.focus();
-      } else if (input.classList.contains("log-rl-roll-id")) {
-        e.preventDefault();
-        checkMaterialInput(input, "rl");
-        const cleanId = extractScannedRollId(input.value);
-        if (cleanId) input.value = cleanId;
-        const next = row.querySelector(".log-start-mtrs");
-        if (next && !next.readOnly) next.focus();
-      }
+    function materialSlot(pool) {
+      return curMaterialsPanel.querySelector(`.jc-material-slot[data-pool="${pool}"]`);
     }
+
+    // Copies whatever's currently mounted into one row's hidden roll-id
+    // fields (prefix is "js" for Job Setting, "log" for Production Log).
+    function applyCurrentMaterialsToRow(row, prefix) {
+      if (!row) return;
+      const fsInput = row.querySelector(`.${prefix}-fs-roll-id`);
+      const adInput = row.querySelector(`.${prefix}-ad-roll-id`);
+      const rlInput = row.querySelector(`.${prefix}-rl-roll-id`);
+      if (fsInput) fsInput.value = currentMaterials.fs;
+      if (adInput) adInput.value = currentMaterials.ad;
+      if (rlInput) rlInput.value = currentMaterials.rl;
+    }
+
+    // Keeps every still-open row in sync whenever the mounted roll changes --
+    // every Job Setting row (none of them are "final" until the whole card
+    // is saved) and the single live Production Log entry row (completed rows
+    // already deducted against whatever was current when they were punched,
+    // so they're left alone).
+    function syncCurrentMaterialsToOpenRows() {
+      Array.from(jsBody.rows).forEach((row) => applyCurrentMaterialsToRow(row, "js"));
+      if (logBody.rows.length) applyCurrentMaterialsToRow(logBody.rows[0], "log");
+    }
+
+    function lockMaterialSlot(pool) {
+      const slot = materialSlot(pool);
+      if (!slot) return;
+      slot.querySelector(".jc-cur-roll-input").readOnly = true;
+      slot.querySelector(".jc-cur-scan-btn").style.display = "none";
+      slot.querySelector(".jc-material-add-btn").style.display = "";
+    }
+
+    function unlockMaterialSlot(pool) {
+      const slot = materialSlot(pool);
+      if (!slot) return;
+      const input = slot.querySelector(".jc-cur-roll-input");
+      input.value = "";
+      input.readOnly = false;
+      slot.querySelector(".jc-cur-scan-btn").style.display = "";
+      slot.querySelector(".jc-material-add-btn").style.display = "none";
+      currentMaterials[pool] = "";
+      checkMaterialInput(input, pool);
+      syncCurrentMaterialsToOpenRows();
+      if (typeof scheduleSave === "function") scheduleSave();
+      input.focus();
+    }
+
+    // Locks in a scanned/typed roll as the currently mounted one for `pool`
+    // and pushes it out to every open row. A blank/invalid value just
+    // updates the note (via checkMaterialInput) without locking the slot.
+    function setCurrentMaterial(pool, rawValue) {
+      const slot = materialSlot(pool);
+      if (!slot) return;
+      const input = slot.querySelector(".jc-cur-roll-input");
+      const cleanId = extractScannedRollId(rawValue);
+      input.value = cleanId || rawValue;
+      checkMaterialInput(input, pool);
+      if (!cleanId) return;
+      currentMaterials[pool] = cleanId;
+      lockMaterialSlot(pool);
+      syncCurrentMaterialsToOpenRows();
+      if (typeof scheduleSave === "function") scheduleSave();
+    }
+
+    curMaterialsPanel.addEventListener("input", (e) => {
+      if (!e.target.classList.contains("jc-cur-roll-input")) return;
+      checkMaterialInput(e.target, e.target.dataset.pool);
+    });
+
+    curMaterialsPanel.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      const input = e.target.closest(".jc-cur-roll-input");
+      if (!input) return;
+      e.preventDefault();
+      const pool = input.dataset.pool;
+      setCurrentMaterial(pool, input.value);
+      const next = MATERIAL_POOL_ORDER[MATERIAL_POOL_ORDER.indexOf(pool) + 1];
+      if (next) materialSlot(next)?.querySelector(".jc-cur-roll-input")?.focus();
+    });
+
+    curMaterialsPanel.addEventListener("click", (e) => {
+      const scanBtn = e.target.closest(".jc-cur-scan-btn");
+      if (scanBtn) {
+        const pool = scanBtn.dataset.pool;
+        openScanDialog(materialSlot(pool)?.querySelector(".jc-cur-roll-input"), getRollPoolInfo(pool).name);
+        return;
+      }
+      const addBtn = e.target.closest(".jc-material-add-btn");
+      if (addBtn) unlockMaterialSlot(addBtn.dataset.pool);
+    });
 
     function openModal(id)  { const d = document.getElementById(id); if (!d) return; d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
     function closeModal(id) { const d = document.getElementById(id); if (!d) return; d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
@@ -1318,17 +1542,11 @@
         return;
       }
 
-      input.value = cleanId;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-
-      const row = input.closest("tr");
-      if (row) {
-        if (input.classList.contains("js-fs-roll-id")) row.querySelector(".js-ad-roll-id")?.focus();
-        else if (input.classList.contains("js-ad-roll-id")) row.querySelector(".js-rl-roll-id")?.focus();
-        else if (input.classList.contains("js-rl-roll-id")) row.querySelector(".js-mtrs1")?.focus();
-        else if (input.classList.contains("log-fs-roll-id")) row.querySelector(".log-ad-roll-id")?.focus();
-        else if (input.classList.contains("log-ad-roll-id")) row.querySelector(".log-rl-roll-id")?.focus();
-        else if (input.classList.contains("log-rl-roll-id")) row.querySelector(".log-start-mtrs")?.focus();
+      if (input.classList.contains("jc-cur-roll-input")) {
+        const pool = input.dataset.pool;
+        setCurrentMaterial(pool, cleanId);
+        const next = MATERIAL_POOL_ORDER[MATERIAL_POOL_ORDER.indexOf(pool) + 1];
+        if (next) materialSlot(next)?.querySelector(".jc-cur-roll-input")?.focus();
       }
       if (typeof showToast === "function") showToast(`Scanned ID: ${cleanId}`, "success");
     }
@@ -1437,35 +1655,10 @@
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td style="text-align:center; font-weight:600; color:#03365a; background:#f0f7ff;" data-label="Row"></td>
-        <td data-label="Jumbo FS id">
-          <div class="roll-id-field">
-            <input type="text" name="jsFsRollId" class="form-control js-fs-roll-id" list="allottedFsRollList"
-                   placeholder="Scan FS" autocomplete="off" />
-            <button type="button" class="roll-scan-btn js-fs-scan-btn" aria-label="Scan Jumbo FS ID with camera" title="Scan QR with camera">
-              <i class="fa-solid fa-camera"></i>
-            </button>
-          </div>
-          <span class="roll-note"></span>
-        </td>
-        <td data-label="Drum id">
-          <div class="roll-id-field">
-            <input type="text" name="jsAdRollId" class="form-control js-ad-roll-id" list="allottedAdRollList"
-                   placeholder="Scan Drum" autocomplete="off" />
-            <button type="button" class="roll-scan-btn js-ad-scan-btn" aria-label="Scan Drum ID with camera" title="Scan QR with camera">
-              <i class="fa-solid fa-camera"></i>
-            </button>
-          </div>
-          <span class="roll-note"></span>
-        </td>
-        <td data-label="Jumbo REL id">
-          <div class="roll-id-field">
-            <input type="text" name="jsRlRollId" class="form-control js-rl-roll-id" list="allottedRlRollList"
-                   placeholder="Scan REL" autocomplete="off" />
-            <button type="button" class="roll-scan-btn js-rl-scan-btn" aria-label="Scan Jumbo REL ID with camera" title="Scan QR with camera">
-              <i class="fa-solid fa-camera"></i>
-            </button>
-          </div>
-          <span class="roll-note"></span>
+        <td style="display:none;">
+          <input type="hidden" name="jsFsRollId" class="js-fs-roll-id" />
+          <input type="hidden" name="jsAdRollId" class="js-ad-roll-id" />
+          <input type="hidden" name="jsRlRollId" class="js-rl-roll-id" />
         </td>
         <td data-label="Kg"><input type="number" name="jsMtrs1" class="form-control js-mtrs1" placeholder="Kg" min="0" step="any" /></td>
         <td style="text-align:center; white-space:nowrap;" data-label="Start">
@@ -1489,24 +1682,12 @@
     }
 
     jsBody.addEventListener("input", (e) => {
-      if (e.target.classList.contains("js-fs-roll-id")) checkMaterialInput(e.target, "fs");
-      else if (e.target.classList.contains("js-ad-roll-id")) checkMaterialInput(e.target, "ad");
-      else if (e.target.classList.contains("js-rl-roll-id")) checkMaterialInput(e.target, "rl");
-      else if (e.target.classList.contains("js-mtrs1") || e.target.classList.contains("js-mtrs2")) {
+      if (e.target.classList.contains("js-mtrs1") || e.target.classList.contains("js-mtrs2")) {
         syncJsRowButtons(e.target.closest("tr"));
       }
     });
 
-    jsBody.addEventListener("keydown", handleMaterialEnter);
-
     jsBody.addEventListener("click", (e) => {
-      const fsScan = e.target.closest(".js-fs-scan-btn");
-      if (fsScan) { openScanDialog(fsScan.closest("td")?.querySelector(".js-fs-roll-id"), "Jumbo FS"); return; }
-      const adScan = e.target.closest(".js-ad-scan-btn");
-      if (adScan) { openScanDialog(adScan.closest("td")?.querySelector(".js-ad-roll-id"), "Drum"); return; }
-      const rlScan = e.target.closest(".js-rl-scan-btn");
-      if (rlScan) { openScanDialog(rlScan.closest("td")?.querySelector(".js-rl-roll-id"), "Jumbo REL"); return; }
-
       const startBtn = e.target.closest(".js-start-btn");
       if (startBtn) {
         if (startBtn.disabled) return;
@@ -1551,21 +1732,82 @@
       }
     });
 
-    jsPlus.addEventListener("click", () => { jsBody.appendChild(createJsRow()); jsRenumber(); updateStartProdLogButton(); });
+    jsPlus.addEventListener("click", () => {
+      const row = createJsRow();
+      jsBody.appendChild(row);
+      applyCurrentMaterialsToRow(row, "js");
+      jsRenumber();
+      updateStartProdLogButton();
+    });
     jsMinus.addEventListener("click", () => { if (jsBody.rows.length > 1) { jsBody.removeChild(jsBody.lastElementChild); jsRenumber(); updateStartProdLogButton(); } });
     jsBody.appendChild(createJsRow());
+    applyCurrentMaterialsToRow(jsBody.rows[0], "js");
     jsRenumber();
 
-    const logBody   = document.getElementById("logTableBody");
-    const logCount  = document.getElementById("logCount");
-    const logPlus   = document.getElementById("logPlus");
-    const logMinus  = document.getElementById("logMinus");
+    const logBody       = document.getElementById("logTableBody");
+    const logDoneBody   = document.getElementById("logDoneTableBody");
+    const prodLogDoneWrap = document.getElementById("prodLogDoneWrap");
 
     function renumber() {
-      Array.from(logBody.rows).forEach((row, i) => {
-        row.cells[0].textContent = i + 1;
+      let n = 0;
+      Array.from(logDoneBody.rows).forEach((row) => { row.cells[0].textContent = ++n; });
+      Array.from(logBody.rows).forEach((row) => { row.cells[0].textContent = ++n; });
+    }
+
+    // Fields a completed Deckle has locked for good -- editing them after
+    // Semi Finished Stock has already been credited would desync real stock
+    // (see lockProducedRow below), so the Edit button never reopens these
+    // once instantProduced is set, even though the rest of the row does.
+    // (Roll ids aren't in this list -- they're hidden, mirrored from
+    // Materials in Use, never directly edited on the row itself.)
+    const PRODUCTION_LOCKED_SELECTORS = [".log-meters", ".log-start-mtrs", ".log-stop-mtrs"];
+
+    function addRowEditCell(row) {
+      if (row.querySelector(".jc-row-edit-cell")) return;
+      const td = document.createElement("td");
+      td.className = "jc-row-edit-cell";
+      td.innerHTML = '<button type="button" class="jc-row-edit-btn" title="Edit this entry"><i class="fa-solid fa-pen"></i></button>';
+      row.appendChild(td);
+    }
+
+    // readOnly true -> plain-text display; false -> editable, except any
+    // field a completed Deckle already locked for good (see
+    // PRODUCTION_LOCKED_SELECTORS).
+    function setRowReadOnly(row, readOnly) {
+      const produced = row.querySelector(".log-instant-produced-input")?.value === "1";
+      row.classList.toggle("jc-row-readonly", readOnly);
+
+      row.querySelectorAll("input.form-control").forEach((el) => {
+        const productionLocked = produced && PRODUCTION_LOCKED_SELECTORS.some((sel) => el.matches(sel));
+        el.readOnly = readOnly || productionLocked;
       });
-      logCount.value = logBody.rows.length;
+      row.querySelectorAll("select.form-control").forEach((el) => {
+        el.style.pointerEvents = readOnly ? "none" : "";
+        el.tabIndex = readOnly ? -1 : 0;
+      });
+
+      const editBtn = row.querySelector(".jc-row-edit-btn");
+      if (editBtn) {
+        editBtn.classList.toggle("editing", !readOnly);
+        editBtn.innerHTML = readOnly ? '<i class="fa-solid fa-pen"></i>' : '<i class="fa-solid fa-check"></i>';
+        editBtn.title = readOnly ? "Edit this entry" : "Done editing";
+      }
+    }
+
+    function finalizeDoneRow(row) {
+      addRowEditCell(row);
+      setRowReadOnly(row, true);
+    }
+
+    // Punching Stop moves a row out of the single entry table and into the
+    // running record above it -- revealed the first time there's something
+    // to show, since an empty "already entered" table with just headers
+    // reads as broken. It lands there as a plain read-only line with an
+    // Edit button, not another live input row.
+    function moveRowToDoneTable(row) {
+      finalizeDoneRow(row);
+      logDoneBody.appendChild(row);
+      prodLogDoneWrap.classList.remove("jc-hidden");
     }
 
     const jointOptionHtml = `
@@ -1577,35 +1819,10 @@
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td style="text-align:center; font-weight:600; color:#03365a; background:#f0f7ff;" data-label="Row"></td>
-        <td data-label="Jumbo FS id">
-          <div class="roll-id-field">
-            <input type="text" name="fsRollId" class="form-control log-fs-roll-id" list="allottedFsRollList"
-                   placeholder="Scan FS" autocomplete="off" />
-            <button type="button" class="roll-scan-btn log-fs-scan-btn" aria-label="Scan Jumbo FS ID with camera" title="Scan QR with camera">
-              <i class="fa-solid fa-camera"></i>
-            </button>
-          </div>
-          <span class="roll-note"></span>
-        </td>
-        <td data-label="Drum id">
-          <div class="roll-id-field">
-            <input type="text" name="adRollId" class="form-control log-ad-roll-id" list="allottedAdRollList"
-                   placeholder="Scan Drum" autocomplete="off" />
-            <button type="button" class="roll-scan-btn log-ad-scan-btn" aria-label="Scan Drum ID with camera" title="Scan QR with camera">
-              <i class="fa-solid fa-camera"></i>
-            </button>
-          </div>
-          <span class="roll-note"></span>
-        </td>
-        <td data-label="Jumbo REL id">
-          <div class="roll-id-field">
-            <input type="text" name="rlRollId" class="form-control log-rl-roll-id" list="allottedRlRollList"
-                   placeholder="Scan REL" autocomplete="off" />
-            <button type="button" class="roll-scan-btn log-rl-scan-btn" aria-label="Scan Jumbo REL ID with camera" title="Scan QR with camera">
-              <i class="fa-solid fa-camera"></i>
-            </button>
-          </div>
-          <span class="roll-note"></span>
+        <td style="display:none;">
+          <input type="hidden" name="fsRollId" class="log-fs-roll-id" />
+          <input type="hidden" name="adRollId" class="log-ad-roll-id" />
+          <input type="hidden" name="rlRollId" class="log-rl-roll-id" />
         </td>
         <td data-label="Kg"><input type="number" name="logStartMtrs" class="form-control log-start-mtrs" placeholder="Kg" min="0" step="any" /></td>
         <td style="text-align:center; white-space:nowrap;" data-label="Start">
@@ -1652,7 +1869,7 @@
 
     function recalcLogTotals() {
       let runningMtrs = 0;
-      Array.from(logBody.rows).forEach((row) => {
+      Array.from(logDoneBody.rows).concat(Array.from(logBody.rows)).forEach((row) => {
         const made = parseFloat(row.querySelector(".log-meters")?.value);
         if (Number.isFinite(made) && made > 0) runningMtrs += made;
       });
@@ -1678,8 +1895,7 @@
     // Once a row's Deckle is actually inwarded, its material/meters can't
     // change without desyncing the stock that's already been created for it.
     function lockProducedRow(row) {
-      [".log-fs-roll-id", ".log-ad-roll-id", ".log-rl-roll-id", ".log-meters", ".log-start-mtrs", ".log-stop-mtrs"]
-        .forEach((sel) => { const el = row.querySelector(sel); if (el) el.readOnly = true; });
+      PRODUCTION_LOCKED_SELECTORS.forEach((sel) => { const el = row.querySelector(sel); if (el) el.readOnly = true; });
     }
 
     function setLogDeckleNote(row, text, color) {
@@ -1743,11 +1959,8 @@
       }
     }
 
-    logBody.addEventListener("input", (e) => {
-      if (e.target.classList.contains("log-fs-roll-id")) checkMaterialInput(e.target, "fs");
-      else if (e.target.classList.contains("log-ad-roll-id")) checkMaterialInput(e.target, "ad");
-      else if (e.target.classList.contains("log-rl-roll-id")) checkMaterialInput(e.target, "rl");
-      else if (e.target.classList.contains("log-start-mtrs") || e.target.classList.contains("log-stop-mtrs")) {
+    function onLogBodyInput(e) {
+      if (e.target.classList.contains("log-start-mtrs") || e.target.classList.contains("log-stop-mtrs")) {
         const row = e.target.closest("tr");
         syncLogRowButtons(row);
         autoFillMeters(row);
@@ -1755,17 +1968,15 @@
         e.target.dataset.userEdited = "1";
       }
       recalcLogTotals();
-    });
+    }
 
-    logBody.addEventListener("keydown", handleMaterialEnter);
-
-    logBody.addEventListener("click", (e) => {
-      const fsScan = e.target.closest(".log-fs-scan-btn");
-      if (fsScan) { openScanDialog(fsScan.closest("td")?.querySelector(".log-fs-roll-id"), "Jumbo FS"); return; }
-      const adScan = e.target.closest(".log-ad-scan-btn");
-      if (adScan) { openScanDialog(adScan.closest("td")?.querySelector(".log-ad-roll-id"), "Drum"); return; }
-      const rlScan = e.target.closest(".log-rl-scan-btn");
-      if (rlScan) { openScanDialog(rlScan.closest("td")?.querySelector(".log-rl-roll-id"), "Jumbo REL"); return; }
+    function onLogBodyClick(e) {
+      const editBtn = e.target.closest(".jc-row-edit-btn");
+      if (editBtn) {
+        const row = editBtn.closest("tr");
+        setRowReadOnly(row, !row.classList.contains("jc-row-readonly"));
+        return;
+      }
 
       const startBtn = e.target.closest(".log-start-btn");
       if (startBtn) {
@@ -1814,25 +2025,27 @@
         stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         stopBtn.style.background = "#6b7280";
         stopBtn.style.cursor = "default";
-        produceRowDeckleInstantly(row);
-      }
-    });
-
-    logPlus.addEventListener("click", () => {
-      logBody.appendChild(createLogRow());
-      renumber();
-      recalcLogTotals();
-    });
-
-    logMinus.addEventListener("click", () => {
-      if (logBody.rows.length > 1) {
-        logBody.removeChild(logBody.lastElementChild);
+        // This row is done -- move it up into the running record and give
+        // the operator a fresh blank row to punch the next roll into.
+        moveRowToDoneTable(row);
+        const freshRow = createLogRow();
+        logBody.appendChild(freshRow);
+        applyCurrentMaterialsToRow(freshRow, "log");
         renumber();
         recalcLogTotals();
+        produceRowDeckleInstantly(row);
       }
+    }
+
+    // Rows migrate from logBody into logDoneBody once punched, so both
+    // tbodies need the same delegated handlers to keep working there.
+    [logBody, logDoneBody].forEach((body) => {
+      body.addEventListener("input", onLogBodyInput);
+      body.addEventListener("click", onLogBodyClick);
     });
 
     logBody.appendChild(createLogRow());
+    applyCurrentMaterialsToRow(logBody.rows[0], "log");
     renumber();
     recalcLogTotals();
 
@@ -1861,7 +2074,7 @@
       stop: val(row, ".js-stop-input"),
     }));
 
-    const readLogRows = () => Array.from(logBody.rows).map((row) => ({
+    const readLogRows = () => Array.from(logDoneBody.rows).concat(Array.from(logBody.rows)).map((row) => ({
       fsRollId: val(row, ".log-fs-roll-id"),
       adRollId: val(row, ".log-ad-roll-id"),
       rlRollId: val(row, ".log-rl-roll-id"),
@@ -1899,10 +2112,12 @@
       const draft = {
         jsRows: readJsRows(),
         logRows: readLogRows(),
+        currentMaterials: { ...currentMaterials },
         prodLogStarted,
         savedAt: Date.now(),
       };
-      if (!anyEntry(draft.jsRows) && !anyEntry(draft.logRows) && !prodLogStarted) { dropDraft(); return; }
+      const anyMaterial = currentMaterials.fs || currentMaterials.ad || currentMaterials.rl;
+      if (!anyEntry(draft.jsRows) && !anyEntry(draft.logRows) && !prodLogStarted && !anyMaterial) { dropDraft(); return; }
       writeDraft(draft);
     }
 
@@ -1951,53 +2166,66 @@
           data.stop,
         );
         syncJsRowButtons(row);
-        checkMaterialInput(row.querySelector(".js-fs-roll-id"), "fs");
-        checkMaterialInput(row.querySelector(".js-ad-roll-id"), "ad");
-        checkMaterialInput(row.querySelector(".js-rl-roll-id"), "rl");
       });
       jsRenumber();
       updateStartProdLogButton();
     }
 
+    function fillLogRow(row, data) {
+      markPunched(
+        row.querySelector(".log-start-btn"),
+        row.querySelector(".log-start-display"),
+        row.querySelector(".log-start-input"),
+        data.start,
+      );
+      markPunched(
+        row.querySelector(".log-stop-btn"),
+        row.querySelector(".log-end-display"),
+        row.querySelector(".log-end-input"),
+        data.end,
+      );
+      putValue(row, ".log-fs-roll-id", data.fsRollId || data.rollId);
+      putValue(row, ".log-ad-roll-id", data.adRollId);
+      putValue(row, ".log-rl-roll-id", data.rlRollId);
+      putValue(row, ".log-start-mtrs", data.startMtrs);
+      putValue(row, ".log-stop-mtrs", data.stopMtrs);
+      putValue(row, ".log-meters", data.meters);
+      putValue(row, ".log-face-joint", data.faceJoint);
+      putValue(row, ".log-face-mtr", data.faceMtr);
+      putValue(row, ".log-release-joint", data.releaseJoint);
+      putValue(row, ".log-release-mtr", data.releaseMtr);
+      putValue(row, ".log-deckle-id-input", data.deckleId);
+      putValue(row, ".log-instant-produced-input", data.instantProduced);
+      if (data.deckleId && data.instantProduced === "1") {
+        setLogDeckleNote(row, `✓ ${data.deckleId} — in Semi Finished Stock`, "#059669");
+        lockProducedRow(row);
+      }
+      syncLogRowButtons(row);
+    }
+
+    // Restoring a draft: every row goes into the done table except a
+    // trailing one that was never punched Stop -- that one becomes the
+    // active entry row. (A draft saved before this change could have several
+    // unfinished rows; only the very last is treated as "still being typed
+    // in", the rest are shown as done so nothing is silently dropped.)
     function applyLogRows(rows) {
-      while (logBody.rows.length < rows.length) logBody.appendChild(createLogRow());
-      while (logBody.rows.length > rows.length && logBody.rows.length > 1) logBody.removeChild(logBody.lastElementChild);
-      rows.forEach((data, i) => {
-        const row = logBody.rows[i];
-        if (!row) return;
-        markPunched(
-          row.querySelector(".log-start-btn"),
-          row.querySelector(".log-start-display"),
-          row.querySelector(".log-start-input"),
-          data.start,
-        );
-        markPunched(
-          row.querySelector(".log-stop-btn"),
-          row.querySelector(".log-end-display"),
-          row.querySelector(".log-end-input"),
-          data.end,
-        );
-        putValue(row, ".log-fs-roll-id", data.fsRollId || data.rollId);
-        putValue(row, ".log-ad-roll-id", data.adRollId);
-        putValue(row, ".log-rl-roll-id", data.rlRollId);
-        putValue(row, ".log-start-mtrs", data.startMtrs);
-        putValue(row, ".log-stop-mtrs", data.stopMtrs);
-        putValue(row, ".log-meters", data.meters);
-        putValue(row, ".log-face-joint", data.faceJoint);
-        putValue(row, ".log-face-mtr", data.faceMtr);
-        putValue(row, ".log-release-joint", data.releaseJoint);
-        putValue(row, ".log-release-mtr", data.releaseMtr);
-        putValue(row, ".log-deckle-id-input", data.deckleId);
-        putValue(row, ".log-instant-produced-input", data.instantProduced);
-        if (data.deckleId && data.instantProduced === "1") {
-          setLogDeckleNote(row, `✓ ${data.deckleId} — in Semi Finished Stock`, "#059669");
-          lockProducedRow(row);
-        }
-        syncLogRowButtons(row);
-        checkMaterialInput(row.querySelector(".log-fs-roll-id"), "fs");
-        checkMaterialInput(row.querySelector(".log-ad-roll-id"), "ad");
-        checkMaterialInput(row.querySelector(".log-rl-roll-id"), "rl");
+      logDoneBody.innerHTML = "";
+      while (logBody.rows.length > 1) logBody.removeChild(logBody.lastElementChild);
+      if (!logBody.rows.length) logBody.appendChild(createLogRow());
+
+      const list = rows.slice();
+      const activeData = list.length && !list[list.length - 1].end ? list.pop() : null;
+
+      list.forEach((data) => {
+        const row = createLogRow();
+        fillLogRow(row, data);
+        finalizeDoneRow(row);
+        logDoneBody.appendChild(row);
       });
+      if (logDoneBody.rows.length) prodLogDoneWrap.classList.remove("jc-hidden");
+
+      if (activeData) fillLogRow(logBody.rows[0], activeData);
+
       renumber();
     }
 
@@ -2005,8 +2233,20 @@
       const draft = readDraft();
       if (!draft) return;
 
+      if (draft.currentMaterials) {
+        MATERIAL_POOL_ORDER.forEach((pool) => {
+          const rollId = draft.currentMaterials[pool];
+          if (!rollId) return;
+          currentMaterials[pool] = rollId;
+          const input = materialSlot(pool)?.querySelector(".jc-cur-roll-input");
+          if (input) input.value = rollId;
+          lockMaterialSlot(pool);
+          checkMaterialInput(input, pool);
+        });
+      }
       if (Array.isArray(draft.jsRows) && draft.jsRows.length) applyJsRows(draft.jsRows);
       if (Array.isArray(draft.logRows) && draft.logRows.length) applyLogRows(draft.logRows);
+      syncCurrentMaterialsToOpenRows();
       if (draft.prodLogStarted) revealProdLogSection();
       recalcLogTotals();
       if (typeof showToast === "function") showToast("Restored your unsaved entry", "success");

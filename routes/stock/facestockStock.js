@@ -381,101 +381,6 @@ function totalStockValueOf(stock) {
   return stock.reduce((sum, s) => (s.quantity ? sum + (Number(s.reelMtrs) || 0) * (Number(s.rate) || 0) : sum), 0);
 }
 
-// Flat, per-usage-event listing for the "Used Stock" page (GET /used) --
-// unlike loadFacestockReelUsage's per-reel rollup above (one badge per
-// reel), this is one row per (reel, job) pairing, so a reel drawn on by two
-// different orders over time shows up twice, once for each. Two kinds of
-// row, same split as the badge:
-//   - USED: a permanent row read off every job card's own facestockUsage --
-//     the reel, how much was actually drawn, and which job/lot it was for.
-//   - LIVE: a reel that's been scanned and Start-punched on a still-open
-//     job (PendingProduction.liveMaterialInUse), no Kg yet since that isn't
-//     reported until Save Production Entry.
-// Not facestock-only -- every raw-material pool a job card can report usage
-// against (see POOL_MODELS in utils/labelStockProduction.js and the three
-// *Usage arrays on models/inventory/machineJobCard.js), each with its own
-// Stock model/usage array/consumed-amount field name. `item` is the column
-// the Used Stock page filters on to pick one pool out of the three, or
-// leaves blank for all.
-const USAGE_POOL_CONFIG = {
-  facestock: { item: "Facestock", Model: FacestockStock, usageField: "facestockUsage", amountField: "mtrsUsed", specFields: "rollId type make vendorName vendorSkuCode location" },
-  adhesive: { item: "Adhesive", Model: AdhesiveStock, usageField: "adhesiveUsage", amountField: "kgUsed", specFields: "rollId type make vendorName vendorSkuCode location" },
-  release: { item: "Release Liner", Model: ReleaseLinerStock, usageField: "releaseUsage", amountField: "mtrsUsed", specFields: "rollId type make vendorName vendorSkuCode location" },
-};
-
-async function loadFacestockUsageRows() {
-  const usageExistsOr = Object.values(USAGE_POOL_CONFIG).map((cfg) => ({ [`${cfg.usageField}.0`]: { $exists: true } }));
-  const jobCards = await MachineJobCard.find({ $or: usageExistsOr })
-    .select(["jobCardId date lotNo productCode", ...Object.values(USAGE_POOL_CONFIG).map((cfg) => cfg.usageField)].join(" "))
-    .sort({ date: -1 })
-    .lean();
-
-  const liveExistsOr = Object.keys(USAGE_POOL_CONFIG).map((pool) => ({ [`liveMaterialInUse.${pool}.0`]: { $exists: true } }));
-  const pending = await PendingProduction.find({ producedAt: null, $or: liveExistsOr })
-    .select("lotNo itemId liveMaterialInUse updatedAt")
-    .populate({ path: "itemId", select: "productCode" })
-    .lean();
-
-  const rows = [];
-  for (const [pool, cfg] of Object.entries(USAGE_POOL_CONFIG)) {
-    const stockIds = new Set();
-    jobCards.forEach((jc) => (jc[cfg.usageField] || []).forEach((u) => { if (u.stockId) stockIds.add(String(u.stockId)); }));
-    pending.forEach((p) => (p.liveMaterialInUse?.[pool] || []).forEach((id) => stockIds.add(String(id))));
-
-    const reels = stockIds.size
-      ? await cfg.Model.find({ _id: { $in: [...stockIds] } }).select(cfg.specFields).lean()
-      : [];
-    const reelById = new Map(reels.map((r) => [String(r._id), r]));
-    const reelFields = (reel) => ({
-      type: reel?.type || "",
-      make: reel?.make || "",
-      vendorName: reel?.vendorName || "",
-      vendorSkuCode: reel?.vendorSkuCode || "",
-      location: reel?.location || "",
-    });
-
-    for (const jc of jobCards) {
-      for (const u of jc[cfg.usageField] || []) {
-        const kgUsed = Number(u[cfg.amountField]) || 0;
-        if (!u.stockId || kgUsed <= 0) continue;
-        const reel = reelById.get(String(u.stockId));
-        rows.push({
-          item: cfg.item,
-          status: "USED",
-          rollId: u.rollId || reel?.rollId || "",
-          ...reelFields(reel),
-          kgUsed: roundKg(kgUsed),
-          remainingKg: u.remainingKg != null ? roundKg(u.remainingKg) : null,
-          lotNo: jc.lotNo || "",
-          productCode: jc.productCode || "",
-          jobCardId: jc.jobCardId || "",
-          date: jc.date || null,
-        });
-      }
-    }
-    for (const p of pending) {
-      for (const id of p.liveMaterialInUse?.[pool] || []) {
-        const reel = reelById.get(String(id));
-        rows.push({
-          item: cfg.item,
-          status: "LIVE",
-          rollId: reel?.rollId || "",
-          ...reelFields(reel),
-          kgUsed: null,
-          remainingKg: null,
-          lotNo: p.lotNo || "",
-          productCode: p.itemId?.productCode || "",
-          jobCardId: "",
-          date: p.updatedAt || null,
-        });
-      }
-    }
-  }
-
-  rows.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-  return rows;
-}
-
 router.get("/", async (req, res) => {
   const [locations, stock, releaseStock, adhesiveStock, specOptions, reelUsage] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
@@ -509,21 +414,6 @@ router.get("/", async (req, res) => {
     // the frame can't quietly disagree with the label inside it.
     labelSizeMm: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM },
     ...specOptions,
-    notification: req.flash("notification"),
-  });
-});
-
-// Flat "which stock is being used, and for which job" listing -- the same
-// USED/LIVE signal each reel's dropdown badge on the page above already
-// carries, just laid out one row per usage event instead of needing every
-// master's dropdown opened to find it. See loadFacestockUsageRows.
-router.get("/used", async (req, res) => {
-  const rows = await loadFacestockUsageRows();
-  res.render("stock/facestockStockUsed.ejs", {
-    JS: false,
-    CSS: "tableDisp.css",
-    title: "Used Stock",
-    rows,
     notification: req.flash("notification"),
   });
 });
