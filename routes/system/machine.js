@@ -569,10 +569,12 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
   const pendingId = req.query.pendingId;
   let machine = null;
   let prefill = null;
+  let materialSwapLog = [];
 
   let eligibleRawStock = { facestock: [], adhesive: [], release: [] };
   if (pendingId && mongoose.isValidObjectId(pendingId)) {
-    const pendingDoc = await PendingProduction.findById(pendingId).select("assignedMachineId itemId allottedLayers").lean();
+    const pendingDoc = await PendingProduction.findById(pendingId).select("assignedMachineId itemId allottedLayers materialSwapLog").lean();
+    materialSwapLog = pendingDoc?.materialSwapLog || [];
     if (pendingDoc?.assignedMachineId) {
       machine = await Machine.findById(pendingDoc.assignedMachineId).lean();
       const rows = await buildQueueRows({ assignedMachineId: pendingDoc.assignedMachineId });
@@ -619,6 +621,7 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
     prefill,
     previewJobCardId,
     eligibleRawStock,
+    materialSwapLog,
     // One-shot token so a double-submit of this page can't save (or deduct) twice.
     submissionToken: randomUUID(),
     notification: req.flash("notification"),
@@ -1145,6 +1148,76 @@ router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, cr
   }
 });
 
+// Fires the moment an operator confirms "how much is left" after clicking
+// Add on a Materials in Use slot (jobCardForm.ejs) -- the live counterpart
+// to the Material Used dialog otherwise only shown at final Job Card save.
+// Deducts stock right now via consumePoolUsage (identical math to final
+// save: remaining kg -> used = current - remaining, reel emptied at 0) and
+// records the swap on the order so (a) the final-save dialog knows to skip
+// this reel -- it's already been resolved -- and (b) the operator can see a
+// short history of what they've swapped out this job (materialSwapLog,
+// returned by GET /machine/jobcard/form and rendered client-side).
+router.post("/machine/jobcard/material/set-remaining", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
+  try {
+    const { pendingId, pool, stockId, remainingKg } = req.body || {};
+    if (!mongoose.isValidObjectId(pendingId)) {
+      return res.status(400).json({ success: false, message: "Missing production order." });
+    }
+    if (!POOL_MODELS[pool]) {
+      return res.status(400).json({ success: false, message: "Unknown material pool." });
+    }
+    if (!mongoose.isValidObjectId(stockId)) {
+      return res.status(400).json({ success: false, message: "Missing stock reference." });
+    }
+    const remaining = Number(remainingKg);
+    if (!Number.isFinite(remaining) || remaining < 0) {
+      return res.status(400).json({ success: false, message: "Enter a valid non-negative kg amount." });
+    }
+
+    const pendingDoc = await PendingProduction.findById(pendingId).select("allottedLayers itemId").lean();
+    if (!pendingDoc) {
+      return res.status(404).json({ success: false, message: "That production order no longer exists." });
+    }
+
+    // Only a stockId genuinely eligible for this order/pool can be resolved
+    // this way -- same trust boundary as the Material Used dialog at final
+    // save (getEligibleRawMaterials' validStockIds, not whatever the client posts).
+    const eligible = await getEligibleRawMaterials({ labelStock: pendingDoc.itemId, allottedLayers: pendingDoc.allottedLayers });
+    if (!eligible.validStockIds?.[pool]?.has(String(stockId))) {
+      return res.status(400).json({ success: false, message: "That reel isn't reserved for this order." });
+    }
+
+    const createdBy = req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM";
+    const result = await consumePoolUsage({
+      pool,
+      rows: [{ stockId, remainingKg: remaining }],
+      jobCardId: "",
+      createdBy,
+    });
+    const row = result.rows[0];
+    if (!row) {
+      return res.status(404).json({ success: false, message: "Couldn't find that reel in stock." });
+    }
+
+    const swapEntry = {
+      pool,
+      stockId: row.stockId,
+      rollId: row.rollId,
+      usedKg: row.used,
+      remainingKg: row.remainingKg,
+      emptied: row.remainingKg <= 0,
+      swappedAt: new Date(),
+      swappedBy: createdBy,
+    };
+    await PendingProduction.updateOne({ _id: pendingId }, { $push: { materialSwapLog: swapEntry } });
+
+    res.json({ success: true, swap: swapEntry });
+  } catch (err) {
+    console.error("JOB CARD MATERIAL SET-REMAINING ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to update stock." });
+  }
+});
+
 router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
   try {
     const b = req.body;
@@ -1169,7 +1242,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     let pendingDoc = null;
     if (mongoose.isValidObjectId(b.pendingId)) {
       pendingDoc = await PendingProduction.findById(b.pendingId)
-        .select("allottedRollIds allottedLayers itemId paperSize lotNo")
+        .select("allottedRollIds allottedLayers itemId paperSize lotNo materialSwapLog")
         .populate({ path: "itemId", select: "rollType" })
         .lean();
       if (!pendingDoc || !hasStartableAllotment({
@@ -1215,6 +1288,13 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       return new Set([...allotted, ...eligible]);
     };
 
+    // A reel already resolved live via the Materials in Use "Add" flow
+    // (POST /machine/jobcard/material/set-remaining) was already deducted at
+    // that moment -- the client's own Material Used dialog is told not to
+    // ask about it again, but this is the belt-and-suspenders backstop
+    // against double-deducting the same reel if it slips through anyway.
+    const alreadyResolvedStockIds = new Set((pendingDoc?.materialSwapLog || []).map((s) => String(s.stockId)));
+
     const validFacestockStockIds = validStockIdsForPool("facestock", ["facestock", "facestock2"]);
     const fsStockId = toArray(b.facestockStockId);
     const fsMtrsUsed = toArray(b.facestockMtrsUsed);
@@ -1226,7 +1306,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
           mtrsUsed: numOrUndef(fsMtrsUsed[i]),
           remainingKg: numOrUndef(fsRemainingKg[i]),
         }))
-        .filter((row) => row.stockId && validFacestockStockIds.has(row.stockId)),
+        .filter((row) => row.stockId && validFacestockStockIds.has(row.stockId) && !alreadyResolvedStockIds.has(row.stockId)),
       "mtrsUsed",
     );
 
@@ -1241,7 +1321,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
           kgUsed: numOrUndef(adKgUsed[i]),
           remainingKg: numOrUndef(adRemainingKg[i]),
         }))
-        .filter((row) => row.stockId && validAdhesiveStockIds.has(row.stockId)),
+        .filter((row) => row.stockId && validAdhesiveStockIds.has(row.stockId) && !alreadyResolvedStockIds.has(row.stockId)),
       "kgUsed",
     );
 
@@ -1256,7 +1336,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
           mtrsUsed: numOrUndef(rlMtrsUsed[i]),
           remainingKg: numOrUndef(rlRemainingKg[i]),
         }))
-        .filter((row) => row.stockId && validReleaseStockIds.has(row.stockId)),
+        .filter((row) => row.stockId && validReleaseStockIds.has(row.stockId) && !alreadyResolvedStockIds.has(row.stockId)),
       "mtrsUsed",
     );
 

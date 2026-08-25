@@ -109,6 +109,30 @@ const pendingProductionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: undefined,
     },
+    // One entry per roll/drum an operator swapped out mid-job via the
+    // Materials in Use "Add" flow on the Job Card (POST /sachiko/machine/
+    // jobcard/material/set-remaining) -- the live counterpart to the
+    // Material Used dialog shown at final Job Card save. Written the moment
+    // the operator confirms how much was left on the outgoing reel, which
+    // both deducts stock immediately (via consumePoolUsage, same as final
+    // save) and lets the Job Card form (a) skip re-asking about that same
+    // reel in its own end-of-job dialog and (b) show the operator a short
+    // history of what's already been swapped this job.
+    materialSwapLog: {
+      type: [
+        {
+          pool: { type: String, enum: ["facestock", "adhesive", "release"] },
+          stockId: { type: mongoose.Schema.Types.ObjectId },
+          rollId: { type: String },
+          usedKg: { type: Number },
+          remainingKg: { type: Number },
+          emptied: { type: Boolean },
+          swappedAt: { type: Date, default: Date.now },
+          swappedBy: { type: String },
+        },
+      ],
+      default: undefined,
+    },
     lotNo: {
       type: String,
       trim: true,
