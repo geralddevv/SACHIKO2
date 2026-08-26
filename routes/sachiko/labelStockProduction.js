@@ -47,10 +47,12 @@ router.get("/raw-stock", async (req, res) => {
     // which Adhesive Master(s) are valid for this SKU now, and a binding can
     // legitimately point at a different type than whatever the recipe layer
     // happens to say (the recipe's Type was only ever a loose default, not a
-    // hard constraint -- see applyAdhesiveBindings below). Facestock/Release
-    // Liner still gate on their own recipe Type as before.
+    // hard constraint -- see applyAdhesiveBindings below). Facestock still
+    // gates on its own recipe Type as before. Release Liner does NOT --
+    // matched purely on Sensing below (POOL_MATCH_FIELDS.release), so its
+    // Type is never even queried on, let alone required here.
     const type = String(layerSpec?.[meta.typeField] || "").trim();
-    if (meta.pool !== "adhesive" && !type) return res.json({ reels: [], hasBinding: true });
+    if (meta.pool === "facestock" && !type) return res.json({ reels: [], hasBinding: true });
 
     // A physical reel/drum can only be mounted on one machine at a time, so
     // once another still-open WIP order (assigned to a machine, not yet
@@ -112,6 +114,15 @@ router.get("/raw-stock", async (req, res) => {
         .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
         .lean();
       ({ drums: matched, hasBinding } = await applyAdhesiveBindings(reels, itemId));
+    } else if (meta.pool === "release") {
+      // Sensing alone -- no Type/Make/Vendor/Vendor SKU Code/Colour/Size/GSM
+      // constraint, not even as a DB pre-filter (POOL_MATCH_FIELDS.release
+      // already only lists sensing; querying by `type` here would silently
+      // reintroduce a constraint reelMatchesLayer itself doesn't apply).
+      const reels = await poolMeta.Model.find({ location, reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
+        .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
+        .lean();
+      matched = reels.filter((r) => reelMatchesLayer(meta.pool, r, layerSpec));
     } else {
       const reels = await poolMeta.Model.find({ type, location, reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
         .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })

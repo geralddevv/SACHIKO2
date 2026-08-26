@@ -12,7 +12,6 @@
     if (isNaN(d)) return "—";
     return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear();
   };
-  const balance = Math.max((Number(pp.quantity) || 0) - (Number(pp.dispatchedQuantity) || 0), 0);
   const fmtQty = (v) => (Number.isFinite(Number(v)) && v !== '' && v != null)
     ? Number(v).toLocaleString('en-IN')
     : (v || '—');
@@ -123,12 +122,12 @@
        a dashed border, marking them as the recipe's second pass of that
        material. ---- */
     .material-id-row {
-      display: flex; flex-wrap: wrap; gap: 24px; padding: 10px 14px;
+      display: flex; flex-wrap: wrap; gap: 30px; padding: 14px 18px;
       border: 1px solid #e5e7eb; border-radius: 8px; background: #f8fafc; margin-bottom: 12px;
     }
-    .material-id-row .mid-item { display: flex; flex-direction: column; gap: 2px; }
-    .material-id-row .mid-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #94a3b8; }
-    .material-id-row .mid-value { font-size: 13px; font-weight: 700; color: #1f2a44; }
+    .material-id-row .mid-item { display: flex; flex-direction: column; gap: 4px; }
+    .material-id-row .mid-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #7c8ba1; }
+    .material-id-row .mid-value { font-size: 19px; font-weight: 800; color: #1f2a44; }
 
     .layer-stack { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow-y: auto; padding: 2px; }
     .layer-block {
@@ -304,6 +303,7 @@
     .raw-layer-table col.rl-col-size  { width: 62px; }  /* facestock columns only */
     .raw-layer-table col.rl-col-gsm   { width: 58px; }  /* facestock columns only */
     .raw-layer-table col.rl-col-kg    { width: 62px; }
+    .raw-layer-table col.rl-col-sensing { width: 92px; }  /* release column only */
     /* Checkbox cell keeps a tighter padding than the rest -- the two have to
        be kept in step with the col width above: 20px box + these two
        paddings. The checkbox itself is 20px square, set in
@@ -416,44 +416,18 @@
   </div>
 
   <div class="ap-card">
-    <div class="ap-card-title"><span><i class="fa-solid fa-tag"></i> Order Details</span></div>
-    <div class="ap-table-wrap">
-      <table class="ap-table">
-        <tbody>
-          <tr>
-            <th>PO Number</th><td><%= dash(pp.poNumber) %></td>
-            <th>PO Date</th><td><%= fmtDate(poDate) %></td>
-            <th>Est. Delivery</th><td><%= fmtDate(pp.estimatedDate) %></td>
-          </tr>
-          <tr>
-            <th>Product Code</th><td><%= dash(item.productCode || item.skuCode) %></td>
-            <th>Paper Size</th><td><%= dash(pp.paperSize) %></td>
-            <th>No. of Rolls</th><td><%= dash(pp.noOfRolls) %></td>
-          </tr>
-          <tr>
-            <th>Quantity</th><td><%= fmtQty(pp.quantity) %></td>
-            <th>Dispatched</th><td><%= fmtQty(pp.dispatchedQuantity || 0) %></td>
-            <th>Balance</th><td><%= fmtQty(balance) %></td>
-          </tr>
-          <tr>
-            <th>Running Mtrs</th><td><%= fmtQty(pp.runningMeters) %></td>
-            <th colspan="1">Remarks</th><td colspan="3"><%= dash(pp.remarks) %></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="ap-card">
     <div class="ap-card-title"><span><i class="fa-solid fa-layer-group"></i> Material Details</span></div>
     <div style="padding: 14px;">
       <div class="material-id-row">
-        <div class="mid-item"><span class="mid-label">Label Stock ID</span><span class="mid-value"><%= dash(item.labelStockId) %></span></div>
-        <div class="mid-item"><span class="mid-label">SKU Code</span><span class="mid-value"><%= dash(item.skuCode) %></span></div>
+        <div class="mid-item"><span class="mid-label">Label Stock Code</span><span class="mid-value"><%= dash(item.productCode || item.skuCode) %></span></div>
+        <div class="mid-item"><span class="mid-label">Size</span><span class="mid-value"><%= dash(pp.paperSize) %></span></div>
+        <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= fmtQty(pp.runningMeters) %></span></div>
+        <div class="mid-item"><span class="mid-label">Qty</span><span class="mid-value"><%= fmtQty(pp.quantity) %></span></div>
         <div class="mid-item"><span class="mid-label">Roll Type</span><span class="mid-value"><%= dash(rollType) %></span></div>
-        <!-- Filled in by the Deckle Size dialog's Continue handler once
-             answered -- not known at render time, so it starts blank. -->
-        <div class="mid-item"><span class="mid-label">Deckle Size</span><span class="mid-value" id="midDeckleSize">—</span></div>
+        <!-- Set on the Deckle Set page (before an order ever reaches Assign
+             Production); the dialog below only asks again for a legacy
+             order that somehow got here without one. -->
+        <div class="mid-item"><span class="mid-label">Deckle Size</span><span class="mid-value" id="midDeckleSize"><%= dash(pp.deckleSize) %></span></div>
       </div>
 
       <div class="layer-stack custom-scrollbar">
@@ -669,8 +643,10 @@
     //
     // Facestock and Release Liner deliberately do NOT. Release Liner reads
     // Sensing only -- the one property of a liner the press itself cares
-    // about -- while type/make/vendor SKU code/colour go on being matched
-    // silently. Facestock reads Family / GSM / Type only,
+    // about, and the ONLY thing Release Liner is matched on at all (not
+    // Type/Make/Vendor/Vendor SKU Code/Colour/Size/GSM -- see POOL_MATCH_FIELDS
+    // and the /raw-stock route, which doesn't even query on Type for this
+    // pool). Facestock reads Family / GSM / Type only,
     // the three a picker actually recognises the paper by. Make, Vendor SKU
     // Code and Micron are still part of the match (a reel failing them never
     // reaches the table below) -- they're just not spelled out here; the full
@@ -696,9 +672,10 @@
       } else {
         // Sensing alone -- whether the liner carries the mark the press's
         // eye-mark sensor needs (models/sachiko/sachikoLabelStock.js's
-        // releaseLinerSensing). Type/Make/Vendor SKU Code/Colour are still
-        // matched on (POOL_MATCH_FIELDS), they're just not spelled out here;
-        // the full spec is on the Material Details card at the top.
+        // releaseLinerSensing). It's the ONLY thing Release Liner is matched
+        // on (POOL_MATCH_FIELDS) -- Type/Make/Vendor/Vendor SKU Code/Colour/
+        // Size/GSM are shown for reference (Material Details card / the
+        // table's own columns) but never narrow the picker.
         if (spec.releaseLinerSensing) bits.push(spec.releaseLinerSensing);
       }
       return bits.join(" · ") || "—";
@@ -709,7 +686,7 @@
     // narrows on) and that have no column of their own in POOL_COLUMNS
     // below -- Facestock: nothing (Vendor/Make/Code/Size/GSM are all
     // columns); Adhesive: Viscosity/Cohesion/Shear/Density (Vendor/Make/Code
-    // are columns); Release Liner: nothing (Vendor/Size/GSM are all
+    // are columns); Release Liner: nothing (Vendor/Sensing/Size/GSM are all
     // columns). Since those fields can differ
     // between reels that still count as a match, this is what a picker
     // actually needs to tell candidates apart by. For a pool whose columns
@@ -773,6 +750,7 @@
       ],
       release: [
         { key: "vendor", label: "Vendor", trunc: true, value: (r) => r.vendorName, title: reelTitle },
+        { key: "sensing", label: "Sensing", col: "rl-col-sensing", trunc: true, value: (r) => r.sensing },
         { key: "size", label: "Size", col: "rl-col-size", value: (r) => r.size },
         { key: "gsm", label: "GSM", col: "rl-col-gsm", value: (r) => r.gsm },
         { key: "kg", label: "Kg", col: "rl-col-kg", value: (r) => r.reelMtrs },
@@ -1182,8 +1160,17 @@
       if (e.key === "Enter") { e.preventDefault(); confirmDeckleSize(); }
     });
 
-    deckleSizeDialog.classList.add("show");
-    deckleSizeDialog.setAttribute("aria-hidden", "false");
-    deckleSizeInput.focus();
+    // Normal case: the Deckle Set page already chose this order's size
+    // (see pp.deckleSize) before it ever reached Assign Production, so just
+    // apply it straight away -- no dialog. Only a legacy order that got here
+    // without one (assigned before Deckle Set existed) still gets asked.
+    const existingDeckleSize = <%- safeJson(pp.deckleSize ?? null) %>;
+    if (existingDeckleSize) {
+      applyDeckleSize(existingDeckleSize);
+    } else {
+      deckleSizeDialog.classList.add("show");
+      deckleSizeDialog.setAttribute("aria-hidden", "false");
+      deckleSizeInput.focus();
+    }
   });
 </script>

@@ -107,11 +107,28 @@ const canonMatch = (v) => String(v ?? "").trim().toUpperCase();
 // numerically (a select's string value vs. the reel's stored Number);
 // everything else is a canonicalized string compare, matching
 // *SpecKey/*RecipeKey's own canonStr in routes/stock/*.js.
+//
+// Release Liner's sensing is one-directional, not a straight equality: a
+// SENSING liner physically satisfies a NON-SENSING recipe too (the mark just
+// goes unused), so a recipe that only calls for NON-SENSING accepts either.
+// The reverse doesn't hold -- a recipe that calls for SENSING still needs a
+// liner that actually carries the mark, so that direction stays an exact
+// match (including rejecting a reel whose sensing is blank/not yet filled in).
 export function reelMatchesLayer(pool, reel, layer) {
   if (!reel || !layer) return false;
   for (const { field, recipe, numeric } of POOL_MATCH_FIELDS[pool] || []) {
     const raw = layer[recipe];
     if (raw === undefined || raw === null || String(raw).trim() === "") continue;
+    if (pool === "release" && field === "sensing") {
+      const recipeSensing = canonMatch(raw);
+      const reelSensing = canonMatch(reel.sensing);
+      if (recipeSensing === "NON-SENSING") {
+        if (reelSensing !== "NON-SENSING" && reelSensing !== "SENSING") return false;
+      } else if (reelSensing !== recipeSensing) {
+        return false;
+      }
+      continue;
+    }
     if (numeric) {
       if (Number(reel[field]) !== Number(raw)) return false;
     } else if (canonMatch(reel[field]) !== canonMatch(raw)) {
@@ -484,6 +501,66 @@ export async function produceDeckle({ labelStock, location, reelMtrs, lotNo, siz
     // that to whoever assigned this order, since it happens automatically.
     variantProductCode: actualLabelStock.productCode !== labelStock.productCode ? actualLabelStock.productCode : null,
   };
+}
+
+// Every laminated web loses this much width off EACH side to the
+// laminator/slitter's own guide edges (not usable for any finished roll,
+// regardless of recipe or order) -- a fixed physical constant, not a
+// per-order setting. Deckle Set factors it into how wide a facestock an
+// order actually needs, on top of the rolls themselves.
+export const DECKLE_EDGE_TRIM_MM = 5;
+
+// Deckle Set (GET/POST /sachiko/labels/production/deckle-set) -- suggests
+// which in-stock Facestock size to laminate an order's mother web from.
+// neededWidth is the order's finished-roll width times how many rolls get
+// slit off one laminated run, PLUS the standard edge trim on both sides
+// (a 210mm order needing 2 rolls needs 420mm of usable roll width + 10mm of
+// edge trim = a >=430mm web); candidates are grouped by the *available*
+// (quantity/reelMtrs > 0) FacestockStock sizes that match the recipe's own
+// facestock layer the same way production itself matches reels
+// (reelMatchesLayer/POOL_MATCH_FIELDS above) -- only that first facestock
+// layer, DOUBLE FACESTOCK's facestock2 isn't factored in. suggestedSize is
+// the smallest matching size that covers neededWidth with the least trim;
+// if nothing in stock is wide enough, falls back to the widest available
+// and flags `short` so the planner can still pick it deliberately.
+export async function suggestDeckleSize({ labelStock, paperSize, noOfRolls }) {
+  const perRollWidth = Number(paperSize) || 0;
+  const rolls = Number(noOfRolls) || 1;
+  const rollsWidth = round2(perRollWidth * rolls);
+  const edgeTrim = DECKLE_EDGE_TRIM_MM * 2;
+  const neededWidth = rollsWidth > 0 ? round2(rollsWidth + edgeTrim) : null;
+
+  if (!labelStock?.facestock || !neededWidth) {
+    return { neededWidth, rollsWidth: rollsWidth || null, edgeTrim, sizes: [], suggestedSize: null, short: false };
+  }
+
+  const reels = await POOL_MODELS.facestock.Model.find({ quantity: { $gt: 0 }, reelMtrs: { $gt: 0 } }).lean();
+  const matching = reels.filter((r) => reelMatchesLayer("facestock", r, labelStock.facestock));
+
+  // FacestockStock.reelMtrs is Kg despite its name -- raw Facestock is
+  // tracked/labelled by weight everywhere in the UI (the inward form's
+  // "Quantity (Kg)", the stock view's "Stock (Kg)"/"Available (Kg)"
+  // columns, Assign Production's own reel picker column, all read this same
+  // field as Kg). Only MaterialStock's reelMtrs (finished Label Stock/
+  // Deckle) is real metres. Named totalKg here to not perpetuate that mixup.
+  const bySize = new Map();
+  for (const r of matching) {
+    const size = Number(r.size);
+    if (!size) continue;
+    const entry = bySize.get(size) || { size, reelCount: 0, totalKg: 0 };
+    entry.reelCount += 1;
+    entry.totalKg = round2(entry.totalKg + (Number(r.reelMtrs) || 0));
+    bySize.set(size, entry);
+  }
+
+  const sizes = [...bySize.values()]
+    .sort((a, b) => a.size - b.size)
+    .map((s) => ({ ...s, wastage: round2(s.size - neededWidth) }));
+
+  const fit = sizes.find((s) => s.wastage >= 0);
+  const suggestedSize = fit ? fit.size : (sizes[sizes.length - 1]?.size ?? null);
+
+  return { neededWidth, rollsWidth, edgeTrim, sizes, suggestedSize, short: !fit && suggestedSize != null };
 }
 
 const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

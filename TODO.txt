@@ -81,5 +81,8 @@ wip stock
 removed the used stock and allocated from the allocation page
 refined the prod entry page
 
-in .side-nav stock summary, facestock, adhesive, release, wip stock, semi finished, finised srock, core, 
-remove the things inside the calc
+avery, smi, 
+
+in non sensing we can use sensing but no vice-versa
+
+sku

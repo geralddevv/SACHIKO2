@@ -13,7 +13,6 @@
   const dateMonth = String(today.getMonth() + 1).padStart(2, "0");
   const dateYear = today.getFullYear();
   const dateInputValue = `${dateYear}-${dateMonth}-${dateDay}`;
-  const dateDisplayValue = `${dateDay}/${dateMonth}/${dateYear}`;
 %>
 
 <style>
@@ -29,74 +28,18 @@
   .span-full.form-subheading {
     padding: 10px !important;
   }
-  .jc-info-table {
-    width: 100%;
-    border-collapse: collapse;
-    background: #ffffff;
-    table-layout: fixed;
+  /* Same stacked label-over-value summary as Assign Production's Material
+     Details card (assignProduction.ejs's .material-id-row) -- kept in step
+     with that page's field list (Label Stock Code / Size / Running Mtrs /
+     Qty / Roll Type / Deckle Size) so both stops in the production flow
+     show the same at-a-glance details. */
+  .material-id-row {
+    display: flex; flex-wrap: wrap; gap: 30px; padding: 14px 18px;
+    border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; margin-bottom: 14px;
   }
-  .jc-info-table th,
-  .jc-info-table td {
-    padding: 8px 12px;
-    border-bottom: 1px solid #e2e8f0;
-    border-right: 1px solid #e2e8f0;
-    text-align: left;
-    vertical-align: middle;
-  }
-  .jc-info-table tr > *:last-child {
-    border-right: none;
-  }
-  .jc-info-table tr:last-child > * {
-    border-bottom: none;
-  }
-  .jc-info-table th {
-    width: 12%;
-    background: #f0f7ff;
-    color: #03365a;
-    font-size: 13px;
-    font-weight: 700;
-    white-space: nowrap;
-  }
-  .jc-info-table td {
-    color: #1f2a44;
-    font-size: 13px;
-    font-weight: 600;
-    word-break: break-word;
-  }
-  .jc-info-section {
-    background: #044a78 !important;
-    color: #ffffff !important;
-    text-align: left !important;
-    letter-spacing: 0.02em;
-  }
-  .jc-ref-row {
-    display: flex;
-  }
-  .jc-ref-item {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    border-right: 1px solid #e2e8f0;
-  }
-  .jc-ref-item:last-child {
-    border-right: none;
-  }
-  .jc-ref-label {
-    background: #f0f7ff;
-    color: #03365a;
-    font-size: 13px;
-    font-weight: 700;
-    white-space: nowrap;
-    padding: 8px 12px;
-  }
-  .jc-ref-value {
-    color: #1f2a44;
-    font-size: 13px;
-    font-weight: 600;
-    word-break: break-word;
-    padding: 8px 12px;
-    flex: 1;
-  }
+  .material-id-row .mid-item { display: flex; flex-direction: column; gap: 4px; }
+  .material-id-row .mid-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #7c8ba1; }
+  .material-id-row .mid-value { font-size: 19px; font-weight: 800; color: #1f2a44; }
 
   .jc-log-table {
     width: 100%;
@@ -647,24 +590,6 @@
   .scan-status.error { color: #b91c1c; font-weight: 600; }
 
   @media screen and (max-width: 768px) {
-    .jc-info-table { table-layout: auto; }
-    .jc-info-table tbody { display: block; }
-    .jc-info-table tr { display: flex; flex-wrap: wrap; }
-    .jc-info-table th,
-    .jc-info-table td { display: block; padding: 7px 10px; }
-    .jc-info-table th { flex: 0 0 34%; width: auto; font-size: 12px; }
-    .jc-info-table td { flex: 1 1 60%; font-size: 12.5px; border-right: none; }
-    .jc-info-table th:empty,
-    .jc-info-table td:empty { display: none; }
-    .jc-info-table .jc-info-section,
-    .jc-info-table td[colspan] { flex: 1 1 100%; }
-
-    .jc-ref-row { flex-direction: column; }
-    .jc-ref-item { border-right: none; border-bottom: 1px solid #e2e8f0; }
-    .jc-ref-item:last-child { border-bottom: none; }
-    .jc-ref-label { flex: 0 0 34%; padding: 7px 10px; font-size: 12px; }
-    .jc-ref-value { padding: 7px 10px; font-size: 12.5px; }
-
     .jc-roll-table { table-layout: auto; }
     .jc-roll-table thead { display: none; }
     .jc-roll-table tbody,
@@ -814,39 +739,14 @@
     </div>
 
     <div class="span-full jc-info-wrap">
-      <table class="jc-info-table">
-        <tbody>
-          <tr>
-            <th>Date</th><td><%= dateDisplayValue %></td>
-            <th>Lot No</th><td><%= dash(jc.lotNo) %></td>
-            <th>Order Qty</th><td><%= fmtQty(jc.quantity) %></td>
-          </tr>
-          <tr>
-            <th>Balance Qty</th><td><%= fmtQty(jc.balanceQuantity) %></td>
-            <th>Running Kg</th><td><%= dash(ref.runningMeters) %></td>
-            <th>Machine</th><td><%= dash(machine ? machine.machineName : "") %></td>
-          </tr>
-          <tr>
-            <th>Product Code</th><td><%= dash(jc.productCode) %></td>
-            <th>No. of Rolls</th><td><%= dash(jc.rolls) %></td>
-            <th>Paper Size</th><td><%= dash(jc.paperSize) %></td>
-          </tr>
-          <tr>
-            <th colspan="6" class="jc-info-section">Material Details</th>
-          </tr>
-          <tr>
-            <td colspan="6" style="padding: 0;">
-              <div class="jc-ref-row">
-                <div class="jc-ref-item"><span class="jc-ref-label">Facestock Type</span><span class="jc-ref-value"><%= dash(ref.facestockType) %></span></div>
-                <div class="jc-ref-item"><span class="jc-ref-label">Facestock Family</span><span class="jc-ref-value"><%= dash(ref.facestockFamily) %></span></div>
-                <div class="jc-ref-item"><span class="jc-ref-label">Adhesive Type</span><span class="jc-ref-value"><%= dash(ref.adhesiveType) %></span></div>
-                <div class="jc-ref-item"><span class="jc-ref-label">Release Liner Type</span><span class="jc-ref-value"><%= dash(ref.releaseLinerType) %></span></div>
-                <div class="jc-ref-item"><span class="jc-ref-label">Running Kg</span><span class="jc-ref-value"><%= dash(ref.runningMeters) %></span></div>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="material-id-row">
+        <div class="mid-item"><span class="mid-label">Label Stock Code</span><span class="mid-value"><%= dash(jc.productCode) %></span></div>
+        <div class="mid-item"><span class="mid-label">Size</span><span class="mid-value"><%= dash(jc.paperSize) %></span></div>
+        <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= fmtQty(jc.runningMeters) %></span></div>
+        <div class="mid-item"><span class="mid-label">Qty</span><span class="mid-value"><%= fmtQty(jc.quantity) %></span></div>
+        <div class="mid-item"><span class="mid-label">Roll Type</span><span class="mid-value"><%= dash(jc.rollType) %></span></div>
+        <div class="mid-item"><span class="mid-label">Deckle Size</span><span class="mid-value"><%= dash(jc.deckleSize) %></span></div>
+      </div>
     </div>
 
     <!-- Material Allocation -->

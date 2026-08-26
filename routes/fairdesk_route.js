@@ -51,7 +51,7 @@ import {
   syncLabelBindingIdentity,
 } from "../utils/reconcileBindingLocations.js";
 import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
-import { produceDeckle, dissolveDeckle, requiredLayersFor, trackAllottedCombinations, LAYER_META, POOL_MODELS, pickStockIds } from "../utils/labelStockProduction.js";
+import { produceDeckle, dissolveDeckle, requiredLayersFor, trackAllottedCombinations, suggestDeckleSize, LAYER_META, POOL_MODELS, pickStockIds } from "../utils/labelStockProduction.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 
@@ -4266,6 +4266,86 @@ async function buildJobCardProgressMap(pendingIds) {
   return map;
 }
 
+// Deckle Set -- the planning step before Pending Production. Lists every
+// still-unassigned PendingProduction row that hasn't had a deckle (mother
+// facestock web) size chosen yet, alongside a least-wastage suggestion drawn
+// from current Facestock stock (see suggestDeckleSize). Once set (POST
+// below), a row stops showing here and starts showing on Pending Production's
+// "Pending" tab instead -- see that route's `orders` filter.
+router.get("/labels/production/deckle-set", async (req, res) => {
+  const pending = await PendingProduction.find({
+    assignedMachineId: null,
+    deckleSize: null,
+  })
+    .populate("userId", "clientName userName clientType")
+    .populate("itemId", "productCode skuCode rollType facestock")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const rows = await Promise.all(pending.map(async (r) => {
+    const item = r.itemId || {};
+    const { neededWidth, rollsWidth, edgeTrim, sizes, suggestedSize, short } = await suggestDeckleSize({
+      labelStock: item,
+      paperSize: r.paperSize,
+      noOfRolls: r.noOfRolls,
+    });
+    return {
+      _id: String(r._id),
+      productCode: item.productCode || item.skuCode || "—",
+      clientName: r.userId?.clientName || r.userId?.userName || "—",
+      userName: r.userId?.userName || "—",
+      clientType: r.userId?.clientType || "",
+      paperSize: r.paperSize || "—",
+      noOfRolls: r.noOfRolls ?? "—",
+      runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
+      quantity: r.quantity,
+      balance: Math.max((Number(r.quantity) || 0) - (Number(r.dispatchedQuantity) || 0), 0),
+      poNumber: r.poNumber || "—",
+      estimatedDate: r.estimatedDate,
+      remarks: r.remarks || "",
+      createdAt: r.createdAt,
+      neededWidth,
+      rollsWidth,
+      edgeTrim,
+      candidateSizes: sizes,
+      suggestedSize,
+      short,
+    };
+  }));
+
+  res.render("inventory/orders/deckleSet.ejs", {
+    title: "Deckle Set",
+    CSS: "tableDisp.css",
+    JS: false,
+    rows,
+    notification: req.flash("notification"),
+  });
+});
+
+router.post("/labels/production/deckle-set/:id", requireAuth, updateLimiter, async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    req.flash("notification", "Invalid order id.");
+    return res.redirect("/sachiko/labels/production/deckle-set");
+  }
+  const deckleSize = Number(req.body.deckleSize);
+  if (!deckleSize || deckleSize <= 0) {
+    req.flash("notification", "Enter a valid deckle size.");
+    return res.redirect("/sachiko/labels/production/deckle-set");
+  }
+  const pp = await PendingProduction.findOneAndUpdate(
+    { _id: id, assignedMachineId: null },
+    { $set: { deckleSize } },
+    { new: true },
+  );
+  if (!pp) {
+    req.flash("notification", "Order not found, or it's already been assigned to a machine.");
+    return res.redirect("/sachiko/labels/production/deckle-set");
+  }
+  req.flash("notification", `Deckle size set to ${deckleSize} -- order moved to Pending Production.`);
+  res.redirect("/sachiko/labels/production/deckle-set");
+});
+
 router.get("/labels/production/pending", async (req, res) => {
   const initialTab = req.query.tab === "wip" ? "wip" : "pending";
 
@@ -4342,6 +4422,7 @@ router.get("/labels/production/pending", async (req, res) => {
       userName: r.userId?.userName || "—",
       clientType: r.userId?.clientType || "",
       paperSize: r.paperSize || "—",
+      deckleSize: r.deckleSize ?? null,
       runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
       noOfRolls: r.noOfRolls ?? "—",
       allottedRolls: rollsAllotted,
@@ -4366,10 +4447,13 @@ router.get("/labels/production/pending", async (req, res) => {
     };
   });
 
-  // A row leaves Pending the moment assignedMachineId is set (Assign
-  // Production), and only leaves this page entirely once removePendingProduction
-  // deletes it after confirm/dispatch/cancel.
-  const orders = mapped.filter((r) => !r.assignedMachineId);
+  // A row only reaches this "Pending" tab once it's been through Deckle Set
+  // (deckleSize set) -- an order still awaiting that shows on the Deckle Set
+  // page instead (see GET /labels/production/deckle-set). It then leaves
+  // Pending the moment assignedMachineId is set (Assign Production), and
+  // only leaves this page entirely once removePendingProduction deletes it
+  // after confirm/dispatch/cancel.
+  const orders = mapped.filter((r) => !r.assignedMachineId && r.deckleSize != null);
   const wipOrders = mapped
     .filter((r) => r.assignedMachineId)
     .sort((a, b) => new Date(b.estimatedDate || 0) - new Date(a.estimatedDate || 0));
@@ -4454,8 +4538,6 @@ router.get("/labels/production/assign/:id", async (req, res) => {
       return res.redirect("/sachiko/labels/production/pending");
     }
 
-    const order = await TapeSalesOrder.findById(id).select("poDate").lean();
-
     const [allMachines, operatorEmployees, helperEmployees] = await Promise.all([
       Machine.find().populate("location").sort({ machineName: 1 }).lean(),
       Employee.find({ isActive: true, empProfile: "OPERATOR" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
@@ -4469,7 +4551,6 @@ router.get("/labels/production/assign/:id", async (req, res) => {
       CSS: "tableDisp.css",
       JS: false,
       pp: pendingProduction,
-      poDate: order?.poDate || null,
       allMachines,
       operatorEmployees,
       helperEmployees,

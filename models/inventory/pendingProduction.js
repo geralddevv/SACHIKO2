@@ -45,6 +45,16 @@ const pendingProductionSchema = new mongoose.Schema(
     runningMeters: { type: Number },
     noOfRolls: { type: Number },
 
+    // Set by GET/POST /sachiko/labels/production/deckle-set -- the mother
+    // facestock web's width actually chosen to laminate this order from
+    // (paperSize above is just the ordered *finished roll* width; deckleSize
+    // is paperSize x noOfRolls rounded up to whatever facestock size is
+    // actually in stock, to minimise trim waste). Order-sync upserts never
+    // touch this once set (same reasoning as assignedMachineId etc. below).
+    // A row with this still unset shows on the Deckle Set page instead of
+    // Pending Production's "Pending" tab -- see GET /labels/production/pending.
+    deckleSize: { type: Number },
+
     // Set by GET/POST /sachiko/labels/production/assign/:id. Order-sync
     // upserts never touch these fields (see upsertPendingProduction).
     assignedMachineId: {
