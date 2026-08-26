@@ -573,11 +573,13 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
   let machine = null;
   let prefill = null;
   let materialSwapLog = [];
+  let liveMaterialInUse = {};
 
   let eligibleRawStock = { facestock: [], adhesive: [], release: [] };
   if (pendingId && mongoose.isValidObjectId(pendingId)) {
-    const pendingDoc = await PendingProduction.findById(pendingId).select("assignedMachineId itemId allottedLayers materialSwapLog").lean();
+    const pendingDoc = await PendingProduction.findById(pendingId).select("assignedMachineId itemId allottedLayers materialSwapLog liveMaterialInUse").lean();
     materialSwapLog = pendingDoc?.materialSwapLog || [];
+    liveMaterialInUse = pendingDoc?.liveMaterialInUse || {};
     if (pendingDoc?.assignedMachineId) {
       machine = await Machine.findById(pendingDoc.assignedMachineId).lean();
       const rows = await buildQueueRows({ assignedMachineId: pendingDoc.assignedMachineId });
@@ -625,6 +627,7 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
     previewJobCardId,
     eligibleRawStock,
     materialSwapLog,
+    liveMaterialInUse,
     // One-shot token so a double-submit of this page can't save (or deduct) twice.
     submissionToken: randomUUID(),
     notification: req.flash("notification"),
@@ -1218,6 +1221,117 @@ router.post("/machine/jobcard/material/set-remaining", requireAuth, requireMachi
   } catch (err) {
     console.error("JOB CARD MATERIAL SET-REMAINING ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to update stock." });
+  }
+});
+
+// Fires when an operator, mid-job, scans/locks in a raw-material reel other
+// than the one this order already has reserved (jobCardForm.ejs's merged
+// "Material Allocation & Usage" table) -- the reserved reel turned out to be
+// the wrong one, damaged, or simply not on hand. Re-points this order's own
+// allottedLayers pick for that pool at the newly chosen reel, which by itself
+// frees the previously-reserved one -- "allotted" is never a flag on the
+// stock doc, only a matter of which order's allottedLayers currently names
+// it (see getEligibleRawMaterials), so dropping it here is enough for
+// Assign Production to offer it to another order immediately. A pool
+// spanning two layers (DOUBLE FACESTOCK/DOUBLE RELEASE's facestock+
+// facestock2, etc.) collapses to the single newly-picked reel under the
+// pool's primary key -- consistent with the one-scan-per-pool UI, which
+// never tracked the two layers as separately mounted reels anyway.
+// Distinct from "How much is left?" (set-remaining) above: that resolves a
+// reel that's actually been drawn on, deducting stock; this one hasn't been
+// used at all, so nothing is deducted, only reserved differently.
+router.post("/machine/jobcard/material/reallocate", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
+  try {
+    const { pendingId, pool, newStockId } = req.body || {};
+    if (!mongoose.isValidObjectId(pendingId)) {
+      return res.status(400).json({ success: false, message: "Missing production order." });
+    }
+    if (!POOL_MODELS[pool]) {
+      return res.status(400).json({ success: false, message: "Unknown material pool." });
+    }
+    if (!mongoose.isValidObjectId(newStockId)) {
+      return res.status(400).json({ success: false, message: "Missing stock reference." });
+    }
+
+    const pendingDoc = await PendingProduction.findById(pendingId)
+      .select("allottedLayers itemId materialSwapLog")
+      .lean();
+    if (!pendingDoc) {
+      return res.status(404).json({ success: false, message: "That production order no longer exists." });
+    }
+
+    // Fetched as a full doc (not populate'd with a field-limited select) --
+    // getEligibleRawMaterials below needs every recipe spec field
+    // (facestock/adhesive/releaseLiner/...), not just rollType, to actually
+    // match a NOT-yet-allotted reel against the recipe. A partial doc with
+    // rollType already present short-circuits its own re-fetch (see its own
+    // "typeof labelStock === object && labelStock.rollType" check) and
+    // silently treats every spec field as undefined, so every reel this
+    // order hasn't already claimed would fail to match.
+    const labelStockDoc = await SachikoLabelStock.findById(pendingDoc.itemId).lean();
+    if (!labelStockDoc) {
+      return res.status(400).json({ success: false, message: "This order's Label Stock SKU no longer exists." });
+    }
+
+    const keys = requiredLayersFor(labelStockDoc.rollType).filter((key) => LAYER_META[key].pool === pool);
+    if (!keys.length) {
+      return res.status(400).json({ success: false, message: "This SKU has no layer in that material pool." });
+    }
+
+    // A reel this order has already drawn on (recorded via the live "Add"
+    // flow above) has nothing left to unallocate -- its stock is already
+    // deducted, so swapping the paper allotment now would be meaningless.
+    const alreadyResolvedStockIds = new Set((pendingDoc.materialSwapLog || []).map((s) => String(s.stockId)));
+    const currentStockIds = keys.flatMap((key) => pickStockIds(pendingDoc.allottedLayers?.[key])).map(String);
+    if (currentStockIds.some((sid) => alreadyResolvedStockIds.has(sid))) {
+      return res.status(400).json({ success: false, message: "This material has already been recorded as used — it can no longer be swapped." });
+    }
+    if (currentStockIds.includes(String(newStockId))) {
+      return res.status(400).json({ success: false, message: "That reel is already allotted to this order." });
+    }
+
+    // Only a reel genuinely eligible for this order's own recipe (matching
+    // spec, real stock left) can be swapped in -- same trust boundary as
+    // every other endpoint here, never whatever stockId the client posts.
+    const eligible = await getEligibleRawMaterials({ labelStock: labelStockDoc, allottedLayers: pendingDoc.allottedLayers });
+    const target = (eligible[pool] || []).find((r) => String(r._id) === String(newStockId));
+    if (!target) {
+      return res.status(400).json({ success: false, message: "That reel doesn't match this order's recipe, or is out of stock." });
+    }
+
+    // A reel another still-open WIP order already has reserved on paper, or
+    // is physically running on right now, can't be double-booked onto this
+    // order too -- the same claim guard the Assign Production page applies
+    // when a reel is picked there (routes/fairdesk_route.js's claimedByKey/
+    // liveByKey), just re-applied here for a reallocation made from the shop
+    // floor instead of the assign form.
+    const otherPending = await PendingProduction.find({
+      _id: { $ne: pendingId },
+      assignedMachineId: { $ne: null },
+      producedAt: null,
+    }).select("allottedLayers liveMaterialInUse").lean();
+    const claimedElsewhere = otherPending.some((p) =>
+      Object.values(p.allottedLayers || {}).some(
+        (pick) => pick?.pool === pool && pickStockIds(pick).map(String).includes(String(newStockId))
+      ) || (p.liveMaterialInUse?.[pool] || []).map(String).includes(String(newStockId))
+    );
+    if (claimedElsewhere) {
+      return res.status(400).json({ success: false, message: "That reel is already reserved by another production order." });
+    }
+
+    const updatedLayers = { ...(pendingDoc.allottedLayers || {}) };
+    keys.forEach((key) => { delete updatedLayers[key]; });
+    updatedLayers[keys[0]] = { pool, stockIds: [String(newStockId)] };
+    await PendingProduction.updateOne({ _id: pendingId }, { $set: { allottedLayers: updatedLayers } });
+
+    res.json({
+      success: true,
+      freed: currentStockIds,
+      allotted: { _id: String(target._id), rollId: target.rollId, reelMtrs: target.reelMtrs, location: target.location },
+    });
+  } catch (err) {
+    console.error("JOB CARD MATERIAL REALLOCATE ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to update the material allocation." });
   }
 });
 
