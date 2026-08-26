@@ -510,19 +510,25 @@ export async function produceDeckle({ labelStock, location, reelMtrs, lotNo, siz
 // order actually needs, on top of the rolls themselves.
 export const DECKLE_EDGE_TRIM_MM = 5;
 
-// Deckle Set (GET/POST /sachiko/labels/production/deckle-set) -- suggests
-// which in-stock Facestock size to laminate an order's mother web from.
+// Deckle Set (GET/POST /sachiko/labels/production/deckle-set) -- lists every
+// in-stock Facestock size (quantity/reelMtrs > 0), across ALL specs, not
+// just ones matching this order's recipe -- the planner may want to see the
+// full warehouse picture, or deliberately substitute a close-enough spec.
+// Each size is tagged `isRecipeMatch` (does at least one reel of that size
+// actually satisfy the recipe the same way production matches reels --
+// reelMatchesLayer/POOL_MATCH_FIELDS above, only the first facestock layer,
+// DOUBLE FACESTOCK's facestock2 isn't factored in) with its own
+// matchingReelCount/matchingKg subtotal, so the UI can show "12 reels in
+// stock, 9 of them this spec" rather than silently mixing them together.
+//
 // neededWidth is the order's finished-roll width times how many rolls get
 // slit off one laminated run, PLUS the standard edge trim on both sides
 // (a 210mm order needing 2 rolls needs 420mm of usable roll width + 10mm of
-// edge trim = a >=430mm web); candidates are grouped by the *available*
-// (quantity/reelMtrs > 0) FacestockStock sizes that match the recipe's own
-// facestock layer the same way production itself matches reels
-// (reelMatchesLayer/POOL_MATCH_FIELDS above) -- only that first facestock
-// layer, DOUBLE FACESTOCK's facestock2 isn't factored in. suggestedSize is
-// the smallest matching size that covers neededWidth with the least trim;
-// if nothing in stock is wide enough, falls back to the widest available
-// and flags `short` so the planner can still pick it deliberately.
+// edge trim = a >=430mm web). suggestedSize -- the "Best Fit" -- deliberately
+// only ever considers recipe-matching sizes: a numerically closer size in
+// the wrong spec still isn't a safe suggestion, even though it's listed.
+// If nothing matching is in stock, falls back to the widest matching size
+// and flags `short`; if nothing matches at all, suggestedSize is null.
 export async function suggestDeckleSize({ labelStock, paperSize, noOfRolls }) {
   const perRollWidth = Number(paperSize) || 0;
   const rolls = Number(noOfRolls) || 1;
@@ -535,7 +541,6 @@ export async function suggestDeckleSize({ labelStock, paperSize, noOfRolls }) {
   }
 
   const reels = await POOL_MODELS.facestock.Model.find({ quantity: { $gt: 0 }, reelMtrs: { $gt: 0 } }).lean();
-  const matching = reels.filter((r) => reelMatchesLayer("facestock", r, labelStock.facestock));
 
   // FacestockStock.reelMtrs is Kg despite its name -- raw Facestock is
   // tracked/labelled by weight everywhere in the UI (the inward form's
@@ -544,21 +549,27 @@ export async function suggestDeckleSize({ labelStock, paperSize, noOfRolls }) {
   // field as Kg). Only MaterialStock's reelMtrs (finished Label Stock/
   // Deckle) is real metres. Named totalKg here to not perpetuate that mixup.
   const bySize = new Map();
-  for (const r of matching) {
+  for (const r of reels) {
     const size = Number(r.size);
     if (!size) continue;
-    const entry = bySize.get(size) || { size, reelCount: 0, totalKg: 0 };
+    const isMatch = reelMatchesLayer("facestock", r, labelStock.facestock);
+    const entry = bySize.get(size) || { size, reelCount: 0, totalKg: 0, matchingReelCount: 0, matchingKg: 0 };
     entry.reelCount += 1;
     entry.totalKg = round2(entry.totalKg + (Number(r.reelMtrs) || 0));
+    if (isMatch) {
+      entry.matchingReelCount += 1;
+      entry.matchingKg = round2(entry.matchingKg + (Number(r.reelMtrs) || 0));
+    }
     bySize.set(size, entry);
   }
 
   const sizes = [...bySize.values()]
     .sort((a, b) => a.size - b.size)
-    .map((s) => ({ ...s, wastage: round2(s.size - neededWidth) }));
+    .map((s) => ({ ...s, wastage: round2(s.size - neededWidth), isRecipeMatch: s.matchingReelCount > 0 }));
 
-  const fit = sizes.find((s) => s.wastage >= 0);
-  const suggestedSize = fit ? fit.size : (sizes[sizes.length - 1]?.size ?? null);
+  const matchingSizes = sizes.filter((s) => s.isRecipeMatch);
+  const fit = matchingSizes.find((s) => s.wastage >= 0);
+  const suggestedSize = fit ? fit.size : (matchingSizes[matchingSizes.length - 1]?.size ?? null);
 
   return { neededWidth, rollsWidth, edgeTrim, sizes, suggestedSize, short: !fit && suggestedSize != null };
 }

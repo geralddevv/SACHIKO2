@@ -84,5 +84,3 @@ refined the prod entry page
 avery, smi, 
 
 in non sensing we can use sensing but no vice-versa
-
-sku
