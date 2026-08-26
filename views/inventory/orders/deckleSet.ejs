@@ -448,8 +448,6 @@
       { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter product...", formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>` },
       { title: "Paper Size", field: "paperSize", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "Size" },
       { title: "No. of Rolls", field: "noOfRolls", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#" },
-      { title: "Needed Width", field: "neededWidth", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "mm",
-        formatter: (cell) => (cell.getValue() != null ? `${cell.getValue()}mm` : "—") },
       {
         title: "Deckle Size",
         hozAlign: "center",
