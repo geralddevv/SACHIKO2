@@ -185,11 +185,11 @@
     <h1>Deckle Set</h1>
     <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
       <a
-        href="/sachiko/labels/production/pending"
+        href="/sachiko/labels/production/pending?tab=wip"
         style="padding: 6px 14px; background: #044a78; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
         onmouseover="this.style.opacity = '0.85'" onmouseout="this.style.opacity = '1'"
       >
-        <i class="fa-solid fa-industry"></i><span>Pending Production</span>
+        <i class="fa-solid fa-gears"></i><span>WIP Production</span>
       </a>
     </div>
   </div>
@@ -321,8 +321,15 @@
       return a.size - b.size;
     });
 
+    // The current value (what's actually saved, when editing an already-set
+    // row -- otherwise the suggestion) drives which radio starts filled;
+    // "Best Fit" is a separate badge and can land on a different row than
+    // the one currently picked.
+    const currentValue = row.deckleSize != null ? row.deckleSize : row.suggestedSize;
+
     dsSizeList.innerHTML = sorted.map((s) => {
       const isSuggested = row.suggestedSize != null && s.size === row.suggestedSize;
+      const isCurrent = currentValue != null && s.size === currentValue;
       // A size can carry reels of several specs -- if any of them actually
       // match this recipe, show that matching subset's own count/kg (what's
       // actually usable here); otherwise fall back to the full total, all of
@@ -330,7 +337,7 @@
       const reelCount = s.isRecipeMatch ? s.matchingReelCount : s.reelCount;
       const kg = s.isRecipeMatch ? s.matchingKg : s.totalKg;
       return `
-        <div class="ds-size-row${isSuggested ? " is-selected is-suggested" : ""}${s.isRecipeMatch ? "" : " is-other-spec"}" data-size="${s.size}">
+        <div class="ds-size-row${isCurrent ? " is-selected" : ""}${isSuggested ? " is-suggested" : ""}${s.isRecipeMatch ? "" : " is-other-spec"}" data-size="${s.size}">
           <span class="ds-size-radio"></span>
           <span class="ds-size-info">
             <span class="ds-size-main-row">
@@ -354,11 +361,16 @@
     });
   }
 
+  window.startProduction = function (orderId) {
+    window.location.href = `/sachiko/labels/production/assign/${orderId}`;
+  };
+
   window.openSetDeckleDialog = function (orderId) {
     const row = rowsData.find((r) => String(r._id) === String(orderId));
     if (!row) return;
     currentDialogRow = row;
 
+    document.getElementById("setDeckleDialogTitle").textContent = row.deckleSize != null ? "Edit Deckle Size" : "Set Deckle Size";
     document.getElementById("ds-dialog-subtitle").textContent =
       `${row.productCode || "Label Stock"} · ${row.clientName || "—"}`;
 
@@ -371,7 +383,9 @@
     dsRunningMtrsInput.value = row.runningMeters != null ? row.runningMeters : "";
 
     renderSizeList(row);
-    dsSizeInput.value = row.suggestedSize != null ? row.suggestedSize : "";
+    // Editing an already-set row starts from what's actually saved, not the
+    // suggestion -- re-picking a candidate below still overwrites it.
+    dsSizeInput.value = row.deckleSize != null ? row.deckleSize : (row.suggestedSize != null ? row.suggestedSize : "");
     dsSizeError.textContent = "";
     dsDialogForm.action = `/sachiko/labels/production/deckle-set/${row._id}`;
 
@@ -414,6 +428,18 @@
         headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
+          // Deckle size already set -- Play sends it straight to Assign
+          // Production (mirrors the old Pending Production "Pending" tab's
+          // own Play button, which this page now replaces), but it can
+          // still be reopened via Edit to change the size before that.
+          if (row.deckleSize != null) {
+            return `
+              <div style="display:flex; gap:6px; justify-content:center; align-items:center;">
+                <button onclick="openSetDeckleDialog('${row._id}')" class="btn-action" style="background:#044A78;" title="Edit Deckle Size"><i class="fa-solid fa-pen"></i> Edit Deckle</button>
+                <button onclick="startProduction('${row._id}')" class="btn-action" style="background:#10b981;" title="Assign Production"><i class="fa-solid fa-play"></i></button>
+              </div>
+            `;
+          }
           return `<button onclick="openSetDeckleDialog('${row._id}')" class="btn-action" style="background:#10b981;" title="Set Deckle Size"><i class="fa-solid fa-ruler"></i> Set Deckle</button>`;
         },
       },
@@ -425,14 +451,18 @@
       { title: "Needed Width", field: "neededWidth", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "mm",
         formatter: (cell) => (cell.getValue() != null ? `${cell.getValue()}mm` : "—") },
       {
-        title: "Suggested Size",
+        title: "Deckle Size",
         hozAlign: "center",
         headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          if (row.suggestedSize == null) return `<span style="color:#9ca3af;">—</span>`;
-          const color = row.short ? "#dc2626" : "#059669";
-          return `<span style="font-weight:700; color:${color};">${row.suggestedSize}mm${row.short ? " (short)" : ""}</span>`;
+          // Only ever shows the actual saved decision -- nothing here until
+          // Set Deckle has actually been done (the suggestion still drives
+          // the dialog itself, just not this column).
+          if (row.deckleSize != null) {
+            return `<span style="font-weight:700; color:#044A78;">${row.deckleSize}mm</span>`;
+          }
+          return `<span style="color:#9ca3af;">—</span>`;
         },
       },
       { title: "Running Mtrs", field: "runningMeters", hozAlign: "right", headerFilter: "input", headerFilterPlaceholder: "Mtrs",

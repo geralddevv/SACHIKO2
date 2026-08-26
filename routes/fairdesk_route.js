@@ -4266,16 +4266,18 @@ async function buildJobCardProgressMap(pendingIds) {
   return map;
 }
 
-// Deckle Set -- the planning step before Pending Production. Lists every
-// still-unassigned PendingProduction row that hasn't had a deckle (mother
-// facestock web) size chosen yet, alongside a least-wastage suggestion drawn
-// from current Facestock stock (see suggestDeckleSize). Once set (POST
-// below), a row stops showing here and starts showing on Pending Production's
-// "Pending" tab instead -- see that route's `orders` filter.
+// Deckle Set -- the single stop for every still-unassigned PendingProduction
+// order, superseding the old separate Pending Production "Pending" tab
+// (GET /labels/production/pending now just redirects here for non-wip
+// requests). Every row gets a least-wastage suggestion drawn from current
+// Facestock stock (see suggestDeckleSize), whether or not it already has a
+// size -- a set one can still be reopened and edited. A row without a size
+// yet gets a "Set Deckle" action; one that already has one gets both an
+// Edit action and a Play button straight into Assign Production -- see the
+// Actions column in deckleSet.ejs.
 router.get("/labels/production/deckle-set", async (req, res) => {
   const pending = await PendingProduction.find({
     assignedMachineId: null,
-    deckleSize: null,
   })
     .populate("userId", "clientName userName clientType")
     .populate("itemId", "productCode skuCode rollType facestock")
@@ -4284,6 +4286,9 @@ router.get("/labels/production/deckle-set", async (req, res) => {
 
   const rows = await Promise.all(pending.map(async (r) => {
     const item = r.itemId || {};
+    // Computed for every row, not just ones still awaiting a size -- a row
+    // that already has one can still be reopened to edit it, and that
+    // dialog needs the same candidate list as setting it the first time.
     const { neededWidth, rollsWidth, edgeTrim, sizes, suggestedSize, short } = await suggestDeckleSize({
       labelStock: item,
       paperSize: r.paperSize,
@@ -4296,6 +4301,7 @@ router.get("/labels/production/deckle-set", async (req, res) => {
       userName: r.userId?.userName || "—",
       clientType: r.userId?.clientType || "",
       paperSize: r.paperSize || "—",
+      deckleSize: r.deckleSize ?? null,
       noOfRolls: r.noOfRolls ?? "—",
       runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
       quantity: r.quantity,
@@ -4358,12 +4364,20 @@ router.post("/labels/production/deckle-set/:id", requireAuth, updateLimiter, asy
     req.flash("notification", "Order not found, or it's already been assigned to a machine.");
     return res.redirect("/sachiko/labels/production/deckle-set");
   }
-  req.flash("notification", `Deckle size set to ${deckleSize} -- order moved to Pending Production.`);
+  req.flash("notification", `Deckle size set to ${deckleSize} -- ready to assign.`);
   res.redirect("/sachiko/labels/production/deckle-set");
 });
 
 router.get("/labels/production/pending", async (req, res) => {
   const initialTab = req.query.tab === "wip" ? "wip" : "pending";
+
+  // The "Pending" tab is superseded by Deckle Set -- that page now lists
+  // every not-yet-assigned order (whether its deckle size is set or not),
+  // with a Play button straight into Assign Production once it is. Only the
+  // WIP tab still renders from here.
+  if (initialTab !== "wip") {
+    return res.redirect("/sachiko/labels/production/deckle-set");
+  }
 
   const all = await PendingProduction.find({})
     .populate("userId", "clientName userName clientType")
@@ -4541,7 +4555,7 @@ router.get("/labels/production/assign/:id", async (req, res) => {
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) {
       req.flash("notification", "Invalid order id.");
-      return res.redirect("/sachiko/labels/production/pending");
+      return res.redirect("/sachiko/labels/production/deckle-set");
     }
 
     const pendingProduction = await PendingProduction.findById(id)
@@ -4551,7 +4565,7 @@ router.get("/labels/production/assign/:id", async (req, res) => {
 
     if (!pendingProduction) {
       req.flash("notification", "Order not found.");
-      return res.redirect("/sachiko/labels/production/pending");
+      return res.redirect("/sachiko/labels/production/deckle-set");
     }
 
     const [allMachines, operatorEmployees, helperEmployees] = await Promise.all([
@@ -4576,7 +4590,7 @@ router.get("/labels/production/assign/:id", async (req, res) => {
   } catch (err) {
     console.error("ASSIGN PRODUCTION LOAD ERROR:", err);
     req.flash("notification", "Failed to load Assign Production.");
-    res.redirect("/sachiko/labels/production/pending");
+    res.redirect("/sachiko/labels/production/deckle-set");
   }
 });
 
@@ -4585,13 +4599,13 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) {
       req.flash("notification", "Invalid order id.");
-      return res.redirect("/sachiko/labels/production/pending");
+      return res.redirect("/sachiko/labels/production/deckle-set");
     }
 
     const pendingProduction = await PendingProduction.findById(id);
     if (!pendingProduction) {
       req.flash("notification", "Order not found.");
-      return res.redirect("/sachiko/labels/production/pending");
+      return res.redirect("/sachiko/labels/production/deckle-set");
     }
 
     const { machineId, operatorId, helperId, selectedRolls, rawLayers } = req.body;
@@ -4948,7 +4962,7 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     }
     if (kept.length) message += ` Note: could not return ${kept.join("; ")}.`;
     req.flash("notification", message);
-    res.redirect("/sachiko/labels/production/pending");
+    res.redirect("/sachiko/labels/production/deckle-set");
   } catch (err) {
     console.error("UNASSIGN PRODUCTION ERROR:", err);
     req.flash("notification", "Failed to send order back to Pending.");
