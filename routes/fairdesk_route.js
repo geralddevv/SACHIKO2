@@ -4333,9 +4333,25 @@ router.post("/labels/production/deckle-set/:id", requireAuth, updateLimiter, asy
     req.flash("notification", "Enter a valid deckle size.");
     return res.redirect("/sachiko/labels/production/deckle-set");
   }
+  // Deckle Qty and Running Mtrs are entered/corrected right here (the
+  // planner is looking at the order anyway) rather than only ever being
+  // whatever the sales order originally collected -- both feed the same
+  // PendingProduction fields Pending Production and Assign Production
+  // already read. Paper Size (the per-roll width) isn't edited on this
+  // dialog -- it stays whatever the sales order set.
+  const noOfRolls = Number(req.body.noOfRolls);
+  if (!noOfRolls || noOfRolls <= 0) {
+    req.flash("notification", "Enter a valid deckle qty.");
+    return res.redirect("/sachiko/labels/production/deckle-set");
+  }
+  const runningMeters = Number(req.body.runningMeters);
+  if (!runningMeters || runningMeters <= 0) {
+    req.flash("notification", "Enter valid running mtrs.");
+    return res.redirect("/sachiko/labels/production/deckle-set");
+  }
   const pp = await PendingProduction.findOneAndUpdate(
     { _id: id, assignedMachineId: null },
-    { $set: { deckleSize } },
+    { $set: { deckleSize, noOfRolls, runningMeters } },
     { new: true },
   );
   if (!pp) {
