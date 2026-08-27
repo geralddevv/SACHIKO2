@@ -209,14 +209,14 @@
     </div>
 
     <%
-      // The repeatable line-items strip is create-only: editing an existing
-      // order (orderToEdit) and dispatch (confirmMode) stay strictly single-line.
+      // The line-items table is create-only: editing an existing order
+      // (orderToEdit) and dispatch (confirmMode) stay strictly single-line.
       const showAdditionalItems = !(typeof confirmMode !== 'undefined' && confirmMode)
         && !(typeof orderToEdit !== 'undefined' && orderToEdit);
     %>
     <% if (showAdditionalItems) { %>
     <div id="additional-items-wrap" class="span-full" style="display:none;">
-      <div class="form-subheading" style="margin-top:2px;"><h1>More Items on this PO</h1></div>
+      <div class="form-subheading" style="margin-top:2px;"><h1>Order Items</h1></div>
       <div class="ai-table-wrap" style="overflow-x:auto;">
         <table class="ai-table" id="additional-items-table">
           <thead>
@@ -1302,6 +1302,12 @@
     if (runningMetersDiv) runningMetersDiv.style.gridColumn = showPicker ? "span 3" : "";
 
     syncRemarksWidth();
+
+    // New Label Stock order -> the "Order Items" table replaces the scattered
+    // single-item fields; keep them hidden no matter who calls this.
+    if (typeof aiTableMode === "function" && aiTableMode() && typeof aiHideLegacyFields === "function") {
+      aiHideLegacyFields();
+    }
   }
 
   function renderSelectedItemDetailsTable() {
@@ -2072,56 +2078,68 @@
 
     // Label Stock orders need Paper Size, RM, and No of Rolls filled in.
     if (isLabelStockItemType(itemType)) {
-      const paperSizeVal = document.getElementById("paper-size")?.value.trim();
-      const runningMetersVal = document.getElementById("running-meters")?.value;
-      const noOfRollsVal = document.getElementById("no-of-rolls")?.value;
-      if (!paperSizeVal || !runningMetersVal || !noOfRollsVal) {
-        showToast("Paper Size, RM, and No of Rolls are required for Label Stock orders.", "error");
-        setSubmittingState(false);
-        return false;
-      }
+      const aiTableDriving = typeof aiIsActive === "function" && aiTableMode();
 
-      // No existing Label Stock Binding was resolved for the picked product
-      // (itemSelect stayed empty) -- POST /sales/order auto-creates one from
-      // labelStockMasterId, which needs a Rate and a Location the same way a
-      // manually-created binding would.
-      if (!itemSelect.value) {
-        const masterIdVal = document.getElementById("label-stock-master-id")?.value;
-        if (!masterIdVal) {
-          showToast("Select a Product Code.", "error");
+      if (aiTableDriving) {
+        // New Label Stock order: the "Order Items" table is the sole editor.
+        // A location is still needed so any new bindings can be auto-created.
+        const tableLocation = normalizeLocationName(selectedLocation || sourceLocationInput.value || locationSelect.value || "");
+        if (!tableLocation || tableLocation === "ALL") {
+          showToast("Select a Location for this PO.", "error");
           setSubmittingState(false);
           return false;
         }
-        const rateVal = parseFloat(rateDisplayInput?.value);
-        if (!Number.isFinite(rateVal) || rateVal <= 0) {
-          showToast("Rate is required to bind this product to the client.", "error");
-          setSubmittingState(false);
-          return false;
-        }
-        const newBindingLocation = normalizeLocationName(selectedLocation || sourceLocationInput.value || locationSelect.value || "");
-        if (!newBindingLocation || newBindingLocation === "ALL") {
-          showToast("Select a location for this product.", "error");
-          setSubmittingState(false);
-          return false;
-        }
-        sourceLocationInput.value = newBindingLocation;
-      }
+        sourceLocationInput.value = tableLocation;
 
-      // Extra line items on this PO (the "More Items" strip). Validate each
-      // one here so a bad row is caught before any order is created server-side.
-      if (typeof aiIsActive === "function" && aiIsActive()) {
         const aiErr = aiValidateRows();
         if (aiErr) {
           showToast(aiErr, "error");
           setSubmittingState(false);
           return false;
         }
+      } else {
+        // Single-item path (edit / non-table): Paper Size, RM, No of Rolls.
+        const paperSizeVal = document.getElementById("paper-size")?.value.trim();
+        const runningMetersVal = document.getElementById("running-meters")?.value;
+        const noOfRollsVal = document.getElementById("no-of-rolls")?.value;
+        if (!paperSizeVal || !runningMetersVal || !noOfRollsVal) {
+          showToast("Paper Size, RM, and No of Rolls are required for Label Stock orders.", "error");
+          setSubmittingState(false);
+          return false;
+        }
+
+        // No existing Label Stock Binding was resolved for the picked product
+        // (itemSelect stayed empty) -- POST /sales/order auto-creates one from
+        // labelStockMasterId, which needs a Rate and a Location the same way a
+        // manually-created binding would.
+        if (!itemSelect.value) {
+          const masterIdVal = document.getElementById("label-stock-master-id")?.value;
+          if (!masterIdVal) {
+            showToast("Select a Product Code.", "error");
+            setSubmittingState(false);
+            return false;
+          }
+          const rateVal = parseFloat(rateDisplayInput?.value);
+          if (!Number.isFinite(rateVal) || rateVal <= 0) {
+            showToast("Rate is required to bind this product to the client.", "error");
+            setSubmittingState(false);
+            return false;
+          }
+          const newBindingLocation = normalizeLocationName(selectedLocation || sourceLocationInput.value || locationSelect.value || "");
+          if (!newBindingLocation || newBindingLocation === "ALL") {
+            showToast("Select a location for this product.", "error");
+            setSubmittingState(false);
+            return false;
+          }
+          sourceLocationInput.value = newBindingLocation;
+        }
       }
     }
 
     // Check Minimum Order Qty. Qty and MOQ are always in the same unit
-    // (rolls vs rolls, labels vs labels) so no conversion needed.
-    if (selectedOption && selectedOption.customProperties) {
+    // (rolls vs rolls, labels vs labels) so no conversion needed. Skipped when
+    // the Order Items table is driving (per-row No of Rolls, not this field).
+    if (!(typeof aiIsActive === "function" && aiIsActive()) && selectedOption && selectedOption.customProperties) {
       const cp = selectedOption.customProperties;
       let cpDetails = {};
       try { cpDetails = JSON.parse(cp.details || "{}"); } catch (e) { cpDetails = {}; }
@@ -2158,8 +2176,8 @@
           payload.append(key, key === "itemType" ? toServerItemType(value) : value);
         }
 
-        // Multi-item PO: append lines[0..N] (item 1 from the fields above +
-        // every extra row) so POST /sales/order takes its multi-line branch.
+        // New Label Stock order: append lines[0..N] from the Order Items table
+        // so POST /sales/order takes its multi-line branch.
         if (actionPath === "/sachiko/sales/order" && typeof aiIsActive === "function" && aiIsActive()) {
           aiAppendLines(payload);
         }
@@ -2628,25 +2646,64 @@
   }
 
   /* ================================================================
-   *  MULTI-ITEM PO  --  "More Items on this PO" strip (create mode only)
+   *  MULTI-ITEM PO  --  the "Order Items" table (create mode only)
    *
-   *  Item 1 stays the existing single-item fields/logic untouched. Each
-   *  extra row is a self-contained product line; on submit, item 1 + every
-   *  extra row are sent as lines[0..N] so POST /sales/order takes its
-   *  multi-line branch (one TapeSalesOrder per line, shared poNumber /
-   *  poGroupId / header). With zero extra rows the form behaves exactly as
-   *  before (single flat submit).
+   *  For a NEW Label Stock order the scattered single-item fields (Product
+   *  Code picker, Paper Size, RM, No of Rolls, Rate) are hidden and every
+   *  product line -- including the first -- lives as a row in this table.
+   *  On submit all rows are sent as lines[0..N] so POST /sales/order takes
+   *  its multi-line branch (one TapeSalesOrder per line, shared poNumber /
+   *  poGroupId / header).
+   *
+   *  Editing an existing order, dispatch/confirm, and TAPE orders keep the
+   *  original single-item fields and logic untouched.
    * ================================================================ */
   const aiChoices = new Map(); // <select>.ai-product  ->  Choices instance
+  const aiPrefillItemId = new URLSearchParams(window.location.search).get("item") || "";
+  let aiPrefillDone = false;
+
+  // The single-item fields this table replaces while it's driving the form.
+  const AI_LEGACY_FIELD_IDS = [
+    "item-select-wrap", "label-stock-product-div", "paper-size-div",
+    "running-meters-div", "no-of-rolls-div", "quantity-div",
+    "item-rate-div", "order-rate-div", "selected-item-details",
+  ];
 
   function aiBody() { return document.getElementById("additional-items-body"); }
   function aiRows() { return aiBody() ? [...aiBody().querySelectorAll(".ai-row")] : []; }
   function aiRowCount() { return aiRows().length; }
 
-  function aiIsActive() {
-    return !confirmMode && !orderToEdit
-      && isLabelStockItemType(itemTypeSelect.value)
-      && aiRowCount() > 0;
+  // Table mode = new Label Stock order. When true, this table is the sole
+  // item editor and every submit goes through the multi-line branch.
+  function aiTableMode() {
+    return !confirmMode && !orderToEdit && isLabelStockItemType(itemTypeSelect.value);
+  }
+  // Kept as the name the submit handler checks.
+  function aiIsActive() { return aiTableMode() && aiRowCount() > 0; }
+
+  function aiHideLegacyFields() {
+    AI_LEGACY_FIELD_IDS.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = "none";
+    });
+    if (itemSelect) itemSelect.required = false;
+    if (quantityInput) quantityInput.required = false;
+    const remarksWrap = document.getElementById("remarks-wrap");
+    if (remarksWrap) remarksWrap.style.gridColumn = "span 20";
+  }
+
+  function aiApplyTableMode(on) {
+    if (on) {
+      aiHideLegacyFields();
+      return;
+    }
+    AI_LEGACY_FIELD_IDS.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = "";
+    });
+    // Hand layout back to the normal single-item visibility logic.
+    updateLabelStockFieldsVisibility();
+    renderSelectedItemDetailsTable();
   }
 
   function aiSkuToProductMap() {
@@ -2681,7 +2738,7 @@
   // existing binding for this client/location if one exists (fills Paper Size /
   // RM / Rate from it), otherwise fall back to the master id -- POST
   // /sales/order auto-creates the binding from the row's Rate + the header
-  // location, same as item 1.
+  // location.
   function aiOnRowProductChange(row) {
     const sel = row.querySelector(".ai-product");
     const sku = sel.value || "";
@@ -2712,8 +2769,19 @@
   function aiRenumber() {
     aiRows().forEach((row, i) => {
       const cell = row.querySelector(".ai-row-num");
-      if (cell) cell.textContent = String(i + 2); // item 1 is the fields above
+      if (cell) cell.textContent = String(i + 1);
+      // Row 1 is mandatory -- it can't be removed.
+      const btn = row.querySelector(".ai-remove");
+      if (btn) btn.style.visibility = i === 0 ? "hidden" : "visible";
     });
+  }
+
+  function aiDestroyRow(row) {
+    const sel = row.querySelector(".ai-product");
+    const inst = aiChoices.get(sel);
+    if (inst) inst.destroy();
+    aiChoices.delete(sel);
+    row.remove();
   }
 
   function aiAddRow() {
@@ -2734,45 +2802,54 @@
       el.addEventListener("input", () => { el.dataset.userEdited = "1"; });
     });
     row.querySelector(".ai-remove").addEventListener("click", () => {
-      const i = aiChoices.get(sel);
-      if (i) i.destroy();
-      aiChoices.delete(sel);
-      row.remove();
+      if (aiRowCount() <= 1) return; // keep at least one item
+      aiDestroyRow(row);
       aiRenumber();
     });
 
     aiRenumber();
+    return row;
   }
 
   function aiOnItemTypeChange() {
     const wrap = document.getElementById("additional-items-wrap");
     if (!wrap) return;
-    const show = !confirmMode && !orderToEdit && isLabelStockItemType(itemTypeSelect.value);
-    wrap.style.display = show ? "" : "none";
-    if (!show) {
-      aiRows().forEach((row) => {
-        const sel = row.querySelector(".ai-product");
-        const i = aiChoices.get(sel);
-        if (i) i.destroy();
-        aiChoices.delete(sel);
-        row.remove();
-      });
+    const on = aiTableMode();
+    wrap.style.display = on ? "" : "none";
+    aiApplyTableMode(on);
+    if (!on) {
+      aiRows().forEach(aiDestroyRow);
       return;
     }
+    if (aiRowCount() === 0) aiAddRow();
     aiRows().forEach((row) => { aiPopulateRowSelect(row, true); aiOnRowProductChange(row); });
+    aiRenumber();
   }
 
-  // Re-resolve every row against a freshly-loaded binding list (loadItems).
+  // Re-resolve every row against a freshly-loaded binding list (loadItems),
+  // and honour a ?item= prefill (from the "order this binding" shortcuts).
   function aiSyncRows() {
-    if (!document.getElementById("additional-items-wrap")) return;
+    if (!document.getElementById("additional-items-wrap") || !aiTableMode()) return;
+    if (aiPrefillItemId && !aiPrefillDone) {
+      const row0 = aiRows()[0];
+      const it = (latestLabelStockItems || []).find((x) => String(x._id) === String(aiPrefillItemId));
+      if (row0 && it && it.details?.skuCode && !row0.querySelector(".ai-item-id").value) {
+        const sel = row0.querySelector(".ai-product");
+        const inst = aiChoices.get(sel);
+        if (inst) inst.setChoiceByValue(it.details.skuCode);
+        sel.value = it.details.skuCode;
+        aiPrefillDone = true;
+      }
+    }
     aiRows().forEach((row) => { aiPopulateRowSelect(row, true); aiOnRowProductChange(row); });
   }
 
   function aiValidateRows() {
     const rows = aiRows();
+    if (!rows.length) return "Add at least one item.";
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-      const n = i + 2;
+      const n = i + 1;
       if (!(r.querySelector(".ai-item-id").value || r.querySelector(".ai-master-id").value)) return `Item ${n}: select a Product Code.`;
       if (!(r.querySelector(".ai-paper-size").value || "").trim()) return `Item ${n}: Paper Size is required.`;
       if (!(parseFloat(r.querySelector(".ai-rm").value) > 0)) return `Item ${n}: RM must be greater than 0.`;
@@ -2783,31 +2860,21 @@
   }
 
   function aiAppendLines(payload) {
-    const lines = [{
-      itemId: document.getElementById("item-select")?.value || "",
-      labelStockMasterId: document.getElementById("label-stock-master-id")?.value || "",
-      paperSize: (document.getElementById("paper-size")?.value || "").trim(),
-      runningMeters: (document.getElementById("running-meters")?.value || "").trim(),
-      noOfRolls: (document.getElementById("no-of-rolls")?.value || "").trim(),
-      itemRate: (document.getElementById("item-rate")?.value || "").trim(),
-    }];
-    aiRows().forEach((r) => {
-      lines.push({
+    aiRows().forEach((r, i) => {
+      const ln = {
         itemId: r.querySelector(".ai-item-id").value || "",
         labelStockMasterId: r.querySelector(".ai-master-id").value || "",
         paperSize: (r.querySelector(".ai-paper-size").value || "").trim(),
         runningMeters: (r.querySelector(".ai-rm").value || "").trim(),
         noOfRolls: (r.querySelector(".ai-rolls").value || "").trim(),
         itemRate: (r.querySelector(".ai-rate").value || "").trim(),
-      });
-    });
-    lines.forEach((ln, i) => {
+      };
       Object.entries(ln).forEach(([k, v]) => payload.append(`lines[${i}][${k}]`, v));
     });
   }
 
   // loadItems refreshes the binding list for the chosen user+location -- rerun
-  // row resolution afterwards so extra rows pick up matching bindings too.
+  // row resolution afterwards so rows pick up matching bindings too.
   if (typeof loadItems === "function") {
     const _aiOrigLoadItems = loadItems;
     loadItems = function (...args) {
@@ -2822,6 +2889,6 @@
     const addBtn = document.getElementById("add-line-btn");
     if (!addBtn) return;
     addBtn.addEventListener("click", aiAddRow);
-    aiOnItemTypeChange(); // initial visibility (Item Type defaults to ROLL)
+    aiOnItemTypeChange(); // Item Type defaults to ROLL -> table mode on, 1 row
   });
 </script>
