@@ -78,6 +78,21 @@ const materialStockSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Which raw-material reels this Deckle was laminated from -- one per pool
+    // normally, or several facestock entries when a reel ran out mid-run and
+    // was swapped. `material` above already records the Product Code / variant
+    // this Deckle was produced as; this is the reel-level trace behind it.
+    // Written by routes/system/machine.js's produceDecklesFromLog.
+    sourceReels: [
+      new mongoose.Schema(
+        {
+          pool: { type: String, trim: true },
+          stockId: { type: mongoose.Schema.Types.ObjectId },
+          rollId: { type: String, trim: true },
+        },
+        { _id: false },
+      ),
+    ],
     // The order whose Assign & Continue laminated this reel. Only set on reels
     // this app produced for an order -- it's what lets sending that order back
     // to Pending un-make exactly the Deckles it made and return their raw

@@ -132,6 +132,8 @@
         padding: 8px 12px;
         gap: 10px;
         border: 1px solid transparent;
+        display: flex;
+        align-items: center;
       }
 
       .nav-items i {
@@ -764,10 +766,10 @@
         <%# Home isn't /welcome for everyone -- the server hands the layout a
             homeUrl so this link follows whatever the role can actually open. %>
         <% const home = typeof homeUrl !== 'undefined' && homeUrl ? homeUrl : '/sachiko/welcome'; %>
-        <div title="Dashboard" class="<%= title === 'Welcome' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '<%= home %>'">
+        <a href="<%= home %>" title="Dashboard" class="<%= title === 'Welcome' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
           <i class="fa-solid fa-house" style="color: #ffffff"></i>
           <p class="nav-items-para">Dashboard</p>
-        </div>
+        </a>
 
         <% const permissions = authUser && authUser.permissions ? authUser.permissions : {}; %>
         
@@ -787,21 +789,21 @@
           <%# Tape View below is hidden app-wide, so Label Stock is the only
               item this dropdown ever opens onto -- skip the toggle and go
               straight there. %>
-          <div title="View" class="view-toggle nav-items" onclick="window.location.href = '/sachiko/label-stock/view'">
+          <a href="/sachiko/label-stock/view" title="View" class="view-toggle nav-items" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
             <i class="fa-solid fa-boxes-stacked" style="color: #ffffff"></i>
             <p class="nav-items-para">SKUs List</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
-          </div>
+          </a>
 
           <div class="nav-labels-opt">
-            <div title="Label Stock View" class="<%= (title === 'Label Stock View' || title === 'Label Stock Form' || title === 'Edit Label Stock') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/label-stock/view'" style="border-top: 2px solid #ffffff9d; border-bottom: 2px solid #ffffff9d;">
+            <a href="/sachiko/label-stock/view" title="Label Stock View" class="<%= (title === 'Label Stock View' || title === 'Label Stock Form' || title === 'Edit Label Stock') ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
               <p class="nav-items-para">Label Stock</p>
-            </div>
-            <div title="Tape View" class="<%= title === 'Tape View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tape/view'" style="display:none;">
+            </a>
+            <a href="/sachiko/tape/view" title="Tape View" class="<%= title === 'Tape View' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
-            </div>
+            </a>
           </div>
         </div>
 
@@ -809,7 +811,7 @@
 
         <% if (canView) { %>
         <div class="nav-opt-wrap">
-          <div title="Client" class="view-toggle nav-items">
+          <div title="Client" class="view-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-user-tie" style="color: #ffffff"></i>
             <p class="nav-items-para">Client</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
@@ -819,14 +821,14 @@
             <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">View</p>
             </div>
-            <div title="Client View" class="<%= title === 'Client View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/client/view'">
+            <a href="/sachiko/client/view" title="Client View" class="<%= title === 'Client View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Client List</p>
-            </div>
-            <div title="Client Details" class="<%= title === 'Client Details' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/master/view'">
+            </a>
+            <a href="/sachiko/master/view" title="Client Details" class="<%= title === 'Client Details' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Client Data</p>
-            </div>
+            </a>
 
             <!-- "Binding" only ever labelled "Client Label Stock" and
                  "Client Tape" below it, both now hidden app-wide -- hiding
@@ -835,40 +837,40 @@
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
             </div>
 
-            <div title="Client Label Stock" class="<%= title === 'Client Label Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/label-stock-binding'" style="display:none;">
+            <a href="/sachiko/form/label-stock-binding" title="Client Label Stock" class="<%= title === 'Client Label Stock' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
               <p class="nav-items-para">Label Stock</p>
-            </div>
-            <div title="Client Tape" class="<%= title === 'Client Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/tape-binding'" style="display:none;">
+            </a>
+            <a href="/sachiko/form/tape-binding" title="Client Tape" class="<%= title === 'Client Tape' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
-            </div>
+            </a>
           </div>
         </div>
         <% } %>
 
         <% if (canOrders) { %>
         <div class="nav-opt-wrap">
-          <div title="Orders" class="view-toggle nav-items">
+          <div title="Orders" class="view-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-receipt" style="color: #ffffff"></i>
             <p class="nav-items-para">Orders</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
 
           <div class="nav-labels-opt">
-            <div title="Sales Order" class="<%= title === 'Sales Order' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/sales/order'" style="border-top: 2px solid #ffffff9d;">
+            <a href="/sachiko/sales/order" title="Sales Order" class="<%= title === 'Sales Order' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-cart-plus" style="color: #ffffff"></i>
               <p class="nav-items-para">Sales Order</p>
-            </div>
-            <div title="Pending Orders" class="<%= title === 'Pending Orders' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/sales/pending'" style="<%= isSales ? '' : 'border-bottom: 2px solid #ffffff9d;' %>">
+            </a>
+            <a href="/sachiko/sales/pending" title="Pending Orders" class="<%= title === 'Pending Orders' ? 'nav-items active' : 'nav-items' %>" style="<%= isSales ? '' : 'border-bottom: 2px solid #ffffff9d;' %> text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clock-rotate-left" style="color: #ffffff"></i>
               <p class="nav-items-para">Pending Orders</p>
-            </div>
+            </a>
             <% if (isSales) { %>
-            <div title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/stocks/view'" style="border-bottom: 2px solid #ffffff9d;">
+            <a href="/sachiko/stocks/view" title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Stock Summary</p>
-            </div>
+            </a>
             <% } %>
           </div>
         </div>
@@ -882,47 +884,47 @@
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
           <div class="nav-labels-opt">
-            <div title="Petty Cash" class="<%= title === 'Petty Cash View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/pettycash/view'" style="border-bottom: 2px solid #ffffff9d;">
+            <a href="/sachiko/pettycash/view" title="Petty Cash" class="<%= title === 'Petty Cash View' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-money-bill-1" style="color: #ffffff"></i>
               <p class="nav-items-para">Petty Cash</p>
-            </div>
+            </a>
           </div>
         </div>
         <% } %>
 
         <% if (isAdmin || isHod) { %>
         <div class="nav-opt-wrap">
-          <div title="Production" class="production-toggle nav-items">
+          <div title="Production" class="production-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-industry" style="color: #ffffff"></i>
             <p class="nav-items-para">Production</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
 
           <div class="nav-labels-opt">
-            <div title="Production Binding View" class="<%= title === 'Production Binding View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/prodcalc/view'" style="border-top: 2px solid #ffffff9d; display:none;">
+            <a href="/sachiko/prodcalc/view" title="Production Binding View" class="<%= title === 'Production Binding View' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Prod Bind View</p>
-            </div>
-            <div title="Production Binding" class="<%= title === 'Production Calculator' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/prodcalc'" style="display:none;">
+            </a>
+            <a href="/sachiko/form/prodcalc" title="Production Binding" class="<%= title === 'Production Calculator' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-industry" style="color: #ffffff"></i>
               <p class="nav-items-para">Prod Binding</p>
-            </div>
-            <div title="Deckle Set" class="<%= title === 'Deckle Set' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/labels/production/deckle-set'">
+            </a>
+            <a href="/sachiko/labels/production/deckle-set" title="Deckle Set" class="<%= title === 'Deckle Set' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-ruler-combined" style="color: #ffffff"></i>
               <p class="nav-items-para">Deckle Set</p>
-            </div>
-            <div title="WIP Production" class="<%= title === 'WIP Production' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/labels/production/pending?tab=wip'">
+            </a>
+            <a href="/sachiko/labels/production/pending?tab=wip" title="WIP Production" class="<%= title === 'WIP Production' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-gears" style="color: #ffffff"></i>
               <p class="nav-items-para">WIP Production</p>
-            </div>
-            <div title="Machine Queues" class="<%= title === 'Machine Queues' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/machine/queue'">
+            </a>
+            <a href="/sachiko/machine/queue" title="Machine Queues" class="<%= title === 'Machine Queues' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
               <p class="nav-items-para">Machine Queues</p>
-            </div>
-            <div title="Production Records" class="<%= title === 'Production Records' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/machine/jobcard/view'" style="border-bottom: 2px solid #ffffff9d;">
+            </a>
+            <a href="/sachiko/machine/jobcard/view" title="Production Records" class="<%= title === 'Production Records' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Production Records</p>
-            </div>
+            </a>
             <!-- Sachiko's pre-existing manual Job Card (/sachiko/jobcard/view) is
                  hidden from nav and disabled at the route -- superseded by the
                  machine-queue-driven "Production Records" above. -->
@@ -932,7 +934,7 @@
 
         <% if (canStock && !isSales) { %>
         <div class="nav-opt-wrap">
-          <div title="Stocks" class="view-toggle nav-items">
+          <div title="Stocks" class="view-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-warehouse" style="color: #ffffff"></i>
             <p class="nav-items-para">Stocks</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
@@ -940,48 +942,48 @@
 
           <div class="nav-labels-opt">
             <% if ((isAdmin || isHod || permissions.inventory) && !isSales) { %>
-            <div title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/stocks/view'" style="border-top: 2px solid #ffffff9d;">
+            <a href="/sachiko/stocks/view" title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Stock Summary</p>
-            </div>
-            <div title="Facestock Stock" class="<%= title === 'Facestock Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/facestockstock'">
+            </a>
+            <a href="/sachiko/facestockstock" title="Facestock Stock" class="<%= title === 'Facestock Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
               <p class="nav-items-para">Facestock</p>
-            </div>
-            <div title="Adhesive Stock" class="<%= title === 'Adhesive Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/adhesivestock'">
+            </a>
+            <a href="/sachiko/adhesivestock" title="Adhesive Stock" class="<%= title === 'Adhesive Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
               <p class="nav-items-para">Adhesive</p>
-            </div>
-            <div title="Release Liner Stock" class="<%= title === 'Release Liner Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/releaselinerstock'">
+            </a>
+            <a href="/sachiko/releaselinerstock" title="Release Liner Stock" class="<%= title === 'Release Liner Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
               <p class="nav-items-para">Release Liner</p>
-            </div>
+            </a>
             <!-- Flat "which reel is used/being used, and for which job" listing,
                  common to all three raw-material pools (an Item column filters
                  Facestock/Adhesive/Release Liner) -- see routes/stock/
                  wipStock.js's loadFacestockUsageRows and the "Used (Kg)"
                  column on the Facestock Stock page above, which this is the
                  drill-down for. -->
-            <div title="WIP Stock" class="<%= title === 'WIP Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/stock/wip'">
+            <a href="/sachiko/stock/wip" title="WIP Stock" class="<%= title === 'WIP Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-industry" style="color: #ffffff"></i>
               <p class="nav-items-para">WIP Stock</p>
-            </div>
-            <div title="Semi Finished Goods Stock" class="<%= title === 'Semi Finished Goods Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/semifinishedstock'">
+            </a>
+            <a href="/sachiko/semifinishedstock" title="Semi Finished Goods Stock" class="<%= title === 'Semi Finished Goods Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-cubes" style="color: #ffffff"></i>
               <p class="nav-items-para">Semi Finished Goods</p>
-            </div>
-            <div title="Finished Goods Stock" class="<%= title === 'Finished Goods Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/finishedstock'">
+            </a>
+            <a href="/sachiko/finishedstock" title="Finished Goods Stock" class="<%= title === 'Finished Goods Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-box" style="color: #ffffff"></i>
               <p class="nav-items-para">Finished</p>
-            </div>
-            <div title="Core Stock" class="<%= title === 'Core Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/corestock'" style="border-bottom: 2px solid #ffffff9d;">
+            </a>
+            <a href="/sachiko/corestock" title="Core Stock" class="<%= title === 'Core Stock' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-regular fa-circle" style="color: #ffffff"></i>
               <p class="nav-items-para">Core</p>
-            </div>
-            <div title="Tape Stock" class="<%= title === 'Tape Stock' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tapestock'" style="display:none;">
+            </a>
+            <a href="/sachiko/tapestock" title="Tape Stock" class="<%= title === 'Tape Stock' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
-            </div>
+            </a>
             <% } %>
           </div>
         </div>
@@ -989,7 +991,7 @@
 
         <% if (canView && !isSales) { %>
         <div class="nav-opt-wrap">
-          <div title="Vendor" class="view-toggle nav-items">
+          <div title="Vendor" class="view-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-shop" style="color: #ffffff"></i>
             <p class="nav-items-para">Purchase</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
@@ -999,40 +1001,40 @@
             <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">View</p>
             </div>
-            <div title="Vendor List" class="<%= title === 'Vendor Details' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/vendor/view'">
+            <a href="/sachiko/vendor/view" title="Vendor List" class="<%= title === 'Vendor Details' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Vendor List</p>
-            </div>
-            <div title="Vendor Details" class="<%= (title === 'Vendor Coordinator View' || title === 'Edit Vendor Coordinator') ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/vendor/coordinator/view'">
+            </a>
+            <a href="/sachiko/vendor/coordinator/view" title="Vendor Details" class="<%= (title === 'Vendor Coordinator View' || title === 'Edit Vendor Coordinator') ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Vendor Details</p>
-            </div>
-            <div title="Stock View" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/stocks/view'" >
+            </a>
+            <a href="/sachiko/stocks/view" title="Stock View" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Summary</p>
-            </div>
-            <div title="Re-Order" class="<%= title === 'Reorder List' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/inventory/reorder'">
+            </a>
+            <a href="/sachiko/inventory/reorder" title="Re-Order" class="<%= title === 'Reorder List' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-cart-flatbed" style="color: #ffffff"></i>
               <p class="nav-items-para">Re-Order</p>
-            </div>
-            <div title="Pending PO" class="<%= title === 'Pending Purchase Orders' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/purchase/pending'">
+            </a>
+            <a href="/sachiko/purchase/pending" title="Pending PO" class="<%= title === 'Pending Purchase Orders' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clock-rotate-left" style="color: #ffffff"></i>
               <p class="nav-items-para">Pending PO</p>
-            </div>
+            </a>
 
             <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Entry</p>
             </div>
 
-            <div title="Purchase Order" class="<%= title === 'Purchase Order' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/inventory/purchase/order'">
+            <a href="/sachiko/inventory/purchase/order" title="Purchase Order" class="<%= title === 'Purchase Order' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-file-invoice" style="color: #ffffff"></i>
               <p class="nav-items-para">Purchase Order</p>
-            </div>
+            </a>
 
-            <div title="Vendor Create" class="<%= title === 'Vendor Form' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor'">
+            <a href="/sachiko/form/vendor" title="Vendor Create" class="<%= title === 'Vendor Form' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-shop" style="color: #ffffff"></i>
               <p class="nav-items-para">Vendor Create</p>
-            </div>
+            </a>
 
             <!-- "Binding" only ever labelled "Vendor Tape" below it, which is
                  now hidden app-wide -- hiding the header too instead of
@@ -1041,67 +1043,67 @@
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
             </div>
 
-            <div title="Vendor Tape" class="<%= title === 'Vendor Tape' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/vendor-item-binding/tape'" style="display:none;">
+            <a href="/sachiko/form/vendor-item-binding/tape" title="Vendor Tape" class="<%= title === 'Vendor Tape' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
-            </div>
+            </a>
           </div>
         </div>
         <% } %>
 
         <% if (isAdmin || isHod) { %>
         <div class="nav-opt-wrap">
-          <div title="Masters" class="masters-toggle nav-items">
+          <div title="Masters" class="masters-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-database" style="color: #ffffff"></i>
             <p class="nav-items-para">Masters</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
 
           <div class="nav-labels-opt">
-            <div title="Location Master" class="<%= title === 'Location Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/location'" style="border-top: 2px solid #ffffff9d;" >
+            <a href="/sachiko/form/location" title="Location Master" class="<%= title === 'Location Master' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-location-dot" style="color: #ffffff"></i>
               <p class="nav-items-para">Location</p>
-            </div>
+            </a>
 
-            <div title="Machine Master" class="<%= title === 'Machine Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/machine'">
+            <a href="/sachiko/form/machine" title="Machine Master" class="<%= title === 'Machine Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-gears" style="color: #ffffff"></i>
               <p class="nav-items-para">Machine</p>
-            </div>
+            </a>
 
-            <div title="Facestock Master" class="<%= title === 'Facestock Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/facestock'">
+            <a href="/sachiko/form/facestock" title="Facestock Master" class="<%= title === 'Facestock Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
               <p class="nav-items-para">Facestock</p>
-            </div>
+            </a>
 
-            <div title="Adhesive Master" class="<%= title === 'Adhesive Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/adhesive'">
+            <a href="/sachiko/form/adhesive" title="Adhesive Master" class="<%= title === 'Adhesive Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
               <p class="nav-items-para">Adhesive</p>
-            </div>
+            </a>
 
-            <div title="Release Master" class="<%= title === 'Release Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/release'">
+            <a href="/sachiko/form/release" title="Release Master" class="<%= title === 'Release Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
               <p class="nav-items-para">Release</p>
-            </div>
+            </a>
 
-            <div title="Family Master" class="<%= title === 'Family Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/family'">
+            <a href="/sachiko/form/family" title="Family Master" class="<%= title === 'Family Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-tags" style="color: #ffffff"></i>
               <p class="nav-items-para">Family</p>
-            </div>
+            </a>
 
-            <div title="Type Master" class="<%= title === 'Type Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/type'">
+            <a href="/sachiko/form/type" title="Type Master" class="<%= title === 'Type Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-shapes" style="color: #ffffff"></i>
               <p class="nav-items-para">Type</p>
-            </div>
+            </a>
 
-            <div title="Core Master" class="<%= title === 'Core Master' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/core'">
+            <a href="/sachiko/form/core" title="Core Master" class="<%= title === 'Core Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-regular fa-circle" style="color: #ffffff"></i>
               <p class="nav-items-para">Core</p>
-            </div>
+            </a>
 
-            <div title="Label Stock Adhesive" class="<%= title === 'Label Stock Adhesive' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/form/label-stock-adhesive-binding'" style="border-bottom: 2px solid #ffffff9d">
+            <a href="/sachiko/form/label-stock-adhesive-binding" title="Label Stock Adhesive" class="<%= title === 'Label Stock Adhesive' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-link" style="color: #ffffff"></i>
               <p class="nav-items-para">LS Adhesive</p>
-            </div>
+            </a>
           </div>
         </div>
 
@@ -1109,20 +1111,20 @@
 
         <% if (isAdmin) { %>
         <div class="nav-opt-wrap">
-          <div title="Admin" class="view-toggle nav-items">
+          <div title="Admin" class="view-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-user-shield" style="color: #ffffff"></i>
             <p class="nav-items-para">Admin Control</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
           <div class="nav-labels-opt">
-            <div title="Permission Dashboard" class="<%= title === 'Permission Dashboard' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/employee/admin/permissions'">
+            <a href="/sachiko/employee/admin/permissions" title="Permission Dashboard" class="<%= title === 'Permission Dashboard' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-shield-halved" style="color: #ffffff"></i>
               <p class="nav-items-para">Permissions</p>
-            </div>
-            <div title="Audit Log" class="<%= title === 'Audit Log' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/audit/view'">
+            </a>
+            <a href="/sachiko/audit/view" title="Audit Log" class="<%= title === 'Audit Log' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Audit Log</p>
-            </div>
+            </a>
           </div>
         </div>
         <% } %>
@@ -1136,14 +1138,14 @@
           </div>
 
           <div class="nav-labels-opt">
-            <div title="Rate Calculator" class="nav-items" onclick="window.location.href = '/sachiko/form/ratecalculator'">
+            <a href="/sachiko/form/ratecalculator" title="Rate Calculator" class="nav-items" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-calculator" style="color: #ffffff"></i>
               <p class="nav-items-para">Rate Calculator</p>
-            </div>
-            <div title="Sales Calculator" class="nav-items" onclick="window.location.href = '/sachiko/form/salescalc'">
+            </a>
+            <a href="/sachiko/form/salescalc" title="Sales Calculator" class="nav-items" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-money-bill-transfer" style="color: #ffffff"></i>
               <p class="nav-items-para">Sales Calculator</p>
-            </div>
+            </a>
           </div>
         </div>
         <% } %>
@@ -1152,54 +1154,54 @@
         <%# HR staff have nothing else in the sidebar, so their one group starts
             expanded instead of making them open it on every page. %>
         <div class="nav-opt-wrap" style="display: none;" <%= isHr ? 'data-open-default' : '' %>>
-          <div title="Masters" class="masters-toggle nav-items">
+          <div title="Masters" class="masters-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-users-gear" style="color: #ffffff"></i>
             <p class="nav-items-para">HR</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
           <div class="nav-labels-opt">
-            <div title="Petty Cash View" class="<%= title === 'Petty Cash View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/pettycash/view'" style="border-top: 2px solid #ffffff9d; margin-bottom: 5px">
+            <a href="/sachiko/pettycash/view" title="Petty Cash View" class="<%= title === 'Petty Cash View' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; margin-bottom: 5px; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-money-bill-1" style="color: #ffffff"></i>
               <p class="nav-items-para">Petty Cash</p>
-            </div>
+            </a>
 
-            <div title="Advance View" class="<%= title === 'Advance View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/advance/view'" >
+            <a href="/sachiko/advance/view" title="Advance View" class="<%= title === 'Advance View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-arrow-up-1-9" style="color: #ffffff"></i>
               <p class="nav-items-para">Advance</p>
-            </div>
+            </a>
 
-            <div title="Loan View" class="<%= title === 'Loan View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/loan/view'" >
+            <a href="/sachiko/loan/view" title="Loan View" class="<%= title === 'Loan View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-handshake" style="color: #ffffff"></i>
               <p class="nav-items-para">Loan</p>
-            </div>
+            </a>
 
-            <div title="Payroll View" class="<%= title === 'Payroll View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/payroll/view'" >
+            <a href="/sachiko/payroll/view" title="Payroll View" class="<%= title === 'Payroll View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-address-book" style="color: #ffffff"></i>
               <p class="nav-items-para">Payroll</p>
-            </div>
+            </a>
 
-            <div title="Employee View" class="<%= title === 'Employee View' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/employee/view'" style="border-bottom: 2px solid #ffffff9d" >
+            <a href="/sachiko/employee/view" title="Employee View" class="<%= title === 'Employee View' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-users" style="color: #ffffff"></i>
               <p class="nav-items-para">Employee</p>
-            </div>
+            </a>
           </div>
         </div>
         <% } %>
 
-        <div title="Maintenance Requests" class="<%= title === 'Maintenance Requests' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/maintenance'">
+        <a href="/sachiko/maintenance" title="Maintenance Requests" class="<%= title === 'Maintenance Requests' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
           <i class="fa-solid fa-screwdriver-wrench" style="color: #ffffff"></i>
           <p class="nav-items-para">Maintenance</p>
-        </div>
+        </a>
 
-        <div title="Company Tasks" class="<%= title === 'Company Tasks' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/tasks'">
+        <a href="/sachiko/tasks" title="Company Tasks" class="<%= title === 'Company Tasks' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
           <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
           <p class="nav-items-para">Tasks</p>
-        </div>
+        </a>
 
-        <div title="Daybook" class="<%= title === 'Daybook' ? 'nav-items active' : 'nav-items' %>" onclick="window.location.href = '/sachiko/daybook'">
+        <a href="/sachiko/daybook" title="Daybook" class="<%= title === 'Daybook' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
           <i class="fa-solid fa-book-open" style="color: #ffffff"></i>
           <p class="nav-items-para">Daybook</p>
-        </div>
+        </a>
       </div>
       <% } %>
 

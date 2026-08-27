@@ -42,6 +42,19 @@ const rollRowSchema = new mongoose.Schema(
 // operator punched start and stop (the form won't let either be punched
 // without its reading). `meters` stays the deckle's own produced length as
 // entered -- it is not derived from these two.
+// Which raw-material reels actually went into one deckle. Normally one per
+// pool, but a facestock reel that runs out mid-run is swapped and the deckle
+// then carries two (see the Materials Mounted strip's "Change" flow -- every
+// reel mounted while a Production Log row is the live entry is appended here).
+const deckleReelSchema = new mongoose.Schema(
+  {
+    pool: { type: String, trim: true }, // facestock | adhesive | release
+    stockId: { type: mongoose.Schema.Types.ObjectId }, // FacestockStock / AdhesiveStock / ReleaseLinerStock _id
+    rollId: { type: String, trim: true },
+  },
+  { _id: false },
+);
+
 const productionLogRowSchema = new mongoose.Schema(
   {
     rollId: { type: String, trim: true },
@@ -49,6 +62,12 @@ const productionLogRowSchema = new mongoose.Schema(
     adRollId: { type: String, trim: true },
     rlRollId: { type: String, trim: true },
     deckleId: { type: String, trim: true },
+    // The Label Stock Product Code this deckle was actually produced as -- the
+    // order's own SKU, or an "-A"/"-B" variant when the scanned reel
+    // combination differed from it (utils/labelStockVariant.js).
+    productCode: { type: String, trim: true },
+    // Every reel that fed this deckle (supports a mid-run facestock swap).
+    materialsUsed: [deckleReelSchema],
     startMtrs: { type: Number },
     stopMtrs: { type: Number },
     meters: { type: Number },

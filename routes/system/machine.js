@@ -493,6 +493,29 @@ async function buildQueueRows(match) {
     const adhesiveStatus = poolStatus("adhesive");
     const releaseStatus = poolStatus("release");
 
+    // The item's recipe, one row per layer it calls for, as
+    // { tag: "Facestock" | "Adhesive" | "Release" (+ " 2" for a second
+    // layer), code, gsm, size }. Drawn straight off the Label Stock's saved
+    // facestock/adhesive/releaseLiner (+ *2) sub-docs -- Adhesive has no
+    // size of its own.
+    const POOL_TAG = { facestock: "Facestock", adhesive: "Adhesive", release: "Release" };
+    const RECIPE_FIELDS = {
+      facestock: { code: "facestockVendorSkuCode", gsm: "facestockGsm", size: "facestockSize" },
+      adhesive: { code: "adhesiveVendorSkuCode", gsm: "adhesiveGsm", size: null },
+      release: { code: "releaseLinerVendorSkuCode", gsm: "releaseLinerGsm", size: "releaseLinerSize" },
+    };
+    const recipe = requiredLayersFor(item.rollType).map((key) => {
+      const meta = LAYER_META[key];
+      const spec = item[meta.specField] || {};
+      const f = RECIPE_FIELDS[meta.pool];
+      return {
+        tag: POOL_TAG[meta.pool] + (key.endsWith("2") ? " 2" : ""),
+        code: spec[f.code] || "",
+        gsm: f.gsm != null && spec[f.gsm] != null ? spec[f.gsm] : "",
+        size: f.size ? spec[f.size] || "" : "",
+      };
+    });
+
     return {
       _id: String(p._id),
       machineId: String(p.assignedMachineId || ""),
@@ -521,6 +544,7 @@ async function buildQueueRows(match) {
       helperName: p.helperId?.empName || "—",
       allottedRollDetails,
       layerAllotments,
+      recipe,
       materialReference: {
         facestockType: item.facestock?.facestockType || "",
         facestockFamily: item.facestock?.facestockFamily || "",
@@ -531,6 +555,68 @@ async function buildQueueRows(match) {
       },
     };
   });
+}
+
+// Raw-material reels that ANY other still-open production order has actually
+// started drawing on -- scanned + Start punched (liveMaterialInUse), or
+// recorded as live-consumed (materialSwapLog, legacy). This is the exact
+// "in use right now" signal the WIP Stock page shows (routes/stock/
+// wipStock.js). A reel here is strictly off-limits to another job: the same
+// physical reel can't feed two machines at once. Distinct from a mere paper
+// allotment, which the shop floor is free to override by scanning something
+// else.
+//
+// Returns { byStockId, byRollId } -- both Maps to { lotNo, machineName, pool }
+// -- keyed by `${pool}|${stockId}` and by normalized rollId respectively.
+async function reelsInUseElsewhere(exceptPendingId) {
+  const byStockId = new Map();
+  const byRollId = new Map();
+
+  const filter = { producedAt: null };
+  if (mongoose.isValidObjectId(exceptPendingId)) filter._id = { $ne: exceptPendingId };
+
+  const others = await PendingProduction.find(filter)
+    .select("lotNo assignedMachineId liveMaterialInUse materialSwapLog")
+    .lean();
+  if (!others.length) return { byStockId, byRollId };
+
+  const machineIds = [...new Set(others.map((p) => String(p.assignedMachineId || "")).filter(Boolean))];
+  const machines = machineIds.length
+    ? await Machine.find({ _id: { $in: machineIds } }).select("machineName").lean()
+    : [];
+  const machineNameById = new Map(machines.map((m) => [String(m._id), m.machineName || ""]));
+
+  // pool -> Set(stockId) -> owning order info
+  const stockIdsByPool = { facestock: new Map(), adhesive: new Map(), release: new Map() };
+  for (const p of others) {
+    const info = { lotNo: p.lotNo || "", machineName: machineNameById.get(String(p.assignedMachineId || "")) || "" };
+    for (const [pool, ids] of Object.entries(p.liveMaterialInUse || {})) {
+      if (!stockIdsByPool[pool]) continue;
+      for (const sid of ids || []) {
+        stockIdsByPool[pool].set(String(sid), info);
+        byStockId.set(`${pool}|${String(sid)}`, { ...info, pool });
+      }
+    }
+    for (const s of p.materialSwapLog || []) {
+      if (!s?.pool || !stockIdsByPool[s.pool] || !s.stockId) continue;
+      stockIdsByPool[s.pool].set(String(s.stockId), info);
+      byStockId.set(`${s.pool}|${String(s.stockId)}`, { ...info, pool: s.pool });
+    }
+  }
+
+  // Translate every in-use stockId back to its rollId so a scanned id (which
+  // is a rollId, not a stockId) can be checked directly.
+  for (const [pool, map] of Object.entries(stockIdsByPool)) {
+    if (!map.size) continue;
+    const { Model } = POOL_MODELS[pool];
+    const reels = await Model.find({ _id: { $in: [...map.keys()] } }).select("rollId").lean();
+    for (const r of reels) {
+      const key = normalizeRollId(r.rollId);
+      if (key) byRollId.set(key, { ...map.get(String(r._id)), pool });
+    }
+  }
+
+  return { byStockId, byRollId };
 }
 
 // Shows every order currently assigned to a machine (via Assign Production)
@@ -573,13 +659,11 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
   let machine = null;
   let prefill = null;
   let materialSwapLog = [];
-  let liveMaterialInUse = {};
 
   let eligibleRawStock = { facestock: [], adhesive: [], release: [] };
   if (pendingId && mongoose.isValidObjectId(pendingId)) {
-    const pendingDoc = await PendingProduction.findById(pendingId).select("assignedMachineId itemId allottedLayers materialSwapLog liveMaterialInUse").lean();
+    const pendingDoc = await PendingProduction.findById(pendingId).select("assignedMachineId itemId allottedLayers materialSwapLog").lean();
     materialSwapLog = pendingDoc?.materialSwapLog || [];
-    liveMaterialInUse = pendingDoc?.liveMaterialInUse || {};
     if (pendingDoc?.assignedMachineId) {
       machine = await Machine.findById(pendingDoc.assignedMachineId).lean();
       const rows = await buildQueueRows({ assignedMachineId: pendingDoc.assignedMachineId });
@@ -627,7 +711,6 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
     previewJobCardId,
     eligibleRawStock,
     materialSwapLog,
-    liveMaterialInUse,
     // One-shot token so a double-submit of this page can't save (or deduct) twice.
     submissionToken: randomUUID(),
     notification: req.flash("notification"),
@@ -845,7 +928,7 @@ async function consumePoolUsage({ pool, rows, jobCardId, createdBy }) {
 // generated Deckle ID is written back onto the row it came from (by index)
 // so the saved job card records which Deckle each row actually became.
 async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [], facestockUsage = [], adhesiveUsage = [], releaseUsage = [], location, jobCardId, createdBy }) {
-  const result = { rows: [], created: 0, meters: 0, resolvedProductCode: null };
+  const result = { rows: [], rowMeta: [], created: 0, meters: 0, resolvedProductCode: null };
   const labelStockId = pendingDoc?.itemId?._id || pendingDoc?.itemId;
   if (!labelStockId || !location || !Array.isArray(productionLog) || !productionLog.length) return result;
 
@@ -864,10 +947,16 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
     if (key) rollSet.add(key);
   };
 
+  const poolRollSet = { facestock: allFsRollIds, adhesive: allAdRollIds, release: allRlRollIds };
   [...jobSetting, ...productionLog].forEach((r) => {
     collectPoolId(r.fsRollId, allFsRollIds);
     collectPoolId(r.adRollId, allAdRollIds);
     collectPoolId(r.rlRollId, allRlRollIds);
+    // Reels a deckle used that aren't its "current" one -- a mid-run swap
+    // (see the Materials Mounted strip). Load them into the maps below too.
+    (Array.isArray(r.materialsUsed) ? r.materialsUsed : []).forEach((m) => {
+      if (poolRollSet[m?.pool]) collectPoolId(m.rollId, poolRollSet[m.pool]);
+    });
   });
 
   (facestockUsage || []).forEach((u) => { if (u.stockId) allFsStockIds.add(String(u.stockId)); if (u.rollId) collectPoolId(u.rollId, allFsRollIds); });
@@ -929,15 +1018,56 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
     }
   }
 
+  const poolMap = { facestock: fsByRollId, adhesive: adByRollId, release: rlByRollId };
+
   let lastFsReel = fsDocs[0] || null;
   let lastAdReel = adDocs[0] || null;
   let lastRlReel = rlDocs[0] || null;
+
+  // Every reel that fed this deckle. Prefers the row's own materialsUsed list
+  // (the strip records each reel mounted during the row's run, so a mid-run
+  // facestock swap keeps both), and falls back to the single "current" reel
+  // per pool when the client didn't send a list.
+  const buildSourceReels = (row) => {
+    const out = [];
+    const seen = new Set();
+    const add = (pool, reel, rawRollId) => {
+      const doc = reel
+        || poolMap[pool]?.get(extractScannedRollId(rawRollId))
+        || (rawRollId && poolMap[pool]?.get(String(rawRollId)));
+      const rollId = doc?.rollId || trim(rawRollId);
+      const key = `${pool}|${normalizeRollId(rollId)}`;
+      if (!rollId || seen.has(key)) return;
+      seen.add(key);
+      out.push({ pool, stockId: doc?._id ? String(doc._id) : undefined, rollId });
+    };
+    (Array.isArray(row.materialsUsed) ? row.materialsUsed : []).forEach((m) => {
+      if (m?.pool && (m.rollId || m.stockId)) add(m.pool, null, m.rollId || m.stockId);
+    });
+    if (!out.length) {
+      add("facestock", lastFsReel);
+      add("adhesive", lastAdReel);
+      add("release", lastRlReel);
+    }
+    return out;
+  };
+
+  const reelSummary = (reels) => {
+    const byPool = { facestock: [], adhesive: [], release: [] };
+    reels.forEach((r) => { if (byPool[r.pool]) byPool[r.pool].push(r.rollId); });
+    return [
+      byPool.facestock.length ? `FS ${byPool.facestock.join(", ")}` : "",
+      byPool.adhesive.length ? `AD ${byPool.adhesive.join(", ")}` : "",
+      byPool.release.length ? `REL ${byPool.release.join(", ")}` : "",
+    ].filter(Boolean).join("; ");
+  };
 
   for (let i = 0; i < productionLog.length; i++) {
     const row = productionLog[i];
     const meters = round2(Number(row.meters) || 0);
     if (meters <= 0) {
       result.rows.push(null);
+      result.rowMeta.push(null);
       continue;
     }
 
@@ -949,17 +1079,6 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
 
     const rlKey = extractScannedRollId(row.rlRollId);
     if (rlKey && rlByRollId.has(rlKey)) lastRlReel = rlByRollId.get(rlKey);
-
-    // Already inwarded to Semi-Finished Stock the instant its Stop was
-    // punched (POST /machine/jobcard/log/produce below) -- just carry its
-    // Deckle ID through rather than producing (and inwarding) it again here.
-    // The lastFsReel/lastAdReel/lastRlReel carry-forward above still ran for
-    // this row first, so a later row with blank roll ids still inherits the
-    // right reel.
-    if (row.alreadyProduced && row.deckleId) {
-      result.rows.push(row.deckleId);
-      continue;
-    }
 
     const resolvedLayers = [
       lastFsReel ? { layerKey: "facestock", meta: LAYER_META.facestock, reel: lastFsReel } : null,
@@ -977,8 +1096,21 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
       }
     }
 
-    const itemCode = actualLabelStock?.productCode || baseLabelStock.productCode || baseLabelStock.skuCode;
-    const deckleId = await generateDeckleId(itemCode, pendingDoc.lotNo);
+    const sourceReels = buildSourceReels(row);
+    const rowProductCode = actualLabelStock?.productCode || baseLabelStock.productCode || "";
+
+    // Already inwarded to Semi-Finished Stock the instant its Stop was punched
+    // (POST /machine/jobcard/log/produce). Don't re-produce it -- but the
+    // variant + reel trace above are still resolved so the saved job card row
+    // carries them.
+    if (row.alreadyProduced && row.deckleId) {
+      result.rows.push(row.deckleId);
+      result.rowMeta.push({ productCode: rowProductCode, sourceReels });
+      if (rowProductCode) result.resolvedProductCode = rowProductCode;
+      continue;
+    }
+
+    const deckleId = await generateDeckleId(rowProductCode || baseLabelStock.skuCode, pendingDoc.lotNo);
 
     // The job card records the status of both webs. Preserve the actual
     // selected value(s) on this particular finished reel for its SOFT.prn
@@ -1004,8 +1136,10 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
       lotNo: trim(pendingDoc.lotNo),
       rollId: deckleId,
       producedFor: pendingDoc._id,
+      sourceReels,
     });
 
+    const traceNote = `as ${rowProductCode || baseLabelStock.productCode}${sourceReels.length ? ` from ${reelSummary(sourceReels)}` : ""}`;
     await MaterialStockLog.create({
       material: actualLabelStock._id,
       location,
@@ -1016,14 +1150,15 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
       rollId: deckleId,
       type: "INWARD",
       source: "SYSTEM",
-      remarks: `${jobCardId ? `${jobCardId}: ` : ""}Deckle produced from Production Log row ${i + 1}`,
+      remarks: `${jobCardId ? `${jobCardId}: ` : ""}Deckle produced from Production Log row ${i + 1} — ${traceNote}`,
       createdBy: createdBy || "SYSTEM",
     });
 
     result.rows.push(deckleId);
+    result.rowMeta.push({ productCode: rowProductCode, sourceReels });
     result.created += 1;
     result.meters = round2(result.meters + meters);
-    if (actualLabelStock?.productCode) result.resolvedProductCode = actualLabelStock.productCode;
+    if (rowProductCode) result.resolvedProductCode = rowProductCode;
   }
   return result;
 }
@@ -1048,6 +1183,141 @@ async function resolveDeckleLocation(pendingDoc) {
   return "";
 }
 
+// The primary recipe layer key for each raw-material pool.
+const POOL_PRIMARY_LAYER = { facestock: "facestock", adhesive: "adhesive", release: "releaseLiner" };
+
+// Resolve which Label Stock the CURRENTLY MOUNTED combination (the reel just
+// scanned for `pool` + the reels already on for the other pools) actually
+// produces -- creating/reusing its "-A"/"-B"/... Product Code variant when
+// the combination differs from the order's own SKU spec on a soft field
+// (vendor, size, ...). Same machinery the Deckle producer uses
+// (resolveActualLabelStock).
+//
+// Deliberately only resolves once EVERY pool the recipe needs has a reel.
+// Resolving a half-scanned combination (facestock in, adhesive/release still
+// from the SKU spec) would mint a throwaway variant on each of the operator's
+// three scans -- "-A" after the first, "-B" after the second, "-C" after the
+// third -- for what is really one combination. Until the mount is complete
+// the caller just shows "pending".
+async function resolveScannedCombinationVariant({ baseLabelStock, pool, reel, mounted }) {
+  if (!baseLabelStock) return null;
+
+  const wanted = { facestock: null, adhesive: null, release: null };
+  wanted[pool] = reel;
+
+  const codeToPool = { fs: "facestock", ad: "adhesive", rl: "release" };
+  for (const [code, otherPool] of Object.entries(codeToPool)) {
+    if (otherPool === pool) continue;
+    const rid = extractScannedRollId(mounted?.[code]);
+    if (!rid) continue;
+    wanted[otherPool] = await POOL_MODELS[otherPool].Model.findOne({ rollId: rid }).lean();
+  }
+
+  const requiredPools = [...new Set(
+    requiredLayersFor(baseLabelStock.rollType).map((k) => LAYER_META[k]?.pool).filter(Boolean),
+  )];
+  const complete = requiredPools.every((p) => wanted[p]);
+  if (!complete) {
+    return { pending: true, baseProductCode: baseLabelStock.productCode };
+  }
+
+  const resolvedLayers = requiredPools
+    .filter((p) => wanted[p])
+    .map((p) => ({ layerKey: POOL_PRIMARY_LAYER[p], meta: LAYER_META[POOL_PRIMARY_LAYER[p]], reel: wanted[p] }));
+
+  const actual = await resolveActualLabelStock(baseLabelStock, resolvedLayers);
+  const isVariant = String(actual._id) !== String(baseLabelStock._id);
+  return {
+    productCode: actual.productCode || baseLabelStock.productCode,
+    skuCode: actual.skuCode || baseLabelStock.skuCode,
+    baseProductCode: baseLabelStock.productCode,
+    isVariant,
+  };
+}
+
+// Validates one raw-material reel the operator has scanned/typed into the
+// Materials Mounted strip, BEFORE it's committed to anything. The shop floor
+// is free to run whatever reel physically matches the recipe -- the office
+// allotment is only a name here -- but:
+//   - the reel has to match this order's recipe on the must-match fields
+//     (getEligibleRawMaterials' validStockIds).
+//   - the reel must not already be WIP on another still-open job -- one
+//     physical reel can't feed two machines (HARD stop / blocking alert).
+//   - the resulting facestock+adhesive+release combination is resolved to its
+//     real Product Code right now, minting the "-A"/"-B" variant if new.
+router.post("/machine/jobcard/material/check", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
+  try {
+    const { pendingId, pool, rollId, mounted } = req.body || {};
+    if (!mongoose.isValidObjectId(pendingId)) {
+      return res.status(400).json({ ok: false, code: "bad-request" });
+    }
+    if (!POOL_MODELS[pool]) {
+      return res.status(400).json({ ok: false, code: "bad-request" });
+    }
+    const cleanId = extractScannedRollId(rollId);
+    if (!cleanId) return res.json({ ok: false, code: "unknown" });
+
+    const pendingDoc = await PendingProduction.findById(pendingId)
+      .select("itemId allottedLayers")
+      .lean();
+    if (!pendingDoc) return res.status(404).json({ ok: false, code: "no-order" });
+
+    const reel = await POOL_MODELS[pool].Model.findOne({ rollId: cleanId }).lean();
+    if (!reel) return res.json({ ok: false, code: "unknown" });
+
+    const eligible = await getEligibleRawMaterials({
+      labelStock: pendingDoc.itemId,
+      allottedLayers: pendingDoc.allottedLayers,
+    });
+    const matchesRecipe = eligible.validStockIds?.[pool]?.has(String(reel._id));
+
+    const { byStockId } = await reelsInUseElsewhere(pendingId);
+    const wip = byStockId.get(`${pool}|${String(reel._id)}`);
+    if (wip) {
+      return res.json({
+        ok: false,
+        code: "wip",
+        rollId: reel.rollId,
+        lotNo: wip.lotNo,
+        machineName: wip.machineName,
+      });
+    }
+
+    if (!matchesRecipe) {
+      return res.json({ ok: false, code: "mismatch", rollId: reel.rollId });
+    }
+
+    const allotted = new Set(
+      Object.values(pendingDoc.allottedLayers || {})
+        .filter((pick) => pick?.pool === pool)
+        .flatMap((pick) => pickStockIds(pick).map(String)),
+    );
+
+    let variant = null;
+    try {
+      const baseLabelStock = await SachikoLabelStock.findById(pendingDoc.itemId).lean();
+      variant = await resolveScannedCombinationVariant({ baseLabelStock, pool, reel, mounted });
+    } catch (variantErr) {
+      console.error("SCAN VARIANT RESOLUTION ERROR:", variantErr);
+    }
+
+    res.json({
+      ok: true,
+      reel: {
+        _id: String(reel._id),
+        rollId: reel.rollId,
+        reelMtrs: Number(reel.reelMtrs) || 0,
+        location: reel.location || "",
+        allotted: allotted.has(String(reel._id)),
+      },
+      variant,
+    });
+  } catch (err) {
+    console.error("JOB CARD MATERIAL CHECK ERROR:", err);
+    res.status(500).json({ ok: false, code: "error" });
+  }
+});
+
 // Fires the moment a Job Setting/Production Log row's Start is punched (see
 // the .js-start-btn/.log-start-btn handlers in jobCardForm.ejs), for
 // whichever of that row's Jumbo FS id/Drum id/Jumbo REL id are already
@@ -1070,8 +1340,23 @@ router.post("/machine/jobcard/mark-in-use", requireAuth, requireMachineFloor, cr
     const cleanId = extractScannedRollId(rollId);
     if (!cleanId) return res.status(400).json({ success: false });
 
-    const reel = await poolInfo.Model.findOne({ rollId: cleanId }).select("_id").lean();
+    const reel = await poolInfo.Model.findOne({ rollId: cleanId }).select("_id rollId").lean();
     if (!reel) return res.status(404).json({ success: false });
+
+    // Hard stop: this reel is already running on another still-open job. Don't
+    // mark it in use here -- the UI shows a blocking alert and the operator
+    // must scan a different one.
+    const { byStockId } = await reelsInUseElsewhere(pendingId);
+    const wip = byStockId.get(`${pool}|${String(reel._id)}`);
+    if (wip) {
+      return res.status(409).json({
+        success: false,
+        code: "wip",
+        rollId: reel.rollId,
+        lotNo: wip.lotNo,
+        machineName: wip.machineName,
+      });
+    }
 
     await PendingProduction.updateOne(
       { _id: pendingId },
@@ -1121,11 +1406,21 @@ router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, cr
     const fs = trim(b.fsRollId);
     const ad = trim(b.adRollId);
     const rl = trim(b.rlRollId);
+    let materialsUsed = [];
+    try {
+      const arr = JSON.parse(b.materialsUsed || "[]");
+      if (Array.isArray(arr)) {
+        materialsUsed = arr
+          .filter((m) => m && m.pool && (m.rollId || m.stockId))
+          .map((m) => ({ pool: trim(m.pool), rollId: trim(m.rollId), stockId: mongoose.isValidObjectId(m.stockId) ? m.stockId : undefined }));
+      }
+    } catch { materialsUsed = []; }
     const row = {
       rollId: fs || [fs, ad, rl].filter(Boolean).join(", "),
       fsRollId: fs,
       adRollId: ad,
       rlRollId: rl,
+      materialsUsed,
       deckleId: "",
       startMtrs: numOrUndef(b.startMtrs),
       stopMtrs: numOrUndef(b.stopMtrs),
@@ -1147,22 +1442,28 @@ router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, cr
       return res.status(400).json({ success: false, message: "Couldn't produce a Deckle for this row." });
     }
 
-    res.json({ success: true, deckleId, meters: production.meters, location: deckleLocation });
+    res.json({
+      success: true,
+      deckleId,
+      meters: production.meters,
+      location: deckleLocation,
+      productCode: production.rowMeta?.[0]?.productCode || "",
+      sourceReels: production.rowMeta?.[0]?.sourceReels || [],
+    });
   } catch (err) {
     console.error("JOB CARD INSTANT DECKLE ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to move this Deckle to Semi Finished Stock." });
   }
 });
 
-// Fires the moment an operator confirms "how much is left" after clicking
-// Add on a Materials in Use slot (jobCardForm.ejs) -- the live counterpart
-// to the Material Used dialog otherwise only shown at final Job Card save.
-// Deducts stock right now via consumePoolUsage (identical math to final
-// save: remaining kg -> used = current - remaining, reel emptied at 0) and
-// records the swap on the order so (a) the final-save dialog knows to skip
-// this reel -- it's already been resolved -- and (b) the operator can see a
-// short history of what they've swapped out this job (materialSwapLog,
-// returned by GET /machine/jobcard/form and rendered client-side).
+// Fires when the operator clicks "Change" on a mounted material (a reel ran
+// out, or the wrong one was scanned) -- reconciles the OUTGOING reel before
+// the next one goes on. The operator enters how many kg are physically left
+// on it; stock is updated to exactly that (consumed = current - remaining,
+// reel emptied at 0), and the swap is recorded on the order so (a) the
+// end-of-job Material Used dialog skips this reel and (b) the shop floor can
+// see a short "what was used on this job" history. No allocation here -- any
+// recipe-matching in-stock reel is fair game.
 router.post("/machine/jobcard/material/set-remaining", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
   try {
     const { pendingId, pool, stockId, remainingKg } = req.body || {};
@@ -1185,12 +1486,18 @@ router.post("/machine/jobcard/material/set-remaining", requireAuth, requireMachi
       return res.status(404).json({ success: false, message: "That production order no longer exists." });
     }
 
-    // Only a stockId genuinely eligible for this order/pool can be resolved
-    // this way -- same trust boundary as the Material Used dialog at final
-    // save (getEligibleRawMaterials' validStockIds, not whatever the client posts).
+    // Any reel that matches this order's recipe (allotted or not) can be
+    // resolved this way -- getEligibleRawMaterials' validStockIds is that set.
     const eligible = await getEligibleRawMaterials({ labelStock: pendingDoc.itemId, allottedLayers: pendingDoc.allottedLayers });
     if (!eligible.validStockIds?.[pool]?.has(String(stockId))) {
-      return res.status(400).json({ success: false, message: "That reel isn't reserved for this order." });
+      return res.status(400).json({ success: false, message: "That reel doesn't match this order's recipe." });
+    }
+
+    // A reel running on another still-open job can't be drawn down here.
+    const { byStockId } = await reelsInUseElsewhere(pendingId);
+    const wip = byStockId.get(`${pool}|${String(stockId)}`);
+    if (wip) {
+      return res.status(409).json({ success: false, code: "wip", lotNo: wip.lotNo, machineName: wip.machineName });
     }
 
     const createdBy = req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM";
@@ -1221,117 +1528,6 @@ router.post("/machine/jobcard/material/set-remaining", requireAuth, requireMachi
   } catch (err) {
     console.error("JOB CARD MATERIAL SET-REMAINING ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to update stock." });
-  }
-});
-
-// Fires when an operator, mid-job, scans/locks in a raw-material reel other
-// than the one this order already has reserved (jobCardForm.ejs's merged
-// "Material Allocation & Usage" table) -- the reserved reel turned out to be
-// the wrong one, damaged, or simply not on hand. Re-points this order's own
-// allottedLayers pick for that pool at the newly chosen reel, which by itself
-// frees the previously-reserved one -- "allotted" is never a flag on the
-// stock doc, only a matter of which order's allottedLayers currently names
-// it (see getEligibleRawMaterials), so dropping it here is enough for
-// Assign Production to offer it to another order immediately. A pool
-// spanning two layers (DOUBLE FACESTOCK/DOUBLE RELEASE's facestock+
-// facestock2, etc.) collapses to the single newly-picked reel under the
-// pool's primary key -- consistent with the one-scan-per-pool UI, which
-// never tracked the two layers as separately mounted reels anyway.
-// Distinct from "How much is left?" (set-remaining) above: that resolves a
-// reel that's actually been drawn on, deducting stock; this one hasn't been
-// used at all, so nothing is deducted, only reserved differently.
-router.post("/machine/jobcard/material/reallocate", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
-  try {
-    const { pendingId, pool, newStockId } = req.body || {};
-    if (!mongoose.isValidObjectId(pendingId)) {
-      return res.status(400).json({ success: false, message: "Missing production order." });
-    }
-    if (!POOL_MODELS[pool]) {
-      return res.status(400).json({ success: false, message: "Unknown material pool." });
-    }
-    if (!mongoose.isValidObjectId(newStockId)) {
-      return res.status(400).json({ success: false, message: "Missing stock reference." });
-    }
-
-    const pendingDoc = await PendingProduction.findById(pendingId)
-      .select("allottedLayers itemId materialSwapLog")
-      .lean();
-    if (!pendingDoc) {
-      return res.status(404).json({ success: false, message: "That production order no longer exists." });
-    }
-
-    // Fetched as a full doc (not populate'd with a field-limited select) --
-    // getEligibleRawMaterials below needs every recipe spec field
-    // (facestock/adhesive/releaseLiner/...), not just rollType, to actually
-    // match a NOT-yet-allotted reel against the recipe. A partial doc with
-    // rollType already present short-circuits its own re-fetch (see its own
-    // "typeof labelStock === object && labelStock.rollType" check) and
-    // silently treats every spec field as undefined, so every reel this
-    // order hasn't already claimed would fail to match.
-    const labelStockDoc = await SachikoLabelStock.findById(pendingDoc.itemId).lean();
-    if (!labelStockDoc) {
-      return res.status(400).json({ success: false, message: "This order's Label Stock SKU no longer exists." });
-    }
-
-    const keys = requiredLayersFor(labelStockDoc.rollType).filter((key) => LAYER_META[key].pool === pool);
-    if (!keys.length) {
-      return res.status(400).json({ success: false, message: "This SKU has no layer in that material pool." });
-    }
-
-    // A reel this order has already drawn on (recorded via the live "Add"
-    // flow above) has nothing left to unallocate -- its stock is already
-    // deducted, so swapping the paper allotment now would be meaningless.
-    const alreadyResolvedStockIds = new Set((pendingDoc.materialSwapLog || []).map((s) => String(s.stockId)));
-    const currentStockIds = keys.flatMap((key) => pickStockIds(pendingDoc.allottedLayers?.[key])).map(String);
-    if (currentStockIds.some((sid) => alreadyResolvedStockIds.has(sid))) {
-      return res.status(400).json({ success: false, message: "This material has already been recorded as used — it can no longer be swapped." });
-    }
-    if (currentStockIds.includes(String(newStockId))) {
-      return res.status(400).json({ success: false, message: "That reel is already allotted to this order." });
-    }
-
-    // Only a reel genuinely eligible for this order's own recipe (matching
-    // spec, real stock left) can be swapped in -- same trust boundary as
-    // every other endpoint here, never whatever stockId the client posts.
-    const eligible = await getEligibleRawMaterials({ labelStock: labelStockDoc, allottedLayers: pendingDoc.allottedLayers });
-    const target = (eligible[pool] || []).find((r) => String(r._id) === String(newStockId));
-    if (!target) {
-      return res.status(400).json({ success: false, message: "That reel doesn't match this order's recipe, or is out of stock." });
-    }
-
-    // A reel another still-open WIP order already has reserved on paper, or
-    // is physically running on right now, can't be double-booked onto this
-    // order too -- the same claim guard the Assign Production page applies
-    // when a reel is picked there (routes/fairdesk_route.js's claimedByKey/
-    // liveByKey), just re-applied here for a reallocation made from the shop
-    // floor instead of the assign form.
-    const otherPending = await PendingProduction.find({
-      _id: { $ne: pendingId },
-      assignedMachineId: { $ne: null },
-      producedAt: null,
-    }).select("allottedLayers liveMaterialInUse").lean();
-    const claimedElsewhere = otherPending.some((p) =>
-      Object.values(p.allottedLayers || {}).some(
-        (pick) => pick?.pool === pool && pickStockIds(pick).map(String).includes(String(newStockId))
-      ) || (p.liveMaterialInUse?.[pool] || []).map(String).includes(String(newStockId))
-    );
-    if (claimedElsewhere) {
-      return res.status(400).json({ success: false, message: "That reel is already reserved by another production order." });
-    }
-
-    const updatedLayers = { ...(pendingDoc.allottedLayers || {}) };
-    keys.forEach((key) => { delete updatedLayers[key]; });
-    updatedLayers[keys[0]] = { pool, stockIds: [String(newStockId)] };
-    await PendingProduction.updateOne({ _id: pendingId }, { $set: { allottedLayers: updatedLayers } });
-
-    res.json({
-      success: true,
-      freed: currentStockIds,
-      allotted: { _id: String(target._id), rollId: target.rollId, reelMtrs: target.reelMtrs, location: target.location },
-    });
-  } catch (err) {
-    console.error("JOB CARD MATERIAL REALLOCATE ERROR:", err);
-    res.status(500).json({ success: false, message: "Failed to update the material allocation." });
   }
 });
 
@@ -1502,6 +1698,21 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     // system-issued deckleId already has its Deckle inwarded to Semi Finished
     // Stock, so produceDecklesFromLog below must not do it again.
     const logInstantProduced = toArray(b.logInstantProduced);
+    const logMaterialsUsed = toArray(b.logMaterialsUsed);
+    const parseMaterialsUsed = (raw) => {
+      try {
+        const arr = JSON.parse(raw || "[]");
+        return Array.isArray(arr)
+          ? arr
+              .filter((m) => m && m.pool && (m.rollId || m.stockId))
+              .map((m) => ({
+                pool: trim(m.pool),
+                rollId: trim(m.rollId),
+                stockId: mongoose.isValidObjectId(m.stockId) ? m.stockId : undefined,
+              }))
+          : [];
+      } catch { return []; }
+    };
     const logStart = toArray(b.logStart);
     const logStartMtrs = toArray(b.logStartMtrs);
     const logEnd = toArray(b.logEnd);
@@ -1525,6 +1736,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
           adRollId: ad,
           rlRollId: rl,
           deckleId: rowDeckleId,
+          materialsUsed: parseMaterialsUsed(logMaterialsUsed[i]),
           alreadyProduced: trim(logInstantProduced[i]) === "1" && Boolean(rowDeckleId),
           startMtrs: numOrUndef(logStartMtrs[i]),
           stopMtrs: numOrUndef(logStopMtrs[i]),
@@ -1549,6 +1761,42 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
           row.time.startTime ||
           row.time.endTime,
       );
+
+    // Hard stop, server-side backstop for the scan-time alert: no reel that is
+    // already WIP on another still-open job may be recorded here. Checks every
+    // scanned roll id across Job Setting / Production Log, plus every stockId
+    // the Material Used dialog posted.
+    if (mongoose.isValidObjectId(b.pendingId)) {
+      const { byRollId, byStockId } = await reelsInUseElsewhere(b.pendingId);
+      if (byRollId.size || byStockId.size) {
+        const scannedByPool = { facestock: [], adhesive: [], release: [] };
+        for (const r of [...jobSetting, ...productionLog]) {
+          if (r.fsRollId) scannedByPool.facestock.push(extractScannedRollId(r.fsRollId));
+          if (r.adRollId) scannedByPool.adhesive.push(extractScannedRollId(r.adRollId));
+          if (r.rlRollId) scannedByPool.release.push(extractScannedRollId(r.rlRollId));
+        }
+        let clash = null;
+        for (const [, rid] of Object.entries(scannedByPool).flatMap(([p, ids]) => ids.map((id) => [p, id]))) {
+          const hit = rid && byRollId.get(rid);
+          if (hit) { clash = { rollId: rid, ...hit }; break; }
+        }
+        if (!clash) {
+          for (const u of [...facestockUsage, ...adhesiveUsage, ...releaseUsage]) {
+            const poolKey = ["facestock", "adhesive", "release"].find((p) => byStockId.has(`${p}|${String(u.stockId)}`));
+            if (poolKey) { clash = { rollId: u.rollId || "", ...byStockId.get(`${poolKey}|${String(u.stockId)}`) }; break; }
+          }
+        }
+        if (clash) {
+          req.flash(
+            "notification",
+            `Reel ${clash.rollId || ""} is already running on job ${clash.lotNo || "(another order)"}${clash.machineName ? ` at ${clash.machineName}` : ""} — it can't be used here.`,
+          );
+          return res.redirect(
+            mongoose.isValidObjectId(b.machineId) ? `/sachiko/machine/${b.machineId}/queue` : "/sachiko/machine/queue",
+          );
+        }
+      }
+    }
 
     await MachineJobCard.create({
       jobCardId,
@@ -1688,18 +1936,20 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
         jobCardId,
         createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
       });
-      if (deckleProduction.created) {
-        const updateSet = productionLog.reduce((set, _row, i) => {
-          if (deckleProduction.rows[i]) set[`productionLog.${i}.deckleId`] = deckleProduction.rows[i];
-          return set;
-        }, {});
-        if (deckleProduction.resolvedProductCode) {
-          updateSet.productCode = deckleProduction.resolvedProductCode;
+      const updateSet = productionLog.reduce((set, _row, i) => {
+        if (deckleProduction.rows[i]) set[`productionLog.${i}.deckleId`] = deckleProduction.rows[i];
+        const meta = deckleProduction.rowMeta?.[i];
+        if (meta) {
+          if (meta.productCode) set[`productionLog.${i}.productCode`] = meta.productCode;
+          if (meta.sourceReels?.length) set[`productionLog.${i}.materialsUsed`] = meta.sourceReels;
         }
-        await MachineJobCard.updateOne(
-          { jobCardId },
-          { $set: updateSet },
-        );
+        return set;
+      }, {});
+      if (deckleProduction.resolvedProductCode) {
+        updateSet.productCode = deckleProduction.resolvedProductCode;
+      }
+      if (Object.keys(updateSet).length) {
+        await MachineJobCard.updateOne({ jobCardId }, { $set: updateSet });
       }
     } catch (deckleErr) {
       console.error("JOB CARD DECKLE PRODUCTION ERROR:", deckleErr);
@@ -1770,7 +2020,10 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
 });
 
 router.get("/machine/jobcard/view", requireMachineFloor, async (req, res) => {
-  const jsonData = await MachineJobCard.find().sort({ createdAt: -1 }).lean();
+  const jsonData = await MachineJobCard.find()
+    .populate({ path: "pendingProductionId", select: "deckleSize" })
+    .sort({ createdAt: -1 })
+    .lean();
   res.render("inventory/masters/jobCardView.ejs", {
     title: "Production Records",
     CSS: "tableDisp.css",

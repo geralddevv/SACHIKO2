@@ -29,10 +29,9 @@
     padding: 10px !important;
   }
   /* Same stacked label-over-value summary as Assign Production's Material
-     Details card (assignProduction.ejs's .material-id-row) -- kept in step
-     with that page's field list (Label Stock Code / Size / Running Mtrs /
-     Qty / Roll Type / Deckle Size) so both stops in the production flow
-     show the same at-a-glance details. */
+     Details card (assignProduction.ejs's .material-id-row). Shows just the
+     essentials here, in this order: Label Stock Code / Deckle Size /
+     Running Mtrs / Qty. */
   .material-id-row {
     /* .jc-info-wrap (its parent) is a column-direction flex box with
        align-items:flex-start -- on the cross axis (width, for a column
@@ -46,6 +45,26 @@
   .material-id-row .mid-item { display: flex; flex-direction: column; gap: 4px; }
   .material-id-row .mid-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #7c8ba1; }
   .material-id-row .mid-value { font-size: 19px; font-weight: 800; color: #1f2a44; }
+
+  /* Recipe of the item being run -- one row per layer (Facestock /
+     Adhesive / Release, + a " 2" suffix for a second layer on DOUBLE
+     FACESTOCK / DOUBLE RELEASE). */
+  .jc-recipe-table {
+    align-self: stretch; border-collapse: collapse;
+    margin: 12px 18px 4px; width: calc(100% - 36px);
+    border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;
+  }
+  .jc-recipe-table th {
+    background: #044a78; color: #fff; font-size: 11px; font-weight: 600;
+    text-align: left; padding: 6px 12px; letter-spacing: 0.02em;
+  }
+  .jc-recipe-table td {
+    padding: 6px 12px; font-size: 12px; font-weight: 600; color: #1f2a44;
+    border-top: 1px solid #e2e8f0; background: #fff;
+  }
+  .jc-recipe-table td.jc-recipe-tag {
+    font-weight: 800; color: #044a78; white-space: nowrap;
+  }
 
   .jc-log-table {
     width: 100%;
@@ -186,51 +205,6 @@
   .jc-roll-table th:last-child,
   .jc-roll-table td:last-child { border-right: none; }
   .jc-roll-table tr:last-child td { border-bottom: none; }
-  .jc-allocation-wrap {
-    width: 100%;
-    align-self: stretch;
-    padding: 0;
-  }
-  /* Collapsible "Material Allocation" header -- click to shrink the table
-     away when you don't need it on screen. */
-  .jc-collapsible-header:hover { filter: brightness(1.08); }
-  .jc-collapse-icon {
-    font-size: 14px;
-    transition: transform 0.15s ease;
-    flex-shrink: 0;
-  }
-  .jc-collapse-icon.collapsed { transform: rotate(-90deg); }
-  .jc-allocation-scroll {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto;
-  }
-  .jc-roll-table.jc-allocation-table {
-    min-width: 1330px;
-    table-layout: auto;
-  }
-  .jc-roll-table.jc-allocation-table td {
-    white-space: nowrap;
-    word-break: normal;
-    vertical-align: middle;
-  }
-  /* "Currently Mounted" -- the one column of the merged allocation table
-     that isn't a flat fact but a live scan control (input + running history
-     of what's already been drawn on), so unlike every other cell here it
-     needs to wrap and grow instead of staying a single nowrap line. */
-  .jc-roll-table.jc-allocation-table td.jc-mounted-cell {
-    white-space: normal;
-    vertical-align: top;
-    min-width: 260px;
-    padding: 8px !important;
-  }
-  .jc-no-rolls {
-    padding: 10px 12px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #92400e;
-    background: #fffbeb;
-  }
 
   .jc-readonly {
     background: #f0f7ff !important;
@@ -267,126 +241,126 @@
   }
   .roll-scan-btn:hover { opacity: 0.88; }
 
-  /* Materials-in-use -- one column per material (Facestock / Adhesive /
-     Release), Jumbo FS / Drum / Jumbo REL id are scanned ONCE here and
-     carried into every Job Setting row and the single Production Log entry
-     row automatically, instead of being re-scanned on every line. Each
-     column stacks every roll already scanned this job (oldest first) as a
-     running feed, with the active scan field always at the bottom -- so
-     what's mounted right now is always the last thing in the column. Add
-     swaps in a new roll once the current one runs out. */
-  /* One .jc-material-slot per pool, now embedded as the last cell of that
-     pool's row in the merged allocation table (jc-mounted-cell) instead of
-     living in its own separate grid/section. */
-  .jc-material-slot {
-    min-width: 220px;
+  /* Materials Mounted strip -- one slot per raw-material pool, scanned once. */
+  /* Persistent banner: what Product Code / variant the current reel
+     combination produces. Stays put once resolved -- it is not a toast. */
+  .jc-mounted-variant {
     display: flex;
-    flex-direction: column;
-    background: #ffffff;
-    border: 1px solid #dbe4f0;
-    border-radius: 8px;
-    padding: 10px;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 14px;
+    padding: 11px 14px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.35;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
   }
-  .jc-material-col-head {
-    font-size: 12px;
-    font-weight: 800;
-    color: #ffffff;
-    background: #044a78;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    text-align: center;
-    padding: 5px 8px;
+  .jc-mounted-variant > i { font-size: 15px; flex: 0 0 auto; }
+  .jc-mounted-variant.is-variant {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #9a3412;
+  }
+  .jc-mounted-variant.is-pending {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    color: #64748b;
+  }
+  .jc-mounted-variant .code {
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    padding: 1px 7px;
     border-radius: 5px;
-    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.7);
   }
-  .jc-material-scanned-list {
+  .jc-mounted-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    align-self: stretch;
+  }
+  .jc-mounted-slot {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin-bottom: 8px;
-    max-height: 220px;
-    overflow-y: auto;
-  }
-  .jc-material-scanned-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 7px;
-    background: #f7fafd;
+    background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    padding: 5px 8px;
+    border-radius: 8px;
+    padding: 10px 12px;
   }
-  .jc-material-scanned-row .idx {
-    flex: 0 0 auto;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #044a78;
-    color: #ffffff;
-    font-size: 9.5px;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-top: 1px;
+  .jc-mounted-slot-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #7c8ba1;
   }
-  .jc-material-scanned-row .body {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
-  }
-  .jc-material-scanned-row .roll {
-    font-size: 12px;
-    font-weight: 700;
-    color: #03365a;
-    word-break: break-word;
-  }
-  .jc-material-scanned-row .meta {
-    font-size: 10.5px;
-    color: #5a6586;
-    font-weight: 600;
-  }
-  .jc-material-scanned-row .empty-tag {
-    color: #b91c1c;
-    font-weight: 700;
-  }
-  .jc-material-slot-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .jc-material-slot-row .roll-id-field { flex: 1 1 auto; }
-  .jc-material-slot input.form-control {
-    padding: 6px 8px !important;
+  .jc-mounted-slot-row { display: flex; align-items: center; gap: 6px; }
+  .jc-mounted-slot-row .roll-id-field { flex: 1 1 auto; }
+  .jc-mounted-slot .form-control {
+    padding: 7px 9px !important;
     font-size: 13px !important;
-    height: 32px !important;
+    height: 34px !important;
   }
-  .jc-material-slot input.form-control[readonly] {
+  .jc-mounted-slot .form-control[readonly] {
     background: #ffffff;
     border-color: #cbd5e1;
     color: #03365a;
     font-weight: 700;
   }
+  .jc-mounted-slot .roll-scan-btn { width: 34px; height: 34px; font-size: 13px; }
   .jc-material-add-btn {
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    height: 32px;
-    padding: 0 10px;
-    border: 1px solid #044A78;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid #044a78;
     background: #ffffff;
-    color: #044A78;
+    color: #044a78;
     border-radius: 6px;
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
     white-space: nowrap;
   }
-  .jc-material-add-btn:hover { background: #044A78; color: #ffffff; }
+  .jc-material-add-btn:hover { background: #044a78; color: #ffffff; }
 
-  /* "How much is left?" swap dialog */
+  /* Per-job "reels used so far" feed under each mounted slot. */
+  .jc-material-scanned-list { display: flex; flex-direction: column; gap: 5px; }
+  .jc-material-scanned-list:empty { display: none; }
+  .jc-material-scanned-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    background: #eef4fb;
+    border: 1px solid #dbe7f4;
+    border-radius: 6px;
+    padding: 4px 7px;
+  }
+  .jc-material-scanned-row .idx {
+    flex: 0 0 auto;
+    width: 15px; height: 15px;
+    border-radius: 50%;
+    background: #044a78;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+  .jc-material-scanned-row .body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .jc-material-scanned-row .roll { font-size: 11.5px; font-weight: 700; color: #03365a; word-break: break-word; }
+  .jc-material-scanned-row .meta { font-size: 10px; color: #5a6586; font-weight: 600; }
+  .jc-material-scanned-row .empty-tag { color: #b91c1c; font-weight: 700; }
+
+  /* "How much is left?" dialog */
   .jc-swap-current {
     background: #f0f7ff;
     border: 1px solid #d7e6f5;
@@ -523,6 +497,12 @@
     outline: 3px solid rgba(4, 74, 120, 0.32);
     outline-offset: 2px;
   }
+  #wipBlockDialog .jc-material-confirm {
+    background: #b91c1c !important;
+    box-shadow: 0 3px 9px rgba(185, 28, 28, 0.3);
+    min-width: 120px;
+  }
+  #wipBlockDialog .dialog-header h2 { gap: 8px; display: flex; align-items: center; }
 
   .jc-save-wrap {
     display: flex;
@@ -554,32 +534,6 @@
     opacity: 0.72;
     transform: none;
     box-shadow: none;
-  }
-
-  /* Submit button -- light/outlined at rest, inverts to solid dark navy on
-     hover (no scale/glow, just the background+text swap). Scoped by id so
-     it wins over the site-wide .btn-grp button:hover glow (common.css)
-     without touching that global rule or the Start Production Log button,
-     which still uses the default .jc-save-action look. */
-  #saveEntryBtn {
-    background: #eaf2fc;
-    color: #044a78;
-    border: 1px solid #044a78;
-    box-shadow: none;
-  }
-  #saveEntryBtn:hover {
-    background: #044a78;
-    color: #ffffff;
-    box-shadow: none;
-    transform: none;
-    cursor: pointer;
-  }
-  #saveEntryBtn:active {
-    background: #03365a;
-    color: #ffffff;
-    box-shadow: none;
-    transform: none;
-    cursor: pointer;
   }
 
   .scan-video-wrap {
@@ -615,18 +569,6 @@
       flex: 0 0 34%; color: #5a6586; font-weight: 700; font-size: 12px;
     }
     .jc-roll-table td:first-child { background: #f0f7ff; color: #03365a; font-weight: 700; }
-
-    .jc-roll-table.jc-allocation-table { min-width: 1330px; table-layout: auto; }
-    .jc-roll-table.jc-allocation-table thead { display: table-header-group; }
-    .jc-roll-table.jc-allocation-table tbody { display: table-row-group; }
-    .jc-roll-table.jc-allocation-table tr { display: table-row; border-bottom: none; }
-    .jc-roll-table.jc-allocation-table td {
-      display: table-cell; width: auto; padding: 7px 12px; border-right: 1px solid #e2e8f0;
-      white-space: nowrap; word-break: normal; font-size: 12.5px;
-    }
-    .jc-roll-table.jc-allocation-table td.jc-mounted-cell { white-space: normal; vertical-align: top; }
-    .jc-roll-table.jc-allocation-table td::before { display: none; }
-    .jc-roll-table.jc-allocation-table td:first-child { background: #f0f7ff; color: #03365a; font-weight: 700; }
 
     .jc-roll-table.jc-material-used-table { min-width: 1160px; table-layout: auto; }
     .jc-roll-table.jc-material-used-table thead { display: table-header-group; }
@@ -750,160 +692,43 @@
     <div class="span-full jc-info-wrap">
       <div class="material-id-row">
         <div class="mid-item"><span class="mid-label">Label Stock Code</span><span class="mid-value"><%= dash(jc.productCode) %></span></div>
-        <div class="mid-item"><span class="mid-label">Size</span><span class="mid-value"><%= dash(jc.paperSize) %></span></div>
+        <div class="mid-item"><span class="mid-label">Deckle Size</span><span class="mid-value"><%= dash(jc.deckleSize) %></span></div>
         <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= fmtQty(jc.runningMeters) %></span></div>
         <div class="mid-item"><span class="mid-label">Qty</span><span class="mid-value"><%= fmtQty(jc.quantity) %></span></div>
-        <div class="mid-item"><span class="mid-label">Roll Type</span><span class="mid-value"><%= dash(jc.rollType) %></span></div>
-        <div class="mid-item"><span class="mid-label">Deckle Size</span><span class="mid-value"><%= dash(jc.deckleSize) %></span></div>
       </div>
-    </div>
 
-    <!-- Material Allocation & Usage -- one row per raw-material pool
-         (always exactly 3: Facestock / Adhesive / Release, never per-layer,
-         so a DOUBLE FACESTOCK/DOUBLE RELEASE recipe's extra layer folds into
-         its own pool's row instead of adding a 4th/5th line) merging what
-         used to be two separate sections: the read-only allotment summary,
-         and the live "scan what's mounted" control. Each row's last column
-         IS that pool's scan control -- see jc-mounted-cell below -- so
-         switching to a reel other than the one already allotted is done
-         right where the allotment itself is shown, not in a disconnected
-         panel further down the page. -->
-    <% const allocLayers = jc.layerAllotments || []; %>
-    <%
-      const usageItems = allocLayers.flatMap((l) =>
-        (l.reels || []).map((r) => ({ ...r, pool: l.pool, unit: l.unit, layerLabel: l.label }))
-      );
-      const POOL_META = {
-        facestock: { label: "Facestock", code: "fs", datalist: "allottedFsRollList", placeholder: "Scan FS", scanName: "Jumbo FS", unitFallback: "Roll" },
-        adhesive: { label: "Adhesive", code: "ad", datalist: "allottedAdRollList", placeholder: "Scan Drum", scanName: "Drum", unitFallback: "Drum" },
-        release: { label: "Release Liner", code: "rl", datalist: "allottedRlRollList", placeholder: "Scan REL", scanName: "Jumbo REL", unitFallback: "Roll" },
-      };
-      // Status reflects what's actually happening RIGHT NOW, not just the
-      // paper reservation: running (this pool has a reel live -- Start's
-      // already been punched with it scanned in, see PendingProduction.
-      // liveMaterialInUse) outranks used (fully resolved via a Materials in
-      // Use "Add", see materialSwapLog) which outranks a plain reservation,
-      // which itself splits full/partial for a DOUBLE recipe's 2-layer pool
-      // (facestock+facestock2, etc.) rather than flattening straight to
-      // Allotted the moment either one has a reel.
-      const liveByPool = (typeof liveMaterialInUse !== 'undefined' && liveMaterialInUse) ? liveMaterialInUse : {};
-      const swapLogEntries = (typeof materialSwapLog !== 'undefined' && materialSwapLog) ? materialSwapLog : [];
-      const poolRows = Object.keys(POOL_META).map((pool) => {
-        const layers = allocLayers.filter((l) => l.pool === pool);
-        const allocatedCount = layers.filter((l) => l.allocated).length;
-        const isLive = Array.isArray(liveByPool[pool]) && liveByPool[pool].length > 0;
-        const isUsed = swapLogEntries.some((s) => s.pool === pool);
-        const status = allocatedCount === 0
-          ? "none"
-          : isLive
-          ? "running"
-          : isUsed
-          ? "used"
-          : allocatedCount === layers.length
-          ? "full"
-          : "partial";
-        return {
-          pool,
-          meta: POOL_META[pool],
-          unit: layers[0]?.unit || POOL_META[pool].unitFallback,
-          status,
-          reels: layers.filter((l) => l.allocated).flatMap((l) => l.reels || []),
-        };
-      });
-    %>
-    <div class="span-full form-subheading jc-collapsible-header" id="allocationHeader"
-         style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;"
-         role="button" tabindex="0" aria-expanded="true" aria-controls="allocationWrap">
-      <h1>Material Allocation &amp; Usage</h1>
-      <i class="fa-solid fa-chevron-down jc-collapse-icon" id="allocationChevron" aria-hidden="true"></i>
-    </div>
-
-    <div class="span-full jc-info-wrap jc-allocation-wrap" id="allocationWrap">
-      <% if (allocLayers.length) { %>
-        <div class="jc-allocation-scroll">
-        <table class="jc-roll-table jc-allocation-table" id="curMaterialsPanel">
-          <thead>
-            <tr>
-              <th style="width:150px;">Layer</th>
-              <th style="width:120px;">Status</th>
-              <th>Qty</th>
-              <th>Roll / Drum ID</th>
-              <th>Code</th>
-              <th>GSM</th>
-              <th>Size</th>
-              <th>Make</th>
-              <th>Location</th>
-              <th style="min-width:260px;">Currently Mounted</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% poolRows.forEach((pr) => { %>
-              <tr>
-                <td data-label="Layer"><%= pr.meta.label %></td>
-                <td data-label="Status">
-                  <% if (pr.status === "running") { %>
-                    <span style="color:#047857; font-weight:700;"><i class="fa-solid fa-circle-play" aria-hidden="true"></i> In Use</span>
-                  <% } else if (pr.status === "used") { %>
-                    <span style="color:#5a6586; font-weight:700;">Used</span>
-                  <% } else if (pr.status === "full") { %>
-                    <span style="color:#16a34a; font-weight:700;">Allotted</span>
-                  <% } else if (pr.status === "partial") { %>
-                    <span style="color:#b45309; font-weight:700;">Partly Allotted</span>
-                  <% } else { %>
-                    <span style="color:#dc2626; font-weight:700;">Not Allotted</span>
-                  <% } %>
-                </td>
-                <%
-                  const reels = pr.reels;
-                  const totalKg = reels.reduce((sum, r) => sum + (Number(r.reelMtrs) || 0), 0);
-                  const reelIds = reels.map((r) => r.rollId).filter(Boolean);
-                  const reelLocations = [...new Set(reels.map((r) => r.location).filter(Boolean))];
-                  const reelCodes = reels.map((r) => r.code).filter(Boolean);
-                  const reelGsms = reels.map((r) => r.gsm).filter((v) => v !== undefined && v !== null && v !== "");
-                  const reelSizes = reels.map((r) => r.size).filter(Boolean);
-                  const reelMakes = reels.map((r) => r.make).filter(Boolean);
-                %>
-                <td data-label="Qty"><%= reels.length ? `${reels.length} ${pr.unit}${reels.length === 1 ? "" : "s"}${totalKg ? ` (${fmtQty(totalKg)} kg)` : ""}` : "—" %></td>
-                <td data-label="Roll / Drum ID"><%= reelIds.length ? reelIds.join(", ") : "—" %></td>
-                <td data-label="Code"><%= reelCodes.length ? reelCodes.join(", ") : "—" %></td>
-                <td data-label="GSM"><%= reelGsms.length ? reelGsms.map((gsm) => `${fmtQty(gsm)} GSM`).join(", ") : "—" %></td>
-                <td data-label="Size"><%= reelSizes.length ? reelSizes.join(", ") : "—" %></td>
-                <td data-label="Make"><%= reelMakes.length ? reelMakes.join(", ") : "—" %></td>
-                <td data-label="Location"><%= reelLocations.length ? reelLocations.join(", ") : "—" %></td>
-                <td data-label="Currently Mounted" class="jc-mounted-cell">
-                  <div class="jc-material-slot" data-pool="<%= pr.meta.code %>">
-                    <div class="jc-material-scanned-list" id="materialScannedList-<%= pr.meta.code %>"></div>
-                    <div class="jc-material-slot-row">
-                      <div class="roll-id-field">
-                        <input type="text" class="form-control jc-cur-roll-input" data-pool="<%= pr.meta.code %>" list="<%= pr.meta.datalist %>"
-                               placeholder="<%= pr.meta.placeholder %>" autocomplete="off" />
-                        <button type="button" class="roll-scan-btn jc-cur-scan-btn" data-pool="<%= pr.meta.code %>" aria-label="Scan <%= pr.meta.scanName %> ID with camera" title="Scan QR with camera">
-                          <i class="fa-solid fa-camera"></i>
-                        </button>
-                      </div>
-                      <button type="button" class="jc-material-add-btn" data-pool="<%= pr.meta.code %>" style="display:none;" title="This <%= pr.meta.scanName.toLowerCase() %> is finished — scan the next one">
-                        <i class="fa-solid fa-plus"></i> Add
-                      </button>
-                    </div>
-                    <span class="roll-note"></span>
-                  </div>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-        </div>
-      <% } else { %>
-        <div class="jc-no-rolls">
-          This SKU has no raw-material recipe to allocate.
-        </div>
+      <% const recipe = jc.recipe || []; %>
+      <% if (recipe.length) { %>
+      <table class="jc-recipe-table">
+        <thead>
+          <tr><th></th><th>Code</th><th>GSM</th><th>Size</th></tr>
+        </thead>
+        <tbody>
+          <% recipe.forEach((r) => { %>
+          <tr>
+            <td class="jc-recipe-tag"><%= r.tag %></td>
+            <td><%= dash(r.code) %></td>
+            <td><%= dash(r.gsm) %></td>
+            <td><%= dash(r.size) %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
       <% } %>
     </div>
 
+    <!-- Materials Mounted -- the operator scans each raw-material reel ONCE
+         here; it carries into every Job Setting row and every Production Log
+         deckle automatically (hidden per-row fsRollId/adRollId/rlRollId).
+         When a reel runs out (or was the wrong scan) "Change" asks how many
+         kg are left on it, updates stock right then, and logs it to this
+         job's history. The office allotment is only a hint -- any reel that
+         matches the recipe (see the table above) is fair game; a reel
+         already running on another job is hard-blocked. -->
     <%
-      const eligibleFs = (typeof eligibleRawStock !== 'undefined' && eligibleRawStock.facestock) ? eligibleRawStock.facestock : (allocLayers.filter(l => l.pool === 'facestock').flatMap(l => l.reels || []));
-      const eligibleAd = (typeof eligibleRawStock !== 'undefined' && eligibleRawStock.adhesive) ? eligibleRawStock.adhesive : (allocLayers.filter(l => l.pool === 'adhesive').flatMap(l => l.reels || []));
-      const eligibleRl = (typeof eligibleRawStock !== 'undefined' && eligibleRawStock.release) ? eligibleRawStock.release : (allocLayers.filter(l => l.pool === 'release').flatMap(l => l.reels || []));
+      const eligibleFs = (typeof eligibleRawStock !== 'undefined' && eligibleRawStock.facestock) ? eligibleRawStock.facestock : [];
+      const eligibleAd = (typeof eligibleRawStock !== 'undefined' && eligibleRawStock.adhesive) ? eligibleRawStock.adhesive : [];
+      const eligibleRl = (typeof eligibleRawStock !== 'undefined' && eligibleRawStock.release) ? eligibleRawStock.release : [];
 
       const sortedFs = [...eligibleFs].sort((a, b) => (b.allotted ? 1 : 0) - (a.allotted ? 1 : 0));
       const sortedAd = [...eligibleAd].sort((a, b) => (b.allotted ? 1 : 0) - (a.allotted ? 1 : 0));
@@ -929,8 +754,42 @@
     <script id="allotted-fs-rolls-data" type="application/json"><%- safeJson(eligibleFs) %></script>
     <script id="allotted-ad-rolls-data" type="application/json"><%- safeJson(eligibleAd) %></script>
     <script id="allotted-rl-rolls-data" type="application/json"><%- safeJson(eligibleRl) %></script>
-    <script id="material-usage-data" type="application/json"><%- safeJson(usageItems) %></script>
     <script id="material-swap-log-data" type="application/json"><%- safeJson(typeof materialSwapLog !== 'undefined' ? materialSwapLog : []) %></script>
+
+    <div class="span-full form-subheading" style="margin-top: 10px;"><h1>Scan Materials</h1></div>
+    <div class="span-full jc-info-wrap" id="materialsMountedStrip" style="padding: 14px 16px;">
+      <div class="jc-mounted-variant" id="mountedVariantLine" style="display:none;"></div>
+      <div class="jc-mounted-grid">
+        <%
+          const MOUNTED_POOLS = [
+            { code: "fs", label: "Facestock", list: "allottedFsRollList", ph: "Scan facestock reel", scan: "Jumbo FS" },
+            { code: "ad", label: "Adhesive",  list: "allottedAdRollList", ph: "Scan adhesive drum",  scan: "Drum" },
+            { code: "rl", label: "Release Liner", list: "allottedRlRollList", ph: "Scan release liner reel", scan: "Jumbo REL" },
+          ];
+        %>
+        <% MOUNTED_POOLS.forEach((p) => { %>
+        <div class="jc-mounted-slot" data-pool="<%= p.code %>">
+          <div class="jc-mounted-slot-label"><%= p.label %></div>
+          <div class="jc-mounted-slot-row">
+            <div class="roll-id-field">
+              <input type="text" class="form-control jc-cur-roll-input" data-pool="<%= p.code %>" list="<%= p.list %>"
+                     placeholder="<%= p.ph %>" autocomplete="off" />
+              <button type="button" class="roll-scan-btn jc-cur-scan-btn" data-pool="<%= p.code %>"
+                      aria-label="Scan <%= p.scan %> with camera" title="Scan QR with camera">
+                <i class="fa-solid fa-camera"></i>
+              </button>
+            </div>
+            <button type="button" class="jc-material-add-btn" data-pool="<%= p.code %>" style="display:none;"
+                    title="This reel is finished or wrong — record how much is left and scan the next one">
+              <i class="fa-solid fa-arrows-rotate"></i> Change
+            </button>
+          </div>
+          <span class="roll-note"></span>
+          <div class="jc-material-scanned-list" id="materialScannedList-<%= p.code %>"></div>
+        </div>
+        <% }) %>
+      </div>
+    </div>
 
     <!-- Job Setting -->
     <div class="span-full form-subheading" style="display: flex; align-items: center; gap: 12px; margin-top: 10px;">
@@ -1047,8 +906,11 @@
       </table>
     </div>
 
-    <div class="btn-grp jc-save-wrap span-full" id="saveBtnWrap" style="margin-top: 10px; display: none;">
-      <button type="submit" id="saveEntryBtn" class="jc-save-action" disabled><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Submit Entry</button>
+    <!-- Hidden until at least one Production Log row has a value (see
+         updateSaveButtonState). Styled with the site-wide .btn-grp /
+         .submit-btn look, same as the Client Form's submit button. -->
+    <div class="span-full btn-grp" id="saveBtnWrap" style="margin-top: 10px; display: none;">
+      <button type="submit" id="saveEntryBtn" class="submit-btn" disabled>Submit Entry</button>
     </div>
   </form>
 </div>
@@ -1095,11 +957,10 @@
   </div>
 </div>
 
-<!-- Shown the moment Add is clicked on a Materials in Use slot -- the roll
-     being swapped out has to be reconciled (how much was actually left on
-     it) before the slot opens up for the next one, same "enter what's left,
-     0 means finished" idea as the end-of-job Material Used dialog above,
-     just for one reel and updating stock immediately instead of waiting. -->
+<!-- Shown when the operator taps "Change" on a mounted reel -- the outgoing
+     reel is reconciled (how many kg are physically left on it: 0 = finished)
+     before the slot opens for the next scan. Stock is updated right away and
+     the swap is added to this job's material history. -->
 <div class="logout-modal" id="materialSwapDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="materialSwapDialogTitle"
     style="width: min(460px, 95vw); padding: 0; border-radius: 14px; border: none;">
@@ -1136,40 +997,25 @@
   </div>
 </div>
 
-<!-- Shown when the roll/drum typed or scanned into a Currently Mounted field
-     is a real, matching-spec reel but NOT the one this order already has
-     reserved -- e.g. the reserved reel is missing, damaged, or was simply
-     the wrong pick at Assign Production. Confirming re-points this order's
-     own allotment at the new reel, which frees the old one straight back to
-     available stock (see POST /machine/jobcard/material/reallocate) so
-     another order can pick it up. Nothing here has been drawn on yet, so
-     unlike the "How much is left?" dialog above, no stock is deducted. -->
-<div class="logout-modal" id="materialReallocateDialog" aria-hidden="true">
-  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="materialReallocateDialogTitle"
+<!-- STRONG STOP: shown when a scanned reel is already running on another
+     still-open job (PendingProduction.liveMaterialInUse). One physical reel
+     can't feed two machines -- there is no "continue anyway", only OK. -->
+<div class="logout-modal" id="wipBlockDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="wipBlockDialogTitle"
     style="width: min(460px, 95vw); padding: 0; border-radius: 14px; border: none;">
-    <div class="dialog-header">
-      <h2 id="materialReallocateDialogTitle">Change Allocation?</h2>
-      <button class="dialog-close-btn" type="button" onclick="closeMaterialReallocateDialog()" aria-label="Close">×</button>
+    <div class="dialog-header" style="background:#b91c1c;">
+      <h2 id="wipBlockDialogTitle"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> STOP — reel already in use</h2>
     </div>
     <div class="dialog-body">
-      <p class="jc-material-used-hint" id="materialReallocateHint">
-        This isn't the reel reserved for this order. Continuing will unallocate the reel below
-        (freeing it for any other job) and reserve the newly scanned one for this order instead.
+      <p class="jc-material-used-hint" style="color:#991b1b; font-weight:700;">
+        Roll <strong id="wipBlockRollId">—</strong> is already running on job
+        <strong id="wipBlockLot">—</strong><span id="wipBlockMachineWrap"> at <strong id="wipBlockMachine">—</strong></span>.
       </p>
-      <div class="jc-swap-current">
-        <div class="jc-swap-current-row">
-          <span class="jc-swap-current-label">Unallocate (freed)</span>
-          <strong id="reallocateOldRollId">—</strong>
-        </div>
-        <div class="jc-swap-current-row">
-          <span class="jc-swap-current-label">Allocate instead</span>
-          <strong id="reallocateNewRollId">—</strong>
-        </div>
-      </div>
-      <div class="jc-material-used-error" id="materialReallocateError"></div>
+      <p class="jc-material-used-hint">
+        Running the same reel on two jobs corrupts stock. Take it off this job and scan a different reel.
+      </p>
       <div class="dialog-actions">
-        <button type="button" class="btn-cancel" onclick="closeMaterialReallocateDialog()">Cancel</button>
-        <button type="button" class="btn-primary jc-material-confirm" id="materialReallocateConfirmBtn" onclick="confirmMaterialReallocate()"><i class="fa-solid fa-right-left" aria-hidden="true"></i> Unallocate &amp; Swap</button>
+        <button type="button" class="btn-primary jc-material-confirm" id="wipBlockOkBtn" onclick="closeWipBlockDialog()">OK</button>
       </div>
     </div>
   </div>
@@ -1198,20 +1044,31 @@
     // a failed/racing call never blocks the operator, it only feeds the
     // "which stock is actually running" visibility on the raw-material
     // stock pages.
+    // On Start, re-assert the mounted reels as live (idempotent -- the strip
+    // already did this on scan). If one comes back as WIP on another job
+    // (a race), free that slot and raise the hard-stop dialog.
     function markRowMaterialsInUse(row, prefix) {
       if (!pendingId || !row) return;
       [
-        ["facestock", `.${prefix}-fs-roll-id`],
-        ["adhesive", `.${prefix}-ad-roll-id`],
-        ["release", `.${prefix}-rl-roll-id`],
-      ].forEach(([pool, sel]) => {
-        const rollId = row.querySelector(sel)?.value?.trim();
+        ["facestock", "fs"],
+        ["adhesive", "ad"],
+        ["release", "rl"],
+      ].forEach(([pool, code]) => {
+        const rollId = row.querySelector(`.${prefix}-${code}-roll-id`)?.value?.trim();
         if (!rollId) return;
         fetch("/sachiko/machine/jobcard/mark-in-use", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pendingId, pool, rollId }),
-        }).catch(() => {});
+        })
+          .then((res) => (res.status === 409 ? res.json() : null))
+          .then((data) => {
+            if (data && data.code === "wip") {
+              if (typeof unlockMaterialSlot === "function") unlockMaterialSlot(code);
+              openWipBlockDialog({ rollId: data.rollId || rollId, lotNo: data.lotNo, machineName: data.machineName });
+            }
+          })
+          .catch(() => {});
       });
     }
 
@@ -1227,9 +1084,13 @@
       return { map: rollById, unit: "kg", name: "Roll" };
     }
 
+    function rowRollNote(input) {
+      return input.closest(".jc-mounted-slot, td")?.querySelector(".roll-note") || null;
+    }
+
     function checkMaterialInput(input, pool) {
       if (!input) return;
-      const note = input.closest(".jc-material-slot")?.querySelector(".roll-note");
+      const note = rowRollNote(input);
       if (!note) return;
       const key = extractScannedRollId(input.value);
       if (!key) {
@@ -1249,87 +1110,128 @@
       }
     }
 
-    // fsRollById/adRollById/rlRollById hold the SAME reel objects the page
-    // was rendered with (reelMtrs = stock as of page load) -- after "How much
-    // is left?" updates a reel's real stock server-side, that object has to
-    // be patched in place too, or re-scanning the same roll later in this job
-    // (another slot, or back into the same one) would keep showing the
-    // stale, pre-swap figure in the roll-note until a full page reload.
-    function updateRollRemainingStock(pool, rollId, remainingKg) {
-      const key = normRollId(rollId);
-      const info = getRollPoolInfo(pool);
-      const reel = info.map.get(key) || rollById.get(key);
-      if (reel) reel.reelMtrs = remainingKg;
-      rebuildRollDatalist(pool);
+    // Server-side check for one scanned reel (recipe match + not WIP on
+    // another job). pool is the client code ("fs"/"ad"/"rl").
+    const POOL_CODE_TO_SERVER = { fs: "facestock", ad: "adhesive", rl: "release" };
+    let wipBlockOpen = false;
+
+    window.closeWipBlockDialog = function closeWipBlockDialog() {
+      closeModal("wipBlockDialog");
+      wipBlockOpen = false;
+    };
+
+    function openWipBlockDialog({ rollId, lotNo, machineName }) {
+      document.getElementById("wipBlockRollId").textContent = rollId || "—";
+      document.getElementById("wipBlockLot").textContent = lotNo || "(another order)";
+      const mWrap = document.getElementById("wipBlockMachineWrap");
+      if (machineName) {
+        document.getElementById("wipBlockMachine").textContent = machineName;
+        mWrap.style.display = "";
+      } else {
+        mWrap.style.display = "none";
+      }
+      wipBlockOpen = true;
+      openModal("wipBlockDialog");
+      document.getElementById("wipBlockOkBtn")?.focus();
     }
 
-    const ROLL_DATALIST_ID = { fs: "allottedFsRollList", ad: "allottedAdRollList", rl: "allottedRlRollList" };
-    const ROLL_DATALIST_SOURCE = { fs: ALLOTTED_FS_ROLLS, ad: ALLOTTED_AD_ROLLS, rl: ALLOTTED_RL_ROLLS };
-
-    // The <datalist> options themselves were only ever rendered once, at
-    // page load -- patching the reel object (above) keeps the roll-note
-    // right the next time this roll is looked up, but the dropdown list an
-    // operator actually picks from would otherwise keep showing the old kg
-    // figure for the rest of this page's life. Regenerated from the same
-    // (now-patched) array, in the same allotted-first order the server used.
-    function rebuildRollDatalist(pool) {
-      const datalist = document.getElementById(ROLL_DATALIST_ID[pool]);
-      const source = ROLL_DATALIST_SOURCE[pool];
-      if (!datalist || !source) return;
-      const sorted = [...source].sort((a, b) => (b.allotted ? 1 : 0) - (a.allotted ? 1 : 0));
-      datalist.innerHTML = sorted
-        .filter((r) => r.rollId)
-        .map((r) => {
-          const bits = [`${fmtMtrs(r.reelMtrs)} kg`];
-          if (r.location) bits.push(r.location);
-          if (pool === "fs") {
-            if (r.family) bits.push(r.family);
-            if (r.gsm) bits.push(`${r.gsm} GSM`); else if (r.micron) bits.push(`${r.micron} mic`);
-            if (r.type) bits.push(r.type);
-            if (r.size) bits.push(r.size);
-          } else if (pool === "ad") {
-            if (r.make) bits.push(r.make);
-            if (r.code) bits.push(r.code); else if (r.type) bits.push(r.type);
-          } else {
-            if (r.sensing) bits.push(r.sensing);
-            if (r.type) bits.push(r.type);
-            if (r.size) bits.push(r.size);
-          }
-          return `<option value="${escAdhesiveKey(r.rollId)}">${r.allotted ? "[Allotted] " : "[Stock] "}${bits.join(" · ")}</option>`;
-        })
-        .join("");
+    // One reel resolves through the server (recipe match + not WIP elsewhere +
+    // resolve the combination's Product Code / variant) before it's accepted
+    // as mounted. `mounted` is the reels already on for the other pools, so
+    // the server can resolve the full facestock+adhesive+release combination.
+    async function checkReel(pool, rollId) {
+      if (!pendingId) return { ok: true };
+      try {
+        const res = await fetch("/sachiko/machine/jobcard/material/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pendingId,
+            pool: POOL_CODE_TO_SERVER[pool],
+            rollId,
+            mounted: { fs: currentMaterials.fs, ad: currentMaterials.ad, rl: currentMaterials.rl },
+          }),
+        });
+        return await res.json().catch(() => ({ ok: false, code: "error" }));
+      } catch (_) {
+        return { ok: false, code: "error" };
+      }
     }
 
-    // Materials in Use -- Jumbo FS / Drum / Jumbo REL id are scanned ONCE
-    // here instead of on every Job Setting / Production Log row. Every row
-    // still carries its own hidden fsRollId/adRollId/rlRollId (unchanged
-    // server contract), it's just filled in from here instead of scanned
-    // per line -- see applyCurrentMaterialsToRow / syncCurrentMaterialsToOpenRows.
-    const curMaterialsPanel = document.getElementById("curMaterialsPanel");
+    function openModal(id)  { const d = document.getElementById(id); if (!d) return; d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
+    function closeModal(id) { const d = document.getElementById(id); if (!d) return; d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
+
+    // The office allotment is no longer shown here -- see the recipe table and
+    // the Materials Mounted strip. USAGE_ITEMS stays empty (there is nothing
+    // pre-allotted to seed the end-of-job dialog with); resolvedMaterialStockIds
+    // collects reels already reconciled via "Change" so they aren't asked
+    // about twice.
+    const USAGE_ITEMS = [];
+    const resolvedMaterialStockIds = new Set();
+    let materialUsedCleared = false;
+
+    /* ============ Materials Mounted strip ============
+       Scan each raw-material reel ONCE. It's validated (recipe match + not
+       WIP on another job), then carried into every Job Setting row and every
+       Production Log deckle via the hidden per-row fsRollId/adRollId/rlRollId.
+       "Change" reconciles the outgoing reel (kg left -> stock updated now)
+       and logs it to this job's history, then frees the slot for the next
+       scan. No office allotment here -- allocation is name only. */
+    const mountedStrip = document.getElementById("materialsMountedStrip");
     const currentMaterials = { fs: "", ad: "", rl: "" };
     const MATERIAL_POOL_ORDER = ["fs", "ad", "rl"];
+    const SERVER_POOL_TO_CODE = { facestock: "fs", adhesive: "ad", release: "rl" };
 
     function materialSlot(pool) {
-      return curMaterialsPanel.querySelector(`.jc-material-slot[data-pool="${pool}"]`);
+      return mountedStrip ? mountedStrip.querySelector(`.jc-mounted-slot[data-pool="${pool}"]`) : null;
     }
 
-    // Copies whatever's currently mounted into one row's hidden roll-id
-    // fields (prefix is "js" for Job Setting, "log" for Production Log).
+    // Resolve a scanned rollId to its stock _id via the recipe-matching reel
+    // lists the page was rendered with.
+    function reelStockId(code, rollId) {
+      const info = getRollPoolInfo(code);
+      const reel = info.map.get(normRollId(rollId)) || rollById.get(normRollId(rollId));
+      return reel && reel._id ? String(reel._id) : "";
+    }
+
+    // A Production Log row = one deckle. Record EVERY reel mounted while this
+    // row is the live entry, so a facestock reel swapped mid-run still shows
+    // on the deckle (server: MaterialStock.sourceReels + the job card row's
+    // materialsUsed). Deduped by pool+rollId.
+    function appendRowMaterialsUsed(row) {
+      const input = row.querySelector(".log-materials-used");
+      if (!input) return;
+      let list = [];
+      try { list = JSON.parse(input.value || "[]"); } catch (_) { list = []; }
+      if (!Array.isArray(list)) list = [];
+      const have = new Set(list.map((e) => `${e.pool}|${normRollId(e.rollId)}`));
+      [["facestock", "fs"], ["adhesive", "ad"], ["release", "rl"]].forEach(([pool, code]) => {
+        const rid = currentMaterials[code];
+        if (!rid) return;
+        const key = `${pool}|${normRollId(rid)}`;
+        if (have.has(key)) return;
+        have.add(key);
+        list.push({ pool, rollId: rid, stockId: reelStockId(code, rid) });
+      });
+      input.value = JSON.stringify(list);
+    }
+
+    // Copy the mounted reels into one row's hidden id fields
+    // (prefix "js" = Job Setting, "log" = Production Log).
     function applyCurrentMaterialsToRow(row, prefix) {
       if (!row) return;
-      const fsInput = row.querySelector(`.${prefix}-fs-roll-id`);
-      const adInput = row.querySelector(`.${prefix}-ad-roll-id`);
-      const rlInput = row.querySelector(`.${prefix}-rl-roll-id`);
-      if (fsInput) fsInput.value = currentMaterials.fs;
-      if (adInput) adInput.value = currentMaterials.ad;
-      if (rlInput) rlInput.value = currentMaterials.rl;
+      const fs = row.querySelector(`.${prefix}-fs-roll-id`);
+      const ad = row.querySelector(`.${prefix}-ad-roll-id`);
+      const rl = row.querySelector(`.${prefix}-rl-roll-id`);
+      if (fs) fs.value = currentMaterials.fs;
+      if (ad) ad.value = currentMaterials.ad;
+      if (rl) rl.value = currentMaterials.rl;
+      if (prefix === "log") appendRowMaterialsUsed(row);
     }
 
-    // Keeps every still-open row in sync whenever the mounted roll changes --
-    // every Job Setting row (none of them are "final" until the whole card
-    // is saved) and the single live Production Log entry row (completed rows
-    // already deducted against whatever was current when they were punched,
-    // so they're left alone).
+    // Every still-open row tracks whatever is mounted right now. Completed
+    // Production Log rows are frozen with whatever was mounted when they were
+    // punched -- that's the per-deckle record of which reel made it.
     function syncCurrentMaterialsToOpenRows() {
       Array.from(jsBody.rows).forEach((row) => applyCurrentMaterialsToRow(row, "js"));
       if (logBody.rows.length) applyCurrentMaterialsToRow(logBody.rows[0], "log");
@@ -1354,19 +1256,48 @@
       currentMaterials[pool] = "";
       checkMaterialInput(input, pool);
       syncCurrentMaterialsToOpenRows();
+      // Leave the "Producing as ..." banner in place -- it refreshes on the
+      // next scan; a persistent message, not a toast.
       if (typeof scheduleSave === "function") scheduleSave();
       input.focus();
     }
 
-    // Locks in a scanned/typed roll as the currently mounted one for `pool`
-    // and pushes it out to every open row. A blank/invalid value just
-    // updates the note (via checkMaterialInput) without locking the slot.
-    // A value that resolves to a real, matching-spec reel this order does
-    // NOT already have reserved (reel.allotted === false) is a request to
-    // change the allocation, not just record what's mounted -- routed to
-    // the confirm dialog below instead of locking straight in, so a
-    // reserved-but-unused reel is never silently orphaned.
-    function setCurrentMaterial(pool, rawValue) {
+    // Persistent banner (#mountedVariantLine) -- the Product Code / variant the
+    // fully-mounted facestock+adhesive+release combination produces, resolved
+    // server-side. It only resolves once EVERY material is scanned (a
+    // half-scanned mount would otherwise mint a throwaway variant per scan);
+    // until then it shows a "pending" line. Once resolved it stays put and is
+    // only replaced by the next full re-resolve -- never auto-hidden.
+    let mountedVariantResolved = false;
+    function renderMountedVariant(v) {
+      const el = document.getElementById("mountedVariantLine");
+      if (!el || !v) return;
+
+      if (v.pending) {
+        // Don't overwrite an already-resolved code with the pending line
+        // (e.g. right after "Change", before the replacement reel is scanned).
+        if (mountedVariantResolved) return;
+        el.classList.remove("is-variant");
+        el.classList.add("is-pending");
+        el.style.display = "";
+        el.innerHTML = `<i class="fa-solid fa-barcode" aria-hidden="true"></i><span>Scan facestock, adhesive and release liner to confirm the Product Code.</span>`;
+        return;
+      }
+      if (!v.productCode) return;
+
+      mountedVariantResolved = true;
+      el.classList.remove("is-pending");
+      el.classList.toggle("is-variant", !!v.isVariant);
+      el.style.display = "";
+      el.innerHTML = v.isVariant
+        ? `<i class="fa-solid fa-code-branch" aria-hidden="true"></i><span>Producing as <span class="code">${escAdhesiveKey(v.productCode)}</span> — new variant of ${escAdhesiveKey(v.baseProductCode || "")} for this reel combination</span>`
+        : `<i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Producing to spec as <span class="code">${escAdhesiveKey(v.productCode)}</span></span>`;
+    }
+
+    // Lock a scanned reel in as mounted for `pool` and push it to every open
+    // row. wip -> hard stop dialog, nothing mounted. mismatch/unknown -> a
+    // warning, nothing mounted (make the operator re-scan the right reel).
+    async function setCurrentMaterial(pool, rawValue) {
       const slot = materialSlot(pool);
       if (!slot) return;
       const input = slot.querySelector(".jc-cur-roll-input");
@@ -1375,33 +1306,47 @@
       checkMaterialInput(input, pool);
       if (!cleanId) return;
 
-      if (pendingId) {
-        const info = getRollPoolInfo(pool);
-        const reel = info.map.get(normRollId(cleanId));
-        if (reel && reel._id && reel.allotted === false) {
-          openMaterialReallocateDialog(pool, reel, cleanId);
-          return;
+      const data = await checkReel(pool, cleanId);
+      if (extractScannedRollId(input.value) !== cleanId) return; // changed while we waited
+
+      if (data && data.code === "wip") {
+        input.value = "";
+        checkMaterialInput(input, pool);
+        if (typeof scheduleSave === "function") scheduleSave();
+        openWipBlockDialog({ rollId: data.rollId || cleanId, lotNo: data.lotNo, machineName: data.machineName });
+        return;
+      }
+      if (data && (data.code === "mismatch" || data.code === "unknown")) {
+        const note = rowRollNote(input);
+        if (note) {
+          note.textContent = data.code === "unknown"
+            ? `${cleanId} isn't a known reel — check the label.`
+            : `${cleanId} doesn't match this recipe — verify the reel.`;
+          note.className = "roll-note warn";
         }
+        if (typeof showToast === "function") showToast(`${cleanId} not mounted — ${data.code === "unknown" ? "unknown reel" : "doesn't match the recipe"}.`, "error");
+        return;
       }
 
       currentMaterials[pool] = cleanId;
       lockMaterialSlot(pool);
       syncCurrentMaterialsToOpenRows();
+      renderMountedVariant(data && data.variant);
       if (typeof scheduleSave === "function") scheduleSave();
+
+      // Best-effort live "in use" flag so other jobs' scans see it at once.
+      if (pendingId) {
+        fetch("/sachiko/machine/jobcard/mark-in-use", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pendingId, pool: POOL_CODE_TO_SERVER[pool], rollId: cleanId }),
+        }).catch(() => {});
+      }
     }
 
-    // Server pool name each client-side pool code maps to -- consumePoolUsage
-    // / POST /machine/jobcard/material/set-remaining use the long form.
-    const POOL_CODE_TO_SERVER = { fs: "facestock", ad: "adhesive", rl: "release" };
-    const SERVER_POOL_TO_CODE = { facestock: "fs", adhesive: "ad", release: "rl" };
-
+    // ---- this job's material history (persisted server-side as
+    // PendingProduction.materialSwapLog) ----
     const MATERIAL_SWAP_LOG = JSON.parse(document.getElementById("material-swap-log-data")?.textContent || "[]");
-
-    // Every reel already resolved live via Add (this session, or a past one
-    // -- materialSwapLog is persisted server-side) -- excluded from the
-    // end-of-job Material Used dialog so it's never asked about twice, and
-    // shown per-slot as a short "previously used" history.
-    const resolvedMaterialStockIds = new Set();
     const materialHistoryByPool = { fs: [], ad: [], rl: [] };
     MATERIAL_SWAP_LOG.forEach((entry) => {
       const pool = SERVER_POOL_TO_CODE[entry.pool];
@@ -1416,55 +1361,43 @@
       return d.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
     }
 
-    // Every roll already scanned & swapped out this job, shown as a running
-    // feed above the active scan field -- scanned1, scanned2, ... in scan
-    // order, oldest first, so the field right underneath is always "next".
     function renderMaterialHistory(pool) {
       const list = document.getElementById(`materialScannedList-${pool}`);
       if (!list) return;
-      const entries = materialHistoryByPool[pool] || [];
-      list.innerHTML = entries
-        .map((e, i) => `
-          <div class="jc-material-scanned-row">
-            <span class="idx">${i + 1}</span>
-            <span class="body">
-              <span class="roll">${escAdhesiveKey(e.rollId || "—")}</span>
-              <span class="meta">Used ${fmtMtrs(e.usedKg || 0)} kg &middot; ${e.emptied ? '<span class="empty-tag">Emptied</span>' : `${fmtMtrs(e.remainingKg || 0)} kg left`} &middot; ${escAdhesiveKey(fmtSwapTime(e.swappedAt))}</span>
-            </span>
-          </div>
-        `)
-        .join("");
+      list.innerHTML = (materialHistoryByPool[pool] || []).map((e, i) => `
+        <div class="jc-material-scanned-row">
+          <span class="idx">${i + 1}</span>
+          <span class="body">
+            <span class="roll">${escAdhesiveKey(e.rollId || "—")}</span>
+            <span class="meta">Used ${fmtMtrs(e.usedKg || 0)} kg &middot; ${e.emptied ? '<span class="empty-tag">Emptied</span>' : `${fmtMtrs(e.remainingKg || 0)} kg left`} &middot; ${escAdhesiveKey(fmtSwapTime(e.swappedAt))}</span>
+          </span>
+        </div>`).join("");
+    }
+    ["fs", "ad", "rl"].forEach((pool) => renderMaterialHistory(pool));
+
+    // Keep the page's copy of a reel's stock in step after "Change" updates it
+    // server-side, so re-scanning it later shows the right figure.
+    function updateRollRemainingStock(pool, rollId, remainingKg) {
+      const key = normRollId(rollId);
+      const info = getRollPoolInfo(pool);
+      const reel = info.map.get(key) || rollById.get(key);
+      if (reel) reel.reelMtrs = remainingKg;
     }
 
-    MATERIAL_POOL_ORDER.forEach((pool) => renderMaterialHistory(pool));
-
-    // Add on a locked slot doesn't unlock it outright -- it first asks how
-    // much is left on the OUTGOING reel (0 = finished), same idea as the
-    // end-of-job Material Used dialog but for one reel, resolved and
-    // deducted immediately instead of waiting for Save.
     let pendingSwap = null;
 
     function openMaterialSwapDialog(pool) {
-      const pendingIdVal = document.querySelector('input[name="pendingId"]')?.value || "";
       const rollId = currentMaterials[pool];
-      // No production order to deduct against, or nothing recognizable to
-      // look up (typed free text that matches no known reel) -- nothing to
-      // reconcile, so just let them move on to the next roll.
-      if (!pendingIdVal || !rollId) { unlockMaterialSlot(pool); return; }
-
+      if (!pendingId || !rollId) { unlockMaterialSlot(pool); return; }
       const info = getRollPoolInfo(pool);
       const key = normRollId(rollId);
       const reel = info.map.get(key) || rollById.get(key);
       if (!reel || !reel._id) {
-        if (typeof showToast === "function") {
-          showToast("Couldn't find that reel in stock — nothing to update, scanning the next one.", "error");
-        }
+        if (typeof showToast === "function") showToast("Couldn't find that reel in stock — scanning the next one.", "error");
         unlockMaterialSlot(pool);
         return;
       }
-
-      pendingSwap = { pool, stockId: reel._id, rollId: reel.rollId || rollId, currentStock: Math.max(0, Number(reel.reelMtrs) || 0), reel };
-
+      pendingSwap = { pool, stockId: reel._id, rollId: reel.rollId || rollId, currentStock: Math.max(0, Number(reel.reelMtrs) || 0) };
       document.getElementById("materialSwapDialogTitle").textContent = `How much ${info.name} is left?`;
       document.getElementById("materialSwapHint").textContent =
         `Enter the weight (kg) left on this ${info.name.toLowerCase()} before scanning the next one in. Stock updates immediately.`;
@@ -1476,7 +1409,6 @@
       input.classList.remove("jc-material-used-over");
       document.getElementById("materialSwapCalcNote").textContent = "";
       document.getElementById("materialSwapError").textContent = "";
-
       openModal("materialSwapDialog");
       input.focus();
     }
@@ -1485,36 +1417,19 @@
       const note = document.getElementById("materialSwapCalcNote");
       if (!note || !pendingSwap) return;
       const val = input.value.trim();
-      if (!val && val !== "0") {
-        note.textContent = "";
-        input.classList.remove("jc-material-used-over");
-        return;
-      }
+      if (!val && val !== "0") { note.textContent = ""; input.classList.remove("jc-material-used-over"); return; }
       const remaining = Number(val);
       if (!Number.isFinite(remaining) || remaining < 0) {
-        note.textContent = "Invalid amount";
-        note.style.color = "#dc2626";
-        input.classList.add("jc-material-used-over");
-        return;
+        note.textContent = "Invalid amount"; note.style.color = "#dc2626"; input.classList.add("jc-material-used-over"); return;
       }
       if (remaining > pendingSwap.currentStock) {
-        note.textContent = `Exceeds stock of ${fmtMtrs(pendingSwap.currentStock)} kg`;
-        note.style.color = "#dc2626";
-        input.classList.add("jc-material-used-over");
-        return;
+        note.textContent = `Exceeds stock of ${fmtMtrs(pendingSwap.currentStock)} kg`; note.style.color = "#dc2626"; input.classList.add("jc-material-used-over"); return;
       }
       input.classList.remove("jc-material-used-over");
       const used = Math.max(0, Number(round2(pendingSwap.currentStock - remaining)));
-      if (remaining === 0) {
-        note.textContent = `Used: ${fmtMtrs(used)} kg (Emptied)`;
-        note.style.color = "#b45309";
-      } else if (used === 0) {
-        note.textContent = "Used: 0 kg (Full)";
-        note.style.color = "#64748b";
-      } else {
-        note.textContent = `Used: ${fmtMtrs(used)} kg`;
-        note.style.color = "#047857";
-      }
+      if (remaining === 0) { note.textContent = `Used: ${fmtMtrs(used)} kg (Emptied)`; note.style.color = "#b45309"; }
+      else if (used === 0) { note.textContent = "Used: 0 kg (Full)"; note.style.color = "#64748b"; }
+      else { note.textContent = `Used: ${fmtMtrs(used)} kg`; note.style.color = "#047857"; }
     };
 
     window.closeMaterialSwapDialog = function closeMaterialSwapDialog() {
@@ -1526,53 +1441,33 @@
       const errorEl = document.getElementById("materialSwapError");
       errorEl.textContent = "";
       if (!pendingSwap) { closeMaterialSwapDialog(); return; }
-
       const input = document.getElementById("materialSwapRemainingInput");
       const raw = input.value.trim();
-      if (!raw && raw !== "0") {
-        errorEl.textContent = "Enter the kg left on this reel (0 if it's finished).";
-        input.focus();
-        return;
-      }
+      if (!raw && raw !== "0") { errorEl.textContent = "Enter the kg left on this reel (0 if it's finished)."; input.focus(); return; }
       const remaining = Number(raw);
-      if (!Number.isFinite(remaining) || remaining < 0) {
-        errorEl.textContent = "Enter a valid non-negative kg amount.";
-        input.focus();
-        return;
-      }
+      if (!Number.isFinite(remaining) || remaining < 0) { errorEl.textContent = "Enter a valid non-negative kg amount."; input.focus(); return; }
       if (remaining > pendingSwap.currentStock) {
         errorEl.textContent = `Cannot exceed current stock (${fmtMtrs(pendingSwap.currentStock)} kg).`;
-        input.classList.add("jc-material-used-over");
-        input.focus();
-        return;
+        input.classList.add("jc-material-used-over"); input.focus(); return;
       }
-
       const confirmBtn = document.getElementById("materialSwapConfirmBtn");
       confirmBtn.disabled = true;
-      const pendingIdVal = document.querySelector('input[name="pendingId"]')?.value || "";
       const { pool, stockId, rollId } = pendingSwap;
-
       try {
         const res = await fetch("/sachiko/machine/jobcard/material/set-remaining", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pendingId: pendingIdVal, pool: POOL_CODE_TO_SERVER[pool], stockId, remainingKg: remaining }),
+          body: JSON.stringify({ pendingId, pool: POOL_CODE_TO_SERVER[pool], stockId, remainingKg: remaining }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success) {
-          errorEl.textContent = data.message || "Couldn't update stock. Try again.";
-          confirmBtn.disabled = false;
-          return;
-        }
+        if (!res.ok || !data.success) { errorEl.textContent = data.message || "Couldn't update stock. Try again."; confirmBtn.disabled = false; return; }
         resolvedMaterialStockIds.add(String(stockId));
         materialHistoryByPool[pool].push(data.swap);
         renderMaterialHistory(pool);
         updateRollRemainingStock(pool, rollId, remaining);
         closeMaterialSwapDialog();
         unlockMaterialSlot(pool);
-        if (typeof showToast === "function") {
-          showToast(`Stock updated — ${fmtMtrs(remaining)} kg left on ${rollId}.`, "success");
-        }
+        if (typeof showToast === "function") showToast(`Stock updated — ${fmtMtrs(remaining)} kg left on ${rollId}.`, "success");
       } catch (err) {
         errorEl.textContent = "Network error — try again.";
       } finally {
@@ -1580,151 +1475,35 @@
       }
     };
 
-    // Fires from setCurrentMaterial above the instant a scanned/typed roll
-    // resolves to a real reel that ISN'T the one already reserved for this
-    // order/pool -- asks for confirmation before touching the allotment,
-    // since freeing the currently-reserved reel can't be silently undone
-    // (another order's Assign Production could claim it the moment it's
-    // free). Cancelling reverts the input back to whatever was locked in
-    // before, so an accidental scan never leaves the field pointed at a
-    // reel this order doesn't actually have.
-    let pendingReallocate = null;
-
-    function openMaterialReallocateDialog(pool, reel, rawValue) {
-      const info = getRollPoolInfo(pool);
-      const source = ROLL_DATALIST_SOURCE[pool] || [];
-      const oldRollIds = source.filter((r) => r.allotted).map((r) => r.rollId).filter(Boolean);
-
-      pendingReallocate = { pool, reel, rawValue };
-
-      document.getElementById("materialReallocateDialogTitle").textContent = `Change ${info.name}?`;
-      document.getElementById("reallocateOldRollId").textContent = oldRollIds.length ? oldRollIds.join(", ") : "Nothing currently allotted";
-      document.getElementById("reallocateNewRollId").textContent = reel.rollId || rawValue;
-      document.getElementById("materialReallocateError").textContent = "";
-      document.getElementById("materialReallocateConfirmBtn").disabled = false;
-
-      openModal("materialReallocateDialog");
-    }
-
-    window.closeMaterialReallocateDialog = function closeMaterialReallocateDialog() {
-      closeModal("materialReallocateDialog");
-      if (pendingReallocate) {
-        const { pool } = pendingReallocate;
-        const slot = materialSlot(pool);
-        const input = slot?.querySelector(".jc-cur-roll-input");
-        if (input) {
-          input.value = currentMaterials[pool] || "";
-          checkMaterialInput(input, pool);
-        }
-      }
-      pendingReallocate = null;
-    };
-
-    window.confirmMaterialReallocate = async function confirmMaterialReallocate() {
-      if (!pendingReallocate) { closeMaterialReallocateDialog(); return; }
-      const errorEl = document.getElementById("materialReallocateError");
-      errorEl.textContent = "";
-      const confirmBtn = document.getElementById("materialReallocateConfirmBtn");
-      confirmBtn.disabled = true;
-
-      const { pool, reel, rawValue } = pendingReallocate;
-      const pendingIdVal = document.querySelector('input[name="pendingId"]')?.value || "";
-
-      try {
-        const res = await fetch("/sachiko/machine/jobcard/material/reallocate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pendingId: pendingIdVal, pool: POOL_CODE_TO_SERVER[pool], newStockId: reel._id }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.success) {
-          errorEl.textContent = data.message || "Couldn't update the allocation. Try again.";
-          confirmBtn.disabled = false;
+    if (mountedStrip) {
+      mountedStrip.addEventListener("input", (e) => {
+        const input = e.target.closest(".jc-cur-roll-input");
+        if (input) checkMaterialInput(input, input.dataset.pool);
+      });
+      mountedStrip.addEventListener("keydown", (e) => {
+        const input = e.target.closest(".jc-cur-roll-input");
+        if (!input || e.key !== "Enter") return;
+        e.preventDefault();
+        setCurrentMaterial(input.dataset.pool, input.value);
+        const next = MATERIAL_POOL_ORDER[MATERIAL_POOL_ORDER.indexOf(input.dataset.pool) + 1];
+        if (next) materialSlot(next)?.querySelector(".jc-cur-roll-input")?.focus();
+      });
+      // Typed/scanned then clicked away without pressing Enter -- still lock it.
+      mountedStrip.addEventListener("focusout", (e) => {
+        const input = e.target.closest(".jc-cur-roll-input");
+        if (!input || input.readOnly || !input.value.trim()) return;
+        setCurrentMaterial(input.dataset.pool, input.value);
+      });
+      mountedStrip.addEventListener("click", (e) => {
+        const scanBtn = e.target.closest(".jc-cur-scan-btn");
+        if (scanBtn) {
+          openScanDialog(materialSlot(scanBtn.dataset.pool)?.querySelector(".jc-cur-roll-input"), getRollPoolInfo(scanBtn.dataset.pool).name);
           return;
         }
-        // The allotment, eligible-reel lists and allocation table are all
-        // re-derived server-side from the freshly saved PendingProduction
-        // doc -- rather than hand-patch every one of those client-side
-        // (datalists, roll-notes, the allocation table's own row, the OTHER
-        // pool's "already allotted" markers), the currently mounted pick is
-        // saved to the draft and the page is reloaded, which restores it via
-        // restoreDraft() against the now-current server data.
-        currentMaterials[pool] = extractScannedRollId(reel.rollId || rawValue);
-        if (typeof saveDraft === "function") saveDraft();
-        if (typeof showToast === "function") {
-          showToast(`Allocation updated — ${reel.rollId || rawValue} is now reserved for this order.`, "success");
-        }
-        closeModal("materialReallocateDialog");
-        pendingReallocate = null;
-        location.reload();
-      } catch (err) {
-        errorEl.textContent = "Network error — try again.";
-        confirmBtn.disabled = false;
-      }
-    };
-
-    curMaterialsPanel.addEventListener("input", (e) => {
-      if (!e.target.classList.contains("jc-cur-roll-input")) return;
-      checkMaterialInput(e.target, e.target.dataset.pool);
-    });
-
-    curMaterialsPanel.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter") return;
-      const input = e.target.closest(".jc-cur-roll-input");
-      if (!input) return;
-      e.preventDefault();
-      const pool = input.dataset.pool;
-      setCurrentMaterial(pool, input.value);
-      const next = MATERIAL_POOL_ORDER[MATERIAL_POOL_ORDER.indexOf(pool) + 1];
-      if (next) materialSlot(next)?.querySelector(".jc-cur-roll-input")?.focus();
-    });
-
-    // An operator who types/scans a roll id and then just clicks or tabs
-    // away (instead of pressing Enter) still needs it locked in -- otherwise
-    // the Add button never appears and there's no way to swap it later.
-    // focusout (unlike blur) bubbles, so this can sit on the panel.
-    curMaterialsPanel.addEventListener("focusout", (e) => {
-      const input = e.target.closest(".jc-cur-roll-input");
-      if (!input || input.readOnly) return;
-      if (!input.value.trim()) return;
-      setCurrentMaterial(input.dataset.pool, input.value);
-    });
-
-    curMaterialsPanel.addEventListener("click", (e) => {
-      const scanBtn = e.target.closest(".jc-cur-scan-btn");
-      if (scanBtn) {
-        const pool = scanBtn.dataset.pool;
-        openScanDialog(materialSlot(pool)?.querySelector(".jc-cur-roll-input"), getRollPoolInfo(pool).name);
-        return;
-      }
-      const addBtn = e.target.closest(".jc-material-add-btn");
-      if (addBtn) openMaterialSwapDialog(addBtn.dataset.pool);
-    });
-
-    function openModal(id)  { const d = document.getElementById(id); if (!d) return; d.classList.add("show");    d.setAttribute("aria-hidden", "false"); }
-    function closeModal(id) { const d = document.getElementById(id); if (!d) return; d.classList.remove("show"); d.setAttribute("aria-hidden", "true");  }
-
-    // "Material Allocation" header -- click (or Enter/Space) to shrink the
-    // table out of the way, click again to bring it back.
-    const allocationHeader = document.getElementById("allocationHeader");
-    const allocationWrap = document.getElementById("allocationWrap");
-    const allocationChevron = document.getElementById("allocationChevron");
-    if (allocationHeader && allocationWrap) {
-      const toggleAllocation = () => {
-        const collapsed = allocationWrap.classList.toggle("jc-hidden");
-        allocationChevron?.classList.toggle("collapsed", collapsed);
-        allocationHeader.setAttribute("aria-expanded", collapsed ? "false" : "true");
-      };
-      allocationHeader.addEventListener("click", toggleAllocation);
-      allocationHeader.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        e.preventDefault();
-        toggleAllocation();
+        const addBtn = e.target.closest(".jc-material-add-btn");
+        if (addBtn) openMaterialSwapDialog(addBtn.dataset.pool);
       });
     }
-
-    const USAGE_ITEMS = JSON.parse(document.getElementById("material-usage-data").textContent || "[]");
-    let materialUsedCleared = false;
 
     const POOL_FIELDS = {
       facestock: { stockId: "facestockStockId", used: "facestockMtrsUsed", remaining: "facestockRemainingKg", unit: "kg" },
@@ -2050,10 +1829,10 @@
         return;
       }
 
+      // Scan targets are the Materials Mounted strip fields (data-pool set).
       if (input.classList.contains("jc-cur-roll-input")) {
-        const pool = input.dataset.pool;
-        setCurrentMaterial(pool, cleanId);
-        const next = MATERIAL_POOL_ORDER[MATERIAL_POOL_ORDER.indexOf(pool) + 1];
+        setCurrentMaterial(input.dataset.pool, cleanId);
+        const next = MATERIAL_POOL_ORDER[MATERIAL_POOL_ORDER.indexOf(input.dataset.pool) + 1];
         if (next) materialSlot(next)?.querySelector(".jc-cur-roll-input")?.focus();
       }
       if (typeof showToast === "function") showToast(`Scanned ID: ${cleanId}`, "success");
@@ -2269,8 +2048,8 @@
     // the rest of the row does -- including Start/Stop Mtrs, which stay
     // editable so a mis-punched reading can still be corrected (autoFillMeters
     // is guarded separately so doing that never overwrites the locked Mtrs).
-    // (Roll ids aren't in this list -- they're hidden, mirrored from
-    // Materials in Use, never directly edited on the row itself.)
+    // (Roll ids aren't in this list -- they're hidden, mirrored from the
+    // Materials Mounted strip, never directly edited on the row itself.)
     const PRODUCTION_LOCKED_SELECTORS = [".log-meters"];
 
     // Its own column next to Edit -- previously a tiny caption tucked under
@@ -2351,6 +2130,7 @@
           <input type="hidden" name="fsRollId" class="log-fs-roll-id" />
           <input type="hidden" name="adRollId" class="log-ad-roll-id" />
           <input type="hidden" name="rlRollId" class="log-rl-roll-id" />
+          <input type="hidden" name="logMaterialsUsed" class="log-materials-used" value="[]" />
         </td>
         <td data-label="Mtrs"><input type="number" name="logStartMtrs" class="form-control log-start-mtrs" placeholder="Mtrs" min="0" step="any" /></td>
         <td style="text-align:center; white-space:nowrap;" data-label="Start">
@@ -2460,6 +2240,7 @@
             fsRollId: logRowVal(row, ".log-fs-roll-id"),
             adRollId: logRowVal(row, ".log-ad-roll-id"),
             rlRollId: logRowVal(row, ".log-rl-roll-id"),
+            materialsUsed: logRowVal(row, ".log-materials-used"),
             startMtrs: logRowVal(row, ".log-start-mtrs"),
             stopMtrs: logRowVal(row, ".log-stop-mtrs"),
             meters: logRowVal(row, ".log-meters"),
@@ -2481,7 +2262,10 @@
         }
         row.querySelector(".log-deckle-id-input").value = data.deckleId;
         row.querySelector(".log-instant-produced-input").value = "1";
-        setLogDeckleNote(row, `✓ ${data.deckleId} — in Semi Finished Stock`, "#059669");
+        const fsUsed = (data.sourceReels || []).filter((r) => r.pool === "facestock").map((r) => r.rollId);
+        const codePart = data.productCode ? ` · ${data.productCode}` : "";
+        const fsPart = fsUsed.length > 1 ? ` · FS: ${fsUsed.join(", ")}` : "";
+        setLogDeckleNote(row, `✓ ${data.deckleId}${codePart}${fsPart} — in Semi Finished Stock`, "#059669");
         lockProducedRow(row);
         if (typeof showToast === "function") showToast(`${data.deckleId} moved to Semi Finished Stock.`, "success");
       } catch (err) {
@@ -2622,6 +2406,7 @@
       releaseMtr: val(row, ".log-release-mtr"),
       deckleId: val(row, ".log-deckle-id-input"),
       instantProduced: val(row, ".log-instant-produced-input"),
+      materialsUsed: (val(row, ".log-materials-used") === "[]" ? "" : val(row, ".log-materials-used")),
     }));
 
     const anyEntry = (rows) =>
@@ -2728,6 +2513,7 @@
       putValue(row, ".log-release-mtr", data.releaseMtr);
       putValue(row, ".log-deckle-id-input", data.deckleId);
       putValue(row, ".log-instant-produced-input", data.instantProduced);
+      if (data.materialsUsed) putValue(row, ".log-materials-used", data.materialsUsed);
       if (data.deckleId && data.instantProduced === "1") {
         setLogDeckleNote(row, `✓ ${data.deckleId} — in Semi Finished Stock`, "#059669");
         lockProducedRow(row);
@@ -2771,10 +2557,16 @@
           if (!rollId) return;
           currentMaterials[pool] = rollId;
           const input = materialSlot(pool)?.querySelector(".jc-cur-roll-input");
-          if (input) input.value = rollId;
+          if (input) { input.value = rollId; checkMaterialInput(input, pool); }
           lockMaterialSlot(pool);
-          checkMaterialInput(input, pool);
         });
+        // Re-resolve the combination's Product Code for the restored mount.
+        const mountedPool = MATERIAL_POOL_ORDER.find((p) => currentMaterials[p]);
+        if (mountedPool && pendingId) {
+          checkReel(mountedPool, currentMaterials[mountedPool])
+            .then((d) => renderMountedVariant(d && d.variant))
+            .catch(() => {});
+        }
       }
       if (Array.isArray(draft.jsRows) && draft.jsRows.length) applyJsRows(draft.jsRows);
       if (Array.isArray(draft.logRows) && draft.logRows.length) applyLogRows(draft.logRows);

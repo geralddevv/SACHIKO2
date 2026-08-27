@@ -209,6 +209,26 @@
   </div>
 </div>
 
+<!-- ============ DECKLE DETAIL DIALOG ============ -->
+<!-- What this Deckle was produced as (Product Code / variant) and the raw-
+     material reels that fed it -- mirrors the per-deckle breakdown on
+     /sachiko/machine/jobcard/view. -->
+<div class="logout-modal" id="deckleDetailDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deckleDetailTitle"
+    style="width: min(560px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="deckleDetailTitle">Deckle Detail</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeModal('deckleDetailDialog')" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div id="deckleDetailBody"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeModal('deckleDetailDialog')">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
@@ -250,13 +270,20 @@
       { title: "Remarks", field: "remarks", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160, formatter: (cell) => cell.getValue() || "—" },
       {
         title: "Actions",
-        width: 150,
+        width: 190,
         hozAlign: "center",
         headerSort: false,
         formatter: function (cell) {
           const row = cell.getRow().getData();
           const wrap = document.createElement("div");
           wrap.style.cssText = "display:flex; gap:5px; justify-content:center;";
+
+          const viewBtn = document.createElement("button");
+          viewBtn.className = "loc-btn";
+          viewBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#044a78;";
+          viewBtn.title = "View variant & materials used";
+          viewBtn.innerHTML = '<i class="fa-solid fa-eye"></i>';
+          viewBtn.addEventListener("click", () => openDeckleDetailDialog(row));
 
           const printBtn = document.createElement("button");
           printBtn.className = "loc-btn";
@@ -279,6 +306,7 @@
           deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
           deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.rollId));
 
+          wrap.appendChild(viewBtn);
           wrap.appendChild(printBtn);
           wrap.appendChild(editBtn);
           wrap.appendChild(deleteBtn);
@@ -327,7 +355,7 @@
     btn.style.opacity = loading ? "0.7" : "";
   }
 
-  ["editDialog", "deleteDialog", "labelDialog"].forEach(id => {
+  ["editDialog", "deleteDialog", "labelDialog", "deckleDetailDialog"].forEach(id => {
     document.getElementById(id).addEventListener("click", function (e) {
       if (e.target === this) closeModal(id);
     });
@@ -335,10 +363,42 @@
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    ["editDialog", "deleteDialog", "labelDialog"].forEach(id => {
+    ["editDialog", "deleteDialog", "labelDialog", "deckleDetailDialog"].forEach(id => {
       if (document.getElementById(id).classList.contains("show")) closeModal(id);
     });
   });
+
+  // ---- DECKLE DETAIL (variant + reels used) ----
+  const escHtml = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const POOL_LABEL = { facestock: "Facestock", adhesive: "Adhesive", release: "Release Liner" };
+
+  function openDeckleDetailDialog(row) {
+    document.getElementById("deckleDetailTitle").textContent = `Deckle Detail — ${row.rollId || ""}`;
+    const byPool = { facestock: [], adhesive: [], release: [] };
+    (row.sourceReels || []).forEach((r) => { if (byPool[r.pool]) byPool[r.pool].push(r.rollId); });
+
+    const reelRows = Object.keys(POOL_LABEL).map((p) => {
+      if (!byPool[p].length) return "";
+      return `<div style="display:flex;gap:10px;padding:5px 0;border-top:1px solid #f1f5f9;">
+        <span style="flex:0 0 120px;color:#64748b;font-weight:600;font-size:12.5px;">${POOL_LABEL[p]}</span>
+        <span style="font-weight:700;color:#03365a;font-size:13px;">${byPool[p].map(escHtml).join(", ")}${byPool[p].length > 1 ? ' <span style="color:#b45309;">(swapped mid-run)</span>' : ""}</span>
+      </div>`;
+    }).join("");
+
+    document.getElementById("deckleDetailBody").innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:14px;">
+        <span style="background:#f0f7ff;border:1px solid #d7e6f5;color:#03365a;font-weight:700;font-size:13px;padding:4px 10px;border-radius:7px;">
+          ${escHtml(row.productCode || "—")}
+        </span>
+        ${row.reelMtrs != null ? `<span style="color:#64748b;font-size:12.5px;font-weight:600;">${escHtml(row.reelMtrs)} mtrs</span>` : ""}
+        ${row.lotNo ? `<span style="color:#64748b;font-size:12.5px;font-weight:600;">Lot ${escHtml(row.lotNo)}</span>` : ""}
+      </div>
+      <div class="dialog-field-label" style="margin-bottom:2px;">Raw materials used</div>
+      ${reelRows || '<div style="color:#94a3b8;font-size:12.5px;padding:5px 0;">No reel detail recorded for this Deckle.</div>'}
+      ${row.joints ? `<div style="margin-top:12px;color:#64748b;font-size:12.5px;"><strong>Joints:</strong> ${escHtml(row.joints)}</div>` : ""}
+    `;
+    openModal("deckleDetailDialog");
+  }
 
   // ---- Print Roll Label dialog ----
   // Nothing about the label is built here: the iframe loads

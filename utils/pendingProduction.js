@@ -29,6 +29,7 @@ export async function upsertPendingProduction(order) {
         quantity: order.quantity,
         dispatchedQuantity: order.dispatchedQuantity || 0,
         poNumber: order.poNumber,
+        deckleOption: order.deckleOption,
         orderRate: order.orderRate,
         estimatedDate: order.estimatedDate,
         remarks: order.remarks,

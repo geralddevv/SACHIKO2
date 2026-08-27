@@ -236,8 +236,23 @@
 
     toggle.addEventListener("click", (e) => {
       if (e.target.closest(".nav-labels-opt")) return;
-      e.stopPropagation();
-      toggleNavGroup(wrapper);
+
+      // For SKUs List (which is an <a> tag), allow right-click/middle-click/modifier+click to navigate
+      const isLink = toggle.tagName === 'A';
+      if (isLink) {
+        const isRightClick = e.button === 2;
+        const isMiddleClick = e.button === 1;
+        const isModifierClick = e.ctrlKey || e.shiftKey || e.metaKey || e.altKey;
+
+        if (!isRightClick && !isMiddleClick && !isModifierClick) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleNavGroup(wrapper);
+        }
+      } else {
+        e.stopPropagation();
+        toggleNavGroup(wrapper);
+      }
     });
   });
 

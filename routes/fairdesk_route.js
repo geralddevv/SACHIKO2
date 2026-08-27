@@ -343,6 +343,7 @@ function buildSalesOrderSignature({
   sourceLocation,
   orderRate,
   createdBy,
+  lineIndex,
 }) {
   return hashSignature(
     [
@@ -355,6 +356,12 @@ function buildSalesOrderSignature({
       String(poNumber || "").trim(),
       String(orderRate ?? ""),
       String(createdBy || ""),
+      // Distinguishes two lines of the same multi-item PO that are otherwise
+      // spec-identical (same product, qty, rate, location) -- without it the
+      // unique orderSignature index would drop the second as a duplicate.
+      // Omitted (empty) for plain single-item orders so their signatures are
+      // unchanged.
+      lineIndex == null ? "" : `L${lineIndex}`,
     ].join("|"),
   );
 }
@@ -417,6 +424,58 @@ async function resolveLabelStockBinding({ labelStock, userId, paperSize, running
     await Username.updateOne({ _id: userId }, { $addToSet: { labelStock: binding._id } });
   }
   return { binding };
+}
+
+// Resolves (or auto-creates) the LabelStockBinding for ONE line of a
+// multi-item Label Stock PO -- same rules as the single-item LABEL_STOCK
+// branch of POST /sales/order, factored out so the multi-item loop can
+// validate every line up front and create nothing if any line is bad.
+async function resolveLabelStockLineBinding({ line, userId, sourceLocation, locationRadio, userLocation }) {
+  const paperSize = String(line.paperSize || "").trim();
+  const runningMeters = line.runningMeters;
+  const noOfRolls = line.noOfRolls;
+  const itemRate = line.itemRate;
+
+  if (!paperSize || !(Number(runningMeters) > 0) || !(Number(noOfRolls) > 0)) {
+    return { error: "Every item needs a Paper Size, and RM / No of Rolls greater than zero." };
+  }
+
+  let binding = line.itemId ? await LabelStockBinding.findById(line.itemId) : null;
+  const bindingMatchesOrder =
+    binding &&
+    String(binding.paperSize || "").trim() === paperSize &&
+    Number(binding.runningMeters) === Number(runningMeters);
+
+  if (!binding || !bindingMatchesOrder) {
+    let masterId;
+    if (binding) {
+      masterId = String(binding.labelStock);
+    } else {
+      masterId = String(line.labelStockMasterId || "").trim();
+      if (!masterId) return { error: "Select a Product Code for every item." };
+      const master = await SachikoLabelStock.findById(masterId).select("_id").lean();
+      if (!master) return { error: "Invalid product selected." };
+    }
+
+    const resolvedBinding = await resolveLabelStockBinding({
+      labelStock: masterId,
+      userId,
+      paperSize,
+      runningMeters,
+      itemRate,
+      sourceLocation,
+      locationRadio,
+      userLocation,
+    });
+    if (resolvedBinding.error) return { error: resolvedBinding.error };
+    binding = resolvedBinding.binding;
+  }
+
+  if (binding.status === "INACTIVE") {
+    return { error: "One of the selected products is disabled for this client and cannot be ordered." };
+  }
+
+  return { binding, paperSize, runningMeters, noOfRolls, itemRate };
 }
 
 function isTemplateOnlyInvoice(invoiceNumber) {
@@ -2667,8 +2726,143 @@ async function describeSalesOrder({ itemTypeLabel, userId, quantity, poNumber, i
 // Submit Sales Order (Create or Update)
 router.post("/sales/order", async (req, res) => {
   try {
-    const { orderId, itemType, userId, itemId, quantity, estimatedDate, remarks, sourceLocation, locationRadio, userLocation, poNumber, poDate, orderRate, submissionToken, paperSize, runningMeters, noOfRolls, labelStockMasterId, itemRate } = req.body;
+    const { orderId, itemType, userId, itemId, quantity, estimatedDate, remarks, sourceLocation, locationRadio, userLocation, poNumber, poDate, orderRate, submissionToken, paperSize, runningMeters, noOfRolls, labelStockMasterId, itemRate, deckleOption } = req.body;
     const createdByUser = req.user?.username || "SYSTEM";
+    const normalizedDeckleOption = String(deckleOption || "").trim().toUpperCase() || undefined;
+
+    // ================= MULTI-ITEM PO =================
+    // The Sales Order form submits `lines[i][...]` when several Label Stock
+    // product lines are placed under one PO. Each line becomes its own
+    // TapeSalesOrder document (one product = one production unit downstream),
+    // all sharing this PO's header fields + a common poGroupId. Only for new
+    // orders -- editing stays single-line (handled further below).
+    const rawLines = req.body.lines;
+    const poLines = Array.isArray(rawLines)
+      ? rawLines
+      : rawLines && typeof rawLines === "object"
+      ? Object.values(rawLines)
+      : null;
+
+    if (!orderId && poLines && poLines.length) {
+      const poNo = String(poNumber || "").trim();
+      if (!userId) return res.status(400).json({ success: false, message: "Select a client and user." });
+      if (!poNo) return res.status(400).json({ success: false, message: "PO Number is required." });
+      if (!estimatedDate) return res.status(400).json({ success: false, message: "Est Delivery Date is required." });
+
+      // 1. Resolve every line's binding first -- fail the whole submit (create
+      //    nothing) if any line is invalid.
+      const resolvedLines = [];
+      for (const line of poLines) {
+        const resolved = await resolveLabelStockLineBinding({
+          line,
+          userId,
+          sourceLocation,
+          locationRadio,
+          userLocation,
+        });
+        if (resolved.error) {
+          return res.status(400).json({ success: false, message: resolved.error });
+        }
+        resolvedLines.push(resolved);
+      }
+
+      // 2. Rate write-back -- once per distinct binding (a later manual edit
+      //    via the binding form works the same way).
+      const rateApplied = new Set();
+      for (const r of resolvedLines) {
+        const key = String(r.binding._id);
+        const submitted = Number(r.itemRate);
+        if (
+          !rateApplied.has(key) &&
+          Number.isFinite(submitted) &&
+          submitted > 0 &&
+          submitted !== Number(r.binding.rate)
+        ) {
+          r.binding.rate = submitted;
+          await r.binding.save();
+        }
+        rateApplied.add(key);
+      }
+
+      // 3. One order + PendingProduction + CREATED log per line.
+      const poGroupId = new mongoose.Types.ObjectId();
+      const token = String(submissionToken || "").trim();
+      const createdOrders = [];
+      for (let i = 0; i < resolvedLines.length; i++) {
+        const { binding, paperSize: lPaperSize, runningMeters: lRunningMeters, noOfRolls: lNoOfRolls } = resolvedLines[i];
+        const qty = Number(lNoOfRolls);
+        const rate = Number(binding.rate) || 0;
+        const lineSourceLocation = canonicalizeLocationName(binding.location);
+
+        const data = {
+          tapeBinding: binding._id,
+          userId: binding.userId,
+          tapeId: binding.labelStock,
+          sourceLocation: lineSourceLocation,
+          poDate: poDate ? new Date(poDate) : undefined,
+          poNumber: poNo,
+          poGroupId,
+          deckleOption: normalizedDeckleOption,
+          orderRate: rate,
+          quantity: qty,
+          estimatedDate: new Date(estimatedDate),
+          remarks,
+          paperSize: lPaperSize,
+          runningMeters: Number(lRunningMeters),
+          noOfRolls: qty,
+          status: "PENDING",
+          onModel: "SachikoLabelStock",
+          onBindingModel: "LabelStockBinding",
+          createdBy: createdByUser,
+          orderSignature: buildSalesOrderSignature({
+            itemType: "LABEL_STOCK",
+            itemId: String(binding._id),
+            userId: binding.userId,
+            quantity: qty,
+            estimatedDate,
+            poNumber: poNo,
+            sourceLocation: lineSourceLocation,
+            orderRate: rate,
+            createdBy: createdByUser,
+            lineIndex: i,
+          }),
+          submissionToken: token ? `${token}-${i}` : undefined,
+        };
+
+        const dup = await TapeSalesOrder.findOne({ orderSignature: data.orderSignature }).select("_id").lean();
+        if (dup) continue;
+
+        let newOrder;
+        try {
+          newOrder = await TapeSalesOrder.create(data);
+        } catch (e) {
+          // Re-submit of the same form (same suffixed token / signature) -- the
+          // line already exists, skip it rather than failing the PO.
+          if (e?.code === 11000) continue;
+          throw e;
+        }
+
+        await upsertPendingProduction(newOrder);
+        await SalesOrderLog.create({
+          orderId: newOrder._id,
+          action: "CREATED",
+          quantity: qty,
+          performedBy: createdByUser,
+        });
+        createdOrders.push(newOrder);
+      }
+
+      const totalQty = createdOrders.reduce((sum, o) => sum + (o.quantity || 0), 0);
+      const user = await Username.findById(userId).select("clientName").lean();
+      res.locals.auditDescription = `Created Label Stock sales order for "${user?.clientName || "Unknown Client"}" -- ${createdOrders.length} item line(s), total x${totalQty} (PO ${poNo})`;
+      req.flash(
+        "notification",
+        createdOrders.length
+          ? `Sales order created with ${createdOrders.length} item line(s)!`
+          : "This sales order was already created.",
+      );
+      return res.json({ success: true, redirect: "/sachiko/sales/pending" });
+    }
 
     if (["TAPE"].includes(itemType) && canonicalizeLocationName(locationRadio) === "ALL") {
       return res.status(400).json({ success: false, message: "Location cannot be ALL. Please select a specific location." });
@@ -2865,6 +3059,7 @@ router.post("/sales/order", async (req, res) => {
         sourceLocation: canonicalizeLocationName(binding.location),
         poDate: poDate ? new Date(poDate) : undefined,
         poNumber,
+        deckleOption: normalizedDeckleOption,
         orderRate: labelStockRate,
         quantity: Number(quantity),
         estimatedDate: new Date(estimatedDate),
@@ -2971,7 +3166,7 @@ router.get("/sales/pending", async (req, res) => {
   try {
     const pendingOrders = await TapeSalesOrder.find({ status: "PENDING" })
       .select(
-        "tapeId tapeBinding userId quantity dispatchedQuantity estimatedDate poDate createdAt sourceLocation poNumber orderRate remarks status onModel onBindingModel paperSize runningMeters noOfRolls",
+        "tapeId tapeBinding userId quantity dispatchedQuantity estimatedDate poDate createdAt sourceLocation poNumber poGroupId deckleOption orderRate remarks status onModel onBindingModel paperSize runningMeters noOfRolls",
       )
       .populate({ path: "userId", select: "clientName userName" })
       .populate({

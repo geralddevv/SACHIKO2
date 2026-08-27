@@ -36,6 +36,23 @@
   <div class="table-spinner"><div class="spinner-circle"></div></div>
   <div id="master-table"></div>
 
+  <!-- Per-deckle breakdown for one Production Record: the Product Code /
+       variant each deckle was produced as, and every raw-material reel that
+       fed it (a facestock reel swapped mid-run leaves two). -->
+  <div class="logout-modal" id="deckleDetailModal" aria-hidden="true">
+    <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deckleDetailTitle"
+      style="width: min(720px, 96vw); padding: 0; border-radius: 14px; border: none;">
+      <div class="dialog-header" style="background:#044a78; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; border-radius:14px 14px 0 0;">
+        <h2 id="deckleDetailTitle" style="margin:0; font-size:1rem; font-weight:700; color:#fff;">Deckles Produced</h2>
+        <button type="button" onclick="closeDeckleDetail()" aria-label="Close"
+          style="background:none; border:none; color:#fff; font-size:20px; cursor:pointer; line-height:1;">×</button>
+      </div>
+      <div class="dialog-body" style="padding:16px 20px; max-height:70vh; overflow:auto; border-radius:0 0 14px 14px;">
+        <div id="deckleDetailBody"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Landing here with ?saved=<pendingId> is the only proof a production entry
     // actually reached the server, so it's where the entry form's local draft
@@ -68,10 +85,14 @@
   // entered on the Production Log rows (falling back to Job Setting when the log
   // named none), joined for display.
   const rollsUsed = (jc) => {
-    const ids = []
+    const rows = []
       .concat(Array.isArray(jc.productionLog) ? jc.productionLog : [])
-      .concat(Array.isArray(jc.jobSetting) ? jc.jobSetting : [])
-      .flatMap((r) => [r?.fsRollId, r?.adRollId, r?.rlRollId, r?.rollId])
+      .concat(Array.isArray(jc.jobSetting) ? jc.jobSetting : []);
+    const ids = rows
+      .flatMap((r) => [
+        r?.fsRollId, r?.adRollId, r?.rlRollId, r?.rollId,
+        ...(Array.isArray(r?.materialsUsed) ? r.materialsUsed.map((m) => m?.rollId) : []),
+      ])
       .map((id) => String(id || "").trim())
       .filter(Boolean);
     const seen = new Set();
@@ -88,17 +109,20 @@
   // row that made metres (routes/system/machine.js's produceDecklesFromLog,
   // system-generated on save), distinct and joined the same way rollsUsed
   // above reads the raw material side.
-  const decklesProduced = (jc) => {
+  const deckleIdList = (jc) => {
     const ids = (Array.isArray(jc.productionLog) ? jc.productionLog : [])
       .map((r) => String(r?.deckleId || "").trim())
       .filter(Boolean);
     const seen = new Set();
-    const uniq = ids.filter((id) => {
+    return ids.filter((id) => {
       const key = id.toUpperCase();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
+  };
+  const decklesProduced = (jc) => {
+    const uniq = deckleIdList(jc);
     return uniq.length ? uniq.join(", ") : "-";
   };
 
@@ -109,8 +133,8 @@
     productCode:  jc.productCode || "-",
     quantity:     jc.quantity ?? "-",
     lotNo:        jc.lotNo || "-",
-    paperSize:    jc.paperSize || "-",
-    rolls:        jc.rolls || "-",
+    deckleSize:   jc.pendingProductionId?.deckleSize ?? "-",
+    deckleQty:    deckleIdList(jc).length || "-",
     rollIdUsed:   rollsUsed(jc),
     decklesProduced: decklesProduced(jc),
     operatorName: jc.operatorName || "-",
@@ -120,6 +144,59 @@
   }));
 
   const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, ...col });
+
+  const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const rawByJobCardId = new Map(raw.map((jc) => [jc.jobCardId, jc]));
+
+  // One card = several deckles. For each: its Deckle ID, the Product Code /
+  // variant it was produced as, and the reels that went into it (grouped by
+  // pool; >1 facestock = a mid-run swap).
+  window.closeDeckleDetail = () => {
+    const m = document.getElementById("deckleDetailModal");
+    m.classList.remove("show"); m.setAttribute("aria-hidden", "true");
+  };
+  function openDeckleDetail(jobCardId) {
+    const jc = rawByJobCardId.get(jobCardId);
+    if (!jc) return;
+    const rows = (Array.isArray(jc.productionLog) ? jc.productionLog : []).filter(
+      (r) => r && (r.deckleId || Number(r.meters) > 0)
+    );
+    document.getElementById("deckleDetailTitle").textContent = `Deckles Produced — ${jobCardId}`;
+    const body = document.getElementById("deckleDetailBody");
+    if (!rows.length) { body.innerHTML = `<p style="color:#64748b;font-weight:600;">No deckles recorded for this entry.</p>`; return; }
+
+    const POOL_LABEL = { facestock: "Facestock", adhesive: "Adhesive", release: "Release Liner" };
+    body.innerHTML = rows.map((r, i) => {
+      const code = (r.productCode || jc.productCode || "-");
+      const used = Array.isArray(r.materialsUsed) && r.materialsUsed.length
+        ? r.materialsUsed
+        : [r.fsRollId && { pool: "facestock", rollId: r.fsRollId },
+           r.adRollId && { pool: "adhesive", rollId: r.adRollId },
+           r.rlRollId && { pool: "release", rollId: r.rlRollId }].filter(Boolean);
+      const byPool = { facestock: [], adhesive: [], release: [] };
+      used.forEach((m) => { if (byPool[m.pool]) byPool[m.pool].push(m.rollId); });
+      const reelRows = Object.keys(POOL_LABEL).map((p) => {
+        if (!byPool[p].length) return "";
+        return `<div style="display:flex;gap:8px;padding:3px 0;">
+          <span style="flex:0 0 110px;color:#64748b;font-weight:600;font-size:12px;">${POOL_LABEL[p]}</span>
+          <span style="font-weight:700;color:#03365a;font-size:12.5px;">${byPool[p].map(esc).join(", ")}${byPool[p].length > 1 ? ' <span style="color:#b45309;font-weight:700;">(swapped mid-run)</span>' : ""}</span>
+        </div>`;
+      }).join("");
+      return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px;">
+          <strong style="color:#15803d;font-size:13px;">${esc(r.deckleId || `Deckle ${i + 1}`)}</strong>
+          <span style="background:#f0f7ff;border:1px solid #d7e6f5;color:#03365a;font-weight:700;font-size:11.5px;padding:2px 8px;border-radius:6px;">
+            ${esc(code)}
+          </span>
+          ${Number(r.meters) > 0 ? `<span style="color:#64748b;font-size:12px;font-weight:600;">${esc(r.meters)} mtrs</span>` : ""}
+        </div>
+        ${reelRows || '<div style="color:#94a3b8;font-size:12px;">No reels recorded.</div>'}
+      </div>`;
+    }).join("");
+
+    const m = document.getElementById("deckleDetailModal");
+    m.classList.add("show"); m.setAttribute("aria-hidden", "false");
+  }
 
   const table = new Tabulator("#master-table", {
     data: tableData,
@@ -138,11 +215,13 @@
       withTextFilter({ title: "Product Code",  field: "productCode",  minWidth: 140, formatter: (cell) => `<span style="font-weight:600;color:#03365a;">${cell.getValue()}</span>` }),
       withTextFilter({ title: "Quantity",      field: "quantity",     width: 100 }),
       withTextFilter({ title: "Lot No",        field: "lotNo",        minWidth: 110 }),
-      withTextFilter({ title: "Paper Size",    field: "paperSize",    minWidth: 110 }),
-      withTextFilter({ title: "Rolls",         field: "rolls",        width: 90 }),
+      withTextFilter({ title: "Deckle Size",   field: "deckleSize",   minWidth: 110 }),
+      withTextFilter({ title: "Deckle Qty",    field: "deckleQty",    width: 100 }),
       withTextFilter({ title: "Roll ID Used", field: "rollIdUsed",   minWidth: 150 }),
       withTextFilter({ title: "Deckle(s) Produced", field: "decklesProduced", minWidth: 160,
-        formatter: (cell) => cell.getValue() === "-" ? "-" : `<span style="font-weight:600;color:#15803d;">${cell.getValue()}</span>` }),
+        formatter: (cell) => cell.getValue() === "-" ? "-"
+          : `<span style="font-weight:600;color:#15803d;text-decoration:underline;cursor:pointer;" title="Show per-deckle variant &amp; reels">${cell.getValue()}</span>`,
+        cellClick: (e, cell) => { if (cell.getValue() !== "-") openDeckleDetail(cell.getData().jobCardId); } }),
       withTextFilter({ title: "Operator",      field: "operatorName", minWidth: 120 }),
       withTextFilter({ title: "Helper",        field: "helperName",   minWidth: 120 }),
       withTextFilter({ title: "Running Meters", field: "totalMeter",  minWidth: 120 }),

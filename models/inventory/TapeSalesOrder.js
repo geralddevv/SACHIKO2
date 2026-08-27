@@ -63,6 +63,24 @@ const tapeSalesOrderSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Set when a single PO is placed for several product lines at once (the
+    // multi-item Sales Order form). Every line becomes its own TapeSalesOrder
+    // document; they all share this id so the lines of one PO can be found
+    // together. Null for a plain single-item order.
+    poGroupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      index: true,
+    },
+
+    // "DECKLE_FREE" / "DECKLE_SET" -- a header choice on the Sales Order form,
+    // copied onto every line and mirrored to PendingProduction so the
+    // deckle-set / production pages know which way the order was placed.
+    deckleOption: {
+      type: String,
+      trim: true,
+      uppercase: true,
+    },
+
     // Rate used to create/update the sales order (can differ from current binding rate)
     orderRate: {
       type: Number,

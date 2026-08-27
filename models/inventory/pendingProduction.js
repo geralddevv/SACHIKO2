@@ -35,6 +35,8 @@ const pendingProductionSchema = new mongoose.Schema(
       default: 0,
     },
     poNumber: { type: String },
+    // "DECKLE_FREE" / "DECKLE_SET" -- copied from the source order at sync time.
+    deckleOption: { type: String },
     orderRate: { type: Number },
     estimatedDate: { type: Date },
     remarks: { type: String },

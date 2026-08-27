@@ -208,6 +208,72 @@
       <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Any special instructions..." />
     </div>
 
+    <%
+      // The repeatable line-items strip is create-only: editing an existing
+      // order (orderToEdit) and dispatch (confirmMode) stay strictly single-line.
+      const showAdditionalItems = !(typeof confirmMode !== 'undefined' && confirmMode)
+        && !(typeof orderToEdit !== 'undefined' && orderToEdit);
+    %>
+    <% if (showAdditionalItems) { %>
+    <div id="additional-items-wrap" class="span-full" style="display:none;">
+      <div class="form-subheading" style="margin-top:2px;"><h1>More Items on this PO</h1></div>
+      <div class="ai-table-wrap" style="overflow-x:auto;">
+        <table class="ai-table" id="additional-items-table">
+          <thead>
+            <tr>
+              <th style="width:34px;">#</th>
+              <th style="min-width:190px;">Product Code</th>
+              <th style="min-width:120px;">Paper Size</th>
+              <th style="min-width:90px;">RM</th>
+              <th style="min-width:96px;">No of Rolls</th>
+              <th style="min-width:90px;">Rate</th>
+              <th style="width:42px;"></th>
+            </tr>
+          </thead>
+          <tbody id="additional-items-body"></tbody>
+        </table>
+      </div>
+      <button type="button" id="add-line-btn" class="ai-add-btn">
+        <i class="fa-solid fa-plus"></i> Add Item
+      </button>
+    </div>
+
+    <template id="additional-item-row-tpl">
+      <tr class="ai-row">
+        <td class="ai-row-num"></td>
+        <td>
+          <select class="ai-product form-control select-tag">
+            <option value="" disabled selected hidden>Select Product Code</option>
+          </select>
+          <input type="hidden" class="ai-item-id" />
+          <input type="hidden" class="ai-master-id" />
+        </td>
+        <td><input type="text" class="ai-paper-size form-control" placeholder="Paper Size" /></td>
+        <td><input type="text" inputmode="numeric" class="ai-rm form-control" placeholder="RM" /></td>
+        <td><input type="text" inputmode="numeric" class="ai-rolls form-control" placeholder="Rolls" /></td>
+        <td><input type="text" inputmode="decimal" class="ai-rate form-control" placeholder="Rate" /></td>
+        <td style="text-align:center;">
+          <button type="button" class="ai-remove" title="Remove item" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px;">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </td>
+      </tr>
+    </template>
+
+    <style>
+      .ai-table { width:100%; border-collapse:collapse; font-size:13px; }
+      .ai-table th, .ai-table td { padding:5px 8px; border-bottom:1px solid #e5e7eb; border-right:1px solid #e5e7eb; text-align:left; vertical-align:top; }
+      .ai-table tr > *:last-child { border-right:none; }
+      .ai-table th { color:#044a78; font-weight:700; white-space:nowrap; background:#f0f7ff; }
+      .ai-table .ai-row-num { color:#6b7280; font-weight:700; text-align:center; padding-top:12px; }
+      .ai-table input.form-control { padding:7px 9px !important; font-size:13px !important; height:auto !important; }
+      .ai-add-btn { margin-top:10px; background:#044a78; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-weight:700; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
+      .ai-add-btn:hover { background:#03365a; }
+      #additional-items-table .choices { margin-bottom:0; }
+      #additional-items-table .choices__list--dropdown { z-index:99999; }
+    </style>
+    <% } %>
+
     <!-- Stock Warning -->
     <div id="stock-warning" class="span-full" style="display: none; padding: 8px 15px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 0.5rem; color: #92400e; font-size: 14px; font-weight: 500;">
       <i class="fa-solid fa-triangle-exclamation" style="margin-right: 6px;"></i>
@@ -1760,6 +1826,7 @@
   itemTypeSelect.addEventListener("change", () => {
     const itemType = itemTypeSelect.value;
     updateLabelStockFieldsVisibility();
+    if (typeof aiOnItemTypeChange === "function") aiOnItemTypeChange();
     if (itemType) loadClients(itemType);
   });
 
@@ -2039,6 +2106,17 @@
         }
         sourceLocationInput.value = newBindingLocation;
       }
+
+      // Extra line items on this PO (the "More Items" strip). Validate each
+      // one here so a bad row is caught before any order is created server-side.
+      if (typeof aiIsActive === "function" && aiIsActive()) {
+        const aiErr = aiValidateRows();
+        if (aiErr) {
+          showToast(aiErr, "error");
+          setSubmittingState(false);
+          return false;
+        }
+      }
     }
 
     // Check Minimum Order Qty. Qty and MOQ are always in the same unit
@@ -2078,6 +2156,12 @@
           // Roll/Sheet is purely this form's own Item Type split, translated
           // back here rather than taught to the backend.
           payload.append(key, key === "itemType" ? toServerItemType(value) : value);
+        }
+
+        // Multi-item PO: append lines[0..N] (item 1 from the fields above +
+        // every extra row) so POST /sales/order takes its multi-line branch.
+        if (actionPath === "/sachiko/sales/order" && typeof aiIsActive === "function" && aiIsActive()) {
+          aiAppendLines(payload);
         }
 
         const res = await fetch(actionPath, {
@@ -2542,4 +2626,202 @@
     }
     closeDeleteDialog();
   }
+
+  /* ================================================================
+   *  MULTI-ITEM PO  --  "More Items on this PO" strip (create mode only)
+   *
+   *  Item 1 stays the existing single-item fields/logic untouched. Each
+   *  extra row is a self-contained product line; on submit, item 1 + every
+   *  extra row are sent as lines[0..N] so POST /sales/order takes its
+   *  multi-line branch (one TapeSalesOrder per line, shared poNumber /
+   *  poGroupId / header). With zero extra rows the form behaves exactly as
+   *  before (single flat submit).
+   * ================================================================ */
+  const aiChoices = new Map(); // <select>.ai-product  ->  Choices instance
+
+  function aiBody() { return document.getElementById("additional-items-body"); }
+  function aiRows() { return aiBody() ? [...aiBody().querySelectorAll(".ai-row")] : []; }
+  function aiRowCount() { return aiRows().length; }
+
+  function aiIsActive() {
+    return !confirmMode && !orderToEdit
+      && isLabelStockItemType(itemTypeSelect.value)
+      && aiRowCount() > 0;
+  }
+
+  function aiSkuToProductMap() {
+    const want = itemTypeSelect.value;
+    const seen = new Map();
+    (allLabelStockMasters || [])
+      .filter((m) => !want || (m.rollOrSheet || "").toUpperCase() === want)
+      .forEach((m) => {
+        const sku = m.skuCode || "";
+        if (sku && !seen.has(sku)) seen.set(sku, m.productCode || sku);
+      });
+    return seen;
+  }
+
+  function aiPopulateRowSelect(row, keepValue) {
+    const sel = row.querySelector(".ai-product");
+    const inst = aiChoices.get(sel);
+    if (!inst) return;
+    const cur = keepValue ? sel.value : "";
+    const seen = aiSkuToProductMap();
+    inst.clearStore();
+    inst.setChoices(
+      [
+        { value: "", label: "Select Product Code", disabled: true, selected: !cur },
+        ...[...seen].map(([v, l]) => ({ value: v, label: l, selected: v === cur })),
+      ],
+      "value", "label", true,
+    );
+  }
+
+  // Row-scoped port of onLabelStockProductChange: resolve the picked SKU to an
+  // existing binding for this client/location if one exists (fills Paper Size /
+  // RM / Rate from it), otherwise fall back to the master id -- POST
+  // /sales/order auto-creates the binding from the row's Rate + the header
+  // location, same as item 1.
+  function aiOnRowProductChange(row) {
+    const sel = row.querySelector(".ai-product");
+    const sku = sel.value || "";
+    const itemIdInp = row.querySelector(".ai-item-id");
+    const masterIdInp = row.querySelector(".ai-master-id");
+    const psInp = row.querySelector(".ai-paper-size");
+    const rmInp = row.querySelector(".ai-rm");
+    const rateInp = row.querySelector(".ai-rate");
+
+    const match = sku
+      ? (latestLabelStockItems || []).find((it) => (it.details?.skuCode || "") === sku)
+      : null;
+
+    if (match) {
+      itemIdInp.value = match._id;
+      masterIdInp.value = "";
+      if (!psInp.dataset.userEdited) psInp.value = match.paperSize || "";
+      if (!rmInp.dataset.userEdited) rmInp.value = match.runningMeters != null && match.runningMeters !== "" ? match.runningMeters : "";
+      if (!rateInp.dataset.userEdited) rateInp.value = match.rate != null && match.rate !== "" ? match.rate : "";
+      return;
+    }
+
+    itemIdInp.value = "";
+    const master = sku ? (allLabelStockMasters || []).find((m) => (m.skuCode || "") === sku) : null;
+    masterIdInp.value = master?._id || "";
+  }
+
+  function aiRenumber() {
+    aiRows().forEach((row, i) => {
+      const cell = row.querySelector(".ai-row-num");
+      if (cell) cell.textContent = String(i + 2); // item 1 is the fields above
+    });
+  }
+
+  function aiAddRow() {
+    const tpl = document.getElementById("additional-item-row-tpl");
+    if (!tpl) return;
+    const frag = tpl.content.cloneNode(true);
+    const row = frag.querySelector(".ai-row");
+    aiBody().appendChild(frag);
+
+    const sel = row.querySelector(".ai-product");
+    const inst = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "", searchPlaceholderValue: "Search product…" });
+    aiChoices.set(sel, inst);
+    aiPopulateRowSelect(row, false);
+
+    sel.addEventListener("change", () => aiOnRowProductChange(row));
+    [".ai-paper-size", ".ai-rm", ".ai-rate"].forEach((c) => {
+      const el = row.querySelector(c);
+      el.addEventListener("input", () => { el.dataset.userEdited = "1"; });
+    });
+    row.querySelector(".ai-remove").addEventListener("click", () => {
+      const i = aiChoices.get(sel);
+      if (i) i.destroy();
+      aiChoices.delete(sel);
+      row.remove();
+      aiRenumber();
+    });
+
+    aiRenumber();
+  }
+
+  function aiOnItemTypeChange() {
+    const wrap = document.getElementById("additional-items-wrap");
+    if (!wrap) return;
+    const show = !confirmMode && !orderToEdit && isLabelStockItemType(itemTypeSelect.value);
+    wrap.style.display = show ? "" : "none";
+    if (!show) {
+      aiRows().forEach((row) => {
+        const sel = row.querySelector(".ai-product");
+        const i = aiChoices.get(sel);
+        if (i) i.destroy();
+        aiChoices.delete(sel);
+        row.remove();
+      });
+      return;
+    }
+    aiRows().forEach((row) => { aiPopulateRowSelect(row, true); aiOnRowProductChange(row); });
+  }
+
+  // Re-resolve every row against a freshly-loaded binding list (loadItems).
+  function aiSyncRows() {
+    if (!document.getElementById("additional-items-wrap")) return;
+    aiRows().forEach((row) => { aiPopulateRowSelect(row, true); aiOnRowProductChange(row); });
+  }
+
+  function aiValidateRows() {
+    const rows = aiRows();
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const n = i + 2;
+      if (!(r.querySelector(".ai-item-id").value || r.querySelector(".ai-master-id").value)) return `Item ${n}: select a Product Code.`;
+      if (!(r.querySelector(".ai-paper-size").value || "").trim()) return `Item ${n}: Paper Size is required.`;
+      if (!(parseFloat(r.querySelector(".ai-rm").value) > 0)) return `Item ${n}: RM must be greater than 0.`;
+      if (!(parseInt(r.querySelector(".ai-rolls").value, 10) > 0)) return `Item ${n}: No of Rolls must be greater than 0.`;
+      if (!(parseFloat(r.querySelector(".ai-rate").value) > 0)) return `Item ${n}: Rate must be greater than 0.`;
+    }
+    return "";
+  }
+
+  function aiAppendLines(payload) {
+    const lines = [{
+      itemId: document.getElementById("item-select")?.value || "",
+      labelStockMasterId: document.getElementById("label-stock-master-id")?.value || "",
+      paperSize: (document.getElementById("paper-size")?.value || "").trim(),
+      runningMeters: (document.getElementById("running-meters")?.value || "").trim(),
+      noOfRolls: (document.getElementById("no-of-rolls")?.value || "").trim(),
+      itemRate: (document.getElementById("item-rate")?.value || "").trim(),
+    }];
+    aiRows().forEach((r) => {
+      lines.push({
+        itemId: r.querySelector(".ai-item-id").value || "",
+        labelStockMasterId: r.querySelector(".ai-master-id").value || "",
+        paperSize: (r.querySelector(".ai-paper-size").value || "").trim(),
+        runningMeters: (r.querySelector(".ai-rm").value || "").trim(),
+        noOfRolls: (r.querySelector(".ai-rolls").value || "").trim(),
+        itemRate: (r.querySelector(".ai-rate").value || "").trim(),
+      });
+    });
+    lines.forEach((ln, i) => {
+      Object.entries(ln).forEach(([k, v]) => payload.append(`lines[${i}][${k}]`, v));
+    });
+  }
+
+  // loadItems refreshes the binding list for the chosen user+location -- rerun
+  // row resolution afterwards so extra rows pick up matching bindings too.
+  if (typeof loadItems === "function") {
+    const _aiOrigLoadItems = loadItems;
+    loadItems = function (...args) {
+      const ret = _aiOrigLoadItems.apply(this, args);
+      Promise.resolve(ret).then(() => { try { aiSyncRows(); } catch (e) {} }).catch(() => {});
+      return ret;
+    };
+  }
+
+  window.addEventListener("load", () => {
+    if (confirmMode || orderToEdit) return;
+    const addBtn = document.getElementById("add-line-btn");
+    if (!addBtn) return;
+    addBtn.addEventListener("click", aiAddRow);
+    aiOnItemTypeChange(); // initial visibility (Item Type defaults to ROLL)
+  });
 </script>

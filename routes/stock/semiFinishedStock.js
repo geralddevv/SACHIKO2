@@ -35,6 +35,28 @@ router.get("/", async (req, res) => {
       .lean(),
   ]);
 
+  // The job card that produced each Deckle -- used to show its base Product
+  // Code (so an "-A"/"-B" variant reads as a variant) and, for older Deckles
+  // written before MaterialStock.sourceReels existed, the reel list off the
+  // production-log row itself.
+  const deckleIds = stock.map((s) => s.rollId).filter(Boolean);
+  const jobCards = deckleIds.length
+    ? await MachineJobCard.find({ "productionLog.deckleId": { $in: deckleIds } })
+        .select("productCode productionLog")
+        .lean()
+    : [];
+  const jobCardRowByDeckle = new Map();
+  for (const jc of jobCards) {
+    for (const row of jc.productionLog || []) {
+      if (row?.deckleId) jobCardRowByDeckle.set(row.deckleId, { baseProductCode: jc.productCode || "", row });
+    }
+  }
+
+  const baseOf = (code) => {
+    const m = /^(.*[^-])-[A-Z]+$/.exec(String(code || ""));
+    return m ? m[1] : "";
+  };
+
   res.render("stock/semiFinishedStock.ejs", {
     JS: false,
     CSS: "tableDisp.css",
@@ -45,23 +67,48 @@ router.get("/", async (req, res) => {
     // utils/materialStockRollLabel.js.
     labelSizeMm: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM },
     locations,
-    stock: stock.map((s) => ({
-      _id: String(s._id),
-      rollId: s.rollId,
-      productCode: s.material?.productCode || s.material?.skuCode || "",
-      family: s.material?.family || "",
-      // Existing Deckles can fall back to the production order while all new
-      // production saves the size directly on MaterialStock.
-      size: s.size || s.producedFor?.paperSize || "",
-      location: s.location,
-      reelMtrs: s.reelMtrs,
-      rate: s.rate,
-      value: Number.isFinite(Number(s.reelMtrs)) && Number.isFinite(Number(s.rate))
-        ? Number(s.reelMtrs) * Number(s.rate)
-        : null,
-      remarks: s.remarks || "",
-      createdAt: s.createdAt,
-    })),
+    stock: stock.map((s) => {
+      const productCode = s.material?.productCode || s.material?.skuCode || "";
+      const jc = jobCardRowByDeckle.get(s.rollId);
+      // Prefer the Deckle's own sourceReels; then the job-card row's
+      // materialsUsed; then the row's single-reel-per-pool fields (older
+      // Deckles produced before either list existed still carry these).
+      let sourceReels = [];
+      if (Array.isArray(s.sourceReels) && s.sourceReels.length) {
+        sourceReels = s.sourceReels;
+      } else if (Array.isArray(jc?.row?.materialsUsed) && jc.row.materialsUsed.length) {
+        sourceReels = jc.row.materialsUsed;
+      } else if (jc?.row) {
+        sourceReels = [
+          jc.row.fsRollId && { pool: "facestock", rollId: jc.row.fsRollId },
+          jc.row.adRollId && { pool: "adhesive", rollId: jc.row.adRollId },
+          jc.row.rlRollId && { pool: "release", rollId: jc.row.rlRollId },
+        ].filter(Boolean);
+      }
+      const baseProductCode = jc?.baseProductCode || baseOf(productCode);
+      return {
+        _id: String(s._id),
+        rollId: s.rollId,
+        productCode,
+        baseProductCode,
+        isVariant: Boolean(baseProductCode && productCode && baseProductCode !== productCode),
+        sourceReels: (sourceReels || []).map((r) => ({ pool: r.pool || "", rollId: r.rollId || "" })),
+        family: s.material?.family || "",
+        // Existing Deckles can fall back to the production order while all new
+        // production saves the size directly on MaterialStock.
+        size: s.size || s.producedFor?.paperSize || "",
+        joints: s.joints || "",
+        lotNo: s.lotNo || "",
+        location: s.location,
+        reelMtrs: s.reelMtrs,
+        rate: s.rate,
+        value: Number.isFinite(Number(s.reelMtrs)) && Number.isFinite(Number(s.rate))
+          ? Number(s.reelMtrs) * Number(s.rate)
+          : null,
+        remarks: s.remarks || "",
+        createdAt: s.createdAt,
+      };
+    }),
     notification: req.flash("notification"),
   });
 });
