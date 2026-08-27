@@ -435,7 +435,7 @@
         <input type="checkbox" name="orderIds" value="${m._id}" checked />
         <span class="ds-order-main">
           <span class="ds-order-top">${m.clientName || "—"} &middot; ${m.poNumber || "—"}</span>
-          <span class="ds-order-sub">qty ${fmtInt(m.quantity)} &nbsp;·&nbsp; RM ${fmtMtrs(m.runningMeters)} &nbsp;·&nbsp; ${fmtInt(m.noOfRolls)} rolls &nbsp;·&nbsp; due ${fmtDate(m.estimatedDate)}</span>
+          <span class="ds-order-sub">paper ${m.paperSize || "—"} &nbsp;·&nbsp; qty ${fmtInt(m.quantity)} &nbsp;·&nbsp; RM ${fmtMtrs(m.runningMeters)} &nbsp;·&nbsp; ${fmtInt(m.noOfRolls)} rolls &nbsp;·&nbsp; due ${fmtDate(m.estimatedDate)}</span>
         </span>
       </label>
     `).join("");
@@ -608,7 +608,9 @@
         },
       },
       { title: "Paper Size", field: "paperSize", hozAlign: "center", headerSort: false,
-        formatter: (cell) => (cell.getRow().getData().isGroup ? (cell.getValue() || "—") : "") },
+        // Paper size lives only on the per-order child rows -- never on the
+        // SKU group / batch parent row.
+        formatter: (cell) => (cell.getRow().getData().isGroup ? "" : (cell.getValue() || "—")) },
       { title: "PO Number", field: "poNumber", headerSort: false,
         formatter: (cell) => (cell.getRow().getData().isGroup ? "" : (cell.getValue() || "—")) },
       { title: "Orders", hozAlign: "center", headerSort: false,

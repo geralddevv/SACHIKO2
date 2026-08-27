@@ -4535,6 +4535,7 @@ router.get("/labels/production/deckle-set", async (req, res) => {
     isGroup: false,
     clientName: r.userId?.clientName || r.userId?.userName || "—",
     poNumber: r.poNumber || "—",
+    paperSize: r.paperSize || "—",
     quantity: r.quantity ?? "—",
     runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
     noOfRolls: r.noOfRolls ?? "—",
@@ -4542,10 +4543,12 @@ router.get("/labels/production/deckle-set", async (req, res) => {
     remarks: r.remarks || "",
   });
 
-  // ---- loose orders, grouped by itemId + paperSize ----
+  // ---- loose orders, grouped by Product Code (itemId) only -- paper size can
+  // vary within a batch: each order is slit off the one deckle web separately,
+  // so the web just has to be wide enough for the widest single order. ----
   const groupMap = new Map();
   for (const r of loose) {
-    const key = `${String(r.itemId?._id || "none")}::${r.paperSize || ""}`;
+    const key = String(r.itemId?._id || "none");
     let g = groupMap.get(key);
     if (!g) g = groupMap.set(key, { key, item: r.itemId || {}, members: [] }).get(key);
     g.members.push(r);
@@ -4554,11 +4557,17 @@ router.get("/labels/production/deckle-set", async (req, res) => {
   const looseRows = await Promise.all([...groupMap.values()].map(async (g) => {
     const item = g.item || {};
     const sumRolls = g.members.reduce((s, m) => s + num(m.noOfRolls), 0);
-    const maxRolls = g.members.reduce((s, m) => Math.max(s, num(m.noOfRolls)), 0);
+    // Widest single order = max over members of (paper size x its roll count).
+    // Feed that to suggestDeckleSize as a one-roll width so it sizes the web
+    // to the largest slit layout in the batch, not the sum.
+    const maxOrderWidth = g.members.reduce(
+      (w, m) => Math.max(w, num(m.paperSize) * (num(m.noOfRolls) || 1)),
+      0,
+    );
     const { neededWidth, rollsWidth, edgeTrim, sizes, suggestedSize, short } = await suggestDeckleSize({
       labelStock: item,
-      paperSize: g.members[0]?.paperSize,
-      noOfRolls: maxRolls || 1,
+      paperSize: maxOrderWidth || undefined,
+      noOfRolls: 1,
     });
     return {
       _id: `grp:${g.key}`,
@@ -4566,13 +4575,14 @@ router.get("/labels/production/deckle-set", async (req, res) => {
       isBatch: false,
       itemId: String(item._id || ""),
       productCode: item.productCode || item.skuCode || "—",
-      paperSize: g.members[0]?.paperSize || "—",
+      // Never on the group row -- each order's own paper size shows on its
+      // child row (with the rest of that order's detail).
+      paperSize: "",
       rollType: item.rollType || "—",
       orderCount: g.members.length,
       sumQuantity: g.members.reduce((s, m) => s + num(m.quantity), 0),
       sumRunningMeters: g.members.reduce((s, m) => s + num(m.runningMeters), 0),
       sumRolls,
-      maxRolls,
       neededWidth,
       rollsWidth,
       edgeTrim,
@@ -4596,7 +4606,9 @@ router.get("/labels/production/deckle-set", async (req, res) => {
       batchId: String(b._id),
       itemId: String(item._id || ""),
       productCode: item.productCode || item.skuCode || "—",
-      paperSize: b.paperSize || "—",
+      // The deckle width is on the BATCHED tag; each member's paper size is on
+      // its child row -- nothing meaningful for the batch row's own cell.
+      paperSize: "",
       rollType: item.rollType || "—",
       deckleSize: b.deckleSize ?? null,
       orderCount: members.length,
@@ -4640,8 +4652,8 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     return res.redirect(backTo);
   }
 
-  // Every ticked order must still be loose and share one itemId + paperSize --
-  // that pair is the batch key.
+  // Every ticked order must still be loose and share one Product Code (itemId)
+  // -- paper size is NOT part of the batch key (mixed sizes slit off one web).
   const members = await PendingProduction.find({
     _id: { $in: orderIds },
     assignedMachineId: null,
@@ -4653,9 +4665,8 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     req.flash("notification", "Some selected orders are no longer available to batch — refresh and try again.");
     return res.redirect(backTo);
   }
-  if (new Set(members.map((m) => String(m.itemId))).size !== 1 ||
-      new Set(members.map((m) => String(m.paperSize || ""))).size !== 1) {
-    req.flash("notification", "A deckle batch must be one Product Code and one paper size.");
+  if (new Set(members.map((m) => String(m.itemId))).size !== 1) {
+    req.flash("notification", "A deckle batch must be a single Product Code.");
     return res.redirect(backTo);
   }
 
@@ -4681,7 +4692,9 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     isDeckleBatch: true,
     itemId: oldest.itemId,
     userId: oldest.userId,
-    paperSize: oldest.paperSize,
+    // Members can have different per-roll paper sizes -- the batch produces one
+    // web at the chosen deckle width, so that's the size that characterises it.
+    paperSize: String(deckleSize),
     quantity: members.reduce((s, m) => s + num(m.quantity), 0),
     noOfRolls,
     runningMeters,
@@ -4753,7 +4766,7 @@ router.get("/labels/production/deckle-queue", async (req, res) => {
       _id: String(r._id),
       productCode: item.productCode || item.skuCode || "—",
       clientName: r.isDeckleBatch ? "—" : (r.userId?.clientName || r.userId?.userName || "—"),
-      paperSize: r.paperSize || "—",
+      paperSize: r.isDeckleBatch ? "—" : (r.paperSize || "—"),
       isBatch: !!r.isDeckleBatch,
       orderCount: r.isDeckleBatch ? (r.batchOrderIds || []).length : 1,
       deckleSize: r.deckleSize ?? null,
@@ -4984,7 +4997,7 @@ router.get("/labels/production/assign/:id", async (req, res) => {
     if (pendingProduction.isDeckleBatch && Array.isArray(pendingProduction.batchOrderIds) && pendingProduction.batchOrderIds.length) {
       batchOrders = await PendingProduction.find({ _id: { $in: pendingProduction.batchOrderIds } })
         .populate("userId", "clientName userName")
-        .select("poNumber quantity runningMeters noOfRolls estimatedDate userId")
+        .select("poNumber paperSize quantity runningMeters noOfRolls estimatedDate userId")
         .sort({ estimatedDate: 1 })
         .lean();
     }

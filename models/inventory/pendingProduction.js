@@ -58,9 +58,10 @@ const pendingProductionSchema = new mongoose.Schema(
     deckleSize: { type: Number },
 
     // ---- SKU-batched deckle setting (GET/POST /labels/production/deckle-set) ----
-    // Deckle setting is per-SKU + paper size, not per order: the planner picks a
-    // Product Code, ticks the pending orders that share its paper size, and one
-    // deckle covers them all as a single production job.
+    // Deckle setting is per-SKU (Product Code), not per order: the planner picks
+    // a Product Code, ticks the pending orders to bundle (paper size can vary --
+    // each order is slit off the one deckle web separately), and one deckle
+    // covers them all as a single production job.
     //
     // `isDeckleBatch` marks the synthetic "batch" PendingProduction that carries
     // that job -- it is NOT a sales order (no matching TapeSalesOrder), so

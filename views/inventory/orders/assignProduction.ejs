@@ -424,6 +424,7 @@
             <tr style="color:#044a78; text-align:left;">
               <th style="padding:5px 10px;">Client</th>
               <th style="padding:5px 10px;">PO Number</th>
+              <th style="padding:5px 10px; text-align:center;">Paper Size</th>
               <th style="padding:5px 10px; text-align:right;">Qty</th>
               <th style="padding:5px 10px; text-align:right;">Running Mtrs</th>
               <th style="padding:5px 10px; text-align:center;">Rolls</th>
@@ -435,6 +436,7 @@
               <tr style="border-top:1px solid #e5e7eb;">
                 <td style="padding:5px 10px;"><%= dash(o.userId && (o.userId.clientName || o.userId.userName)) %></td>
                 <td style="padding:5px 10px;"><%= dash(o.poNumber) %></td>
+                <td style="padding:5px 10px; text-align:center;"><%= dash(o.paperSize) %></td>
                 <td style="padding:5px 10px; text-align:right;"><%= fmtQty(o.quantity) %></td>
                 <td style="padding:5px 10px; text-align:right;"><%= fmtQty(o.runningMeters) %></td>
                 <td style="padding:5px 10px; text-align:center;"><%= dash(o.noOfRolls) %></td>
