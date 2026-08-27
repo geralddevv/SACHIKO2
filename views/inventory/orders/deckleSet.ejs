@@ -582,7 +582,7 @@
     placeholder: "No orders waiting on a deckle",
     index: "_id",
     dataTree: true,
-    dataTreeStartExpanded: true,
+    dataTreeStartExpanded: false,
     dataTreeChildField: "_children",
     dataTreeElementColumn: "item",
     rowFormatter: (row) => {
@@ -628,6 +628,16 @@
           const row = cell.getRow().getData();
           return fmtMtrs(row.isGroup ? row.sumRunningMeters : row.runningMeters);
         } },
+      { title: "Sq Mtr", hozAlign: "right", headerSort: false,
+        // width (paper size, mm) x length (running mtrs, m) / 1000, per order;
+        // the group / batch row shows the sum of its orders'.
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const v = row.isGroup ? row.sumSqMtr : row.sqMtr;
+          return row.isGroup
+            ? `<span style="font-weight:700; color:#044A78;">${fmtMtrs(v)}</span>`
+            : fmtMtrs(v);
+        } },
       { title: "Rolls", hozAlign: "center", headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
@@ -642,7 +652,7 @@
         title: "Actions",
         hozAlign: "center",
         headerSort: false,
-        widthGrow: 2,
+        width: 130,
         formatter: (cell) => {
           const row = cell.getRow().getData();
           if (!row.isGroup) return "";

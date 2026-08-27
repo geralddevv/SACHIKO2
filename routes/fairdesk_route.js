@@ -4507,6 +4507,8 @@ async function buildJobCardProgressMap(pendingIds) {
 // the one web, not laid side by side).
 router.get("/labels/production/deckle-set", async (req, res) => {
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  // Sq. metres for one order = paper width (mm) x running length (m) / 1000.
+  const sqM = (width, lengthM) => Math.round((num(width) * num(lengthM)) / 1000 * 100) / 100;
 
   const [loose, batches] = await Promise.all([
     PendingProduction.find({
@@ -4523,7 +4525,7 @@ router.get("/labels/production/deckle-set", async (req, res) => {
       .populate("itemId", "productCode skuCode rollType")
       .populate({
         path: "batchOrderIds",
-        select: "poNumber quantity runningMeters noOfRolls estimatedDate remarks createdAt userId",
+        select: "poNumber paperSize quantity runningMeters noOfRolls estimatedDate remarks createdAt userId",
         populate: { path: "userId", select: "clientName userName" },
       })
       .sort({ createdAt: -1 })
@@ -4538,6 +4540,7 @@ router.get("/labels/production/deckle-set", async (req, res) => {
     paperSize: r.paperSize || "—",
     quantity: r.quantity ?? "—",
     runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
+    sqMtr: sqM(r.paperSize, r.runningMeters),
     noOfRolls: r.noOfRolls ?? "—",
     estimatedDate: r.estimatedDate || null,
     remarks: r.remarks || "",
@@ -4582,6 +4585,7 @@ router.get("/labels/production/deckle-set", async (req, res) => {
       orderCount: g.members.length,
       sumQuantity: g.members.reduce((s, m) => s + num(m.quantity), 0),
       sumRunningMeters: g.members.reduce((s, m) => s + num(m.runningMeters), 0),
+      sumSqMtr: Math.round(g.members.reduce((s, m) => s + sqM(m.paperSize, m.runningMeters), 0) * 100) / 100,
       sumRolls,
       neededWidth,
       rollsWidth,
@@ -4614,6 +4618,7 @@ router.get("/labels/production/deckle-set", async (req, res) => {
       orderCount: members.length,
       sumQuantity: num(b.quantity),
       sumRunningMeters: num(b.runningMeters),
+      sumSqMtr: Math.round(members.reduce((s, m) => s + sqM(m.paperSize, m.runningMeters), 0) * 100) / 100,
       sumRolls: num(b.noOfRolls),
       _children: members.map(fmtChild),
     };
