@@ -238,6 +238,8 @@ router.get("/machine/queue", requireMachineFloor, async (req, res) => {
       productCode: job.productCode,
       quantity: job.quantity,
       rolls: job.rolls,
+      balanceRolls: job.balanceRolls,
+      producedRolls: job.producedRolls,
       rollIds: job.allottedRollDetails.map((r) => r.rollId).filter(Boolean),
       clientName: job.clientName,
     });
@@ -400,8 +402,13 @@ async function buildQueueRows(match) {
     // computed from a die.
     const rolls = p.noOfRolls != null ? Number(p.noOfRolls) : null;
     const allottedRolls = p.allottedRolls != null ? p.allottedRolls : null;
+    // Rolls this order's Job Cards have already produced (POST /machine/
+    // jobcard/form accumulates one per Production Log row). The balance is
+    // what's still to run -- distinct from allotment: allottedRolls /
+    // rollsStatus below still track how many reels the office set aside.
+    const producedRolls = Number(p.producedRolls) || 0;
     const balanceRolls =
-      rolls == null ? null : allottedRolls == null ? rolls : Math.max(rolls - allottedRolls, 0);
+      rolls == null ? null : Math.max(rolls - producedRolls, 0);
     const rollsStatus =
       allottedRolls == null || rolls == null
         ? null
@@ -528,6 +535,7 @@ async function buildQueueRows(match) {
       rolls: rolls != null ? String(rolls) : "—",
       allottedRolls: allottedRolls != null ? String(allottedRolls) : "—",
       balanceRolls: balanceRolls != null ? String(balanceRolls) : "—",
+      producedRolls,
       rollsStatus,
       materialStatus,
       facestockStatus,
@@ -1555,7 +1563,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     let pendingDoc = null;
     if (mongoose.isValidObjectId(b.pendingId)) {
       pendingDoc = await PendingProduction.findById(b.pendingId)
-        .select("allottedRollIds allottedLayers itemId paperSize lotNo materialSwapLog")
+        .select("allottedRollIds allottedLayers itemId paperSize lotNo materialSwapLog noOfRolls producedRolls")
         .populate({ path: "itemId", select: "rollType" })
         .lean();
       if (!pendingDoc || !hasStartableAllotment({
@@ -1955,23 +1963,48 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
       console.error("JOB CARD DECKLE PRODUCTION ERROR:", deckleErr);
     }
 
-    // The job is done: take it off the machine and operator queues by
-    // stamping the pending order as produced, and drop the live
-    // in-use hint (liveMaterialInUse) -- the real consumption just saved
-    // above (facestockUsage etc.) is now the permanent record, so the
-    // Start-punch hint that stood in for it has nothing left to add.
+    // Accumulate the rolls this Job Card produced onto the order (one per
+    // Production Log row that recorded metres -- each row is one deckle),
+    // and drop the live in-use hint (liveMaterialInUse) -- the real
+    // consumption just saved above (facestockUsage etc.) is now the
+    // permanent record, so the Start-punch hint that stood in for it has
+    // nothing left to add.
+    //
+    // Only stamp producedAt -- which takes the order off every machine /
+    // operator queue -- once the running total reaches the ordered roll
+    // count. Producing fewer than ordered (the operator switched to
+    // another job mid-order) leaves producedAt unset, so the order stays
+    // on the queue showing its balance still to run. An order with no
+    // roll target recorded closes on the first save, as before.
+    let productionProgress = null;
     if (mongoose.isValidObjectId(b.pendingId)) {
       try {
-        await PendingProduction.updateOne(
-          { _id: b.pendingId },
-          { $set: { producedAt: new Date() }, $unset: { liveMaterialInUse: "" } },
-        );
+        const rollsThisSession = productionLog.filter((r) => Number(r.meters) > 0).length;
+        const priorProduced = Number(pendingDoc?.producedRolls) || 0;
+        const totalProduced = priorProduced + rollsThisSession;
+        const requiredRolls = Number(pendingDoc?.noOfRolls);
+        const hasTarget = Number.isFinite(requiredRolls) && requiredRolls > 0;
+        const complete = !hasTarget || totalProduced >= requiredRolls;
+        const update = {
+          $set: { producedRolls: totalProduced },
+          $unset: { liveMaterialInUse: "" },
+        };
+        if (complete) update.$set.producedAt = new Date();
+        await PendingProduction.updateOne({ _id: b.pendingId }, update);
+        productionProgress = { totalProduced, requiredRolls, hasTarget, complete };
       } catch (prodErr) {
         console.error("JOB CARD MARK-PRODUCED ERROR:", prodErr);
       }
     }
 
     let message = "Production entry saved successfully!";
+    if (productionProgress && productionProgress.hasTarget && !productionProgress.complete) {
+      const remaining = Math.max(productionProgress.requiredRolls - productionProgress.totalProduced, 0);
+      message +=
+        ` Job switch: ${productionProgress.totalProduced} of ${productionProgress.requiredRolls} roll` +
+        `${productionProgress.requiredRolls === 1 ? "" : "s"} produced — ${remaining} still pending,` +
+        ` order kept on the queue.`;
+    }
     if (consumption.deducted) {
       message +=
         ` Stock: ${consumption.meters} mtrs off ${consumption.deducted} reel${consumption.deducted === 1 ? "" : "s"}` +

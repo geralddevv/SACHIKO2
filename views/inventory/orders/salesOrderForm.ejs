@@ -168,7 +168,7 @@
       <h1>Order Info</h1>
     </div>
 
-    <div class="span-three">
+    <div class="span-four">
       <label for="po-date">PO Date</label>
       <input type="date" id="po-date" name="poDate" class="form-control" value="<%= new Date().toISOString().split('T')[0] %>" />
     </div>
@@ -203,7 +203,7 @@
       <input type="date" id="estimated-date" name="estimatedDate" class="form-control" required />
     </div>
 
-    <div class="span-half" id="remarks-wrap" style="grid-column: span 10;">
+    <div class="span-half" id="remarks-wrap" style="grid-column: span 9;">
       <label for="remarks">Remarks (Optional)</label>
       <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Any special instructions..." />
     </div>
@@ -643,6 +643,34 @@
   const confirmQuantityInput = document.getElementById("confirm-quantity");
   const orderForm = document.getElementById("sales-order-form");
   const submitButton = orderForm?.querySelector('button[type="submit"]');
+
+  // Numbers-only guard for Paper Size / RM / No of Rolls / Rate -- both the
+  // single-item fields and every (dynamically cloned) Order Items row. A
+  // delegated "input" listener catches typing, paste and drag-drop alike;
+  // No of Rolls is integer-only, the rest allow one decimal point.
+  const NUMERIC_INT_SELECTOR = "#no-of-rolls, .ai-rolls";
+  const NUMERIC_DECIMAL_SELECTOR =
+    "#paper-size, #running-meters, #order-rate, .ai-paper-size, .ai-rm, .ai-rate";
+  function sanitizeNumericField(el, allowDecimal) {
+    const before = el.value;
+    let v = before.replace(/[^\d.]/g, "");
+    if (!allowDecimal) {
+      v = v.replace(/\./g, "");
+    } else {
+      const dot = v.indexOf(".");
+      if (dot !== -1) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, "");
+    }
+    if (v === before) return;
+    const caret = (el.selectionStart || 0) - (before.length - v.length);
+    el.value = v;
+    try { el.setSelectionRange(caret, caret); } catch (e) {}
+  }
+  document.addEventListener("input", (e) => {
+    const t = e.target;
+    if (!t || t.tagName !== "INPUT") return;
+    if (t.matches(NUMERIC_INT_SELECTOR)) sanitizeNumericField(t, false);
+    else if (t.matches(NUMERIC_DECIMAL_SELECTOR)) sanitizeNumericField(t, true);
+  });
 
   // Est Delivery Date can't precede PO Date -- keep the date picker's `min` in
   // sync so the native control blocks it too (the submit handler double-checks).
@@ -1240,13 +1268,22 @@
   // shows for both item types; Curr Rate (span 3, editable) is Tape-only.
   // Remarks grows to fill whichever columns are freed so the row still
   // totals 32 instead of leaving a trailing gap:
-  //   Tape:        po-date(3) + po-number(4) + quantity(4) + item-rate(3) + order-rate(3) + est-date(5) + remarks(10) = 32
-  //   Label Stock: po-date(3) + po-number(4) + no-of-rolls(3) + item-rate(3) + est-date(5) + remarks(14) = 32
+  //   Table mode (new Label Stock order): po-date(4) + po-number(4) + est-date(5) + remarks(19) = 32
+  //   Label Stock single item:            po-date(4) + po-number(4) + no-of-rolls(3) + item-rate(3) + est-date(5) + remarks(13) = 32
+  //   Tape:                               po-date(4) + po-number(4) + quantity(4) + item-rate(3) + order-rate(3) + est-date(5) + remarks(9) = 32
+  // Every call site (updateLabelStockFieldsVisibility, renderSelectedItemDetailsTable,
+  // ...) routes through here, and some run AFTER aiHideLegacyFields has already
+  // set span 20 -- so this has to know table mode too, or it clobbers that
+  // back down to span 10 and the row loses 10 columns off the right edge.
   function syncRemarksWidth() {
     const remarksWrap = document.getElementById("remarks-wrap");
     if (!remarksWrap) return;
+    if (typeof aiTableMode === "function" && aiTableMode()) {
+      remarksWrap.style.gridColumn = "span 19";
+      return;
+    }
     const labelStockFieldsVisible = document.getElementById("no-of-rolls-div")?.style.display !== "none";
-    remarksWrap.style.gridColumn = labelStockFieldsVisible ? "span 14" : "span 10";
+    remarksWrap.style.gridColumn = labelStockFieldsVisible ? "span 13" : "span 9";
   }
 
   // Show No of Rolls only for Label Stock (Paper Size/Running Meters are
@@ -2738,7 +2775,7 @@
     if (itemSelect) itemSelect.required = false;
     if (quantityInput) quantityInput.required = false;
     const remarksWrap = document.getElementById("remarks-wrap");
-    if (remarksWrap) remarksWrap.style.gridColumn = "span 20";
+    if (remarksWrap) remarksWrap.style.gridColumn = "span 19";
     Object.entries(AI_HEADER_SPANS).forEach(([id, n]) => {
       const el = document.getElementById(id);
       if (el) el.style.gridColumn = `span ${n}`;

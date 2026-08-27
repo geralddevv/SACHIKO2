@@ -263,10 +263,14 @@
   function jobHtml(machineId, job) {
     const rollIds = Array.isArray(job.rollIds) ? job.rollIds : [];
     const rollQty = rollIds.length ? String(rollIds.length) : dash(job.rolls);
+    const producedRolls = Number(job.producedRolls) || 0;
+    const rollLabel = rollQty
+      ? `${rollQty} roll${rollQty === "1" ? "" : "s"}${producedRolls > 0 ? ` (${producedRolls} done)` : ""}`
+      : "— rolls";
     const parts = [
       dash(job.productCode) || "—",
       Number(job.quantity || 0).toLocaleString("en-IN"),
-      rollQty ? `${rollQty} roll${rollQty === "1" ? "" : "s"}` : "— rolls",
+      rollLabel,
       rollIds.length ? `(${rollIds.join(", ")})` : "",
       dash(job.clientName) || "—",
     ].filter(Boolean);

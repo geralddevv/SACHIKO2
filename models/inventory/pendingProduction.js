@@ -57,6 +57,29 @@ const pendingProductionSchema = new mongoose.Schema(
     // Pending Production's "Pending" tab -- see GET /labels/production/pending.
     deckleSize: { type: Number },
 
+    // ---- SKU-batched deckle setting (GET/POST /labels/production/deckle-set) ----
+    // Deckle setting is per-SKU + paper size, not per order: the planner picks a
+    // Product Code, ticks the pending orders that share its paper size, and one
+    // deckle covers them all as a single production job.
+    //
+    // `isDeckleBatch` marks the synthetic "batch" PendingProduction that carries
+    // that job -- it is NOT a sales order (no matching TapeSalesOrder), so
+    // upsert/removePendingProduction never touch it. It flows through Deckle
+    // Queue -> Assign Production -> Machine Queue -> Job Card exactly like a
+    // normal order row (its noOfRolls/quantity/runningMeters are the member
+    // sums). `batchOrderIds` are the member orders it covers -- a creation-time
+    // snapshot; editing a member's qty/rolls afterward does not resize it.
+    isDeckleBatch: { type: Boolean, default: false },
+    batchOrderIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "PendingProduction" }],
+    // Set on each MEMBER order -> points at its batch row above. A member with
+    // this set is hidden from Deckle Set / Deckle Queue / WIP-pending (it is in
+    // production as part of the batch) but still dispatched normally.
+    deckleBatchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PendingProduction",
+      index: true,
+    },
+
     // Set by GET/POST /sachiko/labels/production/assign/:id. Order-sync
     // upserts never touch these fields (see upsertPendingProduction).
     assignedMachineId: {
@@ -155,7 +178,17 @@ const pendingProductionSchema = new mongoose.Schema(
     // Stamped when a Job Card is saved against this order. Drives the
     // "already produced, can't unassign" guard; order-sync upsert never
     // touches it, so an order edit can't un-finish it.
+    //
+    // Only stamped once producedRolls (below) reaches noOfRolls -- a Job
+    // Card save that produces fewer rolls than ordered (the operator
+    // switched jobs mid-order) leaves this unset, so the order stays on
+    // the machine/operator queue with its balance still to run.
     producedAt: { type: Date },
+    // Running total of Production Log rows (one row = one deckle) filed
+    // against this order across every Job Card saved for it. The machine
+    // queue shows noOfRolls - producedRolls as the balance still to run.
+    // Order-sync upsert never touches it, same as producedAt.
+    producedRolls: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

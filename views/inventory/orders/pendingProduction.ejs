@@ -373,7 +373,12 @@
         },
       },
       { title: "Assigned", field: "assignedAt", headerFilter: "input", headerFilterPlaceholder: "Filter date...", formatter: (cell) => (cell.getValue() ? new Date(cell.getValue()).toLocaleDateString("en-IN") : "—") },
-      { title: "Client", field: "clientName", headerFilter: "input", headerFilterPlaceholder: "Filter client...", formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>` },
+      { title: "Client", field: "clientName", headerFilter: "input", headerFilterPlaceholder: "Filter client...",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row.isDeckleBatch) return `<span style="font-weight:800;color:#044a78;background:#e0ecf8;border-radius:999px;padding:1px 9px;font-size:11px;">BATCH ×${row.batchOrderCount || 0}</span>`;
+          return `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>`;
+        } },
       {
         title: "Client Type",
         field: "clientType",

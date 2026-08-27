@@ -415,6 +415,38 @@
     </div>
   </div>
 
+  <% if (pp.isDeckleBatch && Array.isArray(batchOrders) && batchOrders.length) { %>
+    <div class="ap-card" style="border-color:#a7c8e6;">
+      <div class="ap-card-title" style="background:#0b5c94;"><span><i class="fa-solid fa-object-group"></i> Deckle Batch &mdash; one job for <%= batchOrders.length %> order<%= batchOrders.length === 1 ? "" : "s" %></span></div>
+      <div style="padding:10px 14px; overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead>
+            <tr style="color:#044a78; text-align:left;">
+              <th style="padding:5px 10px;">Client</th>
+              <th style="padding:5px 10px;">PO Number</th>
+              <th style="padding:5px 10px; text-align:right;">Qty</th>
+              <th style="padding:5px 10px; text-align:right;">Running Mtrs</th>
+              <th style="padding:5px 10px; text-align:center;">Rolls</th>
+              <th style="padding:5px 10px;">Est. Delivery</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% batchOrders.forEach(function (o) { %>
+              <tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:5px 10px;"><%= dash(o.userId && (o.userId.clientName || o.userId.userName)) %></td>
+                <td style="padding:5px 10px;"><%= dash(o.poNumber) %></td>
+                <td style="padding:5px 10px; text-align:right;"><%= fmtQty(o.quantity) %></td>
+                <td style="padding:5px 10px; text-align:right;"><%= fmtQty(o.runningMeters) %></td>
+                <td style="padding:5px 10px; text-align:center;"><%= dash(o.noOfRolls) %></td>
+                <td style="padding:5px 10px;"><%= fmtDate(o.estimatedDate) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% } %>
+
   <div class="ap-card">
     <div class="ap-card-title"><span><i class="fa-solid fa-layer-group"></i> Material Details</span></div>
     <div style="padding: 14px;">

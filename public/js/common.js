@@ -237,22 +237,14 @@
     toggle.addEventListener("click", (e) => {
       if (e.target.closest(".nav-labels-opt")) return;
 
-      // For SKUs List (which is an <a> tag), allow right-click/middle-click/modifier+click to navigate
-      const isLink = toggle.tagName === 'A';
-      if (isLink) {
-        const isRightClick = e.button === 2;
-        const isMiddleClick = e.button === 1;
-        const isModifierClick = e.ctrlKey || e.shiftKey || e.metaKey || e.altKey;
+      // A toggle that's a real link (SKUs List -> /sachiko/label-stock/view)
+      // just navigates on click. Its group only ever holds one sub-item that
+      // points at the same page, so there's nothing to expand -- the group
+      // still auto-opens on that page via the .nav-items.active check above.
+      if (toggle.tagName === "A") return;
 
-        if (!isRightClick && !isMiddleClick && !isModifierClick) {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleNavGroup(wrapper);
-        }
-      } else {
-        e.stopPropagation();
-        toggleNavGroup(wrapper);
-      }
+      e.stopPropagation();
+      toggleNavGroup(wrapper);
     });
   });
 

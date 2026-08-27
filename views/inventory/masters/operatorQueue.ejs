@@ -230,7 +230,9 @@
                   <td data-label="Paper Size"><%= row.paperSize %></td>
                   <td data-label="Required Rolls"><%= row.rolls %></td>
                   <td class="mq-rolls-cell" data-label="Allotted Rolls" data-id="<%= row._id %>" onclick="openRollDetails(this.dataset.id)" title="View roll allotment details"><%= row.allottedRolls %></td>
-                  <td data-label="Balance Rolls"><%= row.balanceRolls %></td>
+                  <td data-label="Balance Rolls">
+                    <%= row.balanceRolls %><% if (Number(row.producedRolls) > 0) { %> <span style="color:#64748b;font-weight:600;font-size:11px;">(<%= row.producedRolls %> of <%= row.rolls %> done)</span><% } %>
+                  </td>
                   <td>
                     <div class="mq-actions">
                       <%

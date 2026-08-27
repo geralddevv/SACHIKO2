@@ -15,6 +15,81 @@
   }
   .btn-action:hover { opacity: 0.85; }
 
+  /* SKU-group parent vs. member child rows in the dataTree table. */
+  #deckle-set-table .tabulator-row[data-ds-child="true"] { background: #f8fafc; }
+  #deckle-set-table .tabulator-row[data-ds-child="true"] .tabulator-cell { color: #475569; }
+  #deckle-set-table .tabulator-row[data-ds-batched="true"] { background: #eef5ff; }
+
+  /* ---- dataTree expand/collapse toggle (the "+" chip on each SKU row) ----
+     Same house pattern as views/sachiko/labelStockView.ejs: a rounded brand
+     chip with a Font Awesome chevron that rotates 90deg when open. */
+  #deckle-set-table .tabulator-data-tree-control {
+    width: 22px !important;
+    height: 22px !important;
+    margin-right: 8px !important;
+    border: none !important;
+    border-radius: 6px !important;
+    background: rgba(4, 74, 120, 0.09) !important;
+    box-shadow: none !important;
+    outline: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: background-color 0.15s ease, transform 0.12s ease !important;
+  }
+  #deckle-set-table .tabulator-data-tree-control:hover {
+    background: rgba(4, 74, 120, 0.18) !important;
+    transform: translateY(-1px);
+  }
+  #deckle-set-table .tabulator-data-tree-control:active { transform: translateY(0); }
+  #deckle-set-table .tabulator-data-tree-control:focus,
+  #deckle-set-table .tabulator-data-tree-control:focus-visible {
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.14) !important;
+  }
+  #deckle-set-table .tabulator-data-tree-control-expand,
+  #deckle-set-table .tabulator-data-tree-control-collapse {
+    width: auto !important;
+    height: auto !important;
+    background: none !important;
+    border: none !important;
+  }
+  #deckle-set-table .tabulator-data-tree-control-expand::before,
+  #deckle-set-table .tabulator-data-tree-control-collapse::before {
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    content: "\f054"; /* chevron-right -- one glyph, rotated for the open state */
+    font-size: 10px;
+    line-height: 1;
+    color: #044a78;
+    display: inline-block;
+    transition: transform 0.2s ease;
+  }
+  #deckle-set-table .tabulator-data-tree-control-collapse::before { transform: rotate(90deg); }
+  #deckle-set-table .tabulator-data-tree-control-expand::after,
+  #deckle-set-table .tabulator-data-tree-control-collapse::after {
+    content: none !important;
+    display: none !important;
+  }
+  /* Hide Tabulator's own "L"-shaped branch guides on child rows -- the row
+     shading + "↳" prefix already read as nesting. */
+  #deckle-set-table .tabulator-data-tree-branch,
+  #deckle-set-table .tabulator-data-tree-branch-empty {
+    display: none !important;
+  }
+  /* Child rows sit under a parent -- nudge their first cell in a touch so the
+     "↳ client" lines up past where the parent's toggle chip sits. */
+  #deckle-set-table .tabulator-row[data-ds-child="true"] .tabulator-cell:first-child { padding-left: 14px; }
+  .ds-count-badge {
+    display: inline-block; font-size: 11px; font-weight: 800; color: #044a78;
+    background: #e0ecf8; border-radius: 999px; padding: 1px 9px;
+  }
+  .ds-batched-tag {
+    display: inline-block; font-size: 10px; font-weight: 800; color: #065f46;
+    background: #d1fae5; border: 1px solid #a7f3d0; border-radius: 999px; padding: 2px 9px; letter-spacing: 0.3px;
+  }
+
   /* ============ Set Deckle dialog ============
      .logout-modal is global (boilerplate.ejs, handles the fade backdrop);
      .ds-dialog replaces .logout-dialog's own sizing/padding so the header/
@@ -52,31 +127,12 @@
   }
   .ds-close-btn:hover { background: rgba(255, 255, 255, 0.26); }
 
-  /* #ds-dialog-form wraps the body + footer -- it has to be a flex column
-     itself (matching .ds-dialog's own display:flex column), or the flex/
-     overflow rules on its children below are no-ops (flex properties only
-     do anything on children of a flex container). min-height:0 on both the
-     form and the body is the other half of the classic flexbox-scroll
-     gotcha: without it a flex item won't shrink below its content's natural
-     height, so overflow-y:auto never actually engages -- the body just
-     grows past .ds-dialog's max-height and the footer gets clipped by its
-     overflow:hidden instead of staying visible with the body scrolling. */
   #ds-dialog-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   .ds-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 24px; }
 
-  /* Two columns so the order/size decision (left) and the stock options
-     that inform it (right) are both visible without scrolling -- the whole
-     point being to compare them "in a single glance" rather than stacked. */
-  /* Left side is just a stack of compact fields now (SKU no. / Deckle Size /
-     RM / Qty) -- it doesn't need half the dialog, so it gets a narrow fixed
-     column and the Available Facestock Sizes list gets the rest. */
   .ds-dialog-columns { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 26px; align-items: stretch; }
   .ds-dialog-col-left { display: flex; flex-direction: column; min-width: 0; }
   .ds-dialog-col-right { display: flex; flex-direction: column; min-width: 0; border-left: 1px solid #e6eaf2; padding-left: 26px; }
-  /* Now that every in-stock size is listed (not just recipe matches), this
-     can run long -- cap it and let it scroll internally rather than
-     stretching the whole dialog (and the left column along with it, since
-     the grid row stretches to the taller column) past a sane height. */
   .ds-dialog-col-right .ds-size-list { flex: 0 1 auto; max-height: 360px; margin-bottom: 0; }
   @media (max-width: 720px) {
     .ds-dialog-columns { grid-template-columns: 1fr; }
@@ -93,14 +149,33 @@
     padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px dashed #e2e8f0;
   }
   .ds-summary-label { font-size: 12px; color: #5a6586; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
-  /* Boxed to match the height/style of the inputs stacked below it -- it's
-     read-only, not editable, but should still look like one of the row. */
   .ds-summary-value {
     display: block; font-size: 16px; color: #1f2a44; font-weight: 700;
     border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 9px 12px; background: #f8fafc;
   }
 
   .ds-section-label { font-size: 12px; font-weight: 700; color: #044a78; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
+
+  /* ---- Orders-in-this-batch picker ---- */
+  .ds-orders-block { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px dashed #e2e8f0; }
+  .ds-orders-list { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow-y: auto; padding-right: 2px; }
+  .ds-order-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    border: 1.5px solid #e6eaf2; border-radius: 9px; cursor: pointer; font-size: 12.5px;
+  }
+  .ds-order-row:hover { border-color: #a9c8e8; background: #f7fbff; }
+  .ds-order-row input { width: 16px; height: 16px; flex: none; accent-color: #044a78; }
+  .ds-order-row.is-off { opacity: 0.5; }
+  .ds-order-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .ds-order-top { font-weight: 700; color: #1f2a44; }
+  .ds-order-sub { color: #64748b; }
+  .ds-batch-totals {
+    margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .ds-batch-chip {
+    font-size: 11px; font-weight: 800; color: #044a78; background: #e0ecf8;
+    border-radius: 8px; padding: 4px 10px;
+  }
 
   .ds-size-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px 2px 2px 0; margin-bottom: 12px; }
   .ds-size-row {
@@ -129,10 +204,6 @@
   .ds-size-row.is-suggested .ds-size-badge { display: inline-block; }
   .ds-size-meta { font-size: 12px; color: #64748b; }
 
-  /* A size whose only stock is a different Facestock spec than this recipe
-     -- still listed (the planner asked to see every size in the warehouse),
-     but visually receded and clearly flagged so it doesn't get picked up
-     mistaking it for a usable match. */
   .ds-size-row.is-other-spec { border-style: dashed; background: #fafafa; }
   .ds-size-row.is-other-spec .ds-size-main { color: #78716c; }
   .ds-size-tag-other {
@@ -152,11 +223,7 @@
     margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px;
   }
   .ds-input-wrap { position: relative; }
-  /* Only Deckle Size carries a unit suffix (mm) -- RM/Qty don't need the
-     reserved right padding. */
   #ds-size-input { padding-right: 44px !important; }
-  /* Same plain styling as every other field in this stack -- no special
-     emphasis on Deckle Size. */
   #ds-size-input, #ds-running-mtrs-input, #ds-deckle-qty-input { font-size: 16px !important; font-weight: 700 !important; }
   .ds-input-suffix {
     position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
@@ -164,6 +231,10 @@
   }
   .ds-error-text { color: #dc2626; font-size: 12px; font-weight: 600; }
   .ds-error-text:not(:empty) { margin-top: 4px; }
+  .premium-input.is-invalid {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15) !important;
+  }
 
   .ds-dialog-footer {
     flex: none; display: flex; justify-content: flex-end; gap: 10px;
@@ -185,6 +256,13 @@
     <h1>Deckle Set</h1>
     <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
       <a
+        href="/sachiko/labels/production/deckle-queue"
+        style="padding: 6px 14px; background: #044a78; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
+        onmouseover="this.style.opacity = '0.85'" onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-layer-group"></i><span>Deckle Queue</span>
+      </a>
+      <a
         href="/sachiko/labels/production/pending?tab=wip"
         style="padding: 6px 14px; background: #044a78; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
         onmouseover="this.style.opacity = '0.85'" onmouseout="this.style.opacity = '1'"
@@ -202,16 +280,25 @@
   <div class="ds-dialog" role="dialog" aria-modal="true" aria-labelledby="setDeckleDialogTitle">
     <div class="ds-dialog-header">
       <div>
-        <h2 id="setDeckleDialogTitle">Set Deckle Size</h2>
+        <h2 id="setDeckleDialogTitle">Set Deckle</h2>
         <p class="ds-dialog-subtitle" id="ds-dialog-subtitle"></p>
       </div>
       <button type="button" class="ds-close-btn" id="ds-close-btn" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
-    <form id="ds-dialog-form" method="post" action="" novalidate>
+    <form id="ds-dialog-form" method="post" action="/sachiko/labels/production/deckle-set" novalidate>
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" name="itemId" id="ds-item-id" />
+      <input type="hidden" name="paperSize" id="ds-paper-size" />
 
       <div class="ds-dialog-body custom-scrollbar">
+        <div class="ds-orders-block">
+          <div class="ds-section-label">Orders in this deckle</div>
+          <div id="ds-orders-list" class="ds-orders-list custom-scrollbar"></div>
+          <div class="ds-batch-totals" id="ds-batch-totals"></div>
+          <div id="ds-orders-error" class="ds-error-text"></div>
+        </div>
+
         <div class="ds-dialog-columns">
           <div class="ds-dialog-col-left">
             <div class="ds-summary-item">
@@ -233,6 +320,7 @@
               <div class="ds-input-wrap">
                 <input type="number" step="any" min="0" id="ds-running-mtrs-input" name="runningMeters" class="form-control premium-input" placeholder="Enter running mtrs" required />
               </div>
+              <div id="ds-running-mtrs-error" class="ds-error-text"></div>
             </div>
 
             <div class="ds-manual-field">
@@ -240,6 +328,7 @@
               <div class="ds-input-wrap">
                 <input type="number" step="1" min="1" id="ds-deckle-qty-input" name="noOfRolls" class="form-control premium-input" placeholder="Enter deckle qty" required />
               </div>
+              <div id="ds-deckle-qty-error" class="ds-error-text"></div>
             </div>
           </div>
 
@@ -256,11 +345,16 @@
 
       <div class="ds-dialog-footer">
         <button type="button" class="ds-btn ds-btn-ghost" id="ds-cancel-btn">Cancel</button>
-        <button type="submit" class="ds-btn ds-btn-primary"><i class="fa-solid fa-arrow-right-long"></i> Send to Pending Production</button>
+        <button type="submit" class="ds-btn ds-btn-primary"><i class="fa-solid fa-arrow-right-long"></i> Create Deckle Batch</button>
       </div>
     </form>
   </div>
 </div>
+
+<!-- Dissolve batch (hidden form, submitted from the table Actions) -->
+<form id="ds-dissolve-form" method="post" action="" style="display:none;">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+</form>
 
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
@@ -271,16 +365,28 @@
   const rowsData = JSON.parse(document.getElementById("deckle-set-data").textContent);
 
   const fmtMtrs = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
+  const fmtInt = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN") : "—");
+  const fmtDate = (v) => (v ? new Date(v).toLocaleDateString("en-IN") : "—");
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
   /* ----- Set Deckle dialog ----- */
   const setDeckleDialog = document.getElementById("setDeckleDialog");
   const dsDialogForm = document.getElementById("ds-dialog-form");
+  const dsItemId = document.getElementById("ds-item-id");
+  const dsPaperSize = document.getElementById("ds-paper-size");
   const dsSizeInput = document.getElementById("ds-size-input");
   const dsSizeError = document.getElementById("ds-size-error");
   const dsDeckleQtyInput = document.getElementById("ds-deckle-qty-input");
+  const dsDeckleQtyError = document.getElementById("ds-deckle-qty-error");
   const dsRunningMtrsInput = document.getElementById("ds-running-mtrs-input");
+  const dsRunningMtrsError = document.getElementById("ds-running-mtrs-error");
   const dsSizeList = document.getElementById("ds-size-list");
   const dsSizeEmpty = document.getElementById("ds-size-empty");
+  const dsOrdersList = document.getElementById("ds-orders-list");
+  const dsBatchTotals = document.getElementById("ds-batch-totals");
+  const dsOrdersError = document.getElementById("ds-orders-error");
+
+  let currentGroup = null;
 
   function closeSetDeckleDialog() {
     setDeckleDialog.classList.remove("show");
@@ -293,46 +399,68 @@
     if (e.key === "Escape" && setDeckleDialog.classList.contains("show")) closeSetDeckleDialog();
   });
 
-  let currentDialogRow = null;
+  function checkedMembers() {
+    return [...dsOrdersList.querySelectorAll('input[name="orderIds"]:checked')].map((cb) => {
+      const m = (currentGroup._children || []).find((c) => String(c._id) === cb.value);
+      return m;
+    }).filter(Boolean);
+  }
 
-  dsSizeInput.addEventListener("input", () => {
-    // Typing a value that no longer matches any candidate row (or matches a
-    // different one, e.g. after clicking a row then editing it) should drop
-    // the stale highlight rather than leave an unrelated row looking picked.
-    const typed = dsSizeInput.value;
-    dsSizeList.querySelectorAll(".ds-size-row").forEach((r) => {
-      r.classList.toggle("is-selected", r.dataset.size === typed);
+  // Live "N orders · Σ RM · Σ rolls · Σ qty" summary as the checkboxes toggle.
+  // Purely informational -- Deckle Size / Quantity / Running Meters are all
+  // entered by hand by the planner (not prefilled), same as the old dialog.
+  function refreshBatchTotals() {
+    const picked = checkedMembers();
+    const sumRM = picked.reduce((s, m) => s + num(m.runningMeters), 0);
+    const sumRolls = picked.reduce((s, m) => s + num(m.noOfRolls), 0);
+    const sumQty = picked.reduce((s, m) => s + num(m.quantity), 0);
+    dsBatchTotals.innerHTML = `
+      <span class="ds-batch-chip">${picked.length} order${picked.length === 1 ? "" : "s"}</span>
+      <span class="ds-batch-chip">RM ${fmtMtrs(sumRM)}</span>
+      <span class="ds-batch-chip">${fmtInt(sumRolls)} rolls</span>
+      <span class="ds-batch-chip">qty ${fmtInt(sumQty)}</span>
+    `;
+    dsOrdersList.querySelectorAll(".ds-order-row").forEach((r) => {
+      const cb = r.querySelector("input");
+      r.classList.toggle("is-off", !cb.checked);
     });
-  });
+    if (picked.length) dsOrdersError.textContent = "";
+    return { sumRM, sumRolls, sumQty };
+  }
 
-  function renderSizeList(row) {
-    const sizes = Array.isArray(row.candidateSizes) ? row.candidateSizes : [];
+  function renderOrdersList(group) {
+    const kids = Array.isArray(group._children) ? group._children : [];
+    dsOrdersList.innerHTML = kids.map((m) => `
+      <label class="ds-order-row">
+        <input type="checkbox" name="orderIds" value="${m._id}" checked />
+        <span class="ds-order-main">
+          <span class="ds-order-top">${m.clientName || "—"} &middot; ${m.poNumber || "—"}</span>
+          <span class="ds-order-sub">qty ${fmtInt(m.quantity)} &nbsp;·&nbsp; RM ${fmtMtrs(m.runningMeters)} &nbsp;·&nbsp; ${fmtInt(m.noOfRolls)} rolls &nbsp;·&nbsp; due ${fmtDate(m.estimatedDate)}</span>
+        </span>
+      </label>
+    `).join("");
+    dsOrdersList.querySelectorAll('input[name="orderIds"]').forEach((cb) => {
+      cb.addEventListener("change", refreshBatchTotals);
+    });
+  }
+
+  function renderSizeList(group) {
+    const sizes = Array.isArray(group.candidateSizes) ? group.candidateSizes : [];
     dsSizeEmpty.style.display = sizes.length ? "none" : "flex";
     dsSizeList.style.display = sizes.length ? "flex" : "none";
 
-    // Best Fit first, then the rest ascending by size. (The server only ever
-    // sends recipe-matching sizes now, so there's no other-spec tier below.)
     const sorted = [...sizes].sort((a, b) => {
-      const aBest = row.suggestedSize != null && a.size === row.suggestedSize;
-      const bBest = row.suggestedSize != null && b.size === row.suggestedSize;
+      const aBest = group.suggestedSize != null && a.size === group.suggestedSize;
+      const bBest = group.suggestedSize != null && b.size === group.suggestedSize;
       if (aBest !== bBest) return aBest ? -1 : 1;
       if (a.isRecipeMatch !== b.isRecipeMatch) return a.isRecipeMatch ? -1 : 1;
       return a.size - b.size;
     });
-
-    // The current value (what's actually saved, when editing an already-set
-    // row -- otherwise the suggestion) drives which radio starts filled;
-    // "Best Fit" is a separate badge and can land on a different row than
-    // the one currently picked.
-    const currentValue = row.deckleSize != null ? row.deckleSize : row.suggestedSize;
+    const currentValue = group.suggestedSize;
 
     dsSizeList.innerHTML = sorted.map((s) => {
-      const isSuggested = row.suggestedSize != null && s.size === row.suggestedSize;
+      const isSuggested = group.suggestedSize != null && s.size === group.suggestedSize;
       const isCurrent = currentValue != null && s.size === currentValue;
-      // A size can carry reels of several specs -- if any of them actually
-      // match this recipe, show that matching subset's own count/kg (what's
-      // actually usable here); otherwise fall back to the full total, all of
-      // it from other specs.
       const reelCount = s.isRecipeMatch ? s.matchingReelCount : s.reelCount;
       const kg = s.isRecipeMatch ? s.matchingKg : s.totalKg;
       return `
@@ -360,49 +488,57 @@
     });
   }
 
-  window.startProduction = function (orderId) {
-    window.location.href = `/sachiko/labels/production/assign/${orderId}`;
-  };
+  dsSizeInput.addEventListener("input", () => {
+    const typed = dsSizeInput.value;
+    dsSizeList.querySelectorAll(".ds-size-row").forEach((r) => {
+      r.classList.toggle("is-selected", r.dataset.size === typed);
+    });
+  });
 
-  window.openSetDeckleDialog = function (orderId) {
-    const row = rowsData.find((r) => String(r._id) === String(orderId));
-    if (!row) return;
-    currentDialogRow = row;
+  window.openSetDeckleDialog = function (groupId) {
+    const group = rowsData.find((r) => String(r._id) === String(groupId) && r.isGroup && !r.isBatch);
+    if (!group) return;
+    currentGroup = group;
 
-    document.getElementById("setDeckleDialogTitle").textContent = row.deckleSize != null ? "Edit Deckle Size" : "Set Deckle Size";
-    document.getElementById("ds-dialog-subtitle").textContent =
-      `${row.productCode || "Label Stock"} · ${row.clientName || "—"}`;
+    document.getElementById("setDeckleDialogTitle").textContent = "Set Deckle";
+    document.getElementById("ds-dialog-subtitle").textContent = group.productCode || "Label Stock";
+    document.getElementById("ds-product-code").textContent = group.productCode || "—";
 
-    // Label Stock Code is read-only (it's an identifier, not something to
-    // edit here). Deckle Qty and Running Mtrs are entered fresh by the planner
-    // on this dialog -- deliberately NOT prefilled from the order, even when
-    // reopening an already-set row.
-    document.getElementById("ds-product-code").textContent = row.productCode || "—";
+    dsItemId.value = group.itemId || "";
+    dsPaperSize.value = group.paperSize || "";
+
+    // Deckle Size / Quantity / Running Meters are entered fresh each time.
     dsDeckleQtyInput.value = "";
     dsRunningMtrsInput.value = "";
+    dsRunningMtrsInput.classList.remove("is-invalid");
+    dsRunningMtrsError.textContent = "";
+    dsDeckleQtyError.textContent = "";
 
-    renderSizeList(row);
-    // Editing an already-set row starts from what's actually saved, not the
-    // suggestion -- re-picking a candidate below still overwrites it.
-    dsSizeInput.value = row.deckleSize != null ? row.deckleSize : (row.suggestedSize != null ? row.suggestedSize : "");
+    renderOrdersList(group);
+    renderSizeList(group);
+    refreshBatchTotals();
+
+    dsSizeInput.value = group.suggestedSize != null ? group.suggestedSize : "";
     dsSizeError.textContent = "";
-    dsDialogForm.action = `/sachiko/labels/production/deckle-set/${row._id}`;
+    dsOrdersError.textContent = "";
 
     setDeckleDialog.classList.add("show");
     setDeckleDialog.setAttribute("aria-hidden", "false");
   };
 
+  window.dissolveBatch = function (batchId) {
+    if (!confirm("Dissolve this deckle batch? Its orders go back to Deckle Set.")) return;
+    const form = document.getElementById("ds-dissolve-form");
+    form.action = `/sachiko/labels/production/deckle-batch/${batchId}/dissolve`;
+    form.submit();
+  };
+
   dsDialogForm.addEventListener("submit", (e) => {
-    const deckleQty = Number(dsDeckleQtyInput.value);
-    if (!deckleQty || deckleQty <= 0) {
+    const { sumRM } = refreshBatchTotals();
+    const picked = checkedMembers();
+    if (picked.length === 0) {
       e.preventDefault();
-      dsDeckleQtyInput.focus();
-      return;
-    }
-    const runningMtrs = Number(dsRunningMtrsInput.value);
-    if (!runningMtrs || runningMtrs <= 0) {
-      e.preventDefault();
-      dsRunningMtrsInput.focus();
+      dsOrdersError.textContent = "Tick at least one order for this deckle.";
       return;
     }
     const deckleSize = Number(dsSizeInput.value);
@@ -410,80 +546,110 @@
       e.preventDefault();
       dsSizeError.textContent = "Enter a valid deckle size to continue.";
       dsSizeInput.focus();
+      return;
+    }
+    const deckleQty = Number(dsDeckleQtyInput.value);
+    if (!deckleQty || deckleQty <= 0) {
+      e.preventDefault();
+      dsDeckleQtyError.textContent = "Enter a valid quantity.";
+      dsDeckleQtyInput.focus();
+      return;
+    }
+    const rm = Number(dsRunningMtrsInput.value);
+    if (!rm || rm <= 0) {
+      e.preventDefault();
+      dsRunningMtrsInput.classList.add("is-invalid");
+      dsRunningMtrsError.textContent = "Enter valid running mtrs.";
+      dsRunningMtrsInput.focus();
+      return;
+    }
+    if (rm < sumRM) {
+      e.preventDefault();
+      dsRunningMtrsInput.classList.add("is-invalid");
+      dsRunningMtrsError.textContent = `Cannot be less than the combined running mtrs (${fmtMtrs(sumRM)}).`;
+      dsRunningMtrsInput.focus();
     }
   });
 
-  /* ----- Table ----- */
+  /* ----- Table (SKU groups as parent rows, member orders as children) ----- */
+  const groupText = (cell, groupVal, childVal) => {
+    const row = cell.getRow().getData();
+    return row.isGroup ? groupVal(row) : childVal(row);
+  };
+
   const table = new Tabulator("#deckle-set-table", {
     data: rowsData,
-    placeholder: "No orders waiting on a deckle size",
-    initialSort: [{ column: "createdAt", dir: "asc" }],
+    placeholder: "No orders waiting on a deckle",
+    index: "_id",
+    dataTree: true,
+    dataTreeStartExpanded: true,
+    dataTreeChildField: "_children",
+    dataTreeElementColumn: "item",
+    rowFormatter: (row) => {
+      const d = row.getData();
+      if (!d.isGroup) row.getElement().setAttribute("data-ds-child", "true");
+      else if (d.isBatch) row.getElement().setAttribute("data-ds-batched", "true");
+    },
     columns: [
-      { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
-        formatter: (cell) => cell.getRow().getPosition(true) },
+      {
+        title: "Product Code / Client",
+        field: "item",
+        headerSort: false,
+        widthGrow: 3,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row.isGroup) {
+            const tag = row.isBatch
+              ? ` <span class="ds-batched-tag">BATCHED${row.deckleSize != null ? ` · ${row.deckleSize}mm` : ""}</span>`
+              : "";
+            return `<span style="font-weight:800; color:#044A78;">${row.productCode || "—"}</span>${tag}`;
+          }
+          return `<span style="padding-left:6px;">↳ ${row.clientName || "—"}</span>`;
+        },
+      },
+      { title: "Paper Size", field: "paperSize", hozAlign: "center", headerSort: false,
+        formatter: (cell) => (cell.getRow().getData().isGroup ? (cell.getValue() || "—") : "") },
+      { title: "PO Number", field: "poNumber", headerSort: false,
+        formatter: (cell) => (cell.getRow().getData().isGroup ? "" : (cell.getValue() || "—")) },
+      { title: "Orders", hozAlign: "center", headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return row.isGroup ? `<span class="ds-count-badge">${row.orderCount}</span>` : "";
+        } },
+      { title: "Qty", hozAlign: "center", headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return fmtInt(row.isGroup ? row.sumQuantity : row.quantity);
+        } },
+      { title: "Running Mtrs", hozAlign: "right", headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return fmtMtrs(row.isGroup ? row.sumRunningMeters : row.runningMeters);
+        } },
+      { title: "Rolls", hozAlign: "center", headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return fmtInt(row.isGroup ? row.sumRolls : row.noOfRolls);
+        } },
+      { title: "Est. Delivery", hozAlign: "center", headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return row.isGroup ? "" : fmtDate(row.estimatedDate);
+        } },
       {
         title: "Actions",
         hozAlign: "center",
         headerSort: false,
+        widthGrow: 2,
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          // Deckle size already set -- Play sends it straight to Assign
-          // Production (mirrors the old Pending Production "Pending" tab's
-          // own Play button, which this page now replaces), but it can
-          // still be reopened via Edit to change the size before that.
-          if (row.deckleSize != null) {
-            return `
-              <div style="display:flex; gap:6px; justify-content:center; align-items:center;">
-                <button onclick="openSetDeckleDialog('${row._id}')" class="btn-action" style="background:#044A78;" title="Edit Deckle Size"><i class="fa-solid fa-pen"></i> Edit Deckle</button>
-                <button onclick="startProduction('${row._id}')" class="btn-action" style="background:#10b981;" title="Assign Production"><i class="fa-solid fa-play"></i></button>
-              </div>
-            `;
+          if (!row.isGroup) return "";
+          if (row.isBatch) {
+            return `<button onclick="dissolveBatch('${row.batchId}')" class="btn-action" style="background:#b91c1c;" title="Dissolve batch"><i class="fa-solid fa-link-slash"></i> Dissolve</button>`;
           }
-          return `<button onclick="openSetDeckleDialog('${row._id}')" class="btn-action" style="background:#10b981;" title="Set Deckle Size"><i class="fa-solid fa-ruler"></i> Set Deckle</button>`;
+          return `<button onclick="openSetDeckleDialog('${row._id}')" class="btn-action" style="background:#10b981;" title="Set Deckle"><i class="fa-solid fa-ruler"></i> Set Deckle</button>`;
         },
       },
-      { title: "Date", field: "createdAt", headerFilter: "input", headerFilterPlaceholder: "Filter date...", formatter: (cell) => new Date(cell.getValue()).toLocaleDateString("en-IN") },
-      { title: "Client", field: "clientName", headerFilter: "input", headerFilterPlaceholder: "Filter client...", formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>` },
-      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter product...", formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>` },
-      { title: "Paper Size", field: "paperSize", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "Size" },
-      { title: "No. of Rolls", field: "noOfRolls", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#" },
-      {
-        title: "Deckle Size",
-        hozAlign: "center",
-        headerSort: false,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          // Only ever shows the actual saved decision -- nothing here until
-          // Set Deckle has actually been done (the suggestion still drives
-          // the dialog itself, just not this column).
-          if (row.deckleSize != null) {
-            return `<span style="font-weight:700; color:#044A78;">${row.deckleSize}mm</span>`;
-          }
-          return `<span style="color:#9ca3af;">—</span>`;
-        },
-      },
-      { title: "Running Mtrs", field: "runningMeters", hozAlign: "right", headerFilter: "input", headerFilterPlaceholder: "Mtrs",
-        formatter: (cell) => fmtMtrs(cell.getValue()) },
-      { title: "Qty", field: "quantity", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#" },
-      {
-        title: "Bal",
-        hozAlign: "center",
-        headerSort: false,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          return `<span style="font-weight:700; color:#044A78;">${row.balance ?? row.quantity}</span>`;
-        },
-      },
-      { title: "PO Number", field: "poNumber", headerFilter: "input", headerFilterPlaceholder: "Filter PO..." },
-      { title: "Est. Delivery", field: "estimatedDate", headerFilter: "input", headerFilterPlaceholder: "Filter date...", formatter: (cell) => (cell.getValue() ? new Date(cell.getValue()).toLocaleDateString("en-IN") : "—") },
-      { title: "Remarks", field: "remarks", headerFilter: "input", headerFilterPlaceholder: "Filter remarks..." },
     ],
-  });
-
-  table.on("renderComplete", function () {
-    document.querySelectorAll("#deckle-set-table .tabulator-row").forEach((rowEl, i) => {
-      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
-      if (cell) cell.textContent = i + 1;
-    });
   });
 </script>
