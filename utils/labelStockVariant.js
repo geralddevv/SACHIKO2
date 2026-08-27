@@ -253,6 +253,57 @@ export async function resolveLabelStockProductCode(payload, { onExactMatch = "th
   );
 }
 
+// ---------------------------------------------------------------------------
+// Product Code auto-numbering -- "<first letter of Family><NNN>", e.g. family
+// CHROMO -> C001, C002, ...  The number is a running COUNT of the base codes
+// already using that leading letter, plus one (not the highest number seen
+// plus one) -- so deleting codes, or a stray high legacy code, doesn't push
+// the next one far ahead of how many actually exist. One sequence per leading
+// letter (two families that start with the same letter share it). Assigned
+// server-side by routes/sachiko/sachiko_route.js's POST /label-stock/form; the
+// create dialog shows this as a locked prefix and appends the user's typed
+// suffix. The "-A"/"-B" variant suffixes (resolveLabelStockProductCode) still
+// layer on top for production-time raw-material substitutions.
+// ---------------------------------------------------------------------------
+export function familyProductCodeLetter(family) {
+  return String(family || "").toUpperCase().replace(/[^A-Z]/g, "").charAt(0) || "X";
+}
+
+export async function generateFamilyProductCode(family) {
+  const letter = familyProductCodeLetter(family);
+  // Next number = (count of distinct product lines already using this letter)
+  // + 1 -- a plain count, NOT (highest number seen) + 1, so six "C" codes
+  // yield C007 even if the highest of them happens to be C022. Each code's
+  // leading "<letter><digits>" is its line: "C004", "C004-A" and a typed
+  // "C004FOO" all belong to the C004 line and are counted once.
+  const rows = await SachikoLabelStock.find({
+    productCode: new RegExp(`^${letter}\\d{3,}`),
+  }).select("productCode").lean();
+  const headRe = new RegExp(`^${letter}(\\d{3,})`);
+  const seen = new Set();
+  for (const { productCode } of rows) {
+    const m = headRe.exec(String(productCode || "").toUpperCase());
+    if (m) seen.add(Number(m[1]));
+  }
+  let next = seen.size + 1;
+  while (seen.has(next)) next += 1;
+  // Guard against colliding with a hand-entered / differently-formatted code.
+  while (await SachikoLabelStock.exists({ productCode: `${letter}${String(next).padStart(3, "0")}` })) {
+    next += 1;
+  }
+  return `${letter}${String(next).padStart(3, "0")}`;
+}
+
+// The existing row whose recipe (every signature field EXCEPT Product Code)
+// matches this payload, or null. The cross-code duplicate guard the manual
+// create form still needs now that Product Codes are auto-assigned and so
+// never collide on their own for buildLabelStockSignature to catch.
+export async function findLabelStockSpecMatch(payload) {
+  const specSignature = buildLabelStockSpecSignature(normalizeRecipe(payload));
+  const rows = await SachikoLabelStock.find().lean();
+  return rows.find((doc) => buildLabelStockSpecSignature(normalizeRecipe(doc)) === specSignature) || null;
+}
+
 // labelStockId ("SP | LS | 000001") -- same Counter-based sequence
 // routes/sachiko/sachiko_route.js's generateId("sachikoLabelStockId", "LS")
 // uses for the manual create form, so ids stay in one shared sequence

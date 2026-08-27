@@ -944,8 +944,8 @@
     </div>
     <div class="dialog-body">
       <p class="jc-material-used-hint">
-        Enter the remaining weight (kg) left for each used material reel/drum. The stock balance
-        in inventory will be updated directly to this remaining value, and the consumed quantity will be deducted.
+        Enter the remaining weight (kg) left for <strong>every</strong> material reel/drum below — all are required.
+        The stock balance in inventory is updated directly to this remaining value, and the consumed quantity is deducted.
       </p>
       <div id="materialUsedRows"></div>
       <div class="jc-material-used-error" id="materialUsedError"></div>
@@ -1632,7 +1632,33 @@
         note.textContent = `Used: ${fmtMtrs(used)} kg`;
         note.style.color = "#047857";
       }
+      syncMaterialUsedConfirm();
     };
+
+    // Every reel listed in the Material Remaining Stock dialog must have a
+    // valid remaining-kg value before it can be saved. Returns the index of
+    // the first row that's still blank/invalid, or -1 when all are good.
+    function firstIncompleteMaterialUsedRow() {
+      for (let i = 0; i < activeUsageList.length; i++) {
+        const input = document.getElementById(`materialRemainingAmount-${i}`);
+        const raw = input ? input.value.trim() : "";
+        if (!raw && raw !== "0") return i;
+        const n = Number(raw);
+        const cur = Number(activeUsageList[i]?.reelMtrs) || 0;
+        if (!Number.isFinite(n) || n < 0 || n > cur) return i;
+      }
+      return -1;
+    }
+
+    function syncMaterialUsedConfirm() {
+      const btn = document.getElementById("materialUsedConfirmBtn");
+      if (!btn) return;
+      const ok = firstIncompleteMaterialUsedRow() === -1;
+      btn.disabled = !ok;
+      btn.style.opacity = ok ? "" : "0.55";
+      btn.style.cursor = ok ? "" : "not-allowed";
+      btn.title = ok ? "" : "Fill in the remaining kg for every material first.";
+    }
 
     function renderMaterialUsedRows() {
       const wrap = document.getElementById("materialUsedRows");
@@ -1706,6 +1732,7 @@
     function openMaterialUsedDialog() {
       renderMaterialUsedRows();
       document.getElementById("materialUsedError").textContent = "";
+      syncMaterialUsedConfirm();
       openModal("materialUsedDialog");
       document.getElementById("materialRemainingAmount-0")?.focus();
     }
@@ -1715,6 +1742,16 @@
       const errorEl = document.getElementById("materialUsedError");
       errorEl.textContent = "";
 
+      // Every listed reel must have a valid remaining-kg value first.
+      const bad = firstIncompleteMaterialUsedRow();
+      if (bad !== -1) {
+        errorEl.textContent = "Enter the remaining kg for every material listed below before saving.";
+        const badInput = document.getElementById(`materialRemainingAmount-${bad}`);
+        if (badInput) { badInput.classList.add("jc-material-used-over"); badInput.focus(); }
+        syncMaterialUsedConfirm();
+        return;
+      }
+
       const rows = [];
       for (let i = 0; i < activeUsageList.length; i++) {
         const item = activeUsageList[i];
@@ -1722,21 +1759,9 @@
         const input = document.getElementById(`materialRemainingAmount-${i}`);
         const raw = input ? input.value.trim() : "";
         if (input) input.classList.remove("jc-material-used-over");
-        if (!raw && raw !== "0") continue;
 
         const remaining = Number(raw);
-        if (!Number.isFinite(remaining) || remaining < 0) {
-          errorEl.textContent = `Enter a valid non-negative kg amount for ${item.rollId || "all items"}.`;
-          if (input) input.focus();
-          return;
-        }
         const current = Number(item.reelMtrs) || 0;
-        if (remaining > current) {
-          if (input) input.classList.add("jc-material-used-over");
-          errorEl.textContent = `${item.rollId || "Item"} remaining kg cannot exceed current stock (${fmtMtrs(current)} kg).`;
-          if (input) input.focus();
-          return;
-        }
         const used = Math.max(0, round2(current - remaining));
         rows.push({ fields, stockId: item._id, remainingKg: remaining, usedKg: used });
       }

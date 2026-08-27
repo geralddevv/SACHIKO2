@@ -186,30 +186,21 @@
       <h1>Order Info</h1>
     </div>
 
-    <div class="span-five">
-      <label for="size">Size</label>
-      <input type="text" id="size" name="size" class="form-control" placeholder="Size" />
+    <!-- Row: PO Date | PO Number | Est Delivery Date | Remarks -- four span-eight
+         blocks span 8+8+8+8 = 32, filling the grid row exactly. -->
+    <div class="span-eight">
+      <label for="poDate">PO Date</label>
+      <input type="date" id="poDate" name="poDate" class="form-control" value="<%= new Date().toISOString().split('T')[0] %>" />
     </div>
 
-    <div class="span-five">
-      <label for="rollNo">Roll No</label>
-      <input type="text" id="rollNo" name="rollNo" class="form-control" placeholder="Roll No" />
-    </div>
-
-    <div class="span-five">
+    <div class="span-eight">
       <label for="poNumber">PO Number</label>
-      <input type="text" id="poNumber" name="poNumber" class="form-control" placeholder="PO Number" />
+      <input type="text" id="poNumber" name="poNumber" class="form-control" placeholder="Enter PO number" required />
     </div>
 
-    <!-- Row: Rate | Est Delivery Date | Remarks -->
-    <div class="span-four">
-      <label for="rate">Rate</label>
-      <input type="text" id="rate" name="rate" class="form-control" placeholder="Rate" />
-    </div>
-
-    <div class="span-five">
-      <label for="estDeliveryDate">Est Delivery Date</label>
-      <input type="text" id="estDeliveryDate" name="estDeliveryDate" class="form-control" placeholder="dd/mm/yyyy" />
+    <div class="span-eight">
+      <label for="estimatedDate">Est Delivery Date</label>
+      <input type="date" id="estimatedDate" name="estimatedDate" class="form-control" placeholder="dd/mm/yyyy" />
     </div>
 
     <div class="span-eight">
@@ -375,5 +366,14 @@
     deckleSelect.addEventListener("change", toggleDeckleFields);
     // Initialize state
     toggleDeckleFields();
+
+    // Est Delivery Date can't precede PO Date -- keep the picker's `min` in step.
+    const poDateInput = document.getElementById("poDate");
+    const estimatedDateInput = document.getElementById("estimatedDate");
+    function syncEstDeliveryMin() {
+      if (poDateInput && estimatedDateInput) estimatedDateInput.min = (poDateInput.value || "").trim();
+    }
+    if (poDateInput) poDateInput.addEventListener("change", syncEstDeliveryMin);
+    syncEstDeliveryMin();
   });
 </script>

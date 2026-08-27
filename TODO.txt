@@ -85,3 +85,8 @@ avery, smi,
 
 in non sensing we can use sensing but no vice-versa
 
+sales order - 
+
+remark in the stock when changed
+usage, remark, (like a table)
+est date shoudnt be < po date

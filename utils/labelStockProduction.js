@@ -510,16 +510,14 @@ export async function produceDeckle({ labelStock, location, reelMtrs, lotNo, siz
 // order actually needs, on top of the rolls themselves.
 export const DECKLE_EDGE_TRIM_MM = 5;
 
-// Deckle Set (GET/POST /sachiko/labels/production/deckle-set) -- lists every
-// in-stock Facestock size (quantity/reelMtrs > 0), across ALL specs, not
-// just ones matching this order's recipe -- the planner may want to see the
-// full warehouse picture, or deliberately substitute a close-enough spec.
-// Each size is tagged `isRecipeMatch` (does at least one reel of that size
-// actually satisfy the recipe the same way production matches reels --
-// reelMatchesLayer/POOL_MATCH_FIELDS above, only the first facestock layer,
-// DOUBLE FACESTOCK's facestock2 isn't factored in) with its own
-// matchingReelCount/matchingKg subtotal, so the UI can show "12 reels in
-// stock, 9 of them this spec" rather than silently mixing them together.
+// Deckle Set (GET/POST /sachiko/labels/production/deckle-set) -- lists the
+// in-stock Facestock sizes (quantity/reelMtrs > 0) whose reels actually
+// satisfy this order's recipe. A reel "matches" the same way production
+// matches reels -- reelMatchesLayer/POOL_MATCH_FIELDS above, only the first
+// facestock layer, DOUBLE FACESTOCK's facestock2 isn't factored in. Sizes
+// that carry only other-spec stock are dropped entirely (the planner picks a
+// deckle here, not a substitute material). Each returned size still carries a
+// matchingReelCount/matchingKg subtotal alongside its full reelCount/totalKg.
 //
 // neededWidth is the order's finished-roll width times how many rolls get
 // slit off one laminated run, PLUS the standard edge trim on both sides
@@ -565,9 +563,12 @@ export async function suggestDeckleSize({ labelStock, paperSize, noOfRolls }) {
 
   const sizes = [...bySize.values()]
     .sort((a, b) => a.size - b.size)
-    .map((s) => ({ ...s, wastage: round2(s.size - neededWidth), isRecipeMatch: s.matchingReelCount > 0 }));
+    .map((s) => ({ ...s, wastage: round2(s.size - neededWidth), isRecipeMatch: s.matchingReelCount > 0 }))
+    // Only sizes with at least one recipe-matching reel are offered -- an
+    // other-spec size in the warehouse isn't a deckle choice for this order.
+    .filter((s) => s.isRecipeMatch);
 
-  const matchingSizes = sizes.filter((s) => s.isRecipeMatch);
+  const matchingSizes = sizes;
   const fit = matchingSizes.find((s) => s.wastage >= 0);
   const suggestedSize = fit ? fit.size : (matchingSizes[matchingSizes.length - 1]?.size ?? null);
 

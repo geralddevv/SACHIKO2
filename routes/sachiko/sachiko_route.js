@@ -16,7 +16,7 @@ import SachikoJobcard from "../../models/sachiko/sachikoJobcard.js";
 import SachikoSalesOrder from "../../models/sachiko/sachikoSalesOrder.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
-import { buildLabelStockSignature, buildMaterialSignature, resolveLabelStockProductCode, resolveLabelStockSkuCode } from "../../utils/labelStockVariant.js";
+import { buildLabelStockSignature, buildMaterialSignature, generateFamilyProductCode, findLabelStockSpecMatch, resolveLabelStockSkuCode } from "../../utils/labelStockVariant.js";
 
 const router = express.Router();
 
@@ -310,9 +310,6 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
   try {
     const labelStockId = await generateId("sachikoLabelStockId", "LS");
     const payload = await buildLabelStockPayload(req.body);
-    if (!payload.productCode) {
-      throw Object.assign(new Error("Product Code is required"), { userMessage: "Product Code is required" });
-    }
     if (!payload.family) {
       throw Object.assign(new Error("Family is required"), { userMessage: "Family is required" });
     }
@@ -336,16 +333,23 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
       payload.pdfFileOriginalName = newPdfFile.originalname;
     }
 
-    // Same Product Code, different recipe (e.g. C011 re-entered against a
-    // different vendor) -- resolves to a "-A"/"-B"/... variant of the code
-    // instead of colliding with the existing row, or throws if it's an exact
-    // duplicate of one already in that code's family. See its own comment.
-    const enteredProductCode = payload.productCode;
-    payload.productCode = await resolveLabelStockProductCode(payload);
-    // A variant Product Code ("C011-A") takes its base row's own SKU with the
-    // same letter suffix ("SP | LS | 000002-A") instead of the next
-    // sequential number, so the SKU family stays visibly tied to its base --
-    // see resolveLabelStockSkuCode's own comment.
+    // Product Code base is auto-assigned from the Family (CHROMO -> C001,
+    // C002, ...): first letter of the Family + a running 3-digit sequence for
+    // that letter. The dialog shows that base as a locked prefix; anything the
+    // user typed after it is kept as a free-text suffix appended to the
+    // server's own freshly computed base (so a stale client-side prefix can't
+    // leak in). An identical recipe under an existing code is still rejected
+    // -- the full-signature check below can't catch it now that the base is
+    // generated and so never collides on its own.
+    const specMatch = await findLabelStockSpecMatch(payload);
+    if (specMatch) {
+      throw Object.assign(new Error("Duplicate Label Stock combination"), {
+        userMessage: `This exact combination already exists as Product Code "${specMatch.productCode}".`,
+      });
+    }
+    const productCodeBase = await generateFamilyProductCode(payload.family);
+    const productCodeSuffix = trim(payload.productCode).toUpperCase().replace(/^[A-Z]\d{3,}/, "");
+    payload.productCode = productCodeBase + productCodeSuffix;
     const skuCode = await resolveLabelStockSkuCode(payload.productCode);
 
     const labelStockSignature = buildLabelStockSignature(payload);
@@ -356,12 +360,7 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
 
     const materialSignature = buildMaterialSignature(payload);
     await SachikoLabelStock.create({ labelStockId, skuCode, ...payload, labelStockSignature, materialSignature });
-    req.flash(
-      "notification",
-      payload.productCode === enteredProductCode
-        ? "Label Stock created successfully!"
-        : `Product Code "${enteredProductCode}" already names a different combination -- saved as new variant "${payload.productCode}".`,
-    );
+    req.flash("notification", `Label Stock "${payload.productCode}" created successfully!`);
     res.json({ success: true, redirect: "/sachiko/label-stock/view" });
   } catch (err) {
     console.error("SACHIKO LABEL STOCK CREATE ERROR:", err);
@@ -634,6 +633,10 @@ router.post("/sales/order", requireAuth, createLimiter, async (req, res) => {
       clientUserName: trim(b.clientUserName),
       productCode: trim(b.productCode),
       deckleType: trim(b.deckleType),
+      poDate: b.poDate ? new Date(b.poDate) : undefined,
+      poNumber: trim(b.poNumber),
+      estimatedDate: b.estimatedDate ? new Date(b.estimatedDate) : undefined,
+      remarks: trim(b.remarks),
       faceStock: {
         code: trim(b.fsCode),
         gsmMic: trim(b.fsGsmMic),

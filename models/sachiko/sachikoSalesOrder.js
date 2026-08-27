@@ -8,6 +8,10 @@ const sachikoSalesOrderSchema = new mongoose.Schema(
     clientUserName: { type: String, trim: true },
     productCode:    { type: String, required: true, trim: true },
     deckleType:     { type: String, trim: true },
+    poDate:         { type: Date },
+    poNumber:       { type: String, trim: true },
+    estimatedDate:  { type: Date },
+    remarks:        { type: String, trim: true },
     faceStock: {
       code:      { type: String, trim: true },
       gsmMic:    { type: String, trim: true },

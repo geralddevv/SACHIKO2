@@ -161,6 +161,50 @@
       height: auto; padding: 0.55rem 0.85rem; border: 2px solid #94a3b8; border-radius: 8px;
       background: #ffffff; font-size: 0.92rem; font-weight: 600; color: #334155; box-sizing: border-box;
     }
+    /* Product Code -- an auto-derived base ("C023": first letter of the Family
+       + a running 3-digit sequence, assigned server-side) shown as a locked
+       prefix, followed by a free-text box the user types an optional suffix
+       into. The two are concatenated into #lsProductCode on submit. */
+    #ls-create-form .ls-code-input {
+      display: flex; align-items: stretch; width: 100%; height: 2.65rem;
+      border: 2px solid #94a3b8; border-radius: 8px; background: #ffffff;
+      box-sizing: border-box; overflow: hidden;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    #ls-create-form .ls-code-input:hover { border-color: #64748b; }
+    #ls-create-form .ls-code-input:focus-within {
+      border-color: #044a78; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.18);
+    }
+    /* Prefix chip + type-in box share one baseline: identical font-size,
+       letter-spacing and side padding, each vertically centred over the full
+       2.65rem height so nothing sits high or low against the row. */
+    #ls-create-form .ls-code-input__prefix {
+      flex: 0 0 auto;
+      display: inline-flex; align-items: center;
+      height: 100%; padding: 0 0.85rem;
+      background: #eef1f5; color: #0f172a;
+      border-right: 2px solid #94a3b8;
+      font-size: 1.02rem; font-weight: 800; letter-spacing: 0.03em;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: nowrap; user-select: none;
+      transition: border-color 0.15s ease;
+    }
+    #ls-create-form .ls-code-input:hover .ls-code-input__prefix { border-right-color: #64748b; }
+    #ls-create-form .ls-code-input:focus-within .ls-code-input__prefix { border-right-color: #044a78; }
+    /* No base yet (Family not chosen, or a legacy code with no C### head) --
+       drop the chip so the box reads as one plain field. */
+    #ls-create-form .ls-code-input__prefix.is-empty { display: none; }
+    #ls-create-form .ls-code-input input {
+      flex: 1 1 auto; min-width: 0; height: 100%;
+      border: none; outline: none; margin: 0;
+      padding: 0 0.85rem; background: transparent;
+      font-size: 1.02rem; font-weight: 700; letter-spacing: 0.03em; color: #0f172a;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      text-transform: uppercase;
+    }
+    #ls-create-form .ls-code-input input::placeholder {
+      color: #94a3b8; font-weight: 500; letter-spacing: 0; text-transform: none;
+    }
 
     .layer-card { border-radius: 10px; border: 2px solid; padding: 18px 20px 22px; box-shadow: 0 2px 5px rgba(15, 23, 42, 0.1); }
     .layer-card__label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 900; letter-spacing: 0.06em; margin-bottom: 16px; }
@@ -320,6 +364,12 @@
         .sort((a, b) => a.productCode.localeCompare(b.productCode, undefined, { numeric: true }));
       tree.push({ ...parent, _children: children });
     });
+
+    // Sr. No. -- a plain running count of the rows we actually have, assigned
+    // here off the built list rather than parsed from any SKU code. Only
+    // top-level rows are counted; a variant nested under its base Product Code
+    // lives in `_children` and gets no number of its own.
+    tree.forEach((row, i) => { row._srNo = i + 1; });
     return tree;
   }
 
@@ -357,13 +407,9 @@
         // it lands in the toggle column itself rather than the data column.
         formatter: (cell) => (cell.getRow().getTreeParent && cell.getRow().getTreeParent() ? "↳" : "") },
       {
-        // getPosition(true) reads the row's position among only the currently
-        // active (sorted + filtered) rows, re-evaluated on every redraw --
-        // so this stays correct after sorting any column or typing into any
-        // header filter, unlike a static index baked into the row data at
-        // load time. Variant children (nested under a Product Code's dataTree)
-        // aren't top-level rows, so they don't get their own number here --
-        // matches the "↳" toggle column's own parent/child distinction above.
+        // `_srNo` is the running count baked onto each top-level row in
+        // buildLabelStockTreeData (variant children never get one), so this
+        // just prints it -- no SKU-code parsing, no position math.
         title: "Sr. No.",
         field: "_srNo",
         width: 70,
@@ -371,7 +417,7 @@
         headerHozAlign: "center",
         headerSort: false,
         headerFilter: false,
-        formatter: (cell) => (cell.getRow().getTreeParent && cell.getRow().getTreeParent() ? "" : cell.getRow().getPosition(true)),
+        formatter: (cell) => cell.getValue() || "",
       },
       {
         title: "Actions",
@@ -446,26 +492,6 @@
         }
       },
     ],
-  });
-
-  // "renderComplete" is a Tabulator EVENT, not a constructor option -- a
-  // `renderComplete:` key inside the options object above is silently
-  // ignored (no error, callback just never runs), which is why the column
-  // formatter's stale numbers kept showing after a sort. Subscribing via
-  // .on() is the only way it actually fires. Reads straight off the
-  // rendered DOM rather than Tabulator's row APIs -- getRow().getPosition()/
-  // getRows("active") both count a dataTree's collapsed children as
-  // occupying a position even while they're not on screen (e.g. a Product
-  // Code with 5 hidden variants pushes the NEXT visible row's number up by
-  // 5, so numbering jumped 1, 7 instead of 1, 2). Whatever's actually on
-  // screen, top to bottom, is renumbered 1..n every redraw; variant
-  // children are marked "data-variant-child" by rowFormatter above and
-  // skipped, same as the "↳" toggle column's own parent/child distinction.
-  table.on("renderComplete", function () {
-    document.querySelectorAll("#master-table .tabulator-row:not([data-variant-child])").forEach((rowEl, i) => {
-      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
-      if (cell) cell.textContent = i + 1;
-    });
   });
 
   document.getElementById("download-pdf").addEventListener("click", () =>
@@ -1216,9 +1242,9 @@
       select.required = show;
       lsSelectStaticOption(select, show ? selectedValue : "");
       lsInitChoices("lsDigitalPrintType");
-      // Family/Roll-Sheet/Printing Technology stretch to fill the row when
-      // Laser/Ink isn't shown, instead of leaving its column blank.
-      document.getElementById("lsFamilyRow").style.gridTemplateColumns = show ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr";
+      // Fixed 3-col grid: row 1 is Type + Roll/Sheet + Printing Technology;
+      // Laser/Ink (when Sheet+Digital is picked) wraps onto row 2.
+      document.getElementById("lsFamilyRow").style.gridTemplateColumns = "1fr 1fr 1fr";
     }
 
     lsForm.addEventListener("change", function (e) {
@@ -1228,6 +1254,8 @@
       } else if (e.target.id === "lsPrintingTechnology") {
         const rollOrSheet = document.getElementById("lsRollOrSheet").value;
         lsUpdateDigitalPrintTypeVisibility(rollOrSheet, e.target.value, "");
+      } else if (e.target.id === "lsFamily") {
+        lsRefreshProductCode();
       } else if (lsFsIds1.has(e.target.id)) {
         fsRebuildCascade(lsFacestockMasters, lsFsEls1, lsInitChoices, { skip: lsFsKeyById1[e.target.id] });
       } else if (lsFsIds2.has(e.target.id)) {
@@ -1298,6 +1326,69 @@
     lsForm.addEventListener("scroll", () => { if (lsOpenDropdownSelect) lsPositionDropdown(lsOpenDropdownSelect); }, true);
     window.addEventListener("resize", () => { if (lsOpenDropdownSelect) lsPositionDropdown(lsOpenDropdownSelect); });
 
+    // Product Code = an auto-derived base ("C023": first letter of the Family
+    // + a running 3-digit sequence for that letter, CHROMO -> C001, C002, ...)
+    // shown locked as the prefix, plus whatever free-text suffix the user
+    // types after it. The hidden #lsProductCode the form posts is the two
+    // concatenated. On create the server (POST /label-stock/form) recomputes
+    // the base itself and re-appends the typed suffix, so this prefix is only
+    // a preview there; on edit the posted value is saved as-is.
+    const LS_CODE_BASE_RE = /^[A-Z]\d{3,}/;
+
+    function lsSyncProductCode() {
+      const prefixEl = document.getElementById("lsProductCodePrefix");
+      const base = prefixEl.classList.contains("is-empty") ? "" : prefixEl.textContent.trim();
+      const suffix = document.getElementById("lsProductCodeSuffix").value.trim().toUpperCase();
+      document.getElementById("lsProductCode").value = base + suffix;
+    }
+
+    function lsSetProductCodeBase(base) {
+      const prefixEl = document.getElementById("lsProductCodePrefix");
+      prefixEl.textContent = base || "—";
+      prefixEl.classList.toggle("is-empty", !base);
+      lsSyncProductCode();
+    }
+
+    // `code` is the base alone on create (e.g. "C023"), or the full saved
+    // productCode on edit -- split back into locked base + editable suffix
+    // (a legacy code with no "<letter><digits>" head lands wholly in the
+    // editable box).
+    function lsRenderProductCode(code) {
+      const value = String(code || "");
+      const baseMatch = value.match(LS_CODE_BASE_RE);
+      const base = baseMatch ? baseMatch[0] : "";
+      document.getElementById("lsProductCodeSuffix").value = baseMatch ? value.slice(base.length) : value;
+      lsSetProductCodeBase(base);
+    }
+
+    document.getElementById("lsProductCodeSuffix").addEventListener("input", lsSyncProductCode);
+
+    function lsFamilyCodeLetter(family) {
+      return (String(family || "").toUpperCase().match(/[A-Z]/) || ["X"])[0];
+    }
+    function lsComputeProductCode(family) {
+      const letter = lsFamilyCodeLetter(family);
+      // Next number = (how many distinct product lines already use this letter)
+      // + 1 -- a plain count, NOT (highest number seen) + 1. Each code's
+      // leading "<letter><digits>" is its line; "C004", "C004-A" and a typed
+      // "C004FOO" are all the C004 line, counted once. If the resulting number
+      // is somehow already in use it's bumped past.
+      const headRe = new RegExp(`^${letter}(\\d{3,})`);
+      const seen = new Set();
+      raw.forEach((d) => {
+        const m = headRe.exec((d.productCode || "").toUpperCase());
+        if (m) seen.add(Number(m[1]));
+      });
+      let next = seen.size + 1;
+      while (seen.has(next)) next += 1;
+      return `${letter}${String(next).padStart(3, "0")}`;
+    }
+    function lsRefreshProductCode() {
+      if (lsEditId) return; // never renumber an existing row -- keep its base and suffix
+      const family = document.getElementById("lsFamily").value;
+      lsSetProductCodeBase(family ? lsComputeProductCode(family) : ""); // keeps whatever suffix is already typed
+    }
+
     // Shared by opening a fresh "New" dialog and closing the dialog (either
     // way) -- resets the form back to a blank slate, including the layer
     // cascades and roll-type layout, so nothing typed lingers into the next
@@ -1305,6 +1396,7 @@
     function lsResetForm() {
       lsForm.reset();
       lsEditId = null;
+      lsRenderProductCode("");
       document.getElementById("lsCurrentWordFileLink").style.display = "none";
       document.getElementById("lsCurrentPdfFileLink").style.display = "none";
       hideLsError();
@@ -1347,7 +1439,7 @@
       hideLsError();
 
       document.getElementById("lsSkuCode").value = ds.skuCode || "";
-      document.getElementById("lsProductCode").value = ds.productCode || "";
+      lsRenderProductCode(ds.productCode || "");
 
       const wordFileLink = document.getElementById("lsCurrentWordFileLink");
       if (ds.wordFile) {
@@ -1478,14 +1570,27 @@
     </div>
 
     <form id="ls-create-form" class="custom-scrollbar" style="padding:22px 24px;overflow-y:auto;flex:1 1 auto;display:flex;flex-direction:column;gap:16px;border-top:none;border-top-left-radius:0;border-top-right-radius:0;" novalidate>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:14px;">
+      <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:14px;">
         <div class="dialog-field">
           <label class="dialog-field-label" for="lsSkuCode">SKU Code</label>
           <input type="text" id="lsSkuCode" class="form-control" readonly />
         </div>
         <div class="dialog-field">
-          <label class="dialog-field-label" for="lsProductCode">Product Code</label>
-          <input type="text" id="lsProductCode" name="productCode" class="form-control" placeholder="Enter product code" required />
+          <label class="dialog-field-label" for="lsFamily">Family</label>
+          <select id="lsFamily" name="family" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Select family</option>
+            <% families?.forEach(f => { %>
+              <option value="<%= f.familyName %>"><%= f.familyName %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="dialog-field">
+          <label class="dialog-field-label" for="lsProductCodeSuffix">Product Code</label>
+          <div class="ls-code-input">
+            <span id="lsProductCodePrefix" class="ls-code-input__prefix is-empty">—</span>
+            <input type="text" id="lsProductCodeSuffix" autocomplete="off" spellcheck="false" placeholder="type here" />
+          </div>
+          <input type="hidden" id="lsProductCode" name="productCode" />
         </div>
         <div class="dialog-field">
           <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -1505,24 +1610,15 @@
           </div>
           <input type="file" id="lsPdfFile" name="pdfFile" class="form-control" accept=".pdf" />
         </div>
+      </div>
+
+      <div id="lsFamilyRow" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
         <div class="dialog-field">
           <label class="dialog-field-label" for="lsRollType">Type</label>
           <select id="lsRollType" name="rollType" class="form-control select-tag">
             <option value="NORMAL" selected>STANDARD</option>
             <option value="DOUBLE RELEASE">DOUBLE RELEASE</option>
             <option value="DOUBLE FACESTOCK">DOUBLE FACESTOCK</option>
-          </select>
-        </div>
-      </div>
-
-      <div id="lsFamilyRow" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
-        <div class="dialog-field">
-          <label class="dialog-field-label" for="lsFamily">Family</label>
-          <select id="lsFamily" name="family" class="form-control select-tag" required>
-            <option value="" disabled selected hidden>Select family</option>
-            <% families?.forEach(f => { %>
-              <option value="<%= f.familyName %>"><%= f.familyName %></option>
-            <% }) %>
           </select>
         </div>
         <div class="dialog-field">

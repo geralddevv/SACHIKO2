@@ -430,6 +430,14 @@ async function resolveLabelStockBinding({ labelStock, userId, paperSize, running
 // multi-item Label Stock PO -- same rules as the single-item LABEL_STOCK
 // branch of POST /sales/order, factored out so the multi-item loop can
 // validate every line up front and create nothing if any line is bad.
+// Shared Paper Size / RM bounds for a Label Stock order line.
+function validateLabelStockDims(paperSize, runningMeters) {
+  const ps = Number(paperSize);
+  if (!(ps > 0) || ps >= 1000) return "Paper Size must be a number less than 1000.";
+  if (Number(runningMeters) > 2000) return "RM cannot exceed 2000.";
+  return null;
+}
+
 async function resolveLabelStockLineBinding({ line, userId, sourceLocation, locationRadio, userLocation }) {
   const paperSize = String(line.paperSize || "").trim();
   const runningMeters = line.runningMeters;
@@ -439,6 +447,8 @@ async function resolveLabelStockLineBinding({ line, userId, sourceLocation, loca
   if (!paperSize || !(Number(runningMeters) > 0) || !(Number(noOfRolls) > 0)) {
     return { error: "Every item needs a Paper Size, and RM / No of Rolls greater than zero." };
   }
+  const dimErr = validateLabelStockDims(paperSize, runningMeters);
+  if (dimErr) return { error: dimErr };
 
   let binding = line.itemId ? await LabelStockBinding.findById(line.itemId) : null;
   const bindingMatchesOrder =
@@ -2730,6 +2740,16 @@ router.post("/sales/order", async (req, res) => {
     const createdByUser = req.user?.username || "SYSTEM";
     const normalizedDeckleOption = String(deckleOption || "").trim().toUpperCase() || undefined;
 
+    // Est Delivery Date can never be earlier than the PO Date -- applies to
+    // every path below (multi-item PO, single-item create, and edit).
+    if (poDate && estimatedDate) {
+      const pd = new Date(poDate);
+      const ed = new Date(estimatedDate);
+      if (!Number.isNaN(pd.getTime()) && !Number.isNaN(ed.getTime()) && ed < pd) {
+        return res.status(400).json({ success: false, message: "Est Delivery Date cannot be earlier than the PO Date." });
+      }
+    }
+
     // ================= MULTI-ITEM PO =================
     // The Sales Order form submits `lines[i][...]` when several Label Stock
     // product lines are placed under one PO. Each line becomes its own
@@ -2981,6 +3001,8 @@ router.post("/sales/order", async (req, res) => {
       if (!trimmedPaperSize || !runningMeters || !noOfRolls) {
         return res.status(400).json({ success: false, message: "Paper Size, Running Meters, and No of Rolls are required for Label Stock orders." });
       }
+      const dimErr = validateLabelStockDims(trimmedPaperSize, runningMeters);
+      if (dimErr) return res.status(400).json({ success: false, message: dimErr });
 
       let binding = itemId ? await LabelStockBinding.findById(itemId) : null;
 

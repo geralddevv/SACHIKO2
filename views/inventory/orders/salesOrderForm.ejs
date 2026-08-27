@@ -217,7 +217,7 @@
     <% if (showAdditionalItems) { %>
     <div id="additional-items-wrap" class="span-full" style="display:none;">
       <div class="form-subheading" style="margin-top:2px;"><h1>Order Items</h1></div>
-      <div class="ai-table-wrap" style="overflow-x:auto;">
+      <div class="ai-table-wrap">
         <table class="ai-table" id="additional-items-table">
           <thead>
             <tr>
@@ -261,12 +261,20 @@
     </template>
 
     <style>
+      /* Scrolls horizontally only when the columns don't fit; while a Product
+         Code dropdown is open the JS adds .dropdown-open so the list isn't
+         clipped by this container. */
+      .ai-table-wrap { overflow-x: auto; }
+      .ai-table-wrap.dropdown-open { overflow: visible; }
       .ai-table { width:100%; border-collapse:collapse; font-size:13px; }
       .ai-table th, .ai-table td { padding:5px 8px; border-bottom:1px solid #e5e7eb; border-right:1px solid #e5e7eb; text-align:left; vertical-align:top; }
       .ai-table tr > *:last-child { border-right:none; }
       .ai-table th { color:#044a78; font-weight:700; white-space:nowrap; background:#f0f7ff; }
       .ai-table .ai-row-num { color:#6b7280; font-weight:700; text-align:center; padding-top:12px; }
       .ai-table input.form-control { padding:7px 9px !important; font-size:13px !important; height:auto !important; }
+      /* Auto-filled Rate awaiting confirmation -- subtle yellow until clicked. */
+      .ai-table input.ai-rate.ai-rate-unack { background:#fef9c3 !important; }
+      .ai-table input.ai-rate.ai-rate-unack:focus { background:#fff !important; }
       .ai-add-btn { margin-top:10px; background:#044a78; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-weight:700; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
       .ai-add-btn:hover { background:#03365a; }
       #additional-items-table .choices { margin-bottom:0; }
@@ -635,6 +643,15 @@
   const confirmQuantityInput = document.getElementById("confirm-quantity");
   const orderForm = document.getElementById("sales-order-form");
   const submitButton = orderForm?.querySelector('button[type="submit"]');
+
+  // Est Delivery Date can't precede PO Date -- keep the date picker's `min` in
+  // sync so the native control blocks it too (the submit handler double-checks).
+  function syncEstDeliveryMin() {
+    if (!poDateInput || !estimatedDateInput) return;
+    estimatedDateInput.min = (poDateInput.value || "").trim();
+  }
+  if (poDateInput) poDateInput.addEventListener("change", syncEstDeliveryMin);
+  syncEstDeliveryMin();
 
   // Order Quantity: show thousands separators (commas) while typing, but keep
   // the underlying value comma-free so it always saves as a plain number.
@@ -2008,6 +2025,17 @@
     if (orderForm.dataset.submitting === "1") return false;
     setSubmittingState(true);
 
+    // Est Delivery Date can't be earlier than PO Date (create/edit only --
+    // dispatch doesn't touch these dates).
+    const _poDateVal = (poDateInput?.value || "").trim();
+    const _estDateVal = (estimatedDateInput?.value || "").trim();
+    if (!confirmMode && _poDateVal && _estDateVal && _estDateVal < _poDateVal) {
+      showToast("Est Delivery Date cannot be earlier than the PO Date.", "error");
+      estimatedDateInput?.focus?.();
+      setSubmittingState(false);
+      return false;
+    }
+
     const firstInvalid = orderForm.querySelector(":invalid");
     if (firstInvalid) {
       showToast(getValidationMessage(firstInvalid), "error");
@@ -2104,6 +2132,16 @@
         const noOfRollsVal = document.getElementById("no-of-rolls")?.value;
         if (!paperSizeVal || !runningMetersVal || !noOfRollsVal) {
           showToast("Paper Size, RM, and No of Rolls are required for Label Stock orders.", "error");
+          setSubmittingState(false);
+          return false;
+        }
+        if (!(parseFloat(paperSizeVal) < 1000)) {
+          showToast("Paper Size must be a number less than 1000.", "error");
+          setSubmittingState(false);
+          return false;
+        }
+        if (parseFloat(runningMetersVal) > 2000) {
+          showToast("RM cannot exceed 2000.", "error");
           setSubmittingState(false);
           return false;
         }
@@ -2335,7 +2373,8 @@
         const d = new Date(orderToEdit.estimatedDate);
         estimatedDateInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       }
-      
+      syncEstDeliveryMin();
+
       // Ensure all fields are enabled for editing
       itemTypeChoices?.enable();
       clientChoices?.enable();
@@ -2681,6 +2720,16 @@
   // Kept as the name the submit handler checks.
   function aiIsActive() { return aiTableMode() && aiRowCount() > 0; }
 
+  // The Select Item / Product Code slot is gone in table mode, so stretch the
+  // header fields to fill the 32-col row instead of leaving a trailing gap.
+  const AI_HEADER_SPANS = {
+    "deckle-option-div": 6,
+    "item-type-div": 6,
+    "client-name-div": 7,
+    "user-name-div": 7,
+    "user-location-div": 6,
+  };
+
   function aiHideLegacyFields() {
     AI_LEGACY_FIELD_IDS.forEach((id) => {
       const el = document.getElementById(id);
@@ -2690,6 +2739,10 @@
     if (quantityInput) quantityInput.required = false;
     const remarksWrap = document.getElementById("remarks-wrap");
     if (remarksWrap) remarksWrap.style.gridColumn = "span 20";
+    Object.entries(AI_HEADER_SPANS).forEach(([id, n]) => {
+      const el = document.getElementById(id);
+      if (el) el.style.gridColumn = `span ${n}`;
+    });
   }
 
   function aiApplyTableMode(on) {
@@ -2700,6 +2753,10 @@
     AI_LEGACY_FIELD_IDS.forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.style.display = "";
+    });
+    Object.keys(AI_HEADER_SPANS).forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.gridColumn = "";
     });
     // Hand layout back to the normal single-item visibility logic.
     updateLabelStockFieldsVisibility();
@@ -2744,8 +2801,6 @@
     const sku = sel.value || "";
     const itemIdInp = row.querySelector(".ai-item-id");
     const masterIdInp = row.querySelector(".ai-master-id");
-    const psInp = row.querySelector(".ai-paper-size");
-    const rmInp = row.querySelector(".ai-rm");
     const rateInp = row.querySelector(".ai-rate");
 
     const match = sku
@@ -2755,15 +2810,35 @@
     if (match) {
       itemIdInp.value = match._id;
       masterIdInp.value = "";
-      if (!psInp.dataset.userEdited) psInp.value = match.paperSize || "";
-      if (!rmInp.dataset.userEdited) rmInp.value = match.runningMeters != null && match.runningMeters !== "" ? match.runningMeters : "";
-      if (!rateInp.dataset.userEdited) rateInp.value = match.rate != null && match.rate !== "" ? match.rate : "";
+      // Paper Size and RM are never auto-filled -- always entered by hand.
+      if (!rateInp.dataset.userEdited) {
+        const newRate = match.rate != null && match.rate !== "" ? String(match.rate) : "";
+        if (newRate !== rateInp.value) {
+          rateInp.value = newRate;
+          // Auto-filled from the binding -- must be confirmed (click) before submit.
+          rateInp.dataset.rateAutofilled = "1";
+          aiSetRateAck(rateInp, false);
+        }
+      }
       return;
     }
 
     itemIdInp.value = "";
     const master = sku ? (allLabelStockMasters || []).find((m) => (m.skuCode || "") === sku) : null;
     masterIdInp.value = master?._id || "";
+    // No binding -> Rate is entered by hand. Drop a stale auto-filled value so
+    // the user types a fresh one; nothing to acknowledge.
+    if (!rateInp.dataset.userEdited && rateInp.dataset.rateAutofilled === "1") rateInp.value = "";
+    rateInp.dataset.rateAutofilled = "";
+    aiSetRateAck(rateInp, true);
+  }
+
+  // Rate acknowledgement: an auto-filled Rate shows yellow until the user
+  // clicks (focuses) or edits it; an unconfirmed Rate blocks add-row + submit.
+  function aiSetRateAck(rateInp, acked) {
+    if (!rateInp) return;
+    rateInp.dataset.rateAck = acked ? "1" : "";
+    rateInp.classList.toggle("ai-rate-unack", !acked);
   }
 
   function aiRenumber() {
@@ -2784,9 +2859,19 @@
     row.remove();
   }
 
-  function aiAddRow() {
+  // manual = a user click on "+ Add Item"; block it until the existing rows
+  // are fully filled. Programmatic calls (first row, item-type switch) pass
+  // manual = false.
+  function aiAddRow(manual) {
     const tpl = document.getElementById("additional-item-row-tpl");
     if (!tpl) return;
+    if (manual === true && aiRowCount() > 0) {
+      const err = aiValidateRows();
+      if (err) {
+        if (typeof showToast === "function") showToast(`Fill the current item first — ${err}`, "error");
+        return;
+      }
+    }
     const frag = tpl.content.cloneNode(true);
     const row = frag.querySelector(".ai-row");
     aiBody().appendChild(frag);
@@ -2796,11 +2881,28 @@
     aiChoices.set(sel, inst);
     aiPopulateRowSelect(row, false);
 
+    // Choices renders its dropdown absolutely-positioned; the scroll wrapper
+    // would clip it, so lift the wrapper's overflow (and this row) while open.
+    const wrap = document.querySelector("#additional-items-wrap .ai-table-wrap");
+    sel.addEventListener("showDropdown", () => {
+      if (wrap) wrap.classList.add("dropdown-open");
+      row.style.position = "relative";
+      row.style.zIndex = "30";
+    });
+    sel.addEventListener("hideDropdown", () => {
+      if (wrap) wrap.classList.remove("dropdown-open");
+      row.style.zIndex = "";
+    });
+
     sel.addEventListener("change", () => aiOnRowProductChange(row));
     [".ai-paper-size", ".ai-rm", ".ai-rate"].forEach((c) => {
       const el = row.querySelector(c);
       el.addEventListener("input", () => { el.dataset.userEdited = "1"; });
     });
+    // Confirm the auto-filled Rate on click (focus) or manual edit.
+    const rateEl = row.querySelector(".ai-rate");
+    rateEl.addEventListener("focus", () => aiSetRateAck(rateEl, true));
+    rateEl.addEventListener("input", () => aiSetRateAck(rateEl, true));
     row.querySelector(".ai-remove").addEventListener("click", () => {
       if (aiRowCount() <= 1) return; // keep at least one item
       aiDestroyRow(row);
@@ -2851,10 +2953,18 @@
       const r = rows[i];
       const n = i + 1;
       if (!(r.querySelector(".ai-item-id").value || r.querySelector(".ai-master-id").value)) return `Item ${n}: select a Product Code.`;
-      if (!(r.querySelector(".ai-paper-size").value || "").trim()) return `Item ${n}: Paper Size is required.`;
-      if (!(parseFloat(r.querySelector(".ai-rm").value) > 0)) return `Item ${n}: RM must be greater than 0.`;
+      const ps = parseFloat(r.querySelector(".ai-paper-size").value);
+      if (!(ps > 0)) return `Item ${n}: Paper Size is required.`;
+      if (ps >= 1000) return `Item ${n}: Paper Size must be less than 1000.`;
+      const rm = parseFloat(r.querySelector(".ai-rm").value);
+      if (!(rm > 0)) return `Item ${n}: RM must be greater than 0.`;
+      if (rm > 2000) return `Item ${n}: RM cannot exceed 2000.`;
       if (!(parseInt(r.querySelector(".ai-rolls").value, 10) > 0)) return `Item ${n}: No of Rolls must be greater than 0.`;
-      if (!(parseFloat(r.querySelector(".ai-rate").value) > 0)) return `Item ${n}: Rate must be greater than 0.`;
+      const rateEl = r.querySelector(".ai-rate");
+      if (!(parseFloat(rateEl.value) > 0)) return `Item ${n}: Rate must be greater than 0.`;
+      if (rateEl.dataset.rateAutofilled === "1" && rateEl.dataset.rateAck !== "1") {
+        return `Item ${n}: click the Rate field to confirm the auto-filled rate.`;
+      }
     }
     return "";
   }
@@ -2888,7 +2998,7 @@
     if (confirmMode || orderToEdit) return;
     const addBtn = document.getElementById("add-line-btn");
     if (!addBtn) return;
-    addBtn.addEventListener("click", aiAddRow);
+    addBtn.addEventListener("click", () => aiAddRow(true));
     aiOnItemTypeChange(); // Item Type defaults to ROLL -> table mode on, 1 row
   });
 </script>

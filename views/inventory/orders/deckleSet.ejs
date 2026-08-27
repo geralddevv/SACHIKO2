@@ -310,9 +310,8 @@
     dsSizeEmpty.style.display = sizes.length ? "none" : "flex";
     dsSizeList.style.display = sizes.length ? "flex" : "none";
 
-    // Best Fit first, then the rest of the actual recipe matches, then
-    // other-spec sizes last -- most-useful-first rather than a flat
-    // ascending-by-size list now that every in-stock size is shown.
+    // Best Fit first, then the rest ascending by size. (The server only ever
+    // sends recipe-matching sizes now, so there's no other-spec tier below.)
     const sorted = [...sizes].sort((a, b) => {
       const aBest = row.suggestedSize != null && a.size === row.suggestedSize;
       const bBest = row.suggestedSize != null && b.size === row.suggestedSize;
@@ -375,12 +374,12 @@
       `${row.productCode || "Label Stock"} · ${row.clientName || "—"}`;
 
     // Label Stock Code is read-only (it's an identifier, not something to
-    // edit here); Deckle Qty and Running Mtrs are real inputs -- prefilled
-    // from the order, but the planner can correct them before sending this
-    // order on to Pending Production.
+    // edit here). Deckle Qty and Running Mtrs are entered fresh by the planner
+    // on this dialog -- deliberately NOT prefilled from the order, even when
+    // reopening an already-set row.
     document.getElementById("ds-product-code").textContent = row.productCode || "—";
-    dsDeckleQtyInput.value = row.noOfRolls != null && row.noOfRolls !== "—" ? row.noOfRolls : "";
-    dsRunningMtrsInput.value = row.runningMeters != null ? row.runningMeters : "";
+    dsDeckleQtyInput.value = "";
+    dsRunningMtrsInput.value = "";
 
     renderSizeList(row);
     // Editing an already-set row starts from what's actually saved, not the
