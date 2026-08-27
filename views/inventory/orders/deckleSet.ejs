@@ -623,7 +623,7 @@
           const row = cell.getRow().getData();
           return fmtMtrs(row.isGroup ? row.sumRunningMeters : row.runningMeters);
         } },
-      { title: "Qty", hozAlign: "center", headerSort: false,
+      { title: "Roll Qty", hozAlign: "center", headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
           return fmtInt(row.isGroup ? row.sumQuantity : row.quantity);
@@ -637,11 +637,6 @@
           return row.isGroup
             ? `<span style="font-weight:700; color:#044A78;">${fmtMtrs(v)}</span>`
             : fmtMtrs(v);
-        } },
-      { title: "Rolls", hozAlign: "center", headerSort: false,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          return fmtInt(row.isGroup ? row.sumRolls : row.noOfRolls);
         } },
       { title: "Est. Delivery", hozAlign: "center", headerSort: false,
         formatter: (cell) => {
