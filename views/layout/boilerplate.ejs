@@ -1157,7 +1157,7 @@
         <% if ((canAccounting || canHr) && !isSales) { %>
         <%# HR staff have nothing else in the sidebar, so their one group starts
             expanded instead of making them open it on every page. %>
-        <div class="nav-opt-wrap" style="display: none;" <%= isHr ? 'data-open-default' : '' %>>
+        <div class="nav-opt-wrap" <%= isHr ? 'data-open-default' : '' %>>
           <div title="Masters" class="masters-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-users-gear" style="color: #ffffff"></i>
             <p class="nav-items-para">HR</p>

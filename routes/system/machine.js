@@ -32,7 +32,7 @@ const router = express.Router();
 // (a finished Deckle roll ticked on) still counts on its own, for orders
 // assigned through the older flow. Used by the queue's Start button and by
 // both job-card guards, so all three agree.
-function hasStartableAllotment({ rollType, allottedLayers, allottedRollIds }) {
+export function hasStartableAllotment({ rollType, allottedLayers, allottedRollIds }) {
   if (Array.isArray(allottedRollIds) && allottedRollIds.length) return true;
   const required = requiredLayersFor(rollType);
   return required.length > 0 && required.every((key) => pickStockIds(allottedLayers?.[key]).length > 0);
@@ -50,7 +50,7 @@ async function generateId(key, code) {
   return `SP | ${code} | ${String(counter.seq).padStart(6, "0")}`;
 }
 
-async function previewId(key, code) {
+export async function previewId(key, code) {
   const counter = await Counter.findOne({ key }).select("seq").lean();
   const nextSeq = Number(counter?.seq || 0) + 1;
   return `SP | ${code} | ${String(nextSeq).padStart(6, "0")}`;
@@ -290,9 +290,10 @@ router.get("/machine/queue", requireMachineFloor, async (req, res) => {
 // machine each job sits on. This is where operators land straight after
 // login, so it reads their own empObjId off the session rather than a URL
 // param.
-router.get("/operator/queue", requireRole(["operator"]), async (req, res) => {
-  const authUser = req.session?.authUser;
-  const operatorObjId = authUser?.empObjId;
+// Extracted so the JSON operator API's GET /queue can reuse exactly this
+// grouping logic instead of re-deriving it -- see routes/api/operatorApi.js.
+export async function buildOperatorQueue({ empObjId, empName, empNickName, empLoc }) {
+  const operatorObjId = empObjId;
 
   const rows =
     operatorObjId && mongoose.isValidObjectId(operatorObjId)
@@ -334,15 +335,34 @@ router.get("/operator/queue", requireRole(["operator"]), async (req, res) => {
         })
       : 0;
 
+  return {
+    operatorName: empName || "",
+    // Additive on purpose: the EJS operator queue page keeps rendering
+    // operatorName, while the mobile app greets the operator by the short
+    // name they actually go by. Falls back to the full name so an operator
+    // with no nick name set still reads sensibly.
+    operatorNickName: empNickName || empName || "",
+    operatorLocation: empLoc || "",
+    groups,
+    totalJobs: rows.length,
+    openMaintenanceCount,
+  };
+}
+
+router.get("/operator/queue", requireRole(["operator"]), async (req, res) => {
+  const authUser = req.session?.authUser;
+  const queue = await buildOperatorQueue({
+    empObjId: authUser?.empObjId,
+    empName: authUser?.empName,
+    empNickName: authUser?.empNickName,
+    empLoc: authUser?.empLoc,
+  });
+
   res.render("inventory/masters/operatorQueue.ejs", {
     title: "Work Queue",
     CSS: "tableDisp.css",
     JS: false,
-    operatorName: authUser?.empName || "",
-    operatorLocation: authUser?.empLoc || "",
-    groups,
-    totalJobs: rows.length,
-    openMaintenanceCount,
+    ...queue,
     notification: req.flash("notification"),
   });
 });
@@ -351,7 +371,7 @@ router.get("/operator/queue", requireRole(["operator"]), async (req, res) => {
 // job card form's prefill lookup. Takes a match filter rather than a single
 // id so the overview can build every machine's jobs in one pass instead of
 // one round of queries per machine.
-async function buildQueueRows(match) {
+export async function buildQueueRows(match) {
   const pending = await PendingProduction.find(match)
     .populate({
       path: "itemId",
@@ -587,7 +607,7 @@ async function buildQueueRows(match) {
 //
 // Returns { byStockId, byRollId } -- both Maps to { lotNo, machineName, pool }
 // -- keyed by `${pool}|${stockId}` and by normalized rollId respectively.
-async function reelsInUseElsewhere(exceptPendingId) {
+export async function reelsInUseElsewhere(exceptPendingId) {
   const byStockId = new Map();
   const byRollId = new Map();
 
@@ -760,7 +780,7 @@ const round2 = (n) => Math.round(Number(n) * 100) / 100;
 //
 // Every deduction writes an OUTWARD MaterialStockLog line, the mirror of the
 // INWARD one an inward form would write.
-async function consumeAllottedRollMeters({ pendingProductionId, logRows, jobCardId, createdBy }) {
+export async function consumeAllottedRollMeters({ pendingProductionId, logRows, jobCardId, createdBy }) {
   const result = { deducted: 0, emptied: 0, meters: 0, unmatched: [] };
   if (!pendingProductionId || !Array.isArray(logRows) || logRows.length === 0) return result;
 
@@ -850,7 +870,7 @@ async function consumeAllottedRollMeters({ pendingProductionId, logRows, jobCard
 // Deducts the operator-reported usage from each Facestock/Adhesive/Release
 // Liner reel/drum recorded in the Material Stock dialog. Directly updates the
 // stock balance to the remaining kg entered by the operator.
-async function consumePoolUsage({ pool, rows, jobCardId, createdBy }) {
+export async function consumePoolUsage({ pool, rows, jobCardId, createdBy }) {
   const result = { deducted: 0, emptied: 0, used: 0, rows: [], limited: [] };
   if (!Array.isArray(rows) || rows.length === 0) return result;
 
@@ -946,7 +966,7 @@ async function consumePoolUsage({ pool, rows, jobCardId, createdBy }) {
 // still mid-entry) produces nothing -- there's no length to inward. The
 // generated Deckle ID is written back onto the row it came from (by index)
 // so the saved job card records which Deckle each row actually became.
-async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [], facestockUsage = [], adhesiveUsage = [], releaseUsage = [], location, jobCardId, createdBy }) {
+export async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [], facestockUsage = [], adhesiveUsage = [], releaseUsage = [], location, jobCardId, createdBy }) {
   const result = { rows: [], rowMeta: [], created: 0, meters: 0, resolvedProductCode: null };
   const labelStockId = pendingDoc?.itemId?._id || pendingDoc?.itemId;
   if (!labelStockId || !location || !Array.isArray(productionLog) || !productionLog.length) return result;
@@ -1129,15 +1149,30 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
     //     was lost. Match on the token and reuse it rather than minting a
     //     second Deckle for the same physical roll.
     let existingDeckleId = row.alreadyProduced && row.deckleId ? row.deckleId : "";
+    // Carried alongside existingDeckleId so rowMeta.stockId (see below -- used
+    // by the mobile app's Deckle print button) is populated on every replay
+    // path, not just a fresh create.
+    let existingStockId = null;
     if (!existingDeckleId && row.rowToken) {
       const priorDeckle = await MaterialStock.findOne({ productionRowToken: row.rowToken })
         .select("rollId")
         .lean();
-      if (priorDeckle) existingDeckleId = priorDeckle.rollId;
+      if (priorDeckle) {
+        existingDeckleId = priorDeckle.rollId;
+        existingStockId = priorDeckle._id;
+      }
     }
     if (existingDeckleId) {
+      if (!existingStockId) {
+        const doc = await MaterialStock.findOne({ rollId: existingDeckleId }).select("_id").lean();
+        existingStockId = doc?._id || null;
+      }
       result.rows.push(existingDeckleId);
-      result.rowMeta.push({ productCode: rowProductCode, sourceReels });
+      result.rowMeta.push({
+        productCode: rowProductCode,
+        sourceReels,
+        stockId: existingStockId ? String(existingStockId) : null,
+      });
       if (rowProductCode) result.resolvedProductCode = rowProductCode;
       continue;
     }
@@ -1158,8 +1193,9 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
     ]);
     const openingStock = bal[0]?.qty || 0;
 
+    let createdDeckle;
     try {
-      await MaterialStock.create({
+      createdDeckle = await MaterialStock.create({
         material: actualLabelStock._id,
         location,
         quantity: 1,
@@ -1184,7 +1220,7 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
           .lean();
         if (priorDeckle) {
           result.rows.push(priorDeckle.rollId);
-          result.rowMeta.push({ productCode: rowProductCode, sourceReels });
+          result.rowMeta.push({ productCode: rowProductCode, sourceReels, stockId: String(priorDeckle._id) });
           if (rowProductCode) result.resolvedProductCode = rowProductCode;
           continue;
         }
@@ -1208,7 +1244,7 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
     });
 
     result.rows.push(deckleId);
-    result.rowMeta.push({ productCode: rowProductCode, sourceReels });
+    result.rowMeta.push({ productCode: rowProductCode, sourceReels, stockId: String(createdDeckle._id) });
     result.created += 1;
     result.meters = round2(result.meters + meters);
     if (rowProductCode) result.resolvedProductCode = rowProductCode;
@@ -1223,7 +1259,7 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
 // fallback for the one hypothetical recipe that somehow doesn't (there isn't
 // one today, but nothing enforces it). Shared by the final bulk save below
 // and the per-row instant-produce endpoint right after it.
-async function resolveDeckleLocation(pendingDoc) {
+export async function resolveDeckleLocation(pendingDoc) {
   if (!pendingDoc?.allottedLayers) return "";
   for (const key of ["facestock", "facestock2", "adhesive", "adhesive2", "releaseLiner", "releaseLiner2"]) {
     const pick = pendingDoc.allottedLayers[key];
@@ -1251,7 +1287,7 @@ const POOL_PRIMARY_LAYER = { facestock: "facestock", adhesive: "adhesive", relea
 // a half-scanned combination (facestock in, adhesive/release still from the
 // SKU spec) isn't a real combination to report. Until the mount is complete
 // the caller just shows "pending".
-async function resolveScannedCombinationVariant({ baseLabelStock, pool, reel, mounted }) {
+export async function resolveScannedCombinationVariant({ baseLabelStock, pool, reel, mounted }) {
   if (!baseLabelStock) return null;
 
   const wanted = { facestock: null, adhesive: null, release: null };
@@ -1643,19 +1679,26 @@ router.post("/machine/jobcard/material/set-remaining", requireAuth, requireMachi
   }
 });
 
-router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
+// Extracted from POST /machine/jobcard/form so the JSON operator API's
+// POST /jobcard (routes/api/operatorApi.js) can reuse this exact
+// save/consume/produce pipeline instead of re-deriving it. Deliberately
+// takes no req/res -- every early exit (idempotent resubmit, allotment
+// gate, a reel already WIP elsewhere) and the final outcome are reported
+// back as a status object; callers decide what to do with it (the EJS
+// route below turns it into a flash+redirect, the bearer route turns it
+// into a JSON response).
+export async function saveMachineJobCard({ body, actorName }) {
+  const b = body;
+  const createdBy = actorName || "SYSTEM";
   try {
-    const b = req.body;
-
     // Idempotency: a resubmit of the same loaded page carries the same
     // token. If one already saved, don't create a second entry or deduct
-    // stock again -- just send them on to the records.
+    // stock again -- just report it as already-saved.
     const submissionToken = trim(b.submissionToken);
     if (submissionToken) {
       const already = await MachineJobCard.findOne({ submissionToken }).select("_id").lean();
       if (already) {
-        const savedFor = mongoose.isValidObjectId(b.pendingId) ? String(b.pendingId) : "new";
-        return res.redirect(`/sachiko/machine/jobcard/view?saved=${encodeURIComponent(savedFor)}`);
+        return { status: "duplicate", pendingId: mongoose.isValidObjectId(b.pendingId) ? String(b.pendingId) : "new" };
       }
     }
 
@@ -1675,10 +1718,11 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
         allottedLayers: pendingDoc.allottedLayers,
         allottedRollIds: pendingDoc.allottedRollIds,
       })) {
-        req.flash("notification", "Allot every raw material (Facestock / Adhesive / Release Liner) to this order before starting production.");
-        return res.redirect(
-          mongoose.isValidObjectId(b.machineId) ? `/sachiko/machine/${b.machineId}/queue` : "/sachiko/machine/queue"
-        );
+        return {
+          status: "gate-failed",
+          message: "Allot every raw material (Facestock / Adhesive / Release Liner) to this order before starting production.",
+          machineId: b.machineId,
+        };
       }
     }
 
@@ -1905,13 +1949,11 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
           }
         }
         if (clash) {
-          req.flash(
-            "notification",
-            `Reel ${clash.rollId || ""} is already running on job ${clash.lotNo || "(another order)"}${clash.machineName ? ` at ${clash.machineName}` : ""} — it can't be used here.`,
-          );
-          return res.redirect(
-            mongoose.isValidObjectId(b.machineId) ? `/sachiko/machine/${b.machineId}/queue` : "/sachiko/machine/queue",
-          );
+          return {
+            status: "wip-clash",
+            message: `Reel ${clash.rollId || ""} is already running on job ${clash.lotNo || "(another order)"}${clash.machineName ? ` at ${clash.machineName}` : ""} — it can't be used here.`,
+            machineId: b.machineId,
+          };
         }
       }
     }
@@ -1966,7 +2008,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
         pendingProductionId: mongoose.isValidObjectId(b.pendingId) ? b.pendingId : null,
         logRows: [...jobSetting, ...productionLog],
         jobCardId,
-        createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+        createdBy,
       });
     } catch (stockErr) {
       console.error("JOB CARD STOCK DEDUCTION ERROR:", stockErr);
@@ -1982,7 +2024,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
         pool: "facestock",
         rows: facestockUsage.map((r) => ({ stockId: r.stockId, used: r.mtrsUsed, remainingKg: r.remainingKg })),
         jobCardId,
-        createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+        createdBy,
       });
       // Fills in the rollId snapshot the create above couldn't (the reel
       // docs are only read inside consumePoolUsage itself) -- purely
@@ -2004,7 +2046,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
         pool: "adhesive",
         rows: adhesiveUsage.map((r) => ({ stockId: r.stockId, used: r.kgUsed, remainingKg: r.remainingKg })),
         jobCardId,
-        createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+        createdBy,
       });
       if (adhesiveConsumption.rows.length) {
         await MachineJobCard.updateOne(
@@ -2022,7 +2064,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
         pool: "release",
         rows: releaseUsage.map((r) => ({ stockId: r.stockId, used: r.mtrsUsed, remainingKg: r.remainingKg })),
         jobCardId,
-        createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+        createdBy,
       });
       if (releaseConsumption.rows.length) {
         await MachineJobCard.updateOne(
@@ -2052,7 +2094,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
         releaseUsage,
         location: deckleLocation,
         jobCardId,
-        createdBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
+        createdBy,
       });
       const updateSet = productionLog.reduce((set, _row, i) => {
         if (deckleProduction.rows[i]) set[`productionLog.${i}.deckleId`] = deckleProduction.rows[i];
@@ -2151,17 +2193,50 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
         ` Produced: ${deckleProduction.meters} mtrs as ${deckleProduction.created} Deckle${deckleProduction.created === 1 ? "" : "s"}` +
         `${ids.length ? ` (${ids.join(", ")})` : ""} — inwarded to Semi-Finished Stock.`;
     }
-    req.flash("notification", message);
-    const savedFor = mongoose.isValidObjectId(b.pendingId) ? String(b.pendingId) : "new";
-    res.redirect(`/sachiko/machine/jobcard/view?saved=${encodeURIComponent(savedFor)}`);
+
+    return {
+      status: "ok",
+      jobCardId,
+      pendingId: mongoose.isValidObjectId(b.pendingId) ? String(b.pendingId) : "new",
+      message,
+      consumption,
+      facestockConsumption,
+      adhesiveConsumption,
+      releaseConsumption,
+      deckleProduction,
+      productionProgress,
+    };
   } catch (err) {
     // Two submits of the same page racing past the pre-check both reach
     // create; the loser trips the unique submissionToken index. That's a
     // duplicate, not a failure.
     if (err?.code === 11000 && err?.keyPattern?.submissionToken) {
-      const savedFor = mongoose.isValidObjectId(req.body.pendingId) ? String(req.body.pendingId) : "new";
-      return res.redirect(`/sachiko/machine/jobcard/view?saved=${encodeURIComponent(savedFor)}`);
+      return { status: "duplicate", pendingId: mongoose.isValidObjectId(b.pendingId) ? String(b.pendingId) : "new" };
     }
+    throw err;
+  }
+}
+
+router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
+  try {
+    const result = await saveMachineJobCard({
+      body: req.body,
+      actorName: req.session?.authUser?.username || req.session?.authUser?.empName,
+    });
+
+    if (result.status === "duplicate") {
+      return res.redirect(`/sachiko/machine/jobcard/view?saved=${encodeURIComponent(result.pendingId)}`);
+    }
+    if (result.status === "gate-failed" || result.status === "wip-clash") {
+      req.flash("notification", result.message);
+      return res.redirect(
+        mongoose.isValidObjectId(result.machineId) ? `/sachiko/machine/${result.machineId}/queue` : "/sachiko/machine/queue",
+      );
+    }
+
+    req.flash("notification", result.message);
+    return res.redirect(`/sachiko/machine/jobcard/view?saved=${encodeURIComponent(result.pendingId)}`);
+  } catch (err) {
     console.error("JOB CARD CREATE ERROR:", err);
     req.flash("notification", "Failed to save production entry");
     res.redirect("back");

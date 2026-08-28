@@ -6,6 +6,7 @@ import connectDB from "./config/db.js";
 import fairdeskRoute from "./routes/fairdesk_route.js";
 import sachikoRoute from "./routes/sachiko/sachiko_route.js";
 import machineRoutes from "./routes/system/machine.js";
+import operatorApiRoutes from "./routes/api/operatorApi.js";
 import maintenanceRoutes from "./routes/system/maintenance.js";
 import facestockMasterRoutes from "./routes/system/facestockMaster.js";
 import familyMasterRoutes from "./routes/system/familyMaster.js";
@@ -36,6 +37,7 @@ import vendorItemBindingRoutes from "./routes/inventory/vendorItemBinding.js";
 import reorderRoutes from "./routes/inventory/reorder.js";
 import { requireAuth, requireRole } from "./middleware/auth.js";
 import { auditLogger, logAuthEvent } from "./middleware/auditLogger.js";
+import { authenticateOperator } from "./utils/operatorAuth.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import os from "os";
@@ -267,6 +269,11 @@ app.get("/check-session", (req, res) => {
   }
   return res.status(401).json({ authenticated: false });
 });
+
+/* JSON operator API for the Sachiko Operator mobile app -- bearer-token
+   authenticated (middleware/apiAuth.js), not session/CSRF based, so it must
+   sit here, exempt from CSRF the same way /check-session above is. */
+app.use("/sachiko/api/operator", operatorApiRoutes);
 
 /* Apply CSRF protection to ALL routes */
 app.use(csrfProtection);
@@ -738,59 +745,17 @@ app.post("/sachiko/operator/login", loginLimiter, async (req, res) => {
     });
   };
 
-  if (!operatorNick || !locationName || !password) {
-    return fail("Please fill in all three fields.", 400);
-  }
-
   try {
-    // Operators sign in with their nick name (empNickName), not the full
-    // name that's tedious to type on a floor terminal. A nick name isn't
-    // unique on its own, so match on nick name + location; where several
-    // operators at one unit share one, the password decides between them.
-    const nickCollapsed = operatorNick.replace(/\s+/g, " ");
-    const nickPattern = `^\\s*${escapeRegex(nickCollapsed).replace(/ /g, "\\s+")}\\s*$`;
-    const candidates = await Employee.find({
-      empNickName: { $regex: new RegExp(nickPattern, "i") },
-      isActive: true,
-    });
-    const isOperatorProfile = (emp) => String(emp.empProfile || "").trim().toUpperCase() === "OPERATOR";
-    // Operators first, so an operator sharing a nick name with a staff member
-    // at the same unit still gets in.
-    const atLocation = candidates
-      .filter((emp) => normalizeLocationName(emp.empLoc) === locationName)
-      .sort((a, b) => Number(isOperatorProfile(b)) - Number(isOperatorProfile(a)));
-
-    let employee = null;
-    for (const candidate of atLocation) {
-      if (await candidate.comparePassword(password)) {
-        employee = candidate;
-        break;
-      }
+    // Matching logic lives in utils/operatorAuth.js so the EJS portal here and
+    // the JSON operator API (POST /sachiko/api/operator/login) never drift
+    // apart -- see that file for the nick-name/location/password matching
+    // details this used to inline.
+    const result = await authenticateOperator({ operatorNick, location: req.body.location, password });
+    if (result.error) {
+      return fail(result.error, result.status || 401);
     }
 
-    if (!employee) {
-      return fail("Invalid nick name, location or password.");
-    }
-    // The profile itself is the gate here -- operators carry role "none" (no
-    // staff-portal access), which is exactly why this portal exists.
-    if (String(employee.empProfile || "").trim().toUpperCase() !== "OPERATOR") {
-      return fail("This login is for operators only. Please use the staff login.", 403);
-    }
-
-    const authUser = {
-      username: employee.empName,
-      empName: employee.empName,
-      profileCode: employee.empProfileCode,
-      role: "operator",
-      permissions: employee.permissions,
-      empId: employee.empId,
-      // The employee document _id, used to pull this operator's assigned jobs
-      // (PendingProduction.operatorId) on the work-queue landing page.
-      empObjId: String(employee._id),
-      empPhoto: employee.empPhoto,
-      empLoc: employee.empLoc,
-    };
-
+    const { authUser } = result;
     req.session.authUser = authUser;
     return req.session.save((err) => {
       if (err) {
