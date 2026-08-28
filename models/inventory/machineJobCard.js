@@ -62,6 +62,11 @@ const productionLogRowSchema = new mongoose.Schema(
     adRollId: { type: String, trim: true },
     rlRollId: { type: String, trim: true },
     deckleId: { type: String, trim: true },
+    // Client-minted idempotency token for this row (see
+    // MaterialStock.productionRowToken) -- carried so an instant-produced
+    // Deckle is matched and never remade on the final save. Kept on the card
+    // for traceability if a produced/not-produced mismatch ever needs chasing.
+    rowToken: { type: String, trim: true },
     // The Label Stock Product Code this deckle was actually produced as -- the
     // order's own SKU, or an "-A"/"-B" variant when the scanned reel
     // combination differed from it (utils/labelStockVariant.js).

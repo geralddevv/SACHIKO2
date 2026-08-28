@@ -114,6 +114,35 @@
       font-weight: 600;
       color: #64748b;
     }
+
+    /* ---- Deckle Detail dialog: variant meta + per-reel table ---- */
+    .ddx-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .ddx-chip-code {
+      background: #f0f7ff; border: 1px solid #d7e6f5; color: #03365a;
+      font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 7px;
+    }
+    .ddx-chip-muted { color: #64748b; font-size: 12.5px; font-weight: 600; }
+    .ddx-table-wrap { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .ddx-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .ddx-table th {
+      text-align: left; background: #f8fafc; color: #64748b; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.3px; font-size: 10.5px;
+      padding: 7px 10px; border-bottom: 1px solid #e2e8f0;
+    }
+    .ddx-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .ddx-table tr:last-child td { border-bottom: none; }
+    .ddx-table tr.ddx-group-start td { border-top: 2px solid #e6edf5; }
+    .ddx-layer { color: #475569; font-weight: 600; white-space: nowrap; }
+    .ddx-layer.is-cont { color: #cbd5e1; }
+    .ddx-reel { font-weight: 700; color: #03365a; }
+    .ddx-seq { color: #94a3b8; font-weight: 600; margin-left: 6px; font-size: 11px; }
+    .ddx-tag {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 999px; letter-spacing: 0.2px;
+    }
+    .ddx-tag-swap { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
+    .ddx-tag-final { background: #dcfce7; border: 1px solid #bbf7d0; color: #166534; }
+    .ddx-muted-dash { color: #cbd5e1; }
   </style>
 
   <div class="indi-head">
@@ -215,7 +244,7 @@
      /sachiko/machine/jobcard/view. -->
 <div class="logout-modal" id="deckleDetailDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deckleDetailTitle"
-    style="width: min(560px, 95vw); padding: 0; border-radius: 14px;">
+    style="width: min(1000px, 96vw); padding: 0; border-radius: 14px;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
       <h2 id="deckleDetailTitle">Deckle Detail</h2>
       <button class="dialog-close-btn" type="button" onclick="closeModal('deckleDetailDialog')" aria-label="Close">×</button>
@@ -299,17 +328,9 @@
           editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
           editBtn.addEventListener("click", () => openEditDialog(row));
 
-          const deleteBtn = document.createElement("button");
-          deleteBtn.className = "loc-btn";
-          deleteBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#d9534f;";
-          deleteBtn.title = "Delete Reel";
-          deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-          deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.rollId));
-
           wrap.appendChild(viewBtn);
           wrap.appendChild(printBtn);
           wrap.appendChild(editBtn);
-          wrap.appendChild(deleteBtn);
           return wrap;
         },
       },
@@ -374,27 +395,60 @@
 
   function openDeckleDetailDialog(row) {
     document.getElementById("deckleDetailTitle").textContent = `Deckle Detail — ${row.rollId || ""}`;
-    const byPool = { facestock: [], adhesive: [], release: [] };
-    (row.sourceReels || []).forEach((r) => { if (byPool[r.pool]) byPool[r.pool].push(r.rollId); });
 
-    const reelRows = Object.keys(POOL_LABEL).map((p) => {
-      if (!byPool[p].length) return "";
-      return `<div style="display:flex;gap:10px;padding:5px 0;border-top:1px solid #f1f5f9;">
-        <span style="flex:0 0 120px;color:#64748b;font-weight:600;font-size:12.5px;">${POOL_LABEL[p]}</span>
-        <span style="font-weight:700;color:#03365a;font-size:13px;">${byPool[p].map(escHtml).join(", ")}${byPool[p].length > 1 ? ' <span style="color:#b45309;">(swapped mid-run)</span>' : ""}</span>
-      </div>`;
-    }).join("");
+    // Group the source reels by pool, keeping the order they were mounted in.
+    // Within a pool the LAST reel is the one that ran the web to the finish;
+    // any earlier reel there was swapped out mid-run (it ran short / was
+    // changed) -- so the "swapped mid-run" tag belongs on those earlier
+    // reels, not on the whole pool line and not on the final reel.
+    const byPool = { facestock: [], adhesive: [], release: [] };
+    (row.sourceReels || []).forEach((r) => { if (byPool[r.pool]) byPool[r.pool].push(r); });
+
+    const bodyRows = [];
+    Object.keys(POOL_LABEL).forEach((p) => {
+      const reels = byPool[p];
+      if (!reels.length) return;
+      const multi = reels.length > 1;
+      reels.forEach((reel, i) => {
+        const isFirst = i === 0;
+        const isFinal = i === reels.length - 1;
+        const swappedOut = multi && !isFinal;
+        let statusCell = '<span class="ddx-muted-dash">—</span>';
+        if (swappedOut) statusCell = '<span class="ddx-tag ddx-tag-swap">Swapped mid-run</span>';
+        else if (multi && isFinal) statusCell = '<span class="ddx-tag ddx-tag-final">Ran to finish</span>';
+        bodyRows.push(`
+          <tr${isFirst && bodyRows.length ? ' class="ddx-group-start"' : ""}>
+            <td><span class="ddx-layer${isFirst ? "" : " is-cont"}">${isFirst ? escHtml(POOL_LABEL[p]) : "&#8942;"}</span></td>
+            <td>
+              <span class="ddx-reel">${escHtml(reel.rollId || "—")}</span>
+              ${multi ? `<span class="ddx-seq">reel ${i + 1} of ${reels.length}</span>` : ""}
+            </td>
+            <td>${reel.spec ? escHtml(reel.spec) : '<span class="ddx-muted-dash">—</span>'}</td>
+            <td style="text-align:right;white-space:nowrap;">${reel.kgUsed != null ? escHtml(Number(reel.kgUsed).toLocaleString("en-IN", { maximumFractionDigits: 2 })) + " kg" : '<span class="ddx-muted-dash">—</span>'}</td>
+            <td>${statusCell}</td>
+            <td>${reel.remark ? escHtml(reel.remark) : '<span class="ddx-muted-dash">—</span>'}</td>
+          </tr>
+        `);
+      });
+    });
+
+    const reelTable = bodyRows.length
+      ? `<div class="ddx-table-wrap">
+          <table class="ddx-table">
+            <thead><tr><th>Layer</th><th>Reel ID</th><th>Spec</th><th style="text-align:right;">Kg Used</th><th>Status</th><th>Remark</th></tr></thead>
+            <tbody>${bodyRows.join("")}</tbody>
+          </table>
+        </div>`
+      : '<div style="color:#94a3b8;font-size:12.5px;padding:5px 0;">No reel detail recorded for this Deckle.</div>';
 
     document.getElementById("deckleDetailBody").innerHTML = `
-      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:14px;">
-        <span style="background:#f0f7ff;border:1px solid #d7e6f5;color:#03365a;font-weight:700;font-size:13px;padding:4px 10px;border-radius:7px;">
-          ${escHtml(row.productCode || "—")}
-        </span>
-        ${row.reelMtrs != null ? `<span style="color:#64748b;font-size:12.5px;font-weight:600;">${escHtml(row.reelMtrs)} mtrs</span>` : ""}
-        ${row.lotNo ? `<span style="color:#64748b;font-size:12.5px;font-weight:600;">Lot ${escHtml(row.lotNo)}</span>` : ""}
+      <div class="ddx-meta">
+        <span class="ddx-chip-code">${escHtml(row.productCode || "—")}</span>
+        ${row.reelMtrs != null ? `<span class="ddx-chip-muted">${escHtml(row.reelMtrs)} mtrs</span>` : ""}
+        ${row.lotNo ? `<span class="ddx-chip-muted">Lot ${escHtml(row.lotNo)}</span>` : ""}
       </div>
-      <div class="dialog-field-label" style="margin-bottom:2px;">Raw materials used</div>
-      ${reelRows || '<div style="color:#94a3b8;font-size:12.5px;padding:5px 0;">No reel detail recorded for this Deckle.</div>'}
+      <div class="dialog-field-label" style="margin-bottom:8px;">Raw materials used</div>
+      ${reelTable}
       ${row.joints ? `<div style="margin-top:12px;color:#64748b;font-size:12.5px;"><strong>Joints:</strong> ${escHtml(row.joints)}</div>` : ""}
     `;
     openModal("deckleDetailDialog");

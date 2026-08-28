@@ -75,7 +75,10 @@
         formatter: (cell) => (cell.getValue() != null ? `<span style="font-weight:700; color:#044A78;">${cell.getValue()}mm</span>` : `<span style="color:#9ca3af;">—</span>`),
       },
       { title: "Running Mtrs", field: "runningMeters", hozAlign: "right", headerFilter: "input", headerFilterPlaceholder: "Mtrs",
-        formatter: (cell) => fmtMtrs(cell.getValue()) },
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return row.runningMetersText ? row.runningMetersText : fmtMtrs(cell.getValue());
+        } },
       { title: "Qty", field: "quantity", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#" },
     ],
   });

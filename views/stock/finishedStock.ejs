@@ -308,15 +308,7 @@
           editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
           editBtn.addEventListener("click", () => openEditDialog(row));
 
-          const deleteBtn = document.createElement("button");
-          deleteBtn.className = "loc-btn";
-          deleteBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#d9534f;";
-          deleteBtn.title = "Delete Roll";
-          deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-          deleteBtn.addEventListener("click", () => openDeleteDialog(row._id, row.rollId));
-
           wrap.appendChild(editBtn);
-          wrap.appendChild(deleteBtn);
           return wrap;
         },
       },

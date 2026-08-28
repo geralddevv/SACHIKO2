@@ -471,6 +471,7 @@ export async function produceDeckle({ labelStock, location, reelMtrs, lotNo, siz
     rate: numOrUndef(rate),
     rollId: deckleId,
     remarks: remarks?.trim() || undefined,
+    producedVia: "assign",
     // Provenance, so sending the order back to Pending can un-make this reel
     // and only this reel -- see dissolveDeckle below.
     producedFor: producedFor && mongoose.isValidObjectId(producedFor) ? producedFor : undefined,

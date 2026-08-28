@@ -397,10 +397,16 @@ async function buildQueueRows(match) {
     const item = p.itemId || {};
     const qty = Number(p.quantity) || 0;
     const balanceQty = Math.max(qty - (Number(p.dispatchedQuantity) || 0), 0);
-    // Sachiko's Label Stock orders already collect No. of Rolls/Running
-    // Meters directly at order entry -- unlike FAIRTECH, nothing here is
-    // computed from a die.
-    const rolls = p.noOfRolls != null ? Number(p.noOfRolls) : null;
+    // The machine floor laminates one deckle per Production Log row, so the
+    // job's target is the DECKLE count -- for a plain order that's its Qty,
+    // for a deckle batch it's the planner-entered Deckle Qty (stored on the
+    // batch as noOfRolls). A plain order's own noOfRolls is the sales order's
+    // finished-roll count, a downstream slitting figure that never drives the
+    // machine queue or the job card.
+    const deckleTarget = p.isDeckleBatch
+      ? (p.noOfRolls != null ? Number(p.noOfRolls) : null)
+      : (p.quantity != null ? Number(p.quantity) : null);
+    const rolls = deckleTarget;
     const allottedRolls = p.allottedRolls != null ? p.allottedRolls : null;
     // Rolls this order's Job Cards have already produced (POST /machine/
     // jobcard/form accumulates one per Production Log row). The balance is
@@ -532,6 +538,11 @@ async function buildQueueRows(match) {
       rollType: item.rollType || "—",
       deckleSize: p.deckleSize ?? null,
       runningMeters: p.runningMeters ?? null,
+      // Free-text run spec set on Deckle Set (e.g. "1000 MTRS OF 5 ROLL") --
+      // shown in place of the bare number where present, same as the Deckle
+      // Queue / Assign Production pages.
+      runningMetersText: p.runningMetersText || "",
+      deckleTarget: deckleTarget != null ? deckleTarget : null,
       rolls: rolls != null ? String(rolls) : "—",
       allottedRolls: allottedRolls != null ? String(allottedRolls) : "—",
       balanceRolls: balanceRolls != null ? String(balanceRolls) : "—",
@@ -1110,9 +1121,22 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
     // Already inwarded to Semi-Finished Stock the instant its Stop was punched
     // (POST /machine/jobcard/log/produce). Don't re-produce it -- but the
     // variant + reel trace above are still resolved so the saved job card row
-    // carries them.
-    if (row.alreadyProduced && row.deckleId) {
-      result.rows.push(row.deckleId);
+    // carries them. Two ways a row can already be produced:
+    //   - the client marked it so (alreadyProduced + the system deckleId it
+    //     got back), or
+    //   - it isn't marked, but a Deckle carrying this row's idempotency token
+    //     exists anyway -- the instant call committed it and only its response
+    //     was lost. Match on the token and reuse it rather than minting a
+    //     second Deckle for the same physical roll.
+    let existingDeckleId = row.alreadyProduced && row.deckleId ? row.deckleId : "";
+    if (!existingDeckleId && row.rowToken) {
+      const priorDeckle = await MaterialStock.findOne({ productionRowToken: row.rowToken })
+        .select("rollId")
+        .lean();
+      if (priorDeckle) existingDeckleId = priorDeckle.rollId;
+    }
+    if (existingDeckleId) {
+      result.rows.push(existingDeckleId);
       result.rowMeta.push({ productCode: rowProductCode, sourceReels });
       if (rowProductCode) result.resolvedProductCode = rowProductCode;
       continue;
@@ -1134,18 +1158,39 @@ async function produceDecklesFromLog({ pendingDoc, productionLog, jobSetting = [
     ]);
     const openingStock = bal[0]?.qty || 0;
 
-    await MaterialStock.create({
-      material: actualLabelStock._id,
-      location,
-      quantity: 1,
-      reelMtrs: meters,
-      size: trim(pendingDoc.paperSize),
-      joints,
-      lotNo: trim(pendingDoc.lotNo),
-      rollId: deckleId,
-      producedFor: pendingDoc._id,
-      sourceReels,
-    });
+    try {
+      await MaterialStock.create({
+        material: actualLabelStock._id,
+        location,
+        quantity: 1,
+        reelMtrs: meters,
+        size: trim(pendingDoc.paperSize),
+        joints,
+        lotNo: trim(pendingDoc.lotNo),
+        rollId: deckleId,
+        producedFor: pendingDoc._id,
+        sourceReels,
+        productionRowToken: row.rowToken || undefined,
+        producedVia: "jobcard",
+      });
+    } catch (createErr) {
+      // Lost the race to a concurrent instant-produce of this same row (its
+      // Deckle just landed under the shared idempotency token). Reuse it --
+      // the generated deckleId above is simply abandoned, same as any other
+      // failed create.
+      if (createErr?.code === 11000 && row.rowToken) {
+        const priorDeckle = await MaterialStock.findOne({ productionRowToken: row.rowToken })
+          .select("rollId")
+          .lean();
+        if (priorDeckle) {
+          result.rows.push(priorDeckle.rollId);
+          result.rowMeta.push({ productCode: rowProductCode, sourceReels });
+          if (rowProductCode) result.resolvedProductCode = rowProductCode;
+          continue;
+        }
+      }
+      throw createErr;
+    }
 
     const traceNote = `as ${rowProductCode || baseLabelStock.productCode}${sourceReels.length ? ` from ${reelSummary(sourceReels)}` : ""}`;
     await MaterialStockLog.create({
@@ -1195,17 +1240,16 @@ async function resolveDeckleLocation(pendingDoc) {
 const POOL_PRIMARY_LAYER = { facestock: "facestock", adhesive: "adhesive", release: "releaseLiner" };
 
 // Resolve which Label Stock the CURRENTLY MOUNTED combination (the reel just
-// scanned for `pool` + the reels already on for the other pools) actually
-// produces -- creating/reusing its "-A"/"-B"/... Product Code variant when
-// the combination differs from the order's own SKU spec on a soft field
-// (vendor, size, ...). Same machinery the Deckle producer uses
-// (resolveActualLabelStock).
+// scanned for `pool` + the reels already on for the other pools) WOULD
+// produce -- its own SKU, or a "-A"/"-B"/... Product Code variant when the
+// combination differs from the order's SKU spec on a soft field (vendor,
+// size, ...). Read-only: resolveActualLabelStock is called with dryRun, so
+// this scan-time check (fires on every scan/blur) never writes a variant
+// row -- that happens for real at produce time (produceDecklesFromLog).
 //
-// Deliberately only resolves once EVERY pool the recipe needs has a reel.
-// Resolving a half-scanned combination (facestock in, adhesive/release still
-// from the SKU spec) would mint a throwaway variant on each of the operator's
-// three scans -- "-A" after the first, "-B" after the second, "-C" after the
-// third -- for what is really one combination. Until the mount is complete
+// Deliberately only resolves once EVERY pool the recipe needs has a reel --
+// a half-scanned combination (facestock in, adhesive/release still from the
+// SKU spec) isn't a real combination to report. Until the mount is complete
 // the caller just shows "pending".
 async function resolveScannedCombinationVariant({ baseLabelStock, pool, reel, mounted }) {
   if (!baseLabelStock) return null;
@@ -1233,8 +1277,11 @@ async function resolveScannedCombinationVariant({ baseLabelStock, pool, reel, mo
     .filter((p) => wanted[p])
     .map((p) => ({ layerKey: POOL_PRIMARY_LAYER[p], meta: LAYER_META[POOL_PRIMARY_LAYER[p]], reel: wanted[p] }));
 
-  const actual = await resolveActualLabelStock(baseLabelStock, resolvedLayers);
-  const isVariant = String(actual._id) !== String(baseLabelStock._id);
+  // dryRun: this is a scan-time validation check that fires on every scan and
+  // blur -- it must not write a variant Product Code row. The real row is
+  // minted later, at produce time (produceDecklesFromLog).
+  const actual = await resolveActualLabelStock(baseLabelStock, resolvedLayers, { dryRun: true });
+  const isVariant = Boolean(actual.__dryRun) || String(actual._id) !== String(baseLabelStock._id);
   return {
     productCode: actual.productCode || baseLabelStock.productCode,
     skuCode: actual.skuCode || baseLabelStock.skuCode,
@@ -1251,8 +1298,9 @@ async function resolveScannedCombinationVariant({ baseLabelStock, pool, reel, mo
 //     (getEligibleRawMaterials' validStockIds).
 //   - the reel must not already be WIP on another still-open job -- one
 //     physical reel can't feed two machines (HARD stop / blocking alert).
-//   - the resulting facestock+adhesive+release combination is resolved to its
-//     real Product Code right now, minting the "-A"/"-B" variant if new.
+//   - the resulting facestock+adhesive+release combination is resolved to the
+//     Product Code it would produce (read-only -- the "-A"/"-B" variant row is
+//     minted for real only at produce time, not by this check).
 router.post("/machine/jobcard/material/check", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
   try {
     const { pendingId, pool, rollId, mounted } = req.body || {};
@@ -1388,6 +1436,11 @@ router.post("/machine/jobcard/mark-in-use", requireAuth, requireMachineFloor, cr
 // job card id prefix. The final save then skips re-producing any row this
 // endpoint already inwarded -- see productionLog's `alreadyProduced` in
 // POST /machine/jobcard/form below -- so it's recorded once, not twice.
+//
+// Idempotent on the row's `rowToken` (MaterialStock.productionRowToken): a
+// retried call whose first response was lost, and the final save if the row
+// never came back marked produced, both match the existing Deckle on that
+// token and reuse it instead of making a duplicate.
 router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
   try {
     const b = req.body;
@@ -1397,6 +1450,28 @@ router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, cr
     const meters = numOrUndef(b.meters);
     if (!meters || meters <= 0) {
       return res.status(400).json({ success: false, message: "Enter the produced metres first." });
+    }
+
+    // Idempotent replay: a Deckle carrying this row's token already exists,
+    // so the first attempt committed and only its response was lost. Hand
+    // back the same Deckle instead of inwarding a second one.
+    const rowToken = trim(b.rowToken) || undefined;
+    if (rowToken) {
+      const priorDeckle = await MaterialStock.findOne({ productionRowToken: rowToken })
+        .select("rollId reelMtrs location material sourceReels")
+        .populate({ path: "material", select: "productCode" })
+        .lean();
+      if (priorDeckle) {
+        return res.json({
+          success: true,
+          deckleId: priorDeckle.rollId,
+          meters: Number(priorDeckle.reelMtrs) || 0,
+          location: priorDeckle.location || "",
+          productCode: priorDeckle.material?.productCode || "",
+          sourceReels: priorDeckle.sourceReels || [],
+          replayed: true,
+        });
+      }
     }
 
     const pendingDoc = await PendingProduction.findById(b.pendingId)
@@ -1430,6 +1505,7 @@ router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, cr
       rlRollId: rl,
       materialsUsed,
       deckleId: "",
+      rowToken,
       startMtrs: numOrUndef(b.startMtrs),
       stopMtrs: numOrUndef(b.stopMtrs),
       meters,
@@ -1448,6 +1524,27 @@ router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, cr
     const deckleId = production.rows[0];
     if (!deckleId) {
       return res.status(400).json({ success: false, message: "Couldn't produce a Deckle for this row." });
+    }
+
+    // Firm the reel reservation: every reel this Deckle actually consumed is
+    // now locked to this order, whether or not the scan-time mark-in-use call
+    // landed. Released only when the order finishes (final Save) or is sent
+    // back to Pending. Best-effort -- a hiccup here never fails the produce.
+    try {
+      const addToSet = {};
+      for (const sr of production.rowMeta?.[0]?.sourceReels || []) {
+        if (!sr?.pool || !POOL_MODELS[sr.pool] || !mongoose.isValidObjectId(sr.stockId)) continue;
+        const key = `liveMaterialInUse.${sr.pool}`;
+        // ObjectId, to match POST /machine/jobcard/mark-in-use -- a Mixed
+        // array would otherwise hold the same reel as both a string and an
+        // ObjectId and $addToSet wouldn't dedupe them.
+        (addToSet[key] ||= { $each: [] }).$each.push(new mongoose.Types.ObjectId(String(sr.stockId)));
+      }
+      if (Object.keys(addToSet).length) {
+        await PendingProduction.updateOne({ _id: b.pendingId }, { $addToSet: addToSet });
+      }
+    } catch (lockErr) {
+      console.error("JOB CARD INSTANT DECKLE LOCK ERROR:", lockErr);
     }
 
     res.json({
@@ -1488,6 +1585,12 @@ router.post("/machine/jobcard/material/set-remaining", requireAuth, requireMachi
     if (!Number.isFinite(remaining) || remaining < 0) {
       return res.status(400).json({ success: false, message: "Enter a valid non-negative kg amount." });
     }
+    // Mandatory -- why this reel is coming off the job mid-run. Checked here
+    // too, not just client-side, so the swap is never recorded without one.
+    const reason = trim(req.body?.reason).slice(0, 300);
+    if (reason.length < 3) {
+      return res.status(400).json({ success: false, message: "Give a reason for taking this reel off the job." });
+    }
 
     const pendingDoc = await PendingProduction.findById(pendingId).select("allottedLayers itemId").lean();
     if (!pendingDoc) {
@@ -1527,6 +1630,7 @@ router.post("/machine/jobcard/material/set-remaining", requireAuth, requireMachi
       usedKg: row.used,
       remainingKg: row.remainingKg,
       emptied: row.remainingKg <= 0,
+      reason,
       swappedAt: new Date(),
       swappedBy: createdBy,
     };
@@ -1563,7 +1667,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     let pendingDoc = null;
     if (mongoose.isValidObjectId(b.pendingId)) {
       pendingDoc = await PendingProduction.findById(b.pendingId)
-        .select("allottedRollIds allottedLayers itemId paperSize lotNo materialSwapLog noOfRolls producedRolls")
+        .select("allottedRollIds allottedLayers itemId paperSize lotNo materialSwapLog noOfRolls quantity isDeckleBatch producedRolls")
         .populate({ path: "itemId", select: "rollType" })
         .lean();
       if (!pendingDoc || !hasStartableAllotment({
@@ -1706,6 +1810,11 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     // system-issued deckleId already has its Deckle inwarded to Semi Finished
     // Stock, so produceDecklesFromLog below must not do it again.
     const logInstantProduced = toArray(b.logInstantProduced);
+    // Per-row idempotency token (see MaterialStock.productionRowToken) -- lets
+    // produceDecklesFromLog below reuse a Deckle the instant-produce call
+    // already inwarded even when this row didn't come back marked
+    // `alreadyProduced` (its response was lost).
+    const logRowToken = toArray(b.logRowToken);
     const logMaterialsUsed = toArray(b.logMaterialsUsed);
     const parseMaterialsUsed = (raw) => {
       try {
@@ -1744,6 +1853,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
           adRollId: ad,
           rlRollId: rl,
           deckleId: rowDeckleId,
+          rowToken: trim(logRowToken[i]) || undefined,
           materialsUsed: parseMaterialsUsed(logMaterialsUsed[i]),
           alreadyProduced: trim(logInstantProduced[i]) === "1" && Boolean(rowDeckleId),
           startMtrs: numOrUndef(logStartMtrs[i]),
@@ -1971,18 +2081,24 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     // nothing left to add.
     //
     // Only stamp producedAt -- which takes the order off every machine /
-    // operator queue -- once the running total reaches the ordered roll
-    // count. Producing fewer than ordered (the operator switched to
-    // another job mid-order) leaves producedAt unset, so the order stays
-    // on the queue showing its balance still to run. An order with no
-    // roll target recorded closes on the first save, as before.
+    // operator queue -- once the running total of deckles laminated reaches
+    // this job's DECKLE target: a plain order's Qty, or a deckle batch's
+    // planner-entered Deckle Qty (stored as noOfRolls). Deliberately NOT a
+    // plain order's own noOfRolls -- that's the sales order's finished-roll
+    // count for the downstream slitting step, always >= the deckle count.
+    // Producing fewer than the target (the operator switched to another job
+    // mid-order) leaves producedAt unset, so the order stays on the queue
+    // showing its balance still to run. An order with no target recorded
+    // closes on the first save, as before.
     let productionProgress = null;
     if (mongoose.isValidObjectId(b.pendingId)) {
       try {
         const rollsThisSession = productionLog.filter((r) => Number(r.meters) > 0).length;
         const priorProduced = Number(pendingDoc?.producedRolls) || 0;
         const totalProduced = priorProduced + rollsThisSession;
-        const requiredRolls = Number(pendingDoc?.noOfRolls);
+        const requiredRolls = Number(
+          pendingDoc?.isDeckleBatch ? pendingDoc?.noOfRolls : pendingDoc?.quantity,
+        );
         const hasTarget = Number.isFinite(requiredRolls) && requiredRolls > 0;
         const complete = !hasTarget || totalProduced >= requiredRolls;
         const update = {
@@ -2001,7 +2117,7 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     if (productionProgress && productionProgress.hasTarget && !productionProgress.complete) {
       const remaining = Math.max(productionProgress.requiredRolls - productionProgress.totalProduced, 0);
       message +=
-        ` Job switch: ${productionProgress.totalProduced} of ${productionProgress.requiredRolls} roll` +
+        ` Job switch: ${productionProgress.totalProduced} of ${productionProgress.requiredRolls} deckle` +
         `${productionProgress.requiredRolls === 1 ? "" : "s"} produced — ${remaining} still pending,` +
         ` order kept on the queue.`;
     }

@@ -45,6 +45,15 @@ const pendingProductionSchema = new mongoose.Schema(
     // roll math, since Label Stock orders already collect these directly.
     paperSize: { type: String },
     runningMeters: { type: Number },
+    // Deckle batches let the planner type a free-form run spec here instead of
+    // a bare number (e.g. "1000 MTRS OF 5 ROLL"). When set, this is what the
+    // deckle pages show; `runningMeters` still holds the leading number parsed
+    // out of it (or the member sum) so numeric code keeps working.
+    runningMetersText: { type: String, trim: true },
+    // Deckle Set dialog splits the run into the length of ONE deckle web
+    // (deckleRunningMeters) and the whole job's finished label length across
+    // all rolls slit off it (runningMeters above = "Total Running Meters").
+    deckleRunningMeters: { type: Number },
     noOfRolls: { type: Number },
 
     // Set by GET/POST /sachiko/labels/production/deckle-set -- the mother
@@ -163,6 +172,10 @@ const pendingProductionSchema = new mongoose.Schema(
           usedKg: { type: Number },
           remainingKg: { type: Number },
           emptied: { type: Boolean },
+          // Why the operator took this reel off mid-job -- mandatory, entered
+          // in the "How much is left?" dialog (jobCardForm.ejs). Kept so a
+          // supervisor can see the reason a reel was swapped before it ran out.
+          reason: { type: String, trim: true },
           swappedAt: { type: Date, default: Date.now },
           swappedBy: { type: String },
         },

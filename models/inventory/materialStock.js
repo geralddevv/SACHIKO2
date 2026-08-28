@@ -106,6 +106,40 @@ const materialStockSchema = new mongoose.Schema(
       ref: "PendingProduction",
       index: { sparse: true },
     },
+    // Idempotency key for the machine job card's production path -- one stable
+    // token per Production Log row, generated client-side and carried on BOTH
+    // the instant-produce call (POST /machine/jobcard/log/produce, fired the
+    // moment Stop is punched) and the final Job Card save. If the instant call
+    // commits this Deckle but its response is lost, the row stays "not
+    // produced" client-side; the retry -- and produceDecklesFromLog on the
+    // final save -- then match on this token and reuse the Deckle already
+    // inwarded instead of minting a duplicate. Sparse + unique: legacy Deckles
+    // and the Assign Production path (produceDeckle) carry nothing.
+    productionRowToken: {
+      type: String,
+      trim: true,
+      index: { unique: true, sparse: true },
+    },
+    // How this Deckle came to exist, so the two reversal paths don't step on
+    // each other:
+    //   "assign"  -- utils/labelStockProduction.js produceDeckle (Assign &
+    //                Continue): raw material WAS allocated + deducted with
+    //                "allocated to Deckle" ledger lines, so dissolveDeckle can
+    //                fully un-make it and sending the order back to Pending is
+    //                allowed.
+    //   "jobcard" -- routes/system/machine.js produceDecklesFromLog (a machine
+    //                Job Card's Production Log row, instant on Stop or on final
+    //                Save): raw is only reconciled at final Save, so a Deckle
+    //                sitting here with the card not yet saved has no raw
+    //                movement to reverse -- unassign is blocked instead (the
+    //                operator finishes the card), and it isn't fed to
+    //                dissolveDeckle.
+    // Unset on Deckles created before this field existed -- treated as "assign"
+    // by the reversal, matching how those were produced.
+    producedVia: {
+      type: String,
+      enum: ["assign", "jobcard"],
+    },
   },
   { timestamps: true },
 );

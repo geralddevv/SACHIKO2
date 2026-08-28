@@ -194,14 +194,8 @@
   const EMPTY_ROW = {
     userLocation: "",
     dispatchAddress: "",
-    selfDispatch: "",
-    transportName: "",
-    transportContact: "",
-    dropLocation: "",
-    dropLocation1: "",
     deliveryMode: "",
     deliveryLocation: "",
-    deliveryLocation1: "",
     vendorPayment: "",
   };
 
@@ -211,21 +205,15 @@
     return {
       userLocation: get("userLocation"),
       dispatchAddress: get("dispatchAddress"),
-      selfDispatch: get("selfDispatch"),
-      transportName: get("transportName"),
-      transportContact: get("transportContact"),
-      dropLocation: get("dropLocation"),
-      dropLocation1: get("dropLocation1"),
       deliveryMode: get("deliveryMode"),
       deliveryLocation: get("deliveryLocation"),
-      deliveryLocation1: get("deliveryLocation1"),
       vendorPayment: get("vendorPayment"),
     };
   }
 
-  // Build the per-location block (location + address + per-location pick up details).
+  // Build the per-location block (location + address + per-location pick up details:
+  // pick up mode, pick up location and payment).
   function buildRowHtml(i, v) {
-    const isSelf = v.selfDispatch === "Self Dispatch";
     const sel = (val, opt) => (val === opt ? "selected" : "");
     return `
       <div class="location-row">
@@ -240,37 +228,18 @@
         <div class="loc-dispatch">
           <span class="loc-title">Pick Up Details — Location ${i + 1}</span>
           <div class="loc-fields">
-            <select class="loc-dispatch-mode form-control select-tag" aria-label="Pick Up Type for location ${i + 1}">
-              <option value="TRANSPORT" ${isSelf ? "" : "selected"}>Transport</option>
-              <option value="SELF" ${isSelf ? "selected" : ""}>Self Pick Up</option>
+            <select class="form-control select-tag" name="locationDetails[${i}][deliveryMode]">
+              <option value="">Pick Up Mode</option>
+              <option value="DOOR" ${sel(v.deliveryMode, "DOOR")}>DOOR</option>
+              <option value="GODOWN" ${sel(v.deliveryMode, "GODOWN")}>GODOWN</option>
             </select>
-            <input type="hidden" class="loc-self-dispatch" name="locationDetails[${i}][selfDispatch]" value="${isSelf ? "Self Dispatch" : ""}" />
-            <div class="loc-transport" style="${isSelf ? "display:none;" : ""}">
-              <input type="text" class="form-control input-tag" name="locationDetails[${i}][transportName]"
-                placeholder="Transport Name" value="${escapeAttr(v.transportName.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" />
-              <input type="text" class="form-control input-tag loc-transport-contact" name="locationDetails[${i}][transportContact]"
-                placeholder="Transport Contact" value="${escapeAttr(v.transportContact)}" />
-              <input type="text" class="form-control input-tag" name="locationDetails[${i}][dropLocation]"
-                placeholder="Drop Location 1" value="${escapeAttr(v.dropLocation.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" />
-              <input type="text" class="form-control input-tag" name="locationDetails[${i}][dropLocation1]"
-                placeholder="Drop Location 2" value="${escapeAttr(v.dropLocation1.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" />
-              <select class="form-control select-tag" name="locationDetails[${i}][deliveryMode]">
-                <option value="">Pick Up Mode</option>
-                <option value="DOOR" ${sel(v.deliveryMode, "DOOR")}>DOOR</option>
-                <option value="GODOWN" ${sel(v.deliveryMode, "GODOWN")}>GODOWN</option>
-              </select>
-              <input type="text" class="form-control input-tag" name="locationDetails[${i}][deliveryLocation]"
-                placeholder="Pick Up Loc" value="${escapeAttr(v.deliveryLocation.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" />
-              <select class="form-control select-tag" name="locationDetails[${i}][vendorPayment]">
-                <option value="">Payment</option>
-                <option value="PAY" ${sel(v.vendorPayment, "PAY")}>PAY</option>
-                <option value="TO PAY" ${sel(v.vendorPayment, "TO PAY")}>TO PAY</option>
-                <option value="NA" ${sel(v.vendorPayment, "NA")}>NA</option>
-              </select>
-            </div>
-            <div class="loc-self" style="${isSelf ? "" : "display:none;"}">
-              <span class="loc-self-badge">Self Pick Up</span>
-            </div>
+            <input type="text" class="form-control input-tag" name="locationDetails[${i}][deliveryLocation]"
+              placeholder="Pick Up Loc" value="${escapeAttr(v.deliveryLocation.toUpperCase())}" oninput="this.value = this.value.toUpperCase()" />
+            <select class="form-control select-tag" name="locationDetails[${i}][vendorPayment]">
+              <option value="">Payment</option>
+              <option value="PAID" ${sel(v.vendorPayment, "PAID")}>Paid</option>
+              <option value="HAVE TO PAY" ${sel(v.vendorPayment, "HAVE TO PAY")}>Have to Pay</option>
+            </select>
           </div>
         </div>
       </div>
@@ -291,18 +260,6 @@
     dom.locationContainer.innerHTML = html;
   }
 
-  // Show/hide a row's transport sub-fields and set its hidden selfDispatch flag.
-  function applyDispatchMode(row, mode) {
-    if (!row) return;
-    const transport = row.querySelector(".loc-transport");
-    const self = row.querySelector(".loc-self");
-    const hidden = row.querySelector(".loc-self-dispatch");
-    const isSelf = mode === "SELF";
-    if (transport) transport.style.display = isSelf ? "none" : "";
-    if (self) self.style.display = isSelf ? "" : "none";
-    if (hidden) hidden.value = isSelf ? "Self Dispatch" : "";
-  }
-
   function initLocationRepeater() {
     setLocationCount(dom.locationCountInput.value || 1);
 
@@ -314,20 +271,6 @@
     dom.locationPlusBtn?.addEventListener("click", () => {
       const current = normalizeLocationCount(dom.locationCountInput.value || 1);
       setLocationCount(Math.min(20, current + 1));
-    });
-
-    // Per-row pick up type toggle (event delegation survives re-renders).
-    dom.locationContainer.addEventListener("change", (e) => {
-      const modeSel = e.target.closest(".loc-dispatch-mode");
-      if (!modeSel) return;
-      applyDispatchMode(modeSel.closest(".location-row"), modeSel.value);
-    });
-
-    // Mobile formatting for each row's transport contact.
-    dom.locationContainer.addEventListener("input", (e) => {
-      const el = e.target.closest(".loc-transport-contact");
-      if (!el) return;
-      el.value = formatMobileValue(el.value);
     });
   }
 

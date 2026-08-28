@@ -8,6 +8,14 @@
   const fmtQty = (v) => (Number.isFinite(Number(v)) && v !== "" && v != null)
     ? Number(v).toLocaleString("en-IN")
     : dash(v);
+  // Deckles to laminate on this job -- a plain order's Qty or a deckle
+  // batch's Deckle Qty (buildQueueRows resolves it into jc.deckleTarget /
+  // jc.rolls). The sales order's own finished-roll count is downstream only
+  // and is not shown or posted here.
+  const jcDeckleTarget = (jc.deckleTarget != null && jc.deckleTarget !== "")
+    ? jc.deckleTarget
+    : jc.quantity;
+  const jcRunMtrs = jc.runningMetersText ? jc.runningMetersText : fmtQty(jc.runningMeters);
   const today = new Date();
   const dateDay = String(today.getDate()).padStart(2, "0");
   const dateMonth = String(today.getMonth() + 1).padStart(2, "0");
@@ -242,40 +250,6 @@
   .roll-scan-btn:hover { opacity: 0.88; }
 
   /* Materials Mounted strip -- one slot per raw-material pool, scanned once. */
-  /* Persistent banner: what Product Code / variant the current reel
-     combination produces. Stays put once resolved -- it is not a toast. */
-  .jc-mounted-variant {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    margin-bottom: 14px;
-    padding: 11px 14px;
-    border-radius: 9px;
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1.35;
-    background: #ecfdf5;
-    border: 1px solid #a7f3d0;
-    color: #065f46;
-  }
-  .jc-mounted-variant > i { font-size: 15px; flex: 0 0 auto; }
-  .jc-mounted-variant.is-variant {
-    background: #fff7ed;
-    border-color: #fdba74;
-    color: #9a3412;
-  }
-  .jc-mounted-variant.is-pending {
-    background: #f8fafc;
-    border-color: #e2e8f0;
-    color: #64748b;
-  }
-  .jc-mounted-variant .code {
-    font-size: 15px;
-    letter-spacing: 0.02em;
-    padding: 1px 7px;
-    border-radius: 5px;
-    background: rgba(255, 255, 255, 0.7);
-  }
   .jc-mounted-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -678,7 +652,7 @@
     <input type="hidden" name="date" value="<%= dateInputValue %>" />
     <input type="hidden" name="machineNo" value="<%= machine ? machine.machineName : '' %>" />
     <input type="hidden" name="lotNo" value="<%= isEmpty(jc.lotNo) ? '' : jc.lotNo %>" />
-    <input type="hidden" name="quantity" value="<%= isEmpty(jc.quantity) ? '' : jc.quantity %>" />
+    <input type="hidden" name="quantity" value="<%= isEmpty(jcDeckleTarget) ? '' : jcDeckleTarget %>" />
     <input type="hidden" name="productCode" value="<%= isEmpty(jc.productCode) ? '' : jc.productCode %>" />
     <input type="hidden" name="rolls" value="<%= isEmpty(jc.rolls) ? '' : jc.rolls %>" />
     <input type="hidden" name="paperSize" value="<%= isEmpty(ref.paperSize || jc.paperSize) ? '' : (ref.paperSize || jc.paperSize) %>" />
@@ -693,12 +667,11 @@
       <div class="material-id-row">
         <div class="mid-item"><span class="mid-label">Label Stock Code</span><span class="mid-value"><%= dash(jc.productCode) %></span></div>
         <div class="mid-item"><span class="mid-label">Deckle Size</span><span class="mid-value"><%= dash(jc.deckleSize) %></span></div>
-        <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= fmtQty(jc.runningMeters) %></span></div>
-        <div class="mid-item"><span class="mid-label">Qty</span><span class="mid-value"><%= fmtQty(jc.quantity) %></span></div>
+        <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= dash(jcRunMtrs) %></span></div>
         <div class="mid-item">
-          <span class="mid-label">Rolls</span>
+          <span class="mid-label">Qty</span>
           <span class="mid-value">
-            <%= dash(jc.rolls) %><% if (Number(jc.producedRolls) > 0) { %> <span style="font-size:12px;color:#b45309;font-weight:600;">(<%= jc.producedRolls %> done, <%= dash(jc.balanceRolls) %> to run)</span><% } %>
+            <%= fmtQty(jcDeckleTarget) %><% if (Number(jc.producedRolls) > 0) { %> <span style="font-size:12px;color:#b45309;font-weight:600;">(<%= jc.producedRolls %> done, <%= dash(jc.balanceRolls) %> to run)</span><% } %>
           </span>
         </div>
       </div>
@@ -764,7 +737,6 @@
 
     <div class="span-full form-subheading" style="margin-top: 10px;"><h1>Scan Materials</h1></div>
     <div class="span-full jc-info-wrap" id="materialsMountedStrip" style="padding: 14px 16px;">
-      <div class="jc-mounted-variant" id="mountedVariantLine" style="display:none;"></div>
       <div class="jc-mounted-grid">
         <%
           const MOUNTED_POOLS = [
@@ -994,6 +966,15 @@
                style="width:100%;" oninput="onMaterialSwapRemainingInput(this)" />
         <span class="jc-remaining-calc-note" id="materialSwapCalcNote" style="font-size:11px; font-weight:600; min-height:15px;"></span>
       </div>
+      <div class="jc-swap-reason-wrap" style="display:flex; flex-direction:column; gap:4px; margin-top:12px;">
+        <label for="materialSwapReasonInput" style="font-size:12px; font-weight:700; color:#44506b;">
+          Reason for change <span style="color:#dc2626;">*</span>
+        </label>
+        <textarea id="materialSwapReasonInput" rows="2" maxlength="300"
+                  placeholder="Why is this reel coming off now? (e.g. reel damaged, splice failed, wrong reel scanned)"
+                  style="width:100%; resize:vertical; padding:8px 10px; font-size:13px; border:1.5px solid #d7deea; border-radius:8px;"
+                  oninput="document.getElementById('materialSwapError').textContent = ''"></textarea>
+      </div>
       <div class="jc-material-used-error" id="materialSwapError"></div>
       <div class="dialog-actions">
         <button type="button" class="btn-cancel" onclick="closeMaterialSwapDialog()">Cancel</button>
@@ -1022,6 +1003,30 @@
       </p>
       <div class="dialog-actions">
         <button type="button" class="btn-primary jc-material-confirm" id="wipBlockOkBtn" onclick="closeWipBlockDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Shown when Stop is punched on a Production Log row for a real order --
+     one OK before that row's deckle is inwarded to Semi Finished Stock. The
+     job stays open afterwards; raw material is only settled on Save
+     Production Entry. -->
+<div class="logout-modal" id="stopConfirmDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="stopConfirmTitle"
+    style="width: min(440px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="stopConfirmTitle">Move roll to Semi-Finished Stock?</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeStopConfirmDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body">
+      <p class="jc-material-used-hint">
+        This records the deckle <strong id="stopConfirmMtrs">—</strong> into Semi-Finished Stock now.
+        Keep entering more rolls after — the job stays open, and the raw material used is settled when you Save Production Entry.
+      </p>
+      <div class="dialog-actions">
+        <button type="button" class="btn-cancel" onclick="closeStopConfirmDialog()">Cancel</button>
+        <button type="button" class="btn-primary jc-material-confirm" id="stopConfirmOkBtn" onclick="confirmStopMove()"><i class="fa-solid fa-check" aria-hidden="true"></i> Confirm &amp; Move</button>
       </div>
     </div>
   </div>
@@ -1262,43 +1267,35 @@
       currentMaterials[pool] = "";
       checkMaterialInput(input, pool);
       syncCurrentMaterialsToOpenRows();
-      // Leave the "Producing as ..." banner in place -- it refreshes on the
-      // next scan; a persistent message, not a toast.
       if (typeof scheduleSave === "function") scheduleSave();
       input.focus();
     }
 
-    // Persistent banner (#mountedVariantLine) -- the Product Code / variant the
-    // fully-mounted facestock+adhesive+release combination produces, resolved
-    // server-side. It only resolves once EVERY material is scanned (a
-    // half-scanned mount would otherwise mint a throwaway variant per scan);
-    // until then it shows a "pending" line. Once resolved it stays put and is
-    // only replaced by the next full re-resolve -- never auto-hidden.
-    let mountedVariantResolved = false;
+    // Which Label Stock Product Code the fully-mounted reel combination
+    // resolves to is a backend bookkeeping detail -- the operator doesn't act
+    // on it, so there's no persistent UI for it. The only case worth a
+    // heads-up is when the combination resolves to a NEW variant code
+    // (different from the order's own): a brief toast, deduped so re-resolving
+    // the same combination doesn't repeat it. To-spec and half-scanned states
+    // say nothing.
+    let lastVariantToastCode = "";
     function renderMountedVariant(v) {
-      const el = document.getElementById("mountedVariantLine");
-      if (!el || !v) return;
-
-      if (v.pending) {
-        // Don't overwrite an already-resolved code with the pending line
-        // (e.g. right after "Change", before the replacement reel is scanned).
-        if (mountedVariantResolved) return;
-        el.classList.remove("is-variant");
-        el.classList.add("is-pending");
-        el.style.display = "";
-        el.innerHTML = `<i class="fa-solid fa-barcode" aria-hidden="true"></i><span>Scan facestock, adhesive and release liner to confirm the Product Code.</span>`;
-        return;
+      if (!v || v.pending || !v.productCode || !v.isVariant) return;
+      if (v.productCode === lastVariantToastCode) return;
+      lastVariantToastCode = v.productCode;
+      if (typeof showToast === "function") {
+        showToast(
+          `Reel combination produces ${v.productCode}${v.baseProductCode ? ` — variant of ${v.baseProductCode}` : ""}.`,
+          "success",
+        );
       }
-      if (!v.productCode) return;
-
-      mountedVariantResolved = true;
-      el.classList.remove("is-pending");
-      el.classList.toggle("is-variant", !!v.isVariant);
-      el.style.display = "";
-      el.innerHTML = v.isVariant
-        ? `<i class="fa-solid fa-code-branch" aria-hidden="true"></i><span>Producing as <span class="code">${escAdhesiveKey(v.productCode)}</span> — new variant of ${escAdhesiveKey(v.baseProductCode || "")} for this reel combination</span>`
-        : `<i class="fa-solid fa-circle-check" aria-hidden="true"></i><span>Producing to spec as <span class="code">${escAdhesiveKey(v.productCode)}</span></span>`;
     }
+
+    // Enter and focusout (and a scan) can all land on setCurrentMaterial for
+    // the same value before the slot latches readOnly -- track the id each
+    // pool is mid-check on so the duplicate call bails instead of firing a
+    // second checkReel / mark-in-use (and racing two variant resolutions).
+    const materialCheckInFlight = { fs: "", ad: "", rl: "" };
 
     // Lock a scanned reel in as mounted for `pool` and push it to every open
     // row. wip -> hard stop dialog, nothing mounted. mismatch/unknown -> a
@@ -1312,7 +1309,16 @@
       checkMaterialInput(input, pool);
       if (!cleanId) return;
 
-      const data = await checkReel(pool, cleanId);
+      // Already mounted, or a check for this exact id is still running.
+      if (currentMaterials[pool] === cleanId || materialCheckInFlight[pool] === cleanId) return;
+      materialCheckInFlight[pool] = cleanId;
+
+      let data;
+      try {
+        data = await checkReel(pool, cleanId);
+      } finally {
+        if (materialCheckInFlight[pool] === cleanId) materialCheckInFlight[pool] = "";
+      }
       if (extractScannedRollId(input.value) !== cleanId) return; // changed while we waited
 
       if (data && data.code === "wip") {
@@ -1376,6 +1382,7 @@
           <span class="body">
             <span class="roll">${escAdhesiveKey(e.rollId || "—")}</span>
             <span class="meta">Used ${fmtMtrs(e.usedKg || 0)} kg &middot; ${e.emptied ? '<span class="empty-tag">Emptied</span>' : `${fmtMtrs(e.remainingKg || 0)} kg left`} &middot; ${escAdhesiveKey(fmtSwapTime(e.swappedAt))}</span>
+            ${e.reason ? `<span class="meta" style="font-style:italic;">“${escAdhesiveKey(e.reason)}”</span>` : ""}
           </span>
         </div>`).join("");
     }
@@ -1415,6 +1422,8 @@
       input.classList.remove("jc-material-used-over");
       document.getElementById("materialSwapCalcNote").textContent = "";
       document.getElementById("materialSwapError").textContent = "";
+      const reasonEl = document.getElementById("materialSwapReasonInput");
+      if (reasonEl) { reasonEl.value = ""; reasonEl.style.borderColor = "#d7deea"; }
       openModal("materialSwapDialog");
       input.focus();
     }
@@ -1432,7 +1441,7 @@
         note.textContent = `Exceeds stock of ${fmtMtrs(pendingSwap.currentStock)} kg`; note.style.color = "#dc2626"; input.classList.add("jc-material-used-over"); return;
       }
       input.classList.remove("jc-material-used-over");
-      const used = Math.max(0, Number(round2(pendingSwap.currentStock - remaining)));
+      const used = Math.max(0, round2(pendingSwap.currentStock - remaining));
       if (remaining === 0) { note.textContent = `Used: ${fmtMtrs(used)} kg (Emptied)`; note.style.color = "#b45309"; }
       else if (used === 0) { note.textContent = "Used: 0 kg (Full)"; note.style.color = "#64748b"; }
       else { note.textContent = `Used: ${fmtMtrs(used)} kg`; note.style.color = "#047857"; }
@@ -1456,6 +1465,13 @@
         errorEl.textContent = `Cannot exceed current stock (${fmtMtrs(pendingSwap.currentStock)} kg).`;
         input.classList.add("jc-material-used-over"); input.focus(); return;
       }
+      const reasonEl = document.getElementById("materialSwapReasonInput");
+      const reason = (reasonEl?.value || "").trim();
+      if (reason.length < 3) {
+        errorEl.textContent = "Give a reason for taking this reel off the job (at least a few words).";
+        if (reasonEl) { reasonEl.style.borderColor = "#dc2626"; reasonEl.focus(); }
+        return;
+      }
       const confirmBtn = document.getElementById("materialSwapConfirmBtn");
       confirmBtn.disabled = true;
       const { pool, stockId, rollId } = pendingSwap;
@@ -1463,7 +1479,7 @@
         const res = await fetch("/sachiko/machine/jobcard/material/set-remaining", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pendingId, pool: POOL_CODE_TO_SERVER[pool], stockId, remainingKg: remaining }),
+          body: JSON.stringify({ pendingId, pool: POOL_CODE_TO_SERVER[pool], stockId, remainingKg: remaining, reason }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) { errorEl.textContent = data.message || "Couldn't update stock. Try again."; confirmBtn.disabled = false; return; }
@@ -2153,6 +2169,18 @@
       <option value="Joint">Joint</option>
       <option value="Wrinkle">Wrinkle</option>`;
 
+    // Stable per-row idempotency token. Sent on this row's instant-produce
+    // call AND (as logRowToken) on the final Job Card save, so a Deckle the
+    // instant call inwarded is never produced twice if its response was lost
+    // (server: MaterialStock.productionRowToken). Survives a draft
+    // save/restore so a reload can't orphan an already-made Deckle.
+    function newRowToken() {
+      try {
+        if (window.crypto && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+      } catch (_) { /* fall through */ }
+      return `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+
     function createLogRow() {
       const tr = document.createElement("tr");
       tr.innerHTML = `
@@ -2162,6 +2190,7 @@
           <input type="hidden" name="adRollId" class="log-ad-roll-id" />
           <input type="hidden" name="rlRollId" class="log-rl-roll-id" />
           <input type="hidden" name="logMaterialsUsed" class="log-materials-used" value="[]" />
+          <input type="hidden" name="logRowToken" class="log-row-token" value="${newRowToken()}" />
         </td>
         <td data-label="Mtrs"><input type="number" name="logStartMtrs" class="form-control log-start-mtrs" placeholder="Mtrs" min="0" step="any" /></td>
         <td style="text-align:center; white-space:nowrap;" data-label="Start">
@@ -2203,8 +2232,15 @@
 
     const totalMeterInput = document.querySelector('input[name="totalMeter"]');
     const sqMtrInput = document.querySelector('input[name="sqMtr"]');
-    const paperSizeVal = Number(document.querySelector('input[name="paperSize"]')?.value) || 0;
-    const round2 = (n) => String(Math.round(n * 100) / 100);
+    // Paper size is normally a bare mm number, but some orders carry a range
+    // ("100 X 200") -- pull the leading number rather than letting Number()
+    // turn the whole string into NaN (which used to silently save SQ Mtrs 0).
+    const paperSizeVal = (() => {
+      const raw = String(document.querySelector('input[name="paperSize"]')?.value || "").replace(/,/g, "");
+      const m = raw.match(/-?\d+(?:\.\d+)?/);
+      return m ? Number(m[0]) : 0;
+    })();
+    const round2 = (n) => Math.round(Number(n) * 100) / 100;
 
     function recalcLogTotals() {
       let runningMtrs = 0;
@@ -2213,8 +2249,14 @@
         if (Number.isFinite(made) && made > 0) runningMtrs += made;
       });
 
-      if (totalMeterInput) totalMeterInput.value = runningMtrs ? round2(runningMtrs) : "";
-      if (sqMtrInput) sqMtrInput.value = runningMtrs ? round2(paperSizeVal * (runningMtrs / 100)) : "";
+      if (totalMeterInput) totalMeterInput.value = runningMtrs ? String(round2(runningMtrs)) : "";
+      // Blank (not "0") when paper size isn't a usable number -- a false 0 read
+      // as a real measurement on the saved card.
+      if (sqMtrInput) {
+        sqMtrInput.value = runningMtrs && paperSizeVal > 0
+          ? String(round2(paperSizeVal * (runningMtrs / 100)))
+          : "";
+      }
     }
 
     const logRowVal = (row, sel) => row.querySelector(sel)?.value || "";
@@ -2256,7 +2298,11 @@
     // to any production order) has nothing to attach a Deckle to, so it's
     // left for the final save as before. A failed call also falls back to
     // the final save -- the row's hidden deckleId/logInstantProduced stay
-    // empty, so produceDecklesFromLog there still produces it.
+    // empty, so produceDecklesFromLog there still produces it. If the call
+    // actually committed but its RESPONSE was lost, the row's logRowToken
+    // (sent here and again on the final save) is what stops that fallback
+    // from inwarding a second Deckle -- server matches it against
+    // MaterialStock.productionRowToken and reuses the one already made.
     async function produceRowDeckleInstantly(row) {
       const pendingId = document.querySelector('input[name="pendingId"]')?.value || "";
       if (!pendingId) return;
@@ -2268,6 +2314,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             pendingId,
+            rowToken: logRowVal(row, ".log-row-token"),
             fsRollId: logRowVal(row, ".log-fs-roll-id"),
             adRollId: logRowVal(row, ".log-ad-roll-id"),
             rlRollId: logRowVal(row, ".log-rl-roll-id"),
@@ -2363,26 +2410,62 @@
           row.querySelector(".log-meters")?.focus();
           return;
         }
-        const time = nowHHMM();
-        row.querySelector(".log-end-input").value = time;
-        row.querySelector(".log-end-display").textContent = time;
-        stopBtn.dataset.punched = "1";
-        stopBtn.disabled = true;
-        stopBtn.title = "";
-        stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
-        stopBtn.style.background = "#6b7280";
-        stopBtn.style.cursor = "default";
-        // This row is done -- move it up into the running record and give
-        // the operator a fresh blank row to punch the next roll into.
-        moveRowToDoneTable(row);
-        const freshRow = createLogRow();
-        logBody.appendChild(freshRow);
-        applyCurrentMaterialsToRow(freshRow, "log");
-        renumber();
-        recalcLogTotals();
-        produceRowDeckleInstantly(row);
+        // On a real order, Stop inwards this roll to Semi Finished Stock right
+        // away -- confirm once before it does. A blank entry (no order) has
+        // nothing to move, so it just closes the row.
+        if (pendingId) {
+          openStopConfirmDialog(row, stopBtn);
+        } else {
+          commitLogRowStop(row, stopBtn);
+        }
       }
     }
+
+    // Punches Stop, moves the row into the running record, opens a fresh entry
+    // row, and (on a real order) fires the instant-produce. Split out of the
+    // click handler so the Stop-confirm dialog can call it on Confirm.
+    function commitLogRowStop(row, stopBtn) {
+      const time = nowHHMM();
+      row.querySelector(".log-end-input").value = time;
+      row.querySelector(".log-end-display").textContent = time;
+      stopBtn.dataset.punched = "1";
+      stopBtn.disabled = true;
+      stopBtn.title = "";
+      stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+      stopBtn.style.background = "#6b7280";
+      stopBtn.style.cursor = "default";
+      moveRowToDoneTable(row);
+      const freshRow = createLogRow();
+      logBody.appendChild(freshRow);
+      applyCurrentMaterialsToRow(freshRow, "log");
+      renumber();
+      recalcLogTotals();
+      produceRowDeckleInstantly(row);
+      if (typeof scheduleSave === "function") scheduleSave();
+    }
+
+    let pendingStopRow = null;
+    let pendingStopBtn = null;
+    window.closeStopConfirmDialog = function closeStopConfirmDialog() {
+      closeModal("stopConfirmDialog");
+      pendingStopRow = null;
+      pendingStopBtn = null;
+    };
+    function openStopConfirmDialog(row, stopBtn) {
+      pendingStopRow = row;
+      pendingStopBtn = stopBtn;
+      const m = String(row.querySelector(".log-meters")?.value || "").trim();
+      const mtrsEl = document.getElementById("stopConfirmMtrs");
+      if (mtrsEl) mtrsEl.textContent = m ? `${m} mtrs` : "";
+      openModal("stopConfirmDialog");
+      document.getElementById("stopConfirmOkBtn")?.focus();
+    }
+    window.confirmStopMove = function confirmStopMove() {
+      const row = pendingStopRow;
+      const btn = pendingStopBtn;
+      closeStopConfirmDialog();
+      if (row && btn && btn.dataset.punched !== "1") commitLogRowStop(row, btn);
+    };
 
     // Rows migrate from logBody into logDoneBody once punched, so both
     // tbodies need the same delegated handlers to keep working there.
@@ -2438,10 +2521,16 @@
       deckleId: val(row, ".log-deckle-id-input"),
       instantProduced: val(row, ".log-instant-produced-input"),
       materialsUsed: (val(row, ".log-materials-used") === "[]" ? "" : val(row, ".log-materials-used")),
+      rowToken: val(row, ".log-row-token"),
     }));
 
+    // `rowToken` is always populated (every row is minted with one) -- it's
+    // carried for idempotency, not user input, so it must not make an
+    // otherwise-blank row count as "has an entry".
+    const ROW_META_KEYS = new Set(["rowToken"]);
     const anyEntry = (rows) =>
-      rows.some((r) => Object.values(r).some((v) => String(v ?? "").trim() !== ""));
+      rows.some((r) =>
+        Object.entries(r).some(([k, v]) => !ROW_META_KEYS.has(k) && String(v ?? "").trim() !== ""));
 
     // Hidden until at least one Production Log row has something in it --
     // every Production Log row is a Deckle, so a Job Setting entry alone
@@ -2544,6 +2633,10 @@
       putValue(row, ".log-release-mtr", data.releaseMtr);
       putValue(row, ".log-deckle-id-input", data.deckleId);
       putValue(row, ".log-instant-produced-input", data.instantProduced);
+      // Keep the draft's token so a Deckle already inwarded for this row
+      // before the reload is recognised (and not remade) on the final save.
+      // Older drafts predate the field -- the freshly minted one stands.
+      if (data.rowToken) putValue(row, ".log-row-token", data.rowToken);
       if (data.materialsUsed) putValue(row, ".log-materials-used", data.materialsUsed);
       if (data.deckleId && data.instantProduced === "1") {
         setLogDeckleNote(row, `✓ ${data.deckleId} — in Semi Finished Stock`, "#059669");
@@ -2591,13 +2684,6 @@
           if (input) { input.value = rollId; checkMaterialInput(input, pool); }
           lockMaterialSlot(pool);
         });
-        // Re-resolve the combination's Product Code for the restored mount.
-        const mountedPool = MATERIAL_POOL_ORDER.find((p) => currentMaterials[p]);
-        if (mountedPool && pendingId) {
-          checkReel(mountedPool, currentMaterials[mountedPool])
-            .then((d) => renderMountedVariant(d && d.variant))
-            .catch(() => {});
-        }
       }
       if (Array.isArray(draft.jsRows) && draft.jsRows.length) applyJsRows(draft.jsRows);
       if (Array.isArray(draft.logRows) && draft.logRows.length) applyLogRows(draft.logRows);

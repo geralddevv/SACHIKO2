@@ -480,7 +480,7 @@ export async function masterLayerForReel(pool, reel) {
 //     tracked, otherwise minting the next "-A"/"-B"/... variant) and returns
 //     that row instead, so the produced Deckle is attributed to the material
 //     that actually went into it.
-export async function resolveActualLabelStock(labelStock, resolvedLayers) {
+export async function resolveActualLabelStock(labelStock, resolvedLayers, { dryRun = false } = {}) {
   const overrides = {};
   for (const { layerKey, meta, reel } of resolvedLayers) {
     overrides[layerKey] = await masterLayerForReel(meta.pool, reel);
@@ -496,6 +496,14 @@ export async function resolveActualLabelStock(labelStock, resolvedLayers) {
 
   const existing = await SachikoLabelStock.findOne({ productCode: resolvedCode }).lean();
   if (existing) return existing;
+
+  // dryRun -- the caller only wants to KNOW what this combination would
+  // resolve to, not commit it (the Job Card's scan-time "Producing as ..."
+  // banner, re-checked on every scan/blur). Return an unsaved stand-in; the
+  // variant row is minted for real at produce time, from this same path.
+  if (dryRun) {
+    return { ...rebuilt, _id: null, productCode: resolvedCode, skuCode: labelStock.skuCode, __dryRun: true };
+  }
 
   return createLabelStockVariant({ ...rebuilt, productCode: resolvedCode });
 }

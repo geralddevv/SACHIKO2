@@ -454,8 +454,7 @@
     <div style="padding: 14px;">
       <div class="material-id-row">
         <div class="mid-item"><span class="mid-label">Label Stock Code</span><span class="mid-value"><%= dash(item.productCode || item.skuCode) %></span></div>
-        <div class="mid-item"><span class="mid-label">Size</span><span class="mid-value"><%= dash(pp.paperSize) %></span></div>
-        <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= fmtQty(pp.runningMeters) %></span></div>
+        <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= pp.runningMetersText ? pp.runningMetersText : fmtQty(pp.runningMeters) %></span></div>
         <div class="mid-item"><span class="mid-label">Qty</span><span class="mid-value"><%= fmtQty(pp.quantity) %></span></div>
         <div class="mid-item"><span class="mid-label">Roll Type</span><span class="mid-value"><%= dash(rollType) %></span></div>
         <!-- Set on the Deckle Set page (before an order ever reaches Assign

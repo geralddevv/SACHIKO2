@@ -4635,8 +4635,9 @@ router.get("/labels/production/deckle-set", async (req, res) => {
 });
 
 // Bundle the ticked orders of one Product Code + paper size into a deckle
-// batch. Body: deckleSize, runningMeters (optional override of the member
-// sum), orderIds[] (the ticked members).
+// batch. Body: deckleSize, runningMeters ("Total Running Meters" -- optional
+// override of the member sum), deckleRunningMeters (length of one deckle web --
+// optional), noOfRolls ("Deckle Quantity"), orderIds[] (the ticked members).
 router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (req, res) => {
   const backTo = "/sachiko/labels/production/deckle-set";
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -4676,13 +4677,19 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     return res.redirect(backTo);
   }
 
+  // The dialog now takes two numeric fields: "Deckle Running Meters" (one web's
+  // length) and "Total Running Meters" (the whole job across all rolls). Total
+  // defaults to the member sum; Deckle RM is optional. runningMetersText is a
+  // readable one-liner kept only when a Deckle RM was given, so the existing
+  // "runningMetersText || fmtQty(runningMeters)" displays stay meaningful.
   const sumRM = members.reduce((s, m) => s + num(m.runningMeters), 0);
-  const enteredRM = Number(req.body.runningMeters);
-  const runningMeters = enteredRM && enteredRM > 0 ? enteredRM : sumRM;
-  if (runningMeters < sumRM) {
-    req.flash("notification", `Running mtrs cannot be less than the combined order running mtrs (${sumRM}).`);
-    return res.redirect(backTo);
-  }
+  const enteredTotalRM = Number(req.body.runningMeters);
+  const runningMeters = Number.isFinite(enteredTotalRM) && enteredTotalRM > 0 ? enteredTotalRM : sumRM;
+  const enteredDeckleRM = Number(req.body.deckleRunningMeters);
+  const deckleRunningMeters = Number.isFinite(enteredDeckleRM) && enteredDeckleRM > 0 ? enteredDeckleRM : undefined;
+  const runningMetersText = deckleRunningMeters
+    ? `${deckleRunningMeters.toLocaleString("en-IN")} M/DECKLE · ${runningMeters.toLocaleString("en-IN")} M TOTAL`
+    : undefined;
 
   // Deckle Qty -- the rolls the batch job produces. Defaults to the member sum;
   // the planner can override it on the dialog (e.g. an extra roll for wastage).
@@ -4704,6 +4711,8 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     quantity: members.reduce((s, m) => s + num(m.quantity), 0),
     noOfRolls,
     runningMeters,
+    runningMetersText: runningMetersText || undefined,
+    deckleRunningMeters,
     deckleSize,
     deckleOption: oldest.deckleOption,
     estimatedDate: dueDates[0] || undefined,
@@ -4778,6 +4787,7 @@ router.get("/labels/production/deckle-queue", async (req, res) => {
       deckleSize: r.deckleSize ?? null,
       runningMeters:
         r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
+      runningMetersText: r.runningMetersText || "",
       quantity: r.quantity,
       createdAt: r.createdAt,
     };
@@ -5363,14 +5373,29 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
       return res.redirect("/sachiko/labels/production/pending?tab=wip");
     }
 
+    // A machine Job Card that's mid-entry: its operator has already punched
+    // Stop on one or more Production Log rows (each inwarded a Deckle to Semi
+    // Finished Stock the moment Stop was hit -- producedVia "jobcard"), or has
+    // reconciled a swapped-out reel (materialSwapLog -- raw already drawn
+    // down). Neither has a clean reversal here: the raw material a job-card
+    // Deckle consumed is only settled when the whole card is Saved, and
+    // dissolveDeckle has no lamination ledger to reverse for it. Block the
+    // send-back -- the operator must open the Job Card and Save it to close
+    // the order out properly (or cancel the order if it must stop).
+    const jobCardDeckle = await MaterialStock.exists({ producedFor: id, producedVia: "jobcard" });
+    if (jobCardDeckle || (pendingProduction.materialSwapLog || []).length) {
+      req.flash("notification", "This order's Job Card has already moved stock (a Deckle produced, or a reel reconciled) — it can't be sent back to Pending. Open the Job Card and Save Production Entry to close it out.");
+      return res.redirect("/sachiko/labels/production/pending?tab=wip");
+    }
+
     // Raw material, though, left stock the moment Assign & Continue laminated
-    // it (produceDeckle). Unassigning gives the order's material back, so those
-    // Deckles are un-made and their facestock/adhesive/release liner returned
-    // to the reels they came off -- otherwise the raw stock stays spent and an
-    // orphan Deckle nobody ordered is left sitting in Finished stock. Only
-    // reels this order actually produced are touched; a Deckle merely ticked
-    // onto the order from existing stock is simply released below.
-    const producedHere = await MaterialStock.find({ producedFor: id }).select("_id rollId").lean();
+    // it (produceDeckle, producedVia "assign"). Unassigning gives the order's
+    // material back, so those Deckles are un-made and their facestock/adhesive/
+    // release liner returned to the reels they came off -- otherwise the raw
+    // stock stays spent and an orphan Deckle nobody ordered is left sitting in
+    // Finished stock. Job-card Deckles are excluded (blocked above); a Deckle
+    // merely ticked onto the order from existing stock is simply released below.
+    const producedHere = await MaterialStock.find({ producedFor: id, producedVia: { $ne: "jobcard" } }).select("_id rollId").lean();
     const dissolved = [];
     const kept = [];
     for (const reel of producedHere) {
@@ -5389,10 +5414,15 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     }
 
     // lotNo is deliberately kept -- it's tied to the order's life, not the
-    // assignment, so a re-assignment reuses it.
+    // assignment, so a re-assignment reuses it. liveMaterialInUse is cleared
+    // too: a job that only scanned/Started reels (no Deckle, no swap -- those
+    // are blocked above) can still have left the reel reservation set, and it
+    // must not follow the order back to Pending and keep those reels locked
+    // against every other job. producedRolls is forced back to 0 for the same
+    // reason -- defensive, it is already 0 to reach here.
     await PendingProduction.findByIdAndUpdate(id, {
-      $set: { assignedMachineId: null, operatorId: null, helperId: null, allottedRollIds: [] },
-      $unset: { allottedRolls: "", assignedAt: "", allottedLayers: "" },
+      $set: { assignedMachineId: null, operatorId: null, helperId: null, allottedRollIds: [], producedRolls: 0 },
+      $unset: { allottedRolls: "", assignedAt: "", allottedLayers: "", liveMaterialInUse: "" },
     });
 
     res.locals.auditDescription = `Sent production order ${id} back to Pending`;

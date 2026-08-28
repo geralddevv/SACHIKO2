@@ -2,6 +2,9 @@ import express from "express";
 import mongoose from "mongoose";
 import MaterialStock from "../../models/inventory/materialStock.js";
 import MachineJobCard from "../../models/inventory/machineJobCard.js";
+import FacestockStock from "../../models/inventory/facestockStock.js";
+import AdhesiveStock from "../../models/inventory/adhesiveStock.js";
+import ReleaseLinerStock from "../../models/inventory/releaseLinerStock.js";
 import Location from "../../models/system/location.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -30,7 +33,7 @@ router.get("/", async (req, res) => {
     Location.find().sort({ locationName: 1 }).lean(),
     MaterialStock.find()
       .populate({ path: "material", select: "productCode skuCode family" })
-      .populate({ path: "producedFor", select: "paperSize" })
+      .populate({ path: "producedFor", select: "paperSize materialSwapLog" })
       .sort({ createdAt: -1 })
       .lean(),
   ]);
@@ -42,20 +45,148 @@ router.get("/", async (req, res) => {
   const deckleIds = stock.map((s) => s.rollId).filter(Boolean);
   const jobCards = deckleIds.length
     ? await MachineJobCard.find({ "productionLog.deckleId": { $in: deckleIds } })
-        .select("productCode productionLog")
+        .select("productCode productionLog facestockUsage adhesiveUsage releaseUsage")
         .lean()
     : [];
   const jobCardRowByDeckle = new Map();
   for (const jc of jobCards) {
     for (const row of jc.productionLog || []) {
-      if (row?.deckleId) jobCardRowByDeckle.set(row.deckleId, { baseProductCode: jc.productCode || "", row });
+      if (row?.deckleId) jobCardRowByDeckle.set(row.deckleId, { baseProductCode: jc.productCode || "", row, jobCard: jc });
     }
   }
+
+  // Kg consumed from one raw reel, resolved for a given Deckle. Every raw
+  // reel in this system is weighed, not measured -- FacestockStock /
+  // AdhesiveStock / ReleaseLinerStock `reelMtrs` is really kilograms, and so
+  // is the usage snapshot (`facestockUsage.mtrsUsed` / `releaseUsage.mtrsUsed`
+  // are legacy names carrying kg, `adhesiveUsage.kgUsed` is named honestly).
+  // A reel swapped out mid-run is reconciled live onto the order's
+  // materialSwapLog (usedKg); a reel still mounted at job end is reconciled in
+  // the Job Card's end-of-job Material Used dialog into the *Usage arrays --
+  // the two are disjoint, so their union covers every reel a Deckle used.
+  //
+  // Both figures are per reel per Job Card, not per Deckle -- when one card
+  // ran several Deckles off the same reel, split that reel's kg across those
+  // Deckles in proportion to each one's produced metres (same reel => same
+  // width + gsm => kg is linear in metres).
+  const norm = (v) => String(v || "").trim().toUpperCase();
+  const reelMatches = (entry, sid, rid) =>
+    (sid && String(entry.stockId) === sid) || (rid && norm(entry.rollId) === rid);
+
+  const kgUsedFor = (deckle, reel) => {
+    const sid = reel.stockId ? String(reel.stockId) : "";
+    const rid = norm(reel.rollId);
+    const entry = jobCardRowByDeckle.get(deckle.rollId);
+    const jc = entry?.jobCard;
+
+    const poolArr = {
+      facestock: jc?.facestockUsage,
+      adhesive: jc?.adhesiveUsage,
+      release: jc?.releaseUsage,
+    }[reel.pool];
+    let reelKg = null;
+    const fromUsage = (Array.isArray(poolArr) ? poolArr : []).find((u) => reelMatches(u, sid, rid));
+    if (fromUsage) {
+      const v = fromUsage.kgUsed != null ? fromUsage.kgUsed : fromUsage.mtrsUsed;
+      if (Number.isFinite(Number(v))) reelKg = Number(v);
+    }
+    if (reelKg == null) {
+      const swaps = Array.isArray(deckle.producedFor?.materialSwapLog) ? deckle.producedFor.materialSwapLog : [];
+      const fromSwap = swaps.find((s) => s.pool === reel.pool && reelMatches(s, sid, rid));
+      if (fromSwap && Number.isFinite(Number(fromSwap.usedKg))) reelKg = Number(fromSwap.usedKg);
+    }
+    if (reelKg == null) return null;
+
+    // Pro-rate across every Deckle row on this card that drew on this reel.
+    const rows = Array.isArray(jc?.productionLog) ? jc.productionLog : [];
+    const poolRollField = { facestock: "fsRollId", adhesive: "adRollId", release: "rlRollId" }[reel.pool];
+    const sharing = rows.filter((row) => {
+      const list = Array.isArray(row.materialsUsed) ? row.materialsUsed : [];
+      if (list.length) {
+        return list.some((m) => (m.pool || reel.pool) === reel.pool && reelMatches(m, sid, rid));
+      }
+      return rid && poolRollField && norm(row[poolRollField]).includes(rid);
+    });
+    if (sharing.length <= 1) return Math.round(reelKg * 100) / 100;
+    const totalMtrs = sharing.reduce((n, row) => n + (Number(row.meters) || 0), 0);
+    const thisMtrs = Number(entry?.row?.meters) || 0;
+    if (!(totalMtrs > 0) || !(thisMtrs > 0)) return Math.round((reelKg / sharing.length) * 100) / 100;
+    return Math.round(reelKg * (thisMtrs / totalMtrs) * 100) / 100;
+  };
+
+  // The note the operator typed when taking this reel off the job mid-run --
+  // mandatory in the "How much is left?" dialog on the Job Card, stored on the
+  // order's materialSwapLog. Only a swapped-out reel has one.
+  const swapRemarkFor = (deckle, reel) => {
+    const sid = reel.stockId ? String(reel.stockId) : "";
+    const rid = norm(reel.rollId);
+    const swaps = Array.isArray(deckle.producedFor?.materialSwapLog) ? deckle.producedFor.materialSwapLog : [];
+    const hit = swaps.find((s) => s.pool === reel.pool && reelMatches(s, sid, rid));
+    return hit?.reason ? String(hit.reason).trim() : "";
+  };
 
   const baseOf = (code) => {
     const m = /^(.*[^-])-[A-Z]+$/.exec(String(code || ""));
     return m ? m[1] : "";
   };
+
+  // Resolve each Deckle's raw-material reels (Deckle's own sourceReels first,
+  // then the job-card row's materialsUsed, then the row's single-reel-per-pool
+  // fields) up front, so we can look every reel's own spec up in one batch.
+  const reelListFor = (s) => {
+    const jc = jobCardRowByDeckle.get(s.rollId);
+    if (Array.isArray(s.sourceReels) && s.sourceReels.length) return s.sourceReels;
+    if (Array.isArray(jc?.row?.materialsUsed) && jc.row.materialsUsed.length) return jc.row.materialsUsed;
+    if (jc?.row) {
+      return [
+        jc.row.fsRollId && { pool: "facestock", rollId: jc.row.fsRollId },
+        jc.row.adRollId && { pool: "adhesive", rollId: jc.row.adRollId },
+        jc.row.rlRollId && { pool: "release", rollId: jc.row.rlRollId },
+      ].filter(Boolean);
+    }
+    return [];
+  };
+
+  const reelListByDeckle = new Map(stock.map((s) => [String(s._id), reelListFor(s)]));
+
+  // One batched lookup per pool for the reel-level spec (vendor / type / size /
+  // GSM / metres), keyed by rollId -- these raw reels stay in their collection
+  // at quantity 0 after being consumed, so the row is still there to read.
+  const rollIdsIn = (pool) => [
+    ...new Set(
+      [...reelListByDeckle.values()]
+        .flat()
+        .filter((r) => (r.pool || "") === pool)
+        .map((r) => String(r.rollId || "").trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ];
+  const [fsReels, adReels, rlReels] = await Promise.all([
+    FacestockStock.find({ rollId: { $in: rollIdsIn("facestock") } })
+      .select("rollId type size gsm micron").lean(),
+    AdhesiveStock.find({ rollId: { $in: rollIdsIn("adhesive") } })
+      .select("rollId type gsm").lean(),
+    ReleaseLinerStock.find({ rollId: { $in: rollIdsIn("release") } })
+      .select("rollId type color size gsm").lean(),
+  ]);
+
+  const specByRoll = new Map();
+  const compact = (parts) => parts.filter((p) => p != null && p !== "").join(" · ");
+  for (const r of fsReels) {
+    specByRoll.set(r.rollId, {
+      spec: compact([r.type, r.gsm ? `${r.gsm} GSM` : "", r.micron ? `${r.micron} MIC` : "", r.size ? `${r.size} mm` : ""]),
+    });
+  }
+  for (const r of adReels) {
+    specByRoll.set(r.rollId, {
+      spec: compact([r.type, r.gsm ? `${r.gsm} GSM` : ""]),
+    });
+  }
+  for (const r of rlReels) {
+    specByRoll.set(r.rollId, {
+      spec: compact([r.type, r.color, r.gsm ? `${r.gsm} GSM` : "", r.size ? `${r.size} mm` : ""]),
+    });
+  }
 
   res.render("stock/semiFinishedStock.ejs", {
     JS: false,
@@ -70,21 +201,7 @@ router.get("/", async (req, res) => {
     stock: stock.map((s) => {
       const productCode = s.material?.productCode || s.material?.skuCode || "";
       const jc = jobCardRowByDeckle.get(s.rollId);
-      // Prefer the Deckle's own sourceReels; then the job-card row's
-      // materialsUsed; then the row's single-reel-per-pool fields (older
-      // Deckles produced before either list existed still carry these).
-      let sourceReels = [];
-      if (Array.isArray(s.sourceReels) && s.sourceReels.length) {
-        sourceReels = s.sourceReels;
-      } else if (Array.isArray(jc?.row?.materialsUsed) && jc.row.materialsUsed.length) {
-        sourceReels = jc.row.materialsUsed;
-      } else if (jc?.row) {
-        sourceReels = [
-          jc.row.fsRollId && { pool: "facestock", rollId: jc.row.fsRollId },
-          jc.row.adRollId && { pool: "adhesive", rollId: jc.row.adRollId },
-          jc.row.rlRollId && { pool: "release", rollId: jc.row.rlRollId },
-        ].filter(Boolean);
-      }
+      const sourceReels = reelListByDeckle.get(String(s._id)) || [];
       const baseProductCode = jc?.baseProductCode || baseOf(productCode);
       return {
         _id: String(s._id),
@@ -92,7 +209,17 @@ router.get("/", async (req, res) => {
         productCode,
         baseProductCode,
         isVariant: Boolean(baseProductCode && productCode && baseProductCode !== productCode),
-        sourceReels: (sourceReels || []).map((r) => ({ pool: r.pool || "", rollId: r.rollId || "" })),
+        sourceReels: (sourceReels || []).map((r) => {
+          const rid = String(r.rollId || "").trim().toUpperCase();
+          const extra = specByRoll.get(rid) || {};
+          return {
+            pool: r.pool || "",
+            rollId: r.rollId || "",
+            spec: extra.spec || "",
+            kgUsed: kgUsedFor(s, r),
+            remark: swapRemarkFor(s, r),
+          };
+        }),
         family: s.material?.family || "",
         // Existing Deckles can fall back to the production order while all new
         // production saves the size directly on MaterialStock.

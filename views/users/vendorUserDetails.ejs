@@ -320,23 +320,21 @@
     <!-- Dispatch Info -->
     <div class="info-section custom-scrollbar" style="background: white;">
       <div class="info-item">
-        <span class="info-label">Dispatch Type</span>
-        <span class="info-value"><%= vendorUser.SelfDispatch ? 'Self Dispatch' : 'Transport' %></span>
-      </div>
-      <div class="info-item">
         <span class="info-label">Dispatch Address</span>
         <span class="info-value" style="white-space: nowrap;"><%= vendorUser.dispatchAddress || 'N/A' %></span>
       </div>
-      <% if (!vendorUser.SelfDispatch) { %>
-        <div class="info-item">
-          <span class="info-label">Transport</span>
-          <span class="info-value"><%= vendorUser.transportName || '-' %></span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">Transport Contact</span>
-          <span class="info-value"><%= vendorUser.transportContact || '-' %></span>
-        </div>
-      <% } %>
+      <div class="info-item">
+        <span class="info-label">Pick Up Mode</span>
+        <span class="info-value"><%= vendorUser.deliveryMode || '-' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Pick Up Loc</span>
+        <span class="info-value"><%= vendorUser.deliveryLocation || '-' %></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Payment</span>
+        <span class="info-value"><%= vendorUser.vendorPayment || '-' %></span>
+      </div>
       <div class="info-item">
         <span class="info-label">GST</span>
         <span class="info-value"><%= vendorUser.vendorGst || (vendor ? vendor.vendorGst : 'N/A') %></span>
@@ -349,7 +347,7 @@
     <div class="section-header">
       <h2>Item Specifications</h2>
       <div style="display: flex; gap: 8px;">
-        <span class="badge" style="background: #f1f5f9; color: #64748b; font-size: 11px;">Total Items: <%= (labels.length + ttrs.length + tapes.length) %></span>
+        <span class="badge" style="background: #f1f5f9; color: #64748b; font-size: 11px;">Total Items: <%= (labels.length + tapes.length) %></span>
       </div>
     </div>
 
@@ -393,52 +391,6 @@
                   <td style="font-size: 10px; color: #94a3b8;">
                     L:<%= i.lamination || '-' %> G:<%= i.gumming || '-' %> W:<%= i.winding || '-' %>
                   </td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      <% } %>
-
-      <!-- TTR -->
-      <% if (ttrs && ttrs.length > 0) { %>
-        <div class="item-category-group">
-          <div class="item-category-header">
-            <span class="item-type-label">TTR</span>
-            <span class="item-count-badge"><%= ttrs.length %></span>
-          </div>
-          <table class="inner-spec-table">
-            <thead>
-              <tr>
-                <th style="width: 12%;">Item</th>
-                <th style="width: 12%;">Type</th>
-                <th>Color</th>
-                <th>Width</th>
-                <th>Mtrs</th>
-                <th>InkFace</th>
-                <th>Core</th>
-                <th>Min</th>
-                <th>Odr</th>
-                <th>Freq</th>
-                <th>Credit</th>
-                <th>Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% ttrs.forEach(i => { %>
-                <tr>
-                  <td class="item-name-cell"><%= i.vendorTtrMaterialCode %></td>
-                  <td><%= i.vendorTtrType || (i.ttrId ? i.ttrId.ttrType : '-') %></td>
-                  <td><%= i.vendorTtrColor || (i.ttrId ? i.ttrId.ttrColor : '-') %></td>
-                  <td><%= i.ttrId ? i.ttrId.ttrWidth : '-' %></td>
-                  <td><%= i.ttrMtrsDel %></td>
-                  <td><%= i.ttrId ? i.ttrId.ttrInkFace : '-' %></td>
-                  <td><%= i.ttrId ? i.ttrId.ttrCoreId : '-' %></td>
-                  <td><%= i.ttrMinQty %></td>
-                  <td><%= i.ttrOdrQty || '-' %></td>
-                  <td><%= i.ttrOdrFreq || '-' %></td>
-                  <td><%= i.ttrCreditTerm || '-' %></td>
-                  <td style="font-weight:600;">₹<%= i.ttrRatePerRoll %></td>
                 </tr>
               <% }) %>
             </tbody>
@@ -494,7 +446,6 @@
 
       <% if (
         (labels || []).length === 0 &&
-        (ttrs || []).length === 0 &&
         (tapes || []).length === 0
       ) { %>
         <div style="padding: 40px; text-align: center; color: #94a3b8;">
