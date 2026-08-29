@@ -2245,9 +2245,96 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
 
 router.get("/machine/jobcard/view", requireMachineFloor, async (req, res) => {
   const jsonData = await MachineJobCard.find()
-    .populate({ path: "pendingProductionId", select: "deckleSize" })
+    .populate({ path: "pendingProductionId", select: "deckleSize materialSwapLog" })
     .sort({ createdAt: -1 })
     .lean();
+
+  // ---- Per-deckle reel breakdown for the "Deckles Produced" dialog, in the
+  //      same shape as /sachiko/semifinishedstock's view dialog (Layer / Reel
+  //      ID / Spec / Kg Used / Status / Remark). Spec is read off the raw
+  //      reel's own Stock row (kept at qty 0 after it is consumed); Kg Used
+  //      comes from this Job Card's end-of-job *Usage arrays, falling back to
+  //      the order's materialSwapLog for a reel swapped out mid-run, then
+  //      pro-rated across every Deckle row on the card that shared the reel
+  //      (same reasoning as semiFinishedStock.js); Remark is the swap reason. ----
+  const jcNorm = (v) => String(v || "").trim().toUpperCase();
+  const jcReelMatches = (entry, sid, rid) =>
+    (sid && String(entry.stockId) === sid) || (rid && jcNorm(entry.rollId) === rid);
+  const jcCompact = (parts) => parts.filter((p) => p != null && p !== "").join(" · ");
+  const POOL_ROLL_FIELD = { facestock: "fsRollId", adhesive: "adRollId", release: "rlRollId" };
+  const reelsOfRow = (row) => {
+    const list = Array.isArray(row.materialsUsed) && row.materialsUsed.length
+      ? row.materialsUsed.map((m) => ({ pool: m.pool, stockId: m.stockId, rollId: m.rollId }))
+      : Object.entries(POOL_ROLL_FIELD)
+          .map(([pool, f]) => (row[f] ? { pool, rollId: row[f] } : null))
+          .filter(Boolean);
+    return list.filter((r) => r && r.rollId);
+  };
+
+  const wantByPool = { facestock: new Set(), adhesive: new Set(), release: new Set() };
+  for (const jc of jsonData) {
+    for (const row of jc.productionLog || []) {
+      for (const r of reelsOfRow(row)) {
+        if (wantByPool[r.pool]) wantByPool[r.pool].add(jcNorm(r.rollId));
+      }
+    }
+  }
+
+  const [fsReels, adReels, rlReels] = await Promise.all([
+    FacestockStock.find({ rollId: { $in: [...wantByPool.facestock] } }).select("rollId type size gsm micron").lean(),
+    AdhesiveStock.find({ rollId: { $in: [...wantByPool.adhesive] } }).select("rollId type gsm").lean(),
+    ReleaseLinerStock.find({ rollId: { $in: [...wantByPool.release] } }).select("rollId type color size gsm").lean(),
+  ]);
+  const specByRoll = new Map();
+  for (const r of fsReels) specByRoll.set(jcNorm(r.rollId), jcCompact([r.type, r.gsm ? `${r.gsm} GSM` : "", r.micron ? `${r.micron} MIC` : "", r.size ? `${r.size} mm` : ""]));
+  for (const r of adReels) specByRoll.set(jcNorm(r.rollId), jcCompact([r.type, r.gsm ? `${r.gsm} GSM` : ""]));
+  for (const r of rlReels) specByRoll.set(jcNorm(r.rollId), jcCompact([r.type, r.color, r.gsm ? `${r.gsm} GSM` : "", r.size ? `${r.size} mm` : ""]));
+
+  for (const jc of jsonData) {
+    const usageByPool = {
+      facestock: Array.isArray(jc.facestockUsage) ? jc.facestockUsage : [],
+      adhesive: Array.isArray(jc.adhesiveUsage) ? jc.adhesiveUsage : [],
+      release: Array.isArray(jc.releaseUsage) ? jc.releaseUsage : [],
+    };
+    const swaps = Array.isArray(jc.pendingProductionId?.materialSwapLog) ? jc.pendingProductionId.materialSwapLog : [];
+    const logRows = Array.isArray(jc.productionLog) ? jc.productionLog : [];
+
+    for (const row of logRows) {
+      row.reelDetails = reelsOfRow(row).map((r) => {
+        const sid = r.stockId ? String(r.stockId) : "";
+        const rid = jcNorm(r.rollId);
+        const usage = usageByPool[r.pool]?.find((u) => jcReelMatches(u, sid, rid));
+        const swap = swaps.find((s) => s.pool === r.pool && jcReelMatches(s, sid, rid));
+        let kg = null;
+        if (usage) {
+          const v = usage.kgUsed != null ? usage.kgUsed : usage.mtrsUsed;
+          if (Number.isFinite(Number(v))) kg = Number(v);
+        }
+        if (kg == null && swap && Number.isFinite(Number(swap.usedKg))) kg = Number(swap.usedKg);
+        if (kg != null) {
+          const sharing = logRows.filter((rr) =>
+            reelsOfRow(rr).some((x) => (x.pool || r.pool) === r.pool && jcReelMatches(x, sid, rid)));
+          if (sharing.length > 1) {
+            const totalMtrs = sharing.reduce((n, rr) => n + (Number(rr.meters) || 0), 0);
+            const thisMtrs = Number(row.meters) || 0;
+            kg = totalMtrs > 0 && thisMtrs > 0
+              ? Math.round(kg * (thisMtrs / totalMtrs) * 100) / 100
+              : Math.round((kg / sharing.length) * 100) / 100;
+          } else {
+            kg = Math.round(kg * 100) / 100;
+          }
+        }
+        return {
+          pool: r.pool || "",
+          rollId: r.rollId || "",
+          spec: specByRoll.get(rid) || "",
+          kgUsed: kg,
+          remark: swap?.reason ? String(swap.reason).trim() : "",
+        };
+      });
+    }
+  }
+
   res.render("inventory/masters/jobCardView.ejs", {
     title: "Production Records",
     CSS: "tableDisp.css",

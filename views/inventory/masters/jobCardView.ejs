@@ -16,6 +16,43 @@
       display: flex; align-items: center; justify-content: center;
     }
     .header-action-btn:hover { background-color: #e4e4e4; }
+
+    /* ---- Deckle Detail dialog: variant meta + per-reel table
+           (mirrors the view dialog on /sachiko/semifinishedstock) ---- */
+    .dialog-field-label {
+      display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px;
+    }
+    .ddx-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .ddx-chip-code {
+      background: #f0f7ff; border: 1px solid #d7e6f5; color: #03365a;
+      font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 7px;
+    }
+    .ddx-chip-muted { color: #64748b; font-size: 12.5px; font-weight: 600; }
+    .ddx-table-wrap { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .ddx-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .ddx-table th {
+      text-align: left; background: #f8fafc; color: #64748b; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.3px; font-size: 10.5px;
+      padding: 7px 10px; border-bottom: 1px solid #e2e8f0;
+    }
+    .ddx-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .ddx-table tr:last-child td { border-bottom: none; }
+    .ddx-table tr.ddx-group-start td { border-top: 2px solid #e6edf5; }
+    .ddx-layer { color: #475569; font-weight: 600; white-space: nowrap; }
+    .ddx-layer.is-cont { color: #cbd5e1; }
+    .ddx-reel { font-weight: 700; color: #03365a; }
+    .ddx-seq { color: #94a3b8; font-weight: 600; margin-left: 6px; font-size: 11px; }
+    .ddx-tag {
+      display: inline-block; font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 999px; letter-spacing: 0.2px;
+    }
+    .ddx-tag-swap { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
+    .ddx-tag-final { background: #dcfce7; border: 1px solid #bbf7d0; color: #166534; }
+    .ddx-muted-dash { color: #cbd5e1; }
+    .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
   </style>
 
   <div class="indi-head">
@@ -41,13 +78,13 @@
        fed it (a facestock reel swapped mid-run leaves two). -->
   <div class="logout-modal" id="deckleDetailModal" aria-hidden="true">
     <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deckleDetailTitle"
-      style="width: min(720px, 96vw); padding: 0; border-radius: 14px; border: none;">
+      style="width: min(1000px, 96vw); padding: 0; border-radius: 14px; border: none;">
       <div class="dialog-header" style="background:#044a78; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; border-radius:14px 14px 0 0;">
         <h2 id="deckleDetailTitle" style="margin:0; font-size:1rem; font-weight:700; color:#fff;">Deckles Produced</h2>
         <button type="button" onclick="closeDeckleDetail()" aria-label="Close"
           style="background:none; border:none; color:#fff; font-size:20px; cursor:pointer; line-height:1;">×</button>
       </div>
-      <div class="dialog-body" style="padding:16px 20px; max-height:70vh; overflow:auto; border-radius:0 0 14px 14px;">
+      <div class="dialog-body custom-scrollbar" style="padding:16px 20px; max-height:70vh; overflow:auto; border-radius:0 0 14px 14px;">
         <div id="deckleDetailBody"></div>
       </div>
     </div>
@@ -167,30 +204,68 @@
 
     const POOL_LABEL = { facestock: "Facestock", adhesive: "Adhesive", release: "Release Liner" };
     body.innerHTML = rows.map((r, i) => {
-      const code = (r.productCode || jc.productCode || "-");
-      const used = Array.isArray(r.materialsUsed) && r.materialsUsed.length
-        ? r.materialsUsed
-        : [r.fsRollId && { pool: "facestock", rollId: r.fsRollId },
-           r.adRollId && { pool: "adhesive", rollId: r.adRollId },
-           r.rlRollId && { pool: "release", rollId: r.rlRollId }].filter(Boolean);
+      const code = (r.productCode || jc.productCode || "—");
+      // Server (routes/system/machine.js) resolves each reel's Spec, Kg Used
+      // and swap Remark and hands them over on r.reelDetails, already falling
+      // back to the row's single-reel-per-pool fields when materialsUsed is
+      // empty -- same shape as /sachiko/semifinishedstock's view dialog.
+      const details = Array.isArray(r.reelDetails) ? r.reelDetails : [];
       const byPool = { facestock: [], adhesive: [], release: [] };
-      used.forEach((m) => { if (byPool[m.pool]) byPool[m.pool].push(m.rollId); });
-      const reelRows = Object.keys(POOL_LABEL).map((p) => {
-        if (!byPool[p].length) return "";
-        return `<div style="display:flex;gap:8px;padding:3px 0;">
-          <span style="flex:0 0 110px;color:#64748b;font-weight:600;font-size:12px;">${POOL_LABEL[p]}</span>
-          <span style="font-weight:700;color:#03365a;font-size:12.5px;">${byPool[p].map(esc).join(", ")}${byPool[p].length > 1 ? ' <span style="color:#b45309;font-weight:700;">(swapped mid-run)</span>' : ""}</span>
-        </div>`;
-      }).join("");
-      return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:6px;">
+      details.forEach((d) => { if (byPool[d.pool]) byPool[d.pool].push(d); });
+
+      // Group source reels by pool, keeping mount order. Within a pool the
+      // LAST reel ran the web to the finish; any earlier one was swapped out
+      // mid-run -- so that tag belongs on the earlier reels, not the final.
+      const reelBodyRows = [];
+      Object.keys(POOL_LABEL).forEach((p) => {
+        const reels = byPool[p];
+        if (!reels.length) return;
+        const multi = reels.length > 1;
+        reels.forEach((d, idx) => {
+          const isFirst = idx === 0;
+          const isFinal = idx === reels.length - 1;
+          let statusCell = '<span class="ddx-muted-dash">—</span>';
+          if (multi && !isFinal) statusCell = '<span class="ddx-tag ddx-tag-swap">Swapped mid-run</span>';
+          else if (multi && isFinal) statusCell = '<span class="ddx-tag ddx-tag-final">Ran to finish</span>';
+          reelBodyRows.push(`
+            <tr${isFirst && reelBodyRows.length ? ' class="ddx-group-start"' : ""}>
+              <td><span class="ddx-layer${isFirst ? "" : " is-cont"}">${isFirst ? esc(POOL_LABEL[p]) : "&#8942;"}</span></td>
+              <td>
+                <span class="ddx-reel">${esc(d.rollId || "—")}</span>
+                ${multi ? `<span class="ddx-seq">reel ${idx + 1} of ${reels.length}</span>` : ""}
+              </td>
+              <td>${d.spec ? esc(d.spec) : '<span class="ddx-muted-dash">—</span>'}</td>
+              <td style="text-align:right;white-space:nowrap;">${d.kgUsed != null ? esc(Number(d.kgUsed).toLocaleString("en-IN", { maximumFractionDigits: 2 })) + " kg" : '<span class="ddx-muted-dash">—</span>'}</td>
+              <td>${statusCell}</td>
+              <td>${d.remark ? esc(d.remark) : '<span class="ddx-muted-dash">—</span>'}</td>
+            </tr>
+          `);
+        });
+      });
+
+      const reelTable = reelBodyRows.length
+        ? `<div class="ddx-table-wrap">
+            <table class="ddx-table">
+              <thead><tr><th>Layer</th><th>Reel ID</th><th>Spec</th><th style="text-align:right;">Kg Used</th><th>Status</th><th>Remark</th></tr></thead>
+              <tbody>${reelBodyRows.join("")}</tbody>
+            </table>
+          </div>`
+        : '<div style="color:#94a3b8;font-size:12.5px;padding:5px 0;">No reels recorded for this Deckle.</div>';
+
+      const joints = [
+        r.face && r.face.joint ? `Face: ${esc(r.face.joint)}${r.face.mtr != null ? ` · ${esc(r.face.mtr)} mtrs` : ""}` : "",
+        r.release && r.release.joint ? `Release: ${esc(r.release.joint)}${r.release.mtr != null ? ` · ${esc(r.release.mtr)} mtrs` : ""}` : "",
+      ].filter(Boolean).join(" &nbsp;|&nbsp; ");
+
+      return `<div style="margin-bottom:18px;">
+        <div class="ddx-meta">
           <strong style="color:#15803d;font-size:13px;">${esc(r.deckleId || `Deckle ${i + 1}`)}</strong>
-          <span style="background:#f0f7ff;border:1px solid #d7e6f5;color:#03365a;font-weight:700;font-size:11.5px;padding:2px 8px;border-radius:6px;">
-            ${esc(code)}
-          </span>
-          ${Number(r.meters) > 0 ? `<span style="color:#64748b;font-size:12px;font-weight:600;">${esc(r.meters)} mtrs</span>` : ""}
+          <span class="ddx-chip-code">${esc(code)}</span>
+          ${Number(r.meters) > 0 ? `<span class="ddx-chip-muted">${esc(r.meters)} mtrs</span>` : ""}
         </div>
-        ${reelRows || '<div style="color:#94a3b8;font-size:12px;">No reels recorded.</div>'}
+        <div class="dialog-field-label" style="margin-bottom:8px;">Raw materials used</div>
+        ${reelTable}
+        ${joints ? `<div style="margin-top:12px;color:#64748b;font-size:12.5px;"><strong>Joints:</strong> ${joints}</div>` : ""}
       </div>`;
     }).join("");
 

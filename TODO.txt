@@ -89,4 +89,5 @@ sales order -
 
 remark in the stock when changed
 usage, remark, (like a table)
-est date shoudnt be < po date
+
+operator remark in the wip page
