@@ -568,6 +568,10 @@ export async function buildQueueRows(match) {
       // comments on models/inventory/pendingProduction.js). The operator app
       // runs against this one.
       deckleRunningMeters: p.deckleRunningMeters ?? null,
+      // Which device is currently running this job, if any. Additive and
+      // read only by the operator API's /queue, which turns it into a plain
+      // "not you, and who" flag -- the web queue pages ignore it.
+      runningOn: p.runningOn || null,
       deckleTarget: deckleTarget != null ? deckleTarget : null,
       rolls: rolls != null ? String(rolls) : "—",
       allottedRolls: allottedRolls != null ? String(allottedRolls) : "—",

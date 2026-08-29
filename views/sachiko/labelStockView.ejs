@@ -162,9 +162,10 @@
       background: #ffffff; font-size: 0.92rem; font-weight: 600; color: #334155; box-sizing: border-box;
     }
     /* Product Code -- an auto-derived base ("C023": first letter of the Family
-       + a running 3-digit sequence, assigned server-side) shown as a locked
-       prefix, followed by a free-text box the user types an optional suffix
-       into. The two are concatenated into #lsProductCode on submit. */
+       + a running 3-digit sequence) in the first box, followed by a free-text
+       box for an optional suffix. The two are concatenated into
+       #lsProductCode on submit. The base is auto-filled but EDITABLE for now,
+       a deliberate stop-gap until every code is serialized. */
     #ls-create-form .ls-code-input {
       display: flex; align-items: stretch; width: 100%; height: 2.65rem;
       border: 2px solid #94a3b8; border-radius: 8px; background: #ffffff;
@@ -191,9 +192,16 @@
     }
     #ls-create-form .ls-code-input:hover .ls-code-input__prefix { border-right-color: #64748b; }
     #ls-create-form .ls-code-input:focus-within .ls-code-input__prefix { border-right-color: #044a78; }
-    /* No base yet (Family not chosen, or a legacy code with no C### head) --
-       drop the chip so the box reads as one plain field. */
-    #ls-create-form .ls-code-input__prefix.is-empty { display: none; }
+    /* TEMPORARY: the base is editable until codes are fully serialized, so the
+       chip is an <input> and stays visible even when empty -- it can't be
+       hidden or there would be nowhere to type the base. */
+    #ls-create-form input.ls-code-input__prefix {
+      width: 5.5ch; min-width: 5.5ch; border: none; outline: none; margin: 0;
+      border-right: 2px solid #94a3b8; border-radius: 0; text-transform: uppercase;
+    }
+    #ls-create-form input.ls-code-input__prefix::placeholder {
+      color: #94a3b8; font-weight: 600; letter-spacing: 0;
+    }
     #ls-create-form .ls-code-input input {
       flex: 1 1 auto; min-width: 0; height: 100%;
       border: none; outline: none; margin: 0;
@@ -1335,17 +1343,19 @@
     // a preview there; on edit the posted value is saved as-is.
     const LS_CODE_BASE_RE = /^[A-Z]\d{3,}/;
 
+    // TEMPORARY: set once the operator types in the base box, so changing
+    // Family afterwards no longer renumbers a code they chose by hand. Reset
+    // whenever the dialog is re-rendered (new / edit / close).
+    let lsBaseEdited = false;
+
     function lsSyncProductCode() {
-      const prefixEl = document.getElementById("lsProductCodePrefix");
-      const base = prefixEl.classList.contains("is-empty") ? "" : prefixEl.textContent.trim();
+      const base = document.getElementById("lsProductCodePrefix").value.trim().toUpperCase();
       const suffix = document.getElementById("lsProductCodeSuffix").value.trim().toUpperCase();
       document.getElementById("lsProductCode").value = base + suffix;
     }
 
     function lsSetProductCodeBase(base) {
-      const prefixEl = document.getElementById("lsProductCodePrefix");
-      prefixEl.textContent = base || "—";
-      prefixEl.classList.toggle("is-empty", !base);
+      document.getElementById("lsProductCodePrefix").value = base || "";
       lsSyncProductCode();
     }
 
@@ -1358,10 +1368,15 @@
       const baseMatch = value.match(LS_CODE_BASE_RE);
       const base = baseMatch ? baseMatch[0] : "";
       document.getElementById("lsProductCodeSuffix").value = baseMatch ? value.slice(base.length) : value;
+      lsBaseEdited = false;
       lsSetProductCodeBase(base);
     }
 
     document.getElementById("lsProductCodeSuffix").addEventListener("input", lsSyncProductCode);
+    document.getElementById("lsProductCodePrefix").addEventListener("input", () => {
+      lsBaseEdited = true;
+      lsSyncProductCode();
+    });
 
     function lsFamilyCodeLetter(family) {
       return (String(family || "").toUpperCase().match(/[A-Z]/) || ["X"])[0];
@@ -1385,6 +1400,7 @@
     }
     function lsRefreshProductCode() {
       if (lsEditId) return; // never renumber an existing row -- keep its base and suffix
+      if (lsBaseEdited) return; // nor one the operator typed themselves
       const family = document.getElementById("lsFamily").value;
       lsSetProductCodeBase(family ? lsComputeProductCode(family) : ""); // keeps whatever suffix is already typed
     }
@@ -1587,7 +1603,7 @@
         <div class="dialog-field">
           <label class="dialog-field-label" for="lsProductCodeSuffix">Product Code</label>
           <div class="ls-code-input">
-            <span id="lsProductCodePrefix" class="ls-code-input__prefix is-empty">—</span>
+            <input type="text" id="lsProductCodePrefix" class="ls-code-input__prefix" autocomplete="off" spellcheck="false" placeholder="C###" aria-label="Product code base" />
             <input type="text" id="lsProductCodeSuffix" autocomplete="off" spellcheck="false" placeholder="type here" />
           </div>
           <input type="hidden" id="lsProductCode" name="productCode" />

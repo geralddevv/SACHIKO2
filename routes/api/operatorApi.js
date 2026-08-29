@@ -9,6 +9,7 @@ import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import MaintenanceRequest from "../../models/system/maintenanceRequest.js";
 import { authenticateOperator } from "../../utils/operatorAuth.js";
 import { signOperatorApiToken, requireOperatorApiAuth, requireOperatorApiMediaAuth } from "../../middleware/apiAuth.js";
+import { logAuthEvent } from "../../middleware/auditLogger.js";
 import { buildFacestockRollLabelPrn } from "../../utils/facestockRollLabel.js";
 import { buildAdhesiveRollLabelPrn } from "../../utils/adhesiveRollLabel.js";
 import { buildReleaseLinerRollLabelPrn } from "../../utils/releaseLinerRollLabel.js";
@@ -56,6 +57,46 @@ import {
  */
 const router = express.Router();
 
+/*
+ * Job-running claim ("this job is live on THIS device").
+ *
+ * operatorId already scopes a job to one operator, so this is not an auth
+ * boundary -- it exists because one operator can be signed into two devices
+ * at once, and punching the same job from both would interleave two sets of
+ * Job Setting / Production Log rows into one job card. The claim is taken at
+ * the first Start punch (POST /jobcard/claim), refreshed by that device's
+ * heartbeat, and cleared when the job card saves.
+ *
+ * A claim is only honoured while it is FRESH. A tablet that dies, is wiped,
+ * or simply has the app killed stops heartbeating, and once its claim is
+ * older than JOB_CLAIM_STALE_MS any device may take the job -- without that,
+ * a broken device would strand a job on the floor with no in-app recovery.
+ */
+const JOB_CLAIM_STALE_MS = 15 * 60 * 1000;
+const JOB_CLAIM_HEARTBEAT_MS = 60 * 1000;
+
+const deviceIdOf = (req) => String(req.get("x-device-id") || "").trim().slice(0, 128);
+const deviceLabelOf = (req) => String(req.get("x-device-label") || "").trim().slice(0, 64);
+
+// The claim on a doc, or null when there is none / it has gone stale.
+const activeClaim = (runningOn, now = Date.now()) => {
+  if (!runningOn || !runningOn.deviceId) return null;
+  const seen = runningOn.lastSeenAt || runningOn.claimedAt;
+  if (!seen) return null;
+  return now - new Date(seen).getTime() > JOB_CLAIM_STALE_MS ? null : runningOn;
+};
+
+// How a claim reads to a device that is NOT holding it.
+const claimStateFor = (runningOn, deviceId) => {
+  const held = activeClaim(runningOn);
+  const elsewhere = !!(held && held.deviceId !== deviceId);
+  return {
+    runningElsewhere: elsewhere,
+    runningOnLabel: elsewhere ? held.deviceLabel || "another device" : null,
+    runningSince: elsewhere ? held.claimedAt || null : null,
+  };
+};
+
 router.post("/login", loginLimiter, async (req, res) => {
   const { operatorNick, location } = req.body || {};
   const rawPw = (req.body || {}).password;
@@ -67,6 +108,11 @@ router.post("/login", loginLimiter, async (req, res) => {
 
   const { authUser } = result;
   const token = signOperatorApiToken(authUser);
+  // The auditLogger middleware only sees session-authenticated requests, so a
+  // bearer-token login would otherwise leave no trace at all. Fire-and-forget,
+  // exactly like the web portal's own login (server.js): an audit write must
+  // never be able to fail a sign-in on the shop floor.
+  logAuthEvent(authUser, "LOGIN", req, { via: "mobile app" });
   res.json({
     token,
     empName: authUser.empName,
@@ -84,6 +130,7 @@ router.get("/locations", async (req, res) => {
 });
 
 router.get("/queue", requireOperatorApiAuth, async (req, res) => {
+  const queueDeviceId = deviceIdOf(req);
   const queue = await buildOperatorQueue({
     empObjId: req.authUser.empObjId,
     empName: req.authUser.empName,
@@ -99,7 +146,12 @@ router.get("/queue", requireOperatorApiAuth, async (req, res) => {
     ...queue,
     groups: (queue.groups || []).map((group) => ({
       ...group,
-      jobs: (group.jobs || []).map(({ paperSize, rollType, ...job }) => job),
+      jobs: (group.jobs || []).map(({ paperSize, rollType, runningOn, ...job }) => ({
+        ...job,
+        // Whether THIS device may run the job. runningOn itself is never
+        // shipped -- the device only needs to know "not you, and who".
+        ...claimStateFor(runningOn, queueDeviceId),
+      })),
     })),
   });
 });
@@ -111,7 +163,7 @@ router.get("/jobcard/:pendingId", requireOperatorApiAuth, async (req, res) => {
   }
 
   const pendingDoc = await PendingProduction.findById(pendingId)
-    .select("assignedMachineId itemId allottedLayers materialSwapLog operatorId")
+    .select("assignedMachineId itemId allottedLayers materialSwapLog operatorId runningOn")
     .lean();
   if (!pendingDoc) {
     return res.status(404).json({ error: "Not found" });
@@ -155,6 +207,10 @@ router.get("/jobcard/:pendingId", requireOperatorApiAuth, async (req, res) => {
     eligibleRawStock,
     materialSwapLog: pendingDoc.materialSwapLog || [],
     submissionToken: randomUUID(),
+    // So the screen can disable its Start punches on open, rather than only
+    // finding out when the claim is refused.
+    ...claimStateFor(pendingDoc.runningOn, deviceIdOf(req)),
+    heartbeatMs: JOB_CLAIM_HEARTBEAT_MS,
   });
 });
 
@@ -218,6 +274,76 @@ router.post("/jobcard/material/check", requireOperatorApiAuth, createLimiter, as
   } catch (err) {
     console.error("OPERATOR API MATERIAL CHECK ERROR:", err);
     res.status(500).json({ ok: false, code: "error" });
+  }
+});
+
+// Take (or re-take) the running claim on a job for this device. Called at the
+// first Job Setting Start punch. The update is a single atomic conditional
+// write rather than read-then-write: two devices punching Start at the same
+// instant is the exact race this feature exists to stop, so the filter -- free,
+// already ours, or gone stale -- is what decides the winner, not a prior read.
+router.post("/jobcard/claim", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    const { pendingId } = req.body || {};
+    const deviceId = deviceIdOf(req);
+    if (!mongoose.isValidObjectId(pendingId) || !deviceId) {
+      return res.status(400).json({ ok: false, code: "bad-request" });
+    }
+
+    const pendingDoc = await PendingProduction.findById(pendingId).select("operatorId").lean();
+    if (!pendingDoc) return res.status(404).json({ ok: false, code: "no-order" });
+    if (String(pendingDoc.operatorId || "") !== req.authUser.empObjId) {
+      return res.status(403).json({ ok: false, code: "forbidden" });
+    }
+
+    const now = new Date();
+    const staleBefore = new Date(now.getTime() - JOB_CLAIM_STALE_MS);
+    const claimed = await PendingProduction.findOneAndUpdate(
+      {
+        _id: pendingId,
+        $or: [
+          { runningOn: null },
+          { "runningOn.deviceId": { $in: [null, ""] } },
+          { "runningOn.deviceId": { $exists: false } },
+          { "runningOn.deviceId": deviceId },
+          { "runningOn.lastSeenAt": { $lt: staleBefore } },
+        ],
+      },
+      { $set: { runningOn: { deviceId, deviceLabel: deviceLabelOf(req), claimedAt: now, lastSeenAt: now } } },
+      { new: true, projection: { runningOn: 1 } },
+    ).lean();
+
+    if (!claimed) {
+      const current = await PendingProduction.findById(pendingId).select("runningOn").lean();
+      return res.status(409).json({ ok: false, code: "running-elsewhere", ...claimStateFor(current?.runningOn, deviceId) });
+    }
+    return res.json({ ok: true, heartbeatMs: JOB_CLAIM_HEARTBEAT_MS });
+  } catch (err) {
+    return res.status(500).json({ ok: false });
+  }
+});
+
+// Keep this device's claim fresh while the job card is open. `ok: false` means
+// the claim is no longer ours (it went stale and someone else took it), which
+// the app surfaces rather than silently carrying on.
+router.post("/jobcard/heartbeat", requireOperatorApiAuth, async (req, res) => {
+  try {
+    const { pendingId } = req.body || {};
+    const deviceId = deviceIdOf(req);
+    if (!mongoose.isValidObjectId(pendingId) || !deviceId) {
+      return res.status(400).json({ ok: false, code: "bad-request" });
+    }
+    const result = await PendingProduction.updateOne(
+      { _id: pendingId, "runningOn.deviceId": deviceId },
+      { $set: { "runningOn.lastSeenAt": new Date() } },
+    );
+    if (!result.matchedCount) {
+      const current = await PendingProduction.findById(pendingId).select("runningOn").lean();
+      return res.status(409).json({ ok: false, code: "claim-lost", ...claimStateFor(current?.runningOn, deviceId) });
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false });
   }
 });
 
@@ -467,6 +593,11 @@ router.post("/jobcard", requireOperatorApiAuth, createLimiter, async (req, res) 
     }
     if (result.status === "gate-failed" || result.status === "wip-clash") {
       return res.status(409).json({ status: result.status, message: result.message });
+    }
+    // The job is no longer running anywhere: its rows are now a saved job
+    // card, so drop the claim rather than waiting for it to go stale.
+    if (mongoose.isValidObjectId(body.pendingId)) {
+      await PendingProduction.updateOne({ _id: body.pendingId }, { $unset: { runningOn: "" } });
     }
     return res.json({
       status: "ok",

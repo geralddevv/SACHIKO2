@@ -154,6 +154,23 @@ const pendingProductionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: undefined,
     },
+    // Which mobile device is currently RUNNING this job, so the same operator
+    // signed in on a second device can't punch the same job twice. Claimed by
+    // POST /sachiko/api/operator/jobcard/claim the moment the first Job Setting
+    // Start is punched, refreshed by that device's heartbeat, and cleared when
+    // the job card saves. `lastSeenAt` is what makes the claim recoverable: a
+    // device that dies mid-job stops heartbeating, and once the claim goes
+    // stale (see JOB_CLAIM_STALE_MS in routes/api/operatorApi.js) any device
+    // may take it -- otherwise a wiped or broken tablet would block the job on
+    // the floor permanently. Deliberately NOT an auth boundary: operatorId
+    // already scopes a job to one operator, this only stops one operator
+    // double-running it.
+    runningOn: {
+      deviceId: { type: String },
+      deviceLabel: { type: String },
+      claimedAt: { type: Date },
+      lastSeenAt: { type: Date },
+    },
     // One entry per roll/drum an operator swapped out mid-job via the
     // Materials in Use "Add" flow on the Job Card (POST /sachiko/machine/
     // jobcard/material/set-remaining) -- the live counterpart to the

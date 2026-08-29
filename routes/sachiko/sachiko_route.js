@@ -347,9 +347,31 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
         userMessage: `This exact combination already exists as Product Code "${specMatch.productCode}".`,
       });
     }
-    const productCodeBase = await generateFamilyProductCode(payload.family);
-    const productCodeSuffix = trim(payload.productCode).toUpperCase().replace(/^[A-Z]\d{3,}/, "");
-    payload.productCode = productCodeBase + productCodeSuffix;
+    // TEMPORARY (until every Label Stock code is serialized): a typed
+    // "<letter><digits>" head is honoured exactly as entered instead of being
+    // stripped and replaced by the generated base, so an operator can pin a
+    // specific code by hand from the create dialog. Type no head and the base
+    // is still generated as before, with whatever was typed kept as the
+    // suffix. To go back to fully-automatic codes, drop this branch and make
+    // #lsProductCodePrefix in views/sachiko/labelStockView.ejs readonly again.
+    const typedProductCode = trim(payload.productCode).toUpperCase();
+    if (/^[A-Z]\d{3,}/.test(typedProductCode)) {
+      // productCode has no unique index, and variant resolution looks a base
+      // up with findOne({ productCode }) -- two rows sharing a code would make
+      // that pick an arbitrary one, so refuse the clash outright.
+      const codeClash = await SachikoLabelStock.findOne({ productCode: typedProductCode })
+        .select("productCode")
+        .lean();
+      if (codeClash) {
+        throw Object.assign(new Error("Duplicate Product Code"), {
+          userMessage: `Product Code "${typedProductCode}" is already in use. Enter a different code.`,
+        });
+      }
+      payload.productCode = typedProductCode;
+    } else {
+      const productCodeBase = await generateFamilyProductCode(payload.family);
+      payload.productCode = productCodeBase + typedProductCode;
+    }
     const skuCode = await resolveLabelStockSkuCode(payload.productCode);
 
     const labelStockSignature = buildLabelStockSignature(payload);

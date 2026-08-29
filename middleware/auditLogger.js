@@ -109,7 +109,14 @@ export function auditLogger(req, res, next) {
   next();
 }
 
-export async function logAuthEvent(authUser, action, req) {
+// `via` names the client the event came from, for the sessions the auditLogger
+// middleware above can never see: it keys off req.session.authUser, and the
+// mobile operator app is bearer-authenticated (req.authUser), so nothing it
+// does passes through that middleware. Omitted for the web portal so its
+// existing entries read exactly as before.
+export async function logAuthEvent(authUser, action, req, { via } = {}) {
+  const who = authUser?.empName || authUser?.username;
+  const suffix = via ? ` (${via})` : "";
   try {
     await AuditLog.create({
       username: authUser?.username,
@@ -119,7 +126,7 @@ export async function logAuthEvent(authUser, action, req) {
       action,
       method: req.method,
       path: req.path,
-      description: action === "LOGIN" ? `Logged in as "${authUser?.empName || authUser?.username}"` : `Logged out "${authUser?.empName || authUser?.username}"`,
+      description: action === "LOGIN" ? `Logged in as "${who}"${suffix}` : `Logged out "${who}"${suffix}`,
       statusCode: 200,
       ip: req.ip,
     });
