@@ -4626,7 +4626,7 @@ router.get("/labels/production/deckle-set", async (req, res) => {
   });
 
   res.render("inventory/orders/deckleSet.ejs", {
-    title: "Deckle Set",
+    title: "Deckle Sorting",
     CSS: "tableDisp.css",
     JS: false,
     rows: [...batchRows, ...looseRows],
@@ -4928,7 +4928,7 @@ router.get("/labels/production/pending", async (req, res) => {
     .sort((a, b) => new Date(b.estimatedDate || 0) - new Date(a.estimatedDate || 0));
 
   res.render("inventory/orders/pendingProduction.ejs", {
-    title: initialTab === "wip" ? "WIP Production" : "Pending Production",
+    title: initialTab === "wip" ? "WIP" : "Pending Production",
     CSS: "tableDisp.css",
     JS: false,
     orders,
