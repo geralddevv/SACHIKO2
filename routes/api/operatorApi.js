@@ -90,7 +90,18 @@ router.get("/queue", requireOperatorApiAuth, async (req, res) => {
     empNickName: req.authUser.empNickName,
     empLoc: req.authUser.empLoc,
   });
-  res.json(queue);
+  // The app's queue card shows neither the paper size nor the roll type, so
+  // don't ship them to the device. Both stay on buildQueueRows itself: the
+  // web operator queue renders paperSize as its own column (see
+  // views/inventory/masters/operatorQueue.ejs), and /jobcard's prefill still
+  // carries it -- JobCardScreen parses paperSize into its sq-mtr figure.
+  res.json({
+    ...queue,
+    groups: (queue.groups || []).map((group) => ({
+      ...group,
+      jobs: (group.jobs || []).map(({ paperSize, rollType, ...job }) => job),
+    })),
+  });
 });
 
 router.get("/jobcard/:pendingId", requireOperatorApiAuth, async (req, res) => {

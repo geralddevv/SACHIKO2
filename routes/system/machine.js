@@ -562,6 +562,12 @@ export async function buildQueueRows(match) {
       // shown in place of the bare number where present, same as the Deckle
       // Queue / Assign Production pages.
       runningMetersText: p.runningMetersText || "",
+      // Length of ONE deckle web, as typed into Deckle Set's "Per deckle"
+      // input -- distinct from runningMeters above, which is the whole job's
+      // finished length across every roll slit off that web (see the field
+      // comments on models/inventory/pendingProduction.js). The operator app
+      // runs against this one.
+      deckleRunningMeters: p.deckleRunningMeters ?? null,
       deckleTarget: deckleTarget != null ? deckleTarget : null,
       rolls: rolls != null ? String(rolls) : "—",
       allottedRolls: allottedRolls != null ? String(allottedRolls) : "—",
