@@ -16,7 +16,7 @@ import { buildReleaseLinerRollLabelPrn } from "../../utils/releaseLinerRollLabel
 import { buildMaterialStockRollLabelPrn } from "../../utils/materialStockRollLabel.js";
 import { loginLimiter, createLimiter } from "../../utils/limiters.js";
 import { POOL_MODELS, pickStockIds, getEligibleRawMaterials } from "../../utils/labelStockProduction.js";
-import { extractScannedRollId } from "../../utils/rollId.js";
+import { findScannedReel } from "../../utils/rollId.js";
 import {
   buildQueueRows,
   buildOperatorQueue,
@@ -219,8 +219,7 @@ router.post("/jobcard/material/check", requireOperatorApiAuth, createLimiter, as
     const { pendingId, pool, rollId, mounted } = req.body || {};
     if (!mongoose.isValidObjectId(pendingId)) return res.status(400).json({ ok: false, code: "bad-request" });
     if (!POOL_MODELS[pool]) return res.status(400).json({ ok: false, code: "bad-request" });
-    const cleanId = extractScannedRollId(rollId);
-    if (!cleanId) return res.json({ ok: false, code: "unknown" });
+    if (!String(rollId ?? "").trim()) return res.json({ ok: false, code: "unknown" });
 
     const pendingDoc = await PendingProduction.findById(pendingId).select("itemId allottedLayers operatorId").lean();
     if (!pendingDoc) return res.status(404).json({ ok: false, code: "no-order" });
@@ -228,7 +227,11 @@ router.post("/jobcard/material/check", requireOperatorApiAuth, createLimiter, as
       return res.status(403).json({ ok: false, code: "forbidden" });
     }
 
-    const reel = await POOL_MODELS[pool].Model.findOne({ rollId: cleanId }).lean();
+    // Resolved against stock itself rather than parsed down to one id first:
+    // a label's QR ends with the Roll ID glued straight onto the box in front
+    // of it, so only stock can say where the id starts. See findScannedReel in
+    // utils/rollId.js.
+    const reel = await findScannedReel(POOL_MODELS[pool].Model, rollId);
     if (!reel) return res.json({ ok: false, code: "unknown" });
 
     const eligible = await getEligibleRawMaterials({
@@ -359,10 +362,13 @@ router.post("/jobcard/mark-in-use", requireOperatorApiAuth, createLimiter, async
       return res.status(403).json({ success: false });
     }
 
-    const cleanId = extractScannedRollId(rollId);
-    if (!cleanId) return res.status(400).json({ success: false });
+    if (!String(rollId ?? "").trim()) return res.status(400).json({ success: false });
 
-    const reel = await poolInfo.Model.findOne({ rollId: cleanId }).select("_id rollId").lean();
+    // Resolved against stock itself rather than parsed down to one id first:
+    // a label's QR ends with the Roll ID glued straight onto the box in front
+    // of it, so only stock can say where the id starts. See findScannedReel in
+    // utils/rollId.js.
+    const reel = await findScannedReel(poolInfo.Model, rollId, "_id rollId");
     if (!reel) return res.status(404).json({ success: false });
 
     const { byStockId } = await reelsInUseElsewhere(pendingId);
@@ -721,6 +727,62 @@ router.get("/deckle/:stockId/prn", requireOperatorApiAuth, async (req, res) => {
  * difference is these return JSON instead of rendering EJS and are
  * bearer-authed.
  */
+
+// ── Logs ─────────────────────────────────────────────────────────────────────
+// What this operator actually produced on one day, for the app's Logs tab.
+// A "log" here is one Deckle: produceDecklesFromLog mints exactly one
+// MaterialStock per Production Log row punched, so counting them is counting
+// the rows the operator ran.
+//
+// Scoped by the order's own operatorId rather than by the Deckle's createdBy
+// name -- createdBy is a display string, and the order is what actually
+// belongs to an operator (the same field /queue and /jobcard authorise on).
+router.get("/logs", requireOperatorApiAuth, async (req, res) => {
+  const operatorObjId = req.authUser?.empObjId;
+  if (!operatorObjId || !mongoose.isValidObjectId(operatorObjId)) {
+    return res.json({ date: "", rows: [], totals: { deckles: 0, meters: 0 } });
+  }
+
+  // The day is whatever the device calls today: the operator reads this
+  // against their own shift, and the server may not sit in their timezone.
+  // Falls back to the server's day when the app sends nothing.
+  const raw = String(req.query.date || "").trim();
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : new Date().toISOString().slice(0, 10);
+  const offsetMin = Number.isFinite(Number(req.query.tzOffset)) ? Number(req.query.tzOffset) : 0;
+  // getTimezoneOffset()'s sign: minutes to ADD to local time to reach UTC.
+  const start = new Date(`${day}T00:00:00.000Z`);
+  start.setUTCMinutes(start.getUTCMinutes() + offsetMin);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+
+  const deckles = await MaterialStock.find({
+    producedVia: "jobcard",
+    createdAt: { $gte: start, $lt: end },
+  })
+    .select("rollId reelMtrs size lotNo material producedFor createdAt")
+    .populate({ path: "material", select: "productCode" })
+    .populate({ path: "producedFor", select: "operatorId" })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const mine = deckles.filter((d) => String(d.producedFor?.operatorId || "") === String(operatorObjId));
+
+  res.json({
+    date: day,
+    rows: mine.map((d) => ({
+      deckleId: d.rollId || "",
+      productCode: d.material?.productCode || "",
+      lotNo: d.lotNo || "",
+      size: d.size || "",
+      meters: Number(d.reelMtrs) || 0,
+      at: d.createdAt,
+    })),
+    totals: {
+      deckles: mine.length,
+      meters: Math.round(mine.reduce((sum, d) => sum + (Number(d.reelMtrs) || 0), 0) * 100) / 100,
+    },
+  });
+});
 
 router.get("/maintenance", requireOperatorApiAuth, async (req, res) => {
   const authUser = req.authUser;

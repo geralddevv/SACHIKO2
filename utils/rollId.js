@@ -20,8 +20,18 @@ import MaterialStock from "../models/inventory/materialStock.js";
 
 // Accepts both pre-existing three-part roll IDs and the current five-part
 // Deckle IDs, so stock already created before the format change remains
-// scannable and searchable.
-export const ROLL_ID_RE = /^(?:[A-Z0-9-]+\/\d{2}-\d{2}\/\d{3,}|[A-Z0-9-]+\/\d{2}-\d{2}\/[A-Z]+\d{4,}\/\d{5,})$/;
+// scannable and searchable. Built from its parts because extractScannedRollId
+// below needs the two tails on their own as well -- a printed label's QR ends
+// with the Roll ID rather than being one, so the id has to be found by its
+// tail. An item code may carry hyphens inside it but never leads or ends with
+// one (nothing that mints one produces that, and allowing it would let the
+// dashed-out empty boxes on a label be read as part of an id).
+const FY = "\\d{2}-\\d{2}";
+const SEQ_TAIL = `\\/${FY}\\/\\d{3,}`;                       // .../26-27/007
+const DECKLE_TAIL = `\\/${FY}\\/[A-Z]+\\d{4,}\\/\\d{5,}`;   // .../26-27/G0004/00001
+const ITEM_CODE = "[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?";
+
+export const ROLL_ID_RE = new RegExp(`^(?:${ITEM_CODE}${SEQ_TAIL}|${ITEM_CODE}${DECKLE_TAIL})$`);
 
 const normalizeItemCode = (value) => String(value ?? "").trim().toUpperCase();
 
@@ -61,14 +71,184 @@ export const formatRollId = (itemCode, fy, seq) => `${itemCode}/${fy}/${String(s
 // the stored (and compared) form is upper case with no spaces.
 export const normalizeRollId = (value) => String(value ?? "").trim().replace(/\s+/g, "").toUpperCase();
 
-// The QR on the label doesn't carry the Roll ID alone -- its payload is
-// "rollId vendorRollId paperSize reelMtrs" (see utils/rollLabel.js), so a
-// scan into a Roll ID box arrives as that whole space-separated string. The
-// Roll ID is always the first token; this pulls just that out and normalizes
-// it, so matching still works whether the box holds a full scan or someone
-// typed/picked a bare roll id by hand. Must stay in step with the client copy
-// in views/inventory/masters/jobCardForm.ejs.
-export const extractScannedRollId = (value) => normalizeRollId(String(value ?? "").trim().split(/\s+/)[0] || "");
+// ---------------------------------------------------------------------------
+// Reading a Roll ID back off a scan.
+//
+// A scan does NOT arrive as a Roll ID. There are two QR payload formats, and
+// the Roll ID sits in a different place in each:
+//
+//  1. utils/rollLabel.js -- "rollId vendorRollId paperSize reelMtrs", space
+//     separated, Roll ID FIRST. The on-screen preview label.
+//
+//  2. utils/materialRollLabel.js (buildQrPayloadFromFields) -- the payload on
+//     the *printed* sticker a reel gets when its stock is created at inward,
+//     and the one a phone or a hand scanner on the shop floor actually meets.
+//     It runs twelve fields together with NO separator at all, in the sample
+//     label's own order, and the Roll ID is the LAST of them:
+//
+//       clientName prodCode mfgDate face joints lotNo
+//       adhesive release length weight width rollId
+//
+//     A facestock reel therefore scans as
+//       "AVERY DENNISONAD-710013-8-2026--INV/2026/1123---250KG1000FACESTOCK/26-27/007"
+//     and a produced Deckle as
+//       "-C00113-8-2026-2LOT-0004--1200MTR-1000C001/26-27/G0004/00001"
+//
+// This used to take the first whitespace-separated token, which reads "AVERY"
+// off that first label -- format 2 has to be read from the END instead.
+//
+// Reading it from the end is exact down to one point: the field before the
+// Roll ID (`width`, e.g. "1000") is glued straight onto the item code with
+// nothing between them, and every character of both is legal in an item code.
+// The rules below settle that with evidence rather than a guess, and where
+// they have none they keep the whole run -- an id that reads back as "unknown
+// reel" is recoverable, one silently shortened into a DIFFERENT reel's id is
+// not. findScannedReel() removes the guesswork entirely where a Model is at
+// hand: it asks the database which candidate actually exists.
+//
+// Must stay in step with the client copy in
+// views/inventory/masters/jobCardForm.ejs and with the operator app's own
+// src/utils/rollId.js.
+// ---------------------------------------------------------------------------
+
+// A Roll ID's tail where format 2 puts it: at the very end of the payload.
+const TRAILING_TAIL_RE = new RegExp(`(?:${DECKLE_TAIL}|${SEQ_TAIL})$`);
+// Everything item-code-legal immediately before that tail. This deliberately
+// over-reaches (it runs back through `width` and, on a Deckle label, through
+// most of the payload) -- narrowing it down is the job of the rules below.
+const CODE_RUN_RE = /[A-Z0-9-]+$/;
+// The fixed item codes utils/materialRollId.js mints for the raw-material
+// pools (each of routes/stock/{facestock,adhesive,releaseLiner,core}Stock.js's
+// own ROLL_ID_PREFIX). For those the item code is a known constant, so there
+// is nothing to infer.
+const POOL_PREFIX_RE = /(FACESTOCK|ADHESIVE|RELEASE|CORE)$/;
+// Where a Deckle label's PROD CODE box lands in the compacted payload. It is
+// field 2, and field 1 (CLIENT NAME) is hardcoded "-" on that label -- see
+// utils/materialStockRollLabel.js's buildLabelFields -- so a corroborating
+// product code always starts at index 1. Bounding it there is what stops a
+// stray one-character coincidence deeper in the payload passing as evidence.
+const PROD_CODE_START = 1;
+
+// Every Roll ID this scan could be, best first. Used on its own by
+// extractScannedRollId (take the first) and by findScannedReel (ask the
+// database which one exists).
+export function scannedRollIdCandidates(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return [];
+
+  const out = [];
+  const push = (id) => {
+    if (id && ROLL_ID_RE.test(id) && !out.includes(id)) out.push(id);
+  };
+
+  const first = normalizeRollId(raw.split(/\s+/)[0]);
+  const compact = normalizeRollId(raw);
+
+  // Format 1: Roll ID first, then vendorRollId/paperSize/reelMtrs. Taken
+  // before whitespace is squeezed out, because collapsing
+  // "C011/26-27/048 12345" first would run the trailing vendor roll number
+  // into the sequence and read it back as ".../04812345".
+  //
+  // Only when the entry really is several tokens, though. A format-2 payload
+  // has no separators at all, and its own run-together text can itself
+  // satisfy the (deliberately permissive) Roll ID grammar -- an item code may
+  // hold digits and hyphens, so "UPM-13-8-2026------90KG-FACESTOCK/26-27/113"
+  // parses as one -- which would hand back the whole sticker as an id. A
+  // single token goes to the structural read below, which gives the same
+  // answer for a genuinely bare id and the right one for a payload.
+  if (compact !== first) push(first);
+
+  const tail = TRAILING_TAIL_RE.exec(compact);
+  if (!tail) return out;
+  const before = compact.slice(0, tail.index);
+  const run = CODE_RUN_RE.exec(before);
+  if (!run) return out;
+
+  // A raw-material reel: the run ends in one of the four minted prefixes, and
+  // that prefix IS the item code. Exact.
+  const pool = POOL_PREFIX_RE.exec(run[0]);
+  if (pool) push(pool[1] + tail[0]);
+
+  // A Deckle: the label names its own item code twice, because the PROD CODE
+  // box holds exactly the code the Roll ID is built from. So the longest
+  // suffix of the run that also opens the payload at PROD_CODE_START is the
+  // item code -- "C001" is corroborated there, while "1000C001", "000C001",
+  // ... (the same run with more of `width` still stuck to it) are not. The
+  // occurrence must be strictly before the candidate's own position, so the
+  // run can never corroborate itself.
+  for (let i = 0; i < run[0].length; i++) {
+    const candidate = run[0].slice(i);
+    const at = compact.indexOf(candidate);
+    if (candidate[0] !== "-" && at === PROD_CODE_START && at < run.index + i) {
+      push(candidate + tail[0]);
+      break;
+    }
+  }
+
+  // Nothing corroborated: every remaining way the run could split, longest
+  // item code first. The first of these is the whole run, which is what
+  // extractScannedRollId falls back to -- it would rather hand the server an
+  // id that does not exist than one that exists and is the wrong reel. The
+  // shorter splits are there for findScannedReel, which can tell them apart
+  // by asking the database.
+  for (let i = 0; i < run[0].length; i++) {
+    if (run[0][i] !== "-") push(run[0].slice(i) + tail[0]);
+  }
+  return out;
+}
+
+// The single best reading of a scan (or of a typed/stored id, which passes
+// through unchanged bar normalisation).
+//
+// `knownRollIds` is optional: pass the Roll IDs already known to belong to the
+// pool being scanned into and an exact match against those is preferred to any
+// parsing -- a format-2 payload ENDS with the reel's Roll ID, a format-1 one
+// STARTS with it, and a typed one is it. The web form and the operator app
+// both have that list; server-side callers with a Model in hand should use
+// findScannedReel below instead, which is exact for every reel in the pool.
+export function extractScannedRollId(value, knownRollIds) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const first = normalizeRollId(raw.split(/\s+/)[0]);
+
+  if (Array.isArray(knownRollIds) && knownRollIds.length) {
+    const compact = normalizeRollId(raw);
+    const known = knownRollIds
+      .map(normalizeRollId)
+      .filter((id) => id && (compact === id || compact.endsWith(id) || compact.startsWith(id)))
+      .sort((a, b) => b.length - a.length)[0];
+    if (known) return known;
+  }
+
+  // The best-ranked reading, or -- when there is nothing roll-ID-shaped in
+  // there at all -- the old first-token rule, so an id in some format this
+  // file doesn't know still reaches its lookup to be judged there rather than
+  // being swallowed here.
+  return scannedRollIdCandidates(raw)[0] || first;
+}
+
+// The reel a scan actually names, resolved against the pool it was scanned
+// into. This is the exact answer where extractScannedRollId can only be a best
+// reading: the ambiguity is always which prefix of the item code belongs to
+// the `width` box in front of it, and only stock itself can say. Candidates
+// are looked up in one indexed query and the best-ranked one that exists wins,
+// so a product code that happens to contain a shorter one can't shadow it.
+export async function findScannedReel(Model, value, select) {
+  const candidates = scannedRollIdCandidates(value);
+  if (!candidates.length) return null;
+
+  let query = Model.find({ rollId: { $in: candidates } });
+  if (select) query = query.select(select);
+  const docs = await query.lean();
+  if (!docs.length) return null;
+
+  const byRollId = new Map(docs.map((doc) => [normalizeRollId(doc.rollId), doc]));
+  for (const candidate of candidates) {
+    const doc = byRollId.get(candidate);
+    if (doc) return doc;
+  }
+  return null;
+}
 
 // Claims the next sequence number for this item code's current financial
 // year. A generated id is checked against stock before it is handed out, so

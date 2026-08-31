@@ -127,30 +127,67 @@ if (hasCollision) {
 console.log(`Base rows (contiguous 000001-${String(baseDocs.length).padStart(6, "0")}): ${baseDocs.length}`);
 console.log(`Variant rows (re-anchored to base): ${variantDocs.length}\n`);
 
-let changed = 0;
-// Process base rows first, in ascending new-number order: each base row's
-// new number is always <= its own old number (closing gaps only shrinks),
-// and every row processed later still holds an old SKU strictly greater than
-// any number already written, so no in-flight collision with an
-// not-yet-updated row is possible.
+// Every row whose SKU actually moves, in BASE-then-VARIANT print order.
+const changes = [];
 for (const doc of baseDocs) {
   const newSku = newSkuById.get(doc._id.toString());
-  const label = `${doc.productCode || "(no product code)"} / ${doc.labelStockId || "(no ID)"} (_id ${doc._id})`;
   if (newSku === doc.skuCode) continue;
-  console.log(`BASE     ${label}`);
-  console.log(`           "${doc.skuCode}" -> "${newSku}"`);
-  if (APPLY) await SachikoLabelStock.updateOne({ _id: doc._id }, { $set: { skuCode: newSku } });
-  changed++;
+  changes.push({ doc, newSku, kind: "BASE    ", note: "" });
 }
-for (const { doc, baseDoc, suffix } of variantDocs) {
+for (const { doc, baseDoc } of variantDocs) {
   const newSku = newSkuById.get(doc._id.toString());
-  const label = `${doc.productCode || "(no product code)"} / ${doc.labelStockId || "(no ID)"} (_id ${doc._id})`;
   if (newSku === doc.skuCode) continue;
-  console.log(`VARIANT  ${label}  (base: ${baseDoc.productCode})`);
-  console.log(`           "${doc.skuCode}" -> "${newSku}"`);
-  if (APPLY) await SachikoLabelStock.updateOne({ _id: doc._id }, { $set: { skuCode: newSku } });
-  changed++;
+  changes.push({ doc, newSku, kind: "VARIANT ", note: `  (base: ${baseDoc.productCode})` });
 }
+
+for (const { doc, newSku, kind, note } of changes) {
+  console.log(`${kind} ${doc.productCode || "(no product code)"} / ${doc.labelStockId || "(no ID)"} (_id ${doc._id})${note}`);
+  console.log(`           "${doc.skuCode}" -> "${newSku}"`);
+}
+
+// skuCode carries a unique index, and a row's new SKU is very often one that
+// another row is still holding -- so the mapping cannot simply be looped over
+// and written. Ordering the writes does not rescue it either: this used to
+// process base rows in ascending new-number order on the reasoning that a new
+// number is never higher than the old one, which is only true when the old
+// numbering ran in the same order as `createdAt`. It doesn't. A row created
+// early can hold a high old number (or, after past hand-edits, a variant-
+// shaped SKU like "SP | LS | 000013-A" on a base row), so its new number goes
+// UP and lands on a row not yet processed -- E11000. And no ordering can fix
+// the general case anyway, because the mapping may contain cycles: two rows
+// swapping numbers have no safe order at all.
+//
+// So: park every changing row on a temporary value first, then land them all.
+// Two passes, no collisions, whatever the mapping looks like.
+//
+// The temp value is built from _id -- unique by construction, and prefixed
+// with something no real SKU contains, so it can collide with neither an old
+// nor a new SKU. If a run dies between the passes, some rows are left parked;
+// simply re-running the script finishes the job, because the mapping is
+// derived from productCode and createdAt only and never reads the current
+// skuCode. (A dry run will show those rows as `"__reseq__..." -> "SP | ..."`.)
+const tempSkuFor = (doc) => `__reseq__${doc._id}`;
+
+if (APPLY && changes.length) {
+  try {
+    for (const { doc } of changes) {
+      await SachikoLabelStock.updateOne({ _id: doc._id }, { $set: { skuCode: tempSkuFor(doc) } });
+    }
+    for (const { doc, newSku } of changes) {
+      await SachikoLabelStock.updateOne({ _id: doc._id }, { $set: { skuCode: newSku } });
+    }
+  } catch (err) {
+    console.error(`\nFAILED part-way through: ${err.message}`);
+    console.error("Some rows may be left on a temporary \"__reseq__<id>\" skuCode.");
+    console.error("Re-run this script (dry-run first) -- it recomputes the same");
+    console.error("mapping from productCode/createdAt and will finish the move.");
+    process.exitCode = 1;
+    await SachikoLabelStock.db.close();
+    process.exit(1);
+  }
+}
+
+const changed = changes.length;
 
 console.log(`\n--- Summary ---`);
 console.log(`Records ${APPLY ? "updated" : "that would change"}: ${changed} / ${docs.length}`);
@@ -161,6 +198,11 @@ if (APPLY) {
   const distinctSkus = (await SachikoLabelStock.distinct("skuCode")).length;
   if (distinctSkus !== finalCount) {
     console.error(`\nWARNING: post-apply skuCode count (${distinctSkus}) does not match document count (${finalCount}) -- investigate before trusting the data.`);
+  }
+  // Nothing should still be parked once both passes have run.
+  const stranded = await SachikoLabelStock.countDocuments({ skuCode: /^__reseq__/ });
+  if (stranded) {
+    console.error(`\nWARNING: ${stranded} row(s) still hold a temporary "__reseq__<id>" skuCode -- re-run this script to finish moving them.`);
   }
 }
 

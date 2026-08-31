@@ -1041,7 +1041,95 @@
     const ALLOTTED_RL_ROLLS = JSON.parse(document.getElementById("allotted-rl-rolls-data")?.textContent || "[]");
 
     const normRollId = (v) => String(v ?? "").trim().replace(/\s+/g, "").toUpperCase();
-    const extractScannedRollId = (v) => normRollId(String(v ?? "").trim().split(/\s+/)[0] || "");
+
+    // Reading a Roll ID back off a scan. Kept in step with the server's own
+    // utils/rollId.js (and the operator app's src/utils/rollId.js) -- see that
+    // file for the full reasoning; in short:
+    //
+    // A scan is not a Roll ID. The sticker a reel gets when its stock is
+    // created (utils/materialRollLabel.js) puts the WHOLE label in its QR --
+    // client, product code, dates, invoice, weight, size and the Roll ID last
+    // -- run together with no separator at all, e.g.
+    //   "AVERY DENNISONAD-710013-8-2026--INV/2026/1123---250KG1000FACESTOCK/26-27/007"
+    // Taking the first whitespace token, which is what this did, reads
+    // "AVERY" off that. The id has to be found by its tail instead, and the
+    // only ambiguity left is where the `width` box in front of it stops: that
+    // is settled by the four minted pool prefixes, by a Deckle label naming
+    // its own product code twice, or -- best of all -- by ELIGIBLE_BY_POOL,
+    // the reels the server already told this page about.
+    const FY_RE = "\\d{2}-\\d{2}";
+    const SEQ_TAIL_RE = "\\/" + FY_RE + "\\/\\d{3,}";
+    const DECKLE_TAIL_RE = "\\/" + FY_RE + "\\/[A-Z]+\\d{4,}\\/\\d{5,}";
+    const ITEM_CODE_RE = "[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?";
+    const ROLL_ID_RE = new RegExp("^(?:" + ITEM_CODE_RE + SEQ_TAIL_RE + "|" + ITEM_CODE_RE + DECKLE_TAIL_RE + ")$");
+    const TRAILING_TAIL_RE = new RegExp("(?:" + DECKLE_TAIL_RE + "|" + SEQ_TAIL_RE + ")$");
+    const CODE_RUN_RE = /[A-Z0-9-]+$/;
+    const POOL_PREFIX_RE = /(FACESTOCK|ADHESIVE|RELEASE|CORE)$/;
+    const PROD_CODE_START = 1; // a Deckle label's CLIENT NAME box is always "-"
+
+    function extractScannedRollId(v, knownRollIds) {
+      const raw = String(v ?? "").trim();
+      if (!raw) return "";
+      const first = normRollId(raw.split(/\s+/)[0]);
+      const compact = normRollId(raw);
+
+      // Reels this page already knows about: a label payload ENDS with the
+      // reel's Roll ID, the older space-separated payload STARTS with it, and
+      // a typed one is it. An exact hit here beats any parsing.
+      if (Array.isArray(knownRollIds) && knownRollIds.length) {
+        const known = knownRollIds
+          .map(normRollId)
+          .filter((id) => id && (compact === id || compact.endsWith(id) || compact.startsWith(id)))
+          .sort((a, b) => b.length - a.length)[0];
+        if (known) return known;
+      }
+
+      // The older "rollId vendorRollId paperSize reelMtrs" payload -- but only
+      // when the entry really is several tokens. A run-together label payload
+      // can itself satisfy the (permissive) Roll ID grammar, and would then
+      // hand back the whole sticker as an id.
+      if (compact !== first && ROLL_ID_RE.test(first)) return first;
+
+      const tail = TRAILING_TAIL_RE.exec(compact);
+      if (!tail) return first;
+      const before = compact.slice(0, tail.index);
+      const run = CODE_RUN_RE.exec(before);
+      if (!run) return first;
+
+      // A raw-material reel: the run ends in one of the minted pool prefixes,
+      // and that prefix IS the item code.
+      const pool = POOL_PREFIX_RE.exec(run[0]);
+      if (pool) return pool[1] + tail[0];
+
+      // A Deckle: its PROD CODE box holds exactly the code its Roll ID is
+      // built from, so the longest suffix of the run that also opens the
+      // payload is the item code. Strictly earlier than its own position, so
+      // the run can never corroborate itself.
+      for (let i = 0; i < run[0].length; i++) {
+        const candidate = run[0].slice(i);
+        const at = compact.indexOf(candidate);
+        if (candidate[0] !== "-" && at === PROD_CODE_START && at < run.index + i) return candidate + tail[0];
+      }
+
+      // No evidence: keep the whole run. The server answers "unknown reel",
+      // which the operator can recover from; a silently shortened id that
+      // matches a DIFFERENT reel is not recoverable.
+      return run[0].replace(/^-+/, "") + tail[0];
+    }
+
+    // The reels the server handed this page for each Materials Mounted slot,
+    // keyed by the pool codes the slots use. Passed to extractScannedRollId so
+    // a scan is matched against real stock rather than parsed out of the
+    // sticker -- see the note above it.
+    const eligibleRollIds = (rolls) => (rolls || []).map((r) => normRollId(r.rollId)).filter(Boolean);
+    const ELIGIBLE_BY_POOL = {
+      fs: eligibleRollIds(ALLOTTED_FS_ROLLS),
+      ad: eligibleRollIds(ALLOTTED_AD_ROLLS),
+      rl: eligibleRollIds(ALLOTTED_RL_ROLLS),
+    };
+    // For the passes that sweep every pool's inputs at once. A reel only ever
+    // belongs to one pool, so a hit here is still unambiguous.
+    const ELIGIBLE_ALL_ROLL_IDS = [...ELIGIBLE_BY_POOL.fs, ...ELIGIBLE_BY_POOL.ad, ...ELIGIBLE_BY_POOL.rl];
     const fmtKg = (v) => Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
     const fmtMtrs = fmtKg;
 
@@ -1103,7 +1191,7 @@
       if (!input) return;
       const note = rowRollNote(input);
       if (!note) return;
-      const key = extractScannedRollId(input.value);
+      const key = extractScannedRollId(input.value, ELIGIBLE_BY_POOL[pool]);
       if (!key) {
         note.textContent = "";
         note.className = "roll-note";
@@ -1304,7 +1392,7 @@
       const slot = materialSlot(pool);
       if (!slot) return;
       const input = slot.querySelector(".jc-cur-roll-input");
-      const cleanId = extractScannedRollId(rawValue);
+      const cleanId = extractScannedRollId(rawValue, ELIGIBLE_BY_POOL[pool]);
       input.value = cleanId || rawValue;
       checkMaterialInput(input, pool);
       if (!cleanId) return;
@@ -1319,7 +1407,7 @@
       } finally {
         if (materialCheckInFlight[pool] === cleanId) materialCheckInFlight[pool] = "";
       }
-      if (extractScannedRollId(input.value) !== cleanId) return; // changed while we waited
+      if (extractScannedRollId(input.value, ELIGIBLE_BY_POOL[pool]) !== cleanId) return; // changed while we waited
 
       if (data && data.code === "wip") {
         input.value = "";
@@ -1559,7 +1647,7 @@
     function getUsedRollIdsFromForm() {
       const usedKeys = new Set();
       document.querySelectorAll(".js-fs-roll-id, .js-ad-roll-id, .js-rl-roll-id, .log-fs-roll-id, .log-ad-roll-id, .log-rl-roll-id").forEach((input) => {
-        const key = extractScannedRollId(input.value);
+        const key = extractScannedRollId(input.value, ELIGIBLE_ALL_ROLL_IDS);
         if (key) usedKeys.add(key);
       });
       return usedKeys;
@@ -1584,7 +1672,7 @@
 
       const checkAndAdd = (input, pool) => {
         if (!input) return;
-        const key = extractScannedRollId(input.value);
+        const key = extractScannedRollId(input.value, ELIGIBLE_BY_POOL[pool]);
         if (!key) return;
         const info = getRollPoolInfo(pool);
         const reel = info.map.get(key) || rollById.get(key);
@@ -1870,7 +1958,9 @@
       closeScanDialog();
       if (!input) return;
 
-      const cleanId = extractScannedRollId(rawText);
+      // The scan target is always a Materials Mounted slot, so its pool's own
+      // eligible reels are what the payload is matched against first.
+      const cleanId = extractScannedRollId(rawText, ELIGIBLE_BY_POOL[input.dataset.pool]);
       if (!cleanId) {
         if (typeof showToast === "function") showToast("That QR code isn't a valid label.", "error");
         return;

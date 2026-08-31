@@ -17,7 +17,7 @@ import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { normalizeLocationName } from "../../utils/locations.js";
-import { normalizeRollId, extractScannedRollId, generateDeckleId } from "../../utils/rollId.js";
+import { normalizeRollId, extractScannedRollId, findScannedReel, generateDeckleId } from "../../utils/rollId.js";
 import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds, getEligibleRawMaterials } from "../../utils/labelStockProduction.js";
 import { resolveActualLabelStock, resolveLabelStockCombinations } from "../../utils/labelStockVariant.js";
 
@@ -1356,15 +1356,18 @@ router.post("/machine/jobcard/material/check", requireAuth, requireMachineFloor,
     if (!POOL_MODELS[pool]) {
       return res.status(400).json({ ok: false, code: "bad-request" });
     }
-    const cleanId = extractScannedRollId(rollId);
-    if (!cleanId) return res.json({ ok: false, code: "unknown" });
+    if (!String(rollId ?? "").trim()) return res.json({ ok: false, code: "unknown" });
 
     const pendingDoc = await PendingProduction.findById(pendingId)
       .select("itemId allottedLayers")
       .lean();
     if (!pendingDoc) return res.status(404).json({ ok: false, code: "no-order" });
 
-    const reel = await POOL_MODELS[pool].Model.findOne({ rollId: cleanId }).lean();
+    // Resolved against stock itself rather than parsed down to one id first:
+    // a label's QR ends with the Roll ID glued straight onto the box in front
+    // of it, so only stock can say where the id starts. See findScannedReel in
+    // utils/rollId.js.
+    const reel = await findScannedReel(POOL_MODELS[pool].Model, rollId);
     if (!reel) return res.json({ ok: false, code: "unknown" });
 
     const eligible = await getEligibleRawMaterials({
@@ -1439,10 +1442,13 @@ router.post("/machine/jobcard/mark-in-use", requireAuth, requireMachineFloor, cr
     const poolInfo = POOL_MODELS[pool];
     if (!poolInfo) return res.status(400).json({ success: false });
 
-    const cleanId = extractScannedRollId(rollId);
-    if (!cleanId) return res.status(400).json({ success: false });
+    if (!String(rollId ?? "").trim()) return res.status(400).json({ success: false });
 
-    const reel = await poolInfo.Model.findOne({ rollId: cleanId }).select("_id rollId").lean();
+    // Resolved against stock itself rather than parsed down to one id first:
+    // a label's QR ends with the Roll ID glued straight onto the box in front
+    // of it, so only stock can say where the id starts. See findScannedReel in
+    // utils/rollId.js.
+    const reel = await findScannedReel(poolInfo.Model, rollId, "_id rollId");
     if (!reel) return res.status(404).json({ success: false });
 
     // Hard stop: this reel is already running on another still-open job. Don't
