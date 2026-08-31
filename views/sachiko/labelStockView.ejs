@@ -190,13 +190,19 @@
       white-space: nowrap; user-select: none;
       transition: border-color 0.15s ease;
     }
-    #ls-create-form .ls-code-input:hover .ls-code-input__prefix { border-right-color: #64748b; }
-    #ls-create-form .ls-code-input:focus-within .ls-code-input__prefix { border-right-color: #044a78; }
+    #ls-create-form .ls-code-input:hover input.ls-code-input__prefix { border-right-color: #64748b; }
+    #ls-create-form .ls-code-input:focus-within input.ls-code-input__prefix { border-right-color: #044a78; }
     /* TEMPORARY: the base is editable until codes are fully serialized, so the
        chip is an <input> and stays visible even when empty -- it can't be
        hidden or there would be nowhere to type the base. */
-    #ls-create-form input.ls-code-input__prefix {
-      width: 5.5ch; min-width: 5.5ch; border: none; outline: none; margin: 0;
+    /* Selector carries `.ls-code-input` so it outranks the generic
+       `.ls-code-input input` rule below (same specificity, later in the file)
+       -- without it that rule's `border: none` wipes out the divider and its
+       `flex: 1 1 auto` lets the base box stretch, dragging the divider away
+       from the code. */
+    #ls-create-form .ls-code-input input.ls-code-input__prefix {
+      flex: 0 0 auto; width: 5.5ch; min-width: 5.5ch;
+      border: none; outline: none; margin: 0;
       border-right: 2px solid #94a3b8; border-radius: 0; text-transform: uppercase;
     }
     #ls-create-form input.ls-code-input__prefix::placeholder {
