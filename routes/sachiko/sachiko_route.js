@@ -449,6 +449,18 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
       payload.pdfFileOriginalName = newPdfFile.originalname;
     }
 
+    // Recipe-level duplicate guard, same as the create route: a row edited to
+    // exactly match another row's spec keeps its own (different) Product Code,
+    // so the full-signature check below -- which includes Product Code -- would
+    // never catch it. This does, comparing every field EXCEPT Product Code
+    // against every other row.
+    const specMatch = await findLabelStockSpecMatch(payload, { excludeId: req.params.id });
+    if (specMatch) {
+      throw Object.assign(new Error("Duplicate Label Stock combination"), {
+        userMessage: `This exact combination already exists as Product Code "${specMatch.productCode}".`,
+      });
+    }
+
     const labelStockSignature = buildLabelStockSignature(payload);
     const existingSignature = await SachikoLabelStock.findOne({
       _id: { $ne: req.params.id },

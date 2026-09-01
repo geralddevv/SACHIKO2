@@ -295,12 +295,16 @@ export async function generateFamilyProductCode(family) {
 }
 
 // The existing row whose recipe (every signature field EXCEPT Product Code)
-// matches this payload, or null. The cross-code duplicate guard the manual
-// create form still needs now that Product Codes are auto-assigned and so
-// never collide on their own for buildLabelStockSignature to catch.
-export async function findLabelStockSpecMatch(payload) {
+// matches this payload, or null. The cross-code duplicate guard both the
+// manual create form (Product Codes are auto-assigned and so never collide on
+// their own for buildLabelStockSignature to catch) and the edit dialog (a row
+// edited to another row's exact recipe keeps its own Product Code, so the
+// full-signature check misses it) rely on. `excludeId` skips the row being
+// edited so it never matches itself.
+export async function findLabelStockSpecMatch(payload, { excludeId } = {}) {
   const specSignature = buildLabelStockSpecSignature(normalizeRecipe(payload));
-  const rows = await SachikoLabelStock.find().lean();
+  const query = excludeId ? { _id: { $ne: excludeId } } : {};
+  const rows = await SachikoLabelStock.find(query).lean();
   return rows.find((doc) => buildLabelStockSpecSignature(normalizeRecipe(doc)) === specSignature) || null;
 }
 
