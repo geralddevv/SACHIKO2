@@ -120,6 +120,132 @@ export function buildQrPayloadFromFields(fields) {
   return QR_ORDER.map((key) => fields[key]).join("");
 }
 
+// TSPL has no shrink-to-fit, so the .prn has to do for itself what the
+// browser label does in fitToBox() (views/stock/*RollLabel.ejs): drop the
+// point size until a value fits the pre-printed box it lands in. Without this
+// the two outputs disagree exactly where it matters most -- the on-screen
+// label shrinks a long Roll ID to fit while the thermal one prints it at the
+// design's 28pt and runs it off the edge of the label.
+const PT_TO_MM = 25.4 / 72;
+// Average advance width of the scalable font as a fraction of its point size.
+//
+// Measured against SOFT.prn rather than guessed. That file is the label the
+// pre-printed stock was designed around and is known to print correctly, so
+// every one of its values fits its own box by definition -- which puts a hard
+// ceiling on how wide this font can be:
+//
+//   rollId  "#BAI 2216"  9 chars at 28pt in a 47.9mm box -> R <= 0.538 em
+//   width   "190"        3 chars at 35pt in a 27.5mm box -> R <= 0.742 em
+//   client  16 chars     at 10pt in a 74.1mm box         -> R <= 1.31 em
+//
+// The Roll ID row binds, so 0.538 is the largest value the reference label
+// permits. Erring UP is the safe direction (a wider estimate only shrinks
+// sooner), and this is the widest estimate that still reproduces SOFT.prn at
+// its own design sizes -- which is the invariant to hold on to: run the
+// sample's fields through buildPrnFromFields and every TEXT line must come
+// back byte-for-byte identical. An earlier guess of 0.73 em, taken from a
+// browser measuring a browser font rather than this printer's, broke that --
+// it shrank the reference label's own 35pt WIDTH to 34pt and squeezed a
+// 26-character Deckle ID down to the 6pt floor.
+// Set slightly BELOW that ceiling on purpose. 0.538 assumes the sample fills
+// its box edge to edge with no slack, which a designed label rarely does, so
+// it shrinks a shade harder than the font really needs. 0.50 buys roughly 11%
+// more type on the long Deckle IDs and still reproduces SOFT.prn exactly (its
+// 9-character Roll ID measures 44.4mm against a 47.9mm box, so it stays at
+// 28pt). The residual risk is bounded and small: if the font were as wide as
+// the 0.538 ceiling, the longest id seen so far -- 26 characters -- would
+// overrun its box by about 1.4mm. Verify on a printed label; if the longest
+// id touches the QR, step this back to 0.52.
+const AVG_ADVANCE_EM = 0.49;
+// Below this the value stops being readable on the shop floor; the same floor
+// the browser label uses.
+const MIN_PT = 6;
+
+const textWidthMm = (text, pt) => String(text ?? "").length * pt * PT_TO_MM * AVG_ADVANCE_EM;
+
+// Largest whole point size at or below `pt` whose text fits `maxWidthMm`.
+// Whole points only: TSPL's TEXT takes the scalable font's size as an integer.
+// Only ever shrinks, so a value that already fits keeps the size SOFT.prn
+// designed it at.
+export function fitPointSize(text, pt, maxWidthMm) {
+  if (!maxWidthMm || maxWidthMm <= 0) {
+    return pt;
+  }
+  let size = pt;
+  while (size > MIN_PT && textWidthMm(text, size) > maxWidthMm) {
+    size -= 1;
+  }
+  return size;
+}
+
+// The ROLL ID box, set over two lines.
+//
+// The Roll ID is the one value an operator reads at arm's length, and a
+// current id ("C003WB-E/26-27/G0004/00004", 26 characters) squeezed onto the
+// single line the sample label used shrinks to about 10pt -- technically
+// inside its box, useless across a machine. Split at the FIRST "/" instead:
+// the product code takes a small line on top, and the part that actually
+// tells one reel from another (financial year / lot / sequence) gets the rest
+// of the width, printed as large as it will go.
+//
+// Both lines are laid out INSIDE the vertical span the one-line 28pt id
+// already occupied, so this cannot foul the JOINTS/LENGTH/WEIGHT row above or
+// print over the pre-printed box's own border -- neither of whose extents this
+// module knows. The .prn is rotated 180, so a smaller y sits LOWER on the
+// label as a human reads it (see labelLayoutMm): the head keeps the slot's own
+// y and the tail drops below it.
+// The two lines share one fixed vertical budget -- the 9.88mm the single 28pt
+// id used -- so every point added here is taken off the tail. 11pt is the
+// largest head that costs the long Deckle ids nothing: their tail is limited
+// by WIDTH to 15pt, and 11pt still leaves exactly 15pt of height for it. Go
+// to 12 and the tail drops to 14pt.
+const ROLL_ID_HEAD_PT = 13;
+
+// Vertical room the two-line id may use, measured down from the slot's own
+// top. The single 28pt line used 9.88mm and both lines used to be held inside
+// that, which is the strictly safe bound -- but at 11pt + 15pt it was full
+// (9.57mm used, 0.31mm spare, and a point costs 0.35mm), so neither line
+// could grow.
+//
+// 11.0mm takes it to 70.38mm down the label. That is where the QR box in this
+// same pre-printed row ends for a typical Deckle payload, so the row demonstr-
+// ably has ink that far down, and it is still ~4.7mm clear of the label edge.
+// It is NOT derived from the QR at print time on purpose: the QR's size grows
+// with payload length, so a short payload would put its bottom edge ABOVE the
+// old 28pt line and make this bound shrink unpredictably.
+const ROLL_ID_BLOCK_MM = 11.0;
+const ROLL_ID_LINE_GAP_MM = 0.4;
+
+const tsplText = (x, y, pt, value) => `TEXT ${x},${y},"0",180,${pt},${pt},"${value}"`;
+
+export function buildRollIdLines(value, { x, y, pt }, maxWidthMm) {
+  const text = String(value ?? "");
+  const cut = text.indexOf("/");
+  // No separator (or nothing before it) -- a hand-assigned id that doesn't
+  // follow the format. Keep the original single fitted line.
+  if (cut <= 0 || cut === text.length - 1) {
+    return [tsplText(x, y, fitPointSize(text, pt, maxWidthMm), text)];
+  }
+  const head = text.slice(0, cut);
+  const tail = text.slice(cut + 1);
+
+  const headPt = fitPointSize(head, ROLL_ID_HEAD_PT, maxWidthMm);
+  const headHeightMm = headPt * PT_TO_MM;
+
+  // The tail is the point of the exercise, so it gets everything the box will
+  // give it -- but height binds as well as width. A short tail ("26-27/031")
+  // is narrow enough to allow the full 28pt, which stacked under the head
+  // would drop ~3.6mm below where the one-line id ended and print past the
+  // pre-printed box. So cap it at whatever vertical room is left inside that
+  // original span.
+  const tailRoomMm = ROLL_ID_BLOCK_MM - headHeightMm - ROLL_ID_LINE_GAP_MM;
+  const tailMaxPt = Math.max(MIN_PT, Math.floor(tailRoomMm / PT_TO_MM));
+  const tailPt = fitPointSize(tail, Math.min(pt, tailMaxPt), maxWidthMm);
+
+  const dropDots = Math.round((headHeightMm + ROLL_ID_LINE_GAP_MM) * DOTS_PER_MM);
+  return [tsplText(x, y, headPt, head), tsplText(x, y - dropDots, tailPt, tail)];
+}
+
 // The raw TSPL job -- byte-for-byte SOFT.prn with this fields map's values:
 // same page setup, same xpml driver wrappers, same CRLF endings, same
 // no-trailing-newline ending. Not what the Print button uses (that goes
@@ -128,6 +254,7 @@ export function buildQrPayloadFromFields(fields) {
 // way to drive a TSC unit directly if the browser path is ever swapped for
 // raw printing.
 export function buildPrnFromFields(fields) {
+  const { slots: prnSlots } = labelLayoutMm(0);
   const body = [
     `SIZE ${LABEL_WIDTH_MM} mm, ${LABEL_HEIGHT_MM} mm`,
     "GAP 3 mm, 0 mm",
@@ -146,9 +273,16 @@ export function buildPrnFromFields(fields) {
     "SET TEAR ON",
     "CLS",
     "CODEPAGE 1252",
-    ...PRN_EMIT_ORDER.map((key) => {
-      const { x, y, pt } = LABEL_SLOTS[key];
-      return `TEXT ${x},${y},"0",180,${pt},${pt},"${fields[key]}"`;
+    ...PRN_EMIT_ORDER.flatMap((key) => {
+      const slot = LABEL_SLOTS[key];
+      // maxWidth is independent of the QR's module count (only the QR's own
+      // size depends on that), so any argument gives the same box widths.
+      const maxWidth = prnSlots[key]?.maxWidth;
+      if (key === "rollId") {
+        return buildRollIdLines(fields[key], slot, maxWidth);
+      }
+      const size = fitPointSize(fields[key], slot.pt, maxWidth);
+      return [tsplText(slot.x, slot.y, size, fields[key])];
     }),
     `QRCODE ${QR_ANCHOR.x},${QR_ANCHOR.y},${QR_ECC_LEVEL},${QR_CELL_WIDTH_DOTS},A,180,M2,S7,"${buildQrPayloadFromFields(fields)}"`,
     "PRINT 1,1",

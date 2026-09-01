@@ -37,7 +37,7 @@ export function buildLabelFields({ prodCode, reelMtrs, rollId, printedOn, size, 
     adhesive: "-",
     release: "-",
     joints: fieldOrDash(joints),         // JOINTS box <- status captured on the production-log row
-    length: length === "-" ? "-" : `${length}MTR`, // LENGTH box <- reelMtrs is metres in this pool
+    length,                              // LENGTH box <- reelMtrs, bare: the box is captioned "LENGTH" on the pre-printed stock, so the unit was saying it twice
     weight: "-",                        // WEIGHT box      <- not tracked for a Deckle
     width: fieldOrDash(size),            // WIDTH box       <- Deckle's finished size
     rollId: fieldOrDash(rollId),

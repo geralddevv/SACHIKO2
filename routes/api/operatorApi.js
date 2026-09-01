@@ -477,8 +477,16 @@ router.post("/jobcard/log/produce", requireOperatorApiAuth, createLimiter, async
       startMtrs: b.startMtrs != null && b.startMtrs !== "" ? Number(b.startMtrs) : undefined,
       stopMtrs: b.stopMtrs != null && b.stopMtrs !== "" ? Number(b.stopMtrs) : undefined,
       meters,
-      face: { joint: trim(b.faceJoint), mtr: b.faceMtr != null && b.faceMtr !== "" ? Number(b.faceMtr) : undefined },
-      release: { joint: trim(b.releaseJoint), mtr: b.releaseMtr != null && b.releaseMtr !== "" ? Number(b.releaseMtr) : undefined },
+      face: {
+        joint: trim(b.faceJoint),
+        mtr: b.faceMtr != null && b.faceMtr !== "" ? Number(b.faceMtr) : undefined,
+        reason: trim(b.faceJointReason),
+      },
+      release: {
+        joint: trim(b.releaseJoint),
+        mtr: b.releaseMtr != null && b.releaseMtr !== "" ? Number(b.releaseMtr) : undefined,
+        reason: trim(b.releaseJointReason),
+      },
       time: { startTime: trim(b.startTime), endTime: trim(b.endTime) },
     };
 

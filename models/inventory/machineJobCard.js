@@ -76,13 +76,19 @@ const productionLogRowSchema = new mongoose.Schema(
     startMtrs: { type: Number },
     stopMtrs: { type: Number },
     meters: { type: Number },
+    // `reason` is why the joint/wrinkle happened -- operator-typed, free
+    // text, and optional: rows saved before it existed simply have none, and
+    // an operator who doesn't know the cause shouldn't be blocked from
+    // recording the joint itself.
     face: {
       joint: { type: String, trim: true },
       mtr: { type: Number },
+      reason: { type: String, trim: true },
     },
     release: {
       joint: { type: String, trim: true },
       mtr: { type: Number },
+      reason: { type: String, trim: true },
     },
     time: {
       startTime: { type: String, trim: true },

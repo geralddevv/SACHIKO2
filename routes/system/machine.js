@@ -1574,8 +1574,8 @@ router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, cr
       startMtrs: numOrUndef(b.startMtrs),
       stopMtrs: numOrUndef(b.stopMtrs),
       meters,
-      face: { joint: trim(b.faceJoint), mtr: numOrUndef(b.faceMtr) },
-      release: { joint: trim(b.releaseJoint), mtr: numOrUndef(b.releaseMtr) },
+      face: { joint: trim(b.faceJoint), mtr: numOrUndef(b.faceMtr), reason: trim(b.faceJointReason) },
+      release: { joint: trim(b.releaseJoint), mtr: numOrUndef(b.releaseMtr), reason: trim(b.releaseJointReason) },
       time: { startTime: trim(b.startTime), endTime: trim(b.endTime) },
     };
 
@@ -1910,8 +1910,10 @@ export async function saveMachineJobCard({ body, actorName }) {
     const logMeters = toArray(b.logMeters);
     const faceJoint = toArray(b.faceJoint);
     const faceMtr = toArray(b.faceMtr);
+    const faceJointReason = toArray(b.faceJointReason);
     const releaseJoint = toArray(b.releaseJoint);
     const releaseMtr = toArray(b.releaseMtr);
+    const releaseJointReason = toArray(b.releaseJointReason);
     const productionLog = logMeters
       .map((_, i) => {
         const fs = trim(fsRollId[i]);
@@ -1932,8 +1934,8 @@ export async function saveMachineJobCard({ body, actorName }) {
           startMtrs: numOrUndef(logStartMtrs[i]),
           stopMtrs: numOrUndef(logStopMtrs[i]),
           meters: numOrUndef(logMeters[i]),
-          face: { joint: trim(faceJoint[i]), mtr: numOrUndef(faceMtr[i]) },
-          release: { joint: trim(releaseJoint[i]), mtr: numOrUndef(releaseMtr[i]) },
+          face: { joint: trim(faceJoint[i]), mtr: numOrUndef(faceMtr[i]), reason: trim(faceJointReason[i]) },
+          release: { joint: trim(releaseJoint[i]), mtr: numOrUndef(releaseMtr[i]), reason: trim(releaseJointReason[i]) },
           time: { startTime: trim(logStart[i]), endTime: trim(logEnd[i]) },
         };
       })
