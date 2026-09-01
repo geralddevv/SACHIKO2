@@ -315,6 +315,7 @@
       const adType = ds.adhesive?.adhesiveType   || "";
       const adGsm = ds.adhesive?.adhesiveGsm || "";
       const rlType = ds.releaseLiner?.releaseLinerType || "";
+      const rlGsm = ds.releaseLiner?.releaseLinerGsm || "";
       const rlSensing = ds.releaseLiner?.releaseLinerSensing || "";
       const micPart = ds.facestock?.facestockMicron != null ? ds.facestock.facestockMicron + " MIC" : "";
       const product = [fsType, micPart, adType, rlType].filter(Boolean).join(" / ");
@@ -331,6 +332,7 @@
         adhesiveType: adType,
         adhesiveGsm: adGsm,
         releaseLinerType: rlType,
+        releaseLinerGsm: rlGsm,
         releaseLinerSensing: rlSensing,
         product,
         wordFile: ds.wordFile || "",
@@ -473,6 +475,7 @@
       withTextFilter({ title: "ADH Type", field: "adhesiveType", minWidth: 140, formatter: (cell) => cell.getValue() || "—" }),
       withTextFilter({ title: "ADH GSM", field: "adhesiveGsm", minWidth: 120, formatter: (cell) => cell.getValue() ? cell.getValue() + " GSM" : "—" }),
       withTextFilter({ title: "REL Type", field: "releaseLinerType", minWidth: 160, formatter: (cell) => cell.getValue() || "—" }),
+      withTextFilter({ title: "REL GSM", field: "releaseLinerGsm", minWidth: 120, formatter: (cell) => cell.getValue() ? cell.getValue() + " GSM" : "—" }),
       // A list filter rather than a text one: Sensing has exactly three
       // states, and a text search for "SENSING" would also match
       // "NON-SENSING". "Not set" needs its own sentinel + headerFilterFunc --
