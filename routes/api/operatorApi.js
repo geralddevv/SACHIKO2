@@ -234,6 +234,19 @@ router.post("/jobcard/material/check", requireOperatorApiAuth, createLimiter, as
     const reel = await findScannedReel(POOL_MODELS[pool].Model, rollId);
     if (!reel) return res.json({ ok: false, code: "unknown" });
 
+    // A reel inwarded without its purchase invoice is not fit to run: the
+    // invoice is what ties the physical reel to what was actually bought, and
+    // it is the LOT NO printed on its own label (see utils/facestockRollLabel.js
+    // and its siblings), so a blank one also means the sticker on the reel
+    // carries no lot. Refused before the recipe and WIP checks below -- those
+    // describe a reel that is fine but wrong for this order or busy right now,
+    // whereas this one must not be consumed on any order until the office
+    // fills the invoice in. invoiceNo is an optional String on all three raw
+    // pools, so it can be absent, null or "".
+    if (!String(reel.invoiceNo || "").trim()) {
+      return res.json({ ok: false, code: "no-invoice", rollId: reel.rollId });
+    }
+
     const eligible = await getEligibleRawMaterials({
       labelStock: pendingDoc.itemId,
       allottedLayers: pendingDoc.allottedLayers,

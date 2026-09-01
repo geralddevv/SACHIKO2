@@ -1192,6 +1192,13 @@
         </div>
         <% } %>
 
+        <% if (isAdmin || isHod) { %>
+        <a href="/sachiko/form/company" title="Company Registration" class="<%= title === 'Company Registration' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+          <i class="fa-solid fa-building" style="color: #ffffff"></i>
+          <p class="nav-items-para">Company</p>
+        </a>
+        <% } %>
+
         <a href="/sachiko/maintenance" title="Maintenance Requests" class="<%= title === 'Maintenance Requests' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
           <i class="fa-solid fa-screwdriver-wrench" style="color: #ffffff"></i>
           <p class="nav-items-para">Maintenance</p>

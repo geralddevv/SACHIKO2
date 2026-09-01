@@ -17,10 +17,8 @@ import { pickStockIds } from "../../utils/labelStockProduction.js";
 import {
   LABEL_HEIGHT_MM,
   LABEL_WIDTH_MM,
-  buildLabelFields,
+  buildInwardLabelFields,
   buildQrPayload,
-  labelLayoutMm,
-  rollLabelModuleCount,
   rollLabelQrDataUrl,
 } from "../../utils/releaseLinerRollLabel.js";
 
@@ -559,7 +557,7 @@ router.get("/label/:stockId", requireAuth, async (req, res) => {
     if (!mongoose.isValidObjectId(stockId)) return sendLabelError(res, 404, "Roll not found.");
 
     const reel = await ReleaseLinerStock.findById(stockId)
-      .select("rollId vendorName vendorSkuCode invoiceNo reelMtrs size")
+      .select("rollId vendorName vendorSkuCode invoiceNo reelMtrs size type inwardDate")
       .lean();
     if (!reel) return sendLabelError(res, 404, "Roll not found.");
 
@@ -569,19 +567,22 @@ router.get("/label/:stockId", requireAuth, async (req, res) => {
       invoiceNo: reel.invoiceNo,
       reelMtrs: reel.reelMtrs,
       size: reel.size,
+      type: reel.type,
+      inwardDate: reel.inwardDate,
       rollId: reel.rollId,
     };
-    // The QR's module count depends on the whole payload's length, so the
-    // box can only be sized once the payload exists -- hence building the
-    // payload here rather than letting the view ask for a data URL.
+    // The QR still carries the full pre-printed-grid payload, so anything that
+    // scans it is unaffected by the label's visual redesign.
     const qrPayload = buildQrPayload(labelInput);
 
     res.render("stock/releaseLinerRollLabel.ejs", {
       rollId: reel.rollId,
-      fields: buildLabelFields(labelInput),
+      fields: buildInwardLabelFields(labelInput),
       // Named `mm`, not `layout` -- `layout` is ejs-mate's own helper and a
-      // local of that name breaks rendering.
-      mm: labelLayoutMm(rollLabelModuleCount(qrPayload)),
+      // local of that name breaks rendering. The current design draws itself
+      // from an SVG scaled to these dimensions, so only the sticker size is
+      // needed here now, not the pre-printed SOFT.prn slot geometry.
+      mm: { labelWidth: LABEL_WIDTH_MM, labelHeight: LABEL_HEIGHT_MM },
       qrDataUrl: await rollLabelQrDataUrl(qrPayload),
     });
   } catch (err) {

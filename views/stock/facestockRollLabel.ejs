@@ -26,8 +26,8 @@
   </script>
   <style>
     /* The sheet IS the label: one 101.5 x 75.1 mm sticker, zero margins, so
-       Chrome maps the page 1:1 onto the pre-printed stock. Without this the
-       browser defaults to A4 and scales everything down. */
+       Chrome maps the page 1:1 onto the label stock. Without this the browser
+       defaults to A4 and scales everything down. */
     @page {
       size: <%= mm.labelWidth %>mm <%= mm.labelHeight %>mm;
       margin: 0;
@@ -46,11 +46,9 @@
       padding: 24px 16px 40px;
     }
 
-    /* Exact physical size. Every child is positioned in mm from the top-left
-       by utils/facestockRollLabel.js's labelLayoutMm(), which converts the
-       same dot coordinates the .prn uses -- so a value lands in the same
-       pre-printed box either way. Nothing here should be nudged by eye; fix
-       LABEL_SLOTS in that file instead. */
+    /* Exact physical size. Its single child is the design SVG, stretched to
+       fill -- all placement lives in that SVG's viewBox coordinates (see the
+       .label-svg rules below), not here. */
     .label {
       position: relative;
       width: <%= mm.labelWidth %>mm;
@@ -66,9 +64,12 @@
       outline: 1px dashed #94a3b8;
     }
 
+    /* A safe margin inside the sheet: the design is drawn in the area left
+       after this inset, so nothing reaches the physical edge where thermal
+       feed drift or die-cut tolerance would clip it. */
     .label-inner {
       position: absolute;
-      inset: 0;
+      inset: 2.5mm;
     }
 
     /* Set when the pre-printed stock feeds the other way round -- see the
@@ -77,29 +78,32 @@
       transform: rotate(180deg);
     }
 
-    .slot {
-      position: absolute;
-      white-space: nowrap;
-      line-height: 1;
-      color: #000;
-      /* inline-block + a real max-width is what makes overflow measurable:
-         the fit-to-box pass below compares scrollWidth against clientWidth,
-         and neither is meaningful on a plain inline span. */
-      display: inline-block;
-      overflow: hidden;
-      /* The thermal printer's own scalable font is a plain proportional
-         sans; the pt sizes come straight from the TSPL command, which sizes
-         font "0" in points -- the same unit CSS uses, so they pass through
-         unconverted. */
-      font-family: Arial, Helvetica, sans-serif;
-    }
-
-    .slot img {
+    /* The whole sticker is one SVG (Sample inward design.svg) stretched to
+       the label's exact mm size -- boxes, unit captions and values all drawn
+       here, since this label stock is NOT pre-printed. preserveAspectRatio
+       ="none" on the element lets the design's 277.38 x 202.54 viewBox map
+       onto 101.5 x 75.1 mm without letterboxing; the ~1% anamorphism is
+       below what the eye or a scanner notices. */
+    .label-svg {
       display: block;
       width: 100%;
       height: 100%;
-      /* Keep the modules crisp instead of blurring them into each other at
-         print resolution -- a smoothed QR scans worse. */
+    }
+    .label-svg rect.ln {
+      fill: none;
+      stroke: #000;
+      stroke-width: 1;
+    }
+    .label-svg text {
+      fill: #000;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    .label-svg .t-big { font-size: 24px; }
+    .label-svg .t-fam { font-size: 20px; }
+    .label-svg .t-id { font-weight: 700; }
+    .label-svg image {
+      /* Keep the QR modules crisp rather than blurred together at print
+         resolution -- a smoothed QR scans worse. */
       image-rendering: pixelated;
     }
 
@@ -226,23 +230,28 @@
 
   <div class="label label-frame">
     <div class="label-inner" id="labelInner">
-      <% for (const [key, slot] of Object.entries(mm.slots)) { %>
-        <span class="slot" data-fit
-              style="left: <%= slot.left %>mm; top: <%= slot.top %>mm; max-width: <%= slot.maxWidth %>mm; font-size: <%= slot.pt %>pt;"><%= fields[key] %></span>
-      <% } %>
-      <span class="slot" style="left: <%= mm.qr.left %>mm; top: <%= mm.qr.top %>mm; width: <%= mm.qr.size %>mm; height: <%= mm.qr.size %>mm;">
-        <img src="<%= qrDataUrl %>" alt="Roll QR" />
-      </span>
+      <svg class="label-svg" viewBox="0 0 277.38 202.54" preserveAspectRatio="none"
+           xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <rect class="ln" x="0.5" y="0.5" width="117.83" height="201.54" />
+        <rect class="ln" x="118.33" y="0.5" width="158.55" height="201.54" />
+        <image x="7.92" y="34" width="103" height="103" preserveAspectRatio="none"
+               href="<%= qrDataUrl %>" xlink:href="<%= qrDataUrl %>" />
+        <text class="t-fam fit" text-anchor="middle" dominant-baseline="central" data-maxw="107" x="59.42" y="166"><%= fields.family %></text>
+        <text class="t-big t-id fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="46"><%= fields.id %></text>
+        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="83"><%= fields.width %></text>
+        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="120"><%= fields.weight %></text>
+        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="157"><%= fields.date %></text>
+      </svg>
     </div>
   </div>
 
   <span class="caption screen-only">Actual size — <%= mm.labelWidth %> × <%= mm.labelHeight %> mm</span>
 
   <div class="hint screen-only">
-    The dashed outline and this text are on screen only and never print. Only the values print —
-    the boxes and captions are already on the blank label.
+    The dashed outline and this text are on screen only and never print. The whole label —
+    boxes, captions and values — prints onto blank stock.
     <br />
-    If the first test comes out upside down relative to the pre-printed boxes, hit
+    If the first test comes out upside down relative to how the roll feeds, hit
     <b>Rotate 180°</b> and print again. That choice is remembered on this PC for every label from
     then on, so it only needs setting once.
   </div>
@@ -254,7 +263,9 @@
     // which way it lands depends on how the roll is loaded. Rather than
     // guess, this is a one-time per-machine setting -- hence localStorage,
     // not a server-side field: it is a property of the printer in front of
-    // the operator, not of the reel being printed.
+    // the operator, not of the reel being printed. Its own key (distinct
+    // from Adhesive/Release Liner's) so the remembered orientation doesn't
+    // cross-apply between pools.
     var FLIP_KEY = "facestockLabelFlip180";
     var embedded = document.documentElement.classList.contains("embedded");
     var inner = document.getElementById("labelInner");
@@ -307,30 +318,27 @@
       isFlipped: isFlipped,
     };
 
-    // Shrink any value too long for its pre-printed box until it fits.
+    // Shrink any value too long for its box until it fits.
     //
-    // The boxes were sized for the sample label's values and ours are not
-    // the same length -- a Roll ID here is "FACESTOCK/26-27/007" where the
-    // sample's was "#BAI 2216", and at the design's 28pt that is roughly
-    // 137 mm of text on a 101.5 mm label. Measured rather than estimated
-    // from character counts: the browser knows the real advance widths, and
-    // this has to be right for vendor names too, which are free text and can
-    // be any length.
-    //
-    // Only ever shrinks. A value that already fits keeps the exact size the
-    // .prn would print it at, so the common case matches the thermal label
-    // rather than being re-fitted to something slightly different.
-    var MIN_PT = 6;
-    function fitToBox(el) {
-      var pt = parseFloat(el.style.fontSize);
-      while (el.scrollWidth > el.clientWidth && pt > MIN_PT) {
-        pt -= 0.5;
-        el.style.fontSize = pt + "pt";
+    // The design was drawn for short sample values ("$ID", "$FAMILY") and
+    // ours are longer -- a Roll ID is "RELEASE/26-27/007", a Type can be any
+    // length. `data-maxw` on each text element is the room it has in the SVG's
+    // own user units; getComputedTextLength() is the browser's real measure
+    // of the rendered text, tspans included. Only ever shrinks: a value that
+    // already fits keeps the design's font size.
+    var MIN_UNIT = 8;
+    function fitSvgText(el) {
+      var maxw = parseFloat(el.getAttribute("data-maxw"));
+      if (!maxw) return;
+      var size = parseFloat(window.getComputedStyle(el).fontSize);
+      while (el.getComputedTextLength() > maxw && size > MIN_UNIT) {
+        size -= 0.5;
+        el.style.fontSize = size + "px";
       }
     }
 
     window.addEventListener("load", function () {
-      Array.prototype.forEach.call(document.querySelectorAll(".slot[data-fit]"), fitToBox);
+      Array.prototype.forEach.call(document.querySelectorAll(".label-svg .fit"), fitSvgText);
       // Fitting first is load-bearing, not just tidy: print() blocks, so
       // anything resized after it would only affect the NEXT print.
       //

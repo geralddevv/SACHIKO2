@@ -4,6 +4,7 @@ import {
   sanitizeField,
   fieldOrDash,
   formatLabelDate,
+  formatShortLabelDate,
   buildQrPayloadFromFields,
   buildPrnFromFields,
   labelLayoutMm,
@@ -45,6 +46,25 @@ export function buildLabelFields({ vendorName, vendorSkuCode, invoiceNo, reelMtr
 
 export function buildQrPayload(reel) {
   return buildQrPayloadFromFields(buildLabelFields(reel));
+}
+
+// The fields for the current inward-label design (Sample inward design.svg):
+// a clean five-slot sticker the browser draws in full -- boxes and unit
+// captions included -- rather than the pre-printed SOFT.prn grid
+// buildLabelFields targets. The QR still carries the full buildLabelFields
+// payload (buildQrPayload above), so nothing downstream that scans it changes.
+// $FAMILY here is the reel's own Family field (Facestock is the one pool that
+// has one); see utils/releaseLinerRollLabel.js / utils/adhesiveRollLabel.js
+// for the siblings, which fall back to Type.
+export function buildInwardLabelFields({ family, size, reelMtrs, rollId, inwardDate, printedOn }) {
+  const weight = sanitizeField(reelMtrs);
+  return {
+    family: fieldOrDash(family),                     // $FAMILY <- the reel's Family
+    width: size ? `${fieldOrDash(size)} MM` : "-",   // $WIDTH MM <- the spec's size
+    weight: weight ? `${weight} KG` : "-",           // $WEIGHT KG <- reelMtrs is kilos in this pool
+    id: fieldOrDash(rollId),                         // $ID <- system Roll ID
+    date: formatShortLabelDate(inwardDate || printedOn), // $DATE <- the reel's inward date, dd/mm/yy
+  };
 }
 
 // Not what the Print button uses (that goes through the browser's own print

@@ -1416,15 +1416,29 @@
         openWipBlockDialog({ rollId: data.rollId || cleanId, lotNo: data.lotNo, machineName: data.machineName });
         return;
       }
-      if (data && (data.code === "mismatch" || data.code === "unknown")) {
+      // Fail CLOSED on anything the server didn't say yes to. This used to
+      // test for the two codes it knew ("mismatch"/"unknown") and mount the
+      // reel on anything else -- so a new refusal code, or checkReel's own
+      // { ok:false, code:"error" } when the request throws, silently mounted a
+      // reel the server had just refused. Enumerate the messages, not the
+      // decision.
+      if (data && data.ok === false) {
+        const REFUSALS = {
+          unknown: [`${cleanId} isn't a known reel — check the label.`, "unknown reel"],
+          mismatch: [`${cleanId} doesn't match this recipe — verify the reel.`, "doesn't match the recipe"],
+          "no-invoice": [
+            `${cleanId} was inwarded with no purchase invoice — the office must add it before this reel can run.`,
+            "no purchase invoice",
+          ],
+        };
+        const [noteText, toastReason] = REFUSALS[data.code]
+          || [`${cleanId} was not accepted — try again or use a different reel.`, "not accepted"];
         const note = rowRollNote(input);
         if (note) {
-          note.textContent = data.code === "unknown"
-            ? `${cleanId} isn't a known reel — check the label.`
-            : `${cleanId} doesn't match this recipe — verify the reel.`;
+          note.textContent = noteText;
           note.className = "roll-note warn";
         }
-        if (typeof showToast === "function") showToast(`${cleanId} not mounted — ${data.code === "unknown" ? "unknown reel" : "doesn't match the recipe"}.`, "error");
+        if (typeof showToast === "function") showToast(`${cleanId} not mounted — ${toastReason}.`, "error");
         return;
       }
 

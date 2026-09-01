@@ -103,6 +103,17 @@ export function formatLabelDate(date = new Date()) {
   return `${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}`;
 }
 
+// "01/09/26" -- dd/mm/yy, zero-padded. The format the current inward-label
+// design (Sample inward design.svg) uses in its $DATE slot, shared by all
+// three raw-material pools' buildInwardLabelFields(). Distinct from
+// formatLabelDate above, which is the pre-printed SOFT.prn grid's own format.
+export function formatShortLabelDate(date = new Date()) {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "-";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)}`;
+}
+
 // The QR payload for an already-built fields map (see each pool's own
 // buildLabelFields).
 export function buildQrPayloadFromFields(fields) {
