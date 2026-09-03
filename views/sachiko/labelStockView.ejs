@@ -1533,6 +1533,25 @@
         return;
       }
 
+      // Product Code duplicate guard for the edit dialog -- the same clash
+      // POST /label-stock/edit/:id refuses server-side, caught here against
+      // the rows this page already loaded so it's flagged before the round
+      // trip. Create doesn't need it: the base there is generated (and
+      // clash-checked) by the server, so the prefix on screen is only a
+      // preview. The recipe-level duplicate check stays server-side -- it
+      // hashes every field and only the server can compare it against the
+      // stored rows reliably.
+      if (lsEditId) {
+        const typedCode = document.getElementById("lsProductCode").value.trim().toUpperCase();
+        const clash = raw.find((d) => String(d._id) !== String(lsEditId)
+          && String(d.productCode || "").trim().toUpperCase() === typedCode);
+        if (clash) {
+          showLsError(`Product Code "${typedCode}" is already in use by ${clash.skuCode || clash.labelStockId}. Enter a different code.`);
+          document.getElementById("lsProductCodeSuffix").scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+      }
+
       const btn = document.getElementById("ls-create-submit-btn");
       btn.disabled = true;
       hideLsError();

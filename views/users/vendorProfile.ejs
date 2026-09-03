@@ -9,7 +9,7 @@
     --border: #e2e8f0;
   }
 
-  .client-profile-container {
+  .vendor-profile-container {
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -18,7 +18,7 @@
     margin: 0 auto;
   }
 
-  /* Header Section */
+  /* ---------- Header ---------- */
   .profile-header-card {
     background: white;
     border-radius: 12px;
@@ -33,6 +33,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 15px;
   }
 
   .header-info h1 {
@@ -43,8 +44,9 @@
 
   .header-badges {
     display: flex;
-    gap: 10px;
-    margin-top: 5px;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
   }
 
   .badge {
@@ -55,9 +57,14 @@
     text-transform: uppercase;
   }
 
-  .badge-type { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); }
   .badge-status { background: #2ecc71; color: white; }
   .status-inactive { background: #e74c3c; }
+  .badge-commodity {
+    background: rgba(255, 255, 255, 0.18);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    letter-spacing: 0.02em;
+  }
 
   .edit-btn {
     color: var(--primary);
@@ -71,11 +78,11 @@
     padding: 6px 16px;
     border-radius: 6px;
     transition: background 0.2s;
+    white-space: nowrap;
   }
 
   .edit-btn:hover { background: #f1f5f9; }
 
-  /* Info Grid */
   .info-section {
     padding: 20px 25px;
     display: flex;
@@ -108,7 +115,7 @@
     font-weight: 500;
   }
 
-  /* Users Section */
+  /* ---------- Section shell ---------- */
   .section-card {
     background: white;
     border-radius: 12px;
@@ -123,201 +130,255 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
   }
 
   .section-header h2 {
     margin: 0;
-    font-size: 18px;
+    font-size: 16px;
     color: var(--primary);
-    font-weight: 600;
-  }
-
-  .user-list-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-  }
-
-  .user-list-table th {
-    background: #f8fafc;
-    text-align: left;
-    padding: 12px 15px;
-    font-size: 13px;
-    color: #64748b;
-    font-weight: 600;
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .user-list-table td {
-    padding: 12px 15px;
-    font-size: 14px;
-    color: #334155;
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .user-list-table th:first-child,
-  .user-list-table td:first-child {
-    width: 50px;
-    text-align: center;
-    padding: 12px 0;
-  }
-
-  .user-row {
-    transition: background 0.2s;
-    cursor: pointer;
-  }
-
-  .user-row:hover { background: #f8fafc; }
-
-  .toggle-icon {
-    display: inline-flex;
+    font-weight: 700;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    background: var(--primary);
-    color: white;
-    border-radius: 6px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
-  }
-
-  .expanded .toggle-icon {
-    transform: rotate(90deg);
-  }
-
-  .user-details-row td {
-    padding: 0 !important;
-    text-align: left !important;
-  }
-
-  .details-container {
-    padding: 0 20px 0px 20px;
-    display: none;
-  }
-
-  .expanded + .user-details-row .details-container {
-    display: block;
-    animation: slideDown 0.3s ease-out forwards;
-  }
-
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .item-rows-container {
-    margin-top: 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .item-category-group {
-    display: flex;
-    flex-direction: column;
     gap: 8px;
   }
 
-  .item-category-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding-bottom: 4px;
-    border-bottom: 2px solid #f1f5f9;
-  }
-
-  .item-type-label {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--secondary);
-  }
-
-  .item-count-badge {
-    background: #f1f5f9;
-    color: #64748b;
-    padding: 2px 8px;
+  .section-count {
+    background: var(--primary);
+    color: white;
+    padding: 2px 10px;
     border-radius: 100px;
     font-size: 11px;
-    font-weight: 800;
-  }
-
-  .inner-spec-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-    table-layout: fixed;
-  }
-
-  .inner-spec-table th {
-    text-align: center !important;
-    color: #94a3b8;
     font-weight: 700;
-    padding: 10px 12px !important;
-    border-bottom: 1px solid #f1f5f9;
-    text-transform: uppercase;
-    font-size: 10px;
-    letter-spacing: 0.05em;
   }
 
-  .inner-spec-table td {
-    padding: 10px 12px !important;
-    border-bottom: 1px solid #f8fafc;
-    color: #334155;
-    vertical-align: middle;
-    word-wrap: break-word;
-    text-align: center !important;
-  }
-
-  .inner-spec-table th:first-child,
-  .inner-spec-table td:first-child {
-    text-align: left !important;
-  }
-
-  .inner-spec-table tr:hover td {
-    background-color: #f8fafc;
-  }
-
-  .inner-spec-table tr:last-child td { border-bottom: none; }
-
-  .item-name-cell {
+  .header-action-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
     font-weight: 600;
-    color: var(--primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
 
-  .user-link {
-    color: var(--primary);
-    text-decoration: none;
-    font-weight: 600;
-  }
-
-  .user-link:hover { text-decoration: underline; }
+  .header-action-btn:hover { background: #033a5e; }
 
   .empty-state {
-    padding: 40px;
+    padding: 36px 20px;
     text-align: center;
     color: #94a3b8;
+    font-size: 14px;
   }
 
+  .empty-state i {
+    font-size: 28px;
+    margin-bottom: 10px;
+    display: block;
+    opacity: 0.7;
+  }
+
+  /* ---------- Supply tabs ---------- */
+  .supply-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 20px 0 20px;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  .supply-tab {
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .supply-tab:hover { color: var(--primary); }
+
+  /* NOT `.active` -- common.css carries a bare, global
+     `.active { background-color: #03365a; }`, which paints any element
+     using that class name dark blue. */
+  .supply-tab.is-open {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+
+  .supply-tab .tab-count {
+    background: #e2e8f0;
+    color: #475569;
+    padding: 1px 8px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .supply-tab.is-open .tab-count {
+    background: var(--primary);
+    color: white;
+  }
+
+  .supply-tab.is-empty { opacity: 0.55; }
+
+  .supply-panel { display: none; }
+  .supply-panel.is-open { display: block; }
+
+  .table-scroll { overflow-x: auto; }
+
+  .spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .spec-table th {
+    background: #f8fafc;
+    text-align: left;
+    padding: 11px 16px;
+    font-size: 10px;
+    color: #94a3b8;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  .spec-table td {
+    padding: 11px 16px;
+    color: #334155;
+    border-bottom: 1px solid #f1f5f9;
+    white-space: nowrap;
+  }
+
+  .spec-table tbody tr:last-child td { border-bottom: none; }
+  .spec-table tbody tr:hover td { background: #f8fafc; }
+
+  .spec-table .cell-primary {
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .cell-muted { color: #cbd5e1; }
+
+  /* Rates read as a group at the end of the row: tabular figures so the
+     digits line up column to column, and one divider marking where the
+     spec stops and the price history starts. */
+  .spec-table .cell-rate {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .spec-table .cell-rate-first {
+    border-left: 1px solid var(--border);
+  }
+
+  .spec-table td.cell-rate { color: #1e293b; font-weight: 600; }
+
+  /* ---------- Coordinator list ---------- */
+  .coordinator-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .coordinator-list li { border-bottom: 1px solid #f1f5f9; }
+  .coordinator-list li:last-child { border-bottom: none; }
+
+  .coordinator-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s;
+  }
+
+  .coordinator-row:hover { background: #f8fafc; }
+
+  .coordinator-avatar {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    border-radius: 50%;
+    background: #e8f1f8;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .coordinator-main { min-width: 0; flex: 1 1 auto; }
+
+  /* The whole row is already the link to the coordinator's details page, so
+     the name is a <span>, not a nested <a> (which HTML doesn't allow) --
+     it just carries the link's look so it's obvious the row is clickable. */
+  .coordinator-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    display: block;
+  }
+
+  .coordinator-row:hover .coordinator-name {
+    text-decoration-thickness: 2px;
+  }
+
+  /* Location, department, phone and email all sit on one wrapping line under
+     the name -- read left-to-right with the name instead of being parked
+     against the far right edge of a wide row, where they went unnoticed. */
+  .coordinator-sub {
+    font-size: 12.5px;
+    color: #475569;
+    margin-top: 5px;
+    display: flex;
+    gap: 8px 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .coordinator-sub .meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .coordinator-sub .meta i {
+    color: var(--primary);
+    opacity: 0.65;
+    font-size: 11px;
+  }
+
+  .coordinator-chevron { color: #cbd5e1; font-size: 13px; }
+
   @media (max-width: 768px) {
-    .info-section { grid-template-columns: 1fr 1fr; }
+    .info-section { gap: 24px; }
+    .coordinator-sub { gap: 4px 12px; }
   }
 </style>
 
-<div class="client-profile-container">
-  <!-- Header Card -->
+<div class="vendor-profile-container">
+  <!-- ---------- Header ---------- -->
   <div class="profile-header-card">
     <div class="header-top">
       <div class="header-info">
@@ -326,6 +387,9 @@
           <span class="badge badge-status <%= vendor.vendorStatus !== 'ACTIVE' ? 'status-inactive' : '' %>">
             <%= vendor.vendorStatus %>
           </span>
+          <% (vendor.commodities || []).forEach(commodity => { %>
+            <span class="badge badge-commodity"><%= commodity %></span>
+          <% }) %>
         </div>
       </div>
       <a href="/sachiko/vendor/edit/<%= vendor._id %>" class="edit-btn">
@@ -365,214 +429,144 @@
     </div>
   </div>
 
-  <!-- Associated Users Card -->
+  <!-- ---------- Coordinators ---------- -->
   <div class="section-card">
     <div class="section-header">
-      <h2>Associated Coordinators / Locations</h2>
-      <button class="header-action-btn" onclick="window.location.href='/sachiko/form/vendor?tab=user&vendorName=<%= encodeURIComponent(vendor.vendorName) %>'" style="background: var(--primary); color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+      <h2>
+        <i class="fa-solid fa-user-tie"></i> Coordinators
+        <span class="section-count"><%= (vendor.users || []).length %></span>
+      </h2>
+      <button
+        class="header-action-btn"
+        onclick="window.location.href='/sachiko/form/vendor?tab=user&vendorName=<%= encodeURIComponent(vendor.vendorName) %>'"
+      >
         <i class="fa-solid fa-plus"></i> Add Coordinator
       </button>
     </div>
 
-    <div class="table-container">
-      <% if (vendor.users && vendor.users.length > 0) { %>
-        <table class="user-list-table">
-          <thead>
-            <tr>
-              <th style="width: 50px;"></th>
-              <th style="width: 20%;">Coordinator</th>
-              <th style="width: 15%;">Location</th>
-              <th style="width: 15%;">Department</th>
-              <th style="width: 15%;">Contact</th>
-              <th>Email</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% vendor.users.forEach(user => { %>
-              <tr class="user-row expanded" onclick="toggleUserExpand(this)">
-                <td><i class="fa-solid fa-chevron-right toggle-icon"></i></td>
-                <td><a href="/sachiko/vendor/coordinator/details/<%= user._id %>" class="user-link" onclick="event.stopPropagation()"><%= user.userName %></a></td>
-                <td><%= user.userLocation %></td>
-                <td><%= user.userDepartment %></td>
-                <td><%= user.userContact %></td>
-                <td><%= user.userEmail %></td>
-              </tr>
-              <tr class="user-details-row">
-                <td colspan="6">
-                  <div class="details-container">
-                    <div style="font-size: 14px; font-weight: 600; color: var(--primary); margin-top: 10px; border-bottom: 2px solid var(--border); padding-bottom: 5px;">
-                      <i class="fa-solid fa-cart-shopping"></i> Item Details
-                    </div>
-                    
-                    <div class="item-rows-container">
-                      <!-- Labels -->
-                      <% if ((user.label || []).length > 0) { %>
-                        <div class="item-category-group">
-                          <div class="item-category-header">
-                            <span class="item-type-label">Labels</span>
-                            <span class="item-count-badge"><%= user.label.length %></span>
-                          </div>
-                          <table class="inner-spec-table">
-                            <thead>
-                              <tr>
-                                <th style="width: 15%;">Item</th>
-                                <th>GSM</th>
-                                <th>Mtrs</th>
-                                <th>Min</th>
-                                <th>Odr</th>
-                                <th>Freq</th>
-                                <th>Credit</th>
-                                <th>Rate</th>
-                                <th>Paper</th>
-                                <th>Size</th>
-                                <th>Extras</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <% user.label.forEach(i => { %>
-                                <tr>
-                                  <td class="item-name-cell"><%= i.jobName || i.productId %></td>
-                                  <td><%= i.paperGsm || '-' %></td>
-                                  <td><%= i.labelsDel || '-' %></td>
-                                  <td><%= i.labelMinQty || '-' %></td>
-                                  <td><%= i.OrderQty || '-' %></td>
-                                  <td><%= i.repOrderFq || '-' %></td>
-                                  <td><%= i.creditTerm || '-' %></td>
-                                  <td style="font-weight:600;">₹<%= i.ratePerK %>/K</td>
-                                  <td><%= i.paperType %></td>
-                                  <td><%= i.labelWidth %>x<%= i.labelHeight %></td>
-                                  <td style="font-size: 10px; color: #94a3b8;">
-                                    L:<%= i.lamination || '-' %> G:<%= i.gumming || '-' %> W:<%= i.winding || '-' %>
-                                  </td>
-                                </tr>
-                              <% }) %>
-                            </tbody>
-                          </table>
-                        </div>
-                      <% } %>
-
-                      <!-- TTR -->
-                      <% if ((user.ttr || []).length > 0) { %>
-                        <div class="item-category-group">
-                          <div class="item-category-header">
-                            <span class="item-type-label">TTR</span>
-                            <span class="item-count-badge"><%= user.ttr.length %></span>
-                          </div>
-                          <table class="inner-spec-table">
-                            <thead>
-                              <tr>
-                                <th style="width: 12%;">Item</th>
-                                <th style="width: 12%;">Type</th>
-                                <th>Color</th>
-                                <th>Width</th>
-                                <th>Mtrs</th>
-                                <th>InkFace</th>
-                                <th>Core</th>
-                                <th>Min</th>
-                                <th>Odr</th>
-                                <th>Freq</th>
-                                <th>Credit</th>
-                                <th>Rate</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <% user.ttr.forEach(i => { %>
-                                <tr>
-                                  <td class="item-name-cell"><%= i.vendorTtrMaterialCode %></td>
-                                  <td><%= i.vendorTtrType || (i.ttrId ? i.ttrId.ttrType : '-') %></td>
-                                  <td><%= i.vendorTtrColor || (i.ttrId ? i.ttrId.ttrColor : '-') %></td>
-                                  <td><%= i.ttrId ? i.ttrId.ttrWidth : '-' %></td>
-                                  <td><%= i.ttrMtrsDel %></td>
-                                  <td><%= i.ttrId ? i.ttrId.ttrInkFace : '-' %></td>
-                                  <td><%= i.ttrId ? i.ttrId.ttrCoreId : '-' %></td>
-                                  <td><%= i.ttrMinQty %></td>
-                                  <td><%= i.ttrOdrQty || '-' %></td>
-                                  <td><%= i.ttrOdrFreq || '-' %></td>
-                                  <td><%= i.ttrCreditTerm || '-' %></td>
-                                  <td style="font-weight:600;">₹<%= i.ttrRatePerRoll %></td>
-                                </tr>
-                              <% }) %>
-                            </tbody>
-                          </table>
-                        </div>
-                      <% } %>
-
-                      <!-- Tape -->
-                      <% if ((user.tape || []).length > 0) { %>
-                        <div class="item-category-group">
-                          <div class="item-category-header">
-                            <span class="item-type-label">Tape</span>
-                            <span class="item-count-badge"><%= user.tape.length %></span>
-                          </div>
-                          <table class="inner-spec-table">
-                            <thead>
-                              <tr>
-                                <th style="width: 15%;">Item</th>
-                                <th>GSM</th>
-                                <th>Type</th>
-                                <th>Width</th>
-                                <th>Mtrs</th>
-                                <th>Finish</th>
-                                <th>Core</th>
-                                <th>Min</th>
-                                <th>Odr</th>
-                                <th>Freq</th>
-                                <th>Credit</th>
-                                <th>Rate</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <% user.tape.forEach(i => { %>
-                                <tr>
-                                  <td class="item-name-cell"><%= i.vendorTapePaperCode %></td>
-                                  <td><%= i.vendorTapeGsm || (i.tapeId ? i.tapeId.tapeGsm : '-') %></td>
-                                  <td><%= i.vendorTapePaperType || (i.tapeId ? i.tapeId.tapePaperType : '-') %></td>
-                                  <td><%= i.tapeId ? i.tapeId.tapeWidth : '-' %></td>
-                                  <td><%= i.tapeMtrsDel %></td>
-                                  <td><%= i.tapeId ? i.tapeId.tapeFinish : '-' %></td>
-                                  <td><%= i.tapeId ? i.tapeId.tapeCoreId : '-' %></td>
-                                  <td><%= i.tapeMinQty %></td>
-                                  <td><%= i.tapeOdrQty || '-' %></td>
-                                  <td><%= i.tapeOdrFreq || '-' %></td>
-                                  <td><%= i.tapeCreditTerm || '-' %></td>
-                                  <td style="font-weight:600;">₹<%= i.tapeRatePerRoll %></td>
-                                </tr>
-                              <% }) %>
-                            </tbody>
-                          </table>
-                        </div>
-                      <% } %>
-
-                      <% if (
-                        (user.label || []).length === 0 &&
-                        (user.ttr || []).length === 0 &&
-                        (user.tape || []).length === 0
-                      ) { %>
-                        <div style="padding: 15px; color: #94a3b8; font-style: italic; font-size: 13px;">
-                          No items associated with this coordinator.
-                        </div>
-                      <% } %>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-      <% } else { %>
-        <div class="empty-state">
-          <i class="fa-solid fa-users-slash" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
-          No coordinators associated with this vendor yet.
-        </div>
-      <% } %>
-    </div>
+    <% if ((vendor.users || []).length > 0) { %>
+      <ul class="coordinator-list">
+        <% vendor.users.forEach(user => { %>
+          <li>
+            <a class="coordinator-row" href="/sachiko/vendor/coordinator/details/<%= user._id %>">
+              <span class="coordinator-avatar"><%= String(user.userName || '?').trim().charAt(0).toUpperCase() %></span>
+              <span class="coordinator-main">
+                <span class="coordinator-name"><%= user.userName %></span>
+                <span class="coordinator-sub">
+                  <span class="meta"><i class="fa-solid fa-location-dot"></i> <%= user.userLocation || '—' %></span>
+                  <span class="meta"><i class="fa-solid fa-briefcase"></i> <%= user.userDepartment || '—' %></span>
+                  <span class="meta"><i class="fa-solid fa-phone"></i> <%= user.userContact || '—' %></span>
+                  <span class="meta"><i class="fa-solid fa-envelope"></i> <%= user.userEmail || '—' %></span>
+                </span>
+              </span>
+              <i class="fa-solid fa-chevron-right coordinator-chevron"></i>
+            </a>
+          </li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <div class="empty-state">
+        <i class="fa-solid fa-users-slash"></i>
+        No coordinators associated with this vendor yet.
+      </div>
+    <% } %>
   </div>
+
+  <!-- ---------- Items purchased from this vendor ---------- -->
+  <%
+    // A blank/zero-less cell renders as a muted dash rather than an empty gap,
+    // so a short row still lines up with the header above it.
+    const cellText = (value) =>
+      value === undefined || value === null || String(value).trim() === "" ? null : String(value);
+    // A spec never inwarded yet has no rate at all -- a dash, not "₹0".
+    const cellMoney = (value) => {
+      const amount = Number(value);
+      if (!Number.isFinite(amount) || amount <= 0) return null;
+      return "₹" + amount.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+    };
+    const firstFilled = supplyCategories.find((category) => category.items.length > 0);
+  %>
+  <div class="section-card">
+    <div class="section-header">
+      <h2>
+        <i class="fa-solid fa-boxes-stacked"></i> Items
+        <span class="section-count"><%= supplyTotal %></span>
+      </h2>
+    </div>
+
+    <% if (supplyTotal === 0) { %>
+      <div class="empty-state">
+        <i class="fa-solid fa-box-open"></i>
+        No facestock, adhesive, release liner or core master has been added against this vendor yet.
+      </div>
+    <% } else { %>
+      <div class="supply-tabs" role="tablist">
+        <% supplyCategories.forEach(category => { %>
+          <button
+            type="button"
+            class="supply-tab <%= category.key === firstFilled.key ? 'is-open' : '' %> <%= category.items.length === 0 ? 'is-empty' : '' %>"
+            data-panel="supply-panel-<%= category.key %>"
+          >
+            <i class="fa-solid <%= category.icon %>"></i>
+            <%= category.label %>
+            <span class="tab-count"><%= category.items.length %></span>
+          </button>
+        <% }) %>
+      </div>
+
+      <% supplyCategories.forEach(category => { %>
+        <div
+          class="supply-panel <%= category.key === firstFilled.key ? 'is-open' : '' %>"
+          id="supply-panel-<%= category.key %>"
+        >
+          <% if (category.items.length === 0) { %>
+            <div class="empty-state">
+              <i class="fa-solid <%= category.icon %>"></i>
+              No <%= category.label.toLowerCase() %> purchased from this vendor.
+            </div>
+          <% } else { %>
+            <div class="table-scroll">
+              <table class="spec-table">
+                <thead>
+                  <tr>
+                    <% category.columns.forEach(column => { %>
+                      <th class="<%= column.money ? 'cell-rate' : '' %><%= column.rateGroupStart ? ' cell-rate-first' : '' %>"><%= column.title %></th>
+                    <% }) %>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% category.items.forEach(item => { %>
+                    <tr>
+                      <% category.columns.forEach(column => { %>
+                        <% const text = column.money ? cellMoney(item[column.field]) : cellText(item[column.field]); %>
+                        <td class="<%= column.primary ? 'cell-primary' : '' %><%= column.money ? ' cell-rate' : '' %><%= column.rateGroupStart ? ' cell-rate-first' : '' %>">
+                          <% if (text === null) { %>
+                            <span class="cell-muted">—</span>
+                          <% } else { %>
+                            <%= text %>
+                          <% } %>
+                        </td>
+                      <% }) %>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      <% }) %>
+    <% } %>
+  </div>
+
 </div>
 
 <script>
-  function toggleUserExpand(row) {
-    row.classList.toggle('expanded');
-    const detailsRow = row.nextElementSibling;
-    const container = detailsRow.querySelector('.details-container');
-  }
+  document.querySelectorAll(".supply-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".supply-tab").forEach((t) => t.classList.remove("is-open"));
+      document.querySelectorAll(".supply-panel").forEach((p) => p.classList.remove("is-open"));
+      tab.classList.add("is-open");
+      document.getElementById(tab.dataset.panel).classList.add("is-open");
+    });
+  });
 </script>

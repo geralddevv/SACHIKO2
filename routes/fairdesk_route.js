@@ -40,9 +40,11 @@ import MachineJobCard from "../models/inventory/machineJobCard.js";
 import FacestockMaster from "../models/inventory/facestockMaster.js";
 import AdhesiveMaster from "../models/inventory/adhesiveMaster.js";
 import ReleaseMaster from "../models/inventory/releaseMaster.js";
+import CoreMaster from "../models/inventory/coreMaster.js";
 import FacestockStock from "../models/inventory/facestockStock.js";
 import AdhesiveStock from "../models/inventory/adhesiveStock.js";
 import ReleaseLinerStock from "../models/inventory/releaseLinerStock.js";
+import CoreStock from "../models/inventory/coreStock.js";
 import { escapeRegex } from "../utils/security.js";
 import { getUserLocationNames, normalizeLocationName } from "../utils/locations.js";
 import { generateMaterialRollId } from "../utils/materialRollId.js";
@@ -6003,6 +6005,139 @@ router.get("/vendor/view", async (req, res) => {
   }
 });
 
+// The four raw-material masters (Facestock/Adhesive/Release/Core) each carry
+// the vendorId of the vendor that supplies that spec, so "what do we buy from
+// this vendor" is just those four collections filtered by the vendor's _id.
+// Each entry declares the columns the profile page renders, so adding a
+// column is a one-line change here rather than another table in the view.
+//
+// `stockModel`/`specKey` add the price history: the rate on the profile is
+// the rate keyed in at inward on /sachiko/facestockstock (and the adhesive/
+// release-liner/core equivalents), so Last/Lowest/Highest come from that
+// pool's own stock rows. Each specKey is copied verbatim from the matching
+// stock route (facestockSpecKey in routes/stock/facestockStock.js, etc.) --
+// the same grouping the Stock pages use to file a reel under a master, so a
+// master row here shows the rates of exactly the reels it owns. Consumed
+// reels stay in the collection with quantity 0, so an emptied reel still
+// counts towards the price history, which is what you want for "lowest we
+// ever paid".
+const canonSpec = (value) => String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+const numSpec = (value) => (value === undefined || value === null || value === "" ? "" : String(Number(value)));
+
+const VENDOR_SUPPLY_CATEGORIES = [
+  {
+    key: "facestock",
+    label: "Facestock",
+    icon: "fa-layer-group",
+    model: () => FacestockMaster,
+    stockModel: () => FacestockStock,
+    specKey: (o) => [String(o.vendorId || ""), canonSpec(o.family), canonSpec(o.make), canonSpec(o.vendorSkuCode), canonSpec(o.type), canonSpec(o.size), numSpec(o.gsm), numSpec(o.micron)].join("||"),
+    columns: [
+      { title: "Vendor SKU Code", field: "vendorSkuCode", primary: true },
+      { title: "Family", field: "family" },
+      { title: "Make", field: "make" },
+      { title: "Type", field: "type" },
+      { title: "Size", field: "size" },
+      { title: "GSM", field: "gsm" },
+      { title: "Micron", field: "micron" },
+      { title: "MSQ", field: "msq" },
+      { title: "Last Rate", field: "lastRate", money: true, rateGroupStart: true },
+      { title: "Lowest", field: "lowestRate", money: true },
+      { title: "Highest", field: "highestRate", money: true },
+    ],
+  },
+  {
+    key: "adhesive",
+    label: "Adhesive",
+    icon: "fa-droplet",
+    model: () => AdhesiveMaster,
+    stockModel: () => AdhesiveStock,
+    specKey: (o) => [String(o.vendorId || ""), canonSpec(o.type), canonSpec(o.make), canonSpec(o.vendorSkuCode)].join("||"),
+    columns: [
+      { title: "Vendor SKU Code", field: "vendorSkuCode", primary: true },
+      { title: "Type", field: "type" },
+      { title: "Make", field: "make" },
+      { title: "Viscosity", field: "viscosity" },
+      { title: "Cohesion", field: "cohesion" },
+      { title: "Shear", field: "shear" },
+      { title: "Density", field: "density" },
+      { title: "MSQ", field: "msq" },
+      { title: "Last Rate", field: "lastRate", money: true, rateGroupStart: true },
+      { title: "Lowest", field: "lowestRate", money: true },
+      { title: "Highest", field: "highestRate", money: true },
+    ],
+  },
+  {
+    key: "release",
+    label: "Release Liner",
+    icon: "fa-scroll",
+    model: () => ReleaseMaster,
+    stockModel: () => ReleaseLinerStock,
+    specKey: (o) => [String(o.vendorId || ""), canonSpec(o.type), canonSpec(o.make), canonSpec(o.vendorSkuCode), canonSpec(o.color), canonSpec(o.size), numSpec(o.gsm)].join("||"),
+    columns: [
+      { title: "Vendor SKU Code", field: "vendorSkuCode", primary: true },
+      { title: "Type", field: "type" },
+      { title: "Make", field: "make" },
+      { title: "Sensing", field: "sensing" },
+      { title: "Color", field: "color" },
+      { title: "Size", field: "size" },
+      { title: "GSM", field: "gsm" },
+      { title: "MSQ", field: "msq" },
+      { title: "Last Rate", field: "lastRate", money: true, rateGroupStart: true },
+      { title: "Lowest", field: "lowestRate", money: true },
+      { title: "Highest", field: "highestRate", money: true },
+    ],
+  },
+  {
+    key: "core",
+    label: "Core",
+    icon: "fa-circle-notch",
+    model: () => CoreMaster,
+    stockModel: () => CoreStock,
+    specKey: (o) => [String(o.vendorId || ""), canonSpec(o.type), canonSpec(o.make), canonSpec(o.printType), numSpec(o.thickness), numSpec(o.od), numSpec(o.length)].join("||"),
+    columns: [
+      { title: "Type", field: "type", primary: true },
+      { title: "Make", field: "make" },
+      { title: "Print Type", field: "printType" },
+      { title: "Thickness", field: "thickness" },
+      { title: "OD", field: "od" },
+      { title: "Length", field: "length" },
+      { title: "MSQ", field: "msq" },
+      { title: "Last Rate", field: "lastRate", money: true, rateGroupStart: true },
+      { title: "Lowest", field: "lowestRate", money: true },
+      { title: "Highest", field: "highestRate", money: true },
+    ],
+  },
+];
+
+// Last/Lowest/Highest paid per spec, from the rate keyed in at inward on the
+// Stock pages. A blank or zero rate means "never priced" rather than "free",
+// so those rows sit the history out entirely -- counting a 0 would peg
+// Lowest at zero for good. "Last" is by inwardDate where the pool records
+// one and createdAt otherwise (CoreStock has no inwardDate field), with the
+// rows walked oldest-first so the newest inward is simply the one left
+// standing.
+function buildRateStatsByKey(stockRows, specKey) {
+  const priced = stockRows
+    .map((row) => ({ row, rate: Number(row.rate), at: new Date(row.inwardDate || row.createdAt || 0).getTime() }))
+    .filter((entry) => Number.isFinite(entry.rate) && entry.rate > 0)
+    .sort((a, b) => a.at - b.at);
+
+  const stats = new Map();
+  for (const { row, rate } of priced) {
+    const key = specKey(row);
+    const current = stats.get(key);
+    if (!current) {
+      stats.set(key, { lastRate: rate, lowestRate: rate, highestRate: rate });
+      continue;
+    }
+    current.lastRate = rate;
+    current.lowestRate = Math.min(current.lowestRate, rate);
+    current.highestRate = Math.max(current.highestRate, rate);
+  }
+  return stats;
+}
+
 router.get("/vendor/profile/:id", async (req, res) => {
   try {
     const vendor = await Vendor.findById(req.params.id).populate({
@@ -6018,9 +6153,45 @@ router.get("/vendor/profile/:id", async (req, res) => {
       return res.redirect("/sachiko/vendor/view");
     }
 
+    const [supplyRows, supplyStock] = await Promise.all([
+      Promise.all(
+        VENDOR_SUPPLY_CATEGORIES.map((category) =>
+          category
+            .model()
+            .find({ vendorId: vendor._id })
+            .sort({ skuId: 1 })
+            .lean(),
+        ),
+      ),
+      // Every reel/drum/lot ever inwarded from this vendor, emptied ones
+      // included -- the price history is about what was paid, not what's
+      // still on the floor.
+      Promise.all(
+        VENDOR_SUPPLY_CATEGORIES.map((category) =>
+          category.stockModel().find({ vendorId: vendor._id }).lean(),
+        ),
+      ),
+    ]);
+
+    const supplyCategories = VENDOR_SUPPLY_CATEGORIES.map((category, index) => {
+      const rates = buildRateStatsByKey(supplyStock[index], category.specKey);
+      return {
+        key: category.key,
+        label: category.label,
+        icon: category.icon,
+        columns: category.columns,
+        items: supplyRows[index].map((item) => ({
+          ...item,
+          ...(rates.get(category.specKey(item)) || {}),
+        })),
+      };
+    });
+
     res.render("users/vendorProfile.ejs", {
       title: "Vendor Profile",
       vendor,
+      supplyCategories,
+      supplyTotal: supplyRows.reduce((sum, rows) => sum + rows.length, 0),
       CSS: false,
       JS: false,
       notification: req.flash("notification"),

@@ -461,6 +461,26 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
       });
     }
 
+    // Product Code duplicate guard, same as the create route's: productCode
+    // has no unique index, and variant resolution looks a base up with
+    // findOne({ productCode }) (utils/labelStockVariant.js) -- two rows
+    // sharing a code would make that pick an arbitrary one, so an edit that
+    // would create the clash is refused outright. Stored uppercased the way
+    // the create route stores a typed code.
+    const productCode = trim(payload.productCode).toUpperCase();
+    const codeClash = await SachikoLabelStock.findOne({
+      _id: { $ne: req.params.id },
+      productCode,
+    })
+      .select("productCode")
+      .lean();
+    if (codeClash) {
+      throw Object.assign(new Error("Duplicate Product Code"), {
+        userMessage: `Product Code "${productCode}" is already in use. Enter a different code.`,
+      });
+    }
+    payload.productCode = productCode;
+
     const labelStockSignature = buildLabelStockSignature(payload);
     const existingSignature = await SachikoLabelStock.findOne({
       _id: { $ne: req.params.id },
