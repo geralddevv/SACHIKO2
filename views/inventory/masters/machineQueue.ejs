@@ -241,6 +241,61 @@
       </div>
     <% } %>
   </div>
+
+  <!-- Slitting jobs allocated to this machine (routes/system/slitting.js).
+       A slitting card is not a PendingProduction, so it gets its own card
+       rather than being forced into the lamination table's columns. -->
+  <% const slitRows = (typeof slittingRows !== "undefined" && slittingRows) ? slittingRows : []; %>
+  <% if (slitRows.length) { %>
+  <div class="ap-card">
+    <div class="ap-card-title">
+      <span><i class="fa-solid fa-scissors"></i> Slitting Jobs</span>
+      <span><%= slitRows.length %> card<%= slitRows.length === 1 ? "" : "s" %></span>
+    </div>
+    <div class="ap-table-wrap">
+      <table class="ap-table">
+        <colgroup>
+          <col style="width: 16%" /><col style="width: 12%" /><col style="width: 14%" />
+          <col style="width: 18%" /><col style="width: 12%" /><col style="width: 14%" />
+          <col style="width: 14%" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Slitting ID</th>
+            <th>Lot No</th>
+            <th>Product Code</th>
+            <th>Client</th>
+            <th>Deckles</th>
+            <th>Rolls</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% slitRows.forEach((row) => { %>
+            <tr>
+              <td data-label="Slitting ID" title="<%= row.slittingJobCardId %>"><%= row.slittingJobCardId %></td>
+              <td data-label="Lot No"><%= row.lotNo %></td>
+              <td data-label="Product Code"><%= row.productCode %></td>
+              <td data-label="Client" title="<%= row.clientName %>"><%= row.clientName %></td>
+              <td data-label="Deckles">
+                <%= row.deckleLeft %> to run
+                <% if (row.deckleDone > 0) { %><span style="color:#64748b;font-weight:600;font-size:11px;">(<%= row.deckleDone %> of <%= row.deckleCount %> done)</span><% } %>
+              </td>
+              <td data-label="Rolls"><%= row.producedRolls %> of <%= row.plannedRolls %></td>
+              <td>
+                <div class="mq-actions">
+                  <a href="/sachiko/slitting/jobcard/<%= row._id %>" class="mq-start-btn" title="Open the Slitting Job Card">
+                    <i class="fa-solid fa-scissors"></i> slit
+                  </a>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <% } %>
 </div>
 
 <!-- ============ ROLL ALLOTMENT DETAILS DIALOG ============ -->

@@ -4,6 +4,7 @@ import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import LabelStockBinding from "../../models/sachiko/labelStockBinding.js";
 import Client from "../../models/users/client.js";
 import Username from "../../models/users/username.js";
+import TapeSalesOrder from "../../models/inventory/TapeSalesOrder.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { getUserLocationNames } from "../../utils/locations.js";
@@ -165,6 +166,46 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
   }
 });
 
+// Last / Lowest / Highest rate per Label Stock binding, taken from every Sales
+// Order ever placed against that binding (its `orderRate`). Same rules as the
+// vendor profile's price history: a blank or zero rate means "never priced"
+// rather than "free", so those orders sit it out -- otherwise Lowest would peg
+// at zero forever. Orders are walked oldest-first (by poDate, else createdAt)
+// so the newest one is simply the one left standing for "Last".
+async function buildBindingRateStats(bindingIds) {
+  const stats = new Map();
+  if (!bindingIds.length) return stats;
+
+  const orders = await TapeSalesOrder.find({
+    onBindingModel: "LabelStockBinding",
+    tapeBinding: { $in: bindingIds },
+    status: { $ne: "CANCELLED" }, // a cancelled order never actually priced anything
+  })
+    .select("tapeBinding orderRate poDate createdAt")
+    .lean();
+
+  const priced = orders
+    .map((o) => ({
+      key: String(o.tapeBinding),
+      rate: Number(o.orderRate),
+      at: new Date(o.poDate || o.createdAt || 0).getTime(),
+    }))
+    .filter((e) => Number.isFinite(e.rate) && e.rate > 0)
+    .sort((a, b) => a.at - b.at);
+
+  for (const { key, rate } of priced) {
+    const current = stats.get(key);
+    if (!current) {
+      stats.set(key, { lastRate: rate, lowestRate: rate, highestRate: rate });
+      continue;
+    }
+    current.lastRate = rate;
+    current.lowestRate = Math.min(current.lowestRate, rate);
+    current.highestRate = Math.max(current.highestRate, rate);
+  }
+  return stats;
+}
+
 /* GET : Display a client's bound Label Stocks */
 router.get("/label-stock-binding/view/:id", async (req, res) => {
   try {
@@ -177,8 +218,15 @@ router.get("/label-stock-binding/view/:id", async (req, res) => {
       return res.redirect(req.get("Referrer") || "/");
     }
 
+    const bindings = user.labelStock || [];
+    const rateStats = await buildBindingRateStats(bindings.map((b) => b._id));
+    const jsonData = bindings.map((binding) => ({
+      ...binding,
+      ...(rateStats.get(String(binding._id)) || {}),
+    }));
+
     res.render("sachiko/labelStockBindingDisp.ejs", {
-      jsonData: user.labelStock || [],
+      jsonData,
       userId: String(user._id),
       clientName: user.clientName || "",
       userName: user.userName || "",

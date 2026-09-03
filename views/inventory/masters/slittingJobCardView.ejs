@@ -1,0 +1,233 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- Filed Slitting Job Cards. One card can cut several Deckles, so the list
+     stays one line per card and the "Rolls Produced" cell opens the per-Deckle
+     breakdown -- the knife layout and the finished roll each cut became. -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    #master-table { width: 100%; flex: 1 1 auto; min-height: 0; }
+    .header-action-btn {
+      background-color: #f0f0f0; color: #044a78;
+      padding: 2px 14px; font-size: 14px; font-weight: 500;
+      border: none; cursor: pointer; border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,.1);
+      transition: all 0.2s ease-in-out;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .header-action-btn:hover { background-color: #e4e4e4; }
+    .dialog-field-label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px; }
+    .ddx-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .ddx-chip-code {
+      background: #f0f7ff; border: 1px solid #d7e6f5; color: #03365a;
+      font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 7px;
+    }
+    .ddx-chip-muted { color: #64748b; font-size: 12.5px; font-weight: 600; }
+    .ddx-table-wrap { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .ddx-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .ddx-table th {
+      text-align: left; background: #f8fafc; color: #64748b; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.3px; font-size: 10.5px;
+      padding: 7px 10px; border-bottom: 1px solid #e2e8f0;
+    }
+    .ddx-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .ddx-table tr:last-child td { border-bottom: none; }
+    .ddx-reel { font-weight: 700; color: #03365a; }
+    .ddx-muted-dash { color: #cbd5e1; }
+    .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+  </style>
+
+  <div class="indi-head">
+    <h1>Slitting Records</h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <a href="/sachiko/slitting/queue" class="header-action-btn" style="text-decoration:none;">
+        <i class="fa-solid fa-scissors"></i>&nbsp; Slitting Queue
+      </a>
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span><i class="fa-solid fa-file-arrow-down"></i> Download</span>
+          <i class="fas fa-chevron-down"></i>
+        </button>
+        <div class="download-selector__menu">
+          <div class="download-selector__option" id="download-xlsx"><i class="fas fa-file-excel"></i> Excel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table"></div>
+
+  <div class="logout-modal" id="cutDetailModal" aria-hidden="true">
+    <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="cutDetailTitle"
+      style="width: min(1000px, 96vw); padding: 0; border-radius: 14px; border: none;">
+      <div class="dialog-header" style="background:#044a78; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; border-radius:14px 14px 0 0;">
+        <h2 id="cutDetailTitle" style="margin:0; font-size:1rem; font-weight:700; color:#fff;">Rolls Slit</h2>
+        <button type="button" onclick="closeCutDetail()" aria-label="Close"
+          style="background:none; border:none; color:#fff; font-size:20px; cursor:pointer; line-height:1;">×</button>
+      </div>
+      <div class="dialog-body custom-scrollbar" style="padding:16px 20px; max-height:70vh; overflow:auto; border-radius:0 0 14px 14px;">
+        <div id="cutDetailBody"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script id="sl-cards-data" type="application/json"><%- safeJson(jsonData) %></script>
+<script>
+  const downloadSelector = document.getElementById("downloadSelector");
+  downloadSelector.querySelector(".download-selector__trigger")
+    .addEventListener("click", (e) => { e.stopPropagation(); downloadSelector.classList.toggle("download-selector--active"); });
+  document.addEventListener("click", () => downloadSelector.classList.remove("download-selector--active"));
+
+  const raw = JSON.parse(document.getElementById("sl-cards-data").textContent);
+  const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const fmt = (n) => (Number.isFinite(Number(n)) && n !== null && n !== "" ? Number(n).toLocaleString("en-IN") : "-");
+
+  const deckleIds = (c) => (Array.isArray(c.slittingLog) ? c.slittingLog : [])
+    .map((r) => String(r?.deckleId || "").trim()).filter(Boolean);
+
+  const tableData = raw.map((c) => ({
+    slittingJobCardId: c.slittingJobCardId,
+    date: c.date ? new Date(c.date).toLocaleDateString("en-GB") : "-",
+    clientOrderNo: c.clientOrderNo || "-",
+    productCode: c.productCode || "-",
+    lotNo: c.lotNo || "-",
+    clientName: c.clientName || "-",
+    machineName: c.machineName || "-",
+    // "allocated" cards still have Deckles on the floor; only "completed"
+    // ones are finished work.
+    status: c.status === "completed" ? "Completed" : "In progress",
+    deckles: deckleIds(c).join(", ") || "-",
+    totalRolls: c.totalRolls ?? "-",
+    totalDeckleMeter: fmt(c.totalDeckleMeter),
+    totalFinishedMeter: fmt(c.totalFinishedMeter),
+    operatorName: c.operatorName || "-",
+    helperName: c.helperName || "-",
+    location: c.location || "-",
+  }));
+
+  const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, ...col });
+  const rawById = new Map(raw.map((c) => [c.slittingJobCardId, c]));
+
+  window.closeCutDetail = () => {
+    const m = document.getElementById("cutDetailModal");
+    m.classList.remove("show"); m.setAttribute("aria-hidden", "true");
+  };
+
+  function openCutDetail(cardId) {
+    const card = rawById.get(cardId);
+    if (!card) return;
+    const rows = Array.isArray(card.slittingLog) ? card.slittingLog : [];
+
+    document.getElementById("cutDetailBody").innerHTML = rows.map((r, i) => {
+      const cuts = Array.isArray(r.cuts) ? r.cuts : [];
+      const done = r.status === "done";
+      const body = cuts.length
+        ? cuts.map((c) => `
+            <tr>
+              <td style="font-weight:700;color:#044a78;">${esc(c.slot || "—")}</td>
+              <td>${fmt(c.width)} mm</td>
+              <td>${fmt(done ? r.runningMeter : r.plannedRunningMeter)} mtrs</td>
+              <td>${c.rollId
+                ? `<span class="ddx-reel">${esc(c.rollId)}</span>`
+                : '<span class="ddx-muted-dash">not run yet</span>'}</td>
+            </tr>`).join("")
+        : `<tr><td colspan="4" style="color:#94a3b8;">No roll widths allocated on this row.</td></tr>`;
+
+      const meta = [
+        done
+          ? (Number(r.meter) > 0 ? `${fmt(r.meter)} mtrs off the reel` : "")
+          : (Number(r.plannedMeter) > 0 ? `${fmt(r.plannedMeter)} mtrs planned` : ""),
+        r.width != null ? `${fmt(r.width)} mm web` : "",
+        r.trim != null ? `${fmt(r.trim)} mm trim` : "",
+        r.joint ? `Joint: ${esc(r.joint)}${r.jointMtr != null ? ` at ${esc(r.jointMtr)} mtrs` : ""}` : "",
+        r.startTime || r.endTime ? `${esc(r.startTime || "—")} → ${esc(r.endTime || "—")}` : "",
+      ].filter(Boolean);
+
+      return `<div style="margin-bottom:18px;">
+        <div class="ddx-meta">
+          <strong style="color:${done ? "#15803d" : "#b45309"};font-size:13px;">${esc(r.deckleId || `Deckle ${i + 1}`)}</strong>
+          <span class="ddx-chip-muted">${done ? "run" : "not run yet"}</span>
+          ${meta.map((m) => `<span class="ddx-chip-muted">${m}</span>`).join("")}
+        </div>
+        <div class="ddx-table-wrap">
+          <table class="ddx-table">
+            <thead><tr><th>Slot</th><th>Roll Width</th><th>R. Meter</th><th>Finished Roll ID</th></tr></thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join("") || '<div style="color:#94a3b8;font-size:12.5px;">Nothing recorded on this card.</div>';
+
+    const m = document.getElementById("cutDetailModal");
+    m.classList.add("show"); m.setAttribute("aria-hidden", "false");
+  }
+
+  const table = new Tabulator("#master-table", {
+    data: tableData,
+    height: "100%",
+    initialSort: [{ column: "date", dir: "desc" }],
+    placeholder: "No slitting records found",
+    columns: [
+      { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
+        formatter: (cell) => cell.getRow().getPosition(true) },
+      withTextFilter({ title: "Slitting ID", field: "slittingJobCardId", width: 165, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
+      withTextFilter({ title: "Date", field: "date", width: 110 }),
+      withTextFilter({ title: "Client Order No", field: "clientOrderNo", minWidth: 130 }),
+      withTextFilter({ title: "Product Code", field: "productCode", minWidth: 130, formatter: (cell) => `<span style="font-weight:600;color:#03365a;">${cell.getValue()}</span>` }),
+      withTextFilter({ title: "Lot No", field: "lotNo", minWidth: 110 }),
+      withTextFilter({ title: "Client", field: "clientName", minWidth: 140 }),
+      withTextFilter({ title: "Machine", field: "machineName", minWidth: 120 }),
+      withTextFilter({ title: "Status", field: "status", width: 125,
+        formatter: (cell) => cell.getValue() === "Completed"
+          ? '<span style="color:#15803d;font-weight:700;"><i class="fa-solid fa-check"></i> Completed</span>'
+          : '<span style="color:#b45309;font-weight:700;"><i class="fa-solid fa-clock"></i> In progress</span>' }),
+      withTextFilter({ title: "Deckle(s) Slit", field: "deckles", minWidth: 170 }),
+      withTextFilter({ title: "Rolls Inwarded", field: "totalRolls", width: 135,
+        formatter: (cell) => cell.getValue() === "-" ? "-"
+          : `<span style="font-weight:600;color:#15803d;text-decoration:underline;cursor:pointer;" title="Show the cut layout &amp; roll IDs">${cell.getValue()}</span>`,
+        cellClick: (e, cell) => { if (cell.getValue() !== "-") openCutDetail(cell.getData().slittingJobCardId); } }),
+      withTextFilter({ title: "Deckle Mtrs", field: "totalDeckleMeter", width: 120 }),
+      withTextFilter({ title: "Finished Mtrs", field: "totalFinishedMeter", width: 130 }),
+      withTextFilter({ title: "Operator", field: "operatorName", minWidth: 120 }),
+      withTextFilter({ title: "Helper", field: "helperName", minWidth: 120 }),
+      withTextFilter({ title: "Location", field: "location", minWidth: 120 }),
+    ],
+  });
+
+  // See jobCardView.ejs -- "renderComplete" only fires when subscribed via
+  // .on(), and reading the rendered DOM is what keeps Sr. No. correct after a
+  // sort or a header filter.
+  table.on("renderComplete", function () {
+    document.querySelectorAll("#master-table .tabulator-row").forEach((rowEl, i) => {
+      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
+      if (cell) cell.textContent = i + 1;
+    });
+  });
+
+  document.getElementById("download-xlsx").addEventListener("click", () =>
+    table.download("xlsx", "sachiko-slitting-records.xlsx", { sheetName: "Slitting Records" }));
+</script>
+
+<% if (notification && notification.length) { %>
+<script>
+  const slFlash = <%- safeJson(notification[0]) %>;
+  const slFlashType = /failed|not found|error|no deckle|pick an order/i.test(String(slFlash)) ? "error" : "success";
+  const showSlFlash = () => {
+    if (typeof hideStaticToast === "function") hideStaticToast();
+    if (typeof showToast === "function") showToast(slFlash, slFlashType);
+  };
+  document.readyState === "loading"
+    ? document.addEventListener("DOMContentLoaded", showSlFlash, { once: true })
+    : showSlFlash();
+</script>
+<% } %>

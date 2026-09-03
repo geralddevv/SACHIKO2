@@ -6,6 +6,7 @@ import connectDB from "./config/db.js";
 import fairdeskRoute from "./routes/fairdesk_route.js";
 import sachikoRoute from "./routes/sachiko/sachiko_route.js";
 import machineRoutes from "./routes/system/machine.js";
+import slittingRoutes from "./routes/system/slitting.js";
 import operatorApiRoutes from "./routes/api/operatorApi.js";
 import maintenanceRoutes from "./routes/system/maintenance.js";
 import facestockMasterRoutes from "./routes/system/facestockMaster.js";
@@ -846,6 +847,12 @@ app.use(
 // pages before the request ever fell through. The roles are enforced per
 // route inside the router instead.
 app.use("/sachiko", requireAuth, machineRoutes);
+// The slitting step that follows lamination -- Deckles (Semi Finished Goods)
+// cut into finished rolls. Bare-mounted for the same reason as machineRoutes
+// above: it is shopfloor work, so operators must reach it before
+// fairdeskRoute's requireRole below turns them away. Roles are enforced per
+// route inside the router.
+app.use("/sachiko", requireAuth, slittingRoutes);
 // Shopfloor maintenance tickets: raised by operators, actioned by management.
 // Also bare-mounted with no role gate -- operators need to reach
 // /sachiko/operator/maintenance before fairdeskRoute's requireRole below

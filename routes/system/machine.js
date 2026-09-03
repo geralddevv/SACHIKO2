@@ -20,6 +20,7 @@ import { normalizeLocationName } from "../../utils/locations.js";
 import { normalizeRollId, extractScannedRollId, findScannedReel, generateDeckleId } from "../../utils/rollId.js";
 import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds, getEligibleRawMaterials } from "../../utils/labelStockProduction.js";
 import { resolveActualLabelStock, resolveLabelStockCombinations } from "../../utils/labelStockVariant.js";
+import { buildSlittingQueueRows } from "./slitting.js";
 
 const router = express.Router();
 
@@ -335,6 +336,14 @@ export async function buildOperatorQueue({ empObjId, empName, empNickName, empLo
         })
       : 0;
 
+  // Slitting cards allocated to this operator (routes/system/slitting.js).
+  // Kept as its own list rather than merged into `groups`: a slitting job is
+  // not a PendingProduction and has none of a lamination row's shape.
+  const slittingRows =
+    operatorObjId && mongoose.isValidObjectId(operatorObjId)
+      ? await buildSlittingQueueRows({ operatorId: operatorObjId })
+      : [];
+
   return {
     operatorName: empName || "",
     // Additive on purpose: the EJS operator queue page keeps rendering
@@ -344,6 +353,7 @@ export async function buildOperatorQueue({ empObjId, empName, empNickName, empLo
     operatorNickName: empNickName || empName || "",
     operatorLocation: empLoc || "",
     groups,
+    slittingRows,
     totalJobs: rows.length,
     openMaintenanceCount,
   };
@@ -685,7 +695,10 @@ router.get("/machine/:id/queue", requireMachineFloor, async (req, res) => {
     return res.redirect(fallbackUrl);
   }
 
-  const rows = await buildQueueRows({ assignedMachineId: machine._id, producedAt: null });
+  const [rows, slittingRows] = await Promise.all([
+    buildQueueRows({ assignedMachineId: machine._id, producedAt: null }),
+    buildSlittingQueueRows({ machineId: machine._id }),
+  ]);
 
   res.render("inventory/masters/machineQueue.ejs", {
     title: `${machine.machineName} Queue`,
@@ -693,6 +706,7 @@ router.get("/machine/:id/queue", requireMachineFloor, async (req, res) => {
     JS: false,
     machine,
     rows,
+    slittingRows,
     notification: req.flash("notification"),
   });
 });

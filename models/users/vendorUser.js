@@ -52,6 +52,25 @@ const vendorUserSchema = new mongoose.Schema({
   commodities: [String],
   vendorUserSignature: { type: String, unique: true, sparse: true, trim: true },
 
+  // The coordinator's own active/inactive state (distinct from `vendorStatus`,
+  // which mirrors the parent vendor). Toggled from the coordinator details page.
+  coordinatorStatus: {
+    type: String,
+    enum: ["ACTIVE", "INACTIVE"],
+    default: "ACTIVE",
+  },
+  // Activation history -- one entry per stint the coordinator was active.
+  // The open entry (no `to`) is the current stint; closing it (set `to`) is
+  // what "mark inactive" does, re-activating pushes a fresh open entry. Shown
+  // as a timeline on the vendor profile page.
+  activityLog: [
+    {
+      _id: false,
+      from: { type: Date, required: true },
+      to: { type: Date, default: null },
+    },
+  ],
+
   tape: [
     {
       type: Schema.Types.ObjectId,
@@ -66,6 +85,15 @@ const vendorUserSchema = new mongoose.Schema({
       ref: "Label",
     },
   ],
+});
+
+// A brand-new coordinator starts ACTIVE with its activation timeline opened now.
+vendorUserSchema.pre("save", function (next) {
+  if (this.isNew && (!this.activityLog || this.activityLog.length === 0)) {
+    this.coordinatorStatus = this.coordinatorStatus || "ACTIVE";
+    this.activityLog = [{ from: new Date(), to: null }];
+  }
+  next();
 });
 
 const VendorUser = mongoose.model("VendorUser", vendorUserSchema);

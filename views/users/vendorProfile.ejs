@@ -343,6 +343,13 @@
     text-decoration-thickness: 2px;
   }
 
+  .coordinator-name-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+
   /* Location, department, phone and email all sit on one wrapping line under
      the name -- read left-to-right with the name instead of being parked
      against the far right edge of a wide row, where they went unnoticed. */
@@ -370,6 +377,46 @@
   }
 
   .coordinator-chevron { color: #cbd5e1; font-size: 13px; }
+
+  /* ---------- Coordinator activity timeline ---------- */
+  .coordinator-activity {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 7px;
+  }
+
+  .activity-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 100px;
+    background: #f1f5f9;
+    color: #475569;
+    white-space: nowrap;
+  }
+
+  .activity-chip.current {
+    background: #e7f7ee;
+    color: #1a7f45;
+  }
+
+  .activity-chip.current i {
+    font-size: 7px;
+    color: #22c55e;
+  }
+
+  .activity-chip.inactive {
+    background: #fdecea;
+    color: #c0392b;
+  }
+
+  .activity-chip.inactive i { font-size: 7px; color: #e74c3c; }
+
+  .activity-chip.ended i { font-size: 9px; color: #94a3b8; }
 
   @media (max-width: 768px) {
     .info-section { gap: 24px; }
@@ -444,6 +491,25 @@
       </button>
     </div>
 
+    <%
+      const fmtDay = (value) => {
+        if (!value) return "—";
+        const d = new Date(value);
+        return Number.isNaN(d.getTime())
+          ? "—"
+          : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+      };
+      // Every activation stint, oldest first. Legacy coordinators with no
+      // recorded log fall back to a single open stint from the _id timestamp.
+      const activityPeriods = (user) => {
+        const log = Array.isArray(user.activityLog) ? user.activityLog.slice() : [];
+        if (!log.length) {
+          const created = user._id && user._id.getTimestamp ? user._id.getTimestamp() : null;
+          return [{ from: created, to: (user.coordinatorStatus || "ACTIVE") === "ACTIVE" ? null : created }];
+        }
+        return log.sort((a, b) => new Date(a.from) - new Date(b.from));
+      };
+    %>
     <% if ((vendor.users || []).length > 0) { %>
       <ul class="coordinator-list">
         <% vendor.users.forEach(user => { %>
@@ -451,13 +517,42 @@
             <a class="coordinator-row" href="/sachiko/vendor/coordinator/details/<%= user._id %>">
               <span class="coordinator-avatar"><%= String(user.userName || '?').trim().charAt(0).toUpperCase() %></span>
               <span class="coordinator-main">
-                <span class="coordinator-name"><%= user.userName %></span>
+                <%
+                  const periods = activityPeriods(user);
+                  const coordActive = (user.coordinatorStatus || 'ACTIVE') === 'ACTIVE';
+                  const openPeriod = periods.find(p => !p.to);
+                  const endedPeriods = periods.filter(p => p.to);
+                  const lastEnd = endedPeriods.length ? endedPeriods[endedPeriods.length - 1].to : null;
+                %>
+                <span class="coordinator-name-row">
+                  <span class="coordinator-name"><%= user.userName %></span>
+                  <% if (coordActive) { %>
+                    <span class="activity-chip current">
+                      <i class="fa-solid fa-circle"></i>
+                      Currently active<% if (openPeriod && openPeriod.from) { %> — since <%= fmtDay(openPeriod.from) %><% } %>
+                    </span>
+                  <% } else { %>
+                    <span class="activity-chip inactive">
+                      <i class="fa-solid fa-circle"></i>
+                      Inactive<% if (lastEnd) { %> — since <%= fmtDay(lastEnd) %><% } %>
+                    </span>
+                  <% } %>
+                </span>
                 <span class="coordinator-sub">
                   <span class="meta"><i class="fa-solid fa-location-dot"></i> <%= user.userLocation || '—' %></span>
                   <span class="meta"><i class="fa-solid fa-briefcase"></i> <%= user.userDepartment || '—' %></span>
                   <span class="meta"><i class="fa-solid fa-phone"></i> <%= user.userContact || '—' %></span>
                   <span class="meta"><i class="fa-solid fa-envelope"></i> <%= user.userEmail || '—' %></span>
                 </span>
+                <% if (endedPeriods.length) { %>
+                  <span class="coordinator-activity">
+                    <% endedPeriods.forEach(period => { %>
+                      <span class="activity-chip ended">
+                        <i class="fa-regular fa-clock"></i> Active <%= fmtDay(period.from) %> – <%= fmtDay(period.to) %>
+                      </span>
+                    <% }) %>
+                  </span>
+                <% } %>
               </span>
               <i class="fa-solid fa-chevron-right coordinator-chevron"></i>
             </a>

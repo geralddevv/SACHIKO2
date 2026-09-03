@@ -81,6 +81,10 @@
 
   .action-btn-header:hover { background: #f1f5f9; }
   .action-btn-header.danger { color: #e74c3c; }
+  .action-btn-header.warn { color: #b45309; }
+
+  .badge-active { background: #2ecc71; color: white; }
+  .badge-inactive { background: #e74c3c; color: white; }
 
   /* Custom Scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
@@ -172,87 +176,64 @@
     font-weight: 600;
   }
 
-  .item-rows-container {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 25px;
-  }
-
-  .item-category-group {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .item-category-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding-bottom: 6px;
-    border-bottom: 2px solid #f1f5f9;
-  }
-
-  .item-type-label {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--secondary);
-  }
-
-  .item-count-badge {
-    background: #f1f5f9;
-    color: #64748b;
-    padding: 2px 8px;
-    border-radius: 100px;
-    font-size: 11px;
-    font-weight: 800;
-  }
-
-  .inner-spec-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-    table-layout: fixed;
-  }
-
-  .inner-spec-table th {
-    text-align: center;
-    color: #94a3b8;
-    font-weight: 700;
-    padding: 10px 12px;
-    border-bottom: 1px solid #f1f5f9;
-    text-transform: uppercase;
-    font-size: 10px;
-    letter-spacing: 0.05em;
-    background: #f8fafc;
-  }
-
-  .inner-spec-table td {
-    padding: 10px 12px;
-    border-bottom: 1px solid #f8fafc;
-    color: #334155;
-    vertical-align: middle;
-    word-wrap: break-word;
-    text-align: center;
-  }
-
-  .inner-spec-table th:first-child,
-  .inner-spec-table td:first-child {
-    text-align: left;
-  }
-
-  .inner-spec-table tr:hover td {
-    background-color: #f8fafc;
-  }
-
-  .item-name-cell {
-    font-weight: 600;
-    color: var(--primary);
-  }
-
   @media (max-width: 768px) {
     .info-section { flex-wrap: wrap; gap: 20px; }
   }
+
+  /* Activity timeline */
+  .activity-list {
+    padding: 16px 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .activity-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fcfcfc;
+  }
+
+  .activity-row.is-current {
+    border-color: #bbe6cd;
+    background: #f2fbf6;
+  }
+
+  .activity-dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+    background: #cbd5e1;
+  }
+
+  .activity-row.is-current .activity-dot { background: #22c55e; }
+
+  .activity-range {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+  }
+
+  .activity-sep { color: #94a3b8; font-size: 11px; }
+
+  .activity-tag {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748b;
+  }
+
+  .activity-row.is-current .activity-tag { color: #1a7f45; }
 </style>
 
 <div class="client-profile-container">
@@ -263,6 +244,9 @@
         <h1><%= vendorUser.vendorName %></h1>
         <div class="header-badges">
           <span class="badge badge-type">Vendor</span>
+          <span class="badge <%= (vendorUser.coordinatorStatus || 'ACTIVE') === 'ACTIVE' ? 'badge-active' : 'badge-inactive' %>">
+            <%= (vendorUser.coordinatorStatus || 'ACTIVE') === 'ACTIVE' ? 'Active' : 'Inactive' %>
+          </span>
         </div>
       </div>
       <div class="header-actions">
@@ -275,6 +259,14 @@
         <a href="/sachiko/form/edit/vendor-user/<%= vendorUser._id %>" class="action-btn-header">
           <i class="fa-solid fa-pen"></i> Edit Coordinator
         </a>
+        <% const coordStatus = (vendorUser.coordinatorStatus || 'ACTIVE'); %>
+        <button class="action-btn-header <%= coordStatus === 'ACTIVE' ? 'warn' : '' %>" id="toggleStatusBtn"
+          onclick="confirmToggleStatus()"
+          data-current="<%= coordStatus %>"
+          data-target="<%= coordStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' %>">
+          <i class="fa-solid <%= coordStatus === 'ACTIVE' ? 'fa-user-slash' : 'fa-user-check' %>"></i>
+          <%= coordStatus === 'ACTIVE' ? 'Mark Inactive' : 'Mark Active' %>
+        </button>
         <button class="action-btn-header danger" onclick="confirmDeleteCoordinator()">
           <i class="fa-solid fa-trash"></i> Delete
         </button>
@@ -342,117 +334,45 @@
     </div>
   </div>
 
-  <!-- Item Details Card -->
+  <!-- Activity Timeline Card -->
+  <%
+    const fmtDay = (value) => {
+      if (!value) return "—";
+      const d = new Date(value);
+      return Number.isNaN(d.getTime())
+        ? "—"
+        : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    };
+    const coordIsActive = (vendorUser.coordinatorStatus || "ACTIVE") === "ACTIVE";
+    let activity = Array.isArray(vendorUser.activityLog) ? vendorUser.activityLog.slice() : [];
+    if (!activity.length) {
+      const created = vendorUser._id && vendorUser._id.getTimestamp ? vendorUser._id.getTimestamp() : null;
+      activity = [{ from: created, to: coordIsActive ? null : created }];
+    }
+    activity.sort((a, b) => new Date(a.from) - new Date(b.from));
+  %>
   <div class="section-card">
     <div class="section-header">
-      <h2>Item Specifications</h2>
-      <div style="display: flex; gap: 8px;">
-        <span class="badge" style="background: #f1f5f9; color: #64748b; font-size: 11px;">Total Items: <%= (labels.length + tapes.length) %></span>
-      </div>
+      <h2>Activity</h2>
+      <span class="badge <%= coordIsActive ? 'badge-active' : 'badge-inactive' %>" style="font-size: 11px;">
+        <%= coordIsActive ? 'Active' : 'Inactive' %>
+      </span>
     </div>
 
-    <div class="item-rows-container">
-      <!-- Labels -->
-      <% if (labels && labels.length > 0) { %>
-        <div class="item-category-group">
-          <div class="item-category-header">
-            <span class="item-type-label">Labels</span>
-            <span class="item-count-badge"><%= labels.length %></span>
-          </div>
-          <table class="inner-spec-table">
-            <thead>
-              <tr>
-                <th style="width: 15%;">Item</th>
-                <th>GSM</th>
-                <th>Mtrs</th>
-                <th>Min</th>
-                <th>Odr</th>
-                <th>Freq</th>
-                <th>Credit</th>
-                <th>Rate</th>
-                <th>Paper</th>
-                <th>Size</th>
-                <th>Extras</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% labels.forEach(i => { %>
-                <tr>
-                  <td class="item-name-cell"><%= i.jobName || i.productId %></td>
-                  <td><%= i.paperGsm || '-' %></td>
-                  <td><%= i.labelsDel || '-' %></td>
-                  <td><%= i.labelMinQty || '-' %></td>
-                  <td><%= i.OrderQty || '-' %></td>
-                  <td><%= i.repOrderFq || '-' %></td>
-                  <td><%= i.creditTerm || '-' %></td>
-                  <td style="font-weight:600;">₹<%= i.ratePerK %>/K</td>
-                  <td><%= i.paperType %></td>
-                  <td><%= i.labelWidth %>x<%= i.labelHeight %></td>
-                  <td style="font-size: 10px; color: #94a3b8;">
-                    L:<%= i.lamination || '-' %> G:<%= i.gumming || '-' %> W:<%= i.winding || '-' %>
-                  </td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
+    <div class="activity-list">
+      <% activity.forEach((period, idx) => { %>
+        <div class="activity-row <%= !period.to ? 'is-current' : '' %>">
+          <span class="activity-dot"></span>
+          <span class="activity-range">
+            <span class="activity-from"><%= fmtDay(period.from) %></span>
+            <i class="fa-solid fa-arrow-right-long activity-sep"></i>
+            <span class="activity-to"><%= period.to ? fmtDay(period.to) : 'Present' %></span>
+          </span>
+          <span class="activity-tag">
+            <%= !period.to ? 'Currently active' : 'Was active' %>
+          </span>
         </div>
-      <% } %>
-
-      <!-- Tape -->
-      <% if (tapes && tapes.length > 0) { %>
-        <div class="item-category-group">
-          <div class="item-category-header">
-            <span class="item-type-label">Tape</span>
-            <span class="item-count-badge"><%= tapes.length %></span>
-          </div>
-          <table class="inner-spec-table">
-            <thead>
-              <tr>
-                <th style="width: 15%;">Item</th>
-                <th>GSM</th>
-                <th>Type</th>
-                <th>Width</th>
-                <th>Mtrs</th>
-                <th>Finish</th>
-                <th>Core</th>
-                <th>Min</th>
-                <th>Odr</th>
-                <th>Freq</th>
-                <th>Credit</th>
-                <th>Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% tapes.forEach(i => { %>
-                <tr>
-                  <td class="item-name-cell"><%= i.vendorTapePaperCode %></td>
-                  <td><%= i.vendorTapeGsm || (i.tapeId ? i.tapeId.tapeGsm : '-') %></td>
-                  <td><%= i.vendorTapePaperType || (i.tapeId ? i.tapeId.tapePaperType : '-') %></td>
-                  <td><%= i.tapeId ? i.tapeId.tapeWidth : '-' %></td>
-                  <td><%= i.tapeMtrsDel %></td>
-                  <td><%= i.tapeId ? i.tapeId.tapeFinish : '-' %></td>
-                  <td><%= i.tapeId ? i.tapeId.tapeCoreId : '-' %></td>
-                  <td><%= i.tapeMinQty %></td>
-                  <td><%= i.tapeOdrQty || '-' %></td>
-                  <td><%= i.tapeOdrFreq || '-' %></td>
-                  <td><%= i.tapeCreditTerm || '-' %></td>
-                  <td style="font-weight:600;">₹<%= i.tapeRatePerRoll %></td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-      <% } %>
-
-      <% if (
-        (labels || []).length === 0 &&
-        (tapes || []).length === 0
-      ) { %>
-        <div style="padding: 40px; text-align: center; color: #94a3b8;">
-          <i class="fa-solid fa-box-open" style="font-size: 32px; margin-bottom: 10px; display: block;"></i>
-          No items associated with this coordinator.
-        </div>
-      <% } %>
+      <% }) %>
     </div>
   </div>
 </div>
@@ -461,6 +381,17 @@
 <form id="deleteCoordinatorForm" method="POST" action="/sachiko/vendor/coordinator/details/<%= vendorUser._id %>/delete" style="display:none;">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 </form>
+
+<div class="logout-modal" id="toggleStatusModal" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="toggleStatusTitle">
+    <h2 class="logout-title" id="toggleStatusTitle">Change coordinator status?</h2>
+    <p class="logout-text" id="toggleStatusText">This will change the coordinator status.</p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" id="toggleStatusCancel">Cancel</button>
+      <button class="logout-btn primary" type="button" id="toggleStatusConfirm">OK</button>
+    </div>
+  </div>
+</div>
 
 <div class="logout-modal" id="deleteCoordinatorModal" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteCoordinatorTitle">
@@ -497,5 +428,56 @@
   deleteCoordinatorConfirm.addEventListener("click", () => {
     closeDeleteCoordinatorModal();
     document.getElementById("deleteCoordinatorForm").submit();
+  });
+
+  /* ── Active / Inactive toggle ── */
+  const coordinatorId = "<%= vendorUser._id %>";
+  const toggleStatusBtn = document.getElementById("toggleStatusBtn");
+  const toggleStatusModal = document.getElementById("toggleStatusModal");
+  const toggleStatusText = document.getElementById("toggleStatusText");
+  const toggleStatusCancel = document.getElementById("toggleStatusCancel");
+  const toggleStatusConfirm = document.getElementById("toggleStatusConfirm");
+  const getCsrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+
+  function confirmToggleStatus() {
+    const target = toggleStatusBtn.dataset.target;
+    toggleStatusText.textContent = target === "INACTIVE"
+      ? "This will mark the coordinator inactive and close its current active period."
+      : "This will mark the coordinator active and start a new active period.";
+    toggleStatusModal.style.display = "flex";
+    toggleStatusModal.classList.add("show");
+    toggleStatusModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeToggleStatusModal() {
+    toggleStatusModal.classList.remove("show");
+    toggleStatusModal.setAttribute("aria-hidden", "true");
+    toggleStatusModal.style.display = "none";
+  }
+
+  toggleStatusCancel.addEventListener("click", closeToggleStatusModal);
+  toggleStatusModal.addEventListener("click", (e) => {
+    if (e.target === toggleStatusModal) closeToggleStatusModal();
+  });
+
+  toggleStatusConfirm.addEventListener("click", async () => {
+    toggleStatusConfirm.disabled = true;
+    try {
+      const res = await fetch(`/sachiko/vendor/coordinator/details/${coordinatorId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-csrf-token": getCsrfToken() },
+        body: JSON.stringify({ status: toggleStatusBtn.dataset.target }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = data.redirect || window.location.href;
+      } else {
+        toggleStatusText.textContent = data.message || "Failed to update status.";
+        toggleStatusConfirm.disabled = false;
+      }
+    } catch {
+      toggleStatusText.textContent = "Server error. Please try again.";
+      toggleStatusConfirm.disabled = false;
+    }
   });
 </script>

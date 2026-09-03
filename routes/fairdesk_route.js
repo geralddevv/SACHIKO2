@@ -6255,13 +6255,7 @@ router.get("/vendor/coordinator/view", async (req, res) => {
 // ----------------------------------Vendor coordinator details----------------------------------
 router.get("/vendor/coordinator/details/:userId", async (req, res) => {
   try {
-    const vendorUser = await VendorUser.findById(req.params.userId)
-      .populate("label")
-      .populate({
-        path: "tape",
-        populate: { path: "tapeId" },
-      })
-      .lean();
+    const vendorUser = await VendorUser.findById(req.params.userId).lean();
 
     if (!vendorUser) {
       req.flash("notification", "Vendor coordinator not found");
@@ -6270,20 +6264,12 @@ router.get("/vendor/coordinator/details/:userId", async (req, res) => {
 
     const vendor = await Vendor.findOne({ vendorId: vendorUser.vendorId }).lean();
 
-    const stats = {
-      labels: (vendorUser.label || []).length,
-      tapes: (vendorUser.tape || []).length,
-    };
-
     res.render("users/vendorUserDetails.ejs", {
       title: "Vendor Coordinator Details",
       CSS: false,
       JS: false,
       vendorUser,
       vendor,
-      labels: vendorUser.label || [],
-      tapes: vendorUser.tape || [],
-      stats,
       notification: req.flash("notification"),
     });
   } catch (err) {
@@ -6317,6 +6303,56 @@ router.post("/vendor/coordinator/details/:userId/delete", requireAuth, deleteLim
     console.error("VENDOR COORDINATOR DELETE ERROR:", err);
     req.flash("notification", "Failed to remove coordinator");
     return res.redirect("/sachiko/vendor/coordinator/details/" + req.params.userId);
+  }
+});
+
+// ----------------------------------Vendor coordinator active / inactive----------------------------------
+// Toggles the coordinator's own status and keeps its activation timeline in
+// step: marking INACTIVE closes the open stint, re-activating opens a fresh
+// one. The vendor profile page renders that timeline.
+router.post("/vendor/coordinator/details/:userId/status", requireAuth, updateLimiter, async (req, res) => {
+  try {
+    const target = String(req.body.status || "").trim().toUpperCase();
+    if (!["ACTIVE", "INACTIVE"].includes(target)) {
+      return res.status(400).json({ success: false, message: "Invalid status" });
+    }
+
+    const vendorUser = await VendorUser.findById(req.params.userId);
+    if (!vendorUser) {
+      return res.status(404).json({ success: false, message: "Coordinator not found" });
+    }
+
+    const current = vendorUser.coordinatorStatus || "ACTIVE";
+    if (current === target) {
+      return res.json({ success: true, redirect: `/sachiko/vendor/coordinator/details/${vendorUser._id}` });
+    }
+
+    // Legacy coordinators predate the timeline -- seed it from the _id's
+    // creation time so the history still reads sensibly.
+    if (!Array.isArray(vendorUser.activityLog) || vendorUser.activityLog.length === 0) {
+      vendorUser.activityLog = [{ from: vendorUser._id.getTimestamp(), to: null }];
+    }
+
+    const now = new Date();
+    const openPeriod = [...vendorUser.activityLog].reverse().find((p) => !p.to);
+
+    if (target === "INACTIVE") {
+      if (openPeriod) openPeriod.to = now;
+      vendorUser.coordinatorStatus = "INACTIVE";
+    } else {
+      if (openPeriod) openPeriod.to = openPeriod.to || now; // close any stray open stint
+      vendorUser.activityLog.push({ from: now, to: null });
+      vendorUser.coordinatorStatus = "ACTIVE";
+    }
+    vendorUser.markModified("activityLog");
+    await vendorUser.save();
+
+    res.locals.auditDescription = `Marked vendor coordinator "${vendorUser.userName}" ${target}`;
+    req.flash("notification", `Coordinator ${vendorUser.userName} marked ${target === "ACTIVE" ? "active" : "inactive"}`);
+    res.json({ success: true, redirect: `/sachiko/vendor/coordinator/details/${vendorUser._id}` });
+  } catch (err) {
+    console.error("VENDOR COORDINATOR STATUS ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to update coordinator status" });
   }
 });
 

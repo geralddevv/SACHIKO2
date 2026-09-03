@@ -925,9 +925,19 @@
               <i class="fa-solid fa-gears" style="color: #ffffff"></i>
               <p class="nav-items-para">WIP</p>
             </a>
-            <a href="/sachiko/machine/jobcard/view" title="Production Records" class="<%= title === 'Production Records' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/sachiko/machine/jobcard/view" title="Production Records" class="<%= title === 'Production Records' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Production Records</p>
+            </a>
+            <!-- The step after lamination: Deckles cut into finished rolls
+                 (routes/system/slitting.js). -->
+            <a href="/sachiko/slitting/queue" title="Slitting Queue" class="<%= (title === 'Slitting Queue' || title === 'Slitting Allocation' || title === 'Slitting Job Card') ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+              <i class="fa-solid fa-scissors" style="color: #ffffff"></i>
+              <p class="nav-items-para">Slitting</p>
+            </a>
+            <a href="/sachiko/slitting/jobcard/view" title="Slitting Records" class="<%= title === 'Slitting Records' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+              <i class="fa-solid fa-clipboard-check" style="color: #ffffff"></i>
+              <p class="nav-items-para">Slitting Records</p>
             </a>
             <!-- Sachiko's pre-existing manual Job Card (/sachiko/jobcard/view) is
                  hidden from nav and disabled at the route -- superseded by the

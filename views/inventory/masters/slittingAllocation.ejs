@@ -1,0 +1,732 @@
+<% layout('/layout/boilerplate') %>
+
+<%
+  // Stage 1 of slitting: the planner fixes the whole job before it reaches
+  // the floor -- machine, operator, helper, which Deckles to cut, and per
+  // Deckle its web width, the metres to run off it, the length per finished
+  // roll and the A..G knife layout. Nothing moves in stock here; the operator
+  // then works it Deckle by Deckle on /sachiko/slitting/jobcard/:cardId.
+  const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+  const dash = (v) => (isEmpty(v) ? "—" : v);
+  // Log columns that are not roll-width slots: #, Deckle, Meter, Width,
+  // R. Meter, Rolls, Trim, remove. The web strip spans the lot.
+  const fixedCols = 8;
+  const numOf = (v) => { const m = /-?\d+(\.\d+)?/.exec(String(v ?? "")); return m ? Number(m[0]) : null; };
+  const show = (v) => (v === null || v === undefined || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
+  const reqWidth = show(numOf(order.paperSize));
+  const reqRunningMeter = show(order.runningMeters);
+  const reqQty = show(order.noOfRolls);
+  const doneRows = (existing && existing.rows) ? existing.rows.filter((r) => r.status === "done") : [];
+  const pendingRows = (existing && existing.rows) ? existing.rows.filter((r) => r.status !== "done") : [];
+%>
+
+<style>
+  .span-full { padding: 0 !important; }
+  .span-full.form-heading, .span-full.form-subheading { padding: 10px !important; }
+  .sl-panel { align-self: stretch; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .sl-sec-head { display: flex; flex-direction: row; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .sl-sec-head h1 { margin: 0; }
+  .sl-head-chip {
+    background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.3); color: #fff;
+    font-size: 12.5px; font-weight: 700; padding: 3px 11px; border-radius: 999px; white-space: nowrap;
+  }
+  .sl-mini-btn {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,0.55);
+    background: transparent; color: #fff; border-radius: 6px; padding: 5px 11px;
+    font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .sl-mini-btn:hover { background: rgba(255,255,255,0.14); }
+
+  .sl-job-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: #e2e8f0; }
+  .sl-job-cell { background: #f8fafc; padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .sl-job-cell.is-input { background: #fff; }
+  .sl-job-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #7c8ba1; white-space: nowrap;
+  }
+  .sl-job-label .req { color: #dc2626; }
+  .sl-job-value { font-size: 15px; font-weight: 800; color: #1f2a44; line-height: 1.3; overflow-wrap: anywhere; }
+  .sl-job-cell select.form-control {
+    height: 34px !important; font-size: 13px !important; width: 100%;
+    padding: 4px 24px 4px 8px !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important;
+    background-position: right 7px center; background-size: 10px 7px;
+  }
+  .sl-job-cell select.form-control:focus { outline: none; border-color: #044a78 !important; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+
+  .sl-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; }
+  .sl-table th {
+    background: #044a78; color: #fff; font-size: 11.5px; font-weight: 600; padding: 7px 5px;
+    text-align: center; letter-spacing: 0.02em; border-right: 1px solid rgba(255,255,255,0.22); white-space: nowrap;
+  }
+  .sl-table th:last-child { border-right: none; }
+  .sl-table th.sl-sub-head { background: #055690; font-size: 11px; font-weight: 500; padding: 5px; }
+  .sl-table td {
+    padding: 5px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;
+    vertical-align: middle; text-align: center; background: #fff;
+  }
+  .sl-table td:last-child { border-right: none; }
+  .sl-table input.form-control, .sl-table select.form-control {
+    padding: 4px 6px !important; font-size: 12.5px !important; height: 30px !important;
+    min-width: 0; width: 100%; text-align: center; border-radius: 6px !important;
+    font-variant-numeric: tabular-nums; border: 1px solid #cbd5e1 !important; background-color: #fff;
+    transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+  }
+  .sl-table input.form-control:focus, .sl-table select.form-control:focus {
+    outline: none; border-color: #044a78 !important; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12);
+  }
+  /* The global `select` rule paints a dropdown arrow at `right 1rem`; without
+     room reserved for it the option text runs underneath. */
+  .sl-table select.form-control {
+    text-align: left; padding: 4px 24px 4px 8px !important;
+    background-position: right 7px center; background-size: 10px 7px;
+  }
+  .sl-table input[type="number"]::-webkit-outer-spin-button,
+  .sl-table input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .sl-table input[type="number"] { -moz-appearance: textfield; }
+  .sl-table td.sl-derived {
+    font-size: 12.5px; font-weight: 800; color: #1f2a44; background: #f8fafc;
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  .sl-table td.sl-derived.sl-bad { color: #b91c1c; background: #fef2f2; }
+  .sl-table tbody tr:hover > td { background: #fbfdff; }
+  .sl-table tbody tr:hover > td.sl-derived { background: #f2f7fc; }
+
+  .sl-view-table td {
+    font-size: 13px; font-weight: 700; color: #1f2a44; font-variant-numeric: tabular-nums;
+    background: #f8fafc;
+  }
+  .sl-view-table tbody tr:hover > td { background: #f8fafc; }
+
+  .sl-scroll { align-self: stretch; overflow-x: auto; }
+  .sl-scroll::-webkit-scrollbar { height: 9px; }
+  .sl-scroll::-webkit-scrollbar-thumb { background: #044a78; border-radius: 8px; }
+  .sl-log-table { table-layout: fixed; min-width: 1028px; }
+  .sl-deckle-cell { text-align: left !important; }
+  .sl-note { display: block; font-size: 10.5px; font-weight: 600; color: #64748b; margin-top: 3px; line-height: 1.35; }
+  .sl-note.sl-bad { color: #b91c1c; }
+  .sl-width-input.is-set { border-color: #044a78 !important; background-color: #f4f9ff !important; font-weight: 700; }
+
+  .sl-row-btn {
+    width: 26px; height: 26px; padding: 0; border: 1px solid #e2e8f0; background: #fff;
+    color: #b91c1c; border-radius: 5px; font-size: 11.5px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .sl-row-btn:hover { background: #fef2f2; border-color: #fecaca; }
+
+  /* Web view: A..G drawn to scale across the reel's web. Segments are sized
+     by flex-grow, so they stay proportional at any table width. A layout
+     wider than the web is drawn against the roll-width total instead (there
+     is no room left to draw) and flagged red. */
+  .sl-sub-cell {
+    background: #f8fafc !important; padding: 8px 10px 10px !important;
+    text-align: left !important; border-bottom: 2px solid #e2e8f0 !important;
+  }
+  .sl-table tbody tr:hover > td.sl-sub-cell { background: #f8fafc !important; }
+  /* The drawing is a proportional diagram, not a data grid: stretched to the
+     full width its segments are far wider than they need to be to read, so it
+     is capped and centred, caption included. */
+  .sl-web-caption {
+    display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+    max-width: 560px; margin: 0 auto 5px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7c8ba1;
+  }
+  .sl-web-flag { text-transform: none; letter-spacing: 0; font-size: 11px; font-weight: 700; }
+  .sl-web-flag.sl-bad { color: #b91c1c; }
+  .sl-web-flag.sl-ok { color: #15803d; }
+  .sl-web {
+    display: flex; align-items: stretch; height: 32px; width: 100%; max-width: 560px; margin: 0 auto;
+    border: 1px solid #cbd5e1; border-radius: 7px; overflow: hidden; background: #fff;
+  }
+  .sl-web.is-over { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15); }
+  .sl-web-seg {
+    flex-basis: 0; min-width: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1px;
+    border-right: 1px solid #fff; overflow: hidden; white-space: nowrap;
+    background: #2f7fb8; color: #fff;
+  }
+  .sl-web-seg:nth-child(even) { background: #256a9c; }
+  .sl-web-seg:last-child { border-right: none; }
+  .sl-web-seg .sl-seg-slot { font-size: 9px; font-weight: 700; opacity: 0.8; letter-spacing: 0.06em; }
+  .sl-web-seg .sl-seg-w { font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .sl-web-seg.sl-web-trim {
+    background: repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 5px, #eef2f7 5px, #eef2f7 10px); color: #64748b;
+  }
+  .sl-web-empty {
+    display: flex; align-items: center; justify-content: center; width: 100%;
+    font-size: 11.5px; font-weight: 600; color: #94a3b8;
+    background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #f8fafc 6px, #f8fafc 12px);
+  }
+
+  .sl-warn-note {
+    align-self: stretch; background: #fff8e1; border: 1px solid #f0c36d; color: #7a5b00;
+    border-radius: 8px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; line-height: 1.5;
+  }
+  .sl-done-note {
+    align-self: stretch; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
+    border-radius: 8px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; line-height: 1.5;
+  }
+  .sl-summary {
+    align-self: stretch; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px; background: #e2e8f0; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;
+  }
+  .sl-sum-cell { background: #fff; padding: 11px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .sl-sum-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #7c8ba1; }
+  .sl-sum-value { font-size: 19px; font-weight: 800; color: #044a78; font-variant-numeric: tabular-nums; }
+
+  .sl-error {
+    display: none; grid-column: 1 / -1; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c;
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 600;
+  }
+  .sl-save-wrap { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 100%; }
+  .sl-blocked { font-size: 12.5px; font-weight: 600; color: #b45309; text-align: center; }
+  .sl-blocked:empty { display: none; }
+  #slSubmitBtn:disabled { opacity: 0.55; cursor: not-allowed; }
+  #slSubmitBtn:disabled:hover { transform: none; box-shadow: none; }
+
+  @media screen and (max-width: 768px) {
+    .sl-job-grid { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+    .sl-sum-value { font-size: 17px; }
+  }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
+  <form id="slForm" autocomplete="off" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+    <div class="span-full form-heading" style="display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <h1>Slitting Allocation</h1>
+      <span class="sl-head-chip"><%= typeof previewCardId !== "undefined" && previewCardId ? previewCardId : "" %></span>
+    </div>
+
+    <!-- The order facts are read-only (they belong to the sales order); the
+         machine, operator and helper are what this page is allocating. -->
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-panel">
+        <div class="sl-job-grid">
+          <div class="sl-job-cell">
+            <span class="sl-job-label">Client Order No</span>
+            <span class="sl-job-value"><%= dash(order.clientOrderNo) %></span>
+          </div>
+          <div class="sl-job-cell">
+            <span class="sl-job-label">Product Code</span>
+            <span class="sl-job-value"><%= dash(order.productCode) %></span>
+          </div>
+          <div class="sl-job-cell">
+            <span class="sl-job-label">Lot No</span>
+            <span class="sl-job-value"><%= dash(order.lotNo) %></span>
+          </div>
+          <div class="sl-job-cell">
+            <span class="sl-job-label">Client</span>
+            <span class="sl-job-value"><%= dash(order.clientName) %></span>
+          </div>
+          <div class="sl-job-cell is-input">
+            <span class="sl-job-label">Machine <span class="req">*</span></span>
+            <%# Only slitting machines are offered (routes/system/slitting.js
+                filters on machineType), so the type is not worth repeating on
+                every option -- the location still is. %>
+            <select id="slMachine" class="form-control">
+              <option value="" disabled <%= existing && existing.machineId ? "" : "selected" %> hidden>
+                <%= machines.length ? "Select machine" : "No slitting machine set up" %>
+              </option>
+              <% machines.forEach((m) => { %>
+                <option value="<%= m._id %>" <%= existing && existing.machineId === m._id ? "selected" : "" %>><%= m.machineName %><%= m.locationName ? " · " + m.locationName : "" %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="sl-job-cell is-input">
+            <span class="sl-job-label">Operator <span class="req">*</span></span>
+            <select id="slOperator" class="form-control">
+              <option value="" disabled <%= existing && existing.operatorId ? "" : "selected" %> hidden>Select operator</option>
+              <% operators.forEach((e) => { %>
+                <option value="<%= e._id %>" <%= existing && existing.operatorId === e._id ? "selected" : "" %>><%= e.empName %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="sl-job-cell is-input">
+            <span class="sl-job-label">Helper</span>
+            <select id="slHelper" class="form-control">
+              <option value="">— none —</option>
+              <% helpers.forEach((e) => { %>
+                <option value="<%= e._id %>" <%= existing && existing.helperId === e._id ? "selected" : "" %>><%= e.empName %></option>
+              <% }) %>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <% if (!machines.length) { %>
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-warn-note">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        No machine is set up as a slitter yet. Add one on the Machine Master with its
+        Machine Type set to SLITTING, then come back — this job cannot be allocated without one.
+      </div>
+    </div>
+    <% } %>
+
+    <% const ranList = (typeof ranCards !== "undefined" && Array.isArray(ranCards)) ? ranCards : []; %>
+    <% if (ranList.length || doneRows.length) { %>
+    <!-- Rows the operator has already run are immutable -- their stock has
+         moved. They stay on the card and are not re-allocated here. -->
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-done-note">
+        <i class="fa-solid fa-circle-check"></i>
+        <% if (ranList.length) { %>
+          <%= ranList.length %> Deckle<%= ranList.length === 1 ? " has" : "s have" %> already been run and completed:
+          <%= ranList.map((r) => (r.deckleId ? `${r.deckleId} (${r.slittingJobCardId})` : r.slittingJobCardId)).join(", ") %>.
+        <% } %>
+        <% if (doneRows.length) { %>
+          <%= doneRows.length %> Deckle<%= doneRows.length === 1 ? " has" : "s have" %> already been run on
+          <%= (existing && existing.slittingJobCardId) ? existing.slittingJobCardId : "this order" %> and cannot be changed:
+          <%= doneRows.map((r) => r.deckleId).filter(Boolean).join(", ") %>.
+          Anything you allocate below is added to that same card.
+        <% } %>
+      </div>
+    </div>
+    <% } %>
+
+    <!-- What the order asked for. Read-only: it belongs to the sales order,
+         not to this allocation, so it is shown rather than edited. The
+         planner's job is the Deckle layout below. -->
+    <div class="span-full form-subheading sl-sec-head">
+      <h1>Requirement</h1>
+    </div>
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-panel">
+        <table class="sl-table sl-view-table">
+          <thead>
+            <tr>
+              <th style="width:44px;">#</th>
+              <th>Size (Width) mm</th>
+              <th>R. Meter</th>
+              <th>Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td><%= reqWidth %></td>
+              <td><%= reqRunningMeter %></td>
+              <td><%= reqQty %></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- One row per Deckle to be cut. A..G are the widths of the rolls taken
+         across its web -- one finished roll per width. -->
+    <div class="span-full form-subheading sl-sec-head">
+      <h1>Deckle Allocation</h1>
+      <button type="button" class="sl-mini-btn" onclick="addLogRow()" style="margin-left:auto;">
+        <i class="fa-solid fa-plus"></i> Add Deckle
+      </button>
+    </div>
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-panel sl-scroll">
+        <table class="sl-table sl-log-table">
+          <colgroup>
+            <col style="width:34px" /><col style="width:210px" />
+            <col style="width:82px" /><col style="width:78px" />
+            <% cutSlots.forEach(() => { %><col style="width:54px" /><% }) %>
+            <col style="width:82px" /><col style="width:54px" /><col style="width:70px" />
+            <col style="width:40px" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th rowspan="2" style="vertical-align:middle;">#</th>
+              <th rowspan="2" style="vertical-align:middle;">Deckle ID</th>
+              <th rowspan="2" style="vertical-align:middle;">Meter</th>
+              <th rowspan="2" style="vertical-align:middle;">Width</th>
+              <th colspan="<%= cutSlots.length %>">Roll Widths (mm)</th>
+              <th rowspan="2" style="vertical-align:middle;">R. Meter</th>
+              <th rowspan="2" style="vertical-align:middle;">Rolls</th>
+              <th rowspan="2" style="vertical-align:middle;">Trim</th>
+              <th rowspan="2" style="vertical-align:middle;"></th>
+            </tr>
+            <tr>
+              <% cutSlots.forEach((slot) => { %><th class="sl-sub-head"><%= slot %></th><% }) %>
+            </tr>
+          </thead>
+          <tbody id="slLogBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-summary">
+        <div class="sl-sum-cell">
+          <span class="sl-sum-label">Deckles</span>
+          <span class="sl-sum-value" id="slSumDeckles">0</span>
+        </div>
+        <div class="sl-sum-cell">
+          <span class="sl-sum-label">Mtrs Off Deckles</span>
+          <span class="sl-sum-value" id="slTotalMeter">0</span>
+        </div>
+        <div class="sl-sum-cell">
+          <span class="sl-sum-label">Rolls Planned</span>
+          <span class="sl-sum-value" id="slTotalRolls">0</span>
+        </div>
+        <div class="sl-sum-cell">
+          <span class="sl-sum-label">Finished Mtrs</span>
+          <span class="sl-sum-value" id="slTotalFinished">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sl-error" id="slError"></div>
+
+    <div class="span-full btn-grp" style="margin-top: 10px;">
+      <div class="sl-save-wrap">
+        <button type="submit" id="slSubmitBtn" class="submit-btn" disabled>
+          <%= existing ? "Update Allocation" : "Allocate & Send to Machine" %>
+        </button>
+        <div class="sl-blocked" id="slBlocked"></div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script id="sl-deckles-data" type="application/json"><%- safeJson(deckles) %></script>
+<script id="sl-order-data" type="application/json"><%- safeJson(order) %></script>
+<script id="sl-slots-data" type="application/json"><%- safeJson(cutSlots) %></script>
+<script id="sl-config-data" type="application/json"><%- safeJson({ pendingId: order._id, submissionToken, fixedCols }) %></script>
+<script id="sl-existing-data" type="application/json"><%- safeJson({ rows: pendingRows }) %></script>
+
+<script>
+  const DECKLES = JSON.parse(document.getElementById("sl-deckles-data").textContent);
+  const ORDER = JSON.parse(document.getElementById("sl-order-data").textContent);
+  const SLOTS = JSON.parse(document.getElementById("sl-slots-data").textContent);
+  const CONFIG = JSON.parse(document.getElementById("sl-config-data").textContent);
+  const EXISTING = JSON.parse(document.getElementById("sl-existing-data").textContent);
+  const SUB_COLSPAN = CONFIG.fixedCols + SLOTS.length;
+
+  const deckleById = new Map(DECKLES.map((d) => [d._id, d]));
+  const num = (v) => { const s = String(v ?? "").trim(); if (s === "") return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const fmt = (n) => (Number.isFinite(n) ? round2(n).toLocaleString("en-IN") : "—");
+  const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // A Deckle's stored web size is free text ("650", '26"'), so read the
+  // leading number off it and leave the field blank when there isn't one.
+  const sizeToWidth = (size) => { const m = /-?\d+(\.\d+)?/.exec(String(size ?? "")); return m ? Number(m[0]) : null; };
+
+  function renumber(rowSel, cellSel) {
+    document.querySelectorAll(rowSel).forEach((row, i) => {
+      const cell = row.querySelector(cellSel);
+      if (cell) cell.textContent = String(i + 1);
+    });
+  }
+
+  // ---- Deckle rows ----------------------------------------------------------
+  // The picker separates the Deckles laminated for (or allotted to) this order
+  // from anything else of the same Product Code sitting in stock -- the floor
+  // may legitimately finish an order off an earlier web, but the order's own
+  // reels should be the obvious pick. The Product Code is only shown when it
+  // differs from the order's own, i.e. when the reel is an "-A"/"-B" variant.
+  function deckleOptionsHtml(selectedId) {
+    const opt = (d) => {
+      const parts = [esc(d.rollId), `${fmt(d.reelMtrs)} m`];
+      if (d.size) parts.push(`${esc(d.size)} mm`);
+      if (d.productCode && d.productCode !== ORDER.productCode) parts.push(esc(d.productCode));
+      return `<option value="${esc(d._id)}"${d._id === selectedId ? " selected" : ""}>${parts.join("  ·  ")}</option>`;
+    };
+    const own = DECKLES.filter((d) => d.ownOrder);
+    const other = DECKLES.filter((d) => !d.ownOrder);
+    let html = `<option value="" disabled${selectedId ? "" : " selected"} hidden>Select a Deckle</option>`;
+    if (own.length) html += `<optgroup label="This order">${own.map(opt).join("")}</optgroup>`;
+    if (other.length) html += `<optgroup label="Same product code — other stock">${other.map(opt).join("")}</optgroup>`;
+    return html;
+  }
+
+  function addLogRow(preset) {
+    const tr = document.createElement("tr");
+    tr.className = "sl-log-row";
+    tr.innerHTML = `
+      <td class="sl-derived sl-log-no"></td>
+      <td class="sl-deckle-cell">
+        <select class="form-control sl-deckle">${deckleOptionsHtml(preset?.deckleStockId || "")}</select>
+        <span class="sl-note sl-deckle-note">Pick the reel this run cuts from.</span>
+      </td>
+      <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-meter" placeholder="Mtrs" /></td>
+      <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-width" placeholder="mm" /></td>
+      ${SLOTS.map((s) => `<td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-roll-width sl-width-input" data-slot="${s}" placeholder="${s}" title="Roll ${s} width in mm" /></td>`).join("")}
+      <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-rm" placeholder="Mtrs" /></td>
+      <td class="sl-derived sl-rolls">0</td>
+      <td class="sl-derived sl-trim">—</td>
+      <td><button type="button" class="sl-row-btn sl-del" title="Remove this Deckle"><i class="fa-solid fa-xmark"></i></button></td>`;
+
+    // The web view lives in its own row so it can span the full table. The two
+    // are linked by a direct element reference rather than ids, so a row can be
+    // removed without any bookkeeping.
+    const sub = document.createElement("tr");
+    sub.className = "sl-log-sub";
+    sub.innerHTML = `
+      <td class="sl-sub-cell" colspan="${SUB_COLSPAN}">
+        <div class="sl-web-caption"><span>Web View</span><span class="sl-web-flag"></span></div>
+        <div class="sl-web"></div>
+      </td>`;
+    tr.__sub = sub;
+
+    const sel = tr.querySelector(".sl-deckle");
+    sel.addEventListener("change", () => {
+      const d = deckleById.get(sel.value);
+      if (d) {
+        // Prefill from the reel: its remaining metres and its web width. Both
+        // stay editable -- a run can take part of a reel, and the stored size
+        // is only as good as what was entered when it was made.
+        const meterEl = tr.querySelector(".sl-meter");
+        if (!meterEl.value) {
+          meterEl.value = d.reelMtrs;
+          const rm = tr.querySelector(".sl-rm");
+          if (!rm.dataset.touched && !rm.value) rm.value = d.reelMtrs;
+        }
+        const widthEl = tr.querySelector(".sl-width");
+        const w = sizeToWidth(d.size);
+        if (!widthEl.value && w !== null) widthEl.value = w;
+      }
+      recalc();
+    });
+
+    // R. Meter follows the metres taken off the Deckle until the planner types
+    // their own -- they differ only on a rewound or joined run.
+    const meterEl = tr.querySelector(".sl-meter");
+    meterEl.addEventListener("input", () => {
+      const rm = tr.querySelector(".sl-rm");
+      if (!rm.dataset.touched) rm.value = meterEl.value;
+    });
+    tr.querySelector(".sl-rm").addEventListener("input", function () { this.dataset.touched = "1"; });
+
+    tr.querySelectorAll("input").forEach((el) => el.addEventListener("input", recalc));
+
+    // Enter walks along A..G, so a layout can be typed straight through.
+    const widthInputs = [...tr.querySelectorAll(".sl-roll-width")];
+    widthInputs.forEach((el, idx) => {
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Enter") return;
+        ev.preventDefault();
+        (widthInputs[idx + 1] || widthInputs[idx]).focus();
+      });
+    });
+
+    tr.querySelector(".sl-del").addEventListener("click", () => { sub.remove(); tr.remove(); recalc(); });
+
+    if (preset) {
+      if (preset.plannedMeter != null) tr.querySelector(".sl-meter").value = preset.plannedMeter;
+      if (preset.width != null) tr.querySelector(".sl-width").value = preset.width;
+      if (preset.plannedRunningMeter != null) {
+        const rm = tr.querySelector(".sl-rm");
+        rm.value = preset.plannedRunningMeter;
+        rm.dataset.touched = "1";
+      }
+      widthInputs.forEach((el) => {
+        const v = preset.cuts?.[el.dataset.slot];
+        if (v != null) el.value = v;
+      });
+    }
+
+    const body = document.getElementById("slLogBody");
+    body.appendChild(tr);
+    body.appendChild(sub);
+    recalc();
+  }
+
+  function readLogRow(tr) {
+    // Keyed by slot letter -- the server reads req.body.rows[i].cuts.A ...
+    const cuts = {};
+    tr.querySelectorAll(".sl-roll-width").forEach((el) => {
+      const v = num(el.value);
+      if (v !== null) cuts[el.dataset.slot] = v;
+    });
+    return {
+      deckleStockId: tr.querySelector(".sl-deckle").value,
+      plannedMeter: num(tr.querySelector(".sl-meter").value),
+      width: num(tr.querySelector(".sl-width").value),
+      cuts,
+      plannedRunningMeter: num(tr.querySelector(".sl-rm").value),
+    };
+  }
+
+  // Draw one Deckle's web to scale: a segment per roll width, then whatever
+  // edge trim is left over.
+  function paintWeb(tr, r, widthTotal, over) {
+    const sub = tr.__sub;
+    if (!sub) return;
+    const web = sub.querySelector(".sl-web");
+    const flag = sub.querySelector(".sl-web-flag");
+    const entries = Object.entries(r.cuts);
+
+    web.classList.toggle("is-over", over);
+    flag.className = "sl-web-flag" + (over ? " sl-bad" : (entries.length && r.width !== null) ? " sl-ok" : "");
+
+    if (!entries.length) {
+      web.innerHTML = `<div class="sl-web-empty">${r.width !== null
+        ? `${esc(fmt(r.width))} mm web — no roll widths yet`
+        : "Pick a Deckle, then enter the roll widths"}</div>`;
+      flag.textContent = "";
+      return;
+    }
+
+    const trimW = r.width !== null ? round2(r.width - widthTotal) : 0;
+    const segs = entries.map(([slot, w]) => `
+      <div class="sl-web-seg" style="flex-grow:${w}" title="${esc(slot)} — ${esc(fmt(w))} mm">
+        <span class="sl-seg-slot">${esc(slot)}</span><span class="sl-seg-w">${esc(fmt(w))}</span>
+      </div>`);
+    if (!over && trimW > 0) {
+      segs.push(`
+        <div class="sl-web-seg sl-web-trim" style="flex-grow:${trimW}" title="Edge trim — ${esc(fmt(trimW))} mm">
+          <span class="sl-seg-slot">TRIM</span><span class="sl-seg-w">${esc(fmt(trimW))}</span>
+        </div>`);
+    }
+    web.innerHTML = segs.join("");
+
+    const rollWord = `${entries.length} roll${entries.length === 1 ? "" : "s"}`;
+    if (r.width === null) {
+      flag.textContent = `${rollWord} · ${fmt(widthTotal)} mm — enter the web width`;
+    } else if (over) {
+      flag.textContent = `Over the web by ${fmt(widthTotal - r.width)} mm`;
+    } else {
+      flag.textContent = `${rollWord} · ${fmt(widthTotal)} of ${fmt(r.width)} mm · ${fmt(trimW)} mm trim`;
+    }
+  }
+
+  // Rolls and edge trim per row, the running totals, and whether the plan can
+  // be saved. A Deckle named on two rows is checked on the SUM of both -- the
+  // server does the same, so the two can't disagree about what fits.
+  function recalc() {
+    const rows = [...document.querySelectorAll("#slLogBody .sl-log-row")];
+    renumber("#slLogBody .sl-log-row", ".sl-log-no");
+
+    const read = rows.map(readLogRow);
+    const drawByDeckle = new Map();
+    read.forEach((r) => {
+      if (r.deckleStockId && r.plannedMeter > 0) {
+        drawByDeckle.set(r.deckleStockId, round2((drawByDeckle.get(r.deckleStockId) || 0) + r.plannedMeter));
+      }
+    });
+
+    let totalMeter = 0, totalRolls = 0, totalFinished = 0;
+    let blocked = "";
+
+    if (!document.getElementById("slMachine").value) blocked = "Select a slitting machine.";
+    else if (!document.getElementById("slOperator").value) blocked = "Select an operator.";
+
+    rows.forEach((tr, i) => {
+      const r = read[i];
+      const widths = Object.values(r.cuts);
+      const widthTotal = round2(widths.reduce((n, w) => n + w, 0));
+      const over = r.width !== null && widthTotal > r.width;
+
+      tr.querySelectorAll(".sl-roll-width").forEach((el) => el.classList.toggle("is-set", el.value.trim() !== ""));
+      tr.querySelector(".sl-rolls").textContent = String(widths.length);
+
+      const trimCell = tr.querySelector(".sl-trim");
+      if (r.width === null || !widths.length) {
+        trimCell.textContent = "—";
+        trimCell.classList.remove("sl-bad");
+      } else {
+        trimCell.textContent = fmt(r.width - widthTotal);
+        trimCell.classList.toggle("sl-bad", over);
+      }
+
+      paintWeb(tr, r, widthTotal, over);
+
+      const note = tr.querySelector(".sl-deckle-note");
+      const d = deckleById.get(r.deckleStockId);
+      let reelOk = true;
+      if (!d) {
+        note.textContent = "Pick the reel this run cuts from.";
+        note.classList.remove("sl-bad");
+      } else {
+        const drawn = drawByDeckle.get(r.deckleStockId) || 0;
+        if (drawn > d.reelMtrs) {
+          note.textContent = `Only ${fmt(d.reelMtrs)} mtrs left — this plan asks for ${fmt(drawn)}.`;
+          note.classList.add("sl-bad");
+          reelOk = false;
+        } else {
+          note.textContent = `${fmt(d.reelMtrs - drawn)} of ${fmt(d.reelMtrs)} mtrs left after this job`
+            + (d.location ? ` · ${d.location}` : "");
+          note.classList.remove("sl-bad");
+        }
+      }
+
+      // First thing standing between this plan and Save, named in the order it
+      // is filled in -- otherwise the button just sits dead.
+      const why = !r.deckleStockId ? "select a Deckle"
+        : !(r.plannedMeter > 0) ? "enter the metres to run off the Deckle"
+        : !widths.length ? "enter at least one roll width (A–G)"
+        : !widths.every((w) => w > 0) ? "roll widths must be more than zero"
+        : over ? "the roll widths add up to more than the Deckle web"
+        : !(r.plannedRunningMeter > 0) ? "enter the R. Meter"
+        : !reelOk ? "this Deckle does not have that many metres left"
+        : "";
+      if (why && !blocked) blocked = `Row ${i + 1}: ${why}.`;
+
+      if (!why) {
+        totalMeter = round2(totalMeter + r.plannedMeter);
+        totalRolls += widths.length;
+        totalFinished = round2(totalFinished + r.plannedRunningMeter * widths.length);
+      }
+    });
+
+    document.getElementById("slSumDeckles").textContent = String(drawByDeckle.size);
+    document.getElementById("slTotalMeter").textContent = fmt(totalMeter);
+    document.getElementById("slTotalRolls").textContent = String(totalRolls);
+    document.getElementById("slTotalFinished").textContent = fmt(totalFinished);
+
+    if (!rows.length) blocked = "Allocate at least one Deckle.";
+    document.getElementById("slBlocked").textContent = blocked;
+    document.getElementById("slSubmitBtn").disabled = Boolean(blocked);
+  }
+
+  function showError(msg) {
+    const el = document.getElementById("slError");
+    el.textContent = msg;
+    el.style.display = msg ? "block" : "none";
+    if (msg) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  ["slMachine", "slOperator", "slHelper"].forEach((id) =>
+    document.getElementById(id).addEventListener("change", recalc));
+
+  document.getElementById("slForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showError("");
+    const btn = document.getElementById("slSubmitBtn");
+    const label = btn.textContent;
+
+    const rows = [...document.querySelectorAll("#slLogBody .sl-log-row")].map(readLogRow);
+    if (!rows.length) return showError("Allocate at least one Deckle.");
+
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    try {
+      const res = await fetch(`/sachiko/slitting/allocate/${CONFIG.pendingId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionToken: CONFIG.submissionToken,
+          machineId: document.getElementById("slMachine").value,
+          operatorId: document.getElementById("slOperator").value,
+          helperId: document.getElementById("slHelper").value,
+          clientOrderNo: ORDER.clientOrderNo,
+          rows,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = data.redirect || "/sachiko/slitting/queue";
+        return;
+      }
+      showError(data.message || "Failed to save the allocation.");
+    } catch {
+      showError("Server error. Please try again.");
+    }
+    btn.textContent = label;
+    recalc();
+  });
+
+  // Seed the Deckle rows: whatever was allocated before, else one empty row.
+  if (EXISTING.rows.length) EXISTING.rows.forEach((r) => addLogRow(r));
+  else addLogRow();
+</script>
