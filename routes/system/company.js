@@ -20,6 +20,7 @@ const REQUIRED_FIELDS = [
 
 function readPayload(body) {
   const text = (v) => String(v || "").trim();
+  const bank = body.bankDetails && typeof body.bankDetails === "object" ? body.bankDetails : {};
   return {
     companyName: text(body.companyName).toUpperCase(),
     address: text(body.address).toUpperCase(),
@@ -30,8 +31,24 @@ function readPayload(body) {
     mobile: text(body.mobile),
     email: text(body.email).toLowerCase(),
     website: text(body.website),
+    gst: text(body.gst).toUpperCase(),
+    msme: text(body.msme).toUpperCase(),
+    gumasta: text(body.gumasta).toUpperCase(),
+    pan: text(body.pan).toUpperCase(),
+    bankDetails: {
+      bankName: text(bank.bankName).toUpperCase(),
+      accountHolderName: text(bank.accountHolderName).toUpperCase(),
+      accountNumber: text(bank.accountNumber),
+      ifsc: text(bank.ifsc).toUpperCase(),
+      branch: text(bank.branch).toUpperCase(),
+    },
   };
 }
+
+// Same formats the client master enforces (routes/fairdesk_route.js).
+const GST_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 function validate(payload) {
   for (const [field, label] of REQUIRED_FIELDS) {
@@ -39,6 +56,18 @@ function validate(payload) {
   }
   if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
     return "Please enter a valid e-mail address.";
+  }
+  if (payload.gst && !GST_REGEX.test(payload.gst)) {
+    return "Invalid GST number format.";
+  }
+  if (payload.pan && !PAN_REGEX.test(payload.pan)) {
+    return "Invalid PAN number format.";
+  }
+  if (payload.gst && payload.pan && payload.gst.substring(2, 12) !== payload.pan) {
+    return "PAN does not match GST number.";
+  }
+  if (payload.bankDetails.ifsc && !IFSC_REGEX.test(payload.bankDetails.ifsc)) {
+    return "Invalid IFSC code format.";
   }
   return null;
 }

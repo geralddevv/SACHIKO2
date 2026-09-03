@@ -338,6 +338,71 @@
                 placeholder="https://www.company.com" value="<%= company ? company.website : '' %>" />
             </div>
 
+          </div>
+        </div>
+
+        <div class="form-section">
+          <p class="section-title"><i class="fa-solid fa-file-invoice"></i> Statutory &amp; Registration</p>
+          <div class="field-grid">
+            <div class="fg-6">
+              <label class="field-label" for="gst">GST</label>
+              <input type="text" id="gst" autocomplete="off" maxlength="15"
+                placeholder="Enter GST number" value="<%= company ? (company.gst || '') : '' %>" />
+            </div>
+
+            <div class="fg-6">
+              <label class="field-label" for="pan">PAN</label>
+              <input type="text" id="pan" autocomplete="off" maxlength="10"
+                placeholder="Enter PAN number" value="<%= company ? (company.pan || '') : '' %>" />
+            </div>
+
+            <div class="fg-6">
+              <label class="field-label" for="msme">MSME</label>
+              <input type="text" id="msme" autocomplete="off" maxlength="20"
+                placeholder="Enter MSME number" value="<%= company ? (company.msme || '') : '' %>" />
+            </div>
+
+            <div class="fg-6">
+              <label class="field-label" for="gumasta">Gumasta</label>
+              <input type="text" id="gumasta" autocomplete="off" maxlength="30"
+                placeholder="Enter Gumasta number" value="<%= company ? (company.gumasta || '') : '' %>" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <p class="section-title"><i class="fa-solid fa-building-columns"></i> Bank Details</p>
+          <div class="field-grid">
+            <div class="fg-6">
+              <label class="field-label" for="bankName">Bank Name</label>
+              <input type="text" id="bankName" autocomplete="off" maxlength="120"
+                placeholder="Enter bank name" value="<%= company && company.bankDetails ? (company.bankDetails.bankName || '') : '' %>" />
+            </div>
+
+            <div class="fg-6">
+              <label class="field-label" for="accountHolderName">Account Holder Name</label>
+              <input type="text" id="accountHolderName" autocomplete="off" maxlength="150"
+                placeholder="Enter account holder name" value="<%= company && company.bankDetails ? (company.bankDetails.accountHolderName || '') : '' %>" />
+            </div>
+
+            <div class="fg-6">
+              <label class="field-label" for="accountNumber">Account Number</label>
+              <input type="text" id="accountNumber" autocomplete="off" maxlength="30" inputmode="numeric"
+                placeholder="Enter account number" value="<%= company && company.bankDetails ? (company.bankDetails.accountNumber || '') : '' %>" />
+            </div>
+
+            <div class="fg-6">
+              <label class="field-label" for="ifsc">IFSC Code</label>
+              <input type="text" id="ifsc" autocomplete="off" maxlength="11"
+                placeholder="Enter IFSC code" value="<%= company && company.bankDetails ? (company.bankDetails.ifsc || '') : '' %>" />
+            </div>
+
+            <div class="fg-12">
+              <label class="field-label" for="branch">Branch</label>
+              <input type="text" id="branch" autocomplete="off" maxlength="120"
+                placeholder="Enter branch name" value="<%= company && company.bankDetails ? (company.bankDetails.branch || '') : '' %>" />
+            </div>
+
             <div class="fg-12">
               <div id="formError" class="form-error">
                 <i class="fa-solid fa-circle-exclamation"></i><span id="formErrorText"></span>
@@ -368,7 +433,13 @@
   const companyRaw = JSON.parse(document.getElementById("company-data").textContent);
   const company = companyRaw && companyRaw._id ? companyRaw : null;
 
-  const FIELDS = ["companyName", "address", "state", "country", "pincode", "telephone", "mobile", "email", "website"];
+  const FIELDS = [
+    "companyName", "address", "state", "country", "pincode",
+    "telephone", "mobile", "email", "website",
+    "gst", "msme", "gumasta", "pan",
+  ];
+  const BANK_FIELDS = ["bankName", "accountHolderName", "accountNumber", "ifsc", "branch"];
+  const ALL_FIELDS = FIELDS.concat(BANK_FIELDS);
   const REQUIRED = {
     companyName: "Company name",
     address: "Address",
@@ -381,7 +452,7 @@
   const el = (id) => document.getElementById(id);
 
   function setDisabled(disabled) {
-    FIELDS.forEach((f) => { el(f).disabled = disabled; });
+    ALL_FIELDS.forEach((f) => { el(f).disabled = disabled; });
   }
 
   function showError(msg) {
@@ -411,6 +482,8 @@
   function cancelEdit() {
     // Restore whatever was saved, rather than keeping half-typed edits around.
     FIELDS.forEach((f) => { el(f).value = (company && company[f]) || ""; });
+    const bank = (company && company.bankDetails) || {};
+    BANK_FIELDS.forEach((f) => { el(f).value = bank[f] || ""; });
     setDisabled(true);
     hideError();
     el("formActions").style.display = "none";
@@ -420,6 +493,8 @@
   function collect() {
     const payload = {};
     FIELDS.forEach((f) => { payload[f] = el(f).value.trim(); });
+    payload.bankDetails = {};
+    BANK_FIELDS.forEach((f) => { payload.bankDetails[f] = el(f).value.trim(); });
     return payload;
   }
 

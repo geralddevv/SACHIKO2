@@ -791,6 +791,11 @@ router.get("/logs", requireOperatorApiAuth, async (req, res) => {
   res.json({
     date: day,
     rows: mine.map((d) => ({
+      // The MaterialStock _id, so the app can reprint this Deckle's label
+      // through GET /deckle/:stockId/prn (the same call the job card uses).
+      // Every row here is producedFor an order this operator owns, so that
+      // route's ownership check will pass.
+      stockId: String(d._id),
       deckleId: d.rollId || "",
       productCode: d.material?.productCode || "",
       lotNo: d.lotNo || "",
