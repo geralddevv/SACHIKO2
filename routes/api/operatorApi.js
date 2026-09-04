@@ -98,7 +98,7 @@ const claimStateFor = (runningOn, deviceId) => {
 };
 
 router.post("/login", loginLimiter, async (req, res) => {
-  const { operatorNick, location } = req.body || {};
+  const { operatorNick, location, geo } = req.body || {};
   const rawPw = (req.body || {}).password;
   const password = Array.isArray(rawPw) ? rawPw[0] : rawPw;
   const result = await authenticateOperator({ operatorNick, location, password });
@@ -112,7 +112,10 @@ router.post("/login", loginLimiter, async (req, res) => {
   // bearer-token login would otherwise leave no trace at all. Fire-and-forget,
   // exactly like the web portal's own login (server.js): an audit write must
   // never be able to fail a sign-in on the shop floor.
-  logAuthEvent(authUser, "LOGIN", req, { via: "mobile app" });
+  // `geo` is the tablet's own position (the app's services/geolocation.js),
+  // NOT the `location` unit picked above -- sanitised in logAuthEvent, and
+  // absent whenever the device couldn't or wouldn't produce a fix.
+  logAuthEvent(authUser, "LOGIN", req, { via: "mobile app", geo });
   res.json({
     token,
     empName: authUser.empName,

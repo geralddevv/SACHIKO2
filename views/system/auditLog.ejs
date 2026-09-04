@@ -103,6 +103,14 @@
       console.error("Audit Log JSON error", err);
     }
 
+    // The Location column builds its own anchor, so its values go through the
+    // browser's own escaping on the way in rather than being trusted as markup.
+    const escapeHtml = (v) => {
+      const el = document.createElement("span");
+      el.textContent = String(v ?? "");
+      return el.innerHTML.replace(/"/g, "&quot;");
+    };
+
     const fmtDateTime = (v) => {
       if (!v) return "";
       const d = new Date(v);
@@ -159,6 +167,21 @@
             },
           }),
           withTextFilter({ title: "Details", field: "description", widthGrow: 4 }),
+          // Only mobile-app LOGIN entries carry a position; every other row is
+          // blank here. A real fix links out to the map, a failure reason
+          // ("Location denied") is plain text with nothing to link to.
+          withTextFilter({
+            title: "Location",
+            field: "geoText",
+            widthGrow: 2,
+            formatter: (cell) => {
+              const text = cell.getValue();
+              if (!text) return "";
+              const url = cell.getRow().getData().geoUrl;
+              if (!url) return escapeHtml(text);
+              return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`;
+            },
+          }),
           withTextFilter({ title: "Path", field: "path", widthGrow: 2 }),
         ],
       });

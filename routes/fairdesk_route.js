@@ -5445,6 +5445,28 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
   }
 });
 
+// One audit row's `geo` as { geoText, geoUrl }: coordinates to 6 decimal places
+// (~11 cm, past which the numbers are noise) with the fix's own margin of
+// error beside them, or the plain reason the device gave for having none. Both
+// are "" for the vast majority of entries, which carry no geo at all.
+const GEO_ERROR_TEXT = {
+  denied: "Location denied",
+  timeout: "Location timed out",
+  unavailable: "Location unavailable",
+};
+
+function describeGeo(geo) {
+  if (!geo) return { geoText: "", geoUrl: "" };
+  if (typeof geo.lat !== "number" || typeof geo.lng !== "number") {
+    return { geoText: GEO_ERROR_TEXT[geo.error] || "", geoUrl: "" };
+  }
+  const coords = `${geo.lat.toFixed(6)}, ${geo.lng.toFixed(6)}`;
+  return {
+    geoText: typeof geo.accuracy === "number" ? `${coords} (±${Math.round(geo.accuracy)} m)` : coords,
+    geoUrl: `https://www.google.com/maps/search/?api=1&query=${geo.lat},${geo.lng}`,
+  };
+}
+
 // Admin/HOD only — records of every mutating action + login/logout across the app.
 router.get("/audit/view", async (req, res) => {
   const role = req.session?.authUser?.role;
@@ -5459,7 +5481,11 @@ router.get("/audit/view", async (req, res) => {
     title: "Audit Log",
     CSS: "tableDisp.css",
     JS: false,
-    jsonData: logs,
+    // The device position (mobile-app logins only) is flattened to a plain
+    // string here rather than formatted in the browser, so the table's header
+    // filter searches it and the PDF/Excel downloads carry it -- both of which
+    // work off the column's own value, not off its formatter.
+    jsonData: logs.map((log) => ({ ...log, ...describeGeo(log.geo) })),
     notification: req.flash("notification"),
   });
 });

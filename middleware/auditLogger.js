@@ -109,12 +109,36 @@ export function auditLogger(req, res, next) {
   next();
 }
 
+// The device-reported position on the wire is untrusted input off a login
+// request body, so nothing goes into the log that hasn't been coerced to a
+// finite number in range (or, on the failure side, matched against the three
+// reasons the app is allowed to give). Anything else is dropped rather than
+// stored, and a login with no usable geo simply has none.
+const GEO_ERRORS = new Set(["denied", "timeout", "unavailable"]);
+
+function sanitizeGeo(geo) {
+  if (!geo || typeof geo !== "object") return undefined;
+
+  const lat = Number(geo.latitude);
+  const lng = Number(geo.longitude);
+  if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+    const accuracy = Number(geo.accuracy);
+    return {
+      lat,
+      lng,
+      accuracy: Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : undefined,
+    };
+  }
+
+  return GEO_ERRORS.has(geo.error) ? { error: geo.error } : undefined;
+}
+
 // `via` names the client the event came from, for the sessions the auditLogger
 // middleware above can never see: it keys off req.session.authUser, and the
 // mobile operator app is bearer-authenticated (req.authUser), so nothing it
 // does passes through that middleware. Omitted for the web portal so its
 // existing entries read exactly as before.
-export async function logAuthEvent(authUser, action, req, { via } = {}) {
+export async function logAuthEvent(authUser, action, req, { via, geo } = {}) {
   const who = authUser?.empName || authUser?.username;
   const suffix = via ? ` (${via})` : "";
   try {
@@ -129,6 +153,7 @@ export async function logAuthEvent(authUser, action, req, { via } = {}) {
       description: action === "LOGIN" ? `Logged in as "${who}"${suffix}` : `Logged out "${who}"${suffix}`,
       statusCode: 200,
       ip: req.ip,
+      geo: sanitizeGeo(geo),
     });
   } catch (err) {
     console.error("Audit log auth-event write failed:", err);
