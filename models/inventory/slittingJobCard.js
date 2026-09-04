@@ -2,12 +2,14 @@ import mongoose from "mongoose";
 
 // The SLITTING step, as one document with a two-stage life:
 //
-//   1. ALLOCATED -- a planner opens /sachiko/slitting/allocate/:pendingId and
-//      fixes the whole job up front: which slitting machine, which operator
-//      and helper, which Deckles to cut, and for each Deckle its web width,
+//   1. ALLOCATED -- a planner opens
+//      /sachiko/slitting/allocate/:pendingId?deckle=<stockId> from the
+//      Slitting Queue and fixes ONE Deckle's job up front: which slitting
+//      machine, which operator and helper, and for that Deckle its web width,
 //      the metres to take off it, the length to wind on each finished roll,
 //      and the A..G knife layout across the web. Nothing has moved in stock
-//      at this point -- it is a plan.
+//      at this point -- it is a plan. The order's other Deckles are each
+//      allocated on their own card.
 //
 //   2. COMPLETED -- the operator opens the card off their machine queue and
 //      works it one Deckle at a time: scan the reel, Start, Stop, confirm the
@@ -101,8 +103,9 @@ const slittingJobCardSchema = new mongoose.Schema(
       index: { unique: true, sparse: true },
     },
     // "allocated" while the operator still has rows to run; "completed" once
-    // every row has been produced. Only one allocated card may be open per
-    // order at a time -- see routes/system/slitting.js.
+    // every row has been produced. One card per Deckle: an order's Deckles
+    // are each allocated separately and get their own card -- see
+    // routes/system/slitting.js.
     status: {
       type: String,
       enum: ["allocated", "completed"],

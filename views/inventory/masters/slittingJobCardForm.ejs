@@ -70,6 +70,7 @@
   }
   .sl-deckle.is-armed { border-left-color: #044a78; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12); }
   .sl-deckle.is-running { border-left-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14); }
+  .sl-deckle.is-curing { border-left-color: #d97706; background: #fffbf3; }
   .sl-deckle.is-done { border-left-color: #16a34a; background: #f8fdfa; }
 
   .sl-deckle-top { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
@@ -79,12 +80,13 @@
   }
   .sl-deckle-id { font-size: 15.5px; font-weight: 800; color: #03365a; overflow-wrap: anywhere; }
   .sl-deckle-meta { font-size: 12px; font-weight: 600; color: #64748b; margin-top: 3px; line-height: 1.5; }
-  .sl-deckle-meta .sl-bad { color: #b91c1c; }
+  .sl-deckle-meta .sl-bad, .sl-deckle-meta.sl-bad { color: #b91c1c; }
   .sl-badge {
     margin-left: auto; flex: 0 0 auto; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em;
     text-transform: uppercase; padding: 4px 11px; border-radius: 999px; white-space: nowrap;
   }
   .sl-badge.is-pending { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+  .sl-badge.is-curing { background: #fff7ed; color: #b45309; border: 1px solid #fed7aa; }
   .sl-badge.is-armed { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
   .sl-badge.is-running { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
   .sl-badge.is-done { background: #ecfdf5; color: #15803d; border: 1px solid #a7f3d0; }
@@ -169,10 +171,12 @@
   }
   .dialog-header h2 { margin: 0; font-size: 1rem; font-weight: 700; color: #fff; }
   .dialog-close-btn {
-    background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;
-    line-height: 1; padding: 0 2px; opacity: 0.85;
+    background: none; border: none; color: #fff; font-size: 26px; cursor: pointer;
+    line-height: 1; width: 38px; height: 38px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 8px; opacity: 0.85; transition: opacity 0.15s, background 0.15s;
   }
-  .dialog-close-btn:hover { opacity: 1; }
+  .dialog-close-btn:hover { opacity: 1; background: rgba(255, 255, 255, 0.18); }
   .dialog-body { padding: 18px 20px; background: #fff; border-radius: 0 0 14px 14px; }
   .sl-dlg-label {
     display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
@@ -256,28 +260,6 @@
     </div>
   </div>
 
-  <% if (card.requirements && card.requirements.length) { %>
-  <div class="span-full form-subheading" style="margin-top:10px;"><h1>Requirement</h1></div>
-  <div class="span-full" style="border:none !important;">
-    <div class="sl-panel">
-      <table class="sl-req-table">
-        <thead>
-          <tr><th style="width:60px;">#</th><th>Size (Width) mm</th><th>R. Meter</th><th>Qty</th></tr>
-        </thead>
-        <tbody>
-          <% card.requirements.forEach((q, i) => { %>
-          <tr>
-            <td><%= i + 1 %></td>
-            <td><%= fmtN(q.width) %></td>
-            <td><%= fmtN(q.runningMeter) %></td>
-            <td><%= fmtN(q.qty) %></td>
-          </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-  </div>
-  <% } %>
 
   <!-- Scanning the reel is what arms its row: Start stays locked until the
        Deckle in the machine has been confirmed. Typing the id works too, so a
@@ -406,6 +388,17 @@
   };
   const toast = (msg, type) => { if (typeof showToast === "function") showToast(msg, type); };
 
+  // Curing gate: a Deckle can't be run until its adhesive has cured (6 h after
+  // lamination). The server sends `cured`; re-check the clock here too so a
+  // card left open unlocks on its own when the time passes. Hot-melt builds
+  // carry no curedAt and are never gated.
+  function curedNow(row) {
+    const c = row.curing;
+    if (!c || c.hotMelt || c.cured) return true;
+    if (c.curedAt) return Date.now() >= Date.parse(c.curedAt);
+    return false;
+  }
+
   // Which row the scan has confirmed. Only that row's Start is live -- a
   // Deckle has to be identified before it can be run.
   let armedIndex = null;
@@ -455,9 +448,13 @@
     wrap.innerHTML = ROWS.map((row, i) => {
       const done = row.status === "done";
       const running = !done && Boolean(row.startTime);
-      const armed = !done && !running && armedIndex === i;
-      const state = done ? "done" : running ? "running" : armed ? "armed" : "pending";
-      const label = done ? "Done" : running ? "Running" : armed ? "Ready" : "Pending";
+      const curing = !done && !running && !curedNow(row);
+      const armed = !done && !running && !curing && armedIndex === i;
+      const state = done ? "done" : running ? "running" : curing ? "curing" : armed ? "armed" : "pending";
+      const label = done ? "Done" : running ? "Running" : curing ? "Curing" : armed ? "Ready" : "Pending";
+      const cureMsg = curing
+        ? `Adhesive still curing${row.curing && row.curing.curedAtLabel ? ` — ready at ${esc(row.curing.curedAtLabel)}` : ""} (6 h after lamination)`
+        : "";
 
       const rolls = (row.cuts || []).length;
       const meta = done
@@ -480,19 +477,20 @@
               <div class="sl-deckle-id">${esc(row.deckleId || "—")}</div>
               <div class="sl-deckle-meta">${esc(meta)}</div>
               ${stock}
+              ${cureMsg ? `<div class="sl-deckle-meta sl-bad">⏳ ${cureMsg}</div>` : ""}
             </div>
             <span class="sl-badge is-${state}">${label}</span>
           </div>
           ${webHtml(row)}
           <div class="sl-deckle-actions">
             <button type="button" class="sl-punch sl-start" data-act="start" data-index="${i}"
-              ${done || running || !armed ? "disabled" : ""}
-              title="${done ? "Already run" : running ? "Already started" : armed ? "" : "Scan this Deckle first"}">
+              ${done || running || curing || !armed ? "disabled" : ""}
+              title="${done ? "Already run" : running ? "Already started" : curing ? cureMsg : armed ? "" : "Scan this Deckle first"}">
               <i class="fa-solid fa-play"></i> Start
             </button>
             <button type="button" class="sl-punch sl-stop" data-act="stop" data-index="${i}"
               ${running ? "" : "disabled"}
-              title="${running ? "" : "Punch Start first"}">
+              title="${running ? "" : curing ? cureMsg : "Punch Start first"}">
               <i class="fa-solid fa-stop"></i> Stop
             </button>
             ${times ? `<span class="sl-times">${times}</span>` : ""}
@@ -541,6 +539,13 @@
       setScanMsg(`${ROWS[i].deckleId} has already been run on this card.`, "bad");
       return false;
     }
+    if (!curedNow(ROWS[i])) {
+      armedIndex = null;
+      render();
+      const lbl = ROWS[i].curing && ROWS[i].curing.curedAtLabel ? ` — ready at ${ROWS[i].curing.curedAtLabel}` : "";
+      setScanMsg(`${ROWS[i].deckleId} is still curing (6 h after lamination)${lbl}. It can't be run yet.`, "bad");
+      return false;
+    }
     armedIndex = i;
     render();
     setScanMsg(`${ROWS[i].deckleId} confirmed — punch Start when the machine runs.`, "ok");
@@ -559,6 +564,7 @@
   async function punchStart(i) {
     const row = ROWS[i];
     if (!row || row.status === "done" || row.startTime) return;
+    if (!curedNow(row)) return toast("That Deckle is still curing — it can't be run yet.", "error");
     const startTime = nowHHMM();
     try {
       const res = await fetch("/sachiko/slitting/jobcard/row/start", {
@@ -593,6 +599,7 @@
   function openStopDialog(i) {
     const row = ROWS[i];
     if (!row || row.status === "done" || !row.startTime) return;
+    if (!curedNow(row)) return toast("That Deckle is still curing — it can't be run yet.", "error");
     stopIndex = i;
     const rolls = (row.cuts || []).length;
     document.getElementById("stopPlan").innerHTML =
@@ -745,4 +752,14 @@
   });
 
   render();
+
+  // A card left open across a Deckle's curing deadline should unlock itself.
+  // Only re-render while something is actually curing, and never while the
+  // Stop dialog is open (it would rebuild the list under the operator).
+  if (ROWS.some((r) => r.status !== "done" && !curedNow(r))) {
+    setInterval(() => {
+      if (document.getElementById("stopDialog").classList.contains("show")) return;
+      if (ROWS.some((r) => r.status !== "done" && !curedNow(r))) render();
+    }, 60000);
+  }
 </script>

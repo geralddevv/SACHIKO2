@@ -45,8 +45,17 @@ const adhesiveMasterSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    // Free text, not a plain number: a vendor spec is routinely a RANGE
+    // ("3000-5000"), so hyphens and spaces are allowed alongside digits.
     viscosity: {
-      type: Number,
+      type: String,
+      trim: true,
+    },
+    // Tackiness of the adhesive (peel/loop tack). Free text -- also often
+    // quoted as a range or with a unit.
+    tackiness: {
+      type: String,
+      trim: true,
     },
     cohesion: {
       type: Number,

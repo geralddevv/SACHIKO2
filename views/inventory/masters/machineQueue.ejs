@@ -68,10 +68,12 @@
     }
     .dialog-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #fff; }
     .dialog-close-btn {
-      background: none; border: none; color: #fff; font-size: 20px;
-      cursor: pointer; line-height: 1; padding: 0 2px; opacity: 0.8; transition: opacity 0.15s;
+      background: none; border: none; color: #fff; font-size: 26px;
+      cursor: pointer; line-height: 1; width: 38px; height: 38px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 8px; opacity: 0.85; transition: opacity 0.15s, background 0.15s;
     }
-    .dialog-close-btn:hover { opacity: 1; }
+    .dialog-close-btn:hover { opacity: 1; background: rgba(255, 255, 255, 0.18); }
     .dialog-body { padding: 20px 22px; background: #fff; border-radius: 0 0 14px 14px; }
     .rd-pairs { width: 100%; border-collapse: collapse; font-size: 13px; }
     .rd-pairs th, .rd-pairs td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
@@ -280,11 +282,12 @@
               <td data-label="Deckles">
                 <%= row.deckleLeft %> to run
                 <% if (row.deckleDone > 0) { %><span style="color:#64748b;font-weight:600;font-size:11px;">(<%= row.deckleDone %> of <%= row.deckleCount %> done)</span><% } %>
+                <% if (row.curing) { %><br><span style="color:#b45309;font-weight:700;font-size:11px;"><i class="fa-solid fa-hourglass-half"></i> curing<% if (row.curingUntilLabel) { %> · ready <%= row.curingUntilLabel %><% } %></span><% } %>
               </td>
               <td data-label="Rolls"><%= row.producedRolls %> of <%= row.plannedRolls %></td>
               <td>
                 <div class="mq-actions">
-                  <a href="/sachiko/slitting/jobcard/<%= row._id %>" class="mq-start-btn" title="Open the Slitting Job Card">
+                  <a href="/sachiko/slitting/jobcard/<%= row._id %>" class="mq-start-btn" title="<%= row.curing ? 'Deckle still curing — open to see when it is ready' : 'Open the Slitting Job Card' %>">
                     <i class="fa-solid fa-scissors"></i> slit
                   </a>
                 </div>

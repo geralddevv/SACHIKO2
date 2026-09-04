@@ -37,7 +37,12 @@ function canonStr(value) {
   return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
 }
 function canonNum(value) {
-  return value === undefined || value === null || value === "" ? "" : String(Number(value));
+  if (value === undefined || value === null || value === "") return "";
+  const n = Number(value);
+  // Adhesive viscosity is free text now (ranges like "3000-5000") -- fall back
+  // to the string form for non-numbers. Plain numeric specs are unchanged, so
+  // existing signatures stay stable. Keep in step with utils/labelStockVariant.js.
+  return Number.isFinite(n) ? String(n) : canonStr(value);
 }
 
 const FS_SIG_FIELDS = ["facestockFamily", "facestockType", "facestockMake", "facestockVendorId", "facestockVendorSkuCode", "facestockSize"];

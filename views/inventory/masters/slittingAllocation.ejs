@@ -1,23 +1,18 @@
 <% layout('/layout/boilerplate') %>
 
 <%
-  // Stage 1 of slitting: the planner fixes the whole job before it reaches
-  // the floor -- machine, operator, helper, which Deckles to cut, and per
-  // Deckle its web width, the metres to run off it, the length per finished
-  // roll and the A..G knife layout. Nothing moves in stock here; the operator
-  // then works it Deckle by Deckle on /sachiko/slitting/jobcard/:cardId.
+  // Stage 1 of slitting, Deckle-scoped: the planner fixes ONE Deckle's job
+  // before it reaches the floor -- machine, operator, helper, and that
+  // Deckle's web width, the metres to run off it, the length per finished
+  // roll and the A..G knife layout. Nothing moves in stock here; once saved
+  // the card sits on the machine's queue and the operator works it on
+  // /sachiko/slitting/jobcard/:cardId. The order's other Deckles are
+  // allocated one at a time from the Slitting Queue.
   const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
   const dash = (v) => (isEmpty(v) ? "—" : v);
   // Log columns that are not roll-width slots: #, Deckle, Meter, Width,
-  // R. Meter, Rolls, Trim, remove. The web strip spans the lot.
-  const fixedCols = 8;
-  const numOf = (v) => { const m = /-?\d+(\.\d+)?/.exec(String(v ?? "")); return m ? Number(m[0]) : null; };
-  const show = (v) => (v === null || v === undefined || v === "" ? "—" : Number(v).toLocaleString("en-IN"));
-  const reqWidth = show(numOf(order.paperSize));
-  const reqRunningMeter = show(order.runningMeters);
-  const reqQty = show(order.noOfRolls);
-  const doneRows = (existing && existing.rows) ? existing.rows.filter((r) => r.status === "done") : [];
-  const pendingRows = (existing && existing.rows) ? existing.rows.filter((r) => r.status !== "done") : [];
+  // R. Meter, Rolls, Trim. The web strip spans the lot.
+  const fixedCols = 7;
 %>
 
 <style>
@@ -204,26 +199,30 @@
             <span class="sl-job-label">Client</span>
             <span class="sl-job-value"><%= dash(order.clientName) %></span>
           </div>
+          <div class="sl-job-cell">
+            <span class="sl-job-label">Deckle</span>
+            <span class="sl-job-value"><%= dash(targetDeckle.rollId) %></span>
+          </div>
           <div class="sl-job-cell is-input">
             <span class="sl-job-label">Machine <span class="req">*</span></span>
             <%# Only slitting machines are offered (routes/system/slitting.js
                 filters on machineType), so the type is not worth repeating on
                 every option -- the location still is. %>
             <select id="slMachine" class="form-control">
-              <option value="" disabled <%= existing && existing.machineId ? "" : "selected" %> hidden>
+              <option value="" disabled <%= crew.machineId ? "" : "selected" %> hidden>
                 <%= machines.length ? "Select machine" : "No slitting machine set up" %>
               </option>
               <% machines.forEach((m) => { %>
-                <option value="<%= m._id %>" <%= existing && existing.machineId === m._id ? "selected" : "" %>><%= m.machineName %><%= m.locationName ? " · " + m.locationName : "" %></option>
+                <option value="<%= m._id %>" <%= crew.machineId === m._id ? "selected" : "" %>><%= m.machineName %><%= m.locationName ? " · " + m.locationName : "" %></option>
               <% }) %>
             </select>
           </div>
           <div class="sl-job-cell is-input">
             <span class="sl-job-label">Operator <span class="req">*</span></span>
             <select id="slOperator" class="form-control">
-              <option value="" disabled <%= existing && existing.operatorId ? "" : "selected" %> hidden>Select operator</option>
+              <option value="" disabled <%= crew.operatorId ? "" : "selected" %> hidden>Select operator</option>
               <% operators.forEach((e) => { %>
-                <option value="<%= e._id %>" <%= existing && existing.operatorId === e._id ? "selected" : "" %>><%= e.empName %></option>
+                <option value="<%= e._id %>" <%= crew.operatorId === e._id ? "selected" : "" %>><%= e.empName %></option>
               <% }) %>
             </select>
           </div>
@@ -232,7 +231,7 @@
             <select id="slHelper" class="form-control">
               <option value="">— none —</option>
               <% helpers.forEach((e) => { %>
-                <option value="<%= e._id %>" <%= existing && existing.helperId === e._id ? "selected" : "" %>><%= e.empName %></option>
+                <option value="<%= e._id %>" <%= crew.helperId === e._id ? "selected" : "" %>><%= e.empName %></option>
               <% }) %>
             </select>
           </div>
@@ -250,63 +249,32 @@
     </div>
     <% } %>
 
-    <% const ranList = (typeof ranCards !== "undefined" && Array.isArray(ranCards)) ? ranCards : []; %>
-    <% if (ranList.length || doneRows.length) { %>
-    <!-- Rows the operator has already run are immutable -- their stock has
-         moved. They stay on the card and are not re-allocated here. -->
+    <% const cure = targetDeckle.curing || {}; %>
+    <% if (cure.cured === false) { %>
     <div class="span-full" style="border:none !important;">
-      <div class="sl-done-note">
-        <i class="fa-solid fa-circle-check"></i>
-        <% if (ranList.length) { %>
-          <%= ranList.length %> Deckle<%= ranList.length === 1 ? " has" : "s have" %> already been run and completed:
-          <%= ranList.map((r) => (r.deckleId ? `${r.deckleId} (${r.slittingJobCardId})` : r.slittingJobCardId)).join(", ") %>.
-        <% } %>
-        <% if (doneRows.length) { %>
-          <%= doneRows.length %> Deckle<%= doneRows.length === 1 ? " has" : "s have" %> already been run on
-          <%= (existing && existing.slittingJobCardId) ? existing.slittingJobCardId : "this order" %> and cannot be changed:
-          <%= doneRows.map((r) => r.deckleId).filter(Boolean).join(", ") %>.
-          Anything you allocate below is added to that same card.
-        <% } %>
+      <div class="sl-warn-note">
+        <i class="fa-solid fa-hourglass-half"></i>
+        Deckle <strong><%= dash(targetDeckle.rollId) %></strong> is still curing<%= cure.curedAtLabel ? ` — the adhesive is ready at ${cure.curedAtLabel}` : "" %> (6&nbsp;h after lamination).
+        You can allocate it now, but the operator won't be able to run it on the machine until curing is over.
       </div>
     </div>
     <% } %>
 
-    <!-- What the order asked for. Read-only: it belongs to the sales order,
-         not to this allocation, so it is shown rather than edited. The
-         planner's job is the Deckle layout below. -->
-    <div class="span-full form-subheading sl-sec-head">
-      <h1>Requirement</h1>
-    </div>
+    <% if (existing) { %>
     <div class="span-full" style="border:none !important;">
-      <div class="sl-panel">
-        <table class="sl-table sl-view-table">
-          <thead>
-            <tr>
-              <th style="width:44px;">#</th>
-              <th>Size (Width) mm</th>
-              <th>R. Meter</th>
-              <th>Qty</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>1</td>
-              <td><%= reqWidth %></td>
-              <td><%= reqRunningMeter %></td>
-              <td><%= reqQty %></td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="sl-warn-note">
+        <i class="fa-solid fa-pen"></i>
+        Deckle <strong><%= dash(targetDeckle.rollId) %></strong> is already allocated on
+        <strong><%= existing.slittingJobCardId %></strong>. Saving updates that same card in place —
+        it keeps its place on the machine queue.
       </div>
     </div>
+    <% } %>
 
-    <!-- One row per Deckle to be cut. A..G are the widths of the rolls taken
+    <!-- This one Deckle's layout. A..G are the widths of the rolls taken
          across its web -- one finished roll per width. -->
     <div class="span-full form-subheading sl-sec-head">
-      <h1>Deckle Allocation</h1>
-      <button type="button" class="sl-mini-btn" onclick="addLogRow()" style="margin-left:auto;">
-        <i class="fa-solid fa-plus"></i> Add Deckle
-      </button>
+      <h1>Deckle Layout</h1>
     </div>
     <div class="span-full" style="border:none !important;">
       <div class="sl-panel sl-scroll">
@@ -316,7 +284,6 @@
             <col style="width:82px" /><col style="width:78px" />
             <% cutSlots.forEach(() => { %><col style="width:54px" /><% }) %>
             <col style="width:82px" /><col style="width:54px" /><col style="width:70px" />
-            <col style="width:40px" />
           </colgroup>
           <thead>
             <tr>
@@ -328,7 +295,6 @@
               <th rowspan="2" style="vertical-align:middle;">R. Meter</th>
               <th rowspan="2" style="vertical-align:middle;">Rolls</th>
               <th rowspan="2" style="vertical-align:middle;">Trim</th>
-              <th rowspan="2" style="vertical-align:middle;"></th>
             </tr>
             <tr>
               <% cutSlots.forEach((slot) => { %><th class="sl-sub-head"><%= slot %></th><% }) %>
@@ -349,21 +315,22 @@
   </form>
 </div>
 
-<script id="sl-deckles-data" type="application/json"><%- safeJson(deckles) %></script>
+<script id="sl-target-data" type="application/json"><%- safeJson(targetDeckle) %></script>
 <script id="sl-order-data" type="application/json"><%- safeJson(order) %></script>
 <script id="sl-slots-data" type="application/json"><%- safeJson(cutSlots) %></script>
 <script id="sl-config-data" type="application/json"><%- safeJson({ pendingId: order._id, submissionToken, fixedCols }) %></script>
-<script id="sl-existing-data" type="application/json"><%- safeJson({ rows: pendingRows }) %></script>
+<script id="sl-existing-data" type="application/json"><%- safeJson({ row: existing ? existing.row : null }) %></script>
 
 <script>
-  const DECKLES = JSON.parse(document.getElementById("sl-deckles-data").textContent);
+  const TARGET = JSON.parse(document.getElementById("sl-target-data").textContent);
   const ORDER = JSON.parse(document.getElementById("sl-order-data").textContent);
   const SLOTS = JSON.parse(document.getElementById("sl-slots-data").textContent);
   const CONFIG = JSON.parse(document.getElementById("sl-config-data").textContent);
   const EXISTING = JSON.parse(document.getElementById("sl-existing-data").textContent);
   const SUB_COLSPAN = CONFIG.fixedCols + SLOTS.length;
 
-  const deckleById = new Map(DECKLES.map((d) => [d._id, d]));
+  // The page is scoped to exactly one Deckle -- no picker, no other rows.
+  const deckleById = new Map([[TARGET._id, TARGET]]);
   const num = (v) => { const s = String(v ?? "").trim(); if (s === "") return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
   const round2 = (n) => Math.round(n * 100) / 100;
   const fmt = (n) => (Number.isFinite(n) ? round2(n).toLocaleString("en-IN") : "—");
@@ -379,35 +346,18 @@
     });
   }
 
-  // ---- Deckle rows ----------------------------------------------------------
-  // Every Deckle offered here is this order's Product Code (the server filters
-  // on it, brand variants included). The picker separates the reels laminated
-  // for (or allotted to) this order from other stock of the same code -- the
-  // floor may finish an order off an earlier web, but the order's own reels
-  // should be the obvious pick. A reel's own code is shown when it is a
-  // "-A"/"-E" brand variant, so the planner can see which raw material it ran.
-  function deckleOptionsHtml(selectedId) {
-    const opt = (d) => {
-      const parts = [esc(d.rollId), `${fmt(d.reelMtrs)} m`];
-      if (d.size) parts.push(`${esc(d.size)} mm`);
-      if (d.productCode && d.productCode !== ORDER.productCode) parts.push(esc(d.productCode));
-      return `<option value="${esc(d._id)}"${d._id === selectedId ? " selected" : ""}>${parts.join("  ·  ")}</option>`;
-    };
-    const own = DECKLES.filter((d) => d.ownOrder);
-    const other = DECKLES.filter((d) => !d.ownOrder);
-    let html = `<option value="" disabled${selectedId ? "" : " selected"} hidden>Select a Deckle</option>`;
-    if (own.length) html += `<optgroup label="This order">${own.map(opt).join("")}</optgroup>`;
-    if (other.length) html += `<optgroup label="Same product code — other stock">${other.map(opt).join("")}</optgroup>`;
-    return html;
-  }
-
+  // ---- The Deckle's layout row --------------------------------------------
+  // One row, one Deckle -- the one this page was opened for (TARGET). The
+  // Deckle ID cell is a fixed label plus a hidden input carrying its stock id
+  // back to the server, never a picker.
   function addLogRow(preset) {
     const tr = document.createElement("tr");
     tr.className = "sl-log-row";
     tr.innerHTML = `
       <td class="sl-derived sl-log-no"></td>
       <td class="sl-deckle-cell">
-        <select class="form-control sl-deckle">${deckleOptionsHtml(preset?.deckleStockId || "")}</select>
+        <span class="sl-job-value" style="font-size:13px;">${esc(TARGET.rollId)}</span>
+        <input type="hidden" class="sl-deckle" value="${esc(TARGET._id)}" />
         <span class="sl-note sl-deckle-note"></span>
       </td>
       <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-meter" placeholder="Mtrs" /></td>
@@ -415,12 +365,10 @@
       ${SLOTS.map((s) => `<td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-roll-width sl-width-input" data-slot="${s}" placeholder="${s}" title="Roll ${s} width in mm" /></td>`).join("")}
       <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-rm" placeholder="Mtrs" /></td>
       <td class="sl-derived sl-rolls">0</td>
-      <td class="sl-derived sl-trim">—</td>
-      <td><button type="button" class="sl-row-btn sl-del" title="Remove this Deckle"><i class="fa-solid fa-xmark"></i></button></td>`;
+      <td class="sl-derived sl-trim">—</td>`;
 
-    // The web view lives in its own row so it can span the full table. The two
-    // are linked by a direct element reference rather than ids, so a row can be
-    // removed without any bookkeeping.
+    // The web view lives in its own row so it can span the full table, linked
+    // by a direct element reference rather than ids.
     const sub = document.createElement("tr");
     sub.className = "sl-log-sub";
     sub.innerHTML = `
@@ -430,34 +378,23 @@
       </td>`;
     tr.__sub = sub;
 
-    const sel = tr.querySelector(".sl-deckle");
-    sel.addEventListener("change", () => {
-      const d = deckleById.get(sel.value);
-      if (d) {
-        // Prefill from the reel: its remaining metres and its web width. Both
-        // stay editable -- a run can take part of a reel, and the stored size
-        // is only as good as what was entered when it was made.
-        const meterEl = tr.querySelector(".sl-meter");
-        if (!meterEl.value) {
-          meterEl.value = d.reelMtrs;
-          const rm = tr.querySelector(".sl-rm");
-          if (!rm.dataset.touched && !rm.value) rm.value = d.reelMtrs;
-        }
-        const widthEl = tr.querySelector(".sl-width");
-        const w = sizeToWidth(d.size);
-        if (!widthEl.value && w !== null) widthEl.value = w;
-      }
-      recalc();
-    });
+    // Prefill from the reel: its remaining metres and its web width. Both stay
+    // editable -- a run can take part of a reel, and the stored size is only
+    // as good as what was entered when the Deckle was made. A saved preset
+    // (re-opening an existing allocation) wins over these defaults below.
+    const meterEl = tr.querySelector(".sl-meter");
+    const widthEl = tr.querySelector(".sl-width");
+    const rmEl = tr.querySelector(".sl-rm");
+    if (TARGET.reelMtrs != null) { meterEl.value = TARGET.reelMtrs; rmEl.value = TARGET.reelMtrs; }
+    const w0 = sizeToWidth(TARGET.size);
+    if (w0 !== null) widthEl.value = w0;
 
     // R. Meter follows the metres taken off the Deckle until the planner types
     // their own -- they differ only on a rewound or joined run.
-    const meterEl = tr.querySelector(".sl-meter");
     meterEl.addEventListener("input", () => {
-      const rm = tr.querySelector(".sl-rm");
-      if (!rm.dataset.touched) rm.value = meterEl.value;
+      if (!rmEl.dataset.touched) rmEl.value = meterEl.value;
     });
-    tr.querySelector(".sl-rm").addEventListener("input", function () { this.dataset.touched = "1"; });
+    rmEl.addEventListener("input", function () { this.dataset.touched = "1"; });
 
     tr.querySelectorAll("input").forEach((el) => el.addEventListener("input", recalc));
 
@@ -471,15 +408,12 @@
       });
     });
 
-    tr.querySelector(".sl-del").addEventListener("click", () => { sub.remove(); tr.remove(); recalc(); });
-
     if (preset) {
-      if (preset.plannedMeter != null) tr.querySelector(".sl-meter").value = preset.plannedMeter;
-      if (preset.width != null) tr.querySelector(".sl-width").value = preset.width;
+      if (preset.plannedMeter != null) meterEl.value = preset.plannedMeter;
+      if (preset.width != null) widthEl.value = preset.width;
       if (preset.plannedRunningMeter != null) {
-        const rm = tr.querySelector(".sl-rm");
-        rm.value = preset.plannedRunningMeter;
-        rm.dataset.touched = "1";
+        rmEl.value = preset.plannedRunningMeter;
+        rmEl.dataset.touched = "1";
       }
       widthInputs.forEach((el) => {
         const v = preset.cuts?.[el.dataset.slot];
@@ -524,7 +458,7 @@
     if (!entries.length) {
       web.innerHTML = `<div class="sl-web-empty">${r.width !== null
         ? `${esc(fmt(r.width))} mm web — no roll widths yet`
-        : "Pick a Deckle, then enter the roll widths"}</div>`;
+        : "Enter the roll widths (A–G)"}</div>`;
       flag.textContent = "";
       return;
     }
@@ -552,9 +486,11 @@
     }
   }
 
-  // Rolls and edge trim per row, the running totals, and whether the plan can
-  // be saved. A Deckle named on two rows is checked on the SUM of both -- the
-  // server does the same, so the two can't disagree about what fits.
+  // Why the plan can't be saved yet, or "" when it is ready. recalc() keeps it
+  // current; the submit handler shows it as a toast instead of a fixed banner.
+  let submitBlockReason = "";
+
+  // Rolls and edge trim for the row, and whether the plan can be saved.
   function recalc() {
     const rows = [...document.querySelectorAll("#slLogBody .sl-log-row")];
     renumber("#slLogBody .sl-log-row", ".sl-log-no");
@@ -613,27 +549,23 @@
 
       // First thing standing between this plan and Save, named in the order it
       // is filled in -- otherwise the button just sits dead.
-      const why = !r.deckleStockId ? "select a Deckle"
-        : !(r.plannedMeter > 0) ? "enter the metres to run off the Deckle"
+      const why = !(r.plannedMeter > 0) ? "enter the metres to run off the Deckle"
         : !widths.length ? "enter at least one roll width (A–G)"
         : !widths.every((w) => w > 0) ? "roll widths must be more than zero"
         : over ? "the roll widths add up to more than the Deckle web"
         : !(r.plannedRunningMeter > 0) ? "enter the R. Meter"
         : !reelOk ? "this Deckle does not have that many metres left"
         : "";
-      if (why && !blocked) blocked = `Row ${i + 1}: ${why}.`;
+      if (why && !blocked) blocked = why.charAt(0).toUpperCase() + why.slice(1) + ".";
     });
 
-    if (!rows.length) blocked = "Allocate at least one Deckle.";
-    document.getElementById("slBlocked").textContent = blocked;
-    document.getElementById("slSubmitBtn").disabled = Boolean(blocked);
+    if (!rows.length) blocked = "Fill in the Deckle's layout.";
+    submitBlockReason = blocked;
   }
 
+  // Every save-time problem surfaces as a toast, not a fixed banner.
   function showError(msg) {
-    const el = document.getElementById("slError");
-    el.textContent = msg;
-    el.style.display = msg ? "block" : "none";
-    if (msg) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (msg && typeof showToast === "function") showToast(msg, "error");
   }
 
   ["slMachine", "slOperator", "slHelper"].forEach((id) =>
@@ -641,12 +573,14 @@
 
   document.getElementById("slForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    showError("");
     const btn = document.getElementById("slSubmitBtn");
     const label = btn.textContent;
 
+    recalc();
+    if (submitBlockReason) return showError(submitBlockReason);
+
     const rows = [...document.querySelectorAll("#slLogBody .sl-log-row")].map(readLogRow);
-    if (!rows.length) return showError("Allocate at least one Deckle.");
+    if (!rows.length) return showError("Fill in the Deckle's layout.");
 
     btn.disabled = true;
     btn.textContent = "Saving…";
@@ -660,6 +594,7 @@
           operatorId: document.getElementById("slOperator").value,
           helperId: document.getElementById("slHelper").value,
           clientOrderNo: ORDER.clientOrderNo,
+          deckleStockId: TARGET._id,
           rows,
         }),
       });
@@ -672,11 +607,12 @@
     } catch {
       showError("Server error. Please try again.");
     }
+    btn.disabled = false;
     btn.textContent = label;
     recalc();
   });
 
-  // Seed the Deckle rows: whatever was allocated before, else one empty row.
-  if (EXISTING.rows.length) EXISTING.rows.forEach((r) => addLogRow(r));
-  else addLogRow();
+  // One row for this Deckle -- seeded from its existing allocation if it has
+  // one, otherwise blank (with the reel's own metres/width prefilled).
+  addLogRow(EXISTING.row || undefined);
 </script>

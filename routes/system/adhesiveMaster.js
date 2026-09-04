@@ -22,6 +22,13 @@ function canonStr(value) {
   return String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
 }
 
+// Blank -> "" (not "0"); a real number -> its canonical form. Kept in step
+// with scripts/backfill-adhesive-signatures.js so a backfilled signature and
+// a UI edit produce the same hash.
+function canonNum(value) {
+  return value === undefined || value === null || value === "" ? "" : String(Number(value));
+}
+
 function buildAdhesiveSignature(payload) {
   return hashSignature(
     [
@@ -29,10 +36,13 @@ function buildAdhesiveSignature(payload) {
       canonStr(payload.type),
       canonStr(payload.make),
       canonStr(payload.vendorSkuCode),
-      String(Number(payload.viscosity ?? "")),
-      String(Number(payload.cohesion ?? "")),
-      String(Number(payload.shear ?? "")),
-      String(Number(payload.density ?? "")),
+      // Viscosity + Tackiness are free text (ranges allowed) -- canonicalized
+      // as strings, not numbers.
+      canonStr(payload.viscosity),
+      canonStr(payload.tackiness),
+      canonNum(payload.cohesion),
+      canonNum(payload.shear),
+      canonNum(payload.density),
     ].join("||"),
   );
 }
@@ -112,6 +122,11 @@ const numOrUndef = (value) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+const strOrUndef = (value) => {
+  const s = String(value ?? "").trim();
+  return s === "" ? undefined : s;
+};
+
 async function buildPayload(body) {
   const vendorId = String(body.vendorId || "").trim();
   const payload = {
@@ -119,7 +134,10 @@ async function buildPayload(body) {
     type: String(body.type || "").trim(),
     make: String(body.make || "").trim(),
     vendorSkuCode: String(body.vendorSkuCode || "").trim(),
-    viscosity: numOrUndef(body.viscosity),
+    // Free text -- ranges like "3000-5000" are expected, so it is not coerced
+    // to a number.
+    viscosity: strOrUndef(body.viscosity),
+    tackiness: strOrUndef(body.tackiness),
     cohesion: numOrUndef(body.cohesion),
     shear: numOrUndef(body.shear),
     density: numOrUndef(body.density),

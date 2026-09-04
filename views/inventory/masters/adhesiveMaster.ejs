@@ -45,15 +45,21 @@
       background: none;
       border: none;
       color: #fff;
-      font-size: 20px;
+      font-size: 26px;
       cursor: pointer;
       line-height: 1;
-      padding: 0 2px;
-      opacity: 0.8;
-      transition: opacity 0.15s;
+      width: 38px;
+      height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      opacity: 0.85;
+      transition: opacity 0.15s, background 0.15s;
     }
     .dialog-close-btn:hover {
       opacity: 1;
+      background: rgba(255, 255, 255, 0.18);
     }
     .dialog-body {
       padding: 24px;
@@ -148,13 +154,10 @@
       text-overflow: ellipsis !important;
       white-space: nowrap !important;
     }
-    /* Vendor Name otherwise stretches to the dialog's full width -- a fixed
-       width keeps it visually consistent regardless of how long the
-       selected vendor's name is (the ellipsis rule above handles the
-       overflow within it). Caps at 100% so it still shrinks to fit on
-       narrow/mobile viewports. */
+    /* Vendor Name spans the dialog's full width; the ellipsis rule above
+       handles a long selected vendor name within it. */
     .vendor-field-fixed {
-      max-width: 320px;
+      max-width: none;
     }
   </style>
 
@@ -243,15 +246,19 @@
       <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="addViscosityInput">Viscosity (Optional)</label>
-          <input type="number" id="addViscosityInput" class="form-control premium-input" placeholder="Enter viscosity" min="0" step="any" />
+          <input type="text" id="addViscosityInput" class="form-control premium-input" placeholder="Enter viscosity" inputmode="text" />
         </div>
+        <div>
+          <label class="dialog-field-label" for="addTackinessInput">Tackiness (Optional)</label>
+          <input type="text" id="addTackinessInput" class="form-control premium-input" placeholder="Enter tackiness" inputmode="text" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="addCohesionInput">Cohesion (Optional)</label>
           <input type="number" id="addCohesionInput" class="form-control premium-input" placeholder="Enter cohesion" min="0" step="any" />
         </div>
-      </div>
-
-      <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="addShearInput">Shear (Optional)</label>
           <input type="number" id="addShearInput" class="form-control premium-input" placeholder="Enter shear" min="0" step="any" />
@@ -323,15 +330,19 @@
       <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="editViscosityInput">Viscosity (Optional)</label>
-          <input type="number" id="editViscosityInput" class="form-control premium-input" placeholder="Enter viscosity" min="0" step="any" />
+          <input type="text" id="editViscosityInput" class="form-control premium-input" placeholder="Enter viscosity" inputmode="text" />
         </div>
+        <div>
+          <label class="dialog-field-label" for="editTackinessInput">Tackiness (Optional)</label>
+          <input type="text" id="editTackinessInput" class="form-control premium-input" placeholder="Enter tackiness" inputmode="text" />
+        </div>
+      </div>
+
+      <div class="dialog-field-row" style="grid-template-columns: 1fr 1fr 1fr;">
         <div>
           <label class="dialog-field-label" for="editCohesionInput">Cohesion (Optional)</label>
           <input type="number" id="editCohesionInput" class="form-control premium-input" placeholder="Enter cohesion" min="0" step="any" />
         </div>
-      </div>
-
-      <div class="dialog-field-row">
         <div>
           <label class="dialog-field-label" for="editShearInput">Shear (Optional)</label>
           <input type="number" id="editShearInput" class="form-control premium-input" placeholder="Enter shear" min="0" step="any" />
@@ -463,7 +474,8 @@
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Vendor SKU Code", field: "vendorSkuCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "MSQ", field: "msq", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
-      { title: "Viscosity", field: "viscosity", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Viscosity", field: "viscosity", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110, formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Tackiness", field: "tackiness", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Cohesion", field: "cohesion", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Shear", field: "shear", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Density", field: "density", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90, formatter: (cell) => cell.getValue() ?? "—" },
@@ -547,6 +559,7 @@
       detailRow("Make", row.make || "—"),
       detailRow("Vendor SKU Code", row.vendorSkuCode || "—"),
       detailRow("Viscosity", row.viscosity ?? "—"),
+      detailRow("Tackiness", row.tackiness ?? "—"),
       detailRow("Cohesion", row.cohesion ?? "—"),
       detailRow("Shear", row.shear ?? "—"),
       detailRow("Density", row.density ?? "—"),
@@ -558,11 +571,8 @@
     closeModal("viewDialog");
   }
 
-  ["addDialog", "editDialog", "viewDialog", "deleteDialog"].forEach(id => {
-    document.getElementById(id).addEventListener("click", function (e) {
-      if (e.target === this) closeModal(id);
-    });
-  });
+  // A click on the backdrop deliberately does NOT close these dialogs -- only
+  // Cancel / × / Esc do, so a stray click outside can't discard a part-filled form.
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
@@ -577,6 +587,7 @@
     document.getElementById("addMakeInput").value = "";
     document.getElementById("addVendorSkuCodeInput").value = "";
     document.getElementById("addViscosityInput").value = "";
+    document.getElementById("addTackinessInput").value = "";
     document.getElementById("addCohesionInput").value = "";
     document.getElementById("addShearInput").value = "";
     document.getElementById("addDensityInput").value = "";
@@ -617,6 +628,7 @@
           make: document.getElementById("addMakeInput").value.trim(),
           vendorSkuCode,
           viscosity: document.getElementById("addViscosityInput").value,
+          tackiness: document.getElementById("addTackinessInput").value,
           cohesion: document.getElementById("addCohesionInput").value,
           shear: document.getElementById("addShearInput").value,
           density: document.getElementById("addDensityInput").value,
@@ -645,6 +657,7 @@
     document.getElementById("editMakeInput").value = row.make || "";
     document.getElementById("editVendorSkuCodeInput").value = row.vendorSkuCode || "";
     document.getElementById("editViscosityInput").value = row.viscosity ?? "";
+    document.getElementById("editTackinessInput").value = row.tackiness ?? "";
     document.getElementById("editCohesionInput").value = row.cohesion ?? "";
     document.getElementById("editShearInput").value = row.shear ?? "";
     document.getElementById("editDensityInput").value = row.density ?? "";
@@ -687,6 +700,7 @@
           make: document.getElementById("editMakeInput").value.trim(),
           vendorSkuCode,
           viscosity: document.getElementById("editViscosityInput").value,
+          tackiness: document.getElementById("editTackinessInput").value,
           cohesion: document.getElementById("editCohesionInput").value,
           shear: document.getElementById("editShearInput").value,
           density: document.getElementById("editDensityInput").value,

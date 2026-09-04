@@ -212,7 +212,9 @@ async function buildLabelStockPayload(body) {
       adhesiveVendorId: adhesiveVendorId || undefined,
       adhesiveVendorName: await resolveVendorName(adhesiveVendorId),
       adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode),
-      adhesiveViscosity: numOrUndef(body.adhesiveViscosity),
+      // Free text (mirrors Adhesive Master) -- a range like "3000-5000" is
+      // kept verbatim rather than coerced to a number.
+      adhesiveViscosity: trim(body.adhesiveViscosity) || undefined,
       adhesiveCohesion: numOrUndef(body.adhesiveCohesion),
       adhesiveShear: numOrUndef(body.adhesiveShear),
       adhesiveDensity: numOrUndef(body.adhesiveDensity),
@@ -255,7 +257,7 @@ async function buildLabelStockPayload(body) {
       adhesiveVendorId: adhesiveVendorId2 || undefined,
       adhesiveVendorName: await resolveVendorName(adhesiveVendorId2),
       adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode2),
-      adhesiveViscosity: numOrUndef(body.adhesiveViscosity2),
+      adhesiveViscosity: trim(body.adhesiveViscosity2) || undefined,
       adhesiveCohesion: numOrUndef(body.adhesiveCohesion2),
       adhesiveShear: numOrUndef(body.adhesiveShear2),
       adhesiveDensity: numOrUndef(body.adhesiveDensity2),
@@ -270,7 +272,7 @@ async function buildLabelStockPayload(body) {
       adhesiveVendorId: adhesiveVendorId2 || undefined,
       adhesiveVendorName: await resolveVendorName(adhesiveVendorId2),
       adhesiveVendorSkuCode: trim(body.adhesiveVendorSkuCode2),
-      adhesiveViscosity: numOrUndef(body.adhesiveViscosity2),
+      adhesiveViscosity: trim(body.adhesiveViscosity2) || undefined,
       adhesiveCohesion: numOrUndef(body.adhesiveCohesion2),
       adhesiveShear: numOrUndef(body.adhesiveShear2),
       adhesiveDensity: numOrUndef(body.adhesiveDensity2),

@@ -11,9 +11,11 @@ const APPLY = process.argv.includes("--apply");
 const hashSignature = (value) => `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;
 const canonStr = (value) => String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
 const canonNum = (value) => (value === undefined || value === null || value === "" ? "" : String(Number(value)));
+// Must stay in step with buildAdhesiveSignature in routes/system/adhesiveMaster.js.
+// Viscosity + Tackiness are free text (ranges allowed) -- string-canonicalized.
 const signatureFor = (doc) => hashSignature([
   String(doc.vendorId || ""), canonStr(doc.type), canonStr(doc.make), canonStr(doc.vendorSkuCode),
-  canonNum(doc.viscosity), canonNum(doc.cohesion), canonNum(doc.shear), canonNum(doc.density),
+  canonStr(doc.viscosity), canonStr(doc.tackiness), canonNum(doc.cohesion), canonNum(doc.shear), canonNum(doc.density),
 ].join("||"));
 
 await connectDB();

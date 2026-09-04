@@ -284,10 +284,55 @@ nav h1 {
 
 .main-content::-webkit-scrollbar {
   width: 4px;
+  /* Without this the HORIZONTAL bar keeps the browser default (~15px, grey)
+     while the vertical one is styled -- the two never matched on any page wide
+     enough to scroll sideways. Same 4px as the vertical bar. */
+  height: 4px;
+}
+.main-content::-webkit-scrollbar-track {
+  background: transparent;
 }
 .main-content::-webkit-scrollbar-thumb {
   background-color: rgba(26, 26, 46, 0.75);
   border-radius: 6px;
+}
+.main-content::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(26, 26, 46, 0.9);
+}
+/* Firefox, which ignores every ::-webkit- rule above. Mirrors the table
+   scrollbar's own Firefox block in tableDisp.css. */
+.main-content {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(26, 26, 46, 0.75) transparent;
+}
+
+/* The hand-rolled tables (.ap-table-wrap) scroll inside their own card rather
+   than through Tabulator, so tableDisp.css's ".tabulator .tabulator-tableholder"
+   scrollbar never reached them and they fell back to the browser default.
+   Same tokens as that rule so a Tabulator table and an .ap-table look alike.
+   Lives here, not in tableDisp.css, because two of the six pages that use this
+   wrapper (itemView, salesOrderForm) don't load that stylesheet. */
+.ap-table-wrap::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.ap-table-wrap::-webkit-scrollbar-track {
+  background: #f0f2f5;
+}
+.ap-table-wrap::-webkit-scrollbar-thumb {
+  background: #044a78;
+  border-radius: 6px;
+}
+.ap-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: #044a78;
+}
+.ap-table-wrap::-webkit-scrollbar-corner {
+  background: #f0f2f5;
+}
+/* Firefox */
+.ap-table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: #044a78 #f0f2f5;
 }
 
 form {

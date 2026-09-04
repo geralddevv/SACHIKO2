@@ -38,8 +38,11 @@ const adhesiveStockSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Mirrors Adhesive Master's -- free text so a vendor's range spec
+    // ("3000-5000") carries through unchanged.
     viscosity: {
-      type: Number,
+      type: String,
+      trim: true,
     },
     cohesion: {
       type: Number,

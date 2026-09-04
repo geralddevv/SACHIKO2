@@ -45,15 +45,21 @@
       background: none;
       border: none;
       color: #fff;
-      font-size: 20px;
+      font-size: 26px;
       cursor: pointer;
       line-height: 1;
-      padding: 0 2px;
-      opacity: 0.8;
-      transition: opacity 0.15s;
+      width: 38px;
+      height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      opacity: 0.85;
+      transition: opacity 0.15s, background 0.15s;
     }
     .dialog-close-btn:hover {
       opacity: 1;
+      background: rgba(255, 255, 255, 0.18);
     }
     .dialog-body {
       padding: 24px;
@@ -620,11 +626,8 @@
     closeModal("viewDialog");
   }
 
-  ["addDialog", "editDialog", "viewDialog", "deleteDialog"].forEach(id => {
-    document.getElementById(id).addEventListener("click", function (e) {
-      if (e.target === this) closeModal(id);
-    });
-  });
+  // A click on the backdrop deliberately does NOT close these dialogs -- only
+  // Cancel / × / Esc do, so a stray click outside can't discard a part-filled form.
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;

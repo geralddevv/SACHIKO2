@@ -41,7 +41,13 @@ function canonStr(value) {
 }
 
 function canonNum(value) {
-  return value === undefined || value === null || value === "" ? "" : String(Number(value));
+  if (value === undefined || value === null || value === "") return "";
+  const n = Number(value);
+  // Adhesive viscosity is now free text and often a range ("3000-5000"), which
+  // isn't a number -- fall back to the string canonical form so it still signs
+  // distinctly. Plain numeric specs are unaffected (String(Number(x)) is
+  // unchanged), so existing signatures stay stable.
+  return Number.isFinite(n) ? String(n) : canonStr(value);
 }
 
 const FS_SIG_FIELDS = ["facestockFamily", "facestockType", "facestockMake", "facestockVendorId", "facestockVendorSkuCode", "facestockSize"];

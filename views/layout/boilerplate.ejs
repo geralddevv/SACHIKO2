@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="/bootstrap/css/bootstrap.min.css" />
     <link rel="stylesheet" href="/css/choices.min.css" />
     <!-- <link rel="stylesheet" href="/css/ratecalculator.css" /> -->
-    <link rel="stylesheet" href="/css/common.css?v=6" />
+    <link rel="stylesheet" href="/css/common.css?v=8" />
     <% if (CSS) { %>
     <link rel="stylesheet" href="/css/<%= CSS %>" />
     <% } %>
@@ -893,6 +893,26 @@
         <% } %>
 
         <% if (isAdmin || isHod) { %>
+        <!-- Deckle: the sorting board and the resulting laminate queue. Its
+             own group, ahead of Production. -->
+        <div class="nav-opt-wrap">
+          <div title="Deckle" class="deckle-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
+            <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
+            <p class="nav-items-para">Deckle</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          <div class="nav-labels-opt">
+            <a href="/sachiko/labels/production/deckle-set" title="Deckle Sorting" class="<%= title === 'Deckle Sorting' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+              <i class="fa-solid fa-ruler-combined" style="color: #ffffff"></i>
+              <p class="nav-items-para">Deckle Sorting</p>
+            </a>
+            <a href="/sachiko/labels/production/deckle-queue" title="Deckle Queue" class="<%= title === 'Deckle Queue' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+              <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
+              <p class="nav-items-para">Deckle Queue</p>
+            </a>
+          </div>
+        </div>
+
         <div class="nav-opt-wrap">
           <div title="Production" class="production-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
             <i class="fa-solid fa-industry" style="color: #ffffff"></i>
@@ -909,14 +929,6 @@
               <i class="fa-solid fa-industry" style="color: #ffffff"></i>
               <p class="nav-items-para">Prod Binding</p>
             </a>
-            <a href="/sachiko/labels/production/deckle-set" title="Deckle Sorting" class="<%= title === 'Deckle Sorting' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
-              <i class="fa-solid fa-ruler-combined" style="color: #ffffff"></i>
-              <p class="nav-items-para">Deckle Sorting</p>
-            </a>
-            <a href="/sachiko/labels/production/deckle-queue" title="Deckle Queue" class="<%= title === 'Deckle Queue' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
-              <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
-              <p class="nav-items-para">Deckle Queue</p>
-            </a>
             <a href="/sachiko/machine/queue" title="Machine Queues" class="<%= title === 'Machine Queues' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
               <p class="nav-items-para">Machine Queues</p>
@@ -925,23 +937,33 @@
               <i class="fa-solid fa-gears" style="color: #ffffff"></i>
               <p class="nav-items-para">WIP</p>
             </a>
-            <a href="/sachiko/machine/jobcard/view" title="Production Records" class="<%= title === 'Production Records' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/sachiko/machine/jobcard/view" title="Production Records" class="<%= title === 'Production Records' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Production Records</p>
             </a>
-            <!-- The step after lamination: Deckles cut into finished rolls
-                 (routes/system/slitting.js). -->
-            <a href="/sachiko/slitting/queue" title="Slitting Queue" class="<%= (title === 'Slitting Queue' || title === 'Slitting Allocation' || title === 'Slitting Job Card') ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <!-- Sachiko's pre-existing manual Job Card (/sachiko/jobcard/view) is
+                 hidden from nav and disabled at the route -- superseded by the
+                 machine-queue-driven "Production Records" above. -->
+          </div>
+        </div>
+
+        <!-- Slitting: the step after lamination -- Deckles cut into finished
+             rolls (routes/system/slitting.js). Its own group. -->
+        <div class="nav-opt-wrap">
+          <div title="Slitting" class="slitting-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
+            <i class="fa-solid fa-scissors" style="color: #ffffff"></i>
+            <p class="nav-items-para">Slitting</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          <div class="nav-labels-opt">
+            <a href="/sachiko/slitting/queue" title="Slitting Queue" class="<%= (title === 'Slitting Queue' || title === 'Slitting Allocation' || title === 'Slitting Job Card') ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-scissors" style="color: #ffffff"></i>
-              <p class="nav-items-para">Slitting</p>
+              <p class="nav-items-para">Slitting Queue</p>
             </a>
             <a href="/sachiko/slitting/jobcard/view" title="Slitting Records" class="<%= title === 'Slitting Records' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clipboard-check" style="color: #ffffff"></i>
               <p class="nav-items-para">Slitting Records</p>
             </a>
-            <!-- Sachiko's pre-existing manual Job Card (/sachiko/jobcard/view) is
-                 hidden from nav and disabled at the route -- superseded by the
-                 machine-queue-driven "Production Records" above. -->
           </div>
         </div>
         <% } %>

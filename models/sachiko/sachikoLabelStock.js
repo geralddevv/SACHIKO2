@@ -83,7 +83,7 @@ const sachikoLabelStockSchema = new mongoose.Schema(
       // saved before these fields existed -- reelMatchesLayer() treats a
       // blank recipe field as "no constraint", so an old row just stays as
       // ambiguous as before until it's re-saved with values picked.
-      adhesiveViscosity: { type: Number },
+      adhesiveViscosity: { type: String, trim: true },
       adhesiveCohesion: { type: Number },
       adhesiveShear: { type: Number },
       adhesiveDensity: { type: Number },
@@ -132,7 +132,7 @@ const sachikoLabelStockSchema = new mongoose.Schema(
       adhesiveVendorId: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor" },
       adhesiveVendorName: { type: String, trim: true },
       adhesiveVendorSkuCode: { type: String, trim: true },
-      adhesiveViscosity: { type: Number },
+      adhesiveViscosity: { type: String, trim: true },
       adhesiveCohesion: { type: Number },
       adhesiveShear: { type: Number },
       adhesiveDensity: { type: Number },

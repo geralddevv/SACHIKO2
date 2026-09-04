@@ -47,7 +47,9 @@ async function buildHeaderPayload(body) {
     vendorId: vendorId || undefined,
     make: String(body.make || "").trim(),
     vendorSkuCode: String(body.vendorSkuCode || "").trim(),
-    viscosity: numOrUndef(body.viscosity),
+    // Free text (mirrors Adhesive Master) -- ranges like "3000-5000" are kept
+    // as typed, not coerced to a number.
+    viscosity: (String(body.viscosity ?? "").trim() || undefined),
     cohesion: numOrUndef(body.cohesion),
     shear: numOrUndef(body.shear),
     density: numOrUndef(body.density),
@@ -454,7 +456,7 @@ router.get("/filter-specs", async (req, res) => {
     if (vendorId) filter.vendorId = vendorId;
     if (make) filter.make = make;
     if (vendorSkuCode) filter.vendorSkuCode = vendorSkuCode;
-    if (viscosity) filter.viscosity = Number(viscosity);
+    if (viscosity) filter.viscosity = viscosity; // free text (may be a range)
     if (cohesion) filter.cohesion = Number(cohesion);
     if (shear) filter.shear = Number(shear);
     if (density) filter.density = Number(density);

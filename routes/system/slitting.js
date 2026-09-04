@@ -27,11 +27,13 @@ const router = express.Router();
 //
 // Split in two, the same way Assign Production and the Machine Job Card are:
 //
-//   PLANNER  /slitting/allocate/:pendingId
-//     Picks the machine, operator and helper, the Deckles to cut, and per
-//     Deckle its web width, the metres to run off it, the length per finished
-//     roll and the A..G knife layout. Writes an "allocated" SlittingJobCard.
-//     Nothing moves in stock.
+//   PLANNER  /slitting/allocate/:pendingId?deckle=<stockId>
+//     Deckle-scoped -- opened from the Slitting Queue for ONE Deckle. Picks
+//     the machine, operator and helper, and that Deckle's web width, the
+//     metres to run off it, the length per finished roll and the A..G knife
+//     layout. Writes one "allocated" SlittingJobCard bound to that Deckle,
+//     which puts it on the chosen machine's queue. Nothing moves in stock.
+//     Each of the order's Deckles is allocated on its own visit here.
 //
 //   OPERATOR /slitting/jobcard/:cardId
 //     Reached off their machine queue. Per Deckle: scan the reel to confirm
@@ -49,7 +51,6 @@ const requireSlittingView = requireRole(["proprietor", "admin", "hod", "sales", 
 // Knife positions across one Deckle web -- exactly the columns on the paper
 // card.
 export const CUT_SLOTS = ["A", "B", "C", "D", "E", "F", "G"];
-const MAX_ROWS_PER_CARD = 40;
 
 // Machine.machineType is free text (see models/system/machine.js), so slitters
 // are matched on the stem rather than an exact string -- "SLITTING",
@@ -64,6 +65,56 @@ const numOrNull = (value) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 };
+
+// ---- Deckle curing -------------------------------------------------------->
+// After lamination the adhesive has to cure before the web can be slit --
+// CURING_HOURS from the moment the Deckle (MaterialStock reel) was created.
+// A build whose every adhesive layer is hot melt sets on contact and is
+// exempt. The PLANNER's allocation is deliberately NOT gated on this (a job
+// can be planned while the reel cures); the OPERATOR's run IS -- Start and
+// Stop on the slitting job card refuse an un-cured Deckle, and the machine /
+// operator queues flag it.
+const CURING_HOURS = 6;
+const HOT_MELT_RE = /HOT\s*-?\s*MELT/i;
+
+// Exempt only when there is at least one adhesive layer and EVERY layer
+// present is hot melt -- a waterbase + hotmelt double build still cures.
+function adhesiveExemptFromCuring(material) {
+  const types = [material?.adhesive?.adhesiveType, material?.adhesive2?.adhesiveType]
+    .map((t) => trim(t))
+    .filter(Boolean);
+  return types.length > 0 && types.every((t) => HOT_MELT_RE.test(t));
+}
+
+// { hotMelt, curedAt: Date|null, cured: bool } for one Deckle reel. A reel
+// with no createdAt (pre-timestamps legacy stock) is treated as cured.
+function deckleCuring(reel, at = Date.now()) {
+  const hotMelt = adhesiveExemptFromCuring(reel?.material);
+  const createdAt = reel?.createdAt ? new Date(reel.createdAt) : null;
+  const curedAt = hotMelt || !createdAt
+    ? null
+    : new Date(createdAt.getTime() + CURING_HOURS * 3600 * 1000);
+  const cured = !curedAt || at >= curedAt.getTime();
+  return { hotMelt, curedAt, cured };
+}
+
+// Short "ready at 14:30 (about 2 h 10 min from now)" tail for messages/labels.
+function curingWhenLabel(curedAt, at = Date.now()) {
+  if (!curedAt) return "";
+  const d = new Date(curedAt);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const sameDay = d.toDateString() === new Date(at).toDateString();
+  return sameDay ? `${hh}:${mm}` : `${hh}:${mm}, ${d.toLocaleDateString("en-IN")}`;
+}
+
+function curingBlockedMessage(rollId, curedAt) {
+  const mins = Math.max(0, Math.round((new Date(curedAt).getTime() - Date.now()) / 60000));
+  const left = mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`;
+  return `Deckle ${rollId} is still curing (${CURING_HOURS} h after lamination) — ready at `
+    + `${curingWhenLabel(curedAt)}, about ${left} from now. Only fully hot-melt Deckles skip curing.`;
+}
+// <----------------------------------Deckle curing --------------------------
 
 // Same `SP | <CODE> | 000001` scheme as the machine job card's own ids.
 async function generateSlittingId() {
@@ -121,7 +172,7 @@ async function deckleOptionsFor(pending) {
   if (familyIds.length) or.push({ material: { $in: familyIds } });
 
   const reels = await MaterialStock.find({ $or: or, reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
-    .populate({ path: "material", select: "productCode skuCode" })
+    .populate({ path: "material", select: "productCode skuCode adhesive adhesive2" })
     .sort({ createdAt: 1 })
     .lean();
 
@@ -135,20 +186,31 @@ async function deckleOptionsFor(pending) {
   };
 
   const allottedSet = new Set(allotted.map(String));
-  return (codeRe ? reels.filter(inFamily) : reels).map((r) => ({
-    _id: String(r._id),
-    rollId: r.rollId,
-    reelMtrs: round2(Number(r.reelMtrs) || 0),
-    // The Deckle web's own width as recorded when it was laminated; falls
-    // back to the order's paper size for reels made before it was stored.
-    size: r.size || pending.paperSize || "",
-    location: r.location || "",
-    lotNo: r.lotNo || "",
-    productCode: r.material?.productCode || r.material?.skuCode || "",
-    // Whether this reel belongs to the order or was pulled off general stock
-    // -- the picker groups on it.
-    ownOrder: String(r.producedFor || "") === String(pending._id) || allottedSet.has(String(r._id)),
-  }));
+  return (codeRe ? reels.filter(inFamily) : reels).map((r) => {
+    const cure = deckleCuring(r);
+    return {
+      _id: String(r._id),
+      rollId: r.rollId,
+      reelMtrs: round2(Number(r.reelMtrs) || 0),
+      // The Deckle web's own width as recorded when it was laminated; falls
+      // back to the order's paper size for reels made before it was stored.
+      size: r.size || pending.paperSize || "",
+      location: r.location || "",
+      lotNo: r.lotNo || "",
+      productCode: r.material?.productCode || r.material?.skuCode || "",
+      // Whether this reel belongs to the order or was pulled off general stock
+      // -- the picker groups on it.
+      ownOrder: String(r.producedFor || "") === String(pending._id) || allottedSet.has(String(r._id)),
+      // Advisory only on allocation -- the plan can be made now, but the
+      // operator can't run it until this clears.
+      curing: {
+        hotMelt: cure.hotMelt,
+        cured: cure.cured,
+        curedAt: cure.curedAt ? cure.curedAt.toISOString() : null,
+        curedAtLabel: cure.curedAt ? curingWhenLabel(cure.curedAt) : "",
+      },
+    };
+  });
 }
 
 // Every open slitting job on a machine / for an operator, in the shape the
@@ -159,9 +221,39 @@ export async function buildSlittingQueueRows(match) {
     .sort({ createdAt: 1 })
     .lean();
 
+  // Curing state of every Deckle still to run on these cards -- the operator
+  // can't work a card until its pending Deckles have cured.
+  const pendingDeckleIds = [
+    ...new Set(
+      cards.flatMap((c) =>
+        (c.slittingLog || [])
+          .filter((r) => r.status !== "done")
+          .map((r) => String(r.deckleStockId || ""))
+          .filter(Boolean),
+      ),
+    ),
+  ];
+  const cureReels = pendingDeckleIds.length
+    ? await MaterialStock.find({ _id: { $in: pendingDeckleIds } })
+        .select("createdAt rollId")
+        .populate({ path: "material", select: "adhesive adhesive2" })
+        .lean()
+    : [];
+  const cureByReel = new Map(cureReels.map((r) => [String(r._id), deckleCuring(r)]));
+
   return cards.map((c) => {
     const rows = Array.isArray(c.slittingLog) ? c.slittingLog : [];
     const done = rows.filter((r) => r.status === "done").length;
+
+    const uncured = rows
+      .filter((r) => r.status !== "done")
+      .map((r) => cureByReel.get(String(r.deckleStockId)))
+      .filter((info) => info && !info.cured && info.curedAt);
+    const curingUntil = uncured.reduce(
+      (max, info) => Math.max(max, new Date(info.curedAt).getTime()),
+      0,
+    );
+
     return {
       _id: String(c._id),
       slittingJobCardId: c.slittingJobCardId,
@@ -181,100 +273,119 @@ export async function buildSlittingQueueRows(match) {
       producedRolls: rows
         .filter((r) => r.status === "done")
         .reduce((n, r) => n + (Array.isArray(r.cuts) ? r.cuts.length : 0), 0),
+      // A Deckle still to run has not finished curing -- the card can be
+      // opened but not run yet.
+      curing: uncured.length > 0,
+      curingUntilLabel: curingUntil ? curingWhenLabel(curingUntil) : "",
     };
   });
 }
 
-// ---- Slitting Queue: orders carrying Deckle stock still to be cut ----------
+// ---- Slitting Queue: every Deckle web still carrying metres ----------------
+// One row per Deckle (the laminated web made upstream), not per order. The
+// planner picks a Deckle here and "Allocate" opens the Slitting Job Card for
+// that Deckle's order with the Deckle pre-filled as the first row.
 router.get("/slitting/queue", requireSlittingView, async (req, res) => {
-  const orders = await PendingProduction.find({ deckleBatchId: null })
-    .populate({ path: "itemId", select: "productCode skuCode" })
-    .populate({ path: "userId", select: "clientName userName" })
-    .sort({ assignedAt: -1, createdAt: -1 })
-    .lean();
-
-  // One pass over every Deckle with metres left, then matched back to the
-  // orders above -- an order qualifies through any of the three links
-  // deckleOptionsFor uses, so resolving it per order would be N queries.
-  const reels = await MaterialStock.find({ reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
-    .select("material producedFor reelMtrs rollId")
-    .lean();
-
-  const byProducedFor = new Map();
-  const byMaterial = new Map();
-  for (const r of reels) {
-    if (r.producedFor) {
-      const k = String(r.producedFor);
-      byProducedFor.set(k, (byProducedFor.get(k) || []).concat(r));
-    }
-    const m = String(r.material);
-    byMaterial.set(m, (byMaterial.get(m) || []).concat(r));
-  }
-
-  // Product Code -> the Label Stock material ids in its variant family,
-  // resolved once per distinct code across the whole queue rather than per order.
-  const codes = [...new Set(orders.map((o) => trim(o.itemId?.productCode || o.itemId?.skuCode)).filter(Boolean))];
-  const familyByCode = new Map();
-  for (const code of codes) familyByCode.set(code, (await labelStockFamilyIds(code)).map(String));
-
-  const [slitCounts, openCards] = await Promise.all([
-    FinishedStock.aggregate([{ $group: { _id: "$pendingProductionId", rolls: { $sum: 1 } } }]),
-    SlittingJobCard.find({ status: "allocated" })
-      .select("pendingProductionId slittingJobCardId machineName operatorName slittingLog")
+  const [orders, reels] = await Promise.all([
+    PendingProduction.find({ deckleBatchId: null })
+      .populate({ path: "itemId", select: "productCode skuCode" })
+      .populate({ path: "userId", select: "clientName userName" })
+      .sort({ assignedAt: -1, createdAt: -1 })
+      .lean(),
+    MaterialStock.find({ reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
+      .populate({ path: "material", select: "productCode skuCode adhesive adhesive2" })
+      .select("material producedFor reelMtrs rollId size location lotNo createdAt")
+      .sort({ location: 1, rollId: 1 })
       .lean(),
   ]);
-  const slitByOrder = new Map(slitCounts.map((s) => [String(s._id), s.rolls]));
-  const openByOrder = new Map(openCards.map((c) => [String(c.pendingProductionId), c]));
 
-  const rows = [];
-  for (const o of orders) {
-    const code = trim(o.itemId?.productCode || o.itemId?.skuCode);
-    const familyIds = new Set(familyByCode.get(code) || []);
-    const allotted = new Set((o.allottedRollIds || []).map(String));
-    const seen = new Set();
-    const mine = [];
-    const add = (r) => {
-      const k = String(r._id);
-      if (seen.has(k)) return;
-      // Only Deckles whose Label Stock is in this order's Product Code family
-      // (base code + its brand variants) -- a mislinked reel of a genuinely
-      // different code cannot be slit here.
-      if (familyIds.size && !familyIds.has(String(r.material))) return;
-      seen.add(k);
-      mine.push(r);
-    };
-    (byProducedFor.get(String(o._id)) || []).forEach(add);
-    reels.filter((r) => allotted.has(String(r._id))).forEach(add);
-    (familyByCode.get(code) || []).forEach((mid) => (byMaterial.get(mid) || []).forEach(add));
-    if (!mine.length) continue;
+  const pendingById = new Map(orders.map((o) => [String(o._id), o]));
 
-    const open = openByOrder.get(String(o._id));
-    const openRows = Array.isArray(open?.slittingLog) ? open.slittingLog : [];
-    rows.push({
-      _id: String(o._id),
-      lotNo: o.lotNo || "—",
-      clientOrderNo: o.poNumber || "—",
-      productCode: code || "—",
-      clientName: o.userId?.clientName || o.userId?.userName || "—",
-      paperSize: o.paperSize || "—",
-      noOfRolls: o.noOfRolls ?? null,
-      rollsSlit: slitByOrder.get(String(o._id)) || 0,
-      deckleCount: mine.length,
-      deckleMtrs: round2(mine.reduce((n, r) => n + (Number(r.reelMtrs) || 0), 0)),
-      // An order already carrying an allocated card links straight to it
-      // rather than offering to allocate a second one.
-      openCard: open
+  // Product Code -> the Label Stock material ids in its variant family.
+  const codes = [...new Set(orders.map((o) => trim(o.itemId?.productCode || o.itemId?.skuCode)).filter(Boolean))];
+  const familyByCode = new Map();
+  for (const code of codes) familyByCode.set(code, new Set((await labelStockFamilyIds(code)).map(String)));
+
+  // Which order a loose Deckle (no producedFor) belongs to, matched on its
+  // Label Stock being ticked onto the order or sharing its Product Code family.
+  const orderForReel = (reel) => {
+    const direct = reel.producedFor && pendingById.get(String(reel.producedFor));
+    if (direct) return { order: direct, by: "producedFor" };
+    const rid = String(reel._id);
+    const allottedTo = orders.find((o) => (o.allottedRollIds || []).some((x) => String(x) === rid));
+    if (allottedTo) return { order: allottedTo, by: "allotted" };
+    const mid = reel.material?._id ? String(reel.material._id) : String(reel.material || "");
+    const byCode = orders.find((o) => {
+      const code = trim(o.itemId?.productCode || o.itemId?.skuCode);
+      return familyByCode.get(code)?.has(mid);
+    });
+    if (byCode) return { order: byCode, by: "productCode" };
+    return { order: null, by: null };
+  };
+
+  // Every Deckle already named on a Slitting Job Card row, so the queue can
+  // flag it -- "on <card>", or slit if that row / card is finished.
+  const cards = await SlittingJobCard.find({ status: { $in: ["allocated", "completed"] } })
+    .select("slittingJobCardId machineName operatorName status slittingLog")
+    .lean();
+  const deckleCard = new Map();
+  for (const c of cards) {
+    for (const lr of c.slittingLog || []) {
+      const k = String(lr.deckleStockId || "");
+      if (!k) continue;
+      const run = lr.status === "done" || c.status === "completed";
+      const prev = deckleCard.get(k);
+      // An open (unrun) allocation wins over a finished one.
+      if (!prev || (prev.run && !run)) {
+        deckleCard.set(k, {
+          slittingJobCardId: c.slittingJobCardId,
+          machineName: c.machineName || "—",
+          operatorName: c.operatorName || "—",
+          run,
+        });
+      }
+    }
+  }
+
+  const rows = reels.map((reel) => {
+    const { order, by } = orderForReel(reel);
+    const card = deckleCard.get(String(reel._id)) || null;
+    const cure = deckleCuring(reel);
+    return {
+      deckleStockId: String(reel._id),
+      rollId: reel.rollId || "—",
+      productCode: trim(reel.material?.productCode || reel.material?.skuCode) || "—",
+      mtrs: round2(Number(reel.reelMtrs) || 0),
+      size: reel.size || "—",
+      location: reel.location || "—",
+      // Advisory: a Deckle can be allocated while it cures, but not run.
+      curing: !cure.cured,
+      curingUntilLabel: cure.curedAt && !cure.cured ? curingWhenLabel(cure.curedAt) : "",
+      hotMelt: cure.hotMelt,
+      order: order
         ? {
-            _id: String(open._id),
-            slittingJobCardId: open.slittingJobCardId,
-            machineName: open.machineName || "—",
-            operatorName: open.operatorName || "—",
-            deckleLeft: openRows.filter((r) => r.status !== "done").length,
-            deckleCount: openRows.length,
+            _id: String(order._id),
+            lotNo: order.lotNo || "—",
+            clientOrderNo: order.poNumber || "—",
+            clientName: order.userId?.clientName || order.userId?.userName || "—",
           }
         : null,
-    });
-  }
+      matchedBy: by,
+      card,
+      // Deckle-scoped: the allocation page cuts exactly the Deckle named here,
+      // never "the order". Every Deckle row therefore carries its own stock id.
+      allocateHref: order
+        ? `/sachiko/slitting/allocate/${order._id}?deckle=${reel._id}`
+        : null,
+    };
+  });
+
+  // Free Deckles first, then the ones already on a card; each group by location.
+  rows.sort((a, b) => {
+    const ax = a.card ? 1 : 0;
+    const bx = b.card ? 1 : 0;
+    return ax - bx || a.location.localeCompare(b.location) || a.rollId.localeCompare(b.rollId);
+  });
 
   res.render("inventory/masters/slittingQueue.ejs", {
     title: "Slitting Queue",
@@ -285,7 +396,13 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
   });
 });
 
-// ---- Allocation: the planner fixes the whole job up front ------------------
+// ---- Allocation: the planner fixes ONE Deckle's job up front --------------
+// Deckle-scoped. The Slitting Queue links here with ?deckle=<stockId>; this
+// page allocates that one Deckle -- machine, operator, helper, its web width,
+// the metres to run off it, the length per finished roll and the A..G knife
+// layout. One Deckle == one SlittingJobCard, and once saved that card sits on
+// the chosen machine's queue. The order's OTHER Deckles have their own cards
+// and are only shown here for context, never edited from this page.
 router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, res) => {
   const { pendingId } = req.params;
   if (!mongoose.isValidObjectId(pendingId)) {
@@ -304,29 +421,30 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     return res.redirect("/sachiko/slitting/queue");
   }
 
+  const deckleStockId = trim(req.query.deckle);
+  if (!mongoose.isValidObjectId(deckleStockId)) {
+    req.flash("notification", "Open Allocate from the Slitting Queue so it knows which Deckle to cut.");
+    return res.redirect("/sachiko/slitting/queue");
+  }
+
   const deckles = await deckleOptionsFor(pending);
   if (!deckles.length) {
     req.flash("notification", "No Deckle stock left to slit for this order.");
     return res.redirect("/sachiko/slitting/queue");
   }
+  const target = deckles.find((d) => d._id === String(deckleStockId));
+  if (!target) {
+    req.flash("notification", "That Deckle is no longer available to slit for this order.");
+    return res.redirect("/sachiko/slitting/queue");
+  }
 
-  // One allocation emits one card PER DECKLE, so re-opening this page loads
-  // every card still open against the order and shows them as its rows. The
-  // planner edits the set; cards whose Deckle has already been run are
-  // finished work and are listed separately, not edited.
-  const openCards = await SlittingJobCard.find({
+  // The one open slitting card for THIS Deckle on this order, if it already
+  // has one -- that (and only that) is what this page edits and prefills from.
+  const scopedCard = await SlittingJobCard.findOne({
     pendingProductionId: pending._id,
     status: "allocated",
-  })
-    .sort({ createdAt: 1 })
-    .lean();
-  const ranCards = await SlittingJobCard.find({
-    pendingProductionId: pending._id,
-    status: "completed",
-  })
-    .select("slittingJobCardId slittingLog")
-    .sort({ createdAt: 1 })
-    .lean();
+    "slittingLog.0.deckleStockId": new mongoose.Types.ObjectId(String(deckleStockId)),
+  }).lean();
 
   const [machines, operators, helpers] = await Promise.all([
     Machine.find({ machineType: SLITTING_MACHINE_RE }).populate("location").sort({ machineName: 1 }).lean(),
@@ -349,16 +467,34 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     helperName: pending.helperId?.empName || "",
   };
 
-  const previewCardId = openCards.length
-    ? (openCards.length === 1 ? openCards[0].slittingJobCardId : `${openCards.length} Cards Allocated`)
-    : await previewSlittingId();
+  // Machine / operator / helper are prefilled ONLY when THIS Deckle already
+  // has a card (re-opening its allocation). A fresh Deckle starts blank --
+  // another Deckle's crew is never carried over.
+  const crew = {
+    machineId: String(scopedCard?.machineId || ""),
+    operatorId: String(scopedCard?.operatorId || ""),
+    helperId: String(scopedCard?.helperId || ""),
+  };
+
+  const previewCardId = scopedCard ? scopedCard.slittingJobCardId : await previewSlittingId();
+  const scopedRow = (scopedCard?.slittingLog || [])[0] || null;
 
   res.render("inventory/masters/slittingAllocation.ejs", {
     title: "Slitting Allocation",
     CSS: false,
     JS: false,
     order,
-    deckles,
+    // The one Deckle this page allocates. Fixed -- the field is not a picker.
+    targetDeckle: {
+      _id: target._id,
+      rollId: target.rollId,
+      reelMtrs: target.reelMtrs,
+      size: target.size,
+      location: target.location,
+      productCode: target.productCode,
+      ownOrder: target.ownOrder,
+      curing: target.curing,
+    },
     cutSlots: CUT_SLOTS,
     previewCardId,
     machines: machines.map((m) => ({
@@ -369,35 +505,22 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     })),
     operators: operators.map((e) => ({ _id: String(e._id), empName: e.empName })),
     helpers: helpers.map((e) => ({ _id: String(e._id), empName: e.empName })),
-    // The machine/operator/helper of the open cards -- they were allocated
-    // together, so the first one speaks for all of them.
-    existing: openCards.length
+    crew,
+    // This Deckle's existing allocation, if any -- seeds the row and flips the
+    // button to "Update".
+    existing: scopedCard
       ? {
-          machineId: String(openCards[0].machineId || ""),
-          operatorId: String(openCards[0].operatorId || ""),
-          helperId: String(openCards[0].helperId || ""),
-          slittingJobCardId: openCards[0].slittingJobCardId || "",
-          rows: openCards.map((c) => {
-            const r = (c.slittingLog || [])[0] || {};
-            return {
-              cardId: String(c._id),
-              slittingJobCardId: c.slittingJobCardId,
-              deckleStockId: String(r.deckleStockId || ""),
-              deckleId: r.deckleId || "",
-              width: r.width ?? null,
-              plannedMeter: r.plannedMeter ?? null,
-              plannedRunningMeter: r.plannedRunningMeter ?? null,
-              cuts: Object.fromEntries((r.cuts || []).map((c2) => [c2.slot, c2.width])),
-            };
-          }),
+          slittingJobCardId: scopedCard.slittingJobCardId || "",
+          row: {
+            deckleStockId: String(scopedRow?.deckleStockId || ""),
+            deckleId: scopedRow?.deckleId || "",
+            width: scopedRow?.width ?? null,
+            plannedMeter: scopedRow?.plannedMeter ?? null,
+            plannedRunningMeter: scopedRow?.plannedRunningMeter ?? null,
+            cuts: Object.fromEntries((scopedRow?.cuts || []).map((c) => [c.slot, c.width])),
+          },
         }
       : null,
-    // Cards already run against this order. Their stock has moved, so they
-    // are reported, never edited.
-    ranCards: ranCards.map((c) => ({
-      slittingJobCardId: c.slittingJobCardId,
-      deckleId: ((c.slittingLog || [])[0] || {}).deckleId || "",
-    })),
     submissionToken: randomUUID(),
     notification: req.flash("notification"),
   });
@@ -435,10 +558,18 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
       if (!helper) return fail("Select a valid helper.");
     }
 
+    // Deckle-scoped: this page allocates exactly the one Deckle it was opened
+    // for (?deckle=<stockId>, echoed back in the body). One row, that Deckle.
+    const scopeDeckleId = trim(b.deckleStockId);
+    if (!mongoose.isValidObjectId(scopeDeckleId)) {
+      return fail("Reload the allocation from the Slitting Queue.");
+    }
+
     const rawRows = Array.isArray(b.rows) ? b.rows : [];
-    if (!rawRows.length) return fail("Allocate at least one Deckle.");
-    if (rawRows.length > MAX_ROWS_PER_CARD) {
-      return fail(`A slitting card can hold at most ${MAX_ROWS_PER_CARD} Deckles.`);
+    if (!rawRows.length) return fail("Fill in the Deckle's layout.");
+    if (rawRows.length > 1) return fail("This page allocates one Deckle at a time.");
+    if (String(rawRows[0]?.deckleStockId || "") !== scopeDeckleId) {
+      return fail("Reload the allocation from the Slitting Queue.");
     }
 
     // Normalize + validate the whole plan before writing any of it.
@@ -537,36 +668,21 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
       }
     }
 
-    // The order's own requirement -- the finished width it asked for, the
-    // length per roll and the count. Read off the order, never from the form:
-    // the allocation page shows it read-only because it is the sales order's,
-    // not the planner's, to change. paperSize is free text ("660", '26"'), so
-    // the leading number is what goes into the numeric field.
-    const requirements = [
-      {
-        width: numOrNull(/-?\d+(\.\d+)?/.exec(String(pending.paperSize ?? ""))?.[0]),
-        runningMeter: pending.deckleRunningMeters ?? pending.runningMeters ?? null,
-        qty: pending.noOfRolls ?? null,
-      },
-    ].filter((q) => q.width !== null || q.runningMeter !== null || q.qty !== null);
-
-    // Every Deckle is its own job: this allocation emits ONE card per row.
-    // Re-allocating an order therefore reconciles a SET of cards -- an open
-    // card whose Deckle is still listed is updated in place (so it keeps its
-    // id, and the operator's queue entry doesn't churn), one whose Deckle was
-    // dropped is deleted, and a newly listed Deckle gets a fresh card.
-    const openCards = await SlittingJobCard.find({
+    // One Deckle == one card. Re-opening this page for a Deckle that already
+    // has an open card updates THAT card in place (so it keeps its id and its
+    // spot on the operator's queue); a Deckle with no open card yet gets a
+    // fresh one. The order's other Deckles' cards are never read or touched
+    // here -- they belong to their own Allocate pages.
+    const scopedCard = await SlittingJobCard.findOne({
       pendingProductionId: pending._id,
       status: "allocated",
+      "slittingLog.0.deckleStockId": new mongoose.Types.ObjectId(scopeDeckleId),
     });
-    const openByDeckle = new Map(
-      openCards.map((c) => [String((c.slittingLog || [])[0]?.deckleStockId || ""), c]),
-    );
 
     // A card already run is finished work -- its stock has moved and it is
     // never touched here. Its Deckle may legitimately be allocated again
     // (a part-drawn reel still carrying metres), which is why this only
-    // guards the open set above, not the completed one.
+    // looks at the open card above, not the completed ones.
     const shared = {
       status: "allocated",
       pendingProductionId: pending._id,
@@ -581,71 +697,56 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
       productCode: pending.itemId?.productCode || pending.itemId?.skuCode || "",
       lotNo: pending.lotNo || "",
       location: locations[0],
-      requirements,
       allocatedBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
     };
 
     const submissionToken = trim(b.submissionToken) || undefined;
     if (submissionToken && (await SlittingJobCard.exists({ submissionToken }))) {
-      // A resubmit of the same loaded page. The first one landed; don't
-      // duplicate the whole set.
+      // A resubmit of the same loaded page -- the first one already created
+      // this Deckle's card. Don't make a second.
       return res.json({ success: true, redirect: "/sachiko/slitting/queue" });
     }
 
-    const created = [];
-    const updated = [];
-    const keptDeckles = new Set();
+    const r = rows[0];
+    const deckleId = reelById.get(scopeDeckleId)?.rollId || "";
+    let card;
+    let wasUpdate = false;
 
-    for (const r of rows) {
-      const key = String(r.deckleStockId);
-      keptDeckles.add(key);
-      const deckleId = reelById.get(key)?.rollId || "";
-      const existing = openByDeckle.get(key);
-
-      if (existing) {
-        Object.assign(existing, shared);
-        const prior = (existing.slittingLog || [])[0];
-        existing.slittingLog = [{
-          ...r,
-          deckleId,
-          // The token is what makes this card's Stop idempotent, so it is
-          // kept across a re-allocation rather than re-minted -- a Stop
-          // already in flight must still match.
-          rowToken: prior?.rowToken || randomUUID(),
-          status: "pending",
-        }];
-        await existing.save();
-        updated.push(existing);
-        continue;
-      }
-
-      created.push(await SlittingJobCard.create({
+    if (scopedCard) {
+      wasUpdate = true;
+      Object.assign(scopedCard, shared);
+      const prior = (scopedCard.slittingLog || [])[0];
+      scopedCard.slittingLog = [{
+        ...r,
+        deckleId,
+        // The token is what makes this card's Stop idempotent, so it is kept
+        // across a re-allocation rather than re-minted -- a Stop already in
+        // flight must still match.
+        rowToken: prior?.rowToken || randomUUID(),
+        status: "pending",
+      }];
+      await scopedCard.save();
+      card = scopedCard;
+    } else {
+      card = await SlittingJobCard.create({
         ...shared,
         slittingJobCardId: await generateSlittingId(),
-        // The idempotency token belongs to the submission, so only the first
-        // card of a batch carries it -- it is uniquely indexed.
-        submissionToken: created.length === 0 && !updated.length ? submissionToken : undefined,
+        submissionToken,
         date: b.date ? new Date(b.date) : new Date(),
         slittingLog: [{ ...r, deckleId, rowToken: randomUUID(), status: "pending" }],
-      }));
+      });
     }
 
-    // Deckles the planner removed from the allocation: their cards were never
-    // run, so they are withdrawn entirely rather than left on the queue.
-    const dropped = openCards.filter((c) => !keptDeckles.has(String((c.slittingLog || [])[0]?.deckleStockId || "")));
-    if (dropped.length) {
-      await SlittingJobCard.deleteMany({ _id: { $in: dropped.map((c) => c._id) } });
-    }
-
-    const total = created.length + updated.length;
     const summary =
-      `${total} slitting job${total === 1 ? "" : "s"} (one per Deckle) on ${machine.machineName} for ${operator.empName}`
-      + (dropped.length ? `; ${dropped.length} withdrawn` : "");
+      `slitting job ${card.slittingJobCardId} for Deckle ${deckleId || scopeDeckleId} `
+      + `on ${machine.machineName} for ${operator.empName}`;
 
     res.locals.auditDescription =
-      `Allocated slitting for order ${pending.lotNo || pending._id}: ${summary}`
-      + (created.length ? ` — new: ${created.map((c) => c.slittingJobCardId).join(", ")}` : "");
-    req.flash("notification", `Allocated ${summary}.`);
+      `${wasUpdate ? "Updated" : "Allocated"} ${summary} (order ${pending.lotNo || pending._id}).`;
+    req.flash(
+      "notification",
+      `${wasUpdate ? "Updated" : "Allocated"} ${card.slittingJobCardId} — Deckle ${deckleId || scopeDeckleId} is on ${machine.machineName}'s queue.`,
+    );
     res.json({ success: true, redirect: "/sachiko/slitting/queue" });
   } catch (err) {
     console.error("SLITTING ALLOCATION ERROR:", err);
@@ -695,7 +796,10 @@ router.get("/slitting/jobcard/:cardId", requireSlittingFloor, async (req, res) =
   // plan.
   const stockIds = (card.slittingLog || []).map((r) => r.deckleStockId).filter(Boolean);
   const reels = stockIds.length
-    ? await MaterialStock.find({ _id: { $in: stockIds } }).select("rollId reelMtrs location").lean()
+    ? await MaterialStock.find({ _id: { $in: stockIds } })
+        .select("rollId reelMtrs location createdAt")
+        .populate({ path: "material", select: "adhesive adhesive2" })
+        .lean()
     : [];
   const reelById = new Map(reels.map((r) => [String(r._id), r]));
 
@@ -715,9 +819,9 @@ router.get("/slitting/jobcard/:cardId", requireSlittingFloor, async (req, res) =
       productCode: card.productCode || "",
       lotNo: card.lotNo || "",
       location: card.location || "",
-      requirements: card.requirements || [],
       rows: (card.slittingLog || []).map((r, i) => {
         const reel = reelById.get(String(r.deckleStockId));
+        const cure = deckleCuring(reel);
         return {
           index: i,
           deckleId: r.deckleId || reel?.rollId || "",
@@ -734,6 +838,14 @@ router.get("/slitting/jobcard/:cardId", requireSlittingFloor, async (req, res) =
           jointMtr: r.jointMtr ?? null,
           // What is actually left on the reel right now.
           reelMtrs: reel ? round2(Number(reel.reelMtrs) || 0) : null,
+          // Curing gate -- Start / Stop stay locked until the adhesive has
+          // cured (6 h after lamination), unless it's a hot-melt build.
+          curing: {
+            cured: cure.cured,
+            hotMelt: cure.hotMelt,
+            curedAt: cure.curedAt ? cure.curedAt.toISOString() : null,
+            curedAtLabel: cure.curedAt ? curingWhenLabel(cure.curedAt) : "",
+          },
         };
       }),
     },
@@ -756,6 +868,21 @@ router.post("/slitting/jobcard/row/start", requireAuth, requireSlittingFloor, up
     const row = card.slittingLog?.[i];
     if (!row) return res.status(400).json({ success: false, message: "That Deckle is not on this card." });
     if (row.status === "done") return res.status(400).json({ success: false, message: "That Deckle has already been run." });
+
+    // Curing gate: the adhesive must have cured before the web is run.
+    const cureReel = await MaterialStock.findById(row.deckleStockId)
+      .select("rollId createdAt")
+      .populate({ path: "material", select: "adhesive adhesive2" })
+      .lean();
+    if (cureReel) {
+      const cure = deckleCuring(cureReel);
+      if (!cure.cured) {
+        return res.status(400).json({
+          success: false,
+          message: curingBlockedMessage(cureReel.rollId || row.deckleId || "this reel", cure.curedAt),
+        });
+      }
+    }
 
     row.startTime = trim(startTime) || row.startTime;
     await card.save();
@@ -807,9 +934,16 @@ router.post("/slitting/jobcard/row/produce", requireAuth, requireSlittingFloor, 
     if (!cuts.length) return fail("This Deckle has no roll widths allocated.");
 
     const reel = await MaterialStock.findById(row.deckleStockId)
-      .populate({ path: "material", select: "productCode skuCode" })
+      .populate({ path: "material", select: "productCode skuCode adhesive adhesive2" })
       .lean();
     if (!reel) return fail("That Deckle no longer exists.");
+
+    // Curing gate: refuse to slit a web whose adhesive has not cured (6 h
+    // after lamination), unless it's a hot-melt build.
+    const cure = deckleCuring(reel);
+    if (!cure.cured) {
+      return fail(curingBlockedMessage(reel.rollId || row.deckleId || "this reel", cure.curedAt));
+    }
 
     const available = round2(Number(reel.reelMtrs) || 0);
     if (meter > available) {
