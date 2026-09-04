@@ -14,7 +14,6 @@ import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter } from "../../utils/limiters.js";
 import { generateFinishedRollId } from "../../utils/finishedRollId.js";
-import { normalizeLocationName } from "../../utils/locations.js";
 
 const router = express.Router();
 
@@ -81,15 +80,25 @@ async function previewSlittingId() {
   return `SP | SJC | ${String(Number(counter?.seq || 0) + 1).padStart(6, "0")}`;
 }
 
-// The Label Stock rows carrying EXACTLY this Product Code. A variant code
-// ("C011-A") is a different product here -- the suffix only records which
-// brand of raw material a Deckle was laminated from, so a client defect can
-// be traced back to it. Variants are never interchangeable with the base
-// code (or each other) on the floor.
-async function labelStockIdsForCode(productCode) {
+const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Matches a Product Code and its raw-material-brand variants ("C003WB",
+// "C003WB-A", "C003WB-E", ...). The suffix only records which brand of raw
+// material a Deckle was laminated from -- for tracing a client defect back --
+// so for slitting a "C003WB" order every "C003WB-*" Deckle is the same
+// product. A genuinely different code ("C014AC") is not.
+function productCodeFamilyRe(productCode) {
   const code = trim(productCode);
-  if (!code) return [];
-  const rows = await SachikoLabelStock.find({ productCode: code }).select("_id").lean();
+  if (!code) return null;
+  const base = /^(.*[^-])-[A-Z]+$/.exec(code)?.[1] || code;
+  return new RegExp(`^${escapeRegExp(base)}(-[A-Z]+)?$`);
+}
+
+// Every Label Stock row in one Product Code's variant family.
+async function labelStockFamilyIds(productCode) {
+  const re = productCodeFamilyRe(productCode);
+  if (!re) return [];
+  const rows = await SachikoLabelStock.find({ productCode: re }).select("_id").lean();
   return rows.map((r) => r._id);
 }
 
@@ -98,34 +107,35 @@ async function labelStockIdsForCode(productCode) {
 //   2. ticked onto it on Assign Production (allottedRollIds, older flow),
 //   3. any other Deckle of the same Product Code still in stock -- the floor
 //      routinely finishes an order off a web laminated on an earlier run.
-// Every offered reel must carry the order's EXACT Product Code: the
-// producedFor / allotted links are trusted to point at the right stock, but
-// a mislink -- or a variant reel -- must never surface here, because the
-// finished rolls are named after the Deckle's code. Only reels that still
-// carry metres are offered.
+// Every offered reel must carry the order's Product Code (its brand variants
+// included): the producedFor / allotted links are NOT trusted blindly -- a
+// mislinked reel of a different code must never surface here, because the
+// finished rolls are named after the Deckle. Only reels that still carry
+// metres are offered.
 async function deckleOptionsFor(pending) {
   const orderCode = trim(pending?.itemId?.productCode || pending?.itemId?.skuCode);
-  const materialIds = await labelStockIdsForCode(orderCode);
+  const familyIds = await labelStockFamilyIds(orderCode);
   const or = [{ producedFor: pending._id }];
   const allotted = Array.isArray(pending.allottedRollIds) ? pending.allottedRollIds : [];
   if (allotted.length) or.push({ _id: { $in: allotted } });
-  if (materialIds.length) or.push({ material: { $in: materialIds } });
+  if (familyIds.length) or.push({ material: { $in: familyIds } });
 
   const reels = await MaterialStock.find({ $or: or, reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
     .populate({ path: "material", select: "productCode skuCode" })
     .sort({ createdAt: 1 })
     .lean();
 
-  const materialSet = new Set(materialIds.map(String));
-  const sameCode = (r) => {
+  const familySet = new Set(familyIds.map(String));
+  const codeRe = productCodeFamilyRe(orderCode);
+  const inFamily = (r) => {
     const mid = r.material?._id ? String(r.material._id) : String(r.material || "");
-    if (materialSet.has(mid)) return true;
+    if (familySet.has(mid)) return true;
     const code = trim(r.material?.productCode || r.material?.skuCode);
-    return orderCode && code ? code === orderCode : false;
+    return codeRe && code ? codeRe.test(code) : false;
   };
 
   const allottedSet = new Set(allotted.map(String));
-  return (orderCode ? reels.filter(sameCode) : reels).map((r) => ({
+  return (codeRe ? reels.filter(inFamily) : reels).map((r) => ({
     _id: String(r._id),
     rollId: r.rollId,
     reelMtrs: round2(Number(r.reelMtrs) || 0),
@@ -201,11 +211,11 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     byMaterial.set(m, (byMaterial.get(m) || []).concat(r));
   }
 
-  // Product Code -> the Label Stock material ids carrying exactly it, resolved
-  // once per distinct code across the whole queue rather than once per order.
+  // Product Code -> the Label Stock material ids in its variant family,
+  // resolved once per distinct code across the whole queue rather than per order.
   const codes = [...new Set(orders.map((o) => trim(o.itemId?.productCode || o.itemId?.skuCode)).filter(Boolean))];
-  const materialIdsByCode = new Map();
-  for (const code of codes) materialIdsByCode.set(code, (await labelStockIdsForCode(code)).map(String));
+  const familyByCode = new Map();
+  for (const code of codes) familyByCode.set(code, (await labelStockFamilyIds(code)).map(String));
 
   const [slitCounts, openCards] = await Promise.all([
     FinishedStock.aggregate([{ $group: { _id: "$pendingProductionId", rolls: { $sum: 1 } } }]),
@@ -219,22 +229,23 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
   const rows = [];
   for (const o of orders) {
     const code = trim(o.itemId?.productCode || o.itemId?.skuCode);
-    const codeIds = new Set(materialIdsByCode.get(code) || []);
+    const familyIds = new Set(familyByCode.get(code) || []);
     const allotted = new Set((o.allottedRollIds || []).map(String));
     const seen = new Set();
     const mine = [];
     const add = (r) => {
       const k = String(r._id);
       if (seen.has(k)) return;
-      // Only Deckles whose Label Stock carries exactly this order's Product
-      // Code -- a variant reel is a different product and cannot be slit here.
-      if (codeIds.size && !codeIds.has(String(r.material))) return;
+      // Only Deckles whose Label Stock is in this order's Product Code family
+      // (base code + its brand variants) -- a mislinked reel of a genuinely
+      // different code cannot be slit here.
+      if (familyIds.size && !familyIds.has(String(r.material))) return;
       seen.add(k);
       mine.push(r);
     };
     (byProducedFor.get(String(o._id)) || []).forEach(add);
     reels.filter((r) => allotted.has(String(r._id))).forEach(add);
-    (materialIdsByCode.get(code) || []).forEach((mid) => (byMaterial.get(mid) || []).forEach(add));
+    (familyByCode.get(code) || []).forEach((mid) => (byMaterial.get(mid) || []).forEach(add));
     if (!mine.length) continue;
 
     const open = openByOrder.get(String(o._id));
@@ -319,7 +330,7 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
 
   const [machines, operators, helpers] = await Promise.all([
     Machine.find({ machineType: SLITTING_MACHINE_RE }).populate("location").sort({ machineName: 1 }).lean(),
-    Employee.find({ isActive: true, empProfile: "OPERATOR" }, "empName empProfileCode empLoc").sort({ empName: 1 }).lean(),
+    Employee.find({ isActive: true, empProfile: "OPERATOR" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
     Employee.find({ isActive: true, empProfile: "HELPER" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
   ]);
 
@@ -355,15 +366,8 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
       machineName: m.machineName,
       machineType: m.machineType || "",
       locationName: m.location?.locationName || "",
-      // Key an operator is matched on: their profile code is set to the
-      // machine name they run, and they only run it at their own location.
-      operatorKey: `${String(m.machineName).trim().toUpperCase()}||${normalizeLocationName(m.location?.locationName)}`,
     })),
-    operators: operators.map((e) => ({
-      _id: String(e._id),
-      empName: e.empName,
-      operatorKey: `${String(e.empProfileCode || "").trim().toUpperCase()}||${normalizeLocationName(e.empLoc)}`,
-    })),
+    operators: operators.map((e) => ({ _id: String(e._id), empName: e.empName })),
     helpers: helpers.map((e) => ({ _id: String(e._id), empName: e.empName })),
     // The machine/operator/helper of the open cards -- they were allocated
     // together, so the first one speaks for all of them.
@@ -515,14 +519,15 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
       return fail(`Deckle "${codeless.rollId}" has no Product Code on its Label Stock — it cannot be slit.`);
     }
 
-    // A Deckle can only be slit against an order carrying its EXACT Product
-    // Code -- the finished rolls take the Deckle's code, and a variant reel
-    // ("C011-A") is a different product, not a substitute for "C011".
+    // A Deckle can only be slit against an order of its own Product Code
+    // (brand variants included) -- the finished rolls take the Deckle's code,
+    // so a reel of a genuinely different code would mis-name the whole run.
     const orderCode = trim(pending.itemId?.productCode || pending.itemId?.skuCode);
-    if (orderCode) {
+    const codeRe = productCodeFamilyRe(orderCode);
+    if (codeRe) {
       const foreign = reels.find((r) => {
         const code = trim(r.material?.productCode || r.material?.skuCode);
-        return code && code !== orderCode;
+        return code && !codeRe.test(code);
       });
       if (foreign) {
         const code = trim(foreign.material?.productCode || foreign.material?.skuCode);
