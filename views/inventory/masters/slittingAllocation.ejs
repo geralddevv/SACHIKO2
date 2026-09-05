@@ -1,18 +1,20 @@
 <% layout('/layout/boilerplate') %>
 
 <%
-  // Stage 1 of slitting, Deckle-scoped: the planner fixes ONE Deckle's job
-  // before it reaches the floor -- machine, operator, helper, and that
-  // Deckle's web width, the metres to run off it, the length per finished
-  // roll and the A..G knife layout. Nothing moves in stock here; once saved
-  // the card sits on the machine's queue and the operator works it on
-  // /sachiko/slitting/jobcard/:cardId. The order's other Deckles are
-  // allocated one at a time from the Slitting Queue.
+  // Stage 1 of slitting, Deckle-scoped: the planner fixes one or more
+  // Deckles' jobs before they reach the floor -- one shared machine,
+  // operator and helper, and per Deckle its own web width, the metres to
+  // run off it, the length per finished roll and the A..G knife layout (one
+  // row per Deckle below). Nothing moves in stock here; once saved each card
+  // sits on the machine's queue and the operator works it on
+  // /sachiko/slitting/jobcard/:cardId.
   const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
   const dash = (v) => (isEmpty(v) ? "—" : v);
   // Log columns that are not roll-width slots: #, Deckle, Meter, Width,
   // R. Meter, Rolls, Trim. The web strip spans the lot.
   const fixedCols = 7;
+  const existingTargets = targetDeckles.filter((d) => d.existing);
+  const curingTargets = targetDeckles.filter((d) => d.curing && d.curing.cured === false);
 %>
 
 <style>
@@ -122,14 +124,14 @@
      is capped and centred, caption included. */
   .sl-web-caption {
     display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
-    max-width: 560px; margin: 0 auto 5px;
+    max-width: 960px; margin: 0 auto 5px;
     font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7c8ba1;
   }
   .sl-web-flag { text-transform: none; letter-spacing: 0; font-size: 11px; font-weight: 700; }
   .sl-web-flag.sl-bad { color: #b91c1c; }
   .sl-web-flag.sl-ok { color: #15803d; }
   .sl-web {
-    display: flex; align-items: stretch; height: 32px; width: 100%; max-width: 560px; margin: 0 auto;
+    display: flex; align-items: stretch; height: 32px; width: 100%; max-width: 960px; margin: 0 auto;
     border: 1px solid #cbd5e1; border-radius: 7px; overflow: hidden; background: #fff;
   }
   .sl-web.is-over { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15); }
@@ -175,7 +177,10 @@
 
     <div class="span-full form-heading" style="display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
       <h1>Slitting Allocation</h1>
-      <span class="sl-head-chip"><%= typeof previewCardId !== "undefined" && previewCardId ? previewCardId : "" %></span>
+      <span class="sl-head-chip">
+        <% if (targetDeckles.length === 1) { %><%= typeof previewCardId !== "undefined" && previewCardId ? previewCardId : "" %>
+        <% } else { %><%= targetDeckles.length %> Deckles<% } %>
+      </span>
     </div>
 
     <!-- The order facts are read-only (they belong to the sales order); the
@@ -192,8 +197,16 @@
             <span class="sl-job-value"><%= dash(order.lotNo) %></span>
           </div>
           <div class="sl-job-cell">
-            <span class="sl-job-label">Deckle</span>
-            <span class="sl-job-value"><%= dash(targetDeckle.rollId) %></span>
+            <span class="sl-job-label">Size</span>
+            <%# Every targetDeckle here was clubbed on the Slitting Queue by
+                Product Code + Size (see "Other Deckles in this batch" note
+                below), so they all share one size -- same as it reads
+                targetDeckles[0].size there. %>
+            <span class="sl-job-value"><%= dash(targetDeckles[0].size) %>mm</span>
+          </div>
+          <div class="sl-job-cell">
+            <span class="sl-job-label"><%= targetDeckles.length === 1 ? "Deckle" : "Deckles" %></span>
+            <span class="sl-job-value"><%= targetDeckles.length === 1 ? dash(targetDeckles[0].rollId) : `${targetDeckles.length} selected` %></span>
           </div>
           <div class="sl-job-cell is-input">
             <span class="sl-job-label">Machine <span class="req">*</span></span>
@@ -231,21 +244,19 @@
       </div>
     </div>
 
-    <!-- This Deckle's siblings from the Slitting Queue's clubbed group (same
-         Product Code + Size) -- context only, never edited from this page. -->
-    <% if (typeof groupDeckles !== "undefined" && groupDeckles.length > 1) { %>
+    <!-- Deckles clubbed with these on the Slitting Queue (same Product Code
+         + Size) but left unticked there -- context only, never edited from
+         this page. -->
+    <% if (typeof groupDeckles !== "undefined" && groupDeckles.length > 0) { %>
     <div class="span-full" style="border:none !important;">
       <div class="sl-panel" style="padding: 12px 14px;">
         <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7c8ba1;margin-bottom:8px;">
-          Other Deckles in this batch — <%= dash(order.productCode) %> · <%= dash(targetDeckle.size) %>mm
+          Other Deckles in this batch — <%= dash(order.productCode) %> · <%= dash(targetDeckles[0].size) %>mm
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           <% groupDeckles.forEach((d) => { %>
-            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 12px;border:1.5px solid <%= d.isTarget ? '#044a78' : '#e6eaf2' %>;border-radius:8px;<% if (d.isTarget) { %>background:#eef5ff;<% } %>font-size:12.5px;">
-              <span style="font-weight:700;color:#1f2a44;min-width:150px;">
-                <%= dash(d.rollId) %>
-                <% if (d.isTarget) { %><span style="color:#044a78;font-weight:800;">(this one)</span><% } %>
-              </span>
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 12px;border:1.5px solid #e6eaf2;border-radius:8px;font-size:12.5px;">
+              <span style="font-weight:700;color:#1f2a44;min-width:150px;"><%= dash(d.rollId) %></span>
               <span style="color:#64748b;"><%= dash(d.reelMtrs) %> mtrs &middot; <%= dash(d.location) %> &middot; lot <%= dash(d.lotNo) %></span>
               <% if (d.curing && d.curing.cured === false) { %>
                 <span style="margin-left:auto;font-size:10.5px;font-weight:700;color:#b45309;background:#fffaf0;border:1px solid #fde8c9;border-radius:999px;padding:2px 9px;">curing</span>
@@ -267,32 +278,41 @@
     </div>
     <% } %>
 
-    <% const cure = targetDeckle.curing || {}; %>
-    <% if (cure.cured === false) { %>
+    <% if (curingTargets.length) { %>
     <div class="span-full" style="border:none !important;">
       <div class="sl-warn-note">
         <i class="fa-solid fa-hourglass-half"></i>
-        Deckle <strong><%= dash(targetDeckle.rollId) %></strong> is still curing<%= cure.curedAtLabel ? ` — the adhesive is ready at ${cure.curedAtLabel}` : "" %> (6&nbsp;h after lamination).
-        You can allocate it now, but the operator won't be able to run it on the machine until curing is over.
+        <% if (curingTargets.length === 1) { %>
+          Deckle <strong><%= dash(curingTargets[0].rollId) %></strong> is still curing<%= curingTargets[0].curing.curedAtLabel ? ` — the adhesive is ready at ${curingTargets[0].curing.curedAtLabel}` : "" %> (6&nbsp;h after lamination).
+          You can allocate it now, but the operator won't be able to run it on the machine until curing is over.
+        <% } else { %>
+          <%= curingTargets.length %> of these Deckles are still curing (6&nbsp;h after lamination): <strong><%= curingTargets.map((d) => d.rollId).join(", ") %></strong>.
+          You can allocate them now, but the operator won't be able to run them on the machine until curing is over.
+        <% } %>
       </div>
     </div>
     <% } %>
 
-    <% if (existing) { %>
+    <% if (existingTargets.length) { %>
     <div class="span-full" style="border:none !important;">
       <div class="sl-warn-note">
         <i class="fa-solid fa-pen"></i>
-        Deckle <strong><%= dash(targetDeckle.rollId) %></strong> is already allocated on
-        <strong><%= existing.slittingJobCardId %></strong>. Saving updates that same card in place —
-        it keeps its place on the machine queue.
+        <% if (existingTargets.length === 1) { %>
+          Deckle <strong><%= dash(existingTargets[0].rollId) %></strong> is already allocated on
+          <strong><%= existingTargets[0].existing.slittingJobCardId %></strong>. Saving updates that same card in place —
+          it keeps its place on the machine queue.
+        <% } else { %>
+          <%= existingTargets.length %> of these Deckles are already allocated: <strong><%= existingTargets.map((d) => `${d.rollId} on ${d.existing.slittingJobCardId}`).join(", ") %></strong>.
+          Saving updates those cards in place — they keep their place on the machine queue.
+        <% } %>
       </div>
     </div>
     <% } %>
 
-    <!-- This one Deckle's layout. A..G are the widths of the rolls taken
-         across its web -- one finished roll per width. -->
+    <!-- One row per Deckle. A..G are the widths of the rolls taken across
+         each Deckle's own web -- one finished roll per width. -->
     <div class="span-full form-subheading sl-sec-head">
-      <h1>Deckle Layout</h1>
+      <h1><%= targetDeckles.length === 1 ? "Deckle Layout" : "Deckle Layouts" %></h1>
     </div>
     <div class="span-full" style="border:none !important;">
       <div class="sl-panel sl-scroll">
@@ -326,29 +346,27 @@
     <div class="span-full btn-grp" style="margin-top: 10px;">
       <div class="sl-save-wrap">
         <button type="submit" id="slSubmitBtn" class="submit-btn">
-          <%= existing ? "Update Allocation" : "Allocate to Machine" %>
+          <%= existingTargets.length && existingTargets.length === targetDeckles.length ? "Update Allocation" : "Allocate to Machine" %>
         </button>
       </div>
     </div>
   </form>
 </div>
 
-<script id="sl-target-data" type="application/json"><%- safeJson(targetDeckle) %></script>
+<script id="sl-target-data" type="application/json"><%- safeJson(targetDeckles) %></script>
 <script id="sl-order-data" type="application/json"><%- safeJson(order) %></script>
 <script id="sl-slots-data" type="application/json"><%- safeJson(cutSlots) %></script>
 <script id="sl-config-data" type="application/json"><%- safeJson({ pendingId: order._id, submissionToken, fixedCols }) %></script>
-<script id="sl-existing-data" type="application/json"><%- safeJson({ row: existing ? existing.row : null }) %></script>
 
 <script>
-  const TARGET = JSON.parse(document.getElementById("sl-target-data").textContent);
+  const TARGETS = JSON.parse(document.getElementById("sl-target-data").textContent);
   const ORDER = JSON.parse(document.getElementById("sl-order-data").textContent);
   const SLOTS = JSON.parse(document.getElementById("sl-slots-data").textContent);
   const CONFIG = JSON.parse(document.getElementById("sl-config-data").textContent);
-  const EXISTING = JSON.parse(document.getElementById("sl-existing-data").textContent);
   const SUB_COLSPAN = CONFIG.fixedCols + SLOTS.length;
 
-  // The page is scoped to exactly one Deckle -- no picker, no other rows.
-  const deckleById = new Map([[TARGET._id, TARGET]]);
+  // The page is scoped to exactly these Deckles -- no picker, no other rows.
+  const deckleById = new Map(TARGETS.map((t) => [t._id, t]));
   const num = (v) => { const s = String(v ?? "").trim(); if (s === "") return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
   const round2 = (n) => Math.round(n * 100) / 100;
   const fmt = (n) => (Number.isFinite(n) ? round2(n).toLocaleString("en-IN") : "—");
@@ -365,17 +383,16 @@
   }
 
   // ---- The Deckle's layout row --------------------------------------------
-  // One row, one Deckle -- the one this page was opened for (TARGET). The
-  // Deckle ID cell is a fixed label plus a hidden input carrying its stock id
-  // back to the server, never a picker.
-  function addLogRow(preset) {
+  // One row per Deckle in TARGETS. The Deckle ID cell is a fixed label plus
+  // a hidden input carrying its stock id back to the server, never a picker.
+  function addLogRow(target, preset) {
     const tr = document.createElement("tr");
     tr.className = "sl-log-row";
     tr.innerHTML = `
       <td class="sl-derived sl-log-no"></td>
       <td class="sl-deckle-cell">
-        <span class="sl-job-value" style="font-size:13px;">${esc(TARGET.rollId)}</span>
-        <input type="hidden" class="sl-deckle" value="${esc(TARGET._id)}" />
+        <span class="sl-job-value" style="font-size:13px;">${esc(target.rollId)}</span>
+        <input type="hidden" class="sl-deckle" value="${esc(target._id)}" />
         <span class="sl-note sl-deckle-note"></span>
       </td>
       <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-meter" placeholder="Mtrs" /></td>
@@ -391,7 +408,7 @@
     sub.className = "sl-log-sub";
     sub.innerHTML = `
       <td class="sl-sub-cell" colspan="${SUB_COLSPAN}">
-        <div class="sl-web-caption"><span>Web View</span><span class="sl-web-flag"></span></div>
+        <div class="sl-web-caption"><span class="sl-web-flag"></span></div>
         <div class="sl-web"></div>
       </td>`;
     tr.__sub = sub;
@@ -403,8 +420,8 @@
     const meterEl = tr.querySelector(".sl-meter");
     const widthEl = tr.querySelector(".sl-width");
     const rmEl = tr.querySelector(".sl-rm");
-    if (TARGET.reelMtrs != null) { meterEl.value = TARGET.reelMtrs; rmEl.value = TARGET.reelMtrs; }
-    const w0 = sizeToWidth(TARGET.size);
+    if (target.reelMtrs != null) { meterEl.value = target.reelMtrs; rmEl.value = target.reelMtrs; }
+    const w0 = sizeToWidth(target.size);
     if (w0 !== null) widthEl.value = w0;
 
     // R. Meter follows the metres taken off the Deckle until the planner types
@@ -612,7 +629,6 @@
           operatorId: document.getElementById("slOperator").value,
           helperId: document.getElementById("slHelper").value,
           clientOrderNo: ORDER.clientOrderNo,
-          deckleStockId: TARGET._id,
           rows,
         }),
       });
@@ -630,7 +646,7 @@
     recalc();
   });
 
-  // One row for this Deckle -- seeded from its existing allocation if it has
-  // one, otherwise blank (with the reel's own metres/width prefilled).
-  addLogRow(EXISTING.row || undefined);
+  // One row per Deckle -- each seeded from its own existing allocation if it
+  // has one, otherwise blank (with the reel's own metres/width prefilled).
+  TARGETS.forEach((t) => addLogRow(t, t.existing ? t.existing.row : undefined));
 </script>

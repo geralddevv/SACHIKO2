@@ -4,12 +4,13 @@
      Product Code + Size (interchangeable for slitting purposes) into one row
      with one "Slit" action. That opens a dialog where every Deckle in the
      group is ticked by default (untick the ones you don't want) -- Continue
-     carries the ticked ones to the Bulk Slitting Allocation page
-     (routes/system/slitting.js GET "/slitting/bulk-allocate"), where the
-     machine/operator/helper and the A..G knife layout are entered once and
-     applied to all of them. Same shell as the Slitting Logs list
-     (slittingJobCardView.ejs) and the same clubbed-group + dialog pattern as
-     Deckle Sorting (views/inventory/orders/deckleSet.ejs). -->
+     carries the ticked ones to the same Allocate page used for a single
+     Deckle (routes/system/slitting.js GET "/slitting/allocate/:pendingId",
+     one ?deckle= per ticked Deckle), which lists one row per Deckle with the
+     machine/operator/helper and the A..G knife layout entered once for all
+     of them. Same shell as the Slitting Logs list (slittingJobCardView.ejs)
+     and the same clubbed-group + dialog pattern as Deckle Sorting
+     (views/inventory/orders/deckleSet.ejs). -->
 <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
 
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
@@ -203,8 +204,8 @@
 
   /* ----- Choose Deckle dialog: pick which Deckles to allocate (all ticked
      by default) -- Machine, Operator, Helper and the A..G knife layout are
-     entered on the next page (routes/system/slitting.js GET
-     "/slitting/bulk-allocate"). ----- */
+     entered on the Allocate page it opens into (routes/system/slitting.js
+     GET "/slitting/allocate/:pendingId"). ----- */
   const chooseDeckleDialog = document.getElementById("chooseDeckleDialog");
   const sqDeckleList = document.getElementById("sq-deckle-list");
   const sqDeckleError = document.getElementById("sq-deckle-error");
@@ -267,10 +268,11 @@
     chooseDeckleDialog.setAttribute("aria-hidden", "false");
   };
 
-  // Picking Deckles is all this dialog does -- Machine, Operator, Helper and
-  // the knife layout are entered on the next page (routes/system/slitting.js
-  // GET "/slitting/bulk-allocate"), same as the single-Deckle flow keeps
-  // that off the queue page too.
+  // Picking Deckles is all this dialog does -- Continue opens the Allocate
+  // page (routes/system/slitting.js GET "/slitting/allocate/:pendingId")
+  // with one ?deckle= per ticked Deckle, where it lists one row per Deckle
+  // and Machine, Operator, Helper and the A..G knife layout are entered once
+  // for all of them.
   sqDialogForm.addEventListener("submit", (e) => {
     e.preventDefault();
     sqDeckleError.textContent = "";
@@ -280,13 +282,23 @@
       sqDeckleError.textContent = "Tick at least one Deckle to allocate.";
       return;
     }
-    const items = picked.map((d) => ({ deckleStockId: d._id, pendingId: d.order && d.order._id }));
-    if (items.some((it) => !it.pendingId)) {
+    if (picked.some((d) => !(d.order && d.order._id))) {
       sqDeckleError.textContent = "One of the ticked Deckles isn't linked to any pending order.";
       return;
     }
+    // The Allocate page is scoped to one order (:pendingId) -- ticked
+    // Deckles usually share one anyway (same clubbed group), but if not,
+    // ask the planner to split the pick rather than silently dropping some.
+    const pendingIds = [...new Set(picked.map((d) => d.order._id))];
+    if (pendingIds.length > 1) {
+      sqDeckleError.textContent =
+        `These Deckles belong to ${pendingIds.length} different orders — untick until only one order's Deckles are left.`;
+      return;
+    }
 
-    window.location.href = `/sachiko/slitting/bulk-allocate?items=${encodeURIComponent(JSON.stringify(items))}`;
+    const params = new URLSearchParams();
+    picked.forEach((d) => params.append("deckle", d._id));
+    window.location.href = `/sachiko/slitting/allocate/${pendingIds[0]}?${params.toString()}`;
   });
 
   const table = new Tabulator("#master-table", {

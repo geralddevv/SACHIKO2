@@ -27,13 +27,14 @@ const router = express.Router();
 //
 // Split in two, the same way Assign Production and the Machine Job Card are:
 //
-//   PLANNER  /slitting/allocate/:pendingId?deckle=<stockId>
-//     Deckle-scoped -- opened from the Slitting Queue for ONE Deckle. Picks
-//     the machine, operator and helper, and that Deckle's web width, the
-//     metres to run off it, the length per finished roll and the A..G knife
-//     layout. Writes one "allocated" SlittingJobCard bound to that Deckle,
-//     which puts it on the chosen machine's queue. Nothing moves in stock.
-//     Each of the order's Deckles is allocated on its own visit here.
+//   PLANNER  /slitting/allocate/:pendingId?deckle=<stockId>[&deckle=<stockId>...]
+//     Deckle-scoped -- opened from the Slitting Queue's "Choose Deckle"
+//     dialog for one or more Deckles (one row per Deckle). Picks the
+//     machine, operator and helper shared by all of them, and per Deckle its
+//     web width, the metres to run off it, the length per finished roll and
+//     the A..G knife layout. Writes one "allocated" SlittingJobCard per
+//     Deckle, which puts each on the chosen machine's queue. Nothing moves
+//     in stock.
 //
 //   OPERATOR /slitting/jobcard/:cardId
 //     Reached off their machine queue. Per Deckle: scan the reel to confirm
@@ -462,13 +463,15 @@ router.get("/slitting/wip", requireSlittingView, async (req, res) => {
   });
 });
 
-// ---- Allocation: the planner fixes ONE Deckle's job up front --------------
-// Deckle-scoped. The Slitting Queue links here with ?deckle=<stockId>; this
-// page allocates that one Deckle -- machine, operator, helper, its web width,
-// the metres to run off it, the length per finished roll and the A..G knife
-// layout. One Deckle == one SlittingJobCard, and once saved that card sits on
-// the chosen machine's queue. The order's OTHER Deckles have their own cards
-// and are only shown here for context, never edited from this page.
+// ---- Allocation: the planner fixes one or more Deckles' jobs up front ------
+// Deckle-scoped. The Slitting Queue's "Choose Deckle" dialog links here with
+// one ?deckle=<stockId> per ticked Deckle; this page allocates each of them
+// -- one shared machine, operator and helper, and per Deckle its own web
+// width, the metres to run off it, the length per finished roll and the A..G
+// knife layout. One Deckle == one SlittingJobCard, and once saved each card
+// sits on the chosen machine's queue. Any other Deckle clubbed with these on
+// the queue (same Product Code + Size) but left unticked is only shown here
+// for context, never edited from this page.
 router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, res) => {
   const { pendingId } = req.params;
   if (!mongoose.isValidObjectId(pendingId)) {
@@ -487,8 +490,17 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     return res.redirect("/sachiko/slitting/queue");
   }
 
-  const deckleStockId = trim(req.query.deckle);
-  if (!mongoose.isValidObjectId(deckleStockId)) {
+  // The Slitting Queue's "Choose Deckle" dialog ticks one or more Deckles --
+  // ?deckle= repeats once per Deckle; a single value still works the same,
+  // so re-opening one Deckle's own Allocate/Edit link is unchanged.
+  const deckleIds = [
+    ...new Set(
+      [].concat(req.query.deckle || [])
+        .map(trim)
+        .filter((id) => mongoose.isValidObjectId(id)),
+    ),
+  ];
+  if (!deckleIds.length) {
     req.flash("notification", "Open Allocate from Deckle Slitting so it knows which Deckle to cut.");
     return res.redirect("/sachiko/slitting/queue");
   }
@@ -498,19 +510,24 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     req.flash("notification", "No Deckle stock left to slit for this order.");
     return res.redirect("/sachiko/slitting/queue");
   }
-  const target = deckles.find((d) => d._id === String(deckleStockId));
-  if (!target) {
-    req.flash("notification", "That Deckle is no longer available to slit for this order.");
+  const deckleById = new Map(deckles.map((d) => [d._id, d]));
+  const targets = deckleIds.map((id) => deckleById.get(id)).filter(Boolean);
+  if (!targets.length) {
+    req.flash("notification", "Those Deckles are no longer available to slit for this order.");
     return res.redirect("/sachiko/slitting/queue");
   }
 
-  // The one open slitting card for THIS Deckle on this order, if it already
-  // has one -- that (and only that) is what this page edits and prefills from.
-  const scopedCard = await SlittingJobCard.findOne({
+  // Each target's own open slitting card, if it already has one -- that (and
+  // only that) is what this page edits and prefills its row from. One card
+  // per Deckle, so a card already run is never touched here.
+  const scopedCards = await SlittingJobCard.find({
     pendingProductionId: pending._id,
     status: "allocated",
-    "slittingLog.0.deckleStockId": new mongoose.Types.ObjectId(String(deckleStockId)),
+    "slittingLog.0.deckleStockId": { $in: targets.map((t) => new mongoose.Types.ObjectId(t._id)) },
   }).lean();
+  const scopedCardByDeckle = new Map(
+    scopedCards.map((c) => [String(c.slittingLog?.[0]?.deckleStockId || ""), c]),
+  );
 
   const [machines, operators, helpers] = await Promise.all([
     Machine.find({ machineType: SLITTING_MACHINE_RE }).populate("location").sort({ machineName: 1 }).lean(),
@@ -533,23 +550,58 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     helperName: pending.helperId?.empName || "",
   };
 
-  // Machine / operator / helper are prefilled ONLY when THIS Deckle already
-  // has a card (re-opening its allocation). A fresh Deckle starts blank --
-  // another Deckle's crew is never carried over.
+  // Machine / operator / helper are prefilled ONLY when this page allocates a
+  // single Deckle that already has a card (re-opening its allocation). A
+  // fresh Deckle, or more than one at once, starts blank -- another Deckle's
+  // crew is never carried over.
+  const soloCard = targets.length === 1 ? scopedCardByDeckle.get(targets[0]._id) : null;
   const crew = {
-    machineId: String(scopedCard?.machineId || ""),
-    operatorId: String(scopedCard?.operatorId || ""),
-    helperId: String(scopedCard?.helperId || ""),
+    machineId: String(soloCard?.machineId || ""),
+    operatorId: String(soloCard?.operatorId || ""),
+    helperId: String(soloCard?.helperId || ""),
   };
 
-  const previewCardId = scopedCard ? scopedCard.slittingJobCardId : await previewSlittingId();
-  const scopedRow = (scopedCard?.slittingLog || [])[0] || null;
+  const previewCardId = targets.length === 1
+    ? (soloCard ? soloCard.slittingJobCardId : await previewSlittingId())
+    : "";
 
-  // Every other Deckle clubbed with this one on the Slitting Queue (same
-  // Product Code + Size) -- context only, same as the Slitting Queue's
-  // "Choose Deckle" dialog this page was opened from.
+  const targetDeckles = targets.map((t) => {
+    const card = scopedCardByDeckle.get(t._id);
+    const row = card?.slittingLog?.[0] || null;
+    return {
+      _id: t._id,
+      rollId: t.rollId,
+      reelMtrs: t.reelMtrs,
+      size: t.size,
+      location: t.location,
+      productCode: t.productCode,
+      ownOrder: t.ownOrder,
+      curing: t.curing,
+      // This Deckle's existing allocation, if any -- seeds its row and flags
+      // it as an in-place update rather than a fresh card.
+      existing: card
+        ? {
+            slittingJobCardId: card.slittingJobCardId || "",
+            row: {
+              deckleStockId: String(row?.deckleStockId || ""),
+              deckleId: row?.deckleId || "",
+              width: row?.width ?? null,
+              plannedMeter: row?.plannedMeter ?? null,
+              plannedRunningMeter: row?.plannedRunningMeter ?? null,
+              cuts: Object.fromEntries((row?.cuts || []).map((c) => [c.slot, c.width])),
+            },
+          }
+        : null,
+    };
+  });
+
+  const targetIds = new Set(targets.map((t) => t._id));
+  // Every other Deckle clubbed with these on the Slitting Queue (same
+  // Product Code + Size) but NOT ticked in -- context only, same as the
+  // Slitting Queue's "Choose Deckle" dialog this page was opened from.
+  const groupSize = targets[0].size;
   const groupDeckles = deckles
-    .filter((d) => d.size === target.size)
+    .filter((d) => d.size === groupSize && !targetIds.has(d._id))
     .map((d) => ({
       _id: d._id,
       rollId: d.rollId,
@@ -557,7 +609,6 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
       location: d.location,
       lotNo: d.lotNo,
       curing: d.curing,
-      isTarget: d._id === target._id,
     }));
 
   res.render("inventory/masters/slittingAllocation.ejs", {
@@ -565,17 +616,9 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     CSS: false,
     JS: false,
     order,
-    // The one Deckle this page allocates. Fixed -- the field is not a picker.
-    targetDeckle: {
-      _id: target._id,
-      rollId: target.rollId,
-      reelMtrs: target.reelMtrs,
-      size: target.size,
-      location: target.location,
-      productCode: target.productCode,
-      ownOrder: target.ownOrder,
-      curing: target.curing,
-    },
+    // The Deckle(s) this page allocates -- one row per Deckle in the table
+    // below. Fixed -- not a picker.
+    targetDeckles,
     groupDeckles,
     cutSlots: CUT_SLOTS,
     previewCardId,
@@ -588,21 +631,6 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     operators: operators.map((e) => ({ _id: String(e._id), empName: e.empName })),
     helpers: helpers.map((e) => ({ _id: String(e._id), empName: e.empName })),
     crew,
-    // This Deckle's existing allocation, if any -- seeds the row and flips the
-    // button to "Update".
-    existing: scopedCard
-      ? {
-          slittingJobCardId: scopedCard.slittingJobCardId || "",
-          row: {
-            deckleStockId: String(scopedRow?.deckleStockId || ""),
-            deckleId: scopedRow?.deckleId || "",
-            width: scopedRow?.width ?? null,
-            plannedMeter: scopedRow?.plannedMeter ?? null,
-            plannedRunningMeter: scopedRow?.plannedRunningMeter ?? null,
-            cuts: Object.fromEntries((scopedRow?.cuts || []).map((c) => [c.slot, c.width])),
-          },
-        }
-      : null,
     submissionToken: randomUUID(),
     notification: req.flash("notification"),
   });
@@ -640,19 +668,8 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
       if (!helper) return fail("Select a valid helper.");
     }
 
-    // Deckle-scoped: this page allocates exactly the one Deckle it was opened
-    // for (?deckle=<stockId>, echoed back in the body). One row, that Deckle.
-    const scopeDeckleId = trim(b.deckleStockId);
-    if (!mongoose.isValidObjectId(scopeDeckleId)) {
-      return fail("Reload the allocation from Deckle Slitting.");
-    }
-
     const rawRows = Array.isArray(b.rows) ? b.rows : [];
     if (!rawRows.length) return fail("Fill in the Deckle's layout.");
-    if (rawRows.length > 1) return fail("This page allocates one Deckle at a time.");
-    if (String(rawRows[0]?.deckleStockId || "") !== scopeDeckleId) {
-      return fail("Reload the allocation from Deckle Slitting.");
-    }
 
     // Normalize + validate the whole plan before writing any of it.
     const rows = [];
@@ -712,15 +729,12 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
       }
     }
 
-    // Finished rolls are inwarded where their Deckle already sits; a card
-    // mixing locations would need two inward ledgers, so it is refused.
-    const locations = [...new Set(reels.map((r) => trim(r.location)).filter(Boolean))];
-    if (locations.length !== 1) {
-      return fail(
-        locations.length === 0
-          ? "The selected Deckle has no location on it."
-          : `The selected Deckles sit at different locations (${locations.join(", ")}) — allocate them on separate cards.`,
-      );
+    // Finished rolls are inwarded where their own Deckle already sits, and
+    // every Deckle here gets its own card (below) -- so unlike a single
+    // shared card, one row's location has no bearing on another's.
+    const locationless = reels.find((r) => !trim(r.location));
+    if (locationless) {
+      return fail(`Deckle "${locationless.rollId}" has no location on it.`);
     }
 
     // Every finished roll is named after the Product Code of the Deckle it
@@ -750,285 +764,30 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
       }
     }
 
-    // One Deckle == one card. Re-opening this page for a Deckle that already
-    // has an open card updates THAT card in place (so it keeps its id and its
-    // spot on the operator's queue); a Deckle with no open card yet gets a
-    // fresh one. The order's other Deckles' cards are never read or touched
-    // here -- they belong to their own Allocate pages.
-    const scopedCard = await SlittingJobCard.findOne({
-      pendingProductionId: pending._id,
-      status: "allocated",
-      "slittingLog.0.deckleStockId": new mongoose.Types.ObjectId(scopeDeckleId),
-    });
-
-    // A card already run is finished work -- its stock has moved and it is
-    // never touched here. Its Deckle may legitimately be allocated again
-    // (a part-drawn reel still carrying metres), which is why this only
-    // looks at the open card above, not the completed ones.
-    const shared = {
-      status: "allocated",
-      pendingProductionId: pending._id,
-      machineId: machine._id,
-      machineName: machine.machineName || "",
-      operatorId: operator._id,
-      operatorName: operator.empName || "",
-      helperId: helper?._id,
-      helperName: helper?.empName || "",
-      clientOrderNo: trim(b.clientOrderNo) || pending.poNumber || "",
-      clientName: pending.userId?.clientName || pending.userId?.userName || "",
-      productCode: pending.itemId?.productCode || pending.itemId?.skuCode || "",
-      lotNo: pending.lotNo || "",
-      location: locations[0],
-      allocatedBy: req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM",
-    };
-
-    const submissionToken = trim(b.submissionToken) || undefined;
-    if (submissionToken && (await SlittingJobCard.exists({ submissionToken }))) {
-      // A resubmit of the same loaded page -- the first one already created
-      // this Deckle's card. Don't make a second.
-      return res.json({ success: true, redirect: "/sachiko/slitting/queue" });
-    }
-
-    const r = rows[0];
-    const deckleId = reelById.get(scopeDeckleId)?.rollId || "";
-    let card;
-    let wasUpdate = false;
-
-    if (scopedCard) {
-      wasUpdate = true;
-      Object.assign(scopedCard, shared);
-      const prior = (scopedCard.slittingLog || [])[0];
-      scopedCard.slittingLog = [{
-        ...r,
-        deckleId,
-        // The token is what makes this card's Stop idempotent, so it is kept
-        // across a re-allocation rather than re-minted -- a Stop already in
-        // flight must still match.
-        rowToken: prior?.rowToken || randomUUID(),
-        status: "pending",
-      }];
-      await scopedCard.save();
-      card = scopedCard;
-    } else {
-      card = await SlittingJobCard.create({
-        ...shared,
-        slittingJobCardId: await generateSlittingId(),
-        submissionToken,
-        date: b.date ? new Date(b.date) : new Date(),
-        slittingLog: [{ ...r, deckleId, rowToken: randomUUID(), status: "pending" }],
-      });
-    }
-
-    const summary =
-      `slitting job ${card.slittingJobCardId} for Deckle ${deckleId || scopeDeckleId} `
-      + `on ${machine.machineName} for ${operator.empName}`;
-
-    res.locals.auditDescription =
-      `${wasUpdate ? "Updated" : "Allocated"} ${summary} (order ${pending.lotNo || pending._id}).`;
-    req.flash(
-      "notification",
-      `${wasUpdate ? "Updated" : "Allocated"} ${card.slittingJobCardId} — Deckle ${deckleId || scopeDeckleId} is on ${machine.machineName}'s queue.`,
-    );
-    res.json({ success: true, redirect: "/sachiko/slitting/queue" });
-  } catch (err) {
-    console.error("SLITTING ALLOCATION ERROR:", err);
-    if (err?.code === 11000 && err?.keyPattern?.submissionToken) {
-      return res.json({ success: true, redirect: "/sachiko/slitting/queue" });
-    }
-    res.status(500).json({ success: false, message: "Failed to save the slitting allocation." });
-  }
-});
-
-// ---- Bulk allocation, step 1: the form ------------------------------------
-// The queue's "Choose Deckle" dialog only picks which Deckles to allocate
-// (each ticked by default); Machine, Operator, Helper and the A..G knife
-// layout are entered here instead, once, and applied to every one of them.
-// ?items= is a JSON array of {deckleStockId, pendingId} pairs built by that
-// dialog from the Deckles it already has loaded -- re-fetched and
-// re-validated here rather than trusted, same spirit as the single-Deckle
-// Allocate page re-deriving everything from ids.
-router.get("/slitting/bulk-allocate", requireSlittingPlanner, async (req, res) => {
-  let items;
-  try {
-    items = JSON.parse(req.query.items || "[]");
-  } catch {
-    items = [];
-  }
-  if (!Array.isArray(items)) items = [];
-
-  const seen = new Set();
-  const pairs = [];
-  for (const it of items) {
-    const deckleStockId = trim(it?.deckleStockId);
-    const pendingId = trim(it?.pendingId);
-    if (!mongoose.isValidObjectId(deckleStockId) || !mongoose.isValidObjectId(pendingId)) continue;
-    if (seen.has(deckleStockId)) continue;
-    seen.add(deckleStockId);
-    pairs.push({ deckleStockId, pendingId });
-  }
-  if (!pairs.length) {
-    req.flash("notification", "Choose at least one Deckle from Deckle Slitting.");
-    return res.redirect("/sachiko/slitting/queue");
-  }
-
-  const [reels, pendings, machines, operators, helpers] = await Promise.all([
-    MaterialStock.find({ _id: { $in: pairs.map((p) => p.deckleStockId) } })
-      .populate({ path: "material", select: "productCode skuCode adhesive adhesive2" })
-      .lean(),
-    PendingProduction.find({ _id: { $in: pairs.map((p) => p.pendingId) } })
-      .populate({ path: "itemId", select: "productCode skuCode" })
-      .lean(),
-    Machine.find({ machineType: SLITTING_MACHINE_RE }).populate("location").sort({ machineName: 1 }).lean(),
-    Employee.find({ isActive: true, empProfile: "OPERATOR" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
-    Employee.find({ isActive: true, empProfile: "HELPER" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
-  ]);
-  const reelById = new Map(reels.map((r) => [String(r._id), r]));
-  const pendingById = new Map(pendings.map((p) => [String(p._id), p]));
-
-  // Deckles that no longer exist or resolve are dropped quietly here (the
-  // POST re-validates for real and fails loudly if any survivor turns out
-  // bad) -- reloading the queue and re-picking is the recovery either way.
-  const deckles = pairs
-    .map(({ deckleStockId, pendingId }) => {
-      const reel = reelById.get(deckleStockId);
-      const pending = pendingById.get(pendingId);
-      if (!reel || !pending) return null;
-      const cure = deckleCuring(reel);
-      return {
-        deckleStockId,
-        pendingId,
-        rollId: reel.rollId || "—",
-        reelMtrs: round2(Number(reel.reelMtrs) || 0),
-        size: reel.size || "",
-        location: reel.location || "",
-        lotNo: reel.lotNo || "",
-        productCode: reel.material?.productCode || reel.material?.skuCode || pending.itemId?.productCode || "",
-        curing: !cure.cured,
-        curingUntilLabel: cure.curedAt && !cure.cured ? curingWhenLabel(cure.curedAt) : "",
-        hotMelt: cure.hotMelt,
-      };
-    })
-    .filter(Boolean);
-
-  if (!deckles.length) {
-    req.flash("notification", "None of the chosen Deckles are available any more — reload Deckle Slitting.");
-    return res.redirect("/sachiko/slitting/queue");
-  }
-
-  res.render("inventory/masters/slittingBulkAllocation.ejs", {
-    title: "Bulk Slitting Allocation",
-    CSS: false,
-    JS: false,
-    deckles,
-    cutSlots: CUT_SLOTS,
-    machines: machines.map((m) => ({
-      _id: String(m._id),
-      machineName: m.machineName,
-      locationName: m.location?.locationName || "",
-    })),
-    operators: operators.map((e) => ({ _id: String(e._id), empName: e.empName })),
-    helpers: helpers.map((e) => ({ _id: String(e._id), empName: e.empName })),
-    notification: req.flash("notification"),
-  });
-});
-
-// ---- Bulk allocation, step 2: the submit ----------------------------------
-// A planner ticks several Deckles clubbed under the same Product Code + Size
-// (each may belong to a different order -- the dialog sends each Deckle's own
-// pendingId back with it) and allocates them all at once: one machine,
-// operator and helper, and one A..G knife layout applied to every Deckle,
-// each running its own full remaining metres. One SlittingJobCard per
-// Deckle, same as opening the single-Deckle Allocate page for each in turn --
-// a Deckle that already has an open card is updated in place exactly like
-// re-opening its own Allocate page would.
-router.post("/slitting/bulk-allocate", requireAuth, requireSlittingPlanner, createLimiter, async (req, res) => {
-  const fail = (message) => res.status(400).json({ success: false, message });
-  try {
-    const b = req.body || {};
-
-    if (!mongoose.isValidObjectId(b.machineId)) return fail("Select a slitting machine.");
-    const machine = await Machine.findById(b.machineId).select("machineName machineType").lean();
-    if (!machine) return fail("Select a valid slitting machine.");
-    if (!SLITTING_MACHINE_RE.test(machine.machineType || "")) {
-      return fail(`"${machine.machineName}" is not a slitting machine.`);
-    }
-
-    if (!mongoose.isValidObjectId(b.operatorId)) return fail("Select an operator.");
-    const operator = await Employee.findById(b.operatorId).select("empName").lean();
-    if (!operator) return fail("Select a valid operator.");
-
-    let helper = null;
-    if (trim(b.helperId)) {
-      if (!mongoose.isValidObjectId(b.helperId)) return fail("Select a valid helper.");
-      helper = await Employee.findById(b.helperId).select("empName").lean();
-      if (!helper) return fail("Select a valid helper.");
-    }
-
-    const plannedRunningMeter = numOrNull(b.plannedRunningMeter);
-    if (!(plannedRunningMeter > 0)) return fail("Enter the R. Meter for each finished roll.");
-
-    const cuts = CUT_SLOTS.map((slot) => ({ slot, width: numOrNull(b.cuts?.[slot]) })).filter((c) => c.width !== null);
-    if (!cuts.length) return fail("Enter at least one roll width (A–G).");
-    if (cuts.some((c) => !(c.width > 0))) return fail("Roll widths must be greater than zero.");
-    const cutTotal = round2(cuts.reduce((n, c) => n + c.width, 0));
-
-    const items = Array.isArray(b.items) ? b.items : [];
-    if (!items.length) return fail("Tick at least one Deckle to allocate.");
-
-    // Validate every ticked Deckle up front -- all or nothing, same as the
-    // single-Deckle Allocate page's "check the whole plan before writing any
-    // of it" rule.
-    const plans = [];
-    const seen = new Set();
-    for (const item of items) {
-      const deckleStockId = trim(item?.deckleStockId);
-      const pendingId = trim(item?.pendingId);
-      if (!mongoose.isValidObjectId(deckleStockId) || !mongoose.isValidObjectId(pendingId)) {
-        return fail("Reload Deckle Slitting and try again.");
-      }
-      if (seen.has(deckleStockId)) continue;
-      seen.add(deckleStockId);
-
-      const pending = await PendingProduction.findById(pendingId)
-        .populate({ path: "itemId", select: "productCode skuCode" })
-        .populate({ path: "userId", select: "clientName userName" })
-        .lean();
-      if (!pending) return fail("One of the ticked Deckles' orders no longer exists — reload the page.");
-
-      const reel = await MaterialStock.findById(deckleStockId)
-        .populate({ path: "material", select: "productCode skuCode" })
-        .lean();
-      if (!reel) return fail("One of the ticked Deckles no longer exists — reload the page.");
-
-      const available = round2(Number(reel.reelMtrs) || 0);
-      if (!(available > 0)) return fail(`Deckle "${reel.rollId}" has no metres left to slit.`);
-
-      const width = numOrNull(reel.size);
-      if (width !== null && cutTotal > width) {
-        return fail(`Deckle "${reel.rollId}": roll widths total ${cutTotal} mm but its web is only ${width} mm.`);
-      }
-
-      if (!trim(reel.location)) return fail(`Deckle "${reel.rollId}" has no location on it.`);
-
-      const code = trim(reel.material?.productCode || reel.material?.skuCode);
-      if (!code) return fail(`Deckle "${reel.rollId}" has no Product Code on its Label Stock — it cannot be slit.`);
-
-      const orderCode = trim(pending.itemId?.productCode || pending.itemId?.skuCode);
-      const codeRe = productCodeFamilyRe(orderCode);
-      if (codeRe && !codeRe.test(code)) {
-        return fail(
-          `Deckle "${reel.rollId}" is Product Code ${code} — its order is ${orderCode}. Only ${orderCode} Deckles can be slit against it.`,
-        );
-      }
-
-      plans.push({ pending, reel, width, available });
-    }
-
     const allocatedBy = req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM";
-    const cardIds = [];
+    const submissionToken = trim(b.submissionToken) || undefined;
 
-    for (const { pending, reel, width, available } of plans) {
-      const deckleStockId = String(reel._id);
+    // One Deckle == one card, so each row of the table above gets its own --
+    // re-opening this page for a Deckle that already has an open card
+    // updates THAT card in place (so it keeps its id and its spot on the
+    // operator's queue); a Deckle with no open card yet gets a fresh one.
+    // A card already run is finished work and is never touched here.
+    const cardIds = [];
+    let anyUpdate = false;
+    for (const r of rows) {
+      const deckleStockId = r.deckleStockId;
+      const reel = reelById.get(deckleStockId);
+      const deckleId = reel?.rollId || "";
+
+      // Per-row idempotency: one submissionToken shared by the whole submit
+      // can't sit on more than one document (its index is unique), so each
+      // card's own token is derived from it -- a resubmit of the same loaded
+      // page still recognizes every row it already created and skips it.
+      const rowSubmissionToken = submissionToken ? `${submissionToken}:${deckleStockId}` : undefined;
+      if (rowSubmissionToken && (await SlittingJobCard.exists({ submissionToken: rowSubmissionToken }))) {
+        continue;
+      }
+
       const scopedCard = await SlittingJobCard.findOne({
         pendingProductionId: pending._id,
         status: "allocated",
@@ -1044,7 +803,7 @@ router.post("/slitting/bulk-allocate", requireAuth, requireSlittingPlanner, crea
         operatorName: operator.empName || "",
         helperId: helper?._id,
         helperName: helper?.empName || "",
-        clientOrderNo: pending.poNumber || "",
+        clientOrderNo: trim(b.clientOrderNo) || pending.poNumber || "",
         clientName: pending.userId?.clientName || pending.userId?.userName || "",
         productCode: pending.itemId?.productCode || pending.itemId?.skuCode || "",
         lotNo: pending.lotNo || "",
@@ -1052,44 +811,55 @@ router.post("/slitting/bulk-allocate", requireAuth, requireSlittingPlanner, crea
         allocatedBy,
       };
 
-      const row = {
-        deckleStockId,
-        width,
-        cuts,
-        plannedMeter: available,
-        plannedRunningMeter: round2(plannedRunningMeter),
-        status: "pending",
-      };
-
       let card;
       if (scopedCard) {
+        anyUpdate = true;
         Object.assign(scopedCard, shared);
         const prior = (scopedCard.slittingLog || [])[0];
-        scopedCard.slittingLog = [{ ...row, deckleId: reel.rollId || "", rowToken: prior?.rowToken || randomUUID() }];
+        scopedCard.slittingLog = [{
+          ...r,
+          deckleId,
+          // The token is what makes this card's Stop idempotent, so it is kept
+          // across a re-allocation rather than re-minted -- a Stop already in
+          // flight must still match.
+          rowToken: prior?.rowToken || randomUUID(),
+          status: "pending",
+        }];
         await scopedCard.save();
         card = scopedCard;
       } else {
         card = await SlittingJobCard.create({
           ...shared,
           slittingJobCardId: await generateSlittingId(),
-          date: new Date(),
-          slittingLog: [{ ...row, deckleId: reel.rollId || "", rowToken: randomUUID() }],
+          submissionToken: rowSubmissionToken,
+          date: b.date ? new Date(b.date) : new Date(),
+          slittingLog: [{ ...r, deckleId, rowToken: randomUUID(), status: "pending" }],
         });
       }
       cardIds.push(card.slittingJobCardId);
     }
 
+    if (!cardIds.length) {
+      // Every row was already submitted -- a resubmit of the same loaded page.
+      return res.json({ success: true, redirect: "/sachiko/slitting/queue" });
+    }
+
     res.locals.auditDescription =
-      `Bulk-allocated ${cardIds.length} slitting job${cardIds.length === 1 ? "" : "s"} `
-      + `(${cardIds.join(", ")}) on ${machine.machineName} for ${operator.empName}.`;
+      `${anyUpdate ? "Updated/Allocated" : "Allocated"} ${cardIds.length} slitting job${cardIds.length === 1 ? "" : "s"} `
+      + `(${cardIds.join(", ")}) on ${machine.machineName} for ${operator.empName} (order ${pending.lotNo || pending._id}).`;
     req.flash(
       "notification",
-      `Allocated ${cardIds.length} Deckle${cardIds.length === 1 ? "" : "s"} to ${machine.machineName}'s queue.`,
+      cardIds.length === 1
+        ? `${anyUpdate ? "Updated" : "Allocated"} ${cardIds[0]} on ${machine.machineName}'s queue.`
+        : `Allocated ${cardIds.length} Deckles to ${machine.machineName}'s queue.`,
     );
     res.json({ success: true, redirect: "/sachiko/slitting/queue" });
   } catch (err) {
-    console.error("SLITTING BULK ALLOCATION ERROR:", err);
-    res.status(500).json({ success: false, message: "Failed to save the bulk slitting allocation." });
+    console.error("SLITTING ALLOCATION ERROR:", err);
+    if (err?.code === 11000 && err?.keyPattern?.submissionToken) {
+      return res.json({ success: true, redirect: "/sachiko/slitting/queue" });
+    }
+    res.status(500).json({ success: false, message: "Failed to save the slitting allocation." });
   }
 });
 
