@@ -290,6 +290,11 @@
                   <a href="/sachiko/slitting/jobcard/<%= row._id %>" class="mq-start-btn" title="<%= row.curing ? 'Deckle still curing — open to see when it is ready' : 'Open the Slitting Job Card' %>">
                     <i class="fa-solid fa-scissors"></i> slit
                   </a>
+                  <% if (authUser && authUser.role !== "operator" && row.pendingProductionId && row.deckleStockId) { %>
+                    <a href="/sachiko/slitting/allocate/<%= row.pendingProductionId %>?deckle=<%= row.deckleStockId %>" class="mq-edit-btn" title="Edit this allocation" aria-label="Edit this allocation">
+                      <i class="fa-solid fa-pen"></i>
+                    </a>
+                  <% } %>
                 </div>
               </td>
             </tr>

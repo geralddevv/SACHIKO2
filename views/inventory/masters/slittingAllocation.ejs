@@ -184,20 +184,12 @@
       <div class="sl-panel">
         <div class="sl-job-grid">
           <div class="sl-job-cell">
-            <span class="sl-job-label">Client Order No</span>
-            <span class="sl-job-value"><%= dash(order.clientOrderNo) %></span>
-          </div>
-          <div class="sl-job-cell">
             <span class="sl-job-label">Product Code</span>
             <span class="sl-job-value"><%= dash(order.productCode) %></span>
           </div>
           <div class="sl-job-cell">
             <span class="sl-job-label">Lot No</span>
             <span class="sl-job-value"><%= dash(order.lotNo) %></span>
-          </div>
-          <div class="sl-job-cell">
-            <span class="sl-job-label">Client</span>
-            <span class="sl-job-value"><%= dash(order.clientName) %></span>
           </div>
           <div class="sl-job-cell">
             <span class="sl-job-label">Deckle</span>
@@ -238,6 +230,32 @@
         </div>
       </div>
     </div>
+
+    <!-- This Deckle's siblings from the Slitting Queue's clubbed group (same
+         Product Code + Size) -- context only, never edited from this page. -->
+    <% if (typeof groupDeckles !== "undefined" && groupDeckles.length > 1) { %>
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-panel" style="padding: 12px 14px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7c8ba1;margin-bottom:8px;">
+          Other Deckles in this batch — <%= dash(order.productCode) %> · <%= dash(targetDeckle.size) %>mm
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <% groupDeckles.forEach((d) => { %>
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 12px;border:1.5px solid <%= d.isTarget ? '#044a78' : '#e6eaf2' %>;border-radius:8px;<% if (d.isTarget) { %>background:#eef5ff;<% } %>font-size:12.5px;">
+              <span style="font-weight:700;color:#1f2a44;min-width:150px;">
+                <%= dash(d.rollId) %>
+                <% if (d.isTarget) { %><span style="color:#044a78;font-weight:800;">(this one)</span><% } %>
+              </span>
+              <span style="color:#64748b;"><%= dash(d.reelMtrs) %> mtrs &middot; <%= dash(d.location) %> &middot; lot <%= dash(d.lotNo) %></span>
+              <% if (d.curing && d.curing.cured === false) { %>
+                <span style="margin-left:auto;font-size:10.5px;font-weight:700;color:#b45309;background:#fffaf0;border:1px solid #fde8c9;border-radius:999px;padding:2px 9px;">curing</span>
+              <% } %>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    </div>
+    <% } %>
 
     <% if (!machines.length) { %>
     <div class="span-full" style="border:none !important;">
@@ -308,7 +326,7 @@
     <div class="span-full btn-grp" style="margin-top: 10px;">
       <div class="sl-save-wrap">
         <button type="submit" id="slSubmitBtn" class="submit-btn">
-          <%= existing ? "Update Allocation" : "Allocate & Send to Machine" %>
+          <%= existing ? "Update Allocation" : "Allocate to Machine" %>
         </button>
       </div>
     </div>

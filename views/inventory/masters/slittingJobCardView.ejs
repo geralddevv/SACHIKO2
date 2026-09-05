@@ -42,10 +42,10 @@
   </style>
 
   <div class="indi-head">
-    <h1>Slitting Records</h1>
+    <h1>Slitting Logs</h1>
     <div style="display: flex; gap: 10px; align-items: center">
       <a href="/sachiko/slitting/queue" class="header-action-btn" style="text-decoration:none;">
-        <i class="fa-solid fa-scissors"></i>&nbsp; Slitting Queue
+        <i class="fa-solid fa-scissors"></i>&nbsp; Deckle Slitting
       </a>
       <div class="download-selector" id="downloadSelector">
         <button class="download-selector__trigger">
@@ -215,7 +215,7 @@
   });
 
   document.getElementById("download-xlsx").addEventListener("click", () =>
-    table.download("xlsx", "sachiko-slitting-records.xlsx", { sheetName: "Slitting Records" }));
+    table.download("xlsx", "sachiko-slitting-logs.xlsx", { sheetName: "Slitting Logs" }));
 </script>
 
 <% if (notification && notification.length) { %>

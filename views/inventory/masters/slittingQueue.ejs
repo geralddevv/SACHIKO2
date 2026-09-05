@@ -1,9 +1,15 @@
 <% layout('/layout/boilerplate') -%>
 
-<!-- The slitting entry point: one row per Deckle web still carrying metres.
-     "Allocate" opens the Slitting Job Card for that Deckle's order
-     (routes/system/slitting.js) with the Deckle pre-filled as the first row.
-     Same shell as the Slitting Records list (slittingJobCardView.ejs). -->
+<!-- The slitting entry point: Deckle webs still carrying metres, clubbed by
+     Product Code + Size (interchangeable for slitting purposes) into one row
+     with one "Slit" action. That opens a dialog where every Deckle in the
+     group is ticked by default (untick the ones you don't want) -- Continue
+     carries the ticked ones to the Bulk Slitting Allocation page
+     (routes/system/slitting.js GET "/slitting/bulk-allocate"), where the
+     machine/operator/helper and the A..G knife layout are entered once and
+     applied to all of them. Same shell as the Slitting Logs list
+     (slittingJobCardView.ejs) and the same clubbed-group + dialog pattern as
+     Deckle Sorting (views/inventory/orders/deckleSet.ejs). -->
 <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
 
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
@@ -20,20 +26,112 @@
     .header-action-btn:hover { background-color: #e4e4e4; }
     .sq-act {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 28px; height: 28px; border-radius: 6px;
-      font-size: 12px; text-decoration: none;
+      gap: 6px; height: 26px; padding: 0 12px; border-radius: 6px;
+      font-size: 12px; font-weight: 700; text-decoration: none; border: none; cursor: pointer;
       background: #10b981; color: #fff;
     }
     .sq-act:hover { opacity: 0.88; color: #fff; }
-    .sq-act.is-open { background: #044a78; }
     .sq-act.is-disabled { background: #e2e8f0; color: #94a3b8; pointer-events: none; }
+
+    /* Group parent vs. Deckle child rows in the dataTree table -- same
+       visual language as #deckle-set-table (views/inventory/orders/deckleSet.ejs). */
+    #master-table .tabulator-row[data-sq-child="true"] { background: #f8fafc; }
+    #master-table .tabulator-row[data-sq-child="true"] .tabulator-cell { color: #475569; }
+    #master-table .tabulator-data-tree-control {
+      width: 22px !important; height: 22px !important; margin-right: 8px !important;
+      border: none !important; border-radius: 6px !important;
+      background: rgba(4, 74, 120, 0.09) !important; box-shadow: none !important; outline: none !important;
+      display: inline-flex !important; align-items: center !important; justify-content: center !important;
+      cursor: pointer !important; transition: background-color 0.15s ease, transform 0.12s ease !important;
+    }
+    #master-table .tabulator-data-tree-control:hover { background: rgba(4, 74, 120, 0.18) !important; transform: translateY(-1px); }
+    #master-table .tabulator-data-tree-control-expand,
+    #master-table .tabulator-data-tree-control-collapse { width: auto !important; height: auto !important; background: none !important; border: none !important; }
+    #master-table .tabulator-data-tree-control-expand::before,
+    #master-table .tabulator-data-tree-control-collapse::before {
+      font-family: "Font Awesome 6 Free"; font-weight: 900; content: "\f054";
+      font-size: 10px; line-height: 1; color: #044a78; display: inline-block; transition: transform 0.2s ease;
+    }
+    #master-table .tabulator-data-tree-control-collapse::before { transform: rotate(90deg); }
+    #master-table .tabulator-data-tree-control-expand::after,
+    #master-table .tabulator-data-tree-control-collapse::after { content: none !important; display: none !important; }
+    #master-table .tabulator-data-tree-branch,
+    #master-table .tabulator-data-tree-branch-empty { display: none !important; }
+    #master-table .tabulator-row[data-sq-child="true"] .tabulator-cell:first-child { padding-left: 14px; }
+    .sq-count-badge {
+      display: inline-block; font-size: 11px; font-weight: 800; color: #044a78;
+      background: #e0ecf8; border-radius: 999px; padding: 1px 9px;
+    }
+
+    /* ---- Choose Deckle dialog ---- */
+    .sq-dialog {
+      width: min(620px, 95vw); max-height: min(600px, 88vh); padding: 0; border: none;
+      border-radius: 16px; overflow: hidden; background: #fff; display: flex; flex-direction: column;
+      box-shadow: 0 24px 60px rgba(4, 74, 120, 0.28);
+      transform: scale(0.96); transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    #chooseDeckleDialog.show .sq-dialog { transform: scale(1); }
+    .sq-dialog-header {
+      flex: none; background: linear-gradient(135deg, #044a78 0%, #03365a 100%); padding: 14px 24px;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    }
+    .sq-dialog-header h2 { margin: 0; font-size: 17px; font-weight: 700; color: #fff; letter-spacing: 0.2px; }
+    .sq-dialog-subtitle { margin: 4px 0 0; font-size: 12.5px; color: rgba(255, 255, 255, 0.75); }
+    .sq-close-btn {
+      flex: none; border: none; background: rgba(255, 255, 255, 0.14); color: #fff;
+      width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 13px;
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s ease;
+    }
+    .sq-close-btn:hover { background: rgba(255, 255, 255, 0.26); }
+    #sq-dialog-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .sq-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 24px; }
+    .sq-dialog-body::-webkit-scrollbar { width: 6px; }
+    .sq-dialog-body::-webkit-scrollbar-thumb { background: #044a78; border-radius: 10px; }
+
+    .sq-section-label {
+      font-size: 11px; font-weight: 700; color: #044a78; text-transform: uppercase;
+      letter-spacing: 0.4px; margin-bottom: 8px;
+    }
+
+    .sq-deckle-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+    .sq-deckle-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+      border-radius: 10px; border: 1.5px solid #e6eaf2; cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .sq-deckle-row:hover { border-color: #a9c8e8; background: #f7fbff; }
+    .sq-deckle-row.is-off { opacity: 0.55; }
+    .sq-deckle-row.is-disabled { opacity: 0.5; cursor: not-allowed; }
+    .sq-deckle-row input[type="checkbox"] { flex: none; width: 17px; height: 17px; accent-color: #044a78; }
+    .sq-deckle-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .sq-deckle-top { font-weight: 700; color: #1f2a44; font-size: 13.5px; }
+    .sq-deckle-sub { color: #64748b; font-size: 12px; }
+    .sq-deckle-curing {
+      flex: none; font-size: 10.5px; font-weight: 700; color: #b45309; background: #fffaf0;
+      border: 1px solid #fde8c9; border-radius: 999px; padding: 2px 9px;
+    }
+    .sq-error-text { color: #dc2626; font-size: 12px; font-weight: 600; min-height: 16px; margin-top: 6px; }
+
+    .sq-dialog-footer {
+      flex: none; display: flex; justify-content: flex-end; gap: 10px;
+      padding: 12px 24px; border-top: 1px solid #e6eaf2; background: #fafbfd;
+    }
+    .sq-btn {
+      border: none; border-radius: 9px; padding: 11px 20px; font-size: 14px; font-weight: 700; cursor: pointer;
+      transition: opacity 0.18s ease; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .sq-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .sq-btn-ghost { background: #eef1f5; color: #475569; }
+    .sq-btn-ghost:hover { background: #e2e6ec; }
+    .sq-btn-primary { background: linear-gradient(135deg, #044a78 0%, #03365a 100%); color: #fff; }
+    .sq-btn-primary:hover { opacity: 0.92; }
   </style>
 
   <div class="indi-head">
-    <h1>Slitting Queue</h1>
+    <h1>Deckle Slitting</h1>
     <div style="display: flex; gap: 10px; align-items: center">
       <a href="/sachiko/slitting/jobcard/view" class="header-action-btn" style="text-decoration:none;">
-        <i class="fa-solid fa-clipboard-check"></i>&nbsp; Slitting Records
+        <i class="fa-solid fa-clipboard-check"></i>&nbsp; Slitting Logs
       </a>
       <div class="download-selector" id="downloadSelector">
         <button class="download-selector__trigger">
@@ -51,6 +149,32 @@
   <div id="master-table"></div>
 </div>
 
+<!-- Choose Deckle dialog -->
+<div class="logout-modal" id="chooseDeckleDialog" aria-hidden="true">
+  <div class="sq-dialog" role="dialog" aria-modal="true" aria-labelledby="chooseDeckleDialogTitle">
+    <div class="sq-dialog-header">
+      <div>
+        <h2 id="chooseDeckleDialogTitle">Choose Deckles</h2>
+        <p class="sq-dialog-subtitle" id="sq-dialog-subtitle"></p>
+      </div>
+      <button type="button" class="sq-close-btn" id="sq-close-btn" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <form id="sq-dialog-form" novalidate>
+      <div class="sq-dialog-body">
+        <div class="sq-section-label">Deckles to allocate — untick any you don't want to include</div>
+        <div id="sq-deckle-list" class="sq-deckle-list"></div>
+        <div id="sq-deckle-error" class="sq-error-text"></div>
+      </div>
+
+      <div class="sq-dialog-footer">
+        <button type="button" class="sq-btn sq-btn-ghost" id="sq-cancel-btn">Cancel</button>
+        <button type="submit" class="sq-btn sq-btn-primary" id="sq-submit-btn">Continue <i class="fa-solid fa-arrow-right-long"></i></button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
@@ -63,90 +187,192 @@
   document.addEventListener("click", () => downloadSelector.classList.remove("download-selector--active"));
 
   const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const raw = JSON.parse(document.getElementById("sq-data").textContent);
+  const fmtMtrs = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
 
-  const tableData = raw.map((r) => ({
-    rollId: r.rollId || "-",
-    productCode: r.productCode || "-",
-    mtrs: Number(r.mtrs) || 0,
-    size: r.size || "-",
-    location: r.location || "-",
-    lotNo: r.order ? (r.order.lotNo || "-") : "-",
-    clientName: r.order ? (r.order.clientName || "-") : "-",
-    clientOrderNo: r.order ? (r.order.clientOrderNo || "-") : "-",
-    status: r.card ? (r.card.run ? "Slit" : "On card") : "Free",
-    cardInfo: r.card
-      ? (r.card.run
-          ? r.card.slittingJobCardId
-          : `${r.card.slittingJobCardId} · ${r.card.machineName}`)
-      : "-",
-    allocateHref: r.allocateHref || "",
-    hasCard: !!r.card,
-    cardRun: !!(r.card && r.card.run),
-    // Curing: allocation is allowed now, running is not until this clears.
-    curing: !!r.curing,
-    curingLabel: r.hotMelt ? "Hot melt" : (r.curing ? (r.curingUntilLabel ? `Curing · ${r.curingUntilLabel}` : "Curing") : "Cured"),
+  // Each top-level row is a Product Code + Size group; _children are the
+  // physical Deckles clubbed into it (routes/system/slitting.js).
+  const rowsData = JSON.parse(document.getElementById("sq-data").textContent).map((g) => ({
+    ...g,
+    _children: (g._children || []).map((r) => ({
+      ...r,
+      isGroup: false,
+      lotNo: r.order ? (r.order.lotNo || "-") : "-",
+      curingLabel: r.hotMelt ? "Hot melt" : (r.curing ? (r.curingUntilLabel ? `Curing · ${r.curingUntilLabel}` : "Curing") : "Cured"),
+    })),
   }));
 
-  const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, ...col });
+  /* ----- Choose Deckle dialog: pick which Deckles to allocate (all ticked
+     by default) -- Machine, Operator, Helper and the A..G knife layout are
+     entered on the next page (routes/system/slitting.js GET
+     "/slitting/bulk-allocate"). ----- */
+  const chooseDeckleDialog = document.getElementById("chooseDeckleDialog");
+  const sqDeckleList = document.getElementById("sq-deckle-list");
+  const sqDeckleError = document.getElementById("sq-deckle-error");
+  const sqDialogForm = document.getElementById("sq-dialog-form");
 
-  const statusFormatter = (cell) => {
-    const v = cell.getValue();
-    if (v === "Slit") return '<span style="color:#64748b;font-weight:700;"><i class="fa-solid fa-check"></i> Slit</span>';
-    if (v === "On card") return '<span style="color:#1d4ed8;font-weight:700;"><i class="fa-solid fa-scissors"></i> On card</span>';
-    return '<span style="color:#15803d;font-weight:700;"><i class="fa-solid fa-circle-check"></i> Free</span>';
+  let currentGroup = null;
+
+  function closeChooseDeckleDialog() {
+    chooseDeckleDialog.classList.remove("show");
+    chooseDeckleDialog.setAttribute("aria-hidden", "true");
+  }
+  document.getElementById("sq-close-btn").addEventListener("click", closeChooseDeckleDialog);
+  document.getElementById("sq-cancel-btn").addEventListener("click", closeChooseDeckleDialog);
+  chooseDeckleDialog.addEventListener("click", (e) => { if (e.target === chooseDeckleDialog) closeChooseDeckleDialog(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && chooseDeckleDialog.classList.contains("show")) closeChooseDeckleDialog();
+  });
+
+  function checkedDeckles() {
+    return [...sqDeckleList.querySelectorAll('input[type="checkbox"]:checked')].map((cb) => {
+      return (currentGroup._children || []).find((d) => String(d._id) === cb.value);
+    }).filter(Boolean);
+  }
+
+  function renderDeckleList(group) {
+    sqDeckleList.innerHTML = (group._children || []).map((d) => {
+      const curingTag = d.curing ? `<span class="sq-deckle-curing"><i class="fa-solid fa-hourglass-half"></i> curing</span>` : "";
+      const disabled = !d.allocateHref;
+      return `
+        <label class="sq-deckle-row${disabled ? " is-disabled" : ""}">
+          <input type="checkbox" value="${esc(d._id)}" ${disabled ? "disabled" : "checked"} />
+          <span class="sq-deckle-main">
+            <span class="sq-deckle-top">${esc(d.rollId)}</span>
+            <span class="sq-deckle-sub">${fmtMtrs(d.mtrs)} mtrs &nbsp;·&nbsp; ${esc(d.location)} &nbsp;·&nbsp; lot ${esc(d.lotNo)}${disabled ? " &nbsp;·&nbsp; not linked to any pending order" : ""}</span>
+          </span>
+          ${curingTag}
+        </label>`;
+    }).join("");
+
+    sqDeckleList.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+      cb.addEventListener("change", () => {
+        cb.closest(".sq-deckle-row").classList.toggle("is-off", !cb.checked);
+        if (checkedDeckles().length) sqDeckleError.textContent = "";
+      });
+    });
+  }
+
+  window.openChooseDeckleDialog = function (groupId) {
+    const group = rowsData.find((r) => String(r._id) === String(groupId) && r.isGroup);
+    if (!group) return;
+    currentGroup = group;
+
+    document.getElementById("sq-dialog-subtitle").textContent =
+      `${group.productCode || "—"} · ${group.size || "—"}mm · ${group.deckleCount} Deckle${group.deckleCount === 1 ? "" : "s"}`;
+
+    renderDeckleList(group);
+    sqDeckleError.textContent = "";
+
+    chooseDeckleDialog.classList.add("show");
+    chooseDeckleDialog.setAttribute("aria-hidden", "false");
   };
 
-  const actionFormatter = (cell) => {
-    const d = cell.getData();
-    if (!d.allocateHref) {
-      return '<span class="sq-act is-disabled" title="This Deckle isn\'t linked to any pending order"><i class="fa-solid fa-ban"></i></span>';
+  // Picking Deckles is all this dialog does -- Machine, Operator, Helper and
+  // the knife layout are entered on the next page (routes/system/slitting.js
+  // GET "/slitting/bulk-allocate"), same as the single-Deckle flow keeps
+  // that off the queue page too.
+  sqDialogForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    sqDeckleError.textContent = "";
+
+    const picked = checkedDeckles();
+    if (!picked.length) {
+      sqDeckleError.textContent = "Tick at least one Deckle to allocate.";
+      return;
     }
-    if (d.hasCard && !d.cardRun) {
-      return `<a class="sq-act is-open" href="${esc(d.allocateHref)}" title="Open the Slitting Job Card this Deckle is on"><i class="fa-solid fa-pen"></i></a>`;
+    const items = picked.map((d) => ({ deckleStockId: d._id, pendingId: d.order && d.order._id }));
+    if (items.some((it) => !it.pendingId)) {
+      sqDeckleError.textContent = "One of the ticked Deckles isn't linked to any pending order.";
+      return;
     }
-    return `<a class="sq-act" href="${esc(d.allocateHref)}" title="Allocate machine, operator and roll widths for this Deckle"><i class="fa-solid fa-scissors"></i></a>`;
-  };
+
+    window.location.href = `/sachiko/slitting/bulk-allocate?items=${encodeURIComponent(JSON.stringify(items))}`;
+  });
 
   const table = new Tabulator("#master-table", {
-    data: tableData,
+    data: rowsData,
     height: "100%",
     placeholder: "No Deckle stock left to slit",
+    index: "_id",
+    dataTree: true,
+    dataTreeStartExpanded: false,
+    dataTreeChildField: "_children",
+    dataTreeElementColumn: "item",
+    rowFormatter: (row) => {
+      const d = row.getData();
+      if (!d.isGroup) row.getElement().setAttribute("data-sq-child", "true");
+    },
     columns: [
-      { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
-        formatter: (cell) => cell.getRow().getPosition(true) },
-      { title: "Action", field: "_action", width: 80, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
-        formatter: actionFormatter },
-      withTextFilter({ title: "Deckle", field: "rollId", minWidth: 230, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${esc(cell.getValue())}</span>` }),
-      withTextFilter({ title: "Product Code", field: "productCode", minWidth: 130, formatter: (cell) => `<span style="font-weight:600;color:#03365a;">${esc(cell.getValue())}</span>` }),
-      withTextFilter({ title: "Mtrs", field: "mtrs", width: 110, hozAlign: "right", headerHozAlign: "right", sorter: "number",
-        formatter: (cell) => (Number(cell.getValue()) || 0).toLocaleString("en-IN") }),
-      withTextFilter({ title: "Size", field: "size", width: 100 }),
-      withTextFilter({ title: "Location", field: "location", minWidth: 120 }),
-      withTextFilter({ title: "Lot No", field: "lotNo", minWidth: 120 }),
-      withTextFilter({ title: "Client", field: "clientName", minWidth: 150 }),
-      withTextFilter({ title: "Client Order No", field: "clientOrderNo", minWidth: 130 }),
-      withTextFilter({ title: "Status", field: "status", width: 120, formatter: statusFormatter }),
-      withTextFilter({ title: "Curing", field: "curingLabel", width: 150, formatter: (cell) => {
-        const d = cell.getData();
-        if (d.curingLabel === "Hot melt") return '<span style="color:#15803d;font-weight:700;"><i class="fa-solid fa-fire"></i> Hot melt</span>';
-        if (d.curing) return `<span style="color:#b45309;font-weight:700;"><i class="fa-solid fa-hourglass-half"></i> ${esc(cell.getValue())}</span>`;
-        return '<span style="color:#64748b;font-weight:600;"><i class="fa-solid fa-check"></i> Cured</span>';
-      } }),
-      withTextFilter({ title: "Slitting Card", field: "cardInfo", minWidth: 220 }),
+      {
+        title: "Product Code / Deckle", field: "item", headerSort: false, widthGrow: 3,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row.isGroup) return `<span style="font-weight:800;color:#044a78;">${esc(row.productCode)}</span>`;
+          return `<span style="font-weight:700;color:#044a78;">↳ ${esc(row.rollId)}</span>`;
+        },
+      },
+      {
+        title: "Size", hozAlign: "center", width: 110, headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return row.isGroup ? `${esc(row.size)}mm` : "";
+        },
+      },
+      {
+        title: "Deckles", hozAlign: "center", width: 100, headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return row.isGroup ? `<span class="sq-count-badge">${row.deckleCount}</span>` : "";
+        },
+      },
+      {
+        title: "Mtrs", hozAlign: "right", width: 120, headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return fmtMtrs(row.isGroup ? row.totalMtrs : row.mtrs);
+        },
+      },
+      {
+        title: "Location", minWidth: 120, headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return row.isGroup ? "" : esc(row.location);
+        },
+      },
+      {
+        title: "Lot No", minWidth: 120, headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return row.isGroup ? "" : esc(row.lotNo);
+        },
+      },
+      {
+        title: "Curing", minWidth: 150, headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (row.isGroup) {
+            return row.anyCuring
+              ? '<span style="color:#b45309;font-weight:700;"><i class="fa-solid fa-hourglass-half"></i> Curing</span>'
+              : '<span style="color:#64748b;font-weight:600;"><i class="fa-solid fa-check"></i> Cured</span>';
+          }
+          if (row.curingLabel === "Hot melt") return '<span style="color:#15803d;font-weight:700;"><i class="fa-solid fa-fire"></i> Hot melt</span>';
+          if (row.curing) return `<span style="color:#b45309;font-weight:700;"><i class="fa-solid fa-hourglass-half"></i> ${esc(row.curingLabel)}</span>`;
+          return '<span style="color:#64748b;font-weight:600;"><i class="fa-solid fa-check"></i> Cured</span>';
+        },
+      },
+      {
+        title: "Actions", hozAlign: "center", headerSort: false, width: 110,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isGroup) return "";
+          return `<button onclick="openChooseDeckleDialog('${row._id}')" class="sq-act" title="Allocate one or more Deckles from this group"><i class="fa-solid fa-scissors"></i> Slit</button>`;
+        },
+      },
     ],
   });
 
-  // "renderComplete" is what keeps Sr. No. sequential after a sort or a filter.
-  table.on("renderComplete", () => {
-    document.querySelectorAll("#master-table .tabulator-row").forEach((rowEl, i) => {
-      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
-      if (cell) cell.textContent = i + 1;
-    });
-  });
-
   document.getElementById("download-xlsx").addEventListener("click", () =>
-    table.download("xlsx", "sachiko-slitting-queue.xlsx", { sheetName: "Slitting Queue" }));
+    table.download("xlsx", "sachiko-deckle-slitting.xlsx", { sheetName: "Deckle Slitting" }));
 </script>
 
 <% if (notification && notification.length) { %>

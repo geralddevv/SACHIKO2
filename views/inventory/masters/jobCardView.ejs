@@ -56,7 +56,7 @@
   </style>
 
   <div class="indi-head">
-    <h1>Production Records</h1>
+    <h1>Deckle Logs</h1>
     <div style="display: flex; gap: 10px; align-items: center">
       <div class="download-selector" id="downloadSelector">
         <button class="download-selector__trigger">
@@ -319,7 +319,7 @@
   });
 
   document.getElementById("download-xlsx").addEventListener("click", () =>
-    table.download("xlsx", "sachiko-production-records.xlsx", { sheetName: "Production Records" }));
+    table.download("xlsx", "sachiko-deckle-logs.xlsx", { sheetName: "Deckle Logs" }));
 </script>
 
 <% if (notification && notification.length) { %>

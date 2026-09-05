@@ -2381,7 +2381,7 @@ router.get("/machine/jobcard/view", requireMachineFloor, async (req, res) => {
   }
 
   res.render("inventory/masters/jobCardView.ejs", {
-    title: "Production Records",
+    title: "Deckle Logs",
     CSS: "tableDisp.css",
     JS: false,
     jsonData,

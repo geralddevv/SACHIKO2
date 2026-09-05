@@ -1,0 +1,142 @@
+<% layout('/layout/boilerplate') -%>
+
+<!-- Read-only: every Slitting Job Card with a Deckle actually running right
+     now (started, not yet stopped) -- not merely allocated and sitting on a
+     machine's queue untouched. Same Tabulator + Sr. No. pattern as the
+     Production tab's WIP page (views/inventory/orders/pendingProduction.ejs,
+     ?tab=wip). No action buttons here: starting/running a job happens on its
+     own machine queue (machineQueue.ejs) or Slitting Job Card, not from this
+     overview. -->
+
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    #master-table { width: 100%; flex: 1 1 auto; min-height: 0; }
+    .header-action-btn {
+      background-color: #f0f0f0; color: #044a78;
+      padding: 2px 14px; font-size: 14px; font-weight: 500;
+      border: none; cursor: pointer; border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,.1);
+      transition: all 0.2s ease-in-out;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .header-action-btn:hover { background-color: #e4e4e4; }
+  </style>
+
+  <div class="indi-head">
+    <h1>Slitting WIP</h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <a href="/sachiko/slitting/queue" class="header-action-btn" style="text-decoration:none;">
+        <i class="fa-solid fa-scissors"></i>&nbsp; Deckle Slitting
+      </a>
+      <div class="download-selector" id="downloadSelector">
+        <button class="download-selector__trigger">
+          <span><i class="fa-solid fa-file-arrow-down"></i> Download</span>
+          <i class="fas fa-chevron-down"></i>
+        </button>
+        <div class="download-selector__menu">
+          <div class="download-selector__option" id="download-xlsx"><i class="fas fa-file-excel"></i> Excel</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="master-table"></div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+<script id="sw-rows-data" type="application/json"><%- safeJson(rows || []) %></script>
+<script>
+  const downloadSelector = document.getElementById("downloadSelector");
+  downloadSelector.querySelector(".download-selector__trigger")
+    .addEventListener("click", (e) => { e.stopPropagation(); downloadSelector.classList.toggle("download-selector--active"); });
+  document.addEventListener("click", () => downloadSelector.classList.remove("download-selector--active"));
+
+  const swRows = JSON.parse(document.getElementById("sw-rows-data").textContent);
+
+  const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, ...col });
+
+  const table = new Tabulator("#master-table", {
+    data: swRows,
+    height: "100%",
+    placeholder: "No slitting jobs are currently running",
+    initialSort: [{ column: "machineName", dir: "asc" }],
+    columns: [
+      // getPosition(true) is the row's rank among currently sorted/filtered
+      // rows, re-evaluated on every redraw -- stays correct after sorting or
+      // filtering instead of a static index frozen at load time.
+      { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
+        formatter: (cell) => cell.getRow().getPosition(true) },
+      withTextFilter({ title: "Slitting ID", field: "slittingJobCardId", width: 165, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
+      withTextFilter({ title: "Machine", field: "machineName", minWidth: 130 }),
+      withTextFilter({ title: "Lot No", field: "lotNo", minWidth: 110 }),
+      withTextFilter({ title: "Product Code", field: "productCode", minWidth: 130, formatter: (cell) => `<span style="font-weight:600;color:#03365a;">${cell.getValue()}</span>` }),
+      withTextFilter({ title: "Client", field: "clientName", minWidth: 140 }),
+      withTextFilter({ title: "Operator", field: "operatorName", minWidth: 120 }),
+      withTextFilter({ title: "Helper", field: "helperName", minWidth: 120 }),
+      {
+        title: "Deckles",
+        field: "deckleLeft",
+        headerSort: false,
+        minWidth: 160,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          const done = row.deckleDone > 0
+            ? `<span style="color:#64748b;font-weight:600;font-size:11px;"> (${row.deckleDone} of ${row.deckleCount} done)</span>`
+            : "";
+          const curing = row.curing
+            ? `<br><span style="color:#b45309;font-weight:700;font-size:11px;"><i class="fa-solid fa-hourglass-half"></i> curing${row.curingUntilLabel ? ` · ready ${row.curingUntilLabel}` : ""}</span>`
+            : "";
+          return `${row.deckleLeft} to run${done}${curing}`;
+        },
+      },
+      {
+        title: "Rolls",
+        field: "producedRolls",
+        hozAlign: "center",
+        headerSort: false,
+        minWidth: 110,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return `${row.producedRolls} of ${row.plannedRolls}`;
+        },
+      },
+    ],
+  });
+
+  // "renderComplete" is a Tabulator EVENT, not a constructor option -- a
+  // `renderComplete:` key inside the options object above is silently
+  // ignored (no error, callback just never runs). Subscribing via .on() is
+  // the only way it actually fires. Reads straight off the rendered DOM
+  // rather than Tabulator's row APIs (getRow().getPosition()/getRows("active")
+  // were both observed to go stale after a sort) -- whatever's actually on
+  // screen, top to bottom, is renumbered 1..n every time the table redraws.
+  table.on("renderComplete", function () {
+    document.querySelectorAll("#master-table .tabulator-row").forEach((rowEl, i) => {
+      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
+      if (cell) cell.textContent = i + 1;
+    });
+  });
+
+  document.getElementById("download-xlsx").addEventListener("click", () =>
+    table.download("xlsx", "sachiko-slitting-wip.xlsx", { sheetName: "Slitting WIP" }));
+</script>
+
+<% if (notification && notification.length) { %>
+<script>
+  const swFlash = <%- safeJson(notification[0]) %>;
+  const swFlashType = /failed|not found|error|invalid|no longer/i.test(String(swFlash)) ? "error" : "success";
+  const showSwFlash = () => {
+    if (typeof hideStaticToast === "function") hideStaticToast();
+    if (typeof showToast === "function") showToast(swFlash, swFlashType);
+  };
+  document.readyState === "loading"
+    ? document.addEventListener("DOMContentLoaded", showSwFlash, { once: true })
+    : showSwFlash();
+</script>
+<% } %>

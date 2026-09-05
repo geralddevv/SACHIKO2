@@ -553,7 +553,7 @@ router.delete("/label-stock/:id", requireAuth, deleteLimiter, async (req, res) =
 
 /* ================= JOB CARD ================= */
 // Disabled and removed from the side-nav -- superseded by the machine-queue-
-// driven "Production Records" page (/sachiko/machine/jobcard/view).
+// driven "Deckle Logs" page (/sachiko/machine/jobcard/view).
 router.get("/jobcard/view", (req, res) => {
   res.status(404).render("errors/notFound", {
     title: "Page Not Found",
