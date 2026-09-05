@@ -32,7 +32,7 @@ const router = express.Router();
 //     dialog for one or more Deckles (one row per Deckle). Picks the
 //     machine, operator and helper shared by all of them, and per Deckle its
 //     web width, the metres to run off it, the length per finished roll and
-//     the A..G knife layout. Writes one "allocated" SlittingJobCard per
+//     the A..L knife layout. Writes one "allocated" SlittingJobCard per
 //     Deckle, which puts each on the chosen machine's queue. Nothing moves
 //     in stock.
 //
@@ -51,7 +51,7 @@ const requireSlittingView = requireRole(["proprietor", "admin", "hod", "sales", 
 
 // Knife positions across one Deckle web -- exactly the columns on the paper
 // card.
-export const CUT_SLOTS = ["A", "B", "C", "D", "E", "F", "G"];
+export const CUT_SLOTS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
 
 // Machine.machineType is free text (see models/system/machine.js), so slitters
 // are matched on the stem rather than an exact string -- "SLITTING",
@@ -292,11 +292,14 @@ export async function buildSlittingQueueRows(match) {
   });
 }
 
-// ---- Slitting Queue: every Deckle web still carrying metres ----------------
-// One row per Deckle (the laminated web made upstream), not per order. The
-// planner picks a Deckle here and "Allocate" opens the Slitting Job Card for
-// that Deckle's order with the Deckle pre-filled as the first row.
-router.get("/slitting/queue", requireSlittingView, async (req, res) => {
+// Every Deckle web still carrying metres and still free to allocate (or
+// re-allocatable after a completed card left metres behind), across every
+// order -- the flat, per-Deckle facts the Slitting Queue clubs into groups
+// AND, filtered down to one Product Code + Size + Running Meters, what the
+// Allocate page below counts as "this batch"'s Total/Available. Kept as one
+// function so the two pages can never disagree on which Deckles club
+// together or how many of them are actually still free.
+async function buildAvailableDeckleRows() {
   const [orders, reels] = await Promise.all([
     PendingProduction.find({ deckleBatchId: null })
       .populate({ path: "itemId", select: "productCode skuCode" })
@@ -362,13 +365,21 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     const { order, by } = orderForReel(reel);
     const card = deckleCard.get(String(reel._id)) || null;
     const cure = deckleCuring(reel);
+    // The length wound onto each finished roll for this order -- same field
+    // the Allocate page seeds its R. Meter default from (see GET
+    // "/slitting/allocate/:pendingId" below). Two Deckles of the same
+    // Product Code + Size but different running meters still need separate
+    // cut plans, so this is part of what clubs them on this queue.
+    const runningMeters = order ? (order.deckleRunningMeters ?? order.runningMeters ?? null) : null;
     return {
       deckleStockId: String(reel._id),
       rollId: reel.rollId || "—",
       productCode: trim(reel.material?.productCode || reel.material?.skuCode) || "—",
       mtrs: round2(Number(reel.reelMtrs) || 0),
       size: reel.size || "—",
+      runningMeters,
       location: reel.location || "—",
+      lotNo: reel.lotNo || "",
       // Advisory: a Deckle can be allocated while it cures, but not run.
       curing: !cure.cured,
       curingUntilLabel: cure.curedAt && !cure.cured ? curingWhenLabel(cure.curedAt) : "",
@@ -379,6 +390,7 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
             lotNo: order.lotNo || "—",
             clientOrderNo: order.poNumber || "—",
             clientName: order.userId?.clientName || order.userId?.userName || "—",
+            runningMeters,
           }
         : null,
       matchedBy: by,
@@ -403,19 +415,34 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     a.location.localeCompare(b.location) || a.rollId.localeCompare(b.rollId),
   );
 
-  // Club same Product Code + Size together -- these are interchangeable for
-  // slitting, so the queue shows one group with one "Slit" action rather than
-  // a separate row (and separate button) per physical Deckle. The dialog it
-  // opens is where the planner actually picks which Deckle to cut.
+  return visibleRows;
+}
+
+// ---- Slitting Queue: every Deckle web still carrying metres ----------------
+// One row per Deckle (the laminated web made upstream), not per order. The
+// planner picks a Deckle here and "Allocate" opens the Slitting Job Card for
+// that Deckle's order with the Deckle pre-filled as the first row.
+router.get("/slitting/queue", requireSlittingView, async (req, res) => {
+  const visibleRows = await buildAvailableDeckleRows();
+
+  // Club same Product Code + Size + Running Meters together -- these are
+  // interchangeable for slitting, so the queue shows one group with one
+  // "Slit" action rather than a separate row (and separate button) per
+  // physical Deckle. Running Meters is part of the key too: two Deckles of
+  // the same Product Code + Size but wound to a different finished-roll
+  // length still need their own cut plan, so clubbing them would just hide
+  // that they are not actually interchangeable. The dialog this opens is
+  // where the planner actually picks which Deckle to cut.
   const groupMap = new Map();
   for (const r of visibleRows) {
-    const key = `${r.productCode}::${r.size}`;
+    const key = `${r.productCode}::${r.size}::${r.runningMeters ?? ""}`;
     if (!groupMap.has(key)) {
       groupMap.set(key, {
         _id: key,
         isGroup: true,
         productCode: r.productCode,
         size: r.size,
+        runningMeters: r.runningMeters,
         deckleCount: 0,
         totalMtrs: 0,
         anyCuring: false,
@@ -429,7 +456,10 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     g._children.push({ ...r, isGroup: false, _id: r.deckleStockId });
   }
   const groups = [...groupMap.values()].sort(
-    (a, b) => a.productCode.localeCompare(b.productCode) || String(a.size).localeCompare(String(b.size)),
+    (a, b) =>
+      a.productCode.localeCompare(b.productCode)
+      || String(a.size).localeCompare(String(b.size))
+      || (Number(a.runningMeters) || 0) - (Number(b.runningMeters) || 0),
   );
 
   res.render("inventory/masters/slittingQueue.ejs", {
@@ -467,7 +497,7 @@ router.get("/slitting/wip", requireSlittingView, async (req, res) => {
 // Deckle-scoped. The Slitting Queue's "Choose Deckle" dialog links here with
 // one ?deckle=<stockId> per ticked Deckle; this page allocates each of them
 // -- one shared machine, operator and helper, and per Deckle its own web
-// width, the metres to run off it, the length per finished roll and the A..G
+// width, the metres to run off it, the length per finished roll and the A..L
 // knife layout. One Deckle == one SlittingJobCard, and once saved each card
 // sits on the chosen machine's queue. Any other Deckle clubbed with these on
 // the queue (same Product Code + Size) but left unticked is only shown here
@@ -597,18 +627,31 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
 
   const targetIds = new Set(targets.map((t) => t._id));
   // Every other Deckle clubbed with these on the Slitting Queue (same
-  // Product Code + Size) but NOT ticked in -- context only, same as the
-  // Slitting Queue's "Choose Deckle" dialog this page was opened from.
+  // Product Code + Size + Running Meters) but NOT ticked in -- context only,
+  // same as the Slitting Queue's "Choose Deckle" dialog this page was opened
+  // from. Sourced from buildAvailableDeckleRows() -- the exact pool the
+  // queue itself clubs from -- rather than deckleOptionsFor's order-scoped
+  // pool above, which can miss Deckles linked (producedFor) to a *different*
+  // order that nonetheless shares this batch's Product Code + Size +
+  // Running Meters, undercounting Total/Available here.
+  const groupProductCode = trim(targets[0].productCode);
   const groupSize = targets[0].size;
-  const groupDeckles = deckles
-    .filter((d) => d.size === groupSize && !targetIds.has(d._id))
-    .map((d) => ({
-      _id: d._id,
-      rollId: d.rollId,
-      reelMtrs: d.reelMtrs,
-      location: d.location,
-      lotNo: d.lotNo,
-      curing: d.curing,
+  const groupRunningMeters = order.runningMeters ?? null;
+  const availableRows = await buildAvailableDeckleRows();
+  const groupDeckles = availableRows
+    .filter((r) =>
+      r.productCode === groupProductCode
+      && r.size === groupSize
+      && (r.runningMeters ?? null) === groupRunningMeters
+      && !targetIds.has(r.deckleStockId),
+    )
+    .map((r) => ({
+      _id: r.deckleStockId,
+      rollId: r.rollId,
+      reelMtrs: r.mtrs,
+      location: r.location,
+      lotNo: r.lotNo,
+      curing: { cured: !r.curing, curedAtLabel: r.curingUntilLabel },
     }));
 
   res.render("inventory/masters/slittingAllocation.ejs", {
@@ -686,7 +729,7 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
 
       const cuts = CUT_SLOTS.map((slot) => ({ slot, width: numOrNull(r.cuts?.[slot]) }))
         .filter((c) => c.width !== null);
-      if (!cuts.length) return fail(`${label}: enter at least one roll width (A–G).`);
+      if (!cuts.length) return fail(`${label}: enter at least one roll width (A–L).`);
       if (cuts.some((c) => !(c.width > 0))) return fail(`${label}: roll widths must be greater than zero.`);
 
       const width = numOrNull(r.width);

@@ -1,13 +1,16 @@
 <% layout('/layout/boilerplate') -%>
 
 <!-- The slitting entry point: Deckle webs still carrying metres, clubbed by
-     Product Code + Size (interchangeable for slitting purposes) into one row
-     with one "Slit" action. That opens a dialog where every Deckle in the
-     group is ticked by default (untick the ones you don't want) -- Continue
+     Product Code + Size + Running Meters (interchangeable for slitting
+     purposes only when all three match -- two Deckles of the same code and
+     size wound to a different finished-roll length still need separate cut
+     plans) into one row with one "Slit" action. That opens a dialog where
+     every Deckle in the group is ticked by default (untick the ones you
+     don't want) -- Continue
      carries the ticked ones to the same Allocate page used for a single
      Deckle (routes/system/slitting.js GET "/slitting/allocate/:pendingId",
      one ?deckle= per ticked Deckle), which lists one row per Deckle with the
-     machine/operator/helper and the A..G knife layout entered once for all
+     machine/operator/helper and the A..L knife layout entered once for all
      of them. Same shell as the Slitting Logs list (slittingJobCardView.ejs)
      and the same clubbed-group + dialog pattern as Deckle Sorting
      (views/inventory/orders/deckleSet.ejs). -->
@@ -190,7 +193,7 @@
   const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const fmtMtrs = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
 
-  // Each top-level row is a Product Code + Size group; _children are the
+  // Each top-level row is a Product Code + Size + Running Meters group; _children are the
   // physical Deckles clubbed into it (routes/system/slitting.js).
   const rowsData = JSON.parse(document.getElementById("sq-data").textContent).map((g) => ({
     ...g,
@@ -203,7 +206,7 @@
   }));
 
   /* ----- Choose Deckle dialog: pick which Deckles to allocate (all ticked
-     by default) -- Machine, Operator, Helper and the A..G knife layout are
+     by default) -- Machine, Operator, Helper and the A..L knife layout are
      entered on the Allocate page it opens into (routes/system/slitting.js
      GET "/slitting/allocate/:pendingId"). ----- */
   const chooseDeckleDialog = document.getElementById("chooseDeckleDialog");
@@ -258,8 +261,9 @@
     if (!group) return;
     currentGroup = group;
 
+    const rmLabel = group.runningMeters != null ? `${fmtMtrs(group.runningMeters)} mtrs` : "no running meters set";
     document.getElementById("sq-dialog-subtitle").textContent =
-      `${group.productCode || "—"} · ${group.size || "—"}mm · ${group.deckleCount} Deckle${group.deckleCount === 1 ? "" : "s"}`;
+      `${group.productCode || "—"} · ${group.size || "—"}mm · ${rmLabel} · ${group.deckleCount} Deckle${group.deckleCount === 1 ? "" : "s"}`;
 
     renderDeckleList(group);
     sqDeckleError.textContent = "";
@@ -271,7 +275,7 @@
   // Picking Deckles is all this dialog does -- Continue opens the Allocate
   // page (routes/system/slitting.js GET "/slitting/allocate/:pendingId")
   // with one ?deckle= per ticked Deckle, where it lists one row per Deckle
-  // and Machine, Operator, Helper and the A..G knife layout are entered once
+  // and Machine, Operator, Helper and the A..L knife layout are entered once
   // for all of them.
   sqDialogForm.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -328,6 +332,14 @@
         formatter: (cell) => {
           const row = cell.getRow().getData();
           return row.isGroup ? `${esc(row.size)}mm` : "";
+        },
+      },
+      {
+        title: "R. Meter", hozAlign: "center", width: 110, headerSort: false,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isGroup) return "";
+          return row.runningMeters != null ? `${fmtMtrs(row.runningMeters)} mtrs` : "—";
         },
       },
       {

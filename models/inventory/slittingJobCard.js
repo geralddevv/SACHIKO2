@@ -7,7 +7,7 @@ import mongoose from "mongoose";
 //      Slitting Queue and fixes ONE Deckle's job up front: which slitting
 //      machine, which operator and helper, and for that Deckle its web width,
 //      the metres to take off it, the length to wind on each finished roll,
-//      and the A..G knife layout across the web. Nothing has moved in stock
+//      and the A..L knife layout across the web. Nothing has moved in stock
 //      at this point -- it is a plan. The order's other Deckles are each
 //      allocated on their own card.
 //
@@ -40,7 +40,7 @@ const requirementRowSchema = new mongoose.Schema(
 // exact slot it came off.
 const rollWidthSchema = new mongoose.Schema(
   {
-    slot: { type: String, trim: true, uppercase: true }, // A..G
+    slot: { type: String, trim: true, uppercase: true }, // A..L
     width: { type: Number },
     rollId: { type: String, trim: true, uppercase: true },
     stockId: { type: mongoose.Schema.Types.ObjectId, ref: "FinishedStock" },

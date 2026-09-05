@@ -3,18 +3,29 @@
 <%
   // Stage 1 of slitting, Deckle-scoped: the planner fixes one or more
   // Deckles' jobs before they reach the floor -- one shared machine,
-  // operator and helper, and per Deckle its own web width, the metres to
-  // run off it, the length per finished roll and the A..G knife layout (one
-  // row per Deckle below). Nothing moves in stock here; once saved each card
-  // sits on the machine's queue and the operator works it on
-  // /sachiko/slitting/jobcard/:cardId.
+  // operator and helper, and per cut layout its own A..L knife widths and a
+  // "Deckle Rolls" count of how many of the ticked Deckles share it (below,
+  // one row per layout rather than one row per Deckle -- Deckles bound for
+  // the identical layout collapse into one row instead of repeating the same
+  // widths over and over). Nothing moves in stock here; once saved, each
+  // Deckle in a layout's count gets its own card, sitting on the machine's
+  // queue for the operator to work on /sachiko/slitting/jobcard/:cardId.
   const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
   const dash = (v) => (isEmpty(v) ? "—" : v);
-  // Log columns that are not roll-width slots: #, Deckle, Meter, Width,
-  // R. Meter, Rolls, Trim. The web strip spans the lot.
-  const fixedCols = 7;
+  // Log columns that are not roll-width slots: #, Remaining, R. Meter,
+  // Deckle Rolls, Trim, and the trailing remove-layout action. The web strip
+  // spans the lot.
+  const fixedCols = 6;
   const existingTargets = targetDeckles.filter((d) => d.existing);
   const curingTargets = targetDeckles.filter((d) => d.curing && d.curing.cured === false);
+  // Every Deckle of this order's Product Code + Size, in stock right now --
+  // the ones being allocated here (targetDeckles) plus the rest left
+  // unticked on the Slitting Queue (groupDeckles, "Other Deckles in this
+  // batch" below). Total is that whole pool; Available is what is left of it
+  // once this allocation is saved.
+  const deckleGroup = typeof groupDeckles !== "undefined" ? groupDeckles : [];
+  const deckleTotal = targetDeckles.length + deckleGroup.length;
+  const deckleAvailable = deckleGroup.length;
 %>
 
 <style>
@@ -34,15 +45,31 @@
   }
   .sl-mini-btn:hover { background: rgba(255,255,255,0.14); }
 
-  .sl-job-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: #e2e8f0; }
-  .sl-job-cell { background: #f8fafc; padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  /* grid-auto-flow: column with a fixed row (rather than auto-fit wrapping)
+     keeps every cell -- Product Code through Helper -- on one single row;
+     overflow-x lets it scroll sideways instead of wrapping when the strip is
+     wider than the panel. The partition between columns is each cell's own
+     border-right (dropped on the last cell), not a grid gap -- a gap's
+     "background peeking through" trick washes out once cells sit flush
+     against a scrolling container's edge. */
+  .sl-job-grid {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 1fr); grid-template-rows: 1fr;
+    overflow-x: auto;
+  }
+  .sl-job-cell {
+    background: #f8fafc; padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; min-width: 0;
+    border-right: 1px solid #e2e8f0;
+  }
+  .sl-job-cell:last-child { border-right: none; }
   .sl-job-cell.is-input { background: #fff; }
+  .sl-job-cell.is-wide { grid-column: span 2; }
   .sl-job-label {
     font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
     text-transform: uppercase; color: #7c8ba1; white-space: nowrap;
   }
   .sl-job-label .req { color: #dc2626; }
   .sl-job-value { font-size: 15px; font-weight: 800; color: #1f2a44; line-height: 1.3; overflow-wrap: anywhere; }
+  .sl-job-value.sl-bad { color: #b91c1c; }
   .sl-job-cell select.form-control {
     height: 34px !important; font-size: 13px !important; width: 100%;
     padding: 4px 24px 4px 8px !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important;
@@ -97,11 +124,11 @@
   .sl-scroll { align-self: stretch; overflow-x: auto; }
   .sl-scroll::-webkit-scrollbar { height: 9px; }
   .sl-scroll::-webkit-scrollbar-thumb { background: #044a78; border-radius: 8px; }
-  .sl-log-table { table-layout: fixed; min-width: 1028px; }
-  .sl-deckle-cell { text-align: left !important; }
-  .sl-note { display: block; font-size: 10.5px; font-weight: 600; color: #64748b; margin-top: 3px; line-height: 1.35; }
-  .sl-note.sl-bad { color: #b91c1c; }
+  .sl-log-table { table-layout: fixed; min-width: 730px; }
+  .sl-log-no-num { font-size: 12.5px; font-weight: 800; color: #1f2a44; }
   .sl-width-input.is-set { border-color: #044a78 !important; background-color: #f4f9ff !important; font-weight: 700; }
+  .sl-width-remaining { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .sl-width-remaining.sl-bad { color: #b91c1c; }
 
   .sl-row-btn {
     width: 26px; height: 26px; padding: 0; border: 1px solid #e2e8f0; background: #fff;
@@ -109,8 +136,24 @@
     display: inline-flex; align-items: center; justify-content: center;
   }
   .sl-row-btn:hover { background: #fef2f2; border-color: #fecaca; }
+  .sl-row-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .sl-row-btn:disabled:hover { background: #fff; border-color: #e2e8f0; }
 
-  /* Web view: A..G drawn to scale across the reel's web. Segments are sized
+  .sl-layout-toolbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  }
+  .sl-assign-status { font-size: 12.5px; font-weight: 700; color: #7c8ba1; }
+  .sl-assign-status.is-ok { color: #15803d; }
+  .sl-assign-status.is-bad { color: #b91c1c; }
+  .sl-add-layout-btn {
+    display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid #044a78; background: #fff;
+    color: #044a78; border-radius: 7px; padding: 7px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  }
+  .sl-add-layout-btn:hover { background: #f0f7ff; }
+  .sl-add-layout-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .sl-add-layout-btn:disabled:hover { background: #fff; }
+
+  /* Web view: A..L drawn to scale across the reel's web. Segments are sized
      by flex-grow, so they stay proportional at any table width. A layout
      wider than the web is drawn against the roll-width total instead (there
      is no room left to draw) and flagged red. */
@@ -167,7 +210,7 @@
   #slSubmitBtn:disabled:hover { transform: none; box-shadow: none; }
 
   @media screen and (max-width: 768px) {
-    .sl-job-grid { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
+    .sl-job-grid { grid-auto-columns: minmax(130px, 1fr); }
   }
 </style>
 
@@ -193,20 +236,38 @@
             <span class="sl-job-value"><%= dash(order.productCode) %></span>
           </div>
           <div class="sl-job-cell">
+            <span class="sl-job-label">Size</span>
+            <%# Every targetDeckle here was clubbed on the Slitting Queue by
+                Product Code + Size + Running Meters (see "Other Deckles in
+                this batch" note below), so they all share one size -- same
+                as it reads targetDeckles[0].size there. %>
+            <span class="sl-job-value"><%= dash(targetDeckles[0].size) %>mm</span>
+          </div>
+          <div class="sl-job-cell">
+            <span class="sl-job-label">Running Meters</span>
+            <%# The length wound onto each finished roll for this order --
+                same field the Slitting Queue's clubbing (and this page's
+                own group of Deckles below) already keys on alongside
+                Product Code + Size. %>
+            <span class="sl-job-value"><%= order.runningMeters != null ? `${order.runningMeters} mtrs` : "—" %></span>
+          </div>
+          <div class="sl-job-cell">
             <span class="sl-job-label">Lot No</span>
             <span class="sl-job-value"><%= dash(order.lotNo) %></span>
           </div>
           <div class="sl-job-cell">
-            <span class="sl-job-label">Size</span>
-            <%# Every targetDeckle here was clubbed on the Slitting Queue by
-                Product Code + Size (see "Other Deckles in this batch" note
-                below), so they all share one size -- same as it reads
-                targetDeckles[0].size there. %>
-            <span class="sl-job-value"><%= dash(targetDeckles[0].size) %>mm</span>
+            <span class="sl-job-label">Total Deckles</span>
+            <span class="sl-job-value"><%= deckleTotal %></span>
           </div>
           <div class="sl-job-cell">
-            <span class="sl-job-label"><%= targetDeckles.length === 1 ? "Deckle" : "Deckles" %></span>
-            <span class="sl-job-value"><%= targetDeckles.length === 1 ? dash(targetDeckles[0].rollId) : `${targetDeckles.length} selected` %></span>
+            <span class="sl-job-label">Available</span>
+            <%# Total minus however many of the ticked Deckles are currently
+                assigned to a layout's "Deckle Rolls" count below -- static
+                here (deckleAvailable = the batch's untouched Deckles) only
+                until JS takes over in recalc(), which keeps it live as
+                those counts change (e.g. Total 6, one layout's Deckle Rolls
+                set to 5 -> 1 still available for another layout). %>
+            <span class="sl-job-value" id="slAvailableValue"><%= deckleAvailable %></span>
           </div>
           <div class="sl-job-cell is-input">
             <span class="sl-job-label">Machine <span class="req">*</span></span>
@@ -309,8 +370,11 @@
     </div>
     <% } %>
 
-    <!-- One row per Deckle. A..G are the widths of the rolls taken across
-         each Deckle's own web -- one finished roll per width. -->
+    <!-- One row per cut layout, not per Deckle -- Deckles that will be cut
+         to the identical A..L roll widths share one row, with "Deckle Rolls"
+         saying how many of the ticked Deckles it covers. Saving expands each
+         layout row back out into one SlittingJobCard per Deckle it covers,
+         all sharing that row's widths. -->
     <div class="span-full form-subheading sl-sec-head">
       <h1><%= targetDeckles.length === 1 ? "Deckle Layout" : "Deckle Layouts" %></h1>
     </div>
@@ -318,21 +382,20 @@
       <div class="sl-panel sl-scroll">
         <table class="sl-table sl-log-table">
           <colgroup>
-            <col style="width:34px" /><col style="width:210px" />
-            <col style="width:82px" /><col style="width:78px" />
+            <col style="width:40px" />
+            <col style="width:78px" />
             <% cutSlots.forEach(() => { %><col style="width:54px" /><% }) %>
-            <col style="width:82px" /><col style="width:54px" /><col style="width:70px" />
+            <col style="width:82px" /><col style="width:90px" /><col style="width:70px" /><col style="width:40px" />
           </colgroup>
           <thead>
             <tr>
               <th rowspan="2" style="vertical-align:middle;">#</th>
-              <th rowspan="2" style="vertical-align:middle;">Deckle ID</th>
-              <th rowspan="2" style="vertical-align:middle;">Meter</th>
-              <th rowspan="2" style="vertical-align:middle;">Width</th>
+              <th rowspan="2" style="vertical-align:middle;">Remaining</th>
               <th colspan="<%= cutSlots.length %>">Roll Widths (mm)</th>
               <th rowspan="2" style="vertical-align:middle;">R. Meter</th>
-              <th rowspan="2" style="vertical-align:middle;">Rolls</th>
+              <th rowspan="2" style="vertical-align:middle;">Deckle Rolls</th>
               <th rowspan="2" style="vertical-align:middle;">Trim</th>
+              <th rowspan="2" style="vertical-align:middle;"></th>
             </tr>
             <tr>
               <% cutSlots.forEach((slot) => { %><th class="sl-sub-head"><%= slot %></th><% }) %>
@@ -340,6 +403,12 @@
           </thead>
           <tbody id="slLogBody"></tbody>
         </table>
+      </div>
+      <div class="sl-layout-toolbar" style="padding: 10px 14px;">
+        <span id="slAssignStatus" class="sl-assign-status"></span>
+        <button type="button" id="slAddLayoutBtn" class="sl-add-layout-btn">
+          <i class="fa-solid fa-plus"></i> Add Layout
+        </button>
       </div>
     </div>
 
@@ -364,9 +433,13 @@
   const SLOTS = JSON.parse(document.getElementById("sl-slots-data").textContent);
   const CONFIG = JSON.parse(document.getElementById("sl-config-data").textContent);
   const SUB_COLSPAN = CONFIG.fixedCols + SLOTS.length;
+  // Total Deckles in this batch (this page's ticked Deckles + the rest left
+  // unticked on the Slitting Queue -- see routes/system/slitting.js). The
+  // top grid's "Available" cell starts as Total minus every ticked Deckle
+  // (all auto-assigned to a layout on load), then recalc() keeps it live as
+  // "Deckle Rolls" counts change below.
+  const BATCH_TOTAL = <%= deckleTotal %>;
 
-  // The page is scoped to exactly these Deckles -- no picker, no other rows.
-  const deckleById = new Map(TARGETS.map((t) => [t._id, t]));
   const num = (v) => { const s = String(v ?? "").trim(); if (s === "") return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
   const round2 = (n) => Math.round(n * 100) / 100;
   const fmt = (n) => (Number.isFinite(n) ? round2(n).toLocaleString("en-IN") : "—");
@@ -375,6 +448,40 @@
   // leading number off it and leave the field blank when there isn't one.
   const sizeToWidth = (size) => { const m = /-?\d+(\.\d+)?/.exec(String(size ?? "")); return m ? Number(m[0]) : null; };
 
+  // ---- Group the ticked Deckles by layout, not one row each --------------
+  // Deckles already sharing an identical saved layout (or none yet, on a
+  // fresh allocation) collapse into one row, so the planner is never asked
+  // to retype the same A..L widths once per Deckle. SEQUENCED reorders
+  // TARGETS so Deckles sharing a layout sit together -- the row built for
+  // each group is filled from this exact same order when Save expands
+  // "Deckle Rolls" counts back out into one entry per Deckle
+  // (expandLayoutsToRows()), so the two must never drift apart.
+  function presetSignature(t) {
+    if (!t.existing) return "";
+    const row = t.existing.row;
+    const cutsKey = Object.entries(row.cuts || {})
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}:${v}`).join(",");
+    return `${row.width ?? ""}|${row.plannedRunningMeter ?? ""}|${cutsKey}`;
+  }
+  const layoutGroups = new Map();
+  TARGETS.forEach((t) => {
+    const sig = presetSignature(t);
+    if (!layoutGroups.has(sig)) layoutGroups.set(sig, []);
+    layoutGroups.get(sig).push(t);
+  });
+  const SEQUENCED = [...layoutGroups.values()].flat();
+  // Every target here was clubbed on the Slitting Queue by Product Code +
+  // Size, so they all share one web width. The floor always trims 5 mm off
+  // each edge before cutting (10 mm total) -- reserved out of the default
+  // cuttable width here so a fresh layout's "Remaining" and over-the-web
+  // check are correct without the planner having to remember to leave it
+  // out themselves. Only the default: a preset from an existing card (below)
+  // still wins with its own saved width, edge trim included or not.
+  const EDGE_TRIM_MM = 5;
+  const rawWebWidth = sizeToWidth(TARGETS[0]?.size);
+  const GROUP_WIDTH = rawWebWidth !== null ? round2(rawWebWidth - EDGE_TRIM_MM * 2) : null;
+
   function renumber(rowSel, cellSel) {
     document.querySelectorAll(rowSel).forEach((row, i) => {
       const cell = row.querySelector(cellSel);
@@ -382,25 +489,31 @@
     });
   }
 
-  // ---- The Deckle's layout row --------------------------------------------
-  // One row per Deckle in TARGETS. The Deckle ID cell is a fixed label plus
-  // a hidden input carrying its stock id back to the server, never a picker.
-  function addLogRow(target, preset) {
+  // ---- One layout row ------------------------------------------------------
+  // "Deckle Rolls" (qty) says how many Deckles this row's widths apply to --
+  // not which specific ones. Which physical Deckle each unit of qty resolves
+  // to is only decided at Save time (expandLayoutsToRows()), by walking
+  // SEQUENCED in the same order the rows were built from.
+  function addLayoutRow(qty, preset) {
     const tr = document.createElement("tr");
     tr.className = "sl-log-row";
     tr.innerHTML = `
-      <td class="sl-derived sl-log-no"></td>
-      <td class="sl-deckle-cell">
-        <span class="sl-job-value" style="font-size:13px;">${esc(target.rollId)}</span>
-        <input type="hidden" class="sl-deckle" value="${esc(target._id)}" />
-        <span class="sl-note sl-deckle-note"></span>
+      <td class="sl-derived sl-log-no">
+        <span class="sl-log-no-num"></span>
       </td>
-      <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-meter" placeholder="Mtrs" /></td>
-      <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-width" placeholder="mm" /></td>
+      <td class="sl-derived sl-width-cell" title="Cuttable web width left -- already nets out the default 5 mm edge trim on each side (10 mm total), and counts down further as roll widths (A–L) are entered">
+        <input type="hidden" class="sl-width" />
+        <span class="sl-width-remaining">—</span>
+      </td>
       ${SLOTS.map((s) => `<td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-roll-width sl-width-input" data-slot="${s}" placeholder="${s}" title="Roll ${s} width in mm" /></td>`).join("")}
       <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-rm" placeholder="Mtrs" /></td>
-      <td class="sl-derived sl-rolls">0</td>
-      <td class="sl-derived sl-trim">—</td>`;
+      <td><input type="number" step="1" min="1" inputmode="numeric" class="form-control sl-qty" placeholder="Qty" title="How many Deckles use this same roll-width layout" /></td>
+      <td class="sl-derived sl-trim">—</td>
+      <td style="background:#fff;">
+        <button type="button" class="sl-row-btn sl-remove-layout" title="Remove this layout" aria-label="Remove this layout">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </td>`;
 
     // The web view lives in its own row so it can span the full table, linked
     // by a direct element reference rather than ids.
@@ -413,27 +526,15 @@
       </td>`;
     tr.__sub = sub;
 
-    // Prefill from the reel: its remaining metres and its web width. Both stay
-    // editable -- a run can take part of a reel, and the stored size is only
-    // as good as what was entered when the Deckle was made. A saved preset
-    // (re-opening an existing allocation) wins over these defaults below.
-    const meterEl = tr.querySelector(".sl-meter");
     const widthEl = tr.querySelector(".sl-width");
     const rmEl = tr.querySelector(".sl-rm");
-    if (target.reelMtrs != null) { meterEl.value = target.reelMtrs; rmEl.value = target.reelMtrs; }
-    const w0 = sizeToWidth(target.size);
-    if (w0 !== null) widthEl.value = w0;
-
-    // R. Meter follows the metres taken off the Deckle until the planner types
-    // their own -- they differ only on a rewound or joined run.
-    meterEl.addEventListener("input", () => {
-      if (!rmEl.dataset.touched) rmEl.value = meterEl.value;
-    });
-    rmEl.addEventListener("input", function () { this.dataset.touched = "1"; });
+    const qtyEl = tr.querySelector(".sl-qty");
+    if (GROUP_WIDTH !== null) widthEl.value = GROUP_WIDTH;
+    qtyEl.value = qty;
 
     tr.querySelectorAll("input").forEach((el) => el.addEventListener("input", recalc));
 
-    // Enter walks along A..G, so a layout can be typed straight through.
+    // Enter walks along A..L, so a layout can be typed straight through.
     const widthInputs = [...tr.querySelectorAll(".sl-roll-width")];
     widthInputs.forEach((el, idx) => {
       el.addEventListener("keydown", (ev) => {
@@ -443,13 +544,16 @@
       });
     });
 
+    tr.querySelector(".sl-remove-layout").addEventListener("click", () => {
+      if (document.querySelectorAll("#slLogBody .sl-log-row").length <= 1) return;
+      sub.remove();
+      tr.remove();
+      recalc();
+    });
+
     if (preset) {
-      if (preset.plannedMeter != null) meterEl.value = preset.plannedMeter;
       if (preset.width != null) widthEl.value = preset.width;
-      if (preset.plannedRunningMeter != null) {
-        rmEl.value = preset.plannedRunningMeter;
-        rmEl.dataset.touched = "1";
-      }
+      if (preset.plannedRunningMeter != null) rmEl.value = preset.plannedRunningMeter;
       widthInputs.forEach((el) => {
         const v = preset.cuts?.[el.dataset.slot];
         if (v != null) el.value = v;
@@ -462,7 +566,7 @@
     recalc();
   }
 
-  function readLogRow(tr) {
+  function readLayoutRow(tr) {
     // Keyed by slot letter -- the server reads req.body.rows[i].cuts.A ...
     const cuts = {};
     tr.querySelectorAll(".sl-roll-width").forEach((el) => {
@@ -470,16 +574,23 @@
       if (v !== null) cuts[el.dataset.slot] = v;
     });
     return {
-      deckleStockId: tr.querySelector(".sl-deckle").value,
-      plannedMeter: num(tr.querySelector(".sl-meter").value),
       width: num(tr.querySelector(".sl-width").value),
       cuts,
       plannedRunningMeter: num(tr.querySelector(".sl-rm").value),
+      qty: Math.max(0, Math.floor(num(tr.querySelector(".sl-qty").value) || 0)),
     };
   }
 
-  // Draw one Deckle's web to scale: a segment per roll width, then whatever
-  // edge trim is left over.
+  // Draw one layout's web to scale: the 5 mm edge trim on each side (r.width
+  // is already the cuttable width net of both -- see EDGE_TRIM_MM), then a
+  // segment per roll width, then whatever slack is left over uncut.
+  function edgeTrimSeg(side) {
+    return `
+      <div class="sl-web-seg sl-web-trim" style="flex-grow:${EDGE_TRIM_MM}" title="${side} edge trim — ${EDGE_TRIM_MM} mm">
+        <span class="sl-seg-slot">EDGE</span><span class="sl-seg-w">${EDGE_TRIM_MM}</span>
+      </div>`;
+  }
+
   function paintWeb(tr, r, widthTotal, over) {
     const sub = tr.__sub;
     if (!sub) return;
@@ -491,9 +602,16 @@
     flag.className = "sl-web-flag" + (over ? " sl-bad" : (entries.length && r.width !== null) ? " sl-ok" : "");
 
     if (!entries.length) {
-      web.innerHTML = `<div class="sl-web-empty">${r.width !== null
-        ? `${esc(fmt(r.width))} mm web — no roll widths yet`
-        : "Enter the roll widths (A–G)"}</div>`;
+      if (r.width === null) {
+        web.innerHTML = `<div class="sl-web-empty">Enter the roll widths (A–L)</div>`;
+        flag.textContent = "";
+        return;
+      }
+      // Nothing cut yet -- the two mandatory edge trims still show either
+      // side of the empty cuttable width.
+      web.innerHTML = `${edgeTrimSeg("Left")}`
+        + `<div class="sl-web-empty" style="flex-grow:${r.width}; flex-basis:0; min-width:0; width:auto;">${esc(fmt(r.width))} mm web — no roll widths yet</div>`
+        + edgeTrimSeg("Right");
       flag.textContent = "";
       return;
     }
@@ -505,11 +623,11 @@
       </div>`);
     if (!over && trimW > 0) {
       segs.push(`
-        <div class="sl-web-seg sl-web-trim" style="flex-grow:${trimW}" title="Edge trim — ${esc(fmt(trimW))} mm">
+        <div class="sl-web-seg sl-web-trim" style="flex-grow:${trimW}" title="Trim (uncut slack) — ${esc(fmt(trimW))} mm">
           <span class="sl-seg-slot">TRIM</span><span class="sl-seg-w">${esc(fmt(trimW))}</span>
         </div>`);
     }
-    web.innerHTML = segs.join("");
+    web.innerHTML = r.width !== null ? `${edgeTrimSeg("Left")}${segs.join("")}${edgeTrimSeg("Right")}` : segs.join("");
 
     const rollWord = `${entries.length} roll${entries.length === 1 ? "" : "s"}`;
     if (r.width === null) {
@@ -517,7 +635,7 @@
     } else if (over) {
       flag.textContent = `Over the web by ${fmt(widthTotal - r.width)} mm`;
     } else {
-      flag.textContent = `${rollWord} · ${fmt(widthTotal)} of ${fmt(r.width)} mm · ${fmt(trimW)} mm trim`;
+      flag.textContent = `${rollWord} · ${fmt(widthTotal)} of ${fmt(r.width)} mm · ${fmt(trimW)} mm trim + ${EDGE_TRIM_MM * 2} mm edge`;
     }
   }
 
@@ -525,32 +643,40 @@
   // current; the submit handler shows it as a toast instead of a fixed banner.
   let submitBlockReason = "";
 
-  // Rolls and edge trim for the row, and whether the plan can be saved.
+  // Trim and validity per layout row, plus whether every ticked Deckle has
+  // been assigned to exactly one layout's "Deckle Rolls" count.
   function recalc() {
     const rows = [...document.querySelectorAll("#slLogBody .sl-log-row")];
-    renumber("#slLogBody .sl-log-row", ".sl-log-no");
+    renumber("#slLogBody .sl-log-row", ".sl-log-no-num");
 
-    const read = rows.map(readLogRow);
-    const drawByDeckle = new Map();
-    read.forEach((r) => {
-      if (r.deckleStockId && r.plannedMeter > 0) {
-        drawByDeckle.set(r.deckleStockId, round2((drawByDeckle.get(r.deckleStockId) || 0) + r.plannedMeter));
-      }
+    // Only the last remaining layout can't be removed -- there must always be
+    // somewhere for every ticked Deckle to be assigned.
+    rows.forEach((tr) => {
+      const btn = tr.querySelector(".sl-remove-layout");
+      if (btn) btn.disabled = rows.length <= 1;
     });
 
+    const read = rows.map(readLayoutRow);
     let blocked = "";
 
     if (!document.getElementById("slMachine").value) blocked = "Select a slitting machine.";
     else if (!document.getElementById("slOperator").value) blocked = "Select an operator.";
 
+    let totalQty = 0;
     rows.forEach((tr, i) => {
       const r = read[i];
+      totalQty += r.qty;
       const widths = Object.values(r.cuts);
       const widthTotal = round2(widths.reduce((n, w) => n + w, 0));
       const over = r.width !== null && widthTotal > r.width;
 
       tr.querySelectorAll(".sl-roll-width").forEach((el) => el.classList.toggle("is-set", el.value.trim() !== ""));
-      tr.querySelector(".sl-rolls").textContent = String(widths.length);
+
+      // Counts down from the web width as roll widths (A–L) are entered --
+      // what's left to allocate, not what's already cut.
+      const remainingEl = tr.querySelector(".sl-width-remaining");
+      remainingEl.textContent = r.width === null ? "—" : fmt(r.width - widthTotal);
+      remainingEl.classList.toggle("sl-bad", over);
 
       const trimCell = tr.querySelector(".sl-trim");
       if (r.width === null || !widths.length) {
@@ -563,40 +689,88 @@
 
       paintWeb(tr, r, widthTotal, over);
 
-      const note = tr.querySelector(".sl-deckle-note");
-      const d = deckleById.get(r.deckleStockId);
-      let reelOk = true;
-      if (!d) {
-        note.textContent = "";
-        note.classList.remove("sl-bad");
-      } else {
-        const drawn = drawByDeckle.get(r.deckleStockId) || 0;
-        if (drawn > d.reelMtrs) {
-          note.textContent = `Only ${fmt(d.reelMtrs)} mtrs left — this plan asks for ${fmt(drawn)}.`;
-          note.classList.add("sl-bad");
-          reelOk = false;
-        } else {
-          note.textContent = `${fmt(d.reelMtrs - drawn)} of ${fmt(d.reelMtrs)} mtrs left after this job`
-            + (d.location ? ` · ${d.location}` : "");
-          note.classList.remove("sl-bad");
-        }
-      }
-
       // First thing standing between this plan and Save, named in the order it
       // is filled in -- otherwise the button just sits dead.
-      const why = !(r.plannedMeter > 0) ? "enter the metres to run off the Deckle"
-        : !widths.length ? "enter at least one roll width (A–G)"
+      const why = !(r.qty >= 1) ? "enter how many Deckles use this layout"
+        : !widths.length ? "enter at least one roll width (A–L)"
         : !widths.every((w) => w > 0) ? "roll widths must be more than zero"
         : over ? "the roll widths add up to more than the Deckle web"
         : !(r.plannedRunningMeter > 0) ? "enter the R. Meter"
-        : !reelOk ? "this Deckle does not have that many metres left"
         : "";
       if (why && !blocked) blocked = why.charAt(0).toUpperCase() + why.slice(1) + ".";
     });
 
-    if (!rows.length) blocked = "Fill in the Deckle's layout.";
+    const statusEl = document.getElementById("slAssignStatus");
+    const fullyAssigned = totalQty === SEQUENCED.length;
+    if (statusEl) {
+      statusEl.textContent = `${totalQty} of ${SEQUENCED.length} Deckle${SEQUENCED.length === 1 ? "" : "s"} assigned`;
+      statusEl.classList.toggle("is-ok", fullyAssigned);
+      statusEl.classList.toggle("is-bad", !fullyAssigned);
+    }
+
+    // Total minus every ticked Deckle currently assigned to a layout below
+    // -- e.g. Total 6, one layout's Deckle Rolls dropped to 5, 1 still
+    // available for another layout. Negative means too many are assigned
+    // (over SEQUENCED.length), same case the "too many" blocked message
+    // above already names.
+    const unassigned = SEQUENCED.length - totalQty;
+    const availableEl = document.getElementById("slAvailableValue");
+    if (availableEl) {
+      availableEl.textContent = String(BATCH_TOTAL - totalQty);
+      availableEl.classList.toggle("sl-bad", unassigned < 0);
+    }
+    // Nothing left to give a new layout once every ticked Deckle is already
+    // assigned (or over-assigned) -- Add Layout would otherwise default the
+    // new row's qty to 1 and push Available further into the negative.
+    const addLayoutBtn = document.getElementById("slAddLayoutBtn");
+    if (addLayoutBtn) addLayoutBtn.disabled = unassigned <= 0;
+    if (!blocked && !fullyAssigned) {
+      blocked = totalQty < SEQUENCED.length
+        ? `${SEQUENCED.length - totalQty} Deckle${SEQUENCED.length - totalQty === 1 ? "" : "s"} not yet assigned to a layout.`
+        : `${totalQty - SEQUENCED.length} too many Deckles assigned across layouts — lower a "Deckle Rolls" count.`;
+    }
+
+    if (!rows.length) blocked = "Add a Deckle layout.";
     submitBlockReason = blocked;
   }
+
+  // Walks SEQUENCED in the same order the layout rows were built from,
+  // handing each layout's next "Deckle Rolls" Deckles its shared width/cuts
+  // -- one row per Deckle, back to exactly what the server expects (and one
+  // SlittingJobCard per Deckle, per "One Deckle == one card" everywhere else
+  // in slitting).
+  function expandLayoutsToRows() {
+    const layouts = [...document.querySelectorAll("#slLogBody .sl-log-row")].map(readLayoutRow);
+    const expanded = [];
+    let cursor = 0;
+    for (const layout of layouts) {
+      for (let i = 0; i < layout.qty && cursor < SEQUENCED.length; i++, cursor++) {
+        const target = SEQUENCED[cursor];
+        expanded.push({
+          deckleStockId: target._id,
+          // The metres drawn off each Deckle are always its own full
+          // remaining length -- never user-editable, never shared across a
+          // layout's Deckles (each reel has its own).
+          plannedMeter: target.reelMtrs,
+          width: layout.width,
+          cuts: layout.cuts,
+          plannedRunningMeter: layout.plannedRunningMeter,
+        });
+      }
+    }
+    return expanded;
+  }
+
+  document.getElementById("slAddLayoutBtn").addEventListener("click", () => {
+    const assigned = [...document.querySelectorAll("#slLogBody .sl-log-row")]
+      .reduce((n, tr) => n + (readLayoutRow(tr).qty || 0), 0);
+    const remaining = SEQUENCED.length - assigned;
+    // Belt-and-braces alongside recalc() disabling the button itself --
+    // nothing left to give a new layout once every ticked Deckle is already
+    // assigned (or over-assigned).
+    if (remaining <= 0) return;
+    addLayoutRow(remaining);
+  });
 
   // Every save-time problem surfaces as a toast, not a fixed banner.
   function showError(msg) {
@@ -614,8 +788,8 @@
     recalc();
     if (submitBlockReason) return showError(submitBlockReason);
 
-    const rows = [...document.querySelectorAll("#slLogBody .sl-log-row")].map(readLogRow);
-    if (!rows.length) return showError("Fill in the Deckle's layout.");
+    const rows = expandLayoutsToRows();
+    if (!rows.length) return showError("Add a Deckle layout.");
 
     btn.disabled = true;
     btn.textContent = "Saving…";
@@ -646,7 +820,10 @@
     recalc();
   });
 
-  // One row per Deckle -- each seeded from its own existing allocation if it
-  // has one, otherwise blank (with the reel's own metres/width prefilled).
-  TARGETS.forEach((t) => addLogRow(t, t.existing ? t.existing.row : undefined));
+  // One row per layout group -- Deckles sharing an identical existing
+  // allocation (or all blank, on a fresh one) start collapsed together;
+  // qty is seeded from how many Deckles that group has.
+  [...layoutGroups.values()].forEach((group) => {
+    addLayoutRow(group.length, group[0].existing ? group[0].existing.row : undefined);
+  });
 </script>
