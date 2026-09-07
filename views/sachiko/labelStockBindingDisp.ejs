@@ -71,6 +71,10 @@
       paperSize: binding.paperSize || "",
       runningMeters: binding.runningMeters ?? "",
       status: binding.status || "ACTIVE",
+      // Total units actually sent to this client against this binding --
+      // summed server-side from every non-cancelled Sales Order's
+      // dispatchedQuantity (routes/sachiko/labelStockBinding.js).
+      sentQuantity: binding.sentQuantity ?? 0,
       // Last / Lowest / Highest from every Sales Order placed against this
       // binding (server-computed from each order's rate). Undefined when the
       // binding has never been ordered at a real price.
@@ -176,6 +180,8 @@
       withTextFilter({ title: "Product Code", field: "productCode", minWidth: 150, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
       withTextFilter({ title: "Size", field: "paperSize", minWidth: 110 }),
       withTextFilter({ title: "Running Mtrs", field: "runningMeters", minWidth: 130 }),
+      { title: "Sent", field: "sentQuantity", hozAlign: "right", headerHozAlign: "right", minWidth: 100,
+        formatter: (cell) => Number(cell.getValue() || 0).toLocaleString("en-IN") },
       { title: "Last Rate", field: "lastRate", hozAlign: "right", headerHozAlign: "right", minWidth: 110, formatter: rateFormatter },
       { title: "Lowest", field: "lowestRate", hozAlign: "right", headerHozAlign: "right", minWidth: 100, formatter: rateFormatter },
       { title: "Highest", field: "highestRate", hozAlign: "right", headerHozAlign: "right", minWidth: 100, formatter: rateFormatter },
@@ -215,6 +221,7 @@
           { label: "Product Code", value: row.productCode },
           { label: "Size", value: row.paperSize },
           { label: "Running Mtrs", value: row.runningMeters },
+          { label: "Sent", value: Number(row.sentQuantity || 0).toLocaleString("en-IN") },
           { label: "Last Rate", value: fmtRate(row.lastRate) },
           { label: "Lowest Rate", value: fmtRate(row.lowestRate) },
           { label: "Highest Rate", value: fmtRate(row.highestRate) },

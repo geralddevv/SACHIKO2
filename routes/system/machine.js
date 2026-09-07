@@ -224,12 +224,26 @@ router.delete("/api/machines/:id", requireAuth, requireMachineMaster, deleteLimi
 
 // ----------------------------------Machine Production Queue---------------------------------->
 // Overview of every machine with a pending-order count, linking through to
-// each machine's own queue detail page below.
+// each machine's own queue detail page below. ?type=<machineType> narrows the
+// list to one machine type (e.g. the Slitting nav's own "Machine Queue" link
+// uses ?type=SLITTING to show just S1/S2/S3) -- omitted, every machine shows
+// as before.
 router.get("/machine/queue", requireMachineFloor, async (req, res) => {
-  const machines = await Machine.find().populate("location").sort({ machineName: 1 }).lean();
+  const typeFilter = String(req.query.type || "").trim().toUpperCase();
+  const isSlitting = typeFilter === "SLITTING";
+  const machines = await Machine.find(typeFilter ? { machineType: typeFilter } : {})
+    .populate("location")
+    .sort({ machineName: 1 })
+    .lean();
 
-  // producedAt: null keeps finished jobs off the queue (matches unset too).
-  const queuedJobs = await buildQueueRows({ assignedMachineId: { $ne: null }, producedAt: null });
+  // Slitting machines are never targeted by Assign Production
+  // (PendingProduction.assignedMachineId) -- their queue lives on
+  // SlittingJobCard instead, so the two pending-job sources are mutually
+  // exclusive per machine type rather than merged.
+  const [queuedJobs, slittingJobs] = await Promise.all([
+    isSlitting ? [] : buildQueueRows({ assignedMachineId: { $ne: null }, producedAt: null }),
+    isSlitting ? buildSlittingQueueRows({}) : [],
+  ]);
   const jobsByMachine = new Map();
   queuedJobs.forEach((job) => {
     if (!job.machineId) return;
@@ -242,6 +256,23 @@ router.get("/machine/queue", requireMachineFloor, async (req, res) => {
       balanceRolls: job.balanceRolls,
       producedRolls: job.producedRolls,
       rollIds: job.allottedRollDetails.map((r) => r.rollId).filter(Boolean),
+      clientName: job.clientName,
+    });
+  });
+  // Every allocated (not yet fully run) Slitting Job Card, folded into the
+  // same jobs-per-machine shape the table/card view already renders -- one
+  // "job" here is one card, quantity/rolls read off its Deckle count instead
+  // of a PendingProduction's roll quantity.
+  slittingJobs.forEach((job) => {
+    if (!job.machineId) return;
+    if (!jobsByMachine.has(job.machineId)) jobsByMachine.set(job.machineId, []);
+    jobsByMachine.get(job.machineId).push({
+      _id: job._id,
+      productCode: job.productCode,
+      quantity: job.deckleCount,
+      rolls: job.plannedRolls,
+      producedRolls: job.producedRolls,
+      rollIds: [],
       clientName: job.clientName,
     });
   });
@@ -276,8 +307,10 @@ router.get("/machine/queue", requireMachineFloor, async (req, res) => {
     };
   });
 
+  const heading = isSlitting ? "Slitting Machine Queues" : "Machine Queues";
   res.render("inventory/masters/machineQueueList.ejs", {
-    title: "Machine Queues",
+    title: heading,
+    heading,
     CSS: "tableDisp.css",
     JS: false,
     rows,

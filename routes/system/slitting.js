@@ -946,7 +946,7 @@ router.get("/slitting/jobcard/:cardId", requireSlittingFloor, async (req, res) =
   const stockIds = (card.slittingLog || []).map((r) => r.deckleStockId).filter(Boolean);
   const reels = stockIds.length
     ? await MaterialStock.find({ _id: { $in: stockIds } })
-        .select("rollId reelMtrs location createdAt")
+        .select("rollId reelMtrs location createdAt size")
         .populate({ path: "material", select: "adhesive adhesive2" })
         .lean()
     : [];
@@ -968,6 +968,16 @@ router.get("/slitting/jobcard/:cardId", requireSlittingFloor, async (req, res) =
       productCode: card.productCode || "",
       lotNo: card.lotNo || "",
       location: card.location || "",
+      // Setup Start/Stop readings taken before the first Deckle is cut -- see
+      // POST /slitting/jobcard/setting below. Prefills the Job Setting table
+      // so a reload picks up exactly where the operator left off instead of
+      // losing already-punched rows.
+      jobSetting: (card.jobSetting || []).map((r) => ({
+        mtrs1: r.mtrs1 ?? null,
+        startTime: r.startTime || "",
+        mtrs2: r.mtrs2 ?? null,
+        stopTime: r.stopTime || "",
+      })),
       rows: (card.slittingLog || []).map((r, i) => {
         const reel = reelById.get(String(r.deckleStockId));
         const cure = deckleCuring(reel);
@@ -978,6 +988,15 @@ router.get("/slitting/jobcard/:cardId", requireSlittingFloor, async (req, res) =
           cuts: (r.cuts || []).map((c) => ({ slot: c.slot, width: c.width, rollId: c.rollId || "" })),
           plannedMeter: r.plannedMeter ?? null,
           plannedRunningMeter: r.plannedRunningMeter ?? null,
+          // Raw web size the Deckle was laminated to (its MaterialStock.size,
+          // e.g. "210") -- what the allocation page called rawWebWidth, before
+          // the edge trim it netted out to get this row's own `width`. Only
+          // for drawing the web view's edge-trim segments; not itself stored
+          // on the row.
+          webWidth: reel?.size ? (() => {
+            const m = /-?\d+(\.\d+)?/.exec(String(reel.size));
+            return m ? Number(m[0]) : null;
+          })() : null,
           status: r.status || "pending",
           meter: r.meter ?? null,
           runningMeter: r.runningMeter ?? null,
@@ -1000,6 +1019,36 @@ router.get("/slitting/jobcard/:cardId", requireSlittingFloor, async (req, res) =
     },
     notification: req.flash("notification"),
   });
+});
+
+// Persists the Job Setting rows (setup Start/Stop meter readings, punched
+// client-side) in one shot when the operator clicks "Start Production" --
+// unlike a Deckle row's Start/Stop, nothing here moves stock or is gated by
+// curing, so there is no need for the per-punch round trip row/start below
+// uses. Re-saving simply overwrites, so revisiting this step is harmless.
+router.post("/slitting/jobcard/setting", requireAuth, requireSlittingFloor, updateLimiter, async (req, res) => {
+  try {
+    const { cardId, rows } = req.body || {};
+    if (!mongoose.isValidObjectId(cardId)) return res.status(400).json({ success: false, message: "Invalid card." });
+    if (!Array.isArray(rows) || !rows.length) {
+      return res.status(400).json({ success: false, message: "Add at least one Job Setting row." });
+    }
+
+    const card = await SlittingJobCard.findById(cardId);
+    if (!card) return res.status(404).json({ success: false, message: "Card not found." });
+
+    card.jobSetting = rows.map((r) => ({
+      mtrs1: Number(r?.mtrs1) || undefined,
+      startTime: trim(r?.startTime),
+      mtrs2: Number(r?.mtrs2) || undefined,
+      stopTime: trim(r?.stopTime),
+    }));
+    await card.save();
+    res.json({ success: true });
+  } catch (err) {
+    console.error("SLITTING JOB SETTING ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to save Job Setting." });
+  }
 });
 
 // Stamps the clock on one row when the operator punches Start. Deliberately

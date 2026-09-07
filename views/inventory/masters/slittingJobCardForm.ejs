@@ -13,6 +13,11 @@
   const fmtN = (v) => (Number.isFinite(Number(v)) && !isEmpty(v) ? Number(v).toLocaleString("en-IN") : "—");
   const cardDate = card.date ? new Date(card.date).toLocaleDateString("en-GB") : "—";
   const pendingCount = (card.rows || []).filter((r) => r.status !== "done").length;
+  // R. Meter is fixed per Deckle at allocation (every row on this card
+  // shares it, same Deckle-group), so the first row's is the card's -- Rolls
+  // is the total finished rolls every row will produce once run.
+  const plannedRunningMeter = card.rows && card.rows[0] ? card.rows[0].plannedRunningMeter : null;
+  const totalPlannedRolls = (card.rows || []).reduce((n, r) => n + (r.cuts || []).length, 0);
 %>
 
 <style>
@@ -38,6 +43,39 @@
   }
   .sl-job-value { font-size: 15px; font-weight: 800; color: #1f2a44; line-height: 1.3; overflow-wrap: anywhere; }
 
+  /* ---- Job Setting: setup Start/Stop readings before the first Deckle is
+     cut -- same shape as the lamination Job Card's own Job Setting table
+     (views/inventory/masters/jobCardForm.ejs), themed to this page's colors. */
+  .sl-js-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .sl-js-table th {
+    background: #044a78; color: #fff; font-size: 11.5px; font-weight: 600; padding: 8px 10px;
+    text-align: left; border-right: 1px solid rgba(255,255,255,0.22); white-space: nowrap;
+  }
+  .sl-js-table th:last-child { border-right: none; }
+  .sl-js-table td {
+    padding: 6px 8px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;
+    font-size: 12.5px; vertical-align: middle;
+  }
+  .sl-js-table td:last-child { border-right: none; }
+  .sl-js-table tbody tr:last-child td { border-bottom: none; }
+  .sl-js-table input.form-control {
+    height: 32px !important; font-size: 12.5px !important; padding: 4px 8px !important;
+    border-radius: 6px !important; border: 1px solid #cbd5e1 !important; width: 100%;
+  }
+  .sl-js-table input.form-control:focus { outline: none; border-color: #044a78 !important; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+  .sl-js-table input.form-control[readonly] { background: #f8fafc; color: #64748b; }
+  .sl-js-counter-btn {
+    width: 28px; height: 28px; border: 1px solid #044a78; background: #fff; color: #044a78;
+    border-radius: 6px; font-size: 16px; line-height: 1; cursor: pointer;
+  }
+  .sl-js-count { width: 48px !important; height: 28px !important; text-align: center; }
+  .sl-js-btn {
+    width: 30px; height: 26px; padding: 0; font-size: 11px; border: none; border-radius: 5px;
+    cursor: not-allowed; background: #cbd5e1; color: #fff; display: inline-flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .sl-hidden { display: none !important; }
+
   /* ---- Scan strip ------------------------------------------------------ */
   .sl-scan-wrap {
     align-self: stretch; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -61,28 +99,25 @@
   .sl-scan-msg.sl-bad { color: #b91c1c; }
   .sl-scan-msg.sl-ok { color: #15803d; }
 
-  /* ---- One Deckle ------------------------------------------------------ */
-  .sl-deckles { align-self: stretch; display: flex; flex-direction: column; gap: 10px; }
-  .sl-deckle {
-    background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #cbd5e1;
-    border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
-    transition: border-color 0.15s, box-shadow 0.15s;
+  /* ---- Production Log: one row per allocated Deckle, same visual language
+     as the lamination Job Card's own Production Log table (jc-log-table). -- */
+  .sl-log-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .sl-log-table th {
+    background: #044a78; color: #fff; font-size: 11.5px; font-weight: 600; padding: 8px 10px;
+    text-align: center; border-right: 1px solid rgba(255,255,255,0.22); white-space: nowrap;
   }
-  .sl-deckle.is-armed { border-left-color: #044a78; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12); }
-  .sl-deckle.is-running { border-left-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14); }
-  .sl-deckle.is-curing { border-left-color: #d97706; background: #fffbf3; }
-  .sl-deckle.is-done { border-left-color: #16a34a; background: #f8fdfa; }
-
-  .sl-deckle-top { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
-  .sl-deckle-no {
-    flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: #044a78; color: #fff;
-    font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center;
+  .sl-log-table th:last-child { border-right: none; }
+  .sl-log-table td {
+    padding: 7px 8px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;
+    font-size: 12.5px; font-variant-numeric: tabular-nums; vertical-align: middle;
   }
-  .sl-deckle-id { font-size: 15.5px; font-weight: 800; color: #03365a; overflow-wrap: anywhere; }
-  .sl-deckle-meta { font-size: 12px; font-weight: 600; color: #64748b; margin-top: 3px; line-height: 1.5; }
-  .sl-deckle-meta .sl-bad, .sl-deckle-meta.sl-bad { color: #b91c1c; }
+  .sl-log-table td:last-child { border-right: none; }
+  .sl-log-table tbody tr:last-child td { border-bottom: none; }
+  .sl-log-table tbody tr.is-running td { background: #fffbeb; }
+  .sl-log-table tbody tr.is-curing td { background: #fffbf3; }
+  .sl-log-table tbody tr.is-done td { background: #f8fdfa; }
   .sl-badge {
-    margin-left: auto; flex: 0 0 auto; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em;
+    font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em;
     text-transform: uppercase; padding: 4px 11px; border-radius: 999px; white-space: nowrap;
   }
   .sl-badge.is-pending { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
@@ -90,50 +125,13 @@
   .sl-badge.is-armed { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
   .sl-badge.is-running { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
   .sl-badge.is-done { background: #ecfdf5; color: #15803d; border: 1px solid #a7f3d0; }
-
-  /* Web view: the allocated roll widths drawn to scale across the reel. */
-  /* The drawing is a proportional diagram, not a data grid: stretched to the
-     full width its segments are far wider than they need to be to read, so it
-     is capped and centred, caption included. */
-  .sl-web-caption {
-    display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
-    max-width: 560px; margin: 0 auto 5px;
-    font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7c8ba1;
+  .sl-log-btn {
+    width: 30px; height: 26px; padding: 0; font-size: 11px; border: none; border-radius: 5px;
+    cursor: not-allowed; background: #cbd5e1; color: #fff; display: inline-flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
   }
-  .sl-web-flag { text-transform: none; letter-spacing: 0; font-size: 11px; font-weight: 700; color: #15803d; }
-  .sl-web {
-    display: flex; align-items: stretch; height: 34px; width: 100%; max-width: 560px; margin: 0 auto;
-    border: 1px solid #cbd5e1; border-radius: 7px; overflow: hidden; background: #fff;
-  }
-  .sl-web-seg {
-    flex-basis: 0; min-width: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 1px;
-    border-right: 1px solid #fff; overflow: hidden; white-space: nowrap;
-    background: #2f7fb8; color: #fff;
-  }
-  .sl-web-seg:nth-child(even) { background: #256a9c; }
-  .sl-web-seg:last-child { border-right: none; }
-  .sl-web-seg .sl-seg-slot { font-size: 9px; font-weight: 700; opacity: 0.8; letter-spacing: 0.06em; }
-  .sl-web-seg .sl-seg-w { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .sl-web-seg.sl-web-trim {
-    background: repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 5px, #eef2f7 5px, #eef2f7 10px); color: #64748b;
-  }
-
-  .sl-deckle-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .sl-punch {
-    flex: 0 0 auto; min-width: 118px; height: 40px; border: none; border-radius: 8px;
-    font-size: 14px; font-weight: 700; letter-spacing: 0.02em; color: #fff; cursor: pointer;
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    transition: opacity 0.15s;
-  }
-  .sl-punch:hover:not(:disabled) { opacity: 0.88; }
-  .sl-punch.sl-start { background: #10b981; }
-  .sl-punch.sl-stop { background: #dc2626; }
-  .sl-punch:disabled { background: #cbd5e1; cursor: not-allowed; }
-  .sl-times { font-size: 12px; font-weight: 700; color: #64748b; font-variant-numeric: tabular-nums; }
-  .sl-rolls-out {
-    flex: 1 1 100%; font-size: 12px; font-weight: 700; color: #15803d; line-height: 1.6; overflow-wrap: anywhere;
-  }
+  .sl-log-btn.is-start:not(:disabled) { background: #10b981; cursor: pointer; }
+  .sl-log-btn.is-stop:not(:disabled) { background: #dc2626; cursor: pointer; }
 
   /* ---- Requirement (read-only) ----------------------------------------- */
   .sl-req-table { width: 100%; border-collapse: separate; border-spacing: 0; }
@@ -149,13 +147,45 @@
   .sl-req-table td:last-child { border-right: none; }
   .sl-req-table tbody tr:last-child td { border-bottom: none; }
 
-  .sl-summary {
-    align-self: stretch; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1px; background: #e2e8f0; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;
+  /* Web view: A..L drawn to scale across the Deckle's web, same look as the
+     allocation page's own strip (views/inventory/masters/slittingAllocation.ejs)
+     -- just read-only here, off the roll widths already fixed at allocation. */
+  .sl-web-sub td {
+    background: #f8fafc !important; padding: 8px 10px 10px !important;
+    text-align: left !important; border-bottom: 1px solid #e2e8f0 !important;
   }
-  .sl-sum-cell { background: #fff; padding: 11px 14px; display: flex; flex-direction: column; gap: 4px; }
-  .sl-sum-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #7c8ba1; }
-  .sl-sum-value { font-size: 19px; font-weight: 800; color: #044a78; font-variant-numeric: tabular-nums; }
+  .sl-web-caption {
+    display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+    max-width: 960px; margin: 0 auto 5px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7c8ba1;
+  }
+  .sl-web-flag { text-transform: none; letter-spacing: 0; font-size: 11px; font-weight: 700; }
+  .sl-web-flag.sl-bad { color: #b91c1c; }
+  .sl-web-flag.sl-ok { color: #15803d; }
+  .sl-web {
+    display: flex; align-items: stretch; height: 32px; width: 100%; max-width: 960px; margin: 0 auto;
+    border: 1px solid #cbd5e1; border-radius: 7px; overflow: hidden; background: #fff;
+  }
+  .sl-web.is-over { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15); }
+  .sl-web-seg {
+    flex-basis: 0; min-width: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1px;
+    border-right: 1px solid #fff; overflow: hidden; white-space: nowrap;
+    background: #16a34a; color: #fff;
+  }
+  .sl-web-seg:nth-child(even) { background: #15803d; }
+  .sl-web-seg:last-child { border-right: none; }
+  .sl-web-seg .sl-seg-slot { font-size: 9px; font-weight: 700; opacity: 0.8; letter-spacing: 0.06em; }
+  .sl-web-seg .sl-seg-w { font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .sl-web-seg.sl-web-trim { background: #dc2626; color: #fff; }
+  .sl-web-seg.sl-web-edge { background: #f97316; color: #fff; }
+  .sl-web-empty {
+    display: flex; align-items: center; justify-content: center; width: 100%; height: 32px;
+    max-width: 960px; margin: 0 auto;
+    font-size: 11.5px; font-weight: 600; color: #94a3b8;
+    background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #f8fafc 6px, #f8fafc 12px);
+    border: 1px solid #e2e8f0; border-radius: 7px;
+  }
 
   .sl-done-note {
     align-self: stretch; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
@@ -209,7 +239,6 @@
 
   @media screen and (max-width: 768px) {
     .sl-job-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
-    .sl-punch { flex: 1 1 auto; }
     .sl-dlg-row { grid-template-columns: 1fr; }
   }
 </style>
@@ -233,37 +262,39 @@
           <span class="sl-job-value"><%= cardDate %></span>
         </div>
         <div class="sl-job-cell">
-          <span class="sl-job-label">Client Order No</span>
-          <span class="sl-job-value"><%= dash(card.clientOrderNo) %></span>
-        </div>
-        <div class="sl-job-cell">
           <span class="sl-job-label">Product Code</span>
           <span class="sl-job-value"><%= dash(card.productCode) %></span>
         </div>
         <div class="sl-job-cell">
-          <span class="sl-job-label">Lot No</span>
-          <span class="sl-job-value"><%= dash(card.lotNo) %></span>
+          <span class="sl-job-label">R. Meter</span>
+          <span class="sl-job-value"><%= isEmpty(plannedRunningMeter) ? "—" : `${fmtN(plannedRunningMeter)} mtrs` %></span>
         </div>
         <div class="sl-job-cell">
-          <span class="sl-job-label">Client</span>
-          <span class="sl-job-value"><%= dash(card.clientName) %></span>
-        </div>
-        <div class="sl-job-cell">
-          <span class="sl-job-label">Operator</span>
-          <span class="sl-job-value"><%= dash(card.operatorName) %></span>
-        </div>
-        <div class="sl-job-cell">
-          <span class="sl-job-label">Helper</span>
-          <span class="sl-job-value"><%= dash(card.helperName) %></span>
+          <span class="sl-job-label">Rolls</span>
+          <span class="sl-job-value"><%= totalPlannedRolls %></span>
         </div>
       </div>
     </div>
   </div>
 
 
-  <!-- Scanning the reel is what arms its row: Start stays locked until the
-       Deckle in the machine has been confirmed. Typing the id works too, so a
-       dead camera never stops the floor. -->
+  <!-- Deckle Description: what's allocated to this card, read straight off
+       the Deckle rows -- same role as the lamination Job Card's own order
+       info + recipe strip up top. Always visible, purely descriptive. -->
+  <div class="span-full form-subheading" style="margin-top:10px;"><h1>Deckle Description</h1></div>
+  <div class="span-full" style="border:none !important;">
+    <div class="sl-panel" style="overflow-x:auto;">
+      <table class="sl-req-table" style="min-width:520px;">
+        <thead>
+          <tr><th>Deckle</th><th>Web Width</th><th>Planned Mtrs</th><th>Roll Widths</th></tr>
+        </thead>
+        <tbody id="slDescBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Scan Deckle: scan the reel to confirm it before Start is live below --
+       same role as the lamination Job Card's Scan Materials strip. -->
   <div class="span-full form-subheading" style="margin-top:10px;"><h1>Scan Deckle</h1></div>
   <div class="span-full" style="border:none !important;">
     <div class="sl-scan-wrap">
@@ -278,35 +309,61 @@
     </div>
   </div>
 
-  <div class="span-full form-subheading" style="margin-top:10px;">
-    <h1>Deckles &nbsp;<span style="font-size:13px; font-weight:600; opacity:0.85;" id="slProgress"></span></h1>
-  </div>
-  <div class="span-full" style="border:none !important;">
-    <div class="sl-deckles" id="slDeckles"></div>
-  </div>
-
-  <div class="span-full" style="border:none !important;">
-    <div class="sl-summary">
-      <div class="sl-sum-cell">
-        <span class="sl-sum-label">Deckles Done</span>
-        <span class="sl-sum-value" id="slSumDone">0</span>
-      </div>
-      <div class="sl-sum-cell">
-        <span class="sl-sum-label">Mtrs Off Deckles</span>
-        <span class="sl-sum-value" id="slSumMeter">0</span>
-      </div>
-      <div class="sl-sum-cell">
-        <span class="sl-sum-label">Rolls Inwarded</span>
-        <span class="sl-sum-value" id="slSumRolls">0</span>
-      </div>
-      <div class="sl-sum-cell">
-        <span class="sl-sum-label">Finished Mtrs</span>
-        <span class="sl-sum-value" id="slSumFinished">0</span>
-      </div>
+  <!-- Job Setting: setup Start/Stop meter readings taken before the first
+       Deckle is cut -- same shape, name, position and gate as the lamination
+       Job Card's own Job Setting table: Production Log below stays hidden
+       until every row here is punched and "Start Production Log" is clicked. -->
+  <div class="span-full form-subheading" style="display:flex; align-items:center; gap:12px; margin-top:10px;">
+    <h1>Job Setting</h1>
+    <div style="display:inline-flex; align-items:center; gap:6px; margin-left:10px;">
+      <button type="button" id="slJsMinus" class="sl-js-counter-btn">-</button>
+      <input type="text" id="slJsCount" class="form-control sl-js-count" value="1" readonly />
+      <button type="button" id="slJsPlus" class="sl-js-counter-btn">+</button>
     </div>
   </div>
+  <div class="span-full" style="border:none !important;">
+    <table class="sl-js-table">
+      <thead>
+        <tr>
+          <th style="width:44px; text-align:center;">#</th>
+          <th>Mtrs</th>
+          <th style="text-align:center; white-space:nowrap;">Start</th>
+          <th>Mtrs</th>
+          <th style="text-align:center; white-space:nowrap;">Stop</th>
+        </tr>
+      </thead>
+      <tbody id="slJsBody"></tbody>
+    </table>
+  </div>
+  <div class="span-full btn-grp sl-hidden" id="slStartProdWrap" style="margin-top:10px;">
+    <button type="button" id="slStartProdBtn" class="submit-btn">
+      <i class="fa-solid fa-play" aria-hidden="true"></i> Start Production Log
+    </button>
+  </div>
 
-  <div class="span-full" style="border:none !important; display:none;" id="slDoneWrap">
+  <!-- Production Log: one row per allocated Deckle, same tabular layout,
+       position and gate (hidden until Job Setting is done) as the lamination
+       Job Card's own Production Log -- Start/Stop punched inline, Mtrs/R.
+       Meter read as planned until Stop confirms the actual. -->
+  <div class="span-full form-subheading sl-prod-block sl-hidden" style="margin-top:10px;"><h1>Production Log</h1></div>
+  <div class="span-full sl-prod-block sl-hidden" style="border:none !important;">
+    <table class="sl-log-table">
+      <thead>
+        <tr>
+          <th style="width:36px;">#</th>
+          <th style="width:76px;">Start</th>
+          <th style="width:76px;">Stop</th>
+          <th style="width:70px;">Mtrs</th>
+          <th style="width:82px;">R. Meter</th>
+          <th style="text-align:left;">Rolls</th>
+          <th style="width:100px;">Status</th>
+        </tr>
+      </thead>
+      <tbody id="slLogBody"></tbody>
+    </table>
+  </div>
+
+  <div class="span-full sl-prod-block sl-hidden" style="border:none !important; display:none;" id="slDoneWrap">
     <div class="sl-done-note">
       <i class="fa-solid fa-circle-check"></i>
       <span>Every Deckle on this card has been run — the card is finished.</span>
@@ -388,6 +445,189 @@
   };
   const toast = (msg, type) => { if (typeof showToast === "function") showToast(msg, type); };
 
+  // ---- Job Setting -------------------------------------------------------
+  // Setup Start/Stop meter readings taken before the first Deckle is cut --
+  // same shape and gate as the lamination Job Card's own Job Setting section
+  // (views/inventory/masters/jobCardForm.ejs): Production Log below stays
+  // hidden until every row here is punched and "Start Production Log" is
+  // clicked. Unlike a Deckle row's Start/Stop, nothing here moves stock, so
+  // the whole set of rows is saved in one call rather than per punch.
+  const jsBody = document.getElementById("slJsBody");
+  const jsCountEl = document.getElementById("slJsCount");
+  const jsPlusBtn = document.getElementById("slJsPlus");
+  const jsMinusBtn = document.getElementById("slJsMinus");
+  const startProdWrap = document.getElementById("slStartProdWrap");
+  const startProdBtn = document.getElementById("slStartProdBtn");
+
+  const hasValue = (row, sel) => String(row?.querySelector(sel)?.value ?? "").trim() !== "";
+
+  function setJsPunchReady(btn, ready, lockedTitle) {
+    if (!btn || btn.dataset.punched === "1") return;
+    btn.disabled = !ready;
+    btn.style.background = ready ? (btn.dataset.color || "#10b981") : "#cbd5e1";
+    btn.style.cursor = ready ? "pointer" : "not-allowed";
+    btn.title = ready ? "" : lockedTitle;
+  }
+
+  function syncJsRowButtons(row) {
+    if (!row) return;
+    setJsPunchReady(row.querySelector(".sl-js-start-btn"), hasValue(row, ".sl-js-mtrs1"), "Enter the start mtrs first");
+    setJsPunchReady(row.querySelector(".sl-js-stop-btn"), hasValue(row, ".sl-js-mtrs2"), "Enter the stop mtrs first");
+  }
+
+  function jsRenumber() {
+    Array.from(jsBody.rows).forEach((row, i) => { row.cells[0].textContent = i + 1; });
+    jsCountEl.value = jsBody.rows.length;
+  }
+
+  function jsAllRowsPunched() {
+    const rows = Array.from(jsBody.rows);
+    if (!rows.length) return false;
+    return rows.every((row) =>
+      row.querySelector(".sl-js-start-btn")?.dataset.punched === "1" &&
+      row.querySelector(".sl-js-stop-btn")?.dataset.punched === "1");
+  }
+
+  function updateStartProdButton() {
+    startProdWrap.classList.toggle("sl-hidden", !jsAllRowsPunched());
+  }
+
+  // Reveals Production Log (and its Done note) -- called once Job Setting is
+  // saved, or immediately on load if the gate was already cleared before
+  // (see the bottom of this script).
+  function revealProduction() {
+    startProdWrap.classList.add("sl-hidden");
+    document.querySelectorAll(".sl-prod-block").forEach((el) => el.classList.remove("sl-hidden"));
+  }
+
+  function createJsRow(preset) {
+    const punchedStart = Boolean(preset && preset.startTime);
+    const punchedStop = Boolean(preset && preset.stopTime);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="text-align:center; font-weight:700; color:#044a78;"></td>
+      <td><input type="number" class="form-control sl-js-mtrs1" placeholder="Mtrs" min="0" step="any" ${punchedStart ? "readonly" : ""} /></td>
+      <td style="text-align:center; white-space:nowrap;">
+        <span class="sl-js-start-display" style="font-size:11.5px; font-weight:700; color:#03365a; margin-right:3px;">${punchedStart ? esc(preset.startTime) : "—"}</span>
+        <button type="button" class="sl-js-btn sl-js-start-btn" data-color="#10b981" disabled title="Enter the start mtrs first">
+          <i class="fa-solid ${punchedStart ? "fa-check" : "fa-play"}"></i>
+        </button>
+      </td>
+      <td><input type="number" class="form-control sl-js-mtrs2" placeholder="Mtrs" min="0" step="any" ${punchedStop ? "readonly" : ""} /></td>
+      <td style="text-align:center; white-space:nowrap;">
+        <span class="sl-js-stop-display" style="font-size:11.5px; font-weight:700; color:#dc2626; margin-right:3px;">${punchedStop ? esc(preset.stopTime) : "—"}</span>
+        <button type="button" class="sl-js-btn sl-js-stop-btn" data-color="#ef4444" disabled title="Enter the stop mtrs first">
+          <i class="fa-solid ${punchedStop ? "fa-check" : "fa-stop"}"></i>
+        </button>
+      </td>`;
+
+    const mtrs1 = tr.querySelector(".sl-js-mtrs1");
+    const mtrs2 = tr.querySelector(".sl-js-mtrs2");
+    if (preset && preset.mtrs1 != null) mtrs1.value = preset.mtrs1;
+    if (preset && preset.mtrs2 != null) mtrs2.value = preset.mtrs2;
+
+    const startBtn = tr.querySelector(".sl-js-start-btn");
+    const stopBtn = tr.querySelector(".sl-js-stop-btn");
+    if (punchedStart) {
+      startBtn.dataset.punched = "1";
+      startBtn.disabled = true;
+      startBtn.style.background = "#6b7280";
+      startBtn.style.cursor = "default";
+    }
+    if (punchedStop) {
+      stopBtn.dataset.punched = "1";
+      stopBtn.disabled = true;
+      stopBtn.style.background = "#6b7280";
+      stopBtn.style.cursor = "default";
+    }
+    return tr;
+  }
+
+  jsBody.addEventListener("input", (e) => {
+    if (e.target.classList.contains("sl-js-mtrs1") || e.target.classList.contains("sl-js-mtrs2")) {
+      syncJsRowButtons(e.target.closest("tr"));
+    }
+  });
+
+  jsBody.addEventListener("click", (e) => {
+    const startBtn = e.target.closest(".sl-js-start-btn");
+    if (startBtn) {
+      if (startBtn.disabled) return;
+      const row = startBtn.closest("tr");
+      if (!hasValue(row, ".sl-js-mtrs1")) {
+        toast("Enter the start mtrs first.", "error");
+        row.querySelector(".sl-js-mtrs1")?.focus();
+        return;
+      }
+      const time = nowHHMM();
+      row.querySelector(".sl-js-start-display").textContent = time;
+      startBtn.dataset.punched = "1";
+      startBtn.disabled = true;
+      startBtn.title = "";
+      startBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+      startBtn.style.background = "#6b7280";
+      startBtn.style.cursor = "default";
+      updateStartProdButton();
+      return;
+    }
+    const stopBtn = e.target.closest(".sl-js-stop-btn");
+    if (stopBtn) {
+      if (stopBtn.disabled) return;
+      const row = stopBtn.closest("tr");
+      if (!hasValue(row, ".sl-js-mtrs2")) {
+        toast("Enter the stop mtrs first.", "error");
+        row.querySelector(".sl-js-mtrs2")?.focus();
+        return;
+      }
+      const time = nowHHMM();
+      row.querySelector(".sl-js-stop-display").textContent = time;
+      stopBtn.dataset.punched = "1";
+      stopBtn.disabled = true;
+      stopBtn.title = "";
+      stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+      stopBtn.style.background = "#6b7280";
+      stopBtn.style.cursor = "default";
+      updateStartProdButton();
+    }
+  });
+
+  jsPlusBtn.addEventListener("click", () => {
+    jsBody.appendChild(createJsRow());
+    jsRenumber();
+    updateStartProdButton();
+  });
+  jsMinusBtn.addEventListener("click", () => {
+    if (jsBody.rows.length > 1) { jsBody.removeChild(jsBody.lastElementChild); jsRenumber(); updateStartProdButton(); }
+  });
+
+  startProdBtn.addEventListener("click", async () => {
+    const rows = Array.from(jsBody.rows).map((row) => ({
+      mtrs1: row.querySelector(".sl-js-mtrs1").value,
+      startTime: row.querySelector(".sl-js-start-display").textContent.trim(),
+      mtrs2: row.querySelector(".sl-js-mtrs2").value,
+      stopTime: row.querySelector(".sl-js-stop-display").textContent.trim(),
+    })).map((r) => ({ ...r, startTime: r.startTime === "—" ? "" : r.startTime, stopTime: r.stopTime === "—" ? "" : r.stopTime }));
+
+    startProdBtn.disabled = true;
+    try {
+      const res = await fetch("/sachiko/slitting/jobcard/setting", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardId: CARD._id, rows }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        toast(data.message || "Couldn't save Job Setting.", "error");
+        startProdBtn.disabled = false;
+        return;
+      }
+      revealProduction();
+    } catch {
+      toast("Server error — Job Setting was not saved.", "error");
+      startProdBtn.disabled = false;
+    }
+  });
+
   // Curing gate: a Deckle can't be run until its adhesive has cured (6 h after
   // lamination). The server sends `cured`; re-check the clock here too so a
   // card left open unlocks on its own when the time passes. Hot-melt builds
@@ -418,34 +658,81 @@
     return hits.length ? hits[0].i : null;
   }
 
-  function webHtml(row) {
-    const cuts = (row.cuts || []).filter((c) => Number(c.width) > 0);
-    if (!cuts.length) return "";
-    const total = round2(cuts.reduce((n, c) => n + Number(c.width), 0));
-    const trimW = row.width != null ? round2(Number(row.width) - total) : 0;
-    const segs = cuts.map((c) => `
-      <div class="sl-web-seg" style="flex-grow:${Number(c.width)}" title="${esc(c.slot)} — ${esc(fmt(c.width))} mm">
-        <span class="sl-seg-slot">${esc(c.slot)}</span><span class="sl-seg-w">${esc(fmt(c.width))}</span>
-      </div>`);
-    if (trimW > 0) {
-      segs.push(`
-        <div class="sl-web-seg sl-web-trim" style="flex-grow:${trimW}" title="Edge trim — ${esc(fmt(trimW))} mm">
-          <span class="sl-seg-slot">TRIM</span><span class="sl-seg-w">${esc(fmt(trimW))}</span>
-        </div>`);
-    }
-    const flag = row.width != null
-      ? `${cuts.length} roll${cuts.length === 1 ? "" : "s"} · ${fmt(total)} of ${fmt(row.width)} mm · ${fmt(trimW)} mm trim`
-      : `${cuts.length} roll${cuts.length === 1 ? "" : "s"} · ${fmt(total)} mm`;
+  // Web view: A..L drawn to scale across the Deckle's web, same look as the
+  // allocation page's own strip -- read-only, off the roll layout already
+  // fixed there. row.width is the net cuttable width (post edge-trim); the
+  // edge trim itself isn't stored per row, but row.webWidth (the reel's own
+  // MaterialStock.size, mm) is the raw web it was cut from, so the two edge
+  // segments -- (webWidth - width) split evenly -- can still be drawn, same
+  // as the allocation page's EDGE_TRIM_MM either side.
+  function edgeTrimSeg(side, mm) {
     return `
-      <div>
-        <div class="sl-web-caption"><span>Web View</span><span class="sl-web-flag">${esc(flag)}</span></div>
-        <div class="sl-web">${segs.join("")}</div>
+      <div class="sl-web-seg sl-web-edge" style="flex-grow:${mm}" title="${side} edge trim — ${esc(fmt(mm))} mm">
+        <span class="sl-seg-slot">EDGE</span><span class="sl-seg-w">${esc(fmt(mm))}</span>
       </div>`;
   }
 
+  function webViewHtml(row) {
+    const cuts = (row.cuts || []).filter((c) => Number(c.width) > 0);
+    if (!cuts.length || row.width === null) {
+      const label = row.width !== null
+        ? `${esc(fmt(row.width))} mm web — no roll widths recorded`
+        : "No web width recorded";
+      return `<div class="sl-web-empty">${label}</div>`;
+    }
+    const widthTotal = round2(cuts.reduce((s, c) => s + Number(c.width), 0));
+    const trimW = round2(row.width - widthTotal);
+    const over = trimW < 0;
+    const edgeMM = row.webWidth !== null && row.webWidth > row.width
+      ? round2((row.webWidth - row.width) / 2)
+      : null;
+    const segs = cuts.map((c) => `
+      <div class="sl-web-seg" style="flex-grow:${c.width}" title="${esc(c.slot)} — ${esc(fmt(c.width))} mm">
+        <span class="sl-seg-slot">${esc(c.slot)}</span><span class="sl-seg-w">${esc(fmt(c.width))}</span>
+      </div>`);
+    if (!over && trimW > 0) {
+      segs.push(`
+        <div class="sl-web-seg sl-web-trim" style="flex-grow:${trimW}" title="Trim (uncut slack) — ${esc(fmt(trimW))} mm">
+          <span class="sl-seg-slot">TRIM</span><span class="sl-seg-w">${esc(fmt(trimW))}</span>
+        </div>`);
+    }
+    const strip = edgeMM !== null
+      ? `${edgeTrimSeg("Left", edgeMM)}${segs.join("")}${edgeTrimSeg("Right", edgeMM)}`
+      : segs.join("");
+    const flagText = over
+      ? `Over the web by ${esc(fmt(widthTotal - row.width))} mm`
+      : `${cuts.length} roll${cuts.length === 1 ? "" : "s"} · ${esc(fmt(widthTotal))} of ${esc(fmt(row.width))} mm`
+        + (trimW > 0 ? ` · ${esc(fmt(trimW))} mm trim` : "")
+        + (edgeMM !== null ? ` · ${esc(fmt(edgeMM * 2))} mm edge` : "");
+    return `
+      <div class="sl-web-caption"><span class="sl-web-flag${over ? " sl-bad" : " sl-ok"}">${flagText}</span></div>
+      <div class="sl-web${over ? " is-over" : ""}">${strip}</div>`;
+  }
+
+  // Deckle Description: one row per allocated Deckle, read straight off what
+  // the planner already fixed at allocation -- static for the life of the
+  // card, so this is built once rather than on every render().
+  function renderDescription() {
+    const body = document.getElementById("slDescBody");
+    body.innerHTML = ROWS.map((row) => {
+      const cuts = (row.cuts || []).filter((c) => Number(c.width) > 0);
+      const cutsText = cuts.length ? cuts.map((c) => `${esc(c.slot)}: ${esc(fmt(c.width))} mm`).join(", ") : "—";
+      return `
+        <tr>
+          <td>${esc(row.deckleId || "—")}</td>
+          <td>${esc(fmt(row.width))} mm</td>
+          <td>${esc(fmt(row.plannedMeter))} mtrs</td>
+          <td>${cutsText}</td>
+        </tr>
+        <tr class="sl-web-sub">
+          <td colspan="4">${webViewHtml(row)}</td>
+        </tr>`;
+    }).join("");
+  }
+
   function render() {
-    const wrap = document.getElementById("slDeckles");
-    wrap.innerHTML = ROWS.map((row, i) => {
+    const body = document.getElementById("slLogBody");
+    body.innerHTML = ROWS.map((row, i) => {
       const done = row.status === "done";
       const running = !done && Boolean(row.startTime);
       const curing = !done && !running && !curedNow(row);
@@ -457,49 +744,47 @@
         : "";
 
       const rolls = (row.cuts || []).length;
-      const meta = done
-        ? `${fmt(row.meter)} mtrs run · ${fmt(row.runningMeter)} mtrs per roll · ${rolls} roll${rolls === 1 ? "" : "s"}`
-        : `${fmt(row.width)} mm web · ${fmt(row.plannedMeter)} mtrs planned · ${fmt(row.plannedRunningMeter)} mtrs per roll · ${rolls} roll${rolls === 1 ? "" : "s"}`;
       const short = !done && row.reelMtrs != null && Number(row.plannedMeter) > Number(row.reelMtrs);
-      const stock = row.reelMtrs == null
-        ? ""
-        : `<div class="sl-deckle-meta${short ? " sl-bad" : ""}">${short ? "⚠ " : ""}${esc(fmt(row.reelMtrs))} mtrs left on this reel${short ? ` — less than the ${esc(fmt(row.plannedMeter))} planned` : ""}</div>`;
+      // Short-reel and curing warnings no longer get their own column line
+      // (dropped along with Deckle ID to save space) -- folded into the
+      // Status cell's tooltip and a small inline flag instead.
+      const shortNote = short
+        ? `${fmt(row.reelMtrs)} mtrs left on the reel — short of the ${fmt(row.plannedMeter)} planned`
+        : "";
+      const noteTitle = [shortNote, cureMsg].filter(Boolean).join(" · ");
 
       const producedIds = (row.cuts || []).map((c) => c.rollId).filter(Boolean);
-      const times = [row.startTime ? `Start ${esc(row.startTime)}` : "", row.endTime ? `End ${esc(row.endTime)}` : ""]
-        .filter(Boolean).join(" · ");
+      const rollsText = producedIds.length ? esc(producedIds.join(", ")) : `${rolls} roll${rolls === 1 ? "" : "s"} planned`;
 
       return `
-        <div class="sl-deckle is-${state}" data-index="${i}">
-          <div class="sl-deckle-top">
-            <span class="sl-deckle-no">${i + 1}</span>
-            <div style="min-width:0; flex:1 1 240px;">
-              <div class="sl-deckle-id">${esc(row.deckleId || "—")}</div>
-              <div class="sl-deckle-meta">${esc(meta)}</div>
-              ${stock}
-              ${cureMsg ? `<div class="sl-deckle-meta sl-bad">⏳ ${cureMsg}</div>` : ""}
-            </div>
-            <span class="sl-badge is-${state}">${label}</span>
-          </div>
-          ${webHtml(row)}
-          <div class="sl-deckle-actions">
-            <button type="button" class="sl-punch sl-start" data-act="start" data-index="${i}"
+        <tr class="sl-log-row is-${state}" data-index="${i}">
+          <td style="text-align:center; font-weight:700; color:#044a78;">${i + 1}</td>
+          <td style="text-align:center; white-space:nowrap;">
+            <span style="font-size:11.5px; font-weight:700; color:#03365a; margin-right:3px;">${row.startTime ? esc(row.startTime) : "—"}</span>
+            <button type="button" class="sl-log-btn is-start" data-act="start" data-index="${i}"
               ${done || running || curing || !armed ? "disabled" : ""}
               title="${done ? "Already run" : running ? "Already started" : curing ? cureMsg : armed ? "" : "Scan this Deckle first"}">
-              <i class="fa-solid fa-play"></i> Start
+              <i class="fa-solid ${running || done ? "fa-check" : "fa-play"}"></i>
             </button>
-            <button type="button" class="sl-punch sl-stop" data-act="stop" data-index="${i}"
+          </td>
+          <td style="text-align:center; white-space:nowrap;">
+            <span style="font-size:11.5px; font-weight:700; color:#dc2626; margin-right:3px;">${row.endTime ? esc(row.endTime) : "—"}</span>
+            <button type="button" class="sl-log-btn is-stop" data-act="stop" data-index="${i}"
               ${running ? "" : "disabled"}
               title="${running ? "" : curing ? cureMsg : "Punch Start first"}">
-              <i class="fa-solid fa-stop"></i> Stop
+              <i class="fa-solid ${done ? "fa-check" : "fa-stop"}"></i>
             </button>
-            ${times ? `<span class="sl-times">${times}</span>` : ""}
-            ${producedIds.length ? `<span class="sl-rolls-out"><i class="fa-solid fa-box"></i> ${esc(producedIds.join(", "))}</span>` : ""}
-          </div>
-        </div>`;
+          </td>
+          <td style="text-align:center;">${done ? esc(fmt(row.meter)) : esc(fmt(row.plannedMeter))}</td>
+          <td style="text-align:center;">${done ? esc(fmt(row.runningMeter)) : esc(fmt(row.plannedRunningMeter))}</td>
+          <td style="overflow-wrap:anywhere;">${rollsText}</td>
+          <td style="text-align:center;" title="${esc(noteTitle)}">
+            <span class="sl-badge is-${state}">${label}</span>${short ? ' <span style="color:#b91c1c;">⚠</span>' : ""}${curing ? ' <span style="color:#b45309;">⏳</span>' : ""}
+          </td>
+        </tr>`;
     }).join("");
 
-    wrap.querySelectorAll("[data-act]").forEach((btn) => {
+    body.querySelectorAll("[data-act]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const i = Number(btn.dataset.index);
         if (btn.dataset.act === "start") punchStart(i);
@@ -508,13 +793,6 @@
     });
 
     const done = ROWS.filter((r) => r.status === "done");
-    document.getElementById("slSumDone").textContent = `${done.length} / ${ROWS.length}`;
-    document.getElementById("slSumMeter").textContent = fmt(done.reduce((n, r) => n + (Number(r.meter) || 0), 0));
-    document.getElementById("slSumRolls").textContent = String(
-      done.reduce((n, r) => n + (r.cuts || []).filter((c) => c.rollId).length, 0));
-    document.getElementById("slSumFinished").textContent = fmt(
-      done.reduce((n, r) => n + (Number(r.runningMeter) || 0) * (r.cuts || []).length, 0));
-    document.getElementById("slProgress").textContent = `${done.length} of ${ROWS.length} done`;
     document.getElementById("slDoneWrap").style.display = done.length === ROWS.length ? "" : "none";
   }
 
@@ -549,7 +827,7 @@
     armedIndex = i;
     render();
     setScanMsg(`${ROWS[i].deckleId} confirmed — punch Start when the machine runs.`, "ok");
-    document.querySelector(`.sl-deckle[data-index="${i}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.querySelector(`tr.sl-log-row[data-index="${i}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     return true;
   }
 
@@ -751,7 +1029,25 @@
     if (document.getElementById("stopDialog").classList.contains("show")) closeStopDialog();
   });
 
+  renderDescription();
   render();
+
+  // Prefill Job Setting from whatever was already saved (a reload mid-way
+  // through punching it, or after it was already completed) -- otherwise
+  // start with one blank row, same as the lamination Job Card.
+  const savedJs = Array.isArray(CARD.jobSetting) ? CARD.jobSetting : [];
+  if (savedJs.length) savedJs.forEach((r) => jsBody.appendChild(createJsRow(r)));
+  else jsBody.appendChild(createJsRow());
+  jsRenumber();
+  updateStartProdButton();
+
+  // Skip the gate entirely once it has already been cleared -- either Job
+  // Setting is saved and every row punched, or a Deckle has already been
+  // worked (an older card from before this gate existed, or one reopened
+  // mid-run, should never get stuck behind Job Setting again).
+  const jsAlreadyDone = savedJs.length > 0 && savedJs.every((r) => r.startTime && r.stopTime);
+  const productionAlreadyStarted = ROWS.some((r) => r.startTime || r.status === "done");
+  if (jsAlreadyDone || productionAlreadyStarted) revealProduction();
 
   // A card left open across a Deckle's curing deadline should unlock itself.
   // Only re-render while something is actually curing, and never while the

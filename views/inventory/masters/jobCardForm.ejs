@@ -53,6 +53,12 @@
   .material-id-row .mid-item { display: flex; flex-direction: column; gap: 4px; }
   .material-id-row .mid-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #7c8ba1; }
   .material-id-row .mid-value { font-size: 19px; font-weight: 800; color: #1f2a44; }
+  /* Shown next to Label Stock Code once the mounted reel combination
+     resolves to a different Product Code than the order's own (see
+     renderMountedVariant) -- the operator scanned a legitimate substitute
+     reel (different vendor/size, say), so what actually gets produced is a
+     "-A"/"-B"/... variant of the code above, not a mismatch. */
+  .jc-variant-code { font-size: 14px; font-weight: 700; color: #b45309; }
 
   /* Recipe of the item being run -- one row per layer (Facestock /
      Adhesive / Release, + a " 2" suffix for a second layer on DOUBLE
@@ -665,7 +671,7 @@
 
     <div class="span-full jc-info-wrap">
       <div class="material-id-row">
-        <div class="mid-item"><span class="mid-label">Label Stock Code</span><span class="mid-value"><%= dash(jc.productCode) %></span></div>
+        <div class="mid-item"><span class="mid-label">Label Stock Code</span><span class="mid-value"><%= dash(jc.productCode) %><span id="jcVariantCode" class="jc-variant-code" hidden></span></span></div>
         <div class="mid-item"><span class="mid-label">Deckle Size</span><span class="mid-value"><%= dash(jc.deckleSize) %></span></div>
         <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= dash(jcRunMtrs) %></span></div>
         <div class="mid-item">
@@ -1355,20 +1361,28 @@
       currentMaterials[pool] = "";
       checkMaterialInput(input, pool);
       syncCurrentMaterialsToOpenRows();
+      renderMountedVariant(null); // combination is no longer complete -- drop any stale variant badge
       if (typeof scheduleSave === "function") scheduleSave();
       input.focus();
     }
 
     // Which Label Stock Product Code the fully-mounted reel combination
-    // resolves to is a backend bookkeeping detail -- the operator doesn't act
-    // on it, so there's no persistent UI for it. The only case worth a
-    // heads-up is when the combination resolves to a NEW variant code
-    // (different from the order's own): a brief toast, deduped so re-resolving
-    // the same combination doesn't repeat it. To-spec and half-scanned states
-    // say nothing.
+    // resolves to is mostly a backend bookkeeping detail, but when it differs
+    // from the order's own code (a legitimate substitute reel -- different
+    // vendor/size, say -- see resolveScannedCombinationVariant) it's shown
+    // next to Label Stock Code, in brackets, for as long as that combination
+    // stays mounted -- plus a one-time toast the first time it resolves,
+    // deduped so re-resolving the same combination doesn't repeat it. To-spec
+    // and half-scanned states show/say nothing.
     let lastVariantToastCode = "";
     function renderMountedVariant(v) {
-      if (!v || v.pending || !v.productCode || !v.isVariant) return;
+      const badge = document.getElementById("jcVariantCode");
+      const isNewVariant = Boolean(v && !v.pending && v.productCode && v.isVariant);
+      if (badge) {
+        badge.textContent = isNewVariant ? ` (${v.productCode})` : "";
+        badge.hidden = !isNewVariant;
+      }
+      if (!isNewVariant) return;
       if (v.productCode === lastVariantToastCode) return;
       lastVariantToastCode = v.productCode;
       if (typeof showToast === "function") {

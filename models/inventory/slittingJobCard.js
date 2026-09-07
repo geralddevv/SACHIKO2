@@ -89,6 +89,21 @@ const slittingRowSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Job Setting: setup wastage before the first Deckle is cut, measured off the
+// machine's own counter -- a start and a stop reading rather than a length.
+// Same shape/purpose as MachineJobCard's own jobSetting (models/inventory/
+// machineJobCard.js), just without roll ids -- slitting's material is the
+// allocated Deckle itself, scanned in its own step further down the card.
+const jobSettingRowSchema = new mongoose.Schema(
+  {
+    mtrs1: { type: Number },
+    startTime: { type: String, trim: true },
+    mtrs2: { type: Number },
+    stopTime: { type: String, trim: true },
+  },
+  { _id: false },
+);
+
 const slittingJobCardSchema = new mongoose.Schema(
   {
     slittingJobCardId: {
@@ -139,6 +154,7 @@ const slittingJobCardSchema = new mongoose.Schema(
     location: { type: String, trim: true },
 
     requirements: [requirementRowSchema],
+    jobSetting: [jobSettingRowSchema],
     slittingLog: [slittingRowSchema],
 
     // Roll-up over the rows actually produced, so the records list doesn't

@@ -138,6 +138,13 @@
     </div>
   </div>
 
+  <!-- This "Pending List" is Assign Production's lamination queue
+       (PendingProduction.assignedMachineId) -- a Slitting machine is never a
+       target for that, its queue is the "Slitting Jobs" card below instead
+       -- so skip the card here rather than show a permanently-empty, and
+       misleading, "No orders currently assigned" notice above the Slitting
+       Jobs card that actually has this machine's real queue. -->
+  <% if (machine.machineType !== "SLITTING") { %>
   <div class="ap-card">
     <div class="ap-card-title">
       <span><i class="fa-solid fa-layer-group"></i> Pending List</span>
@@ -243,6 +250,7 @@
       </div>
     <% } %>
   </div>
+  <% } %>
 
   <!-- Slitting jobs allocated to this machine (routes/system/slitting.js).
        A slitting card is not a PendingProduction, so it gets its own card
@@ -268,7 +276,7 @@
             <th>Product Code</th>
             <th>Client</th>
             <th>Deckles</th>
-            <th>Rolls</th>
+            <th>Slice</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -284,11 +292,11 @@
                 <% if (row.deckleDone > 0) { %><span style="color:#64748b;font-weight:600;font-size:11px;">(<%= row.deckleDone %> of <%= row.deckleCount %> done)</span><% } %>
                 <% if (row.curing) { %><br><span style="color:#b45309;font-weight:700;font-size:11px;"><i class="fa-solid fa-hourglass-half"></i> curing<% if (row.curingUntilLabel) { %> · ready <%= row.curingUntilLabel %><% } %></span><% } %>
               </td>
-              <td data-label="Rolls"><%= row.producedRolls %> of <%= row.plannedRolls %></td>
+              <td data-label="Slice"><%= row.producedRolls %> of <%= row.plannedRolls %></td>
               <td>
                 <div class="mq-actions">
                   <a href="/sachiko/slitting/jobcard/<%= row._id %>" class="mq-start-btn" title="<%= row.curing ? 'Deckle still curing — open to see when it is ready' : 'Open the Slitting Job Card' %>">
-                    <i class="fa-solid fa-scissors"></i> slit
+                    <i class="fa-solid fa-play"></i> start
                   </a>
                   <% if (authUser && authUser.role !== "operator" && row.pendingProductionId && row.deckleStockId) { %>
                     <a href="/sachiko/slitting/allocate/<%= row.pendingProductionId %>?deckle=<%= row.deckleStockId %>" class="mq-edit-btn" title="Edit this allocation" aria-label="Edit this allocation">

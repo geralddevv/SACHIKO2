@@ -13,9 +13,9 @@
   const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
   const dash = (v) => (isEmpty(v) ? "—" : v);
   // Log columns that are not roll-width slots: #, Remaining, R. Meter,
-  // Deckle Rolls, Trim, and the trailing remove-layout action. The web strip
+  // Deckle Rolls, and the trailing remove-layout action. The web strip
   // spans the lot.
-  const fixedCols = 6;
+  const fixedCols = 5;
   const existingTargets = targetDeckles.filter((d) => d.existing);
   const curingTargets = targetDeckles.filter((d) => d.curing && d.curing.cured === false);
   // Every Deckle of this order's Product Code + Size, in stock right now --
@@ -46,18 +46,20 @@
   .sl-mini-btn:hover { background: rgba(255,255,255,0.14); }
 
   /* grid-auto-flow: column with a fixed row (rather than auto-fit wrapping)
-     keeps every cell -- Product Code through Helper -- on one single row;
-     overflow-x lets it scroll sideways instead of wrapping when the strip is
-     wider than the panel. The partition between columns is each cell's own
-     border-right (dropped on the last cell), not a grid gap -- a gap's
-     "background peeking through" trick washes out once cells sit flush
-     against a scrolling container's edge. */
+     keeps every cell -- Product Code through Helper -- on one single row.
+     grid-auto-columns: minmax(0, 1fr) (rather than a fixed min-width) lets
+     every column shrink evenly to whatever the panel actually has, so all
+     ten cells always fit on one row with no horizontal scrollbar; overflow-x
+     stays on only as a safety net, never meant to trigger. The partition
+     between columns is each cell's own border-right (dropped on the last
+     cell), not a grid gap -- a gap's "background peeking through" trick
+     washes out once cells sit flush against a scrolling container's edge. */
   .sl-job-grid {
-    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 1fr); grid-template-rows: 1fr;
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); grid-template-rows: 1fr;
     overflow-x: auto;
   }
   .sl-job-cell {
-    background: #f8fafc; padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; min-width: 0;
+    background: #f8fafc; padding: 11px 10px; display: flex; flex-direction: column; gap: 5px; min-width: 0;
     border-right: 1px solid #e2e8f0;
   }
   .sl-job-cell:last-child { border-right: none; }
@@ -65,7 +67,7 @@
   .sl-job-cell.is-wide { grid-column: span 2; }
   .sl-job-label {
     font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
-    text-transform: uppercase; color: #7c8ba1; white-space: nowrap;
+    text-transform: uppercase; color: #7c8ba1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .sl-job-label .req { color: #dc2626; }
   .sl-job-value { font-size: 15px; font-weight: 800; color: #1f2a44; line-height: 1.3; overflow-wrap: anywhere; }
@@ -76,6 +78,14 @@
     background-position: right 7px center; background-size: 10px 7px;
   }
   .sl-job-cell select.form-control:focus { outline: none; border-color: #044a78 !important; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+  .sl-job-cell input.form-control {
+    height: 34px !important; font-size: 13px !important; width: 100%;
+    padding: 4px 8px !important; border-radius: 6px !important; border: 1px solid #cbd5e1 !important;
+  }
+  .sl-job-cell input.form-control:focus { outline: none; border-color: #044a78 !important; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+  .sl-job-cell input[type="number"]::-webkit-outer-spin-button,
+  .sl-job-cell input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .sl-job-cell input[type="number"] { -moz-appearance: textfield; }
 
   .sl-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; }
   .sl-table th {
@@ -178,19 +188,22 @@
     border: 1px solid #cbd5e1; border-radius: 7px; overflow: hidden; background: #fff;
   }
   .sl-web.is-over { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15); }
+  /* Web view color key: cut rolls (the actual finished-roll widths) green,
+     the fixed edge trim orange, and the uncut wastage left over inside the
+     web (width - sum of cuts) red -- three different things, three different
+     colors, so a glance at the strip alone says where every mm went. */
   .sl-web-seg {
     flex-basis: 0; min-width: 0; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 1px;
     border-right: 1px solid #fff; overflow: hidden; white-space: nowrap;
-    background: #2f7fb8; color: #fff;
+    background: #16a34a; color: #fff;
   }
-  .sl-web-seg:nth-child(even) { background: #256a9c; }
+  .sl-web-seg:nth-child(even) { background: #15803d; }
   .sl-web-seg:last-child { border-right: none; }
   .sl-web-seg .sl-seg-slot { font-size: 9px; font-weight: 700; opacity: 0.8; letter-spacing: 0.06em; }
   .sl-web-seg .sl-seg-w { font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .sl-web-seg.sl-web-trim {
-    background: repeating-linear-gradient(45deg, #e2e8f0, #e2e8f0 5px, #eef2f7 5px, #eef2f7 10px); color: #64748b;
-  }
+  .sl-web-seg.sl-web-edge { background: #f97316; color: #fff; }
+  .sl-web-seg.sl-web-trim { background: #dc2626; color: #fff; }
   .sl-web-empty {
     display: flex; align-items: center; justify-content: center; width: 100%;
     font-size: 11.5px; font-weight: 600; color: #94a3b8;
@@ -210,7 +223,9 @@
   #slSubmitBtn:disabled:hover { transform: none; box-shadow: none; }
 
   @media screen and (max-width: 768px) {
-    .sl-job-grid { grid-auto-columns: minmax(130px, 1fr); }
+    .sl-job-cell { padding: 9px 6px; }
+    .sl-job-label { font-size: 9.5px; }
+    .sl-job-value { font-size: 13px; }
   }
 </style>
 
@@ -252,10 +267,6 @@
             <span class="sl-job-value"><%= order.runningMeters != null ? `${order.runningMeters} mtrs` : "—" %></span>
           </div>
           <div class="sl-job-cell">
-            <span class="sl-job-label">Lot No</span>
-            <span class="sl-job-value"><%= dash(order.lotNo) %></span>
-          </div>
-          <div class="sl-job-cell">
             <span class="sl-job-label">Total Deckles</span>
             <span class="sl-job-value"><%= deckleTotal %></span>
           </div>
@@ -268,6 +279,17 @@
                 those counts change (e.g. Total 6, one layout's Deckle Rolls
                 set to 5 -> 1 still available for another layout). %>
             <span class="sl-job-value" id="slAvailableValue"><%= deckleAvailable %></span>
+          </div>
+          <div class="sl-job-cell is-input">
+            <span class="sl-job-label">Trim (mm)</span>
+            <%# Total edge trim netted out of the web width before cutting
+                (split evenly across both edges) when defaulting a fresh
+                layout row's width -- 10 mm by default, editable here for a
+                job that needs something else. A layout row carried over from
+                an already-allocated Deckle keeps its own saved width and
+                ignores this. %>
+            <input type="number" id="slTrim" class="form-control" value="10" min="0" step="any"
+                   title="Total edge trim (both sides) netted out of the web width for new layouts. Default 10 mm." />
           </div>
           <div class="sl-job-cell is-input">
             <span class="sl-job-label">Machine <span class="req">*</span></span>
@@ -385,7 +407,7 @@
             <col style="width:40px" />
             <col style="width:78px" />
             <% cutSlots.forEach(() => { %><col style="width:54px" /><% }) %>
-            <col style="width:82px" /><col style="width:90px" /><col style="width:70px" /><col style="width:40px" />
+            <col style="width:82px" /><col style="width:90px" /><col style="width:40px" />
           </colgroup>
           <thead>
             <tr>
@@ -394,7 +416,6 @@
               <th colspan="<%= cutSlots.length %>">Roll Widths (mm)</th>
               <th rowspan="2" style="vertical-align:middle;">R. Meter</th>
               <th rowspan="2" style="vertical-align:middle;">Deckle Rolls</th>
-              <th rowspan="2" style="vertical-align:middle;">Trim</th>
               <th rowspan="2" style="vertical-align:middle;"></th>
             </tr>
             <tr>
@@ -472,15 +493,18 @@
   });
   const SEQUENCED = [...layoutGroups.values()].flat();
   // Every target here was clubbed on the Slitting Queue by Product Code +
-  // Size, so they all share one web width. The floor always trims 5 mm off
-  // each edge before cutting (10 mm total) -- reserved out of the default
-  // cuttable width here so a fresh layout's "Remaining" and over-the-web
-  // check are correct without the planner having to remember to leave it
-  // out themselves. Only the default: a preset from an existing card (below)
-  // still wins with its own saved width, edge trim included or not.
-  const EDGE_TRIM_MM = 5;
+  // Size, so they all share one web width. The floor trims a bit off each
+  // edge before cutting -- 10 mm total (5 mm/side) by default, editable via
+  // the Trim field above -- reserved out of the default cuttable width here
+  // so a fresh layout's "Remaining" and over-the-web check are correct
+  // without the planner having to remember to leave it out themselves. Only
+  // the default: a preset from an existing card (below) still wins with its
+  // own saved width, edge trim included or not.
+  const trimInput = document.getElementById("slTrim");
   const rawWebWidth = sizeToWidth(TARGETS[0]?.size);
-  const GROUP_WIDTH = rawWebWidth !== null ? round2(rawWebWidth - EDGE_TRIM_MM * 2) : null;
+  let TOTAL_TRIM_MM = num(trimInput.value) ?? 10;
+  let EDGE_TRIM_MM = TOTAL_TRIM_MM / 2;
+  let GROUP_WIDTH = rawWebWidth !== null ? round2(rawWebWidth - TOTAL_TRIM_MM) : null;
 
   function renumber(rowSel, cellSel) {
     document.querySelectorAll(rowSel).forEach((row, i) => {
@@ -508,7 +532,6 @@
       ${SLOTS.map((s) => `<td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-roll-width sl-width-input" data-slot="${s}" placeholder="${s}" title="Roll ${s} width in mm" /></td>`).join("")}
       <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-rm" placeholder="Mtrs" /></td>
       <td><input type="number" step="1" min="1" inputmode="numeric" class="form-control sl-qty" placeholder="Qty" title="How many Deckles use this same roll-width layout" /></td>
-      <td class="sl-derived sl-trim">—</td>
       <td style="background:#fff;">
         <button type="button" class="sl-row-btn sl-remove-layout" title="Remove this layout" aria-label="Remove this layout">
           <i class="fa-solid fa-xmark"></i>
@@ -552,7 +575,7 @@
     });
 
     if (preset) {
-      if (preset.width != null) widthEl.value = preset.width;
+      if (preset.width != null) { widthEl.value = preset.width; tr.dataset.presetWidth = "1"; }
       if (preset.plannedRunningMeter != null) rmEl.value = preset.plannedRunningMeter;
       widthInputs.forEach((el) => {
         const v = preset.cuts?.[el.dataset.slot];
@@ -586,7 +609,7 @@
   // segment per roll width, then whatever slack is left over uncut.
   function edgeTrimSeg(side) {
     return `
-      <div class="sl-web-seg sl-web-trim" style="flex-grow:${EDGE_TRIM_MM}" title="${side} edge trim — ${EDGE_TRIM_MM} mm">
+      <div class="sl-web-seg sl-web-edge" style="flex-grow:${EDGE_TRIM_MM}" title="${side} edge trim — ${EDGE_TRIM_MM} mm">
         <span class="sl-seg-slot">EDGE</span><span class="sl-seg-w">${EDGE_TRIM_MM}</span>
       </div>`;
   }
@@ -677,15 +700,6 @@
       const remainingEl = tr.querySelector(".sl-width-remaining");
       remainingEl.textContent = r.width === null ? "—" : fmt(r.width - widthTotal);
       remainingEl.classList.toggle("sl-bad", over);
-
-      const trimCell = tr.querySelector(".sl-trim");
-      if (r.width === null || !widths.length) {
-        trimCell.textContent = "—";
-        trimCell.classList.remove("sl-bad");
-      } else {
-        trimCell.textContent = fmt(r.width - widthTotal);
-        trimCell.classList.toggle("sl-bad", over);
-      }
 
       paintWeb(tr, r, widthTotal, over);
 
@@ -779,6 +793,22 @@
 
   ["slMachine", "slOperator", "slHelper"].forEach((id) =>
     document.getElementById(id).addEventListener("change", recalc));
+
+  // Changing the Trim field only re-defaults layout rows that haven't been
+  // carried over from an already-allocated Deckle (see addLayoutRow's
+  // dataset.presetWidth) -- an existing card's saved width is never
+  // overwritten just because the planner tweaked trim for a new layout.
+  trimInput.addEventListener("input", () => {
+    TOTAL_TRIM_MM = num(trimInput.value) ?? 10;
+    EDGE_TRIM_MM = TOTAL_TRIM_MM / 2;
+    GROUP_WIDTH = rawWebWidth !== null ? round2(rawWebWidth - TOTAL_TRIM_MM) : null;
+    document.querySelectorAll("#slLogBody .sl-log-row").forEach((tr) => {
+      if (tr.dataset.presetWidth) return;
+      const widthEl = tr.querySelector(".sl-width");
+      if (GROUP_WIDTH !== null) widthEl.value = GROUP_WIDTH;
+    });
+    recalc();
+  });
 
   document.getElementById("slForm").addEventListener("submit", async (e) => {
     e.preventDefault();

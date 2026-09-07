@@ -952,6 +952,16 @@
               <i class="fa-solid fa-scissors" style="color: #ffffff"></i>
               <p class="nav-items-para">Deckle Slitting</p>
             </a>
+            <!-- Same "Machine Queues" overview as the Production tab's, just
+                 narrowed to type=SLITTING -- S1/S2/S3, whichever slitting
+                 machines are set up on Machine Master (routes/system/machine.js
+                 "/machine/queue"), each linking through to its own queue
+                 (/sachiko/machine/:id/queue), which already folds in that
+                 machine's allocated Slitting Job Cards. -->
+            <a href="/sachiko/machine/queue?type=SLITTING" title="Slitting Machine Queues" class="<%= title === 'Slitting Machine Queues' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+              <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
+              <p class="nav-items-para">Machine Queue</p>
+            </a>
             <a href="/sachiko/slitting/wip" title="Slitting WIP" class="<%= title === 'Slitting WIP' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-gears" style="color: #ffffff"></i>
               <p class="nav-items-para">WIP</p>

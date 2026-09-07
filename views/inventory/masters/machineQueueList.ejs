@@ -169,7 +169,7 @@
   </style>
 
   <div class="indi-head">
-    <h1>Machine Queues</h1>
+    <h1><%= typeof heading !== "undefined" && heading ? heading : "Machine Queues" %></h1>
     <div style="display: flex; gap: 10px; align-items: stretch">
       <div class="seg-toggle" id="locationSeg" role="group" aria-label="Filter by location"></div>
       <button type="button" class="header-action-btn" id="viewToggleBtn" onclick="toggleView()">

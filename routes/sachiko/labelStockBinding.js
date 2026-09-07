@@ -166,12 +166,14 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
   }
 });
 
-// Last / Lowest / Highest rate per Label Stock binding, taken from every Sales
-// Order ever placed against that binding (its `orderRate`). Same rules as the
-// vendor profile's price history: a blank or zero rate means "never priced"
-// rather than "free", so those orders sit it out -- otherwise Lowest would peg
-// at zero forever. Orders are walked oldest-first (by poDate, else createdAt)
-// so the newest one is simply the one left standing for "Last".
+// Last / Lowest / Highest rate, plus total quantity actually sent, per Label
+// Stock binding -- taken from every Sales Order ever placed against that
+// binding (its `orderRate` and `dispatchedQuantity`). Rates follow the same
+// rules as the vendor profile's price history: a blank or zero rate means
+// "never priced" rather than "free", so those orders sit out of the rate
+// stats (Sent still counts them) -- otherwise Lowest would peg at zero
+// forever. Orders are walked oldest-first (by poDate, else createdAt) so the
+// newest one is simply the one left standing for "Last".
 async function buildBindingRateStats(bindingIds) {
   const stats = new Map();
   if (!bindingIds.length) return stats;
@@ -179,10 +181,21 @@ async function buildBindingRateStats(bindingIds) {
   const orders = await TapeSalesOrder.find({
     onBindingModel: "LabelStockBinding",
     tapeBinding: { $in: bindingIds },
-    status: { $ne: "CANCELLED" }, // a cancelled order never actually priced anything
+    status: { $ne: "CANCELLED" }, // a cancelled order never actually priced or sent anything
   })
-    .select("tapeBinding orderRate poDate createdAt")
+    .select("tapeBinding orderRate dispatchedQuantity poDate createdAt")
     .lean();
+
+  const entry = (key) => {
+    if (!stats.has(key)) stats.set(key, { sentQuantity: 0 });
+    return stats.get(key);
+  };
+
+  // Sent: summed across every non-cancelled order's dispatchedQuantity,
+  // regardless of whether that order was ever priced.
+  orders.forEach((o) => {
+    entry(String(o.tapeBinding)).sentQuantity += Number(o.dispatchedQuantity) || 0;
+  });
 
   const priced = orders
     .map((o) => ({
@@ -194,9 +207,11 @@ async function buildBindingRateStats(bindingIds) {
     .sort((a, b) => a.at - b.at);
 
   for (const { key, rate } of priced) {
-    const current = stats.get(key);
-    if (!current) {
-      stats.set(key, { lastRate: rate, lowestRate: rate, highestRate: rate });
+    const current = entry(key);
+    if (current.lastRate === undefined) {
+      current.lastRate = rate;
+      current.lowestRate = rate;
+      current.highestRate = rate;
       continue;
     }
     current.lastRate = rate;
