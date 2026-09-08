@@ -579,7 +579,7 @@
   function openBindDialog() {
     document.getElementById("bindDialogTitle").textContent = "Bind an Adhesive";
     document.getElementById("bindSubmitBtn").textContent = "Bind";
-    document.getElementById("bindForm").action = "/acme/form/label-stock-adhesive-binding";
+    document.getElementById("bindForm").action = "/app/form/label-stock-adhesive-binding";
     document.getElementById("bindFormError").textContent = "";
 
     if (productChoices) { productChoices.destroy(); productChoices = null; }
@@ -597,7 +597,7 @@
   function openEditBindDialog(id, stockId, adhesiveId) {
     document.getElementById("bindDialogTitle").textContent = "Edit Binding";
     document.getElementById("bindSubmitBtn").textContent = "Save";
-    document.getElementById("bindForm").action = `/acme/label-stock-adhesive-binding/edit/${id}`;
+    document.getElementById("bindForm").action = `/app/label-stock-adhesive-binding/edit/${id}`;
     document.getElementById("bindFormError").textContent = "";
 
     if (productChoices) { productChoices.destroy(); productChoices = null; }
@@ -689,7 +689,7 @@
   window.addEventListener("resize", () => { if (bindOpenDropdownSelect) bindPositionDropdown(bindOpenDropdownSelect); });
 
   function openDeleteDialog(id, label) {
-    document.getElementById("deleteForm").action = `/acme/label-stock-adhesive-binding/delete/${id}`;
+    document.getElementById("deleteForm").action = `/app/label-stock-adhesive-binding/delete/${id}`;
     document.getElementById("deleteTarget").textContent = label;
     document.getElementById("deleteDialog").showModal();
   }

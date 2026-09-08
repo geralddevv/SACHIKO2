@@ -343,7 +343,7 @@
 
     console.log("Client changed (triggered once):", clientName);
 
-    fetch(`/acme/form/client/${encodeURIComponent(clientName)}`)
+    fetch(`/app/form/client/${encodeURIComponent(clientName)}`)
       .then((response) => response.json())
       .then((data) => {
         console.log("Response:", data);

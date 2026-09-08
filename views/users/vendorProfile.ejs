@@ -439,7 +439,7 @@
           <% }) %>
         </div>
       </div>
-      <a href="/acme/vendor/edit/<%= vendor._id %>" class="edit-btn">
+      <a href="/app/vendor/edit/<%= vendor._id %>" class="edit-btn">
         <i class="fa-solid fa-pen"></i> Edit Details
       </a>
     </div>
@@ -485,7 +485,7 @@
       </h2>
       <button
         class="header-action-btn"
-        onclick="window.location.href='/acme/form/vendor?tab=user&vendorName=<%= encodeURIComponent(vendor.vendorName) %>'"
+        onclick="window.location.href='/app/form/vendor?tab=user&vendorName=<%= encodeURIComponent(vendor.vendorName) %>'"
       >
         <i class="fa-solid fa-plus"></i> Add Coordinator
       </button>
@@ -514,7 +514,7 @@
       <ul class="coordinator-list">
         <% vendor.users.forEach(user => { %>
           <li>
-            <a class="coordinator-row" href="/acme/vendor/coordinator/details/<%= user._id %>">
+            <a class="coordinator-row" href="/app/vendor/coordinator/details/<%= user._id %>">
               <span class="coordinator-avatar"><%= String(user.userName || '?').trim().charAt(0).toUpperCase() %></span>
               <span class="coordinator-main">
                 <%

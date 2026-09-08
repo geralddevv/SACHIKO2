@@ -195,7 +195,7 @@ router.post("/form/adhesive", requireAuth, requireAdhesiveMaster, createLimiter,
 
     res.locals.auditDescription = `Created adhesive master "${skuId}" (${payload.vendorSkuCode})`;
     req.flash("notification", "Adhesive master created successfully!");
-    res.json({ success: true, redirect: "/acme/form/adhesive" });
+    res.json({ success: true, redirect: "/app/form/adhesive" });
   } catch (err) {
     console.error("ADHESIVE MASTER CREATE ERROR:", err);
     const isDup = err.code === 11000 && err.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "adhesiveSignature");

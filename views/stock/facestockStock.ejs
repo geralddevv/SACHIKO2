@@ -363,7 +363,7 @@
         <i class="fa-solid fa-layer-group" style="font-size: 1.1rem; opacity: 0.9;"></i>
         <h1 style="margin: 0; letter-spacing: 0.02em;">Facestock Stock</h1>
       </div>
-      <a class="header-action-btn" href="/acme/stock/wip" style="text-decoration: none;">
+      <a class="header-action-btn" href="/app/stock/wip" style="text-decoration: none;">
         <i class="fa-solid fa-industry" style="margin-right: 6px;"></i> WIP Stock
       </a>
       <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
@@ -735,7 +735,7 @@
     });
 
     try {
-      const res = await fetch(`/acme/facestockstock/filter-specs?${params}`);
+      const res = await fetch(`/app/facestockstock/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -1143,7 +1143,7 @@
     hideError("poError");
     setLoading("poSubmitBtn", true);
     try {
-      const res = await fetch("/acme/facestockstock/purchase-order", {
+      const res = await fetch("/app/facestockstock/purchase-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1157,7 +1157,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/acme/purchase/pending";
+        window.location.href = data.redirect || "/app/purchase/pending";
       } else {
         showError("poError", data.message || "Failed to create Purchase Order.");
       }
@@ -1218,7 +1218,7 @@
     const rows = document.querySelectorAll("#addRollsContainer .roll-row");
     if (!rows.length) return;
     try {
-      const res = await fetch(`/acme/facestockstock/preview-roll-ids?count=${rows.length}`);
+      const res = await fetch(`/app/facestockstock/preview-roll-ids?count=${rows.length}`);
       const data = await res.json();
       const ids = data.rollIds || [];
       rows.forEach((row, i) => {
@@ -1325,7 +1325,7 @@
     hideError("addFacestockError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/acme/facestockstock/create", {
+      const res = await fetch("/app/facestockstock/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1347,7 +1347,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/acme/facestockstock";
+        window.location.href = data.redirect || "/app/facestockstock";
       } else {
         showError("addFacestockError", data.message || "Failed to add facestock stock.");
       }
@@ -1431,7 +1431,7 @@
 
     let res;
     try {
-      res = await fetch(`/acme/facestockstock/label/${reel._id}`, { credentials: "same-origin" });
+      res = await fetch(`/app/facestockstock/label/${reel._id}`, { credentials: "same-origin" });
     } catch (e) {
       return labelMessage("Couldn't reach the server to build this label.");
     }
@@ -1541,7 +1541,7 @@
     hideError("editRollError");
     setLoading("editRollSubmitBtn", true);
     try {
-      const res = await fetch(`/acme/facestockstock/${editingRollId}`, {
+      const res = await fetch(`/app/facestockstock/${editingRollId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

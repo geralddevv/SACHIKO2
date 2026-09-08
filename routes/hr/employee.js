@@ -221,9 +221,9 @@ router.post("/form", requireAuth, createLimiter, handleUpload, async (req, res) 
     res.locals.auditDescription = `Created employee "${req.body.empName}" (${req.body.empProfileCode})`;
     req.flash("notification", "Employee created successfully!");
     if (req.xhr || req.headers.accept?.includes("application/json")) {
-      res.json({ success: true, redirect: "/acme/employee/view" });
+      res.json({ success: true, redirect: "/app/employee/view" });
     } else {
-      res.redirect("/acme/employee/view");
+      res.redirect("/app/employee/view");
     }
   } catch (err) {
     console.error(err);
@@ -343,7 +343,7 @@ router.post("/edit/:id", requireAuth, updateLimiter, handleUpload, async (req, r
 
     res.locals.auditDescription = `Updated employee "${emp.empName}"`;
     req.flash("notification", "Employee updated successfully!");
-    const redirectUrl = "/acme/employee/view";
+    const redirectUrl = "/app/employee/view";
     if (req.xhr || req.headers.accept?.includes("application/json")) {
       res.json({ success: true, redirect: redirectUrl });
     } else {

@@ -156,7 +156,7 @@ router.post("/form/label-stock-binding", requireAuth, createLimiter, async (req,
 
     res.locals.auditDescription = `Created Label Stock binding for "${user.userName}"`;
     req.flash("notification", "Label Stock binding created successfully!");
-    res.json({ success: true, redirect: "/acme/client/details/" + userId });
+    res.json({ success: true, redirect: "/app/client/details/" + userId });
   } catch (err) {
     console.error("LABEL STOCK BINDING ERROR:", err);
     if (err?.code === 11000 && err?.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "bindingSignature")) {
@@ -270,7 +270,7 @@ router.post("/label-stock-binding/delete/:id", requireAuth, deleteLimiter, async
 
     res.locals.auditDescription = `Deleted Label Stock binding for user ${binding.userId}`;
     req.flash("notification", "Label Stock binding removed successfully!");
-    return res.redirect(`/acme/label-stock-binding/view/${binding.userId}`);
+    return res.redirect(`/app/label-stock-binding/view/${binding.userId}`);
   } catch (err) {
     console.error("LABEL STOCK BINDING DELETE ERROR:", err);
     req.flash("notification", "Failed to remove Label Stock binding");
@@ -361,7 +361,7 @@ router.post("/label-stock-binding/edit/:id", requireAuth, updateLimiter, async (
 
     res.locals.auditDescription = `Updated Label Stock binding for user ${binding.userId}`;
     req.flash("notification", "Label Stock binding updated successfully!");
-    res.json({ success: true, redirect: `/acme/label-stock-binding/view/${binding.userId}` });
+    res.json({ success: true, redirect: `/app/label-stock-binding/view/${binding.userId}` });
   } catch (err) {
     console.error("LABEL STOCK BINDING EDIT POST ERROR:", err);
     if (err?.code === 11000 && err?.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "bindingSignature")) {

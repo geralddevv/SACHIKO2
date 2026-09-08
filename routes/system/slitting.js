@@ -41,7 +41,7 @@ const router = express.Router();
 //     it, Start, Stop, confirm the metres that actually ran. Each Stop inwards
 //     that row's finished rolls and draws the metres off the Deckle.
 //
-// This router is mounted on the bare "/acme" prefix ahead of the
+// This router is mounted on the bare "/app" prefix ahead of the
 // role-gated routers (see server.js), so like machine.js every route carries
 // its own gate; operators are admitted to the job card because slitting is
 // shop-floor work, but never to allocation.
@@ -398,7 +398,7 @@ async function buildAvailableDeckleRows() {
       // Deckle-scoped: the allocation page cuts exactly the Deckle named here,
       // never "the order". Every Deckle row therefore carries its own stock id.
       allocateHref: order
-        ? `/acme/slitting/allocate/${order._id}?deckle=${reel._id}`
+        ? `/app/slitting/allocate/${order._id}?deckle=${reel._id}`
         : null,
     };
   });
@@ -506,7 +506,7 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
   const { pendingId } = req.params;
   if (!mongoose.isValidObjectId(pendingId)) {
     req.flash("notification", "Invalid order id.");
-    return res.redirect("/acme/slitting/queue");
+    return res.redirect("/app/slitting/queue");
   }
 
   const pending = await PendingProduction.findById(pendingId)
@@ -517,7 +517,7 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     .lean();
   if (!pending) {
     req.flash("notification", "That production order no longer exists.");
-    return res.redirect("/acme/slitting/queue");
+    return res.redirect("/app/slitting/queue");
   }
 
   // The Slitting Queue's "Choose Deckle" dialog ticks one or more Deckles --
@@ -532,19 +532,19 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
   ];
   if (!deckleIds.length) {
     req.flash("notification", "Open Allocate from Deckle Slitting so it knows which Deckle to cut.");
-    return res.redirect("/acme/slitting/queue");
+    return res.redirect("/app/slitting/queue");
   }
 
   const deckles = await deckleOptionsFor(pending);
   if (!deckles.length) {
     req.flash("notification", "No Deckle stock left to slit for this order.");
-    return res.redirect("/acme/slitting/queue");
+    return res.redirect("/app/slitting/queue");
   }
   const deckleById = new Map(deckles.map((d) => [d._id, d]));
   const targets = deckleIds.map((id) => deckleById.get(id)).filter(Boolean);
   if (!targets.length) {
     req.flash("notification", "Those Deckles are no longer available to slit for this order.");
-    return res.redirect("/acme/slitting/queue");
+    return res.redirect("/app/slitting/queue");
   }
 
   // Each target's own open slitting card, if it already has one -- that (and
@@ -884,7 +884,7 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
 
     if (!cardIds.length) {
       // Every row was already submitted -- a resubmit of the same loaded page.
-      return res.json({ success: true, redirect: "/acme/slitting/queue" });
+      return res.json({ success: true, redirect: "/app/slitting/queue" });
     }
 
     res.locals.auditDescription =
@@ -896,11 +896,11 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
         ? `${anyUpdate ? "Updated" : "Allocated"} ${cardIds[0]} on ${machine.machineName}'s queue.`
         : `Allocated ${cardIds.length} Deckles to ${machine.machineName}'s queue.`,
     );
-    res.json({ success: true, redirect: "/acme/slitting/queue" });
+    res.json({ success: true, redirect: "/app/slitting/queue" });
   } catch (err) {
     console.error("SLITTING ALLOCATION ERROR:", err);
     if (err?.code === 11000 && err?.keyPattern?.submissionToken) {
-      return res.json({ success: true, redirect: "/acme/slitting/queue" });
+      return res.json({ success: true, redirect: "/app/slitting/queue" });
     }
     res.status(500).json({ success: false, message: "Failed to save the slitting allocation." });
   }
@@ -927,17 +927,17 @@ router.get("/slitting/jobcard/:cardId", requireSlittingFloor, async (req, res) =
   const { cardId } = req.params;
   if (!mongoose.isValidObjectId(cardId)) {
     req.flash("notification", "Invalid slitting card.");
-    return res.redirect("/acme/slitting/queue");
+    return res.redirect("/app/slitting/queue");
   }
 
   const card = await SlittingJobCard.findById(cardId).lean();
   if (!card) {
     req.flash("notification", "That slitting card no longer exists.");
-    return res.redirect("/acme/slitting/queue");
+    return res.redirect("/app/slitting/queue");
   }
   if (card.status === "completed") {
     req.flash("notification", `${card.slittingJobCardId} is already finished.`);
-    return res.redirect("/acme/slitting/jobcard/view");
+    return res.redirect("/app/slitting/jobcard/view");
   }
 
   // Live remaining metres per allocated reel, so a row whose Deckle has been

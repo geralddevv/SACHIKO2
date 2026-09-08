@@ -225,7 +225,7 @@
                       // button and the two job-card guards can't drift apart.
                     %>
                     <% if (row.canStart) { %>
-                    <a href="/acme/machine/jobcard/form?pendingId=<%= row._id %>" class="mq-start-btn" title="Initiate Production">
+                    <a href="/app/machine/jobcard/form?pendingId=<%= row._id %>" class="mq-start-btn" title="Initiate Production">
                       <i class="fa-solid fa-play"></i> start
                     </a>
                     <% } else { %>
@@ -237,7 +237,7 @@
                       const canEditOrder = authUser && authUser.role !== "operator";
                     %>
                     <% if (canEditOrder) { %>
-                      <a href="/acme/labels/production/assign/<%= row._id %>" class="mq-edit-btn" title="Edit this assignment" aria-label="Edit this assignment">
+                      <a href="/app/labels/production/assign/<%= row._id %>" class="mq-edit-btn" title="Edit this assignment" aria-label="Edit this assignment">
                         <i class="fa-solid fa-pen"></i>
                       </a>
                     <% } %>
@@ -295,11 +295,11 @@
               <td data-label="Slice"><%= row.producedRolls %> of <%= row.plannedRolls %></td>
               <td>
                 <div class="mq-actions">
-                  <a href="/acme/slitting/jobcard/<%= row._id %>" class="mq-start-btn" title="<%= row.curing ? 'Deckle still curing — open to see when it is ready' : 'Open the Slitting Job Card' %>">
+                  <a href="/app/slitting/jobcard/<%= row._id %>" class="mq-start-btn" title="<%= row.curing ? 'Deckle still curing — open to see when it is ready' : 'Open the Slitting Job Card' %>">
                     <i class="fa-solid fa-play"></i> start
                   </a>
                   <% if (authUser && authUser.role !== "operator" && row.pendingProductionId && row.deckleStockId) { %>
-                    <a href="/acme/slitting/allocate/<%= row.pendingProductionId %>?deckle=<%= row.deckleStockId %>" class="mq-edit-btn" title="Edit this allocation" aria-label="Edit this allocation">
+                    <a href="/app/slitting/allocate/<%= row.pendingProductionId %>?deckle=<%= row.deckleStockId %>" class="mq-edit-btn" title="Edit this allocation" aria-label="Edit this allocation">
                       <i class="fa-solid fa-pen"></i>
                     </a>
                   <% } %>

@@ -35,7 +35,7 @@
     <div class="indi-head">
       <h1>Die Master</h1>
       <div style="display: flex; gap: 10px; align-items: center">
-        <button class="header-action-btn" onclick="window.location.href = '/acme/form/die'">
+        <button class="header-action-btn" onclick="window.location.href = '/app/form/die'">
           <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Die
         </button>
         <div class="download-selector" id="downloadSelector">
@@ -102,7 +102,7 @@
             if (!row._id) return "";
             return `
               <button
-                onclick="window.location.href='/acme/die/profile/${row._id}'"
+                onclick="window.location.href='/app/die/profile/${row._id}'"
                 style="padding:2px 10px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">
                 <i class="fa-solid fa-eye"></i>
               </button>
@@ -173,13 +173,13 @@
             const row = cell.getRow().getData();
             const links = [];
             if (row.dieJpgFile) {
-              links.push(`<a href="/acme/die/file/${row._id}/jpg" target="_blank" rel="noopener" title="JPG" style="color:#044A78;margin:0 4px;"><i class="fa-solid fa-file-image"></i></a>`);
+              links.push(`<a href="/app/die/file/${row._id}/jpg" target="_blank" rel="noopener" title="JPG" style="color:#044A78;margin:0 4px;"><i class="fa-solid fa-file-image"></i></a>`);
             }
             if (row.dieDesignFile) {
-              links.push(`<a href="/acme/die/file/${row._id}/design" target="_blank" rel="noopener" title="Design" style="color:#044A78;margin:0 4px;"><i class="fa-solid fa-file-arrow-down"></i></a>`);
+              links.push(`<a href="/app/die/file/${row._id}/design" target="_blank" rel="noopener" title="Design" style="color:#044A78;margin:0 4px;"><i class="fa-solid fa-file-arrow-down"></i></a>`);
             }
             if (row.dieLayoutFile) {
-              links.push(`<a href="/acme/die/file/${row._id}/layout" target="_blank" rel="noopener" title="Layout" style="color:#044A78;margin:0 4px;"><i class="fa-solid fa-file-lines"></i></a>`);
+              links.push(`<a href="/app/die/file/${row._id}/layout" target="_blank" rel="noopener" title="Layout" style="color:#044A78;margin:0 4px;"><i class="fa-solid fa-file-lines"></i></a>`);
             }
             return links.length ? links.join("") : `<span style="color:#9ca3af;">—</span>`;
           },

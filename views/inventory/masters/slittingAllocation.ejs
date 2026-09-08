@@ -824,7 +824,7 @@
     btn.disabled = true;
     btn.textContent = "Saving…";
     try {
-      const res = await fetch(`/acme/slitting/allocate/${CONFIG.pendingId}`, {
+      const res = await fetch(`/app/slitting/allocate/${CONFIG.pendingId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -838,7 +838,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/acme/slitting/queue";
+        window.location.href = data.redirect || "/app/slitting/queue";
         return;
       }
       showError(data.message || "Failed to save the allocation.");

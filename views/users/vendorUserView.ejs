@@ -86,13 +86,13 @@
     <h1>Vendor Coordinator View</h1>
 
     <div style="display: flex; gap: 10px; align-items: center">
-      <button class="header-action-btn" onclick="window.location.href = '/acme/form/vendor'">
+      <button class="header-action-btn" onclick="window.location.href = '/app/form/vendor'">
         <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Vendor
       </button>
-      <button class="header-action-btn" onclick="window.location.href = '/acme/form/vendor?tab=user'">
+      <button class="header-action-btn" onclick="window.location.href = '/app/form/vendor?tab=user'">
         <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Coordinator
       </button>
-      <button class="header-action-btn" onclick="window.location.href = '/acme/ttr-vendor/view'">
+      <button class="header-action-btn" onclick="window.location.href = '/app/ttr-vendor/view'">
         <i class="fa-solid fa-eye" style="margin-right: 4px"></i> TTRs
       </button>
 
@@ -239,8 +239,8 @@
   function commodityLink(commodity, rowId) {
     if (!rowId) return null;
     switch (String(commodity || "").trim().toUpperCase()) {
-      case "TTR": return `/acme/ttr-vendor/view?userId=${encodeURIComponent(rowId)}`;
-      case "TAPE": return `/acme/vendor-item/view/tape?userId=${encodeURIComponent(rowId)}`;
+      case "TTR": return `/app/ttr-vendor/view?userId=${encodeURIComponent(rowId)}`;
+      case "TAPE": return `/app/vendor-item/view/tape?userId=${encodeURIComponent(rowId)}`;
       default: return null;
     }
   }
@@ -319,7 +319,7 @@
           cellClick: (e, cell) => {
             const row = cell.getRow().getData();
             if (!row?._id) return;
-            window.location.href = `/acme/vendor/coordinator/details/${encodeURIComponent(row._id)}`;
+            window.location.href = `/app/vendor/coordinator/details/${encodeURIComponent(row._id)}`;
           },
         }),
         withSelectFilter({

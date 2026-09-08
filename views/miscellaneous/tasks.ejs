@@ -546,12 +546,12 @@
     hideError("addTaskError");
     setLoading("addSubmitBtn", true);
     try {
-      const res  = await fetch("/acme/tasks", {
+      const res  = await fetch("/app/tasks", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, label, assignedTo, assignedToManualName, client, clientManualName, dueDate, status }),
       });
       const data = await res.json();
-      if (data.success) { window.location.href = data.redirect || "/acme/tasks"; }
+      if (data.success) { window.location.href = data.redirect || "/app/tasks"; }
       else              { showError("addTaskError", data.message || "Failed to create task."); }
     } catch { showError("addTaskError", "Server error. Please try again."); }
     finally  { setLoading("addSubmitBtn", false); }
@@ -612,7 +612,7 @@
     setLoading("editSubmitBtn", true);
     const row = editRow;
     try {
-      const res  = await fetch(`/acme/api/tasks/${row.getData()._id}`, {
+      const res  = await fetch(`/app/api/tasks/${row.getData()._id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, label, assignedTo, assignedToManualName, client, clientManualName, dueDate, status }),
       });
@@ -664,7 +664,7 @@
     const nextStatus = t.status === "COMPLETED" ? "PENDING" : "COMPLETED";
     btn.disabled = true;
     try {
-      const res  = await fetch(`/acme/api/tasks/${t._id}`, {
+      const res  = await fetch(`/app/api/tasks/${t._id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),
       });
@@ -702,11 +702,11 @@
     btn.disabled = true;
     try {
       const res = adding
-        ? await fetch("/acme/daybook", {
+        ? await fetch("/app/daybook", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ taskIds: [t._id], silent: true }),
           })
-        : await fetch(`/acme/api/daybook/task/${t._id}`, { method: "DELETE" });
+        : await fetch(`/app/api/daybook/task/${t._id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
         const rec = masterRow(t._id);
@@ -740,7 +740,7 @@
     const id  = row.getData()._id;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res  = await fetch(`/acme/api/tasks/${id}`, { method: "DELETE" });
+      const res  = await fetch(`/app/api/tasks/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (!data.success) {
         closeDeleteDialog();

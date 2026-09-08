@@ -1,7 +1,7 @@
 <% layout('/layout/boilerplate') -%>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form id="sales-order-form" action="<%= typeof confirmMode !== 'undefined' && confirmMode ? '/acme/sales/order/status' : '/acme/sales/order' %>" method="post" class="needs-validation" autocomplete="off" novalidate>
+  <form id="sales-order-form" action="<%= typeof confirmMode !== 'undefined' && confirmMode ? '/app/sales/order/status' : '/app/sales/order' %>" method="post" class="needs-validation" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
     <input type="hidden" name="orderId" value="<%= typeof orderToEdit !== 'undefined' && orderToEdit ? orderToEdit._id : '' %>" />
     <input type="hidden" name="submissionToken" value="<%= typeof submissionToken !== 'undefined' && submissionToken ? submissionToken : '' %>" />
@@ -505,7 +505,7 @@
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
     const form = document.createElement("form");
     form.method = "POST";
-    form.action = "/acme/sales/order/status";
+    form.action = "/app/sales/order/status";
     [["orderId", "<%= orderToEdit._id %>"], ["status", "CANCELLED"], ["cancelReason", reason], ["_csrf", csrf]].forEach(([n, v]) => {
       const inp = document.createElement("input");
       inp.type = "hidden"; inp.name = n; inp.value = v;
@@ -972,7 +972,7 @@
     resetUsers();
     
     try {
-      const res = await fetch(`/acme/sales/clients/${toServerItemType(itemType)}`);
+      const res = await fetch(`/app/sales/clients/${toServerItemType(itemType)}`);
       const clientNames = await res.json();
       
       const finalNames = [...clientNames];
@@ -1010,7 +1010,7 @@
     resetItems();
 
     try {
-      const res = await fetch(`/acme/form/labels/${encodeURIComponent(clientName)}`);
+      const res = await fetch(`/app/form/labels/${encodeURIComponent(clientName)}`);
       const clientData = await res.json();
       const users = clientData?.users || [];
 
@@ -1091,7 +1091,7 @@
     itemChoices.setChoices([{ value: "", label: "Loading...", disabled: true, selected: true }], "value", "label", true);
 
     try {
-      const itemsUrl = `/acme/sales/items/${toServerItemType(itemType)}/${userId}` + (loc ? `?location=${encodeURIComponent(loc)}` : "");
+      const itemsUrl = `/app/sales/items/${toServerItemType(itemType)}/${userId}` + (loc ? `?location=${encodeURIComponent(loc)}` : "");
       const res = await fetch(itemsUrl);
       const items = await res.json();
 
@@ -1560,7 +1560,7 @@
       const itemLocation = normalizeLocationName(selectedOption?.customProperties?.location || "");
 
       try {
-        const locRes = await fetch("/acme/api/locations");
+        const locRes = await fetch("/app/api/locations");
         const allLocations = await locRes.json();
 
         const locationHtml = (Array.isArray(allLocations) ? allLocations : []).map((locName) => {
@@ -1621,7 +1621,7 @@
       try {
         const stock = JSON.parse(selectedOption.customProperties.stock);
         
-        const locRes = await fetch("/acme/api/locations");
+        const locRes = await fetch("/app/api/locations");
         const allLocations = await locRes.json();
 
         // Build "ALL" option
@@ -1737,7 +1737,7 @@
       currentSelectedDetails = null;
       renderSelectedItemDetailsTable();
       try {
-        const locRes = await fetch("/acme/api/locations");
+        const locRes = await fetch("/app/api/locations");
         const allLocations = await locRes.json();
 
         const locationHtml = (Array.isArray(allLocations) ? allLocations : []).map((locName) => {
@@ -2243,7 +2243,7 @@
 
     // For create/update sales order, submit via AJAX so backend JSON errors show as toast
     const actionPath = orderForm.getAttribute("action") || "";
-    if (actionPath === "/acme/sales/order" || actionPath === "/acme/sales/order/status") {
+    if (actionPath === "/app/sales/order" || actionPath === "/app/sales/order/status") {
       try {
         const formData = new FormData(orderForm);
         const payload = new URLSearchParams();
@@ -2256,7 +2256,7 @@
 
         // New Label Stock order: append lines[0..N] from the Order Items table
         // so POST /sales/order takes its multi-line branch.
-        if (actionPath === "/acme/sales/order" && typeof aiIsActive === "function" && aiIsActive()) {
+        if (actionPath === "/app/sales/order" && typeof aiIsActive === "function" && aiIsActive()) {
           aiAppendLines(payload);
         }
 
@@ -2287,7 +2287,7 @@
           return true;
         }
 
-        if (actionPath === "/acme/sales/order/status") {
+        if (actionPath === "/app/sales/order/status") {
           showToast("Order dispatched successfully", "success");
         } else {
           showToast("Sales order submitted successfully", "success");
@@ -2684,7 +2684,7 @@
     }
 
     try {
-      const res = await fetch(`/acme/sales/order/log/${logId}`, {
+      const res = await fetch(`/app/sales/order/log/${logId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantity: qty, invoiceNumber, date })
@@ -2707,7 +2707,7 @@
     const logId = document.getElementById('delete-log-id').value;
 
     try {
-      const res = await fetch(`/acme/sales/order/log/${logId}`, {
+      const res = await fetch(`/app/sales/order/log/${logId}`, {
         method: 'DELETE'
       });
       const data = await res.json();

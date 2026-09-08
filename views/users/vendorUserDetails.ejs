@@ -250,13 +250,13 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="action-btn-header" onclick="window.location.href='/acme/form/vendor'">
+        <button class="action-btn-header" onclick="window.location.href='/app/form/vendor'">
           <i class="fa-solid fa-building"></i> Add Vendor
         </button>
-        <button class="action-btn-header" onclick="window.location.href='/acme/form/vendor?tab=user&vendorName=<%= encodeURIComponent(vendorUser.vendorName) %>'">
+        <button class="action-btn-header" onclick="window.location.href='/app/form/vendor?tab=user&vendorName=<%= encodeURIComponent(vendorUser.vendorName) %>'">
           <i class="fa-solid fa-user-plus"></i> Add Coordinator
         </button>
-        <a href="/acme/form/edit/vendor-user/<%= vendorUser._id %>" class="action-btn-header">
+        <a href="/app/form/edit/vendor-user/<%= vendorUser._id %>" class="action-btn-header">
           <i class="fa-solid fa-pen"></i> Edit Coordinator
         </a>
         <% const coordStatus = (vendorUser.coordinatorStatus || 'ACTIVE'); %>
@@ -378,7 +378,7 @@
 </div>
 
 <!-- Delete Modal -->
-<form id="deleteCoordinatorForm" method="POST" action="/acme/vendor/coordinator/details/<%= vendorUser._id %>/delete" style="display:none;">
+<form id="deleteCoordinatorForm" method="POST" action="/app/vendor/coordinator/details/<%= vendorUser._id %>/delete" style="display:none;">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 </form>
 
@@ -463,7 +463,7 @@
   toggleStatusConfirm.addEventListener("click", async () => {
     toggleStatusConfirm.disabled = true;
     try {
-      const res = await fetch(`/acme/vendor/coordinator/details/${coordinatorId}/status`, {
+      const res = await fetch(`/app/vendor/coordinator/details/${coordinatorId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-csrf-token": getCsrfToken() },
         body: JSON.stringify({ status: toggleStatusBtn.dataset.target }),

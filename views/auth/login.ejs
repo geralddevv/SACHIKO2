@@ -4,7 +4,7 @@
   const self = (typeof selfBrand !== 'undefined' && selfBrand === 'fairdesk') ? 'fairdesk' : 'sachiko';
   const urlFor = {
     fairdesk: (typeof fairtechLoginUrl !== 'undefined' ? fairtechLoginUrl : '/fairtech/login'),
-    sachiko:  (typeof sachikoLoginUrl  !== 'undefined' ? sachikoLoginUrl  : '/acme/login'),
+    sachiko:  (typeof sachikoLoginUrl  !== 'undefined' ? sachikoLoginUrl  : '/app/login'),
   };
   // The Sachiko-side name comes from the Company master (res.locals.brandName);
   // the Fairtech entry is the "switch to the other app" option and stays fixed.

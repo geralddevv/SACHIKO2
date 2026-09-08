@@ -638,7 +638,7 @@
     hideError("addReleaseError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/acme/form/release", {
+      const res = await fetch("/app/form/release", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -655,7 +655,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/acme/form/release";
+        window.location.href = data.redirect || "/app/form/release";
       } else {
         showError("addReleaseError", data.message || "Failed to add release liner.");
       }
@@ -712,7 +712,7 @@
     hideError("editReleaseError");
     setLoading("editSubmitBtn", true);
     try {
-      const res = await fetch(`/acme/api/release/${editId}`, {
+      const res = await fetch(`/app/api/release/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -757,7 +757,7 @@
     if (!deleteId) return;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/acme/api/release/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/app/api/release/${deleteId}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
         window.location.reload();

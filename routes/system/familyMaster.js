@@ -30,7 +30,7 @@ router.post("/form/family", requireAuth, requireFamilyMaster, createLimiter, asy
 
     res.locals.auditDescription = `Created family "${familyName}"`;
     req.flash("notification", "Family created successfully!");
-    res.json({ success: true, redirect: "/acme/form/family" });
+    res.json({ success: true, redirect: "/app/form/family" });
   } catch (err) {
     console.error("FAMILY MASTER CREATE ERROR:", err);
     const isDup = err.code === 11000;

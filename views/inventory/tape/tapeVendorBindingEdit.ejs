@@ -48,7 +48,7 @@
 <div class="main-content">
   <form
     class="needs-validation"
-    action="/acme/vendor-item/edit/tape/<%= binding._id %>"
+    action="/app/vendor-item/edit/tape/<%= binding._id %>"
     method="post"
     autocomplete="off"
     novalidate
@@ -199,7 +199,7 @@
         return;
       }
 
-      window.location.href = data.redirect || returnTo || "/acme/vendor/coordinator/view";
+      window.location.href = data.redirect || returnTo || "/app/vendor/coordinator/view";
     } catch (err) {
       console.error(err);
       submitBtn.disabled = false;

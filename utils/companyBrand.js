@@ -10,8 +10,8 @@ import Company from "../models/system/company.js";
 
 // The constant path every route is mounted at internally. The public slug is
 // mapped onto this; when no company is registered yet the two are the same, so
-// the app just works at /acme/... until then.
-export const INTERNAL_PREFIX = "acme";
+// the app just works at /app/... until then.
+export const INTERNAL_PREFIX = "app";
 
 // Until a Company is saved: APP_BRAND_NAME from .env (set by scripts/rebrand.js),
 // then the historical name.

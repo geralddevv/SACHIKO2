@@ -619,7 +619,7 @@
     hideError("addAdhesiveError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/acme/form/adhesive", {
+      const res = await fetch("/app/form/adhesive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -637,7 +637,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/acme/form/adhesive";
+        window.location.href = data.redirect || "/app/form/adhesive";
       } else {
         showError("addAdhesiveError", data.message || "Failed to add adhesive.");
       }
@@ -691,7 +691,7 @@
     hideError("editAdhesiveError");
     setLoading("editSubmitBtn", true);
     try {
-      const res = await fetch(`/acme/api/adhesive/${editId}`, {
+      const res = await fetch(`/app/api/adhesive/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -737,7 +737,7 @@
     if (!deleteId) return;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/acme/api/adhesive/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/app/api/adhesive/${deleteId}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
         window.location.reload();

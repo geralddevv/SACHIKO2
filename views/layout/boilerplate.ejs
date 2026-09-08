@@ -7,7 +7,7 @@
     <meta name="session-expires-at" content="<%= sessionExpiresAt || '' %>" />
     <%# Where common.js sends this user when their session ends -- operators
         sign in at their own portal, not the staff login. %>
-    <meta name="login-url" content="<%= (authUser && authUser.role === 'operator') ? '/acme/operator/login' : '/acme/login' %>" />
+    <meta name="login-url" content="<%= (authUser && authUser.role === 'operator') ? '/app/operator/login' : '/app/login' %>" />
     <title><%= typeof brandShort !== 'undefined' && brandShort ? brandShort : 'Sachiko' %> - <%= title %></title>
     <link rel="icon" href="<%= typeof faviconUrl !== 'undefined' ? faviconUrl : '/company/favicon' %>" />
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
@@ -662,7 +662,7 @@
           </div>
         </div>
       </div>
-      <a href="<%= typeof homeUrl !== 'undefined' ? homeUrl : '/acme/welcome' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center; margin-right: auto; margin-left: 20px;">
+      <a href="<%= typeof homeUrl !== 'undefined' ? homeUrl : '/app/welcome' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center; margin-right: auto; margin-left: 20px;">
         <h1 style="margin: 0;"><%= typeof brandName !== 'undefined' && brandName ? brandName : 'Sachiko Packaging' %></h1>
       </a>
     </nav>    <div class="logout-modal" id="logoutModal" aria-hidden="true">
@@ -765,7 +765,7 @@
 
         <%# Home isn't /welcome for everyone -- the server hands the layout a
             homeUrl so this link follows whatever the role can actually open. %>
-        <% const home = typeof homeUrl !== 'undefined' && homeUrl ? homeUrl : '/acme/welcome'; %>
+        <% const home = typeof homeUrl !== 'undefined' && homeUrl ? homeUrl : '/app/welcome'; %>
         <a href="<%= home %>" title="Dashboard" class="<%= title === 'Welcome' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
           <i class="fa-solid fa-house" style="color: #ffffff"></i>
           <p class="nav-items-para">Dashboard</p>
@@ -789,18 +789,18 @@
           <%# Tape View below is hidden app-wide, so Label Stock is the only
               item this dropdown ever opens onto -- skip the toggle and go
               straight there. %>
-          <a href="/acme/label-stock/view" title="View" class="view-toggle nav-items" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+          <a href="/app/label-stock/view" title="View" class="view-toggle nav-items" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
             <i class="fa-solid fa-boxes-stacked" style="color: #ffffff"></i>
             <p class="nav-items-para">SKUs List</p>
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </a>
 
           <div class="nav-labels-opt">
-            <a href="/acme/label-stock/view" title="Label Stock View" class="<%= (title === 'Label Stock View' || title === 'Label Stock Form' || title === 'Edit Label Stock') ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/label-stock/view" title="Label Stock View" class="<%= (title === 'Label Stock View' || title === 'Label Stock Form' || title === 'Edit Label Stock') ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
               <p class="nav-items-para">Label Stock</p>
             </a>
-            <a href="/acme/tape/view" title="Tape View" class="<%= title === 'Tape View' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
+            <a href="/app/tape/view" title="Tape View" class="<%= title === 'Tape View' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
             </a>
@@ -821,11 +821,11 @@
             <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">View</p>
             </div>
-            <a href="/acme/client/view" title="Client View" class="<%= title === 'Client View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/client/view" title="Client View" class="<%= title === 'Client View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Client List</p>
             </a>
-            <a href="/acme/master/view" title="Client Details" class="<%= title === 'Client Details' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/master/view" title="Client Details" class="<%= title === 'Client Details' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Client Data</p>
             </a>
@@ -837,11 +837,11 @@
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
             </div>
 
-            <a href="/acme/form/label-stock-binding" title="Client Label Stock" class="<%= title === 'Client Label Stock' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
+            <a href="/app/form/label-stock-binding" title="Client Label Stock" class="<%= title === 'Client Label Stock' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-file-lines" style="color: #ffffff"></i>
               <p class="nav-items-para">Label Stock</p>
             </a>
-            <a href="/acme/form/tape-binding" title="Client Tape" class="<%= title === 'Client Tape' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
+            <a href="/app/form/tape-binding" title="Client Tape" class="<%= title === 'Client Tape' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
             </a>
@@ -858,16 +858,16 @@
           </div>
 
           <div class="nav-labels-opt">
-            <a href="/acme/sales/order" title="Sales Order" class="<%= title === 'Sales Order' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/sales/order" title="Sales Order" class="<%= title === 'Sales Order' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-cart-plus" style="color: #ffffff"></i>
               <p class="nav-items-para">Sales Order</p>
             </a>
-            <a href="/acme/sales/pending" title="Pending Orders" class="<%= title === 'Pending Orders' ? 'nav-items active' : 'nav-items' %>" style="<%= isSales ? '' : 'border-bottom: 2px solid #ffffff9d;' %> text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/sales/pending" title="Pending Orders" class="<%= title === 'Pending Orders' ? 'nav-items active' : 'nav-items' %>" style="<%= isSales ? '' : 'border-bottom: 2px solid #ffffff9d;' %> text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clock-rotate-left" style="color: #ffffff"></i>
               <p class="nav-items-para">Pending Orders</p>
             </a>
             <% if (isSales) { %>
-            <a href="/acme/stocks/view" title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/stocks/view" title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Stock Summary</p>
             </a>
@@ -884,7 +884,7 @@
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
           <div class="nav-labels-opt">
-            <a href="/acme/pettycash/view" title="Petty Cash" class="<%= title === 'Petty Cash View' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/pettycash/view" title="Petty Cash" class="<%= title === 'Petty Cash View' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-money-bill-1" style="color: #ffffff"></i>
               <p class="nav-items-para">Petty Cash</p>
             </a>
@@ -908,28 +908,28 @@
             <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Deckle</p>
             </div>
-            <a href="/acme/labels/production/deckle-set" title="Deckle Sorting" class="<%= title === 'Deckle Sorting' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/labels/production/deckle-set" title="Deckle Sorting" class="<%= title === 'Deckle Sorting' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-ruler-combined" style="color: #ffffff"></i>
               <p class="nav-items-para">Deckle Sorting</p>
             </a>
-            <a href="/acme/labels/production/deckle-queue" title="Deckle Queue" class="<%= title === 'Deckle Queue' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/labels/production/deckle-queue" title="Deckle Queue" class="<%= title === 'Deckle Queue' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
               <p class="nav-items-para">Deckle Queue</p>
             </a>
 
-            <a href="/acme/prodcalc/view" title="Production Binding View" class="<%= title === 'Production Binding View' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
+            <a href="/app/prodcalc/view" title="Production Binding View" class="<%= title === 'Production Binding View' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Prod Bind View</p>
             </a>
-            <a href="/acme/form/prodcalc" title="Production Binding" class="<%= title === 'Production Calculator' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
+            <a href="/app/form/prodcalc" title="Production Binding" class="<%= title === 'Production Calculator' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-industry" style="color: #ffffff"></i>
               <p class="nav-items-para">Prod Binding</p>
             </a>
-            <a href="/acme/machine/queue" title="Machine Queues" class="<%= title === 'Machine Queues' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/machine/queue" title="Machine Queues" class="<%= title === 'Machine Queues' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
               <p class="nav-items-para">Machine Queues</p>
             </a>
-            <a href="/acme/labels/production/pending?tab=wip" title="WIP" class="<%= title === 'WIP' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/labels/production/pending?tab=wip" title="WIP" class="<%= title === 'WIP' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-gears" style="color: #ffffff"></i>
               <p class="nav-items-para">WIP</p>
             </a>
@@ -948,7 +948,7 @@
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
           <div class="nav-labels-opt">
-            <a href="/acme/slitting/queue" title="Deckle Slitting" class="<%= (title === 'Deckle Slitting' || title === 'Slitting Allocation' || title === 'Slitting Job Card') ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/slitting/queue" title="Deckle Slitting" class="<%= (title === 'Deckle Slitting' || title === 'Slitting Allocation' || title === 'Slitting Job Card') ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-scissors" style="color: #ffffff"></i>
               <p class="nav-items-para">Deckle Slitting</p>
             </a>
@@ -958,11 +958,11 @@
                  "/machine/queue"), each linking through to its own queue
                  (/sachiko/machine/:id/queue), which already folds in that
                  machine's allocated Slitting Job Cards. -->
-            <a href="/acme/machine/queue?type=SLITTING" title="Slitting Machine Queues" class="<%= title === 'Slitting Machine Queues' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/machine/queue?type=SLITTING" title="Slitting Machine Queues" class="<%= title === 'Slitting Machine Queues' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
               <p class="nav-items-para">Machine Queue</p>
             </a>
-            <a href="/acme/slitting/wip" title="Slitting WIP" class="<%= title === 'Slitting WIP' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/slitting/wip" title="Slitting WIP" class="<%= title === 'Slitting WIP' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-gears" style="color: #ffffff"></i>
               <p class="nav-items-para">WIP</p>
             </a>
@@ -980,19 +980,19 @@
 
           <div class="nav-labels-opt">
             <% if ((isAdmin || isHod || permissions.inventory) && !isSales) { %>
-            <a href="/acme/stocks/view" title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/stocks/view" title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Stock Summary</p>
             </a>
-            <a href="/acme/facestockstock" title="Facestock Stock" class="<%= title === 'Facestock Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/facestockstock" title="Facestock Stock" class="<%= title === 'Facestock Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
               <p class="nav-items-para">Facestock</p>
             </a>
-            <a href="/acme/adhesivestock" title="Adhesive Stock" class="<%= title === 'Adhesive Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/adhesivestock" title="Adhesive Stock" class="<%= title === 'Adhesive Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
               <p class="nav-items-para">Adhesive</p>
             </a>
-            <a href="/acme/releaselinerstock" title="Release Liner Stock" class="<%= title === 'Release Liner Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/releaselinerstock" title="Release Liner Stock" class="<%= title === 'Release Liner Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
               <p class="nav-items-para">Release Liner</p>
             </a>
@@ -1002,23 +1002,23 @@
                  wipStock.js's loadFacestockUsageRows and the "Used (Kg)"
                  column on the Facestock Stock page above, which this is the
                  drill-down for. -->
-            <a href="/acme/stock/wip" title="WIP Stock" class="<%= title === 'WIP Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/stock/wip" title="WIP Stock" class="<%= title === 'WIP Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-industry" style="color: #ffffff"></i>
               <p class="nav-items-para">WIP Stock</p>
             </a>
-            <a href="/acme/semifinishedstock" title="Semi Finished Goods Stock" class="<%= title === 'Semi Finished Goods Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/semifinishedstock" title="Semi Finished Goods Stock" class="<%= title === 'Semi Finished Goods Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-cubes" style="color: #ffffff"></i>
               <p class="nav-items-para">Semi Finished Goods</p>
             </a>
-            <a href="/acme/finishedstock" title="Finished Goods Stock" class="<%= title === 'Finished Goods Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/finishedstock" title="Finished Goods Stock" class="<%= title === 'Finished Goods Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-box" style="color: #ffffff"></i>
               <p class="nav-items-para">Finished</p>
             </a>
-            <a href="/acme/corestock" title="Core Stock" class="<%= title === 'Core Stock' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/corestock" title="Core Stock" class="<%= title === 'Core Stock' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-regular fa-circle" style="color: #ffffff"></i>
               <p class="nav-items-para">Core</p>
             </a>
-            <a href="/acme/tapestock" title="Tape Stock" class="<%= title === 'Tape Stock' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
+            <a href="/app/tapestock" title="Tape Stock" class="<%= title === 'Tape Stock' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
             </a>
@@ -1039,23 +1039,23 @@
             <div style="margin: 16px 12px 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); cursor: default; pointer-events: none;">
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">View</p>
             </div>
-            <a href="/acme/vendor/view" title="Vendor List" class="<%= title === 'Vendor Details' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/vendor/view" title="Vendor List" class="<%= title === 'Vendor Details' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Vendor List</p>
             </a>
-            <a href="/acme/vendor/coordinator/view" title="Vendor Details" class="<%= (title === 'Vendor Coordinator View' || title === 'Edit Vendor Coordinator') ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/vendor/coordinator/view" title="Vendor Details" class="<%= (title === 'Vendor Coordinator View' || title === 'Edit Vendor Coordinator') ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Vendor Details</p>
             </a>
-            <a href="/acme/stocks/view" title="Stock View" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/stocks/view" title="Stock View" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Summary</p>
             </a>
-            <a href="/acme/inventory/reorder" title="Re-Order" class="<%= title === 'Reorder List' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/inventory/reorder" title="Re-Order" class="<%= title === 'Reorder List' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-cart-flatbed" style="color: #ffffff"></i>
               <p class="nav-items-para">Re-Order</p>
             </a>
-            <a href="/acme/purchase/pending" title="Pending PO" class="<%= title === 'Pending Purchase Orders' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/purchase/pending" title="Pending PO" class="<%= title === 'Pending Purchase Orders' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clock-rotate-left" style="color: #ffffff"></i>
               <p class="nav-items-para">Pending PO</p>
             </a>
@@ -1064,12 +1064,12 @@
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Entry</p>
             </div>
 
-            <a href="/acme/inventory/purchase/order" title="Purchase Order" class="<%= title === 'Purchase Order' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/inventory/purchase/order" title="Purchase Order" class="<%= title === 'Purchase Order' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-file-invoice" style="color: #ffffff"></i>
               <p class="nav-items-para">Purchase Order</p>
             </a>
 
-            <a href="/acme/form/vendor" title="Vendor Create" class="<%= title === 'Vendor Form' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/vendor" title="Vendor Create" class="<%= title === 'Vendor Form' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-shop" style="color: #ffffff"></i>
               <p class="nav-items-para">Vendor Create</p>
             </a>
@@ -1081,7 +1081,7 @@
               <p style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #b1d4e0; margin: 0;">Binding</p>
             </div>
 
-            <a href="/acme/form/vendor-item-binding/tape" title="Vendor Tape" class="<%= title === 'Vendor Tape' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
+            <a href="/app/form/vendor-item-binding/tape" title="Vendor Tape" class="<%= title === 'Vendor Tape' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-tape" style="color: #ffffff"></i>
               <p class="nav-items-para">Tape</p>
             </a>
@@ -1098,52 +1098,52 @@
           </div>
 
           <div class="nav-labels-opt">
-            <a href="/acme/form/company" title="Company Registration" class="<%= title === 'Company Registration' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/company" title="Company Registration" class="<%= title === 'Company Registration' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-building" style="color: #ffffff"></i>
               <p class="nav-items-para">Company</p>
             </a>
 
-            <a href="/acme/form/location" title="Location Master" class="<%= title === 'Location Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/location" title="Location Master" class="<%= title === 'Location Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-location-dot" style="color: #ffffff"></i>
               <p class="nav-items-para">Location</p>
             </a>
 
-            <a href="/acme/form/machine" title="Machine Master" class="<%= title === 'Machine Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/machine" title="Machine Master" class="<%= title === 'Machine Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-gears" style="color: #ffffff"></i>
               <p class="nav-items-para">Machine</p>
             </a>
 
-            <a href="/acme/form/facestock" title="Facestock Master" class="<%= title === 'Facestock Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/facestock" title="Facestock Master" class="<%= title === 'Facestock Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
               <p class="nav-items-para">Facestock</p>
             </a>
 
-            <a href="/acme/form/adhesive" title="Adhesive Master" class="<%= title === 'Adhesive Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/adhesive" title="Adhesive Master" class="<%= title === 'Adhesive Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-droplet" style="color: #ffffff"></i>
               <p class="nav-items-para">Adhesive</p>
             </a>
 
-            <a href="/acme/form/release" title="Release Master" class="<%= title === 'Release Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/release" title="Release Master" class="<%= title === 'Release Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-scroll" style="color: #ffffff"></i>
               <p class="nav-items-para">Release</p>
             </a>
 
-            <a href="/acme/form/family" title="Family Master" class="<%= title === 'Family Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/family" title="Family Master" class="<%= title === 'Family Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-tags" style="color: #ffffff"></i>
               <p class="nav-items-para">Family</p>
             </a>
 
-            <a href="/acme/form/type" title="Type Master" class="<%= title === 'Type Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/type" title="Type Master" class="<%= title === 'Type Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-shapes" style="color: #ffffff"></i>
               <p class="nav-items-para">Type</p>
             </a>
 
-            <a href="/acme/form/core" title="Core Master" class="<%= title === 'Core Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/core" title="Core Master" class="<%= title === 'Core Master' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-regular fa-circle" style="color: #ffffff"></i>
               <p class="nav-items-para">Core</p>
             </a>
 
-            <a href="/acme/form/label-stock-adhesive-binding" title="Label Stock Adhesive" class="<%= title === 'Label Stock Adhesive' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/label-stock-adhesive-binding" title="Label Stock Adhesive" class="<%= title === 'Label Stock Adhesive' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-link" style="color: #ffffff"></i>
               <p class="nav-items-para">LS Adhesive</p>
             </a>
@@ -1160,11 +1160,11 @@
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
           <div class="nav-labels-opt">
-            <a href="/acme/employee/admin/permissions" title="Permission Dashboard" class="<%= title === 'Permission Dashboard' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/employee/admin/permissions" title="Permission Dashboard" class="<%= title === 'Permission Dashboard' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-shield-halved" style="color: #ffffff"></i>
               <p class="nav-items-para">Permissions</p>
             </a>
-            <a href="/acme/audit/view" title="Audit Log" class="<%= title === 'Audit Log' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/audit/view" title="Audit Log" class="<%= title === 'Audit Log' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Audit Log</p>
             </a>
@@ -1181,11 +1181,11 @@
           </div>
 
           <div class="nav-labels-opt">
-            <a href="/acme/form/ratecalculator" title="Rate Calculator" class="nav-items" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/ratecalculator" title="Rate Calculator" class="nav-items" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-calculator" style="color: #ffffff"></i>
               <p class="nav-items-para">Rate Calculator</p>
             </a>
-            <a href="/acme/form/salescalc" title="Sales Calculator" class="nav-items" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/form/salescalc" title="Sales Calculator" class="nav-items" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-money-bill-transfer" style="color: #ffffff"></i>
               <p class="nav-items-para">Sales Calculator</p>
             </a>
@@ -1203,27 +1203,27 @@
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
           <div class="nav-labels-opt">
-            <a href="/acme/pettycash/view" title="Petty Cash View" class="<%= title === 'Petty Cash View' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; margin-bottom: 5px; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/pettycash/view" title="Petty Cash View" class="<%= title === 'Petty Cash View' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; margin-bottom: 5px; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-money-bill-1" style="color: #ffffff"></i>
               <p class="nav-items-para">Petty Cash</p>
             </a>
 
-            <a href="/acme/advance/view" title="Advance View" class="<%= title === 'Advance View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/advance/view" title="Advance View" class="<%= title === 'Advance View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-arrow-up-1-9" style="color: #ffffff"></i>
               <p class="nav-items-para">Advance</p>
             </a>
 
-            <a href="/acme/loan/view" title="Loan View" class="<%= title === 'Loan View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/loan/view" title="Loan View" class="<%= title === 'Loan View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-handshake" style="color: #ffffff"></i>
               <p class="nav-items-para">Loan</p>
             </a>
 
-            <a href="/acme/payroll/view" title="Payroll View" class="<%= title === 'Payroll View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/payroll/view" title="Payroll View" class="<%= title === 'Payroll View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-address-book" style="color: #ffffff"></i>
               <p class="nav-items-para">Payroll</p>
             </a>
 
-            <a href="/acme/employee/view" title="Employee View" class="<%= title === 'Employee View' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/employee/view" title="Employee View" class="<%= title === 'Employee View' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-users" style="color: #ffffff"></i>
               <p class="nav-items-para">Employee</p>
             </a>
@@ -1242,11 +1242,11 @@
             <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
           </div>
           <div class="nav-labels-opt">
-            <a href="/acme/machine/jobcard/view" title="Deckle Logs" class="<%= title === 'Deckle Logs' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/machine/jobcard/view" title="Deckle Logs" class="<%= title === 'Deckle Logs' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clipboard-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Deckle Logs</p>
             </a>
-            <a href="/acme/slitting/jobcard/view" title="Slitting Logs" class="<%= title === 'Slitting Logs' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/slitting/jobcard/view" title="Slitting Logs" class="<%= title === 'Slitting Logs' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clipboard-check" style="color: #ffffff"></i>
               <p class="nav-items-para">Slitting Logs</p>
             </a>
@@ -1254,17 +1254,17 @@
         </div>
         <% } %>
 
-        <a href="/acme/maintenance" title="Maintenance Requests" class="<%= title === 'Maintenance Requests' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+        <a href="/app/maintenance" title="Maintenance Requests" class="<%= title === 'Maintenance Requests' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
           <i class="fa-solid fa-screwdriver-wrench" style="color: #ffffff"></i>
           <p class="nav-items-para">Maintenance</p>
         </a>
 
-        <a href="/acme/tasks" title="Company Tasks" class="<%= title === 'Company Tasks' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+        <a href="/app/tasks" title="Company Tasks" class="<%= title === 'Company Tasks' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
           <i class="fa-solid fa-list-check" style="color: #ffffff"></i>
           <p class="nav-items-para">Tasks</p>
         </a>
 
-        <a href="/acme/daybook" title="Daybook" class="<%= title === 'Daybook' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+        <a href="/app/daybook" title="Daybook" class="<%= title === 'Daybook' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
           <i class="fa-solid fa-book-open" style="color: #ffffff"></i>
           <p class="nav-items-para">Daybook</p>
         </a>
@@ -1439,7 +1439,7 @@
           const data = Object.fromEntries(formData.entries());
 
           try {
-            const resp = await fetch("/acme/profile/password", {
+            const resp = await fetch("/app/profile/password", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(data)

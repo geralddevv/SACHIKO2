@@ -1,7 +1,7 @@
 <% layout('/layout/boilerplate') -%>
 
 <div class="main-content" style="padding: 10px;">
-  <form class="rottary-content needs-validation" method="post" action="/acme/payroll/create" onsubmit="return validatePayrollBeforeSubmit()" autocomplete="off" novalidate>
+  <form class="rottary-content needs-validation" method="post" action="/app/payroll/create" onsubmit="return validatePayrollBeforeSubmit()" autocomplete="off" novalidate>
 
     <!-- ================= HEADING ================= -->
     <div class="span-full form-heading">
@@ -396,18 +396,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function fetchEmployee(id) {
-    const res = await fetch(`/acme/employee/${id}`);
+    const res = await fetch(`/app/employee/${id}`);
     if (!res.ok) throw new Error("Employee fetch failed");
     return res.json();
   }
 
   async function fetchLoan(id) {
-    const res = await fetch(`/acme/payroll/loan/${id}`);
+    const res = await fetch(`/app/payroll/loan/${id}`);
     return res.ok ? res.json() : null;
   }
 
   async function fetchAdvance(id) {
-    const res = await fetch(`/acme/payroll/advance/${id}`);
+    const res = await fetch(`/app/payroll/advance/${id}`);
     return res.ok ? res.json() : null;
   }
 

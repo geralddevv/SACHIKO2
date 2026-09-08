@@ -1,24 +1,31 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
+import { execFileSync } from "child_process";
 import mongoose from "mongoose";
 import { reconnectDB } from "../config/db.js";
 import { resetTasksConnection } from "../config/tasksDb.js";
 
-// Switching the app onto the database that belongs to a company.
-// Triggered from routes/system/company.js when the company name's slug changes
-// (a deliberate, confirmed action -- see companyMaster.ejs).
-//
-//   - target database does NOT exist yet -> create it, seed just the Company
-//     record, everything else starts empty.
-//   - target database already exists      -> switch straight to it and use its
-//     data as-is (nothing is seeded or wiped).
-//
-// .env is updated so the choice survives a restart, and the live process is
-// re-pointed in place (no restart needed). The OLD database is left untouched.
+// Each company gets its own database under a STABLE, RANDOM name, assigned once
+// at registration (routes/system/company.js). Renaming the company afterwards
+// only changes the URL slug + display name -- the database is never touched, so
+// there is no copy and nothing to go wrong. `renameCompanyDb` below is used just
+// for that one-time move at registration (and a legacy migration): it copies the
+// whole current database to the new name and re-points the live process, keeping
+// the old database as a backup.
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ENV_PATH = path.join(ROOT, ".env");
+
+// A fresh per-company database name -- opaque, so it never collides with a
+// company slug and never needs renaming.
+export function makeCompanyDbId() {
+  return `company_${crypto.randomBytes(9).toString("hex")}`;
+}
+export function isCompanyDbName(name) {
+  return /^company_[a-f0-9]{12,}$/.test(String(name || ""));
+}
 
 function parseUri(uri) {
   const m = String(uri || "").match(/^(mongodb(?:\+srv)?:\/\/)([^/?]+)(?:\/([^?]*))?(\?.*)?$/);
@@ -46,41 +53,120 @@ function withAuth(uri) {
   return uri;
 }
 
-// Point the app at database `newDb`. If it has no Company record yet, seed it
-// with `seedDoc`. Returns { ok, oldDb, newDb, seeded } or { error }.
-export async function switchCompanyDb(newDb, seedDoc) {
+function mongoAuthArgs() {
+  if (process.env.MONGO_USER && process.env.MONGO_PASS) {
+    return ["--username", process.env.MONGO_USER, "--password", process.env.MONGO_PASS, "--authenticationDatabase", "admin"];
+  }
+  return [];
+}
+
+async function databaseSizes(parsed) {
+  const base = withAuth(`${parsed.scheme}${parsed.host}${parsed.query}`);
+  const conn = await mongoose.createConnection(base, { serverSelectionTimeoutMS: 8000 }).asPromise();
+  try {
+    const { databases } = await conn.db.admin().listDatabases();
+    return new Map(databases.map((d) => [d.name, d.sizeOnDisk || 0]));
+  } finally {
+    await conn.close().catch(() => {});
+  }
+}
+
+// The `_id` of the Company singleton in another database on the same server --
+// used to tell "a stale backup of THIS company" apart from "someone else's data".
+async function companyIdInDb(parsed, dbName) {
+  const uri = withAuth(`${parsed.scheme}${parsed.host}/${dbName}${parsed.query}`);
+  const conn = await mongoose.createConnection(uri, { serverSelectionTimeoutMS: 8000 }).asPromise();
+  try {
+    const doc = await conn.collection("companies").findOne({ singleton: "COMPANY" }, { projection: { _id: 1 } });
+    return doc ? String(doc._id) : null;
+  } finally {
+    await conn.close().catch(() => {});
+  }
+}
+
+// Copy one database to a new name via the MongoDB database tools. Preserves
+// indexes and everything else; the source is untouched. `drop` first clears any
+// matching collections in the target (used to refresh a stale backup of the
+// same company).
+function copyDatabase(hostArg, fromDb, toDb, drop = false) {
+  const archive = path.join(ROOT, `.dbrename-${fromDb}-${Date.now()}.archive`);
+  const auth = mongoAuthArgs();
+  const TEN_MIN = 10 * 60 * 1000;
+  try {
+    execFileSync(
+      "mongodump",
+      [...auth, "--host", hostArg, `--db=${fromDb}`, `--archive=${archive}`, "--quiet"],
+      { stdio: "pipe", timeout: TEN_MIN },
+    );
+    execFileSync(
+      "mongorestore",
+      [
+        ...auth, "--host", hostArg, `--archive=${archive}`,
+        `--nsFrom=${fromDb}.*`, `--nsTo=${toDb}.*`,
+        ...(drop ? ["--drop"] : []),
+        "--quiet",
+      ],
+      { stdio: "pipe", timeout: TEN_MIN },
+    );
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      throw new Error("MongoDB database tools (mongodump/mongorestore) are not installed on the server.");
+    }
+    const detail = err.stderr ? String(err.stderr).trim().split("\n").pop() : err.message;
+    throw new Error(detail || "database copy failed");
+  } finally {
+    if (fs.existsSync(archive)) { try { fs.unlinkSync(archive); } catch { /* leave it */ } }
+  }
+}
+
+// Copy the current database (and its <db>_tasks sibling) to `newDb`, then point
+// .env and the live process at it. The old database is kept as a backup.
+// Returns { ok, oldDb, newDb } or { error }.
+export async function renameCompanyDb(newDb, { companyId = null } = {}) {
   const parsed = parseUri(process.env.MONGO_URI || "");
   if (!parsed) return { error: "MONGO_URI is not set or cannot be parsed." };
-  if (!fs.existsSync(ENV_PATH)) return { error: ".env file not found -- cannot switch databases." };
+  if (!fs.existsSync(ENV_PATH)) return { error: ".env file not found -- cannot rename the database." };
 
   const oldDb = parsed.db;
   if (!newDb || newDb === oldDb) return { ok: true, oldDb, newDb: oldDb, unchanged: true };
 
-  // 1. Seed the target database only if it has no company yet. Use a standalone
-  //    connection -- deriving one from mongoose.connection (useDb) and then
-  //    closing the main connection for the reconnect leaves the models broken
-  //    ("Connection was force closed").
-  let seeded = false;
-  {
-    const seedUri = withAuth(`${parsed.scheme}${parsed.host}/${newDb}${parsed.query}`);
-    let seedConn;
+  const hostArg = parsed.host.includes("@") ? parsed.host.split("@").pop() : parsed.host;
+  const oldTasksDb = `${oldDb}_tasks`;
+  const newTasksDb = `${newDb}_tasks`;
+
+  // 1. If the target already holds data, only proceed when it's a stale backup
+  //    of THIS same company (same Company _id) -- then overwrite it. Otherwise
+  //    refuse: a rename must never clobber an unrelated dataset.
+  let sizes;
+  try {
+    sizes = await databaseSizes(parsed);
+  } catch (err) {
+    return { error: `Could not check the target database: ${err.message}` };
+  }
+  let overwrite = false;
+  if ((sizes.get(newDb) || 0) > 0) {
+    let targetCompanyId = null;
     try {
-      seedConn = await mongoose.createConnection(seedUri, { serverSelectionTimeoutMS: 8000 }).asPromise();
-      const hasCompany = await seedConn.collection("companies").findOne({ singleton: "COMPANY" });
-      if (!hasCompany && seedDoc) {
-        const doc = { ...seedDoc };
-        delete doc.__v;
-        await seedConn.collection("companies").insertOne(doc);
-        seeded = true;
-      }
-    } catch (err) {
-      return { error: `Could not open the "${newDb}" database: ${err.message}` };
-    } finally {
-      if (seedConn) await seedConn.close().catch(() => {});
+      targetCompanyId = await companyIdInDb(parsed, newDb);
+    } catch { /* treat as unknown -> refuse below */ }
+    if (companyId && targetCompanyId && targetCompanyId === String(companyId)) {
+      overwrite = true; // an old backup of this company -- safe to refresh
+    } else {
+      return {
+        error: `A database named "${newDb}" already exists and holds a different company's data. Choose a different company name, or remove that database first.`,
+      };
     }
   }
 
-  // 2. Rewrite .env (rolling one-step-back copy in .env.prev).
+  // 2. Copy the whole current database (+ its tasks sibling) to the new name.
+  try {
+    copyDatabase(hostArg, oldDb, newDb, overwrite);
+    if ((sizes.get(oldTasksDb) || 0) > 0) copyDatabase(hostArg, oldTasksDb, newTasksDb, overwrite);
+  } catch (err) {
+    return { error: `Could not copy the database (${err.message}). Nothing was changed.` };
+  }
+
+  // 3. Rewrite .env (rolling one-step-back copy in .env.prev).
   const originalEnv = fs.readFileSync(ENV_PATH, "utf8");
   try {
     const nextEnv = originalEnv
@@ -94,10 +180,10 @@ export async function switchCompanyDb(newDb, seedDoc) {
     fs.writeFileSync(`${ENV_PATH}.prev`, originalEnv);
     fs.writeFileSync(ENV_PATH, nextEnv);
   } catch (err) {
-    return { error: `Prepared the database but could not update .env: ${err.message}` };
+    return { error: `Copied the database but could not update .env: ${err.message}` };
   }
 
-  // 3. Re-point the live process. process.env must move too so tasksDb.js and a
+  // 4. Re-point the live process. process.env must move too so tasksDb.js and a
   //    future reconnect read the new value.
   const prevMongoUri = process.env.MONGO_URI;
   const prevTasksUri = process.env.TASKS_MONGO_URI;
@@ -114,8 +200,8 @@ export async function switchCompanyDb(newDb, seedDoc) {
     if (prevTasksUri) process.env.TASKS_MONGO_URI = prevTasksUri;
     try { fs.writeFileSync(ENV_PATH, originalEnv); } catch { /* noted below */ }
     try { await reconnectDB(); } catch { /* connection already lost -- restart needed */ }
-    return { error: `Could not switch the live connection (${err.message}). Reverted; if the app misbehaves, restart it.` };
+    return { error: `Copied the database but could not switch the live connection (${err.message}). Reverted; restart the server if it misbehaves.` };
   }
 
-  return { ok: true, oldDb, newDb, seeded };
+  return { ok: true, oldDb, newDb };
 }

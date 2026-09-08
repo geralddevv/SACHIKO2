@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       // Fetch client data
-      const response = await fetch(`/acme/form/labels/${encodeURIComponent(clientName)}`);
+      const response = await fetch(`/app/form/labels/${encodeURIComponent(clientName)}`);
       if (!response.ok) throw new Error("Failed to fetch data");
 
       clientData = await response.json();

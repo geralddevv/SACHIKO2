@@ -49,7 +49,7 @@
 
     <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
       <a
-        href="/acme/advance/create"
+        href="/app/advance/create"
         class="header-action-btn"
         style="
           height: 30px;
@@ -72,7 +72,7 @@
       </a>
 
       <a
-        href="/acme/advance/logs"
+        href="/app/advance/logs"
         style="
           height: 30px;
           padding: 0 14px;
@@ -222,7 +222,7 @@
       minWidth: 180,
       formatter: function (cell) {
         const data = cell.getRow().getData();
-        return `<a href="/acme/advance/employee/${data.employeeId}/view-logs"
+        return `<a href="/app/advance/employee/${data.employeeId}/view-logs"
                    style="color: #044a78; font-weight: 600; text-decoration: underline;"
                    title="View History">
                    ${data.employeeName}
@@ -311,7 +311,7 @@
   async function refreshAdvanceLogs() {
     if (!currentEmployeeId) return;
 
-    const res = await fetch(`/acme/advance/employee/${currentEmployeeId}/logs`);
+    const res = await fetch(`/app/advance/employee/${currentEmployeeId}/logs`);
     const data = await res.json();
     table.replaceData(data.history || []);
 
@@ -334,7 +334,7 @@
     }
 
     try {
-      const res = await fetch(`/acme/advance/logs/${id}`, {
+      const res = await fetch(`/app/advance/logs/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount }),
@@ -359,7 +359,7 @@
     if (!id) return;
 
     try {
-      const res = await fetch(`/acme/advance/logs/${id}`, {
+      const res = await fetch(`/app/advance/logs/${id}`, {
         method: "DELETE",
       });
       const data = await res.json();

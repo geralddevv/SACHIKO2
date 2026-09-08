@@ -9,7 +9,7 @@ import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiter
 
 const router = express.Router();
 
-const PAGE = "/acme/form/label-stock-adhesive-binding";
+const PAGE = "/app/form/label-stock-adhesive-binding";
 
 // Same sha256 signature scheme the Client Label Stock binding uses (see
 // routes/sachiko/labelStockBinding.js) -- applied here to "same SKU, same
@@ -114,7 +114,7 @@ router.get("/form/label-stock-adhesive-binding", async (req, res) => {
   } catch (err) {
     console.error("LABEL STOCK ADHESIVE BINDING LOAD ERROR:", err);
     req.flash("notification", "Failed to load Label Stock Adhesive Binding.");
-    res.redirect(req.get("Referrer") || "/acme/label-stock/view");
+    res.redirect(req.get("Referrer") || "/app/label-stock/view");
   }
 });
 

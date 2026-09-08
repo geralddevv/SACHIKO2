@@ -123,7 +123,7 @@
                 <i class="fa-solid fa-eye"></i>
               </button>
               <button
-                onclick="window.location.href='/acme/label-stock-binding/edit/${row._id}'"
+                onclick="window.location.href='/app/label-stock-binding/edit/${row._id}'"
                 style="padding:2px 7px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
                 title="Edit Binding">
                 <i class="fa-solid fa-pen-to-square"></i>
@@ -155,7 +155,7 @@
           const itemType = String(row.rollOrSheet || "").toUpperCase();
           return `
             <button
-              onclick="window.location.href='/acme/sales/order?type=${encodeURIComponent(itemType)}&client=${encodeURIComponent(clientName)}&user=${userId}&item=${row._id}'"
+              onclick="window.location.href='/app/sales/order?type=${encodeURIComponent(itemType)}&client=${encodeURIComponent(clientName)}&user=${userId}&item=${row._id}'"
               style="padding:2px 10px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">
               <i class="fa-solid fa-cart-plus"></i>
             </button>
@@ -273,7 +273,7 @@
       deleteForm.appendChild(csrfInput);
     }
     csrfInput.value = getCsrfToken();
-    deleteForm.action = `/acme/label-stock-binding/delete/${bindingToDelete}`;
+    deleteForm.action = `/app/label-stock-binding/delete/${bindingToDelete}`;
     deleteForm.submit();
   });
 
@@ -310,7 +310,7 @@
     statusConfirmBtn.disabled = true;
     const endpoint = statusTarget === "ACTIVE" ? "set-active" : "set-inactive";
     try {
-      const res = await fetch(`/acme/label-stock-binding/${endpoint}/${statusBindingId}`, {
+      const res = await fetch(`/app/label-stock-binding/${endpoint}/${statusBindingId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-csrf-token": getCsrfToken() },
       });

@@ -193,7 +193,7 @@
       <div class="items w-100 h-100 client-item">Status</div>
     </div>
     <% for (client of clients) { %>
-    <div class="span-full client-row" onclick="window.location.href='/acme/edit/user/<%= client._id %>'">
+    <div class="span-full client-row" onclick="window.location.href='/app/edit/user/<%= client._id %>'">
       <div class="items w-100 h-100 px-10px client-item"><%= client.clientId %></div>
       <div class="items w-100 h-100 client-item"><%= client.clientName %></div>
       <div class="items w-100 h-100 client-item"><%= client.clientType %></div>
@@ -248,11 +248,11 @@
 </style>
 
 <div class="fab-capsule">
-  <div title="Add Client" class="fab-item" onclick="window.location.href='/acme/form/client?tab=client'" style="cursor: pointer;">
+  <div title="Add Client" class="fab-item" onclick="window.location.href='/app/form/client?tab=client'" style="cursor: pointer;">
     <i class="fa-solid fa-building"></i>
   </div>
   <div class="fab-divider"></div>
-  <div title="Add User" class="fab-item" onclick="window.location.href='/acme/form/client?tab=user'" style="cursor: pointer;">
+  <div title="Add User" class="fab-item" onclick="window.location.href='/app/form/client?tab=user'" style="cursor: pointer;">
     <i class="fa-solid fa-user-plus"></i>
   </div>
 </div>

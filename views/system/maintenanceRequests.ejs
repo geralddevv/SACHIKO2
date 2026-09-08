@@ -189,11 +189,11 @@
   </div>
 
   <div class="mr-filters">
-    <a href="/acme/maintenance" class="mr-filter <%= activeStatus ? '' : 'active' %>">
+    <a href="/app/maintenance" class="mr-filter <%= activeStatus ? '' : 'active' %>">
       All <span class="mr-filter-count"><%= totalCount %></span>
     </a>
     <% statuses.forEach((s) => { %>
-      <a href="/acme/maintenance?status=<%= encodeURIComponent(s) %>" class="mr-filter <%= activeStatus === s ? 'active' : '' %>">
+      <a href="/app/maintenance?status=<%= encodeURIComponent(s) %>" class="mr-filter <%= activeStatus === s ? 'active' : '' %>">
         <%= s %> <span class="mr-filter-count"><%= countByStatus[s] || 0 %></span>
       </a>
     <% }) %>
@@ -428,7 +428,7 @@
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     try {
-      const res = await fetch(`/acme/maintenance/${encodeURIComponent(id)}/status`, {
+      const res = await fetch(`/app/maintenance/${encodeURIComponent(id)}/status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, remark }),

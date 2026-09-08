@@ -432,7 +432,7 @@ router.post("/purchase-order", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created purchase order "${po.poNumber}" for release liner "${master.skuId}" from "${master.vendorName}" (qty ${po.quantity} kg)`;
     req.flash("notification", "Purchase Order created successfully.");
-    res.json({ success: true, redirect: "/acme/purchase/pending" });
+    res.json({ success: true, redirect: "/app/purchase/pending" });
   } catch (err) {
     console.error("RELEASE LINER CREATE PO ERROR:", err);
     res.status(400).json({ success: false, message: "Failed to create Purchase Order." });
@@ -510,7 +510,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Added ${createdRollIds.length} release liner stock reel(s) (${header.type}) at "${header.location}": ${createdRollIds.join(", ")}`;
     req.flash("notification", `${createdRollIds.length} release liner reel(s) added successfully!`);
-    res.json({ success: true, redirect: "/acme/releaselinerstock" });
+    res.json({ success: true, redirect: "/app/releaselinerstock" });
   } catch (err) {
     console.error("RELEASE LINER STOCK CREATE ERROR:", err);
     const msg = err.code === 11000 ? "Roll ID collision, please retry." : "Failed to add release liner stock.";

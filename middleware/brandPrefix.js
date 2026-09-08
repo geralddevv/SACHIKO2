@@ -1,24 +1,24 @@
 import { currentBrand, ensureFreshBrand, INTERNAL_PREFIX } from "../utils/companyBrand.js";
 
 // Every route in this app is registered under a constant internal prefix
-// ("/acme", INTERNAL_PREFIX). The prefix the user actually sees in the address
+// ("/app", INTERNAL_PREFIX). The prefix the user actually sees in the address
 // bar is the company slug (utils/companyBrand.js), which changes the moment the
 // Company master is registered or renamed -- no restart, no code edits.
 //
 // This middleware bridges the two:
-//   inbound   /<slug>/x   ->  request rewritten to  /acme/x   (routes never know)
-//   outbound  /acme/x     ->  /<slug>/x   in rendered HTML, in JSON `redirect`
+//   inbound   /<slug>/x   ->  request rewritten to  /app/x   (routes never know)
+//   outbound  /app/x     ->  /<slug>/x   in rendered HTML, in JSON `redirect`
 //               fields, and in res.redirect() targets / Location headers
 //
-// /acme/x always keeps working directly too (client-side fetches, bookmarks),
-// so nothing breaks in the gap before a company is registered (slug === "acme").
+// /app/x always keeps working directly too (client-side fetches, bookmarks),
+// so nothing breaks in the gap before a company is registered (slug === "app").
 
 const INT = `/${INTERNAL_PREFIX}`;
 
 // The internal prefix as a real path token only: start-of-string or a
-// delimiter, then "/acme", then a path boundary. Matches
-//   /acme   /acme/x   "/acme"   href="/acme/x"   `/acme/${id}`
-// never  /acmex  or  ../models/acme/x.js
+// delimiter, then "/app", then a path boundary. Matches
+//   /app   /app/x   "/app"   href="/app/x"   `/app/${id}`
+// never  /appfoo  or  ../models/sachiko/x.js
 const OUT_RE = new RegExp(`(^|[\\s"'\`(=>])\\/${INTERNAL_PREFIX}(?=[/"'\`)\\s?#<]|$)`, "g");
 
 const wantsHtml = (req) =>
@@ -47,7 +47,7 @@ export function brandPrefix(req, res, next) {
     wantsHtml(req)
   ) {
     // Raw internal URL opened in a browser -> bounce to the pretty one. Non-HTML
-    // hits on /acme/* are left alone so client fetches / bookmarks keep working.
+    // hits on /app/* are left alone so client fetches / bookmarks keep working.
     return res.redirect(301, pub + url.slice(INT.length));
   }
 

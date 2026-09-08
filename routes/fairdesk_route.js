@@ -503,7 +503,7 @@ router.use((req, res, next) => {
   const hasSalesAccess = role === "sales" || Boolean(permissions.sales);
   const hasHrAccess = role === "hr" || Boolean(permissions.hr);
 
-  if (!role) return res.redirect("/acme/login");
+  if (!role) return res.redirect("/app/login");
 
   if (role === "proprietor" || role === "admin" || role === "hod") return next();
 
@@ -841,7 +841,7 @@ router.post("/form/client", requireAuth, createLimiter, async (req, res) => {
     await Client.create(formData);
     res.locals.auditDescription = `Created client "${clientName}"`;
     req.flash("notification", "Client created successfully!");
-    res.json({ success: true, redirect: "/acme/client/view" });
+    res.json({ success: true, redirect: "/app/client/view" });
   } catch (err) {
     console.error(err);
     if (err?.code === 11000) {
@@ -961,7 +961,7 @@ router.post("/form/user", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created user "${userName}" under client "${client.clientName}"`;
     req.flash("notification", "User created successfully!");
-    res.json({ success: true, redirect: "/acme/master/view" });
+    res.json({ success: true, redirect: "/app/master/view" });
   } catch (err) {
     console.error(err);
     if (err?.code === 11000) {
@@ -1111,7 +1111,7 @@ router.post("/tasks", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created task "${task.title}" assigned to "${assignee.empName}"`;
     req.flash("notification", "Task created successfully!");
-    res.json({ success: true, redirect: "/acme/tasks" });
+    res.json({ success: true, redirect: "/app/tasks" });
   } catch (err) {
     console.error("TASK CREATE ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to create task." });
@@ -1308,7 +1308,7 @@ router.post("/daybook", requireAuth, createLimiter, async (req, res) => {
     await DaybookEntry.bulkWrite(ops);
 
     if (!req.body.silent) req.flash("notification", "Added to Daybook.");
-    res.json({ success: true, redirect: "/acme/daybook" });
+    res.json({ success: true, redirect: "/app/daybook" });
   } catch (err) {
     console.error("DAYBOOK ADD ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to add to Daybook." });
@@ -1477,7 +1477,7 @@ router.post("/form/samples", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created ${activeTab} sample "${sampleCode}" (${material})`;
     req.flash("notification", `${activeTab === "client" ? "Client" : "Vendor"} sample submitted successfully!`);
-    res.json({ success: true, redirect: `/acme/form/samples?tab=${activeTab}` });
+    res.json({ success: true, redirect: `/app/form/samples?tab=${activeTab}` });
   } catch (err) {
     console.error(err);
     res.status(400).json({ success: false, message: err.message });
@@ -1587,7 +1587,7 @@ router.post("/form/tape", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created tape master "${data.tapeProductId}" (${data.tapePaperCode}, ${data.tapeGsm}gsm)`;
     req.flash("notification", "Tape Master created successfully!");
-    res.json({ success: true, redirect: "/acme/tape/view" });
+    res.json({ success: true, redirect: "/app/tape/view" });
   } catch (err) {
     console.error(err);
     if (err?.code === 11000) {
@@ -1612,7 +1612,7 @@ router.get("/form/edit/user/:userId", async (req, res) => {
 
     if (!user) {
       req.flash("error", "User not found.");
-      return res.redirect("/acme/users/master");
+      return res.redirect("/app/users/master");
     }
 
     // Build the rows for the form. Dispatch details are now per-location; for
@@ -1663,7 +1663,7 @@ router.post("/form/edit/user/:userId", requireAuth, updateLimiter, async (req, r
     const currentUser = await Username.findById(userId);
     if (!currentUser) {
       req.flash("error", "User not found.");
-      return res.redirect("/acme/users/master");
+      return res.redirect("/app/users/master");
     }
 
     const updateData = {
@@ -1758,7 +1758,7 @@ router.post("/form/edit/user/:userId", requireAuth, updateLimiter, async (req, r
       console.error("BINDING IDENTITY SYNC ERROR:", err);
     }
     req.flash("notification", notification);
-    res.redirect(`/acme/client/details/${userId}`);
+    res.redirect(`/app/client/details/${userId}`);
   } catch (err) {
     console.error(err);
     req.flash("error", "Error updating user details.");
@@ -1796,7 +1796,7 @@ router.post("/form/location", requireAuth, createLimiter, async (req, res) => {
     await Location.create({ locationName });
     res.locals.auditDescription = `Created location "${locationName}"`;
     req.flash("notification", "Location created successfully!");
-    res.json({ success: true, redirect: "/acme/form/location" });
+    res.json({ success: true, redirect: "/app/form/location" });
   } catch (err) {
     console.error(err);
     const msg = err.code === 11000 ? "location already exist" : err.message;
@@ -1960,8 +1960,8 @@ router.get("/tape/profile/:id", async (req, res) => {
 
   const primaryBinding = tapeBindings[0] || null;
   const backUrl = primaryBinding?.userId?._id
-    ? `/acme/client/details/${primaryBinding.userId._id}`
-    : "/acme/tape/view";
+    ? `/app/client/details/${primaryBinding.userId._id}`
+    : "/app/tape/view";
   const stockSummary = await getItemStockSummary("Tape", tape._id);
   const locationOptions = await Location.find().sort({ locationName: 1 }).lean();
 
@@ -1982,7 +1982,7 @@ router.get("/tape/profile/:id", async (req, res) => {
     pageTitle: "Tape Details",
     sectionTitle: "Tape Details",
     valueHeader: "Value",
-    statusUrl: `/acme/tape/edit/${tape._id}`,
+    statusUrl: `/app/tape/edit/${tape._id}`,
     currentStatus: tape.status || "ACTIVE",
     rows,
     tape,
@@ -1998,7 +1998,7 @@ router.get("/tape/profile/:id", async (req, res) => {
     stockEditConfig: {
       enabled: true,
       itemType: "Tape",
-      editAction: `/acme/tape/profile/${tape._id}/stock/edit`,
+      editAction: `/app/tape/profile/${tape._id}/stock/edit`,
       locationOptions: locationOptions.map((entry) => canonicalizeLocationName(entry.locationName)).filter(Boolean),
     },
     title: "Tape Details",
@@ -2012,7 +2012,7 @@ router.post("/tape/profile/:id/stock/edit", requireAuth, updateLimiter, async (r
   handleProfileStockEdit(req, res, {
     itemType: "Tape",
     model: Tape,
-    redirectPath: "/acme/tape/profile",
+    redirectPath: "/app/tape/profile",
   }));
 
 function normalizePosPart(value) {
@@ -2099,7 +2099,7 @@ router.post("/tape/edit/:id", requireAuth, updateLimiter, async (req, res) => {
     const tapeDoc = await Tape.findByIdAndUpdate(req.params.id, { status }).select("tapeProductId").lean();
     res.locals.auditDescription = `Set tape "${tapeDoc?.tapeProductId || req.params.id}" status to ${status}`;
     req.flash("notification", "Tape status updated successfully!");
-    res.redirect(`/acme/tape/profile/${req.params.id}`);
+    res.redirect(`/app/tape/profile/${req.params.id}`);
   } catch (err) {
     console.error(err);
     req.flash("notification", "Failed to update tape status");
@@ -2283,7 +2283,7 @@ router.post("/form/vendor", requireAuth, createLimiter, async (req, res) => {
     await Vendor.create(formData);
     res.locals.auditDescription = `Created vendor "${vendorName}"`;
     req.flash("notification", "Vendor created successfully!");
-    res.json({ success: true, redirect: "/acme/form/vendor" });
+    res.json({ success: true, redirect: "/app/form/vendor" });
   } catch (err) {
     console.error(err);
     if (err?.code === 11000) {
@@ -2311,7 +2311,7 @@ router.get("/vendor/edit/:id", async (req, res) => {
     const vendor = await Vendor.findById(req.params.id).lean();
     if (!vendor) {
       req.flash("notification", "Vendor not found");
-      return res.redirect("/acme/vendor/view");
+      return res.redirect("/app/vendor/view");
     }
 
     res.render("users/vendorEditForm.ejs", {
@@ -2324,7 +2324,7 @@ router.get("/vendor/edit/:id", async (req, res) => {
   } catch (err) {
     console.error("VENDOR EDIT GET ERROR:", err);
     req.flash("notification", "Failed to load vendor edit page");
-    res.redirect("/acme/vendor/view");
+    res.redirect("/app/vendor/view");
   }
 });
 
@@ -2421,7 +2421,7 @@ router.post("/vendor/edit/:id", requireAuth, updateLimiter, async (req, res) => 
 
     res.locals.auditDescription = `Updated vendor "${updatedData.vendorName}"`;
     req.flash("notification", "Vendor updated successfully!");
-    res.json({ success: true, redirect: "/acme/vendor/view" });
+    res.json({ success: true, redirect: "/app/vendor/view" });
   } catch (err) {
     console.error("VENDOR EDIT POST ERROR:", err);
     if (err?.code === 11000) {
@@ -2512,7 +2512,7 @@ router.post("/form/vendor-user", requireAuth, createLimiter, async (req, res) =>
 
     res.locals.auditDescription = `Created vendor coordinator "${userName}" for vendor "${vendor.vendorName}"`;
     req.flash("notification", "Vendor user created successfully!");
-    res.json({ success: true, redirect: "/acme/form/vendor?tab=user" });
+    res.json({ success: true, redirect: "/app/form/vendor?tab=user" });
   } catch (err) {
     console.error(err);
     if (err?.code === 11000) {
@@ -2889,7 +2889,7 @@ router.post("/sales/order", async (req, res) => {
           ? `Sales order created with ${createdOrders.length} item line(s)!`
           : "This sales order was already created.",
       );
-      return res.json({ success: true, redirect: "/acme/sales/pending" });
+      return res.json({ success: true, redirect: "/app/sales/pending" });
     }
 
     if (["TAPE"].includes(itemType) && canonicalizeLocationName(locationRadio) === "ALL") {
@@ -2963,7 +2963,7 @@ router.post("/sales/order", async (req, res) => {
           quantity: data.quantity, poNumber: data.poNumber, isUpdate: true,
         });
         req.flash("notification", "Sales order updated successfully!");
-        res.json({ success: true, redirect: "/acme/sales/pending" });
+        res.json({ success: true, redirect: "/app/sales/pending" });
       } else {
         // CREATE new order
         data.createdBy = createdByUser;
@@ -2981,7 +2981,7 @@ router.post("/sales/order", async (req, res) => {
         data.submissionToken = String(submissionToken || "").trim() || undefined;
         const existingOrder = await TapeSalesOrder.findOne({ orderSignature: data.orderSignature }).select("_id").lean();
         if (existingOrder) {
-          return res.json({ success: true, redirect: "/acme/sales/pending", duplicate: true });
+          return res.json({ success: true, redirect: "/app/sales/pending", duplicate: true });
         }
         const newOrder = await TapeSalesOrder.create(data);
 
@@ -3000,7 +3000,7 @@ router.post("/sales/order", async (req, res) => {
         req.flash("notification", "Sales order created successfully!");
 
         // Redirect to pending orders
-        res.json({ success: true, redirect: "/acme/sales/pending" });
+        res.json({ success: true, redirect: "/app/sales/pending" });
       }
     } else if (itemType === "LABEL_STOCK") {
       // Validated up front (rather than after binding resolution) so an
@@ -3111,7 +3111,7 @@ router.post("/sales/order", async (req, res) => {
           quantity: data.quantity, poNumber: data.poNumber, isUpdate: true,
         });
         req.flash("notification", "Sales order updated successfully!");
-        res.json({ success: true, redirect: "/acme/sales/pending" });
+        res.json({ success: true, redirect: "/app/sales/pending" });
       } else {
         // CREATE new order
         data.createdBy = createdByUser;
@@ -3129,7 +3129,7 @@ router.post("/sales/order", async (req, res) => {
         data.submissionToken = String(submissionToken || "").trim() || undefined;
         const existingOrder = await TapeSalesOrder.findOne({ orderSignature: data.orderSignature }).select("_id").lean();
         if (existingOrder) {
-          return res.json({ success: true, redirect: "/acme/sales/pending", duplicate: true });
+          return res.json({ success: true, redirect: "/app/sales/pending", duplicate: true });
         }
         const newOrder = await TapeSalesOrder.create(data);
         await upsertPendingProduction(newOrder);
@@ -3146,7 +3146,7 @@ router.post("/sales/order", async (req, res) => {
           quantity: data.quantity, poNumber: data.poNumber, isUpdate: false,
         });
         req.flash("notification", "Sales order created successfully!");
-        res.json({ success: true, redirect: "/acme/sales/pending" });
+        res.json({ success: true, redirect: "/app/sales/pending" });
       }
     } else {
       return res.status(400).json({ success: false, message: "Unsupported item type" });
@@ -3165,7 +3165,7 @@ router.post("/sales/order", async (req, res) => {
         String(err?.message || "").includes("orderSignature"));
 
     if (duplicateSubmissionToken) {
-      return res.json({ success: true, redirect: "/acme/sales/pending", duplicate: true });
+      return res.json({ success: true, redirect: "/app/sales/pending", duplicate: true });
     }
     // Race between two near-simultaneous submits for the same new-client
     // Label Stock binding: both pass the findOne(bindingSignature) check
@@ -3345,7 +3345,7 @@ router.get("/purchase/receive", async (req, res) => {
     const { orderId } = req.query;
     if (!orderId) {
       req.flash("notification", "No order ID provided.");
-      return res.redirect("/acme/purchase/pending");
+      return res.redirect("/app/purchase/pending");
     }
 
     const order = await PurchaseOrder.findById(orderId)
@@ -3355,7 +3355,7 @@ router.get("/purchase/receive", async (req, res) => {
 
     if (!order) {
       req.flash("notification", "Purchase Order not found.");
-      return res.redirect("/acme/purchase/pending");
+      return res.redirect("/app/purchase/pending");
     }
 
     const [logs, locations] = await Promise.all([
@@ -3388,12 +3388,12 @@ router.post("/purchase/receive", async (req, res) => {
     const po = await PurchaseOrder.findById(orderId).populate("itemId");
     if (!po) {
       req.flash("notification", "Purchase Order not found.");
-      return res.redirect("/acme/purchase/pending");
+      return res.redirect("/app/purchase/pending");
     }
 
     if (po.status === "RECEIVED") {
       req.flash("notification", "This order has already been received.");
-      return res.redirect("/acme/purchase/pending");
+      return res.redirect("/app/purchase/pending");
     }
 
     const qty = Number(receivedQuantity) || po.quantity;
@@ -3494,7 +3494,7 @@ router.post("/purchase/receive", async (req, res) => {
 
     res.locals.auditDescription = `Received ${newlyReceived} units into stock at "${location}" for PO "${po.poNumber}"`;
     req.flash("notification", "Purchase Order received and stock updated successfully.");
-    res.redirect("/acme/purchase/pending");
+    res.redirect("/app/purchase/pending");
   } catch (err) {
     console.error("RECEIVE PO POST ERROR:", err);
     req.flash("notification", "Error processing receipt: " + err.message);
@@ -3508,7 +3508,7 @@ router.get("/sales/order/confirm", async (req, res) => {
     const { orderId } = req.query;
     if (!orderId) {
       req.flash("notification", "No order specified");
-      return res.redirect("/acme/sales/pending");
+      return res.redirect("/app/sales/pending");
     }
 
     let order = await TapeSalesOrder.findById(orderId)
@@ -3527,7 +3527,7 @@ router.get("/sales/order/confirm", async (req, res) => {
 
     if (!order) {
       req.flash("notification", "Order not found");
-      return res.redirect("/acme/sales/pending");
+      return res.redirect("/app/sales/pending");
     }
 
     const logs = await SalesOrderLog.find({ orderId, action: "DELIVERED" }).sort({ performedAt: -1 }).lean();
@@ -3560,7 +3560,7 @@ router.get("/sales/order/confirm", async (req, res) => {
   } catch (err) {
     console.error("CONFIRM ORDER PAGE ERROR:", err);
     req.flash("notification", "Failed to load confirm page");
-    res.redirect("/acme/sales/pending");
+    res.redirect("/app/sales/pending");
   }
 });
 
@@ -3607,7 +3607,7 @@ router.get("/sales/order/logs", async (req, res) => {
   } catch (err) {
     console.error("ORDER LOGS ERROR:", err);
     req.flash("notification", "Failed to load logs");
-    res.redirect("/acme/sales/pending");
+    res.redirect("/app/sales/pending");
   }
 });
 
@@ -3817,7 +3817,7 @@ router.get("/purchase/order/logs", async (req, res) => {
   } catch (err) {
     console.error("PURCHASE LOGS ERROR:", err);
     req.flash("notification", "Failed to load purchase logs");
-    res.redirect("/acme/purchase/pending");
+    res.redirect("/app/purchase/pending");
   }
 });
 
@@ -3827,13 +3827,13 @@ router.post("/sales/order/status", requireAuth, updateLimiter, async (req, res) 
     const accepts = req.headers.accept || "";
     const wantsJson = req.xhr || accepts.includes("application/json") || accepts.includes("text/json");
     const { orderId, status, cancelReason, invoiceNumber, confirmDate, confirmQuantity, poNumber, sourceLocation } = req.body;
-    const confirmRedirectUrl = orderId ? `/acme/sales/order/confirm?orderId=${encodeURIComponent(orderId)}` : "/acme/sales/pending";
+    const confirmRedirectUrl = orderId ? `/app/sales/order/confirm?orderId=${encodeURIComponent(orderId)}` : "/app/sales/pending";
     let order = await TapeSalesOrder.findById(orderId)
       .populate({ path: "tapeId", select: "tapeFinish tapePaperCode tapeGsm" })
       .lean();
 
     let ActiveOrderModel = TapeSalesOrder;
-    let pendingRedirectUrl = "/acme/sales/pending";
+    let pendingRedirectUrl = "/app/sales/pending";
 
     if (!order) {
       const message = "Order not found";
@@ -4332,7 +4332,7 @@ router.delete("/sales/order/log/:logId", requireAuth, deleteLimiter, async (req,
 
 // Legacy route redirect
 router.get("/form/salesorder", (req, res) => {
-  res.redirect("/acme/sales/order");
+  res.redirect("/app/sales/order");
 });
 
 // ----------------------------------Sales Calculator---------------------------------->
@@ -4409,13 +4409,13 @@ router.get("/prodcalc/view", async (req, res) => {
 router.get("/prodcalc/details/:id", async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
     req.flash("notification", "Invalid production binding id.");
-    return res.redirect("/acme/prodcalc/view");
+    return res.redirect("/app/prodcalc/view");
   }
 
   const doc = await Calculator.findById(req.params.id).lean();
   if (!doc) {
     req.flash("notification", "Production binding not found.");
-    return res.redirect("/acme/prodcalc/view");
+    return res.redirect("/app/prodcalc/view");
   }
 
   const binding = { ...doc, _id: String(doc._id), createdAt: doc._id.getTimestamp() };
@@ -4641,7 +4641,7 @@ router.get("/labels/production/deckle-set", async (req, res) => {
 // override of the member sum), deckleRunningMeters (length of one deckle web --
 // optional), noOfRolls ("Deckle Quantity"), orderIds[] (the ticked members).
 router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (req, res) => {
-  const backTo = "/acme/labels/production/deckle-set";
+  const backTo = "/app/labels/production/deckle-set";
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
   const deckleSize = Number(req.body.deckleSize);
@@ -4735,7 +4735,7 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
 // Un-bundle a batch that hasn't been assigned to a machine yet -- its member
 // orders drop back to loose on Deckle Set.
 router.post("/labels/production/deckle-batch/:id/dissolve", requireAuth, updateLimiter, async (req, res) => {
-  const backTo = "/acme/labels/production/deckle-set";
+  const backTo = "/app/labels/production/deckle-set";
   const { id } = req.params;
   if (!mongoose.isValidObjectId(id)) {
     req.flash("notification", "Invalid batch id.");
@@ -4812,7 +4812,7 @@ router.get("/labels/production/pending", async (req, res) => {
   // with a Play button straight into Assign Production once it is. Only the
   // WIP tab still renders from here.
   if (initialTab !== "wip") {
-    return res.redirect("/acme/labels/production/deckle-set");
+    return res.redirect("/app/labels/production/deckle-set");
   }
 
   const all = await PendingProduction.find({})
@@ -4996,7 +4996,7 @@ router.get("/labels/production/assign/:id", async (req, res) => {
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) {
       req.flash("notification", "Invalid order id.");
-      return res.redirect("/acme/labels/production/deckle-set");
+      return res.redirect("/app/labels/production/deckle-set");
     }
 
     const pendingProduction = await PendingProduction.findById(id)
@@ -5006,7 +5006,7 @@ router.get("/labels/production/assign/:id", async (req, res) => {
 
     if (!pendingProduction) {
       req.flash("notification", "Order not found.");
-      return res.redirect("/acme/labels/production/deckle-set");
+      return res.redirect("/app/labels/production/deckle-set");
     }
 
     // A deckle batch covers several sales orders as one job -- surface them so
@@ -5043,7 +5043,7 @@ router.get("/labels/production/assign/:id", async (req, res) => {
   } catch (err) {
     console.error("ASSIGN PRODUCTION LOAD ERROR:", err);
     req.flash("notification", "Failed to load Assign Production.");
-    res.redirect("/acme/labels/production/deckle-set");
+    res.redirect("/app/labels/production/deckle-set");
   }
 });
 
@@ -5052,13 +5052,13 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) {
       req.flash("notification", "Invalid order id.");
-      return res.redirect("/acme/labels/production/deckle-set");
+      return res.redirect("/app/labels/production/deckle-set");
     }
 
     const pendingProduction = await PendingProduction.findById(id);
     if (!pendingProduction) {
       req.flash("notification", "Order not found.");
-      return res.redirect("/acme/labels/production/deckle-set");
+      return res.redirect("/app/labels/production/deckle-set");
     }
 
     const { machineId, operatorId, helperId, selectedRolls, rawLayers } = req.body;
@@ -5066,26 +5066,26 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
 
     if (!machineId || !mongoose.isValidObjectId(machineId)) {
       req.flash("notification", "Please select a valid machine.");
-      return res.redirect(`/acme/labels/production/assign/${id}`);
+      return res.redirect(`/app/labels/production/assign/${id}`);
     }
     const machine = await Machine.findById(machineId).populate("location").lean();
     if (!machine) {
       req.flash("notification", "Please select a valid machine.");
-      return res.redirect(`/acme/labels/production/assign/${id}`);
+      return res.redirect(`/app/labels/production/assign/${id}`);
     }
 
     let operator = null;
     if (operatorId) {
       if (!mongoose.isValidObjectId(operatorId) || !(operator = await Employee.findById(operatorId).select("_id").lean())) {
         req.flash("notification", "Please select a valid operator.");
-        return res.redirect(`/acme/labels/production/assign/${id}`);
+        return res.redirect(`/app/labels/production/assign/${id}`);
       }
     }
     let helper = null;
     if (helperId) {
       if (!mongoose.isValidObjectId(helperId) || !(helper = await Employee.findById(helperId).select("_id").lean())) {
         req.flash("notification", "Please select a valid helper.");
-        return res.redirect(`/acme/labels/production/assign/${id}`);
+        return res.redirect(`/app/labels/production/assign/${id}`);
       }
     }
 
@@ -5200,7 +5200,7 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       droppedInUseCount += candidateIds.filter((sid) => existingIds.has(String(sid)) && liveByKey.has(`${meta.pool}|${sid}`)).length;
       if (validIds.some((sid) => pickedForThisOrder.has(`${meta.pool}|${sid}`))) {
         req.flash("notification", "The same raw-material reel or drum cannot be allotted to more than one layer.");
-        return res.redirect(`/acme/labels/production/assign/${id}`);
+        return res.redirect(`/app/labels/production/assign/${id}`);
       }
       validIds.forEach((sid) => {
         pickedForThisOrder.add(`${meta.pool}|${sid}`);
@@ -5341,11 +5341,11 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       : stockWarning
         ? `Machine assigned, but stock wasn't allocated (${stockWarning}) — this order is on the queue as short-allotted. Re-open it to produce a Deckle once material is available.`
         : "Machine assigned successfully.") + variantNote + swapNote + inUseNote);
-    res.redirect("/acme/machine/queue");
+    res.redirect("/app/machine/queue");
   } catch (err) {
     console.error("ASSIGN PRODUCTION SAVE ERROR:", err);
     req.flash("notification", "Failed to assign production.");
-    res.redirect(`/acme/labels/production/assign/${req.params.id}`);
+    res.redirect(`/app/labels/production/assign/${req.params.id}`);
   }
 });
 
@@ -5354,17 +5354,17 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) {
       req.flash("notification", "Invalid order id.");
-      return res.redirect("/acme/labels/production/pending?tab=wip");
+      return res.redirect("/app/labels/production/pending?tab=wip");
     }
 
     const pendingProduction = await PendingProduction.findById(id).lean();
     if (!pendingProduction) {
       req.flash("notification", "Order not found.");
-      return res.redirect("/acme/labels/production/pending?tab=wip");
+      return res.redirect("/app/labels/production/pending?tab=wip");
     }
     if (!pendingProduction.assignedMachineId) {
       req.flash("notification", "This order isn't assigned to a machine.");
-      return res.redirect("/acme/labels/production/pending?tab=wip");
+      return res.redirect("/app/labels/production/pending?tab=wip");
     }
     // The Deckle's own mtrs only leave when a Job Card is filed, so a filed
     // card can't be undone from here -- including a partial one (producedAt
@@ -5372,7 +5372,7 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     // into stock).
     if (pendingProduction.producedAt || Number(pendingProduction.producedRolls) > 0) {
       req.flash("notification", "A Job Card has already been filed for this order — it can't be sent back to Pending. Cancel it instead if it needs to stop.");
-      return res.redirect("/acme/labels/production/pending?tab=wip");
+      return res.redirect("/app/labels/production/pending?tab=wip");
     }
 
     // A machine Job Card that's mid-entry: its operator has already punched
@@ -5387,7 +5387,7 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     const jobCardDeckle = await MaterialStock.exists({ producedFor: id, producedVia: "jobcard" });
     if (jobCardDeckle || (pendingProduction.materialSwapLog || []).length) {
       req.flash("notification", "This order's Job Card has already moved stock (a Deckle produced, or a reel reconciled) — it can't be sent back to Pending. Open the Job Card and Save Production Entry to close it out.");
-      return res.redirect("/acme/labels/production/pending?tab=wip");
+      return res.redirect("/app/labels/production/pending?tab=wip");
     }
 
     // Raw material, though, left stock the moment Assign & Continue laminated
@@ -5437,11 +5437,11 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     }
     if (kept.length) message += ` Note: could not return ${kept.join("; ")}.`;
     req.flash("notification", message);
-    res.redirect("/acme/labels/production/deckle-set");
+    res.redirect("/app/labels/production/deckle-set");
   } catch (err) {
     console.error("UNASSIGN PRODUCTION ERROR:", err);
     req.flash("notification", "Failed to send order back to Pending.");
-    res.redirect("/acme/labels/production/pending?tab=wip");
+    res.redirect("/app/labels/production/pending?tab=wip");
   }
 });
 
@@ -5472,7 +5472,7 @@ router.get("/audit/view", async (req, res) => {
   const role = req.session?.authUser?.role;
   if (role !== "proprietor" && role !== "admin" && role !== "hod") {
     req.flash("notification", "Access denied");
-    return res.redirect("/acme/welcome");
+    return res.redirect("/app/welcome");
   }
 
   const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(5000).lean();
@@ -5511,7 +5511,7 @@ router.post("/form/block", requireAuth, createLimiter, async (req, res) => {
     await Block.create(formData);
     res.locals.auditDescription = `Created block "${formData.blockNo}"`;
     req.flash("notification", "Block created successfully!");
-    res.json({ success: true, redirect: "/acme/form/block" });
+    res.json({ success: true, redirect: "/app/form/block" });
   } catch (err) {
     console.error(err);
     res.status(400).json({ success: false, message: err.message });
@@ -5787,7 +5787,7 @@ router.post("/form/die", requireAuth, createLimiter, handleDieUpload, async (req
         : `Created die "${created.dieDieNo}" (V${dieVersion}) as a new version of "${replacesDie.dieDieNo}"`
       : `Created die "${created.dieDieNo}" for "${req.body.dieClientName || "N/A"}"`;
     req.flash("notification", "Die created successfully!");
-    res.json({ success: true, redirect: "/acme/die/view" });
+    res.json({ success: true, redirect: "/app/die/view" });
   } catch (err) {
     cleanupDieUploads(req.files);
     console.error(err);
@@ -5810,7 +5810,7 @@ router.get("/die/profile/:id", async (req, res) => {
   const die = await Die.findById(req.params.id).lean();
   if (!die) {
     req.flash("notification", "Die not found");
-    return res.redirect("/acme/die/view");
+    return res.redirect("/app/die/view");
   }
   const [replacedDie, replacedByDie] = await Promise.all([
     die.replacesDieId ? Die.findById(die.replacesDieId).select("dieDieNo dieVersion").lean() : null,
@@ -5837,7 +5837,7 @@ router.get("/die/edit/:id", async (req, res) => {
   ]);
   if (!die) {
     req.flash("notification", "Die not found");
-    return res.redirect("/acme/die/view");
+    return res.redirect("/app/die/view");
   }
   dieVendors.sort((a, b) => String(a).localeCompare(String(b)));
   res.render("utilities/dieMaster.ejs", {
@@ -5910,7 +5910,7 @@ router.post("/die/edit/:id", requireAuth, updateLimiter, handleDieUpload, async 
 
     res.locals.auditDescription = `Updated die "${updated.dieDieNo}"`;
     req.flash("notification", "Die updated successfully!");
-    res.json({ success: true, redirect: `/acme/die/profile/${req.params.id}` });
+    res.json({ success: true, redirect: `/app/die/profile/${req.params.id}` });
   } catch (err) {
     cleanupDieUploads(req.files);
     console.error("DIE EDIT ERROR:", err);
@@ -6027,7 +6027,7 @@ router.get("/vendor/view", async (req, res) => {
   } catch (err) {
     console.error("VENDOR VIEW ERROR:", err);
     req.flash("notification", "Failed to load vendor details");
-    res.redirect("/acme/form/vendor");
+    res.redirect("/app/form/vendor");
   }
 });
 
@@ -6176,7 +6176,7 @@ router.get("/vendor/profile/:id", async (req, res) => {
 
     if (!vendor) {
       req.flash("notification", "Vendor not found");
-      return res.redirect("/acme/vendor/view");
+      return res.redirect("/app/vendor/view");
     }
 
     const [supplyRows, supplyStock] = await Promise.all([
@@ -6225,13 +6225,13 @@ router.get("/vendor/profile/:id", async (req, res) => {
   } catch (err) {
     console.error("VENDOR PROFILE ERROR:", err);
     req.flash("notification", "Invalid vendor link");
-    res.redirect("/acme/vendor/view");
+    res.redirect("/app/vendor/view");
   }
 });
 
 // Backward-compatible redirect for the old vendor coordinator URL.
 router.get("/vendor/user/view", async (req, res) => {
-  return res.redirect("/acme/vendor/coordinator/view");
+  return res.redirect("/app/vendor/coordinator/view");
 });
 
 // ----------------------------------Vendor coordinator display----------------------------------
@@ -6274,7 +6274,7 @@ router.get("/vendor/coordinator/view", async (req, res) => {
   } catch (err) {
     console.error("VENDOR COORDINATOR VIEW ERROR:", err);
     req.flash("notification", "Failed to load vendor coordinator view");
-    res.redirect("/acme/form/vendor");
+    res.redirect("/app/form/vendor");
   }
 });
 
@@ -6285,7 +6285,7 @@ router.get("/vendor/coordinator/details/:userId", async (req, res) => {
 
     if (!vendorUser) {
       req.flash("notification", "Vendor coordinator not found");
-      return res.redirect("/acme/vendor/coordinator/view");
+      return res.redirect("/app/vendor/coordinator/view");
     }
 
     const vendor = await Vendor.findOne({ vendorId: vendorUser.vendorId }).lean();
@@ -6301,7 +6301,7 @@ router.get("/vendor/coordinator/details/:userId", async (req, res) => {
   } catch (err) {
     console.error("VENDOR COORDINATOR DETAILS ERROR:", err);
     req.flash("notification", "Failed to load vendor coordinator details");
-    res.redirect("/acme/vendor/coordinator/view");
+    res.redirect("/app/vendor/coordinator/view");
   }
 });
 
@@ -6312,7 +6312,7 @@ router.post("/vendor/coordinator/details/:userId/delete", requireAuth, deleteLim
 
     if (!vendorUser) {
       req.flash("notification", "Vendor coordinator not found");
-      return res.redirect("/acme/vendor/coordinator/view");
+      return res.redirect("/app/vendor/coordinator/view");
     }
 
     await Vendor.updateOne(
@@ -6324,11 +6324,11 @@ router.post("/vendor/coordinator/details/:userId/delete", requireAuth, deleteLim
 
     res.locals.auditDescription = `Deleted vendor coordinator "${vendorUser.userName}"`;
     req.flash("notification", `Coordinator ${vendorUser.userName} removed successfully`);
-    return res.redirect("/acme/vendor/coordinator/view");
+    return res.redirect("/app/vendor/coordinator/view");
   } catch (err) {
     console.error("VENDOR COORDINATOR DELETE ERROR:", err);
     req.flash("notification", "Failed to remove coordinator");
-    return res.redirect("/acme/vendor/coordinator/details/" + req.params.userId);
+    return res.redirect("/app/vendor/coordinator/details/" + req.params.userId);
   }
 });
 
@@ -6350,7 +6350,7 @@ router.post("/vendor/coordinator/details/:userId/status", requireAuth, updateLim
 
     const current = vendorUser.coordinatorStatus || "ACTIVE";
     if (current === target) {
-      return res.json({ success: true, redirect: `/acme/vendor/coordinator/details/${vendorUser._id}` });
+      return res.json({ success: true, redirect: `/app/vendor/coordinator/details/${vendorUser._id}` });
     }
 
     // Legacy coordinators predate the timeline -- seed it from the _id's
@@ -6375,7 +6375,7 @@ router.post("/vendor/coordinator/details/:userId/status", requireAuth, updateLim
 
     res.locals.auditDescription = `Marked vendor coordinator "${vendorUser.userName}" ${target}`;
     req.flash("notification", `Coordinator ${vendorUser.userName} marked ${target === "ACTIVE" ? "active" : "inactive"}`);
-    res.json({ success: true, redirect: `/acme/vendor/coordinator/details/${vendorUser._id}` });
+    res.json({ success: true, redirect: `/app/vendor/coordinator/details/${vendorUser._id}` });
   } catch (err) {
     console.error("VENDOR COORDINATOR STATUS ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to update coordinator status" });
@@ -6388,7 +6388,7 @@ router.get("/form/edit/vendor-user/:userId", async (req, res) => {
     const user = await VendorUser.findById(req.params.userId).lean();
     if (!user) {
       req.flash("notification", "Vendor coordinator not found");
-      return res.redirect("/acme/vendor/coordinator/view");
+      return res.redirect("/app/vendor/coordinator/view");
     }
 
     const vendor = await Vendor.findOne({ vendorId: user.vendorId }).lean();
@@ -6433,7 +6433,7 @@ router.get("/form/edit/vendor-user/:userId", async (req, res) => {
   } catch (err) {
     console.error("VENDOR COORDINATOR EDIT GET ERROR:", err);
     req.flash("notification", "Failed to load vendor coordinator edit page");
-    res.redirect("/acme/vendor/coordinator/view");
+    res.redirect("/app/vendor/coordinator/view");
   }
 });
 
@@ -6525,7 +6525,7 @@ router.post("/form/edit/vendor-user/:userId", requireAuth, updateLimiter, async 
     await VendorUser.findByIdAndUpdate(userId, updatedData, { runValidators: true });
     res.locals.auditDescription = `Updated vendor coordinator "${userName}"`;
     req.flash("notification", "Vendor coordinator updated successfully!");
-    return res.json({ success: true, redirect: `/acme/vendor/coordinator/details/${userId}` });
+    return res.json({ success: true, redirect: `/app/vendor/coordinator/details/${userId}` });
   } catch (err) {
     console.error("VENDOR COORDINATOR EDIT POST ERROR:", err);
     if (err?.code === 11000) {
@@ -6612,7 +6612,7 @@ router.post("/labels-binding/delete/:id", requireAuth, deleteLimiter, async (req
 
     res.locals.auditDescription = `Deleted label binding "${binding?.productId || req.params.id}"`;
     req.flash("notification", "Label binding removed successfully!");
-    return res.redirect(owner ? `/acme/labels/view/${owner._id}` : "/acme/master/view");
+    return res.redirect(owner ? `/app/labels/view/${owner._id}` : "/app/master/view");
   } catch (err) {
     console.error("LABEL BINDING DELETE ERROR:", err);
     req.flash("notification", "Failed to remove Label binding");

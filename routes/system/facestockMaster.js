@@ -180,7 +180,7 @@ router.post("/form/facestock", requireAuth, requireFacestockMaster, createLimite
 
     res.locals.auditDescription = `Created facestock master "${skuId}" (${payload.vendorSkuCode})`;
     req.flash("notification", "Facestock master created successfully!");
-    res.json({ success: true, redirect: "/acme/form/facestock" });
+    res.json({ success: true, redirect: "/app/form/facestock" });
   } catch (err) {
     console.error("FACESTOCK MASTER CREATE ERROR:", err);
     const isDup = err.code === 11000 && err.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "facestockSignature");

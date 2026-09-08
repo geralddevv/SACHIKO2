@@ -44,10 +44,10 @@
     </style>
 
     <div style="display: flex; gap: 10px; align-items: center">
-      <button class="header-action-btn" onclick="window.location.href = '/acme/form/client?tab=user'">
+      <button class="header-action-btn" onclick="window.location.href = '/app/form/client?tab=user'">
         <i class="fa-solid fa-plus" style="margin-right: 4px"></i> User
       </button>
-      <button class="header-action-btn" onclick="window.location.href = '/acme/form/client?tab=client'">
+      <button class="header-action-btn" onclick="window.location.href = '/app/form/client?tab=client'">
         <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Client
       </button>
 
@@ -252,7 +252,7 @@
 
         cellClick: (e, cell) => {
           const row = cell.getRow().getData();
-          window.location.href = `/acme/client/profile/${row._id}`;
+          window.location.href = `/app/client/profile/${row._id}`;
         },
       }),
       withTextFilter({
@@ -309,7 +309,7 @@
         },
         cellClick: (e, cell) => {
           const row = cell.getRow().getData();
-          window.location.href = `/acme/client/orders/${row._id}`;
+          window.location.href = `/app/client/orders/${row._id}`;
         },
       }),
     ],
@@ -361,12 +361,12 @@
 
   /* ===== POPUP LOGIC ===== */
   async function openClientModal(id) {
-    const res = await fetch(`/acme/client/api/${id}`);
+    const res = await fetch(`/app/client/api/${id}`);
     const client = await res.json();
 
     document.getElementById("clientModalTitle").innerText = client.clientName;
     document.getElementById("editClientBtn").href =
-      `/acme/client/edit/${client._id}`;
+      `/app/client/edit/${client._id}`;
 
     const fields = [
       ["Client ID", client.clientId],

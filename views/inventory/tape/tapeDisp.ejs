@@ -117,13 +117,13 @@
             return `
               <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
                 <button
-                  onclick="window.location.href='/acme/tape/compare/${row._id}'"
+                  onclick="window.location.href='/app/tape/compare/${row._id}'"
                   style="padding:2px 7px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
                   title="View Binding">
                   <i class="fa-solid fa-eye"></i>
                 </button>
                 <button
-                  onclick="window.location.href='/acme/tape-binding/edit/${row._id}'"
+                  onclick="window.location.href='/app/tape-binding/edit/${row._id}'"
                   style="padding:2px 7px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
                   title="Edit Binding">
                   <i class="fa-solid fa-pen-to-square"></i>
@@ -176,7 +176,7 @@
             const row = cell.getRow().getData();
             return `
               <button 
-                onclick="window.location.href='/acme/sales/order?type=TAPE&client=${encodeURIComponent(row._clientName)}&user=${row.userId?._id || ""}&item=${row._id}'"
+                onclick="window.location.href='/app/sales/order?type=TAPE&client=${encodeURIComponent(row._clientName)}&user=${row.userId?._id || ""}&item=${row._id}'"
                 style="padding:2px 10px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">
                 <i class="fa-solid fa-cart-plus"></i>
               </button>
@@ -271,7 +271,7 @@
         deleteForm.appendChild(csrfInput);
       }
       csrfInput.value = getCsrfToken();
-      deleteForm.action = `/acme/tape-binding/delete/${bindingToDelete}`;
+      deleteForm.action = `/app/tape-binding/delete/${bindingToDelete}`;
       deleteForm.submit();
     });
 
@@ -308,7 +308,7 @@
       statusConfirmBtn.disabled = true;
       const endpoint = statusTarget === "ACTIVE" ? "set-active" : "set-inactive";
       try {
-        const res = await fetch(`/acme/tape-binding/${endpoint}/${statusBindingId}`, {
+        const res = await fetch(`/app/tape-binding/${endpoint}/${statusBindingId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-csrf-token": getCsrfToken() },
         });

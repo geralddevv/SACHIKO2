@@ -21,7 +21,7 @@
     </div>
   <% } %>
 
-    <form class="login-form" action="/acme/operator/login" method="post" autocomplete="off">
+    <form class="login-form" action="/app/operator/login" method="post" autocomplete="off">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
 
       <label for="op-operator-nick">Nick Name</label>
@@ -159,7 +159,7 @@
       if (!nick || nick === lastLookedUp) return;
       lastLookedUp = nick;
       try {
-        const res = await fetch(`/acme/operator/login/lookup?nick=${encodeURIComponent(nick)}`);
+        const res = await fetch(`/app/operator/login/lookup?nick=${encodeURIComponent(nick)}`);
         const data = await res.json();
         const locations = Array.isArray(data?.locations) ? data.locations : [];
         if (locations.length === 1 && !locationSelect.value) {

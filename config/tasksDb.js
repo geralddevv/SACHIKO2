@@ -21,12 +21,12 @@ function deriveTasksUri(mainUri) {
   const prefix = mainUri.slice(0, schemeSepIdx + 2);
   const afterScheme = mainUri.slice(schemeSepIdx + 2);
   const pathIdx = afterScheme.indexOf("/");
-  if (pathIdx === -1) return `${prefix}${afterScheme}/acme_tasks`;
+  if (pathIdx === -1) return `${prefix}${afterScheme}/app_tasks`;
 
   const hostPart = afterScheme.slice(0, pathIdx);
   const rest = afterScheme.slice(pathIdx + 1);
   const qIdx = rest.indexOf("?");
-  const dbName = (qIdx === -1 ? rest : rest.slice(0, qIdx)) || "acme";
+  const dbName = (qIdx === -1 ? rest : rest.slice(0, qIdx)) || "app";
   const query = qIdx === -1 ? "" : rest.slice(qIdx);
 
   return `${prefix}${hostPart}/${dbName}_tasks${query}`;
@@ -42,7 +42,7 @@ let tasksConnection = null;
 export function getTasksConnection() {
   if (tasksConnection) return tasksConnection;
 
-  const mainUri = process.env.MONGO_URI || "mongodb://localhost:27017/acme";
+  const mainUri = process.env.MONGO_URI || "mongodb://localhost:27017/app";
   const uri = withAuth(process.env.TASKS_MONGO_URI || deriveTasksUri(mainUri));
 
   tasksConnection = mongoose.createConnection(uri);

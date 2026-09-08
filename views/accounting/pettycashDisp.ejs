@@ -113,7 +113,7 @@
       </button>
 
       <a
-        href="/acme/pettycash/logs/all/view"
+        href="/app/pettycash/logs/all/view"
         id="view-all-logs-btn"
         style="
           height: 30px;
@@ -167,7 +167,7 @@
     <form
       id="pc-create-form"
       method="post"
-      action="/acme/pettycash/create"
+      action="/app/pettycash/create"
       style="display:block; width:auto; border:none; grid-template-columns:none; gap:0; padding:0;"
     >
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
@@ -480,13 +480,13 @@
         const { location } = cell.getRow().getData();
         return `
           <div style="display:flex; gap:6px; justify-content:center; align-items:center; height:100%;">
-            <a href="/acme/pettycash/logs/${encodeURIComponent(location)}/view" 
+            <a href="/app/pettycash/logs/${encodeURIComponent(location)}/view" 
                class="view-txn-btn" 
                title="View All" 
                style="height:22px; padding:0 10px; border:1px solid #044A78; background:#044A78; color:#fff; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600; line-height:22px; text-decoration:none; display:inline-block;">
                View Transaction
             </a>
-            <a href="/acme/pettycash/logs/${encodeURIComponent(location)}/view?mode=CURRENT" 
+            <a href="/app/pettycash/logs/${encodeURIComponent(location)}/view?mode=CURRENT" 
                class="view-current-btn" 
                title="Current Month" 
                style="height:22px; padding:0 10px; border:1px solid #044A78; background:#fff; color:#044A78; border-radius:4px; cursor:pointer; font-size:11px; font-weight:600; line-height:22px; text-decoration:none; display:inline-block;">
@@ -580,7 +580,7 @@
 
   async function refreshLogs() {
     if (!currentLocation) return;
-    const res = await fetch(`/acme/pettycash/logs/${currentLocation}`);
+    const res = await fetch(`/app/pettycash/logs/${currentLocation}`);
     let { history } = await res.json();
 
     if (currentViewMode === "CURRENT") {
@@ -636,7 +636,7 @@
     };
 
     try {
-      const res = await fetch(`/acme/pettycash/logs/${id}`, {
+      const res = await fetch(`/app/pettycash/logs/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -662,7 +662,7 @@
     if (!id) return;
 
     try {
-      const res = await fetch(`/acme/pettycash/logs/${id}`, { method: "DELETE" });
+      const res = await fetch(`/app/pettycash/logs/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) {
         alert(data.message || "Failed to delete log");

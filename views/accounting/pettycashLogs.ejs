@@ -471,7 +471,7 @@
   locationSwitcher.addEventListener("change", () => {
     const newLoc = locationSwitcher.value;
     const currentMonth = monthFilter.value;
-    let url = `/acme/pettycash/logs/${encodeURIComponent(newLoc)}/view`;
+    let url = `/app/pettycash/logs/${encodeURIComponent(newLoc)}/view`;
     if (currentMonth) {
       url += `?month=${currentMonth}`;
     }
@@ -578,7 +578,7 @@
     };
 
     try {
-      const res = await fetch(`/acme/pettycash/logs/${id}`, {
+      const res = await fetch(`/app/pettycash/logs/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -597,7 +597,7 @@
   async function submitDeleteLog() {
     const id = document.getElementById("pc-delete-id").value;
     try {
-      const res = await fetch(`/acme/pettycash/logs/${id}`, { method: "DELETE" });
+      const res = await fetch(`/app/pettycash/logs/${id}`, { method: "DELETE" });
       if (res.ok) window.location.reload();
       else alert("Failed to delete log");
     } catch (err) {

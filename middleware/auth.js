@@ -1,14 +1,14 @@
 const wantsJson = (req) => req.xhr || req.headers.accept?.includes("application/json");
 
-const OPERATOR_PORTAL_PREFIX = "/acme/operator";
+const OPERATOR_PORTAL_PREFIX = "/app/operator";
 
 // Operators have no staff account, so a missing/expired session on an
 // operator page must never bounce them to the staff login.
 function loginUrlFor(req) {
-  if (req.session?.authUser?.role === "operator") return "/acme/operator/login";
+  if (req.session?.authUser?.role === "operator") return "/app/operator/login";
   const path = String(req.originalUrl || "").split("?")[0];
-  if (path.startsWith(OPERATOR_PORTAL_PREFIX)) return "/acme/operator/login";
-  return "/acme/login";
+  if (path.startsWith(OPERATOR_PORTAL_PREFIX)) return "/app/operator/login";
+  return "/app/login";
 }
 
 export const requireAuth = (req, res, next) => {

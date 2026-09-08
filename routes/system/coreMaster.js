@@ -173,7 +173,7 @@ router.post("/form/core", requireAuth, requireCoreMaster, createLimiter, async (
 
     res.locals.auditDescription = `Created core master "${skuId}" (${payload.vendorName})`;
     req.flash("notification", "Core master created successfully!");
-    res.json({ success: true, redirect: "/acme/form/core" });
+    res.json({ success: true, redirect: "/app/form/core" });
   } catch (err) {
     console.error("CORE MASTER CREATE ERROR:", err);
     const isDup = err.code === 11000 && err.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "coreSignature");

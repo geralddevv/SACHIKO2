@@ -26,7 +26,7 @@ const router = express.Router();
  * Operators raise them from their own portal (photo of the problem + a
  * description) and watch the status on the same page; management sees every
  * ticket on /sachiko/maintenance and moves it along with a remark. Mounted on
- * the bare "/acme" prefix with no role gate at the mount (see server.js),
+ * the bare "/app" prefix with no role gate at the mount (see server.js),
  * so every route below carries its own.
  */
 
@@ -117,8 +117,8 @@ const toMedia = (doc) => {
     sizeLabel: asset.size ? formatBytes(asset.size) : "",
     durationLabel: asset.durationSec ? formatDuration(asset.durationSec) : "",
     // Both URLs are index-based: the filename never reaches the browser.
-    url: `/acme/maintenance/media/${doc._id}/${index}`,
-    thumbUrl: `/acme/maintenance/media/${doc._id}/${index}/thumb`,
+    url: `/app/maintenance/media/${doc._id}/${index}`,
+    thumbUrl: `/app/maintenance/media/${doc._id}/${index}/thumb`,
   }));
 };
 
@@ -266,7 +266,7 @@ router.post("/operator/maintenance", requireOperator, createLimiter, uploadMedia
     const what = stored.map((a) => a.kind).join(" + ") || "no attachment";
     res.locals.auditDescription = `Raised maintenance ticket "${ticketNo}" for machine "${machineName || "—"}" (${what})`;
     req.flash("notification", `Issue reported — ticket ${ticketNo}`);
-    res.json({ success: true, redirect: "/acme/operator/maintenance" });
+    res.json({ success: true, redirect: "/app/operator/maintenance" });
   } catch (err) {
     if (!(err instanceof MaintenanceInputError)) console.error("MAINTENANCE CREATE ERROR:", err);
     res.status(err.statusCode || 400).json({ success: false, message: err.message || "Could not report the issue." });
@@ -333,7 +333,7 @@ router.put("/maintenance/:id/status", requireMaintenanceAction, updateLimiter, a
 
     res.locals.auditDescription = `Set maintenance ticket "${ticket.ticketNo}" to ${status}`;
     req.flash("notification", `Ticket ${ticket.ticketNo} marked ${status}`);
-    res.json({ success: true, redirect: "/acme/maintenance" });
+    res.json({ success: true, redirect: "/app/maintenance" });
   } catch (err) {
     console.error("MAINTENANCE STATUS ERROR:", err);
     res.status(400).json({ success: false, message: err.message || "Could not update the request." });

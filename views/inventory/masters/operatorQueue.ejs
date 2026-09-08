@@ -175,8 +175,8 @@
   </div>
 
   <div class="op-tabs">
-    <a href="/acme/operator/queue" class="op-tab active"><i class="fa-solid fa-list-check"></i> Work Queue</a>
-    <a href="/acme/operator/maintenance" class="op-tab">
+    <a href="/app/operator/queue" class="op-tab active"><i class="fa-solid fa-list-check"></i> Work Queue</a>
+    <a href="/app/operator/maintenance" class="op-tab">
       <i class="fa-solid fa-screwdriver-wrench"></i> Maintenance
       <% if (openMaintenanceCount) { %><span class="op-tab-badge"><%= openMaintenanceCount %></span><% } %>
     </a>
@@ -246,7 +246,7 @@
                         // machine queue and both job-card guards use.
                       %>
                       <% if (row.canStart) { %>
-                      <a href="/acme/machine/jobcard/form?pendingId=<%= row._id %>" class="mq-start-btn" title="Initiate Production">
+                      <a href="/app/machine/jobcard/form?pendingId=<%= row._id %>" class="mq-start-btn" title="Initiate Production">
                         <i class="fa-solid fa-play"></i> start
                       </a>
                       <% } else { %>
@@ -307,7 +307,7 @@
               <td data-label="Rolls"><%= row.producedRolls %> of <%= row.plannedRolls %></td>
               <td>
                 <div class="mq-actions">
-                  <a href="/acme/slitting/jobcard/<%= row._id %>" class="mq-start-btn" title="<%= row.curing ? 'Deckle still curing — open to see when it is ready' : 'Open the Slitting Job Card' %>">
+                  <a href="/app/slitting/jobcard/<%= row._id %>" class="mq-start-btn" title="<%= row.curing ? 'Deckle still curing — open to see when it is ready' : 'Open the Slitting Job Card' %>">
                     <i class="fa-solid fa-scissors"></i> slit
                   </a>
                 </div>

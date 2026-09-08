@@ -269,7 +269,7 @@ router.post("/purchase-order", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Created purchase order "${po.poNumber}" for core "${master.skuId}" from "${master.vendorName}" (qty ${po.quantity} pcs)`;
     req.flash("notification", "Purchase Order created successfully.");
-    res.json({ success: true, redirect: "/acme/purchase/pending" });
+    res.json({ success: true, redirect: "/app/purchase/pending" });
   } catch (err) {
     console.error("CORE CREATE PO ERROR:", err);
     res.status(400).json({ success: false, message: "Failed to create Purchase Order." });
@@ -336,7 +336,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Added ${createdRollIds.length} core stock lot(s) (${header.type}) at "${header.location}": ${createdRollIds.join(", ")}`;
     req.flash("notification", `${createdRollIds.length} core lot(s) added successfully!`);
-    res.json({ success: true, redirect: "/acme/corestock" });
+    res.json({ success: true, redirect: "/app/corestock" });
   } catch (err) {
     console.error("CORE STOCK CREATE ERROR:", err);
     const msg = err.code === 11000 ? "Roll ID collision, please retry." : "Failed to add core stock.";

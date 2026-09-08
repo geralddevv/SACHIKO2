@@ -26,7 +26,7 @@ clientName.addEventListener("change", async function () {
 
   try {
     // Fetch client data
-    const response = await fetch(`/acme/form/labels/${encodeURIComponent(clientName)}`);
+    const response = await fetch(`/app/form/labels/${encodeURIComponent(clientName)}`);
     if (!response.ok) throw new Error("Failed to fetch data");
 
     clientData = await response.json();
@@ -59,7 +59,7 @@ async function getValues() {
   try {
     // Fetch client data
     const response = await fetch(
-      `/acme/form/prodcalc/data?w=${width.value}&h=${height.value}&client=${encodeURIComponent(clientName)}`
+      `/app/form/prodcalc/data?w=${width.value}&h=${height.value}&client=${encodeURIComponent(clientName)}`
     );
     if (!response.ok) throw new Error("Failed to fetch data");
 

@@ -18,7 +18,7 @@
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
   <form
     class="needs-validation"
-    action="/acme/tape-binding/edit/<%= binding._id %>"
+    action="/app/tape-binding/edit/<%= binding._id %>"
     method="post"
     onsubmit="return validateBeforeSubmit()"
     autocomplete="off"
@@ -299,7 +299,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     try {
-      const res  = await fetch(`/acme/form/tape-binding/filter-specs?${params}`);
+      const res  = await fetch(`/app/form/tape-binding/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -364,7 +364,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     try {
-      const res = await fetch(`/acme/form/tape-binding/resolve-tape?${params}`);
+      const res = await fetch(`/app/form/tape-binding/resolve-tape?${params}`);
       if (!res.ok) {
         tapeIdInput.value  = "";
         tapeIdDisplay.value = "No matching tape found";

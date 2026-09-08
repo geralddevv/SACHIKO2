@@ -193,7 +193,7 @@
       <div class="items w-100 h-100 client-item">Status</div>
     </div>
     <% for (user of users) { %>
-    <div class="span-full client-row" onclick="window.location.href='/acme/edit/details/<%= user._id %>'">
+    <div class="span-full client-row" onclick="window.location.href='/app/edit/details/<%= user._id %>'">
       <div class="items w-100 h-100 px-10px client-item"><%= user.clientId %></div>
       <div class="items w-100 h-100 client-item"><%= user.userName %></div>
       <div class="items w-100 h-100 client-item"><%= user.userLocation %></div>

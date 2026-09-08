@@ -227,7 +227,7 @@
         const textEl = document.getElementById('quote-text');
 
         try {
-            const response = await fetch('/acme/api/motivational?t=' + Date.now());
+            const response = await fetch('/app/api/motivational?t=' + Date.now());
             if (!response.ok) throw new Error('API Error');
             const data = await response.json();
             if (data && data.q) textEl.innerText = `"${data.q}"`;

@@ -1,7 +1,7 @@
 <% layout('/layout/boilerplate') -%>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form id="purchase-order-form" action="/acme/purchase/order" method="post" class="needs-validation" autocomplete="off" novalidate>
+  <form id="purchase-order-form" action="/app/purchase/order" method="post" class="needs-validation" autocomplete="off" novalidate>
     <input type="hidden" name="orderId" value="<%= typeof orderToEdit !== 'undefined' && orderToEdit ? orderToEdit._id : '' %>" />
     <input type="hidden" name="submissionToken" value="<%= typeof submissionToken !== 'undefined' && submissionToken ? submissionToken : '' %>" />
     
@@ -261,7 +261,7 @@
     vendorChoices.setChoices([{ value: "", label: "Loading vendors...", disabled: true, selected: true }], "value", "label", true);
     
     try {
-      const res = await fetch(`/acme/purchase/vendors/${itemType}`);
+      const res = await fetch(`/app/purchase/vendors/${itemType}`);
       const data = await res.json();
       vendorChoices.clearStore();
       vendorChoices.setChoices(
@@ -279,7 +279,7 @@
     coordinatorChoices.setChoices([{ value: "", label: "Loading coordinators...", disabled: true, selected: true }], "value", "label", true);
     
     try {
-      const res = await fetch(`/acme/purchase/coordinators/${encodeURIComponent(vendorName)}`);
+      const res = await fetch(`/app/purchase/coordinators/${encodeURIComponent(vendorName)}`);
       const data = await res.json();
       coordinatorChoices.clearStore();
       coordinatorChoices.setChoices(
@@ -338,7 +338,7 @@
     itemChoices.setChoices([{ value: "", label: "Loading items...", disabled: true, selected: true }], "value", "label", true);
     
     try {
-      const res = await fetch(`/acme/purchase/items/${type}/${vendorUserId}`);
+      const res = await fetch(`/app/purchase/items/${type}/${vendorUserId}`);
       const data = await res.json();
       itemChoices.clearStore();
       itemChoices.setChoices(

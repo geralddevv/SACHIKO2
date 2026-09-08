@@ -474,15 +474,15 @@
   </div>
 </div>
 
-<!-- Rename confirmation -- uses the app's .logout-modal / .logout-dialog styles
+<!-- Rename heads-up -- uses the app's .logout-modal / .logout-dialog styles
      (boilerplate.ejs), NOT window.confirm(). -->
 <div class="logout-modal" id="switchModal" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="switchTitle">
-    <h2 class="logout-title" id="switchTitle">Change the company?</h2>
+    <h2 class="logout-title" id="switchTitle">Rename the company?</h2>
     <p class="logout-text" id="switchText"></p>
     <div class="logout-actions">
       <button class="logout-btn" type="button" id="switchCancel">Cancel</button>
-      <button class="logout-btn primary" type="button" id="switchConfirm">Change &amp; switch</button>
+      <button class="logout-btn primary" type="button" id="switchConfirm">Rename</button>
     </div>
   </div>
 </div>
@@ -580,7 +580,7 @@
       try {
         const fd = new FormData();
         fd.append("logo", file);
-        const res = await fetch("/acme/api/company/" + company._id + "/logo", { method: "POST", body: fd });
+        const res = await fetch("/app/api/company/" + company._id + "/logo", { method: "POST", body: fd });
         const data = await res.json();
         if (data.success) {
           hasLogo = true;
@@ -606,7 +606,7 @@
       rm.disabled = true;
       el("logoPickBtn").disabled = true;
       try {
-        const res = await fetch("/acme/api/company/" + company._id + "/logo", { method: "DELETE" });
+        const res = await fetch("/app/api/company/" + company._id + "/logo", { method: "DELETE" });
         const data = await res.json();
         if (data.success) {
           hasLogo = false;
@@ -654,22 +654,21 @@
   }
 
   // Must match slugifyCompany() in utils/companyBrand.js -- first word, lowered,
-  // letters/digits only. When this changes, the app moves to /<slug>/ and onto
-  // that company's database.
+  // letters/digits only. When it changes, the app's web address changes too
+  // (the database is untouched -- it has a fixed random name).
   function slugOf(name) {
     const first = String(name || "").trim().split(/\s+/)[0] || "";
     return first.toLowerCase().replace(/[^a-z0-9]/g, "");
   }
 
-  // In-app confirmation (not window.confirm). Resolves true / false.
+  // Light heads-up before a rename that shifts the web address. Resolves true/false.
   function confirmSwitch(name, slug) {
     return new Promise((resolve) => {
       const modal = el("switchModal");
       el("switchText").innerHTML =
-        'Saving this name moves the app to <strong>/' + slug + '/…</strong> and onto ' +
-        'the <strong>' + slug + '</strong> database — a new empty one is created if it ' +
-        "doesn't exist yet, otherwise its existing data is used. Everyone is signed out. " +
-        "The data in the current database is left untouched.";
+        "The app's web address will change to <strong>/" + slug + "/…</strong>. Existing " +
+        "bookmarks or saved links to the old address will stop working. All your data " +
+        "stays exactly where it is.";
       let done = false;
       const finish = (val) => {
         if (done) return;
@@ -696,20 +695,6 @@
     });
   }
 
-  function showReloadOverlay(redirect) {
-    const o = document.createElement("div");
-    o.style.cssText =
-      "position:fixed;inset:0;z-index:100000;background:rgba(4,74,120,0.96);color:#fff;" +
-      "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;" +
-      "font-size:15px;text-align:center;padding:24px;";
-    o.innerHTML =
-      '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:30px"></i>' +
-      "<div>Switched to the company database.</div>" +
-      '<div style="font-size:12.5px;opacity:.8">Taking you to the sign-in page…</div>';
-    document.body.appendChild(o);
-    setTimeout(() => { window.location.href = redirect; }, 1500);
-  }
-
   async function submitForm() {
     const payload = collect();
 
@@ -721,8 +706,7 @@
       }
     }
 
-    // Renaming to a different first word moves the app to another URL + database.
-    // Confirm in-app before doing something that big.
+    // Renaming to a different first word changes the app's web address.
     const newSlug = slugOf(payload.companyName);
     const slugChanges = newSlug && newSlug !== slugOf(company ? company.companyName : "");
     if (slugChanges && company) {
@@ -735,30 +719,26 @@
 
     try {
       const res = company
-        ? await fetch("/acme/api/company/" + company._id, {
+        ? await fetch("/app/api/company/" + company._id, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           })
-        : await fetch("/acme/form/company", {
+        : await fetch("/app/form/company", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
       const data = await res.json();
       if (data.success) {
-        if (data.reload) {
-          showReloadOverlay(data.redirect || "/");
-        } else {
-          window.location.href = data.redirect || "/acme/form/company";
-        }
+        window.location.href = data.redirect || "/app/form/company";
       } else {
+        setLoading(false);
         showError(data.message || "Failed to save company.");
       }
     } catch {
-      showError("Server error. Please try again.");
-    } finally {
       setLoading(false);
+      showError("Server error. Please try again.");
     }
   }
 </script>

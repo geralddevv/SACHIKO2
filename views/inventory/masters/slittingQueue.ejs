@@ -134,7 +134,7 @@
   <div class="indi-head">
     <h1>Deckle Slitting</h1>
     <div style="display: flex; gap: 10px; align-items: center">
-      <a href="/acme/slitting/jobcard/view" class="header-action-btn" style="text-decoration:none;">
+      <a href="/app/slitting/jobcard/view" class="header-action-btn" style="text-decoration:none;">
         <i class="fa-solid fa-clipboard-check"></i>&nbsp; Slitting Logs
       </a>
       <div class="download-selector" id="downloadSelector">
@@ -302,7 +302,7 @@
 
     const params = new URLSearchParams();
     picked.forEach((d) => params.append("deckle", d._id));
-    window.location.href = `/acme/slitting/allocate/${pendingIds[0]}?${params.toString()}`;
+    window.location.href = `/app/slitting/allocate/${pendingIds[0]}?${params.toString()}`;
   });
 
   const table = new Tabulator("#master-table", {

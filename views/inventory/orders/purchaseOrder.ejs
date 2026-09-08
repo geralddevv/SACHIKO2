@@ -84,7 +84,7 @@
   <%# ===================== EDIT MODE (single item) ===================== %>
   <% if (typeof orderToEdit !== 'undefined' && orderToEdit) { %>
 
-  <form id="purchase-order-form" action="/acme/inventory/purchase/order" method="post" class="needs-validation" autocomplete="off" novalidate>
+  <form id="purchase-order-form" action="/app/inventory/purchase/order" method="post" class="needs-validation" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf"    value="<%= csrfToken %>" />
     <input type="hidden" name="orderId"  value="<%= orderToEdit._id %>" />
 
@@ -185,7 +185,7 @@
   <% } else { %>
   <%# ===================== CREATE MODE (multi-item cart) ===================== %>
 
-  <form id="multi-po-form" action="/acme/inventory/purchase/order-multi" method="post" style="border:none; padding:0; gap:10px; background:transparent;" autocomplete="off">
+  <form id="multi-po-form" action="/app/inventory/purchase/order-multi" method="post" style="border:none; padding:0; gap:10px; background:transparent;" autocomplete="off">
     <input type="hidden" name="_csrf"  value="<%= csrfToken %>" />
     <input type="hidden" name="items"  id="f-items" />
 
@@ -318,7 +318,7 @@
     <!-- Submit -->
     <div class="span-full btn-grp" style="margin-top:8px; display:flex; flex-direction:row; gap:16px; align-items:center; justify-content:center; border:none; padding:0;">
       <button type="button"
-        onclick="window.location.href='/acme/purchase/pending'"
+        onclick="window.location.href='/app/purchase/pending'"
         style="flex:1; padding:12px 32px; background:#044A78; color:#fff; border-radius:10px; font-weight:700; font-size:15px; border:none; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition:all .2s; box-shadow:0 4px 6px rgba(4,74,120,.15);"
         onmouseover="this.style.background='#033d63'; this.style.transform='translateY(-1px)';"
         onmouseout="this.style.background='#044A78'; this.style.transform='none';"
@@ -574,7 +574,7 @@
   async function loadCoordinators(vendorId) {
     if (!vendorId) { resetCoordinators(); return; }
     try {
-      const res  = await fetch(`/acme/inventory/purchase/coordinators/${encodeURIComponent(vendorId)}`);
+      const res  = await fetch(`/app/inventory/purchase/coordinators/${encodeURIComponent(vendorId)}`);
       const data = await res.json();
       if (!data.length) { setSelectOptions(coordinatorSelect, [], 'No coordinators found'); return; }
       
@@ -644,7 +644,7 @@
     if (listEl) listEl.innerHTML = '<div style="padding:20px; text-align:center; color:#9ca3af; font-size:13px;">Loading items...</div>';
 
     try {
-      const res  = await fetch(`/acme/inventory/purchase/items/${encodeURIComponent(type)}/${encodeURIComponent(vendorUserId)}?location=${encodeURIComponent(location)}`);
+      const res  = await fetch(`/app/inventory/purchase/items/${encodeURIComponent(type)}/${encodeURIComponent(vendorUserId)}?location=${encodeURIComponent(location)}`);
       fetchedAvailableItems = await res.json();
       renderAvailableItems();
       autoAddFromReorder();

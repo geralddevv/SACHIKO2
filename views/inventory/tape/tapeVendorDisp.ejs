@@ -41,7 +41,7 @@
           <% } %>
         </h1>
         <div class="download-btns">
-            <button class="header-action-btn" onclick="window.location.href = '/acme/form/vendor-item-binding/tape'">
+            <button class="header-action-btn" onclick="window.location.href = '/app/form/vendor-item-binding/tape'">
                 <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Bind Tape
             </button>
           <div class="download-selector" id="downloadSelector">
@@ -119,7 +119,7 @@
     });
     deleteConfirmBtn.addEventListener("click", () => {
       if (!bindingToDelete) return closeDeleteModal();
-      deleteForm.action = `/acme/vendor-item/delete/tape/${bindingToDelete}`;
+      deleteForm.action = `/app/vendor-item/delete/tape/${bindingToDelete}`;
       deleteForm.submit();
     });
 
@@ -145,13 +145,13 @@
             return `
               <div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:0 1px;">
                 <button 
-                  onclick="window.location.href='/acme/vendor-item/compare/tape/${row._id}'"
+                  onclick="window.location.href='/app/vendor-item/compare/tape/${row._id}'"
                   style="padding:2px 8px;min-width:30px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
                   title="View Binding">
                   <i class="fa-solid fa-eye"></i>
                 </button>
                 <button
-                  onclick="window.location.href='/acme/vendor-item/edit/tape/${row._id}?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}'"
+                  onclick="window.location.href='/app/vendor-item/edit/tape/${row._id}?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}'"
                   style="padding:2px 8px;min-width:30px;background:#e67e22;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;"
                   title="Edit Binding">
                   <i class="fa-solid fa-pen-to-square"></i>

@@ -726,7 +726,7 @@
     });
 
     try {
-      const res = await fetch(`/acme/releaselinerstock/filter-specs?${params}`);
+      const res = await fetch(`/app/releaselinerstock/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -1117,7 +1117,7 @@
     hideError("poError");
     setLoading("poSubmitBtn", true);
     try {
-      const res = await fetch("/acme/releaselinerstock/purchase-order", {
+      const res = await fetch("/app/releaselinerstock/purchase-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1131,7 +1131,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/acme/purchase/pending";
+        window.location.href = data.redirect || "/app/purchase/pending";
       } else {
         showError("poError", data.message || "Failed to create Purchase Order.");
       }
@@ -1192,7 +1192,7 @@
     const rows = document.querySelectorAll("#addRollsContainer .roll-row");
     if (!rows.length) return;
     try {
-      const res = await fetch(`/acme/releaselinerstock/preview-roll-ids?count=${rows.length}`);
+      const res = await fetch(`/app/releaselinerstock/preview-roll-ids?count=${rows.length}`);
       const data = await res.json();
       const ids = data.rollIds || [];
       rows.forEach((row, i) => {
@@ -1299,7 +1299,7 @@
     hideError("addReleaseError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/acme/releaselinerstock/create", {
+      const res = await fetch("/app/releaselinerstock/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1321,7 +1321,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/acme/releaselinerstock";
+        window.location.href = data.redirect || "/app/releaselinerstock";
       } else {
         showError("addReleaseError", data.message || "Failed to add release liner stock.");
       }
@@ -1405,7 +1405,7 @@
 
     let res;
     try {
-      res = await fetch(`/acme/releaselinerstock/label/${reel._id}`, { credentials: "same-origin" });
+      res = await fetch(`/app/releaselinerstock/label/${reel._id}`, { credentials: "same-origin" });
     } catch (e) {
       return labelMessage("Couldn't reach the server to build this label.");
     }
@@ -1515,7 +1515,7 @@
     hideError("editRollError");
     setLoading("editRollSubmitBtn", true);
     try {
-      const res = await fetch(`/acme/releaselinerstock/${editingRollId}`, {
+      const res = await fetch(`/app/releaselinerstock/${editingRollId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

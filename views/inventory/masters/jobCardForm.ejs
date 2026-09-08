@@ -646,7 +646,7 @@
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
   <form
     id="jcForm"
-    action="/acme/machine/jobcard/form"
+    action="/app/machine/jobcard/form"
     method="POST"
     autocomplete="off"
     novalidate
@@ -1161,7 +1161,7 @@
       ].forEach(([pool, code]) => {
         const rollId = row.querySelector(`.${prefix}-${code}-roll-id`)?.value?.trim();
         if (!rollId) return;
-        fetch("/acme/machine/jobcard/mark-in-use", {
+        fetch("/app/machine/jobcard/mark-in-use", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pendingId, pool, rollId }),
@@ -1247,7 +1247,7 @@
     async function checkReel(pool, rollId) {
       if (!pendingId) return { ok: true };
       try {
-        const res = await fetch("/acme/machine/jobcard/material/check", {
+        const res = await fetch("/app/machine/jobcard/material/check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1464,7 +1464,7 @@
 
       // Best-effort live "in use" flag so other jobs' scans see it at once.
       if (pendingId) {
-        fetch("/acme/machine/jobcard/mark-in-use", {
+        fetch("/app/machine/jobcard/mark-in-use", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pendingId, pool: POOL_CODE_TO_SERVER[pool], rollId: cleanId }),
@@ -1592,7 +1592,7 @@
       confirmBtn.disabled = true;
       const { pool, stockId, rollId } = pendingSwap;
       try {
-        const res = await fetch("/acme/machine/jobcard/material/set-remaining", {
+        const res = await fetch("/app/machine/jobcard/material/set-remaining", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pendingId, pool: POOL_CODE_TO_SERVER[pool], stockId, remainingKg: remaining, reason }),
@@ -2427,7 +2427,7 @@
 
       setLogDeckleNote(row, "Moving to Semi Finished Stock…", "#64748b");
       try {
-        const res = await fetch("/acme/machine/jobcard/log/produce", {
+        const res = await fetch("/app/machine/jobcard/log/produce", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

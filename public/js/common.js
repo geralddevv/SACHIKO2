@@ -19,7 +19,7 @@
   const redirectToLogin = () => {
     // Operators sign in at their own portal; the layout tells us which one.
     const loginUrl =
-      document.querySelector('meta[name="login-url"]')?.getAttribute("content") || "/acme/login";
+      document.querySelector('meta[name="login-url"]')?.getAttribute("content") || "/app/login";
     if (window.location.pathname === loginUrl) return;
     window.location.replace(`${loginUrl}?reason=session-ended`);
   };

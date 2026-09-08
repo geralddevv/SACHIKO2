@@ -29,7 +29,7 @@
       <h1>Employees</h1>
       <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
         <a
-          href="/acme/employee/create"
+          href="/app/employee/create"
           class="header-action-btn"
           style="
             height: 30px;
@@ -229,7 +229,7 @@
             },
             cellClick: function (e, cell) {
               const data = cell.getRow().getData();
-              window.location.href = `/acme/employee/profile/${data._id}`;
+              window.location.href = `/app/employee/profile/${data._id}`;
             },
           },
 

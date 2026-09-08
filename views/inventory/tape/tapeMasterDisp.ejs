@@ -39,7 +39,7 @@
     <div class="indi-head">
       <h1>Tape Master</h1>
       <div style="display: flex; gap: 10px; align-items: center">
-        <button class="header-action-btn" onclick="window.location.href = '/acme/form/tape-master'">
+        <button class="header-action-btn" onclick="window.location.href = '/app/form/tape-master'">
           <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Tape
         </button>
 
@@ -100,7 +100,7 @@
           if (!row._id) return "";
           return `
               <button
-                onclick="window.location.href='/acme/tape/profile/${row._id}'"
+                onclick="window.location.href='/app/tape/profile/${row._id}'"
                 style="padding:2px 10px;background:#044A78;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">
                 <i class="fa-solid fa-eye"></i>
               </button>
@@ -125,12 +125,12 @@
           const value = Number(cell.getValue() || 0);
           if (value === 0) return "";
           const row = cell.getRow().getData();
-          return `<a href="/acme/tape/profile/${row._id}" style="color:#044A78;text-decoration:underline;font-weight:700;">${value}</a>`;
+          return `<a href="/app/tape/profile/${row._id}" style="color:#044A78;text-decoration:underline;font-weight:700;">${value}</a>`;
         },
         cellClick: (e, cell) => {
           const row = cell.getRow().getData();
           if (row._id && Number(row.stock) !== 0) {
-            window.location.href = `/acme/tape/profile/${row._id}`;
+            window.location.href = `/app/tape/profile/${row._id}`;
           }
         },
       },
@@ -146,13 +146,13 @@
           const val = Number(cell.getValue() || 0);
           if (!val) return val;
           const row = cell.getRow().getData();
-          return `<a href="/acme/tape/master-view/clients/${row._id}" style="color:#044A78;text-decoration:underline;font-weight:700;">${val}</a>`;
+          return `<a href="/app/tape/master-view/clients/${row._id}" style="color:#044A78;text-decoration:underline;font-weight:700;">${val}</a>`;
         },
         cellClick: (e, cell) => {
           const val = Number(cell.getValue() || 0);
           if (!val) return;
           const row = cell.getRow().getData();
-          window.location.href = `/acme/tape/master-view/clients/${row._id}`;
+          window.location.href = `/app/tape/master-view/clients/${row._id}`;
         },
       },
       {
@@ -167,13 +167,13 @@
           const val = Number(cell.getValue() || 0);
           if (!val) return val;
           const row = cell.getRow().getData();
-          return `<a href="/acme/tape/master-view/vendors/${row._id}" style="color:#044A78;text-decoration:underline;font-weight:700;">${val}</a>`;
+          return `<a href="/app/tape/master-view/vendors/${row._id}" style="color:#044A78;text-decoration:underline;font-weight:700;">${val}</a>`;
         },
         cellClick: (e, cell) => {
           const val = Number(cell.getValue() || 0);
           if (!val) return;
           const row = cell.getRow().getData();
-          window.location.href = `/acme/tape/master-view/vendors/${row._id}`;
+          window.location.href = `/app/tape/master-view/vendors/${row._id}`;
         },
       },
       withTextFilter({ title: "Paper Code", field: "tapePaperCode" }),

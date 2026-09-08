@@ -158,7 +158,7 @@
       <div class="picker-list" id="pickerList"></div>
       <p class="empty-hint" id="noPickableHint" style="display:none;">
         No open tasks left to add — every task is either already in your Daybook or completed.
-        <a href="/acme/tasks">Create a new task</a>.
+        <a href="/app/tasks">Create a new task</a>.
       </p>
       <div id="addDaybookError" class="dialog-error"></div>
       <div class="picker-footer">
@@ -519,12 +519,12 @@
     hideError("addDaybookError");
     setLoading("addSubmitBtn", true);
     try {
-      const res  = await fetch("/acme/daybook", {
+      const res  = await fetch("/app/daybook", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ taskIds }),
       });
       const data = await res.json();
-      if (data.success) { window.location.href = data.redirect || "/acme/daybook"; }
+      if (data.success) { window.location.href = data.redirect || "/app/daybook"; }
       else              { showError("addDaybookError", data.message || "Failed to add to Daybook."); }
     } catch { showError("addDaybookError", "Server error. Please try again."); }
     finally  { setLoading("addSubmitBtn", false); }
@@ -539,7 +539,7 @@
     const nextStatus = t.status === "COMPLETED" ? "PENDING" : "COMPLETED";
     btn.disabled = true;
     try {
-      const res  = await fetch(`/acme/api/tasks/${t.taskId}`, {
+      const res  = await fetch(`/app/api/tasks/${t.taskId}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),
       });
@@ -577,7 +577,7 @@
     const entryId = t.entryId;
     setLoading("removeConfirmBtn", true);
     try {
-      const res  = await fetch(`/acme/api/daybook/${entryId}`, { method: "DELETE" });
+      const res  = await fetch(`/app/api/daybook/${entryId}`, { method: "DELETE" });
       const data = await res.json();
       if (!data.success) {
         closeRemoveDialog();

@@ -34,7 +34,7 @@
 </style>
 
 <div class="main-content">
-  <form class="rottary-content" method="post" action="/acme/pettycash/create">
+  <form class="rottary-content" method="post" action="/app/pettycash/create">
     <!-- ================= FORM HEADING ================= -->
     <div class="span-full form-heading" style="display: flex; justify-content: space-between; flex-direction: row">
       <div class="span-five" style="display: flex; gap: 6px; justify-content: start; flex-direction: row; width: auto; align-items: center;">
@@ -176,7 +176,7 @@
       if (!loc) return;
 
       try {
-        const res = await fetch(`/acme/pettycash/balance/${loc}`);
+        const res = await fetch(`/app/pettycash/balance/${loc}`);
         const data = await res.json();
         balanceInput.value = data.balance ?? 0;
       } catch {

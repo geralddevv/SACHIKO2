@@ -399,7 +399,7 @@
     const productCode = document.getElementById("produceOrderSelect").dataset.productCode || "";
     if (!rows.length || !productCode) return;
     try {
-      const res = await fetch(`/acme/finishedstock/preview-roll-ids?productCode=${encodeURIComponent(productCode)}&count=${rows.length}`);
+      const res = await fetch(`/app/finishedstock/preview-roll-ids?productCode=${encodeURIComponent(productCode)}&count=${rows.length}`);
       const data = await res.json();
       const ids = data.rollIds || [];
       rows.forEach((row, i) => {
@@ -420,7 +420,7 @@
     const sel = document.getElementById("produceOrderSelect");
     sel.innerHTML = `<option value="" disabled selected hidden>Loading orders…</option>`;
     try {
-      const res = await fetch("/acme/finishedstock/eligible-orders");
+      const res = await fetch("/app/finishedstock/eligible-orders");
       const data = await res.json();
       eligibleOrders = data.orders || [];
     } catch {
@@ -452,7 +452,7 @@
 
     sel.innerHTML = `<option value="" disabled selected hidden>Loading Deckles…</option>`;
     try {
-      const res = await fetch(`/acme/finishedstock/order-deckles?pendingId=${encodeURIComponent(pendingId)}`);
+      const res = await fetch(`/app/finishedstock/order-deckles?pendingId=${encodeURIComponent(pendingId)}`);
       const data = await res.json();
       orderDeckles = data.deckles || [];
     } catch {
@@ -510,14 +510,14 @@
     hideError("produceFinishedError");
     setLoading("produceSubmitBtn", true);
     try {
-      const res = await fetch("/acme/finishedstock/create", {
+      const res = await fetch("/app/finishedstock/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pendingId, deckleStockId, rolls }),
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/acme/finishedstock";
+        window.location.href = data.redirect || "/app/finishedstock";
       } else {
         showError("produceFinishedError", data.message || "Failed to produce finished rolls.");
       }
@@ -559,7 +559,7 @@
     hideError("editFinishedError");
     setLoading("editSubmitBtn", true);
     try {
-      const res = await fetch(`/acme/finishedstock/${editId}`, {
+      const res = await fetch(`/app/finishedstock/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -598,7 +598,7 @@
     if (!deleteId) return;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/acme/finishedstock/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/app/finishedstock/${deleteId}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
         window.location.reload();

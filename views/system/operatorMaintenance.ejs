@@ -191,8 +191,8 @@
   </div>
 
   <div class="op-tabs">
-    <a href="/acme/operator/queue" class="op-tab"><i class="fa-solid fa-list-check"></i> Work Queue</a>
-    <a href="/acme/operator/maintenance" class="op-tab active">
+    <a href="/app/operator/queue" class="op-tab"><i class="fa-solid fa-list-check"></i> Work Queue</a>
+    <a href="/app/operator/maintenance" class="op-tab active">
       <i class="fa-solid fa-screwdriver-wrench"></i> Maintenance
       <% if (openCount) { %><span class="op-tab-badge"><%= openCount %></span><% } %>
     </a>
@@ -470,10 +470,10 @@
     try {
       // The global fetch wrapper adds the CSRF header; FormData sets its own
       // multipart Content-Type, so none is set here.
-      const res = await fetch("/acme/operator/maintenance", { method: "POST", body: data });
+      const res = await fetch("/app/operator/maintenance", { method: "POST", body: data });
       const out = await res.json();
       if (!res.ok || !out.success) throw new Error(out.message || "Could not report the issue.");
-      window.location.href = out.redirect || "/acme/operator/maintenance";
+      window.location.href = out.redirect || "/app/operator/maintenance";
     } catch (err) {
       showToast(err.message || "Could not report the issue.", "error");
       reportSubmitBtn.disabled = false;

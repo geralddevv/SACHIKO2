@@ -62,7 +62,7 @@ import MongoSessionStore from "./utils/mongoSessionStore.js";
 import { safeJson } from "./utils/security.js";
 import { currentBrand, ensureFreshBrand, refreshBrand, shortBrand } from "./utils/companyBrand.js";
 import { brandPrefix } from "./middleware/brandPrefix.js";
-import { sendAsset } from "./utils/media.js";
+import { sendAsset, assetExists } from "./utils/media.js";
 import { loginLimiter, createLimiter, updateLimiter, deleteLimiter } from "./utils/limiters.js";
 
 const app = express();
@@ -186,7 +186,7 @@ const sessionStore = new MongoSessionStore({
 
 app.use(
   session({
-    name: "acme.sid",
+    name: "app.sid",
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
@@ -261,7 +261,7 @@ app.use((req, res, next) => {
 
 /* Company-slug URL prefix: maps the live /<company>/... the user sees onto the
    constant internal mount, and rewrites it back on the way out. Must sit above
-   every "/acme" route mount and above auditLogger / auth path checks. */
+   every "/app" route mount and above auditLogger / auth path checks. */
 app.use(brandPrefix);
 
 /* AUDIT LOG — records every mutating request made by a logged-in user */
@@ -272,8 +272,11 @@ app.use(auditLogger);
    Referenced as /company/favicon?v=<brandVer> so a logo change busts the cache. */
 function serveBrandFavicon(req, res) {
   const { name, logo } = currentBrand();
-  if (logo && logo.filename) {
-    try { return sendAsset(res, logo, { thumb: true }); } catch { /* fall through to letter */ }
+  // Only serve the logo if its file is actually on disk -- a stale reference
+  // (e.g. left behind by an old company-switch) must fall back to the letter,
+  // not 404.
+  if (logo && logo.filename && (assetExists(logo, { thumb: true }) || assetExists(logo))) {
+    return sendAsset(res, logo, { thumb: true });
   }
   const letter = (String(name || "S").trim().toUpperCase().match(/[A-Z0-9]/) || ["S"])[0];
   const svg =
@@ -303,7 +306,7 @@ app.get("/check-session", (req, res) => {
 /* JSON operator API for the Sachiko Operator mobile app -- bearer-token
    authenticated (middleware/apiAuth.js), not session/CSRF based, so it must
    sit here, exempt from CSRF the same way /check-session above is. */
-app.use("/acme/api/operator", operatorApiRoutes);
+app.use("/app/api/operator", operatorApiRoutes);
 
 /* Apply CSRF protection to ALL routes */
 app.use(csrfProtection);
@@ -317,7 +320,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   res.locals.selfBrand = "sachiko";
   res.locals.fairtechLoginUrl = `${process.env.FAIRTECH_URL || "http://localhost:3000"}/fairtech/login`;
-  res.locals.sachikoLoginUrl = "/acme/login";
+  res.locals.sachikoLoginUrl = "/app/login";
   // Company name from the Company master -- drives every page <title>, the nav
   // header and the login screen. Read synchronously from the cache
   // (utils/companyBrand.js); brandPrefix already kicked off any needed refresh.
@@ -519,18 +522,18 @@ app.get("/images/thumb/:folder/:filename", requireAuth, async (req, res) => {
 /* ROUTES */
 const redirectByRole = (role) => {
   if (["proprietor", "admin", "hod", "sales", "hr", "employee"].includes(role)) {
-    return "/acme/welcome";
+    return "/app/welcome";
   }
-  return "/acme/login";
+  return "/app/login";
 };
 
 // Operators sign in through their own portal and land straight on their work
 // queue (resolved from PendingProduction.operatorId at login), so they never
 // have to navigate the main menus.
 const landingForUser = (authUser) => {
-  if (!authUser) return "/acme/login";
+  if (!authUser) return "/app/login";
   if (authUser.role === "operator") {
-    return "/acme/operator/queue";
+    return "/app/operator/queue";
   }
   return redirectByRole(authUser.role);
 };
@@ -543,9 +546,9 @@ app.get("/", (req, res) => {
 });
 
 // Back-compat: old /login path now lives at /sachiko/login
-app.get("/login", (req, res) => res.redirect("/acme/login"));
+app.get("/login", (req, res) => res.redirect("/app/login"));
 
-app.get("/acme/login", (req, res) => {
+app.get("/app/login", (req, res) => {
   if (req.session?.authUser) {
     return res.redirect(landingForUser(req.session.authUser));
   }
@@ -564,7 +567,7 @@ const DEV_PERMISSIONS_BY_ROLE = {
   hr: { sales: false, inventory: false, hr: true, accounting: true, master: false },
 };
 
-app.post("/acme/login", loginLimiter, async (req, res) => {
+app.post("/app/login", loginLimiter, async (req, res) => {
   const { profileCode, username, password } = req.body;
   const loginCode = String(profileCode || username || "").trim();
   const brand = req.body.brand === "sachiko" ? "sachiko" : "fairdesk";
@@ -728,7 +731,7 @@ app.post("/acme/login", loginLimiter, async (req, res) => {
    name, their location and their password -- and land on their own work queue:
    every order assigned to them, grouped by machine. Kept separate from the
    staff login so the terminal on the floor never shows the full portal. */
-app.get("/acme/operator/login", async (req, res) => {
+app.get("/app/operator/login", async (req, res) => {
   if (req.session?.authUser) {
     return res.redirect(landingForUser(req.session.authUser));
   }
@@ -740,7 +743,7 @@ app.get("/acme/operator/login", async (req, res) => {
 // once the operator types their nick name. Rate-limited the same as the
 // login POST itself, since this is otherwise an easy oracle for "does this
 // nick name exist, and where" without a password.
-app.get("/acme/operator/login/lookup", loginLimiter, async (req, res) => {
+app.get("/app/operator/login/lookup", loginLimiter, async (req, res) => {
   try {
     const operatorNick = String(req.query.nick || "").trim();
     if (!operatorNick) return res.json({ locations: [] });
@@ -767,7 +770,7 @@ app.get("/acme/operator/login/lookup", loginLimiter, async (req, res) => {
   }
 });
 
-app.post("/acme/operator/login", loginLimiter, async (req, res) => {
+app.post("/app/operator/login", loginLimiter, async (req, res) => {
   const operatorNick = String(req.body.operatorNick || "").trim();
   const locationName = normalizeLocationName(req.body.location);
   const password = String(req.body.password || "").trim();
@@ -817,18 +820,18 @@ app.get("/logout", (req, res) => {
   // account for. A shopfloor terminal is often left sitting until the session
   // has already expired, and by then the role is gone -- so fall back to the
   // page the Logout link was clicked from.
-  const fromOperatorPortal = String(req.get("referer") || "").includes("/acme/operator");
+  const fromOperatorPortal = String(req.get("referer") || "").includes("/app/operator");
   const isOperator = authUser ? authUser.role === "operator" : fromOperatorPortal;
-  const loginUrl = isOperator ? "/acme/operator/login" : "/acme/login";
+  const loginUrl = isOperator ? "/app/operator/login" : "/app/login";
   req.session.destroy(() => {
-    res.clearCookie("acme.sid");
+    res.clearCookie("app.sid");
     res.redirect(loginUrl);
   });
 });
-app.use("/acme/payroll", requireAuth, requireRole(["proprietor", "admin", "hr"]), payrollRoute);
+app.use("/app/payroll", requireAuth, requireRole(["proprietor", "admin", "hr"]), payrollRoute);
 
 /* PROFILE / ACCOUNT SECURITY - Accessible to all roles */
-app.post("/acme/profile/password", requireAuth, async (req, res) => {
+app.post("/app/profile/password", requireAuth, async (req, res) => {
   try {
     const { oldPassword, newPassword, confirmPassword } = req.body;
     const authUser = req.session.authUser;
@@ -864,13 +867,13 @@ app.post("/acme/profile/password", requireAuth, async (req, res) => {
   }
 });
 
-app.use("/acme/loan", requireAuth, requireRole(["proprietor", "admin", "hr"]), loanRoute);
-app.use("/acme/advance", requireAuth, requireRole(["proprietor", "admin", "hr"]), advanceRoute);
-app.use("/acme/employee", requireAuth, requireRole(["proprietor", "admin", "hr", "sales"]), employeeRoute);
-app.use("/acme/pettycash", requireAuth, requireRole(["proprietor", "admin", "hr", "sales"]), pettycashRoute);
+app.use("/app/loan", requireAuth, requireRole(["proprietor", "admin", "hr"]), loanRoute);
+app.use("/app/advance", requireAuth, requireRole(["proprietor", "admin", "hr"]), advanceRoute);
+app.use("/app/employee", requireAuth, requireRole(["proprietor", "admin", "hr", "sales"]), employeeRoute);
+app.use("/app/pettycash", requireAuth, requireRole(["proprietor", "admin", "hr", "sales"]), pettycashRoute);
 
 app.use(
-  "/acme/client",
+  "/app/client",
   requireAuth,
   requireRole(["proprietor", "admin", "hod", "sales", "master"]),
   clientFormRoute,
@@ -883,43 +886,43 @@ app.use(
 // there must be no requireRole here: it would 403 sales/hr/hod on their own
 // pages before the request ever fell through. The roles are enforced per
 // route inside the router instead.
-app.use("/acme", requireAuth, machineRoutes);
+app.use("/app", requireAuth, machineRoutes);
 // The slitting step that follows lamination -- Deckles (Semi Finished Goods)
 // cut into finished rolls. Bare-mounted for the same reason as machineRoutes
 // above: it is shopfloor work, so operators must reach it before
 // fairdeskRoute's requireRole below turns them away. Roles are enforced per
 // route inside the router.
-app.use("/acme", requireAuth, slittingRoutes);
+app.use("/app", requireAuth, slittingRoutes);
 // Shopfloor maintenance tickets: raised by operators, actioned by management.
 // Also bare-mounted with no role gate -- operators need to reach
 // /sachiko/operator/maintenance before fairdeskRoute's requireRole below
 // would turn them away.
-app.use("/acme", requireAuth, maintenanceRoutes);
-app.use("/acme", requireAuth, facestockMasterRoutes);
-app.use("/acme", requireAuth, familyMasterRoutes);
-app.use("/acme", requireAuth, companyRoutes);
-app.use("/acme", requireAuth, typeMasterRoutes);
-app.use("/acme", requireAuth, coreMasterRoutes);
-app.use("/acme", requireAuth, adhesiveMasterRoutes);
-app.use("/acme", requireAuth, releaseMasterRoutes);
+app.use("/app", requireAuth, maintenanceRoutes);
+app.use("/app", requireAuth, facestockMasterRoutes);
+app.use("/app", requireAuth, familyMasterRoutes);
+app.use("/app", requireAuth, companyRoutes);
+app.use("/app", requireAuth, typeMasterRoutes);
+app.use("/app", requireAuth, coreMasterRoutes);
+app.use("/app", requireAuth, adhesiveMasterRoutes);
+app.use("/app", requireAuth, releaseMasterRoutes);
 
-app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod", "sales", "hr"]), fairdeskRoute);
-app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeBindingRoutes);
-app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), vendorItemBindingRoutes);
-app.use("/acme/tapestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeStockRoutes);
-app.use("/acme/stocks", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), stockViewRoutes);
-app.use("/acme/facestockstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), facestockStockRoutes);
-app.use("/acme/stock/wip", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), wipStockRoutes);
-app.use("/acme/adhesivestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), adhesiveStockRoutes);
-app.use("/acme/releaselinerstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), releaseLinerStockRoutes);
-app.use("/acme/corestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), coreStockRoutes);
-app.use("/acme/semifinishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), semiFinishedStockRoutes);
-app.use("/acme/finishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), finishedStockRoutes);
-app.use("/acme/labelstockproduction", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockProductionRoutes);
-app.use("/acme/inventory", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), reorderRoutes);
-app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod"]), sachikoRoute);
-app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockBindingRoutes);
-app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod"]), labelStockAdhesiveBindingRoutes);
+app.use("/app", requireAuth, requireRole(["proprietor", "admin", "hod", "sales", "hr"]), fairdeskRoute);
+app.use("/app", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeBindingRoutes);
+app.use("/app", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), vendorItemBindingRoutes);
+app.use("/app/tapestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeStockRoutes);
+app.use("/app/stocks", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), stockViewRoutes);
+app.use("/app/facestockstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), facestockStockRoutes);
+app.use("/app/stock/wip", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), wipStockRoutes);
+app.use("/app/adhesivestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), adhesiveStockRoutes);
+app.use("/app/releaselinerstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), releaseLinerStockRoutes);
+app.use("/app/corestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), coreStockRoutes);
+app.use("/app/semifinishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), semiFinishedStockRoutes);
+app.use("/app/finishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), finishedStockRoutes);
+app.use("/app/labelstockproduction", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockProductionRoutes);
+app.use("/app/inventory", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), reorderRoutes);
+app.use("/app", requireAuth, requireRole(["proprietor", "admin", "hod"]), sachikoRoute);
+app.use("/app", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockBindingRoutes);
+app.use("/app", requireAuth, requireRole(["proprietor", "admin", "hod"]), labelStockAdhesiveBindingRoutes);
 
 /* 404 */
 app.all("*", (req, res) => {
@@ -938,7 +941,7 @@ app.use((err, req, res, next) => {
     if (req.xhr || req.headers.accept?.includes("json")) {
       return res.status(403).json({ success: false, message: "Your session ended. Please sign in again." });
     }
-    return res.redirect("/acme/login?reason=session-ended");
+    return res.redirect("/app/login?reason=session-ended");
   }
   console.error("[Error Handler]", err);
   const status = err.statusCode || 500;

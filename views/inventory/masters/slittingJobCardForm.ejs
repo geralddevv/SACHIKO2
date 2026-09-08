@@ -367,7 +367,7 @@
     <div class="sl-done-note">
       <i class="fa-solid fa-circle-check"></i>
       <span>Every Deckle on this card has been run — the card is finished.</span>
-      <a href="/acme/slitting/jobcard/view" style="margin-left:auto;">Slitting Logs →</a>
+      <a href="/app/slitting/jobcard/view" style="margin-left:auto;">Slitting Logs →</a>
     </div>
   </div>
 </div>
@@ -610,7 +610,7 @@
 
     startProdBtn.disabled = true;
     try {
-      const res = await fetch("/acme/slitting/jobcard/setting", {
+      const res = await fetch("/app/slitting/jobcard/setting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cardId: CARD._id, rows }),
@@ -845,7 +845,7 @@
     if (!curedNow(row)) return toast("That Deckle is still curing — it can't be run yet.", "error");
     const startTime = nowHHMM();
     try {
-      const res = await fetch("/acme/slitting/jobcard/row/start", {
+      const res = await fetch("/app/slitting/jobcard/row/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cardId: CARD._id, index: i, startTime }),
@@ -914,7 +914,7 @@
     btn.disabled = true;
     const endTime = nowHHMM();
     try {
-      const res = await fetch("/acme/slitting/jobcard/row/produce", {
+      const res = await fetch("/app/slitting/jobcard/row/produce", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
