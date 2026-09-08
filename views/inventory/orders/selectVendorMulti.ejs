@@ -81,7 +81,7 @@
 
 <div class="main-content" style="padding: 10px;">
 
-  <form id="multi-po-form" action="/sachiko/inventory/reorder/create-po-multi" method="post" style="border:none; padding:0; gap:20px; background:transparent;">
+  <form id="multi-po-form" action="/acme/inventory/reorder/create-po-multi" method="post" style="border:none; padding:0; gap:20px; background:transparent;">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
     <input type="hidden" name="items" id="f-items" />
 
@@ -222,7 +222,7 @@
     <!-- Submit -->
     <div class="span-full btn-grp" style="margin-top:20px; display:flex; flex-direction: row; gap:16px; align-items:center; justify-content: center; border: none; padding: 0;">
       <button type="button"
-        onclick="window.location.href='/sachiko/inventory/reorder'"
+        onclick="window.location.href='/acme/inventory/reorder'"
         style="flex: 1; padding:12px 32px; background:#044A78; color:#ffffff; border-radius:10px; font-weight:700; text-decoration:none; font-size:15px; border:none; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; cursor: pointer; outline: none; box-shadow: 0 4px 6px rgba(4, 74, 120, 0.15);"
         onmouseover="this.style.background='#033d63'; this.style.transform='translateY(-1px)';"
         onmouseout="this.style.background='#044A78'; this.style.transform='none';"

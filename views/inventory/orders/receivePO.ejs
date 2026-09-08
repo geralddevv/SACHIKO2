@@ -1,7 +1,7 @@
 <% layout('/layout/boilerplate') -%>
 
 <div class="main-content">
-  <form id="receive-po-form" action="/sachiko/purchase/receive" method="post" class="needs-validation" autocomplete="off" novalidate>
+  <form id="receive-po-form" action="/acme/purchase/receive" method="post" class="needs-validation" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
     <input type="hidden" name="orderId" value="<%= order._id %>" />
     <input type="hidden" name="location" id="selected-location-input" />
@@ -436,7 +436,7 @@
     const remarks = document.getElementById('edit-log-remarks').value;
 
     try {
-      const resp = await fetch(`/sachiko/purchase/log/${logId}`, {
+      const resp = await fetch(`/acme/purchase/log/${logId}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
@@ -467,7 +467,7 @@
   async function submitDeleteLog() {
     const logId = document.getElementById('delete-log-id').value;
     try {
-      const resp = await fetch(`/sachiko/purchase/log/${logId}`, {
+      const resp = await fetch(`/acme/purchase/log/${logId}`, {
         method: 'DELETE',
         headers: { 'X-CSRF-Token': '<%= csrfToken %>' }
       });

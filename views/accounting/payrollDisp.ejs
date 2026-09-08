@@ -98,7 +98,7 @@
         <i class="fa-solid fa-calendar-days" style="position:absolute; right:11px; top:50%; transform:translateY(-50%); color:#044A78; font-size:11px; pointer-events:none;"></i>
       </div>
 
-      <a href="/sachiko/payroll/create" class="header-action-btn">
+      <a href="/acme/payroll/create" class="header-action-btn">
         <i class="fa-solid fa-plus"></i>
         <span>Manage Payroll</span>
       </a>
@@ -443,7 +443,7 @@
       if (!e.target.classList.contains("emp-link")) return;
       document.body.classList.add("no-underline");
       const employeeId = e.target.dataset.id;
-      const res = await fetch(`/sachiko/payroll/employee/${employeeId}/payrolls`);
+      const res = await fetch(`/acme/payroll/employee/${employeeId}/payrolls`);
       const { history } = await res.json();
       if (!history || !history.length) return;
       table.replaceData(history);
@@ -555,7 +555,7 @@
       };
 
       try {
-        const res = await fetch(`/sachiko/payroll/logs/${id}`, {
+        const res = await fetch(`/acme/payroll/logs/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -584,7 +584,7 @@
     async function submitPayrollDelete() {
       const id = document.getElementById("pr-delete-id").value;
       try {
-        const res = await fetch(`/sachiko/payroll/logs/${id}`, { method: "DELETE" });
+        const res = await fetch(`/acme/payroll/logs/${id}`, { method: "DELETE" });
         if (res.ok) {
           window.location.reload();
         } else {

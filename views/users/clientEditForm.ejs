@@ -7,7 +7,7 @@
 %>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form class="client-content span-full needs-validation" action="/sachiko/client/edit/<%= client._id %>" method="post" autocomplete="off" novalidate style="gap: 10px;">
+  <form class="client-content span-full needs-validation" action="/acme/client/edit/<%= client._id %>" method="post" autocomplete="off" novalidate style="gap: 10px;">
     <div class="span-full form-heading">
       <h1>Edit Client</h1>
     </div>
@@ -105,7 +105,7 @@
 <script src="/js/choices.min.js"></script>
 <script>
   document.getElementById("cancelBtn").addEventListener("click", () => {
-    window.location.href = "/sachiko/client/view";
+    window.location.href = "/acme/client/view";
   });
 
   function resolveSelectValue(selectEl, rawValue) {

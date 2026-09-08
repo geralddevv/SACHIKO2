@@ -165,7 +165,7 @@
 </style>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-    <form class="rottary-content span-full needs-validation" action="<%= isEdit ? '/sachiko/die/edit/' + d._id : '/sachiko/form/die' %>" method="post" enctype="multipart/form-data" autocomplete="off" novalidate>
+    <form class="rottary-content span-full needs-validation" action="<%= isEdit ? '/acme/die/edit/' + d._id : '/acme/form/die' %>" method="post" enctype="multipart/form-data" autocomplete="off" novalidate>
       <div class="span-full form-heading">
         <h1><%= isEdit ? 'Edit Die' : 'Die Master' %></h1>
       </div>
@@ -391,7 +391,7 @@
             <label for="die-jpg-file">JPG File</label>
             <input type="file" id="die-jpg-file" class="form-control" name="dieJpgFile" accept=".jpg,.jpeg,image/jpeg" />
             <% if (isEdit && d.dieJpgFile) { %>
-              <a href="/sachiko/die/file/<%= d._id %>/jpg" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:12px;color:#044a78;font-weight:600;">
+              <a href="/acme/die/file/<%= d._id %>/jpg" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:12px;color:#044a78;font-weight:600;">
                 <i class="fa-solid fa-file-image"></i> View current JPG
               </a>
             <% } %>
@@ -400,7 +400,7 @@
             <label for="die-design-file">Design File</label>
             <input type="file" id="die-design-file" class="form-control" name="dieDesignFile" accept=".jpg,.jpeg,.pdf,.cdr,image/jpeg,application/pdf,application/x-coreldraw,application/cdr,application/octet-stream" />
             <% if (isEdit && d.dieDesignFile) { %>
-              <a href="/sachiko/die/file/<%= d._id %>/design" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:12px;color:#044a78;font-weight:600;">
+              <a href="/acme/die/file/<%= d._id %>/design" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:12px;color:#044a78;font-weight:600;">
                 <i class="fa-solid fa-file-arrow-down"></i> View current Design
               </a>
             <% } %>
@@ -409,7 +409,7 @@
             <label for="die-layout-file">Layout</label>
             <input type="file" id="die-layout-file" class="form-control" name="dieLayoutFile" accept=".jpg,.jpeg,.pdf,.cdr,image/jpeg,application/pdf,application/x-coreldraw,application/cdr,application/octet-stream" />
             <% if (isEdit && d.dieLayoutFile) { %>
-              <a href="/sachiko/die/file/<%= d._id %>/layout" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:12px;color:#044a78;font-weight:600;">
+              <a href="/acme/die/file/<%= d._id %>/layout" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:12px;color:#044a78;font-weight:600;">
                 <i class="fa-solid fa-file-arrow-down"></i> View current Layout
               </a>
             <% } %>

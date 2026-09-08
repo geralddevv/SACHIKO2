@@ -323,14 +323,14 @@
     hideError("addTypeError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/form/type", {
+      const res = await fetch("/acme/form/type", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ typeName: name }),
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/form/type";
+        window.location.href = data.redirect || "/acme/form/type";
       } else {
         showError("addTypeError", data.message || "Failed to add type.");
       }
@@ -374,7 +374,7 @@
     hideError("editTypeError");
     setLoading("editSubmitBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/type/${editId}`, {
+      const res = await fetch(`/acme/api/type/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ typeName: name }),
@@ -409,7 +409,7 @@
     if (!deleteId) return;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/type/${deleteId}`, {
+      const res = await fetch(`/acme/api/type/${deleteId}`, {
         method: "DELETE",
       });
       const data = await res.json();

@@ -152,7 +152,7 @@
       method="post"
       enctype="multipart/form-data"
       novalidate
-      action="<%= employee ? `/sachiko/employee/edit/${employee._id}` : '/sachiko/employee/form' %>"
+      action="<%= employee ? `/acme/employee/edit/${employee._id}` : '/acme/employee/form' %>"
     >
 
     <div class="span-full form-heading">
@@ -637,7 +637,7 @@
     </div>
 
     <div class="span-full btn-grp" style="flex-direction: row !important; gap: 1.2rem;">
-      <a href="/sachiko/employee/view" class="cancel-btn" style="
+      <a href="/acme/employee/view" class="cancel-btn" style="
         width: 50%;
         display: flex;
         align-items: center;

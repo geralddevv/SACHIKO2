@@ -17,7 +17,7 @@
 
       <!-- The main content -->
       <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-        <form action="/sachiko/form/tape-binding" method="post" onsubmit="return validateTapeBeforeSubmit()" class="needs-validation" autocomplete="off" novalidate>
+        <form action="/acme/form/tape-binding" method="post" onsubmit="return validateTapeBeforeSubmit()" class="needs-validation" autocomplete="off" novalidate>
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <div class="span-full form-heading">
             <h1>Client Tape</h1>
@@ -388,7 +388,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     try {
-      const res = await fetch(`/sachiko/form/tape-binding/filter-specs?${params}`);
+      const res = await fetch(`/acme/form/tape-binding/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -443,7 +443,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     hardResetUserSelection();
 
-    const res = await fetch(`/sachiko/form/tape-binding/client/${clientName}`);
+    const res = await fetch(`/acme/form/tape-binding/client/${clientName}`);
     const clientData = await res.json();
     if (!clientData || !clientData.users) return;
 
@@ -532,7 +532,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const res = await fetch(
-      `/sachiko/form/tape-binding/resolve-tape?${params}`
+      `/acme/form/tape-binding/resolve-tape?${params}`
     );
 
     if (!res.ok) {

@@ -539,7 +539,7 @@
     });
 
     try {
-      const res = await fetch(`/sachiko/corestock/filter-specs?${params}`);
+      const res = await fetch(`/acme/corestock/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -839,7 +839,7 @@
     hideError("poError");
     setLoading("poSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/corestock/purchase-order", {
+      const res = await fetch("/acme/corestock/purchase-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -853,7 +853,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/purchase/pending";
+        window.location.href = data.redirect || "/acme/purchase/pending";
       } else {
         showError("poError", data.message || "Failed to create Purchase Order.");
       }
@@ -914,7 +914,7 @@
     const rows = document.querySelectorAll("#addLotsContainer .roll-row");
     if (!rows.length) return;
     try {
-      const res = await fetch(`/sachiko/corestock/preview-roll-ids?count=${rows.length}`);
+      const res = await fetch(`/acme/corestock/preview-roll-ids?count=${rows.length}`);
       const data = await res.json();
       const ids = data.rollIds || [];
       rows.forEach((row, i) => {
@@ -1006,7 +1006,7 @@
     hideError("addCoreError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/corestock/create", {
+      const res = await fetch("/acme/corestock/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1026,7 +1026,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/corestock";
+        window.location.href = data.redirect || "/acme/corestock";
       } else {
         showError("addCoreError", data.message || "Failed to add core stock.");
       }

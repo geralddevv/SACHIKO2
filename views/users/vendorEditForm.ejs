@@ -196,7 +196,7 @@
       </div>
     </div>
 
-    <form id="vendor-edit-form" class="client-content span-full needs-validation" action="/sachiko/vendor/edit/<%= vendor._id %>" method="post" autocomplete="off" novalidate>
+    <form id="vendor-edit-form" class="client-content span-full needs-validation" action="/acme/vendor/edit/<%= vendor._id %>" method="post" autocomplete="off" novalidate>
       <div class="span-five">
         <label for="vendor-id">Vendor Id</label>
         <input type="text" value="<%= vendor.vendorId %>" id="vendor-id" class="form-control input-tag" name="vendorId" readonly required />
@@ -272,7 +272,7 @@
   const submitBtn = document.getElementById("vendor-edit-submit");
 
   document.getElementById("cancelBtn").addEventListener("click", () => {
-    window.location.href = "/sachiko/vendor/view";
+    window.location.href = "/acme/vendor/view";
   });
 
   form.addEventListener("submit", async (e) => {
@@ -298,7 +298,7 @@
         return;
       }
 
-      window.location.href = data.redirect || "/sachiko/vendor/view";
+      window.location.href = data.redirect || "/acme/vendor/view";
     } catch (err) {
       console.error(err);
       submitBtn.disabled = false;

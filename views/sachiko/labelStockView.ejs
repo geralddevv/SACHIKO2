@@ -499,13 +499,13 @@
       { title: "Word File", field: "wordFile", minWidth: 110, headerFilter: false, hozAlign: "center", headerHozAlign: "center",
         formatter: (cell) => {
           const v = cell.getValue();
-          return v ? `<a href="/sachiko/label-stock/file/${v}" target="_blank" style="color:#044a78;font-weight:600;text-decoration:none;" title="View file"><i class="fa-solid fa-file" style="margin-right:4px;"></i>View</a>` : `<span style="color:#aaa;">—</span>`;
+          return v ? `<a href="/acme/label-stock/file/${v}" target="_blank" style="color:#044a78;font-weight:600;text-decoration:none;" title="View file"><i class="fa-solid fa-file" style="margin-right:4px;"></i>View</a>` : `<span style="color:#aaa;">—</span>`;
         }
       },
       { title: "PDF File", field: "pdfFile", minWidth: 110, headerFilter: false, hozAlign: "center", headerHozAlign: "center",
         formatter: (cell) => {
           const v = cell.getValue();
-          return v ? `<a href="/sachiko/label-stock/file/${v}" target="_blank" style="color:#044a78;font-weight:600;text-decoration:none;" title="View file"><i class="fa-solid fa-file-pdf" style="margin-right:4px;"></i>View</a>` : `<span style="color:#aaa;">—</span>`;
+          return v ? `<a href="/acme/label-stock/file/${v}" target="_blank" style="color:#044a78;font-weight:600;text-decoration:none;" title="View file"><i class="fa-solid fa-file-pdf" style="margin-right:4px;"></i>View</a>` : `<span style="color:#aaa;">—</span>`;
         }
       },
     ],
@@ -724,12 +724,12 @@
         ${(ds.wordFile || ds.pdfFile) ? `
           <div style="display:flex;flex-direction:column;gap:8px;">
             ${ds.wordFile ? `
-            <a href="/sachiko/label-stock/file/${esc(ds.wordFile)}" target="_blank"
+            <a href="/acme/label-stock/file/${esc(ds.wordFile)}" target="_blank"
               style="display:inline-flex;align-items:center;gap:8px;color:#044a78;font-weight:600;text-decoration:none;font-size:14px;">
               <i class="fa-solid fa-file"></i> ${esc(ds.wordFileOriginalName || ds.wordFile)}
             </a>` : ""}
             ${ds.pdfFile ? `
-            <a href="/sachiko/label-stock/file/${esc(ds.pdfFile)}" target="_blank"
+            <a href="/acme/label-stock/file/${esc(ds.pdfFile)}" target="_blank"
               style="display:inline-flex;align-items:center;gap:8px;color:#044a78;font-weight:600;text-decoration:none;font-size:14px;">
               <i class="fa-solid fa-file-pdf"></i> ${esc(ds.pdfFileOriginalName || ds.pdfFile)}
             </a>` : ""}
@@ -754,7 +754,7 @@
     document.getElementById("ds-delete-confirm").onclick = async () => {
       dialog.style.display = "none";
       try {
-        const resp = await fetch(`/sachiko/label-stock/${id}`, {
+        const resp = await fetch(`/acme/label-stock/${id}`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
         });
@@ -1468,7 +1468,7 @@
 
       const wordFileLink = document.getElementById("lsCurrentWordFileLink");
       if (ds.wordFile) {
-        wordFileLink.href = `/sachiko/label-stock/file/${ds.wordFile}`;
+        wordFileLink.href = `/acme/label-stock/file/${ds.wordFile}`;
         wordFileLink.title = ds.wordFileOriginalName || ds.wordFile;
         wordFileLink.style.display = "inline-flex";
       } else {
@@ -1477,7 +1477,7 @@
 
       const pdfFileLink = document.getElementById("lsCurrentPdfFileLink");
       if (ds.pdfFile) {
-        pdfFileLink.href = `/sachiko/label-stock/file/${ds.pdfFile}`;
+        pdfFileLink.href = `/acme/label-stock/file/${ds.pdfFile}`;
         pdfFileLink.title = ds.pdfFileOriginalName || ds.pdfFile;
         pdfFileLink.style.display = "inline-flex";
       } else {
@@ -1556,7 +1556,7 @@
       btn.disabled = true;
       hideLsError();
       try {
-        const url = lsEditId ? `/sachiko/label-stock/edit/${lsEditId}` : "/sachiko/label-stock/form";
+        const url = lsEditId ? `/acme/label-stock/edit/${lsEditId}` : "/acme/label-stock/form";
         // "-- None --" is a UI sentinel (FS_NONE), not a value: it means the
         // master rows this field could still resolve to leave it blank. Left
         // as-is it would POST the literal "__FS_NONE__" and get stored as
@@ -1571,7 +1571,7 @@
         const res = await fetch(url, { method: "POST", body: lsPayload });
         const data = await res.json().catch(() => null);
         if (data?.success) {
-          window.location.href = data.redirect || "/sachiko/label-stock/view";
+          window.location.href = data.redirect || "/acme/label-stock/view";
         } else {
           showLsError(data?.message || `Failed to ${lsEditId ? "update" : "create"} Label Stock.`);
         }

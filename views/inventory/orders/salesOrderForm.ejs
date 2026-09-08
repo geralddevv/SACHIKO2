@@ -1,7 +1,7 @@
 <% layout('/layout/boilerplate') -%>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form id="sales-order-form" action="<%= typeof confirmMode !== 'undefined' && confirmMode ? '/sachiko/sales/order/status' : '/sachiko/sales/order' %>" method="post" class="needs-validation" autocomplete="off" novalidate>
+  <form id="sales-order-form" action="<%= typeof confirmMode !== 'undefined' && confirmMode ? '/acme/sales/order/status' : '/acme/sales/order' %>" method="post" class="needs-validation" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
     <input type="hidden" name="orderId" value="<%= typeof orderToEdit !== 'undefined' && orderToEdit ? orderToEdit._id : '' %>" />
     <input type="hidden" name="submissionToken" value="<%= typeof submissionToken !== 'undefined' && submissionToken ? submissionToken : '' %>" />
@@ -275,6 +275,9 @@
       /* Auto-filled Rate awaiting confirmation -- subtle yellow until clicked. */
       .ai-table input.ai-rate.ai-rate-unack { background:#fef9c3 !important; }
       .ai-table input.ai-rate.ai-rate-unack:focus { background:#fff !important; }
+      /* Default RM (1000) awaiting confirmation -- subtle yellow until clicked. */
+      .ai-table input.ai-rm.ai-rm-unack { background:#fef9c3 !important; }
+      .ai-table input.ai-rm.ai-rm-unack:focus { background:#fff !important; }
       .ai-add-btn { margin-top:10px; background:#044a78; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-weight:700; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
       .ai-add-btn:hover { background:#03365a; }
       #additional-items-table .choices { margin-bottom:0; }
@@ -502,7 +505,7 @@
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
     const form = document.createElement("form");
     form.method = "POST";
-    form.action = "/sachiko/sales/order/status";
+    form.action = "/acme/sales/order/status";
     [["orderId", "<%= orderToEdit._id %>"], ["status", "CANCELLED"], ["cancelReason", reason], ["_csrf", csrf]].forEach(([n, v]) => {
       const inp = document.createElement("input");
       inp.type = "hidden"; inp.name = n; inp.value = v;
@@ -969,7 +972,7 @@
     resetUsers();
     
     try {
-      const res = await fetch(`/sachiko/sales/clients/${toServerItemType(itemType)}`);
+      const res = await fetch(`/acme/sales/clients/${toServerItemType(itemType)}`);
       const clientNames = await res.json();
       
       const finalNames = [...clientNames];
@@ -1007,7 +1010,7 @@
     resetItems();
 
     try {
-      const res = await fetch(`/sachiko/form/labels/${encodeURIComponent(clientName)}`);
+      const res = await fetch(`/acme/form/labels/${encodeURIComponent(clientName)}`);
       const clientData = await res.json();
       const users = clientData?.users || [];
 
@@ -1088,7 +1091,7 @@
     itemChoices.setChoices([{ value: "", label: "Loading...", disabled: true, selected: true }], "value", "label", true);
 
     try {
-      const itemsUrl = `/sachiko/sales/items/${toServerItemType(itemType)}/${userId}` + (loc ? `?location=${encodeURIComponent(loc)}` : "");
+      const itemsUrl = `/acme/sales/items/${toServerItemType(itemType)}/${userId}` + (loc ? `?location=${encodeURIComponent(loc)}` : "");
       const res = await fetch(itemsUrl);
       const items = await res.json();
 
@@ -1557,7 +1560,7 @@
       const itemLocation = normalizeLocationName(selectedOption?.customProperties?.location || "");
 
       try {
-        const locRes = await fetch("/sachiko/api/locations");
+        const locRes = await fetch("/acme/api/locations");
         const allLocations = await locRes.json();
 
         const locationHtml = (Array.isArray(allLocations) ? allLocations : []).map((locName) => {
@@ -1618,7 +1621,7 @@
       try {
         const stock = JSON.parse(selectedOption.customProperties.stock);
         
-        const locRes = await fetch("/sachiko/api/locations");
+        const locRes = await fetch("/acme/api/locations");
         const allLocations = await locRes.json();
 
         // Build "ALL" option
@@ -1734,7 +1737,7 @@
       currentSelectedDetails = null;
       renderSelectedItemDetailsTable();
       try {
-        const locRes = await fetch("/sachiko/api/locations");
+        const locRes = await fetch("/acme/api/locations");
         const allLocations = await locRes.json();
 
         const locationHtml = (Array.isArray(allLocations) ? allLocations : []).map((locName) => {
@@ -2240,7 +2243,7 @@
 
     // For create/update sales order, submit via AJAX so backend JSON errors show as toast
     const actionPath = orderForm.getAttribute("action") || "";
-    if (actionPath === "/sachiko/sales/order" || actionPath === "/sachiko/sales/order/status") {
+    if (actionPath === "/acme/sales/order" || actionPath === "/acme/sales/order/status") {
       try {
         const formData = new FormData(orderForm);
         const payload = new URLSearchParams();
@@ -2253,7 +2256,7 @@
 
         // New Label Stock order: append lines[0..N] from the Order Items table
         // so POST /sales/order takes its multi-line branch.
-        if (actionPath === "/sachiko/sales/order" && typeof aiIsActive === "function" && aiIsActive()) {
+        if (actionPath === "/acme/sales/order" && typeof aiIsActive === "function" && aiIsActive()) {
           aiAppendLines(payload);
         }
 
@@ -2284,7 +2287,7 @@
           return true;
         }
 
-        if (actionPath === "/sachiko/sales/order/status") {
+        if (actionPath === "/acme/sales/order/status") {
           showToast("Order dispatched successfully", "success");
         } else {
           showToast("Sales order submitted successfully", "success");
@@ -2681,7 +2684,7 @@
     }
 
     try {
-      const res = await fetch(`/sachiko/sales/order/log/${logId}`, {
+      const res = await fetch(`/acme/sales/order/log/${logId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantity: qty, invoiceNumber, date })
@@ -2704,7 +2707,7 @@
     const logId = document.getElementById('delete-log-id').value;
 
     try {
-      const res = await fetch(`/sachiko/sales/order/log/${logId}`, {
+      const res = await fetch(`/acme/sales/order/log/${logId}`, {
         method: 'DELETE'
       });
       const data = await res.json();
@@ -2878,6 +2881,16 @@
     rateInp.classList.toggle("ai-rate-unack", !acked);
   }
 
+  // RM acknowledgement: every row starts pre-filled with the default RM (1000),
+  // shown yellow until the user clicks (focuses) or edits it -- exactly like the
+  // auto-filled Rate. An unconfirmed default RM blocks add-row + submit.
+  const AI_DEFAULT_RM = "1000";
+  function aiSetRmAck(rmInp, acked) {
+    if (!rmInp) return;
+    rmInp.dataset.rmAck = acked ? "1" : "";
+    rmInp.classList.toggle("ai-rm-unack", !acked);
+  }
+
   function aiRenumber() {
     aiRows().forEach((row, i) => {
       const cell = row.querySelector(".ai-row-num");
@@ -2940,6 +2953,14 @@
     const rateEl = row.querySelector(".ai-rate");
     rateEl.addEventListener("focus", () => aiSetRateAck(rateEl, true));
     rateEl.addEventListener("input", () => aiSetRateAck(rateEl, true));
+    // RM defaults to 1000, awaiting confirmation -- same click-to-acknowledge
+    // behaviour as the Rate field above.
+    const rmEl = row.querySelector(".ai-rm");
+    rmEl.value = AI_DEFAULT_RM;
+    rmEl.dataset.rmAutofilled = "1";
+    aiSetRmAck(rmEl, false);
+    rmEl.addEventListener("focus", () => aiSetRmAck(rmEl, true));
+    rmEl.addEventListener("input", () => aiSetRmAck(rmEl, true));
     row.querySelector(".ai-remove").addEventListener("click", () => {
       if (aiRowCount() <= 1) return; // keep at least one item
       aiDestroyRow(row);
@@ -2993,9 +3014,13 @@
       const ps = parseFloat(r.querySelector(".ai-paper-size").value);
       if (!(ps > 0)) return `Item ${n}: Paper Size is required.`;
       if (ps >= 1000) return `Item ${n}: Paper Size must be less than 1000.`;
-      const rm = parseFloat(r.querySelector(".ai-rm").value);
+      const rmEl = r.querySelector(".ai-rm");
+      const rm = parseFloat(rmEl.value);
       if (!(rm > 0)) return `Item ${n}: RM must be greater than 0.`;
       if (rm > 2000) return `Item ${n}: RM cannot exceed 2000.`;
+      if (rmEl.dataset.rmAutofilled === "1" && rmEl.dataset.rmAck !== "1") {
+        return `Item ${n}: click the RM field to confirm the default RM.`;
+      }
       if (!(parseInt(r.querySelector(".ai-rolls").value, 10) > 0)) return `Item ${n}: No of Rolls must be greater than 0.`;
       const rateEl = r.querySelector(".ai-rate");
       if (!(parseFloat(rateEl.value) > 0)) return `Item ${n}: Rate must be greater than 0.`;

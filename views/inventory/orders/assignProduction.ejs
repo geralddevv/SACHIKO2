@@ -488,7 +488,7 @@
     </div>
   </div>
 
-  <form id="assign-form" class="ap-form-card needs-validation" action="/sachiko/labels/production/assign/<%= pp._id %>" method="post" novalidate>
+  <form id="assign-form" class="ap-form-card needs-validation" action="/acme/labels/production/assign/<%= pp._id %>" method="post" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
 
     <div class="span-dual" style="grid-column: span 11;">
@@ -929,7 +929,7 @@
         // isn't left guessing whether to look for stock or go configure a
         // binding.
         const message = layerKey.startsWith("adhesive") && layerHasBindingCache[layerKey] === false
-          ? 'No binding configured for this Label Stock — set one at <a href="/sachiko/form/label-stock-adhesive-binding" target="_blank" rel="noopener">Label Stock Adhesive Binding</a> before assigning.'
+          ? 'No binding configured for this Label Stock — set one at <a href="/acme/form/label-stock-adhesive-binding" target="_blank" rel="noopener">Label Stock Adhesive Binding</a> before assigning.'
           : "No reels in stock at this location";
         // table-layout: fixed (see .raw-layer-table.roll-table above) means a
         // long, unbroken run of text -- the binding link's full sentence in
@@ -1064,7 +1064,7 @@
       }
 
       try {
-        const res = await fetch(`/sachiko/labelstockproduction/raw-stock?layerKey=${encodeURIComponent(layerKey)}&itemId=${encodeURIComponent(ITEM._id)}&location=${encodeURIComponent(location)}&orderId=${encodeURIComponent(ORDER_ID)}`);
+        const res = await fetch(`/acme/labelstockproduction/raw-stock?layerKey=${encodeURIComponent(layerKey)}&itemId=${encodeURIComponent(ITEM._id)}&location=${encodeURIComponent(location)}&orderId=${encodeURIComponent(ORDER_ID)}`);
         const data = await res.json();
         layerReelsCache[layerKey] = data.reels || [];
         layerHasBindingCache[layerKey] = data.hasBinding !== false;

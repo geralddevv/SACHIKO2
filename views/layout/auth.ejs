@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="csrf-token" content="<%= csrfToken %>" />
-    <title>Sachiko - <%= title %></title>
-    <link rel="icon" href="/assets/sachikofavicon.png" type="image/png" />
+    <title><%= typeof brandShort !== 'undefined' && brandShort ? brandShort : 'Sachiko' %> - <%= title %></title>
+    <link rel="icon" href="<%= typeof faviconUrl !== 'undefined' ? faviconUrl : '/company/favicon' %>" />
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
     <link rel="stylesheet" href="/bootstrap/css/bootstrap.min.css" />

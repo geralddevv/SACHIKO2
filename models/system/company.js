@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { mediaAssetSchema } from "./mediaAsset.js";
 
 // Company master -- the single registration record describing the company
 // this installation belongs to (letterheads, printed documents, etc.).
@@ -20,6 +21,14 @@ const companySchema = new mongoose.Schema(
       required: true,
       trim: true,
       uppercase: true,
+    },
+
+    // Optional company logo (utils/media.js pipeline, bucket "company"). When
+    // absent the app falls back to the first letter of companyName -- see
+    // /company/favicon in server.js and the logo box in companyMaster.ejs.
+    logo: {
+      type: mediaAssetSchema,
+      default: null,
     },
     address: {
       type: String,

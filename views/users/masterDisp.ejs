@@ -85,10 +85,10 @@
       <h1>Client Details</h1>
 
       <div style="display: flex; gap: 10px; align-items: center">
-        <button class="header-action-btn" onclick="window.location.href = '/sachiko/form/client?tab=user'">
+        <button class="header-action-btn" onclick="window.location.href = '/acme/form/client?tab=user'">
           <i class="fa-solid fa-plus" style="margin-right: 4px"></i> User
         </button>
-        <button class="header-action-btn" onclick="window.location.href = '/sachiko/form/client?tab=client'">
+        <button class="header-action-btn" onclick="window.location.href = '/acme/form/client?tab=client'">
           <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Client
         </button>
 
@@ -274,7 +274,7 @@
             cellClick: (e, cell) => {
               const row = cell.getRow().getData();
               const loc = row.userLocation ? `?location=${encodeURIComponent(row.userLocation)}` : "";
-              window.location.href = `/sachiko/client/details/${row._id}${loc}`;
+              window.location.href = `/acme/client/details/${row._id}${loc}`;
             },
             headerSort: true,
             widthGrow: 2,
@@ -308,7 +308,7 @@
             },
             cellClick: (e, cell) => {
               const row = cell.getRow().getData();
-              window.location.href = `/sachiko/label-stock-binding/view/${row._id}`;
+              window.location.href = `/acme/label-stock-binding/view/${row._id}`;
             },
           }),
         ],

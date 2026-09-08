@@ -723,7 +723,7 @@
     });
 
     try {
-      const res = await fetch(`/sachiko/adhesivestock/filter-specs?${params}`);
+      const res = await fetch(`/acme/adhesivestock/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -1112,7 +1112,7 @@
     hideError("poError");
     setLoading("poSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/adhesivestock/purchase-order", {
+      const res = await fetch("/acme/adhesivestock/purchase-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1126,7 +1126,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/purchase/pending";
+        window.location.href = data.redirect || "/acme/purchase/pending";
       } else {
         showError("poError", data.message || "Failed to create Purchase Order.");
       }
@@ -1193,7 +1193,7 @@
     const rows = document.querySelectorAll("#addDrumsContainer .drum-row");
     if (!rows.length) return;
     try {
-      const res = await fetch(`/sachiko/adhesivestock/preview-roll-ids?count=${rows.length}`);
+      const res = await fetch(`/acme/adhesivestock/preview-roll-ids?count=${rows.length}`);
       const data = await res.json();
       const ids = data.rollIds || [];
       rows.forEach((row, i) => {
@@ -1295,7 +1295,7 @@
     hideError("addAdhesiveError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/adhesivestock/create", {
+      const res = await fetch("/acme/adhesivestock/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1310,7 +1310,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/adhesivestock";
+        window.location.href = data.redirect || "/acme/adhesivestock";
       } else {
         showError("addAdhesiveError", data.message || "Failed to add adhesive stock.");
       }
@@ -1394,7 +1394,7 @@
 
     let res;
     try {
-      res = await fetch(`/sachiko/adhesivestock/label/${reel._id}`, { credentials: "same-origin" });
+      res = await fetch(`/acme/adhesivestock/label/${reel._id}`, { credentials: "same-origin" });
     } catch (e) {
       return labelMessage("Couldn't reach the server to build this label.");
     }
@@ -1511,7 +1511,7 @@
     hideError("editRollError");
     setLoading("editRollSubmitBtn", true);
     try {
-      const res = await fetch(`/sachiko/adhesivestock/${editingRollId}`, {
+      const res = await fetch(`/acme/adhesivestock/${editingRollId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

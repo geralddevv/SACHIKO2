@@ -247,6 +247,32 @@
       opacity: 0.65;
       cursor: default;
     }
+
+    .logo-control {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .logo-box {
+      width: 72px;
+      height: 72px;
+      flex: 0 0 72px;
+      border-radius: 16px;
+      background: #044a78;
+      border: 1px solid rgba(4, 74, 120, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      color: #fff;
+      font-size: 30px;
+      font-weight: 700;
+      user-select: none;
+    }
+    .logo-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .logo-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .logo-hint { margin: 8px 0 0; font-size: 12px; color: #8b98a6; }
   </style>
 
   <div class="indi-head">
@@ -276,6 +302,30 @@
         <div class="form-section">
           <p class="section-title"><i class="fa-solid fa-location-dot"></i> Company &amp; Address</p>
           <div class="field-grid">
+            <div class="fg-12 logo-row">
+              <label class="field-label">Logo <span style="font-weight:500;color:#8b98a6;">(optional)</span></label>
+              <div class="logo-control">
+                <div class="logo-box" id="logoBox">
+                  <img id="logoImg" alt="Company logo"
+                       src="<%= (company && company.logo && company.logo.filename) ? ('/company/favicon?v=' + encodeURIComponent(company.logo.filename)) : '' %>"
+                       <%= (company && company.logo && company.logo.filename) ? '' : 'hidden' %> />
+                  <span id="logoLetter"><%= company && company.companyName ? company.companyName.trim().charAt(0).toUpperCase() : '' %></span>
+                </div>
+                <div class="logo-actions" id="logoActions" <%= company ? '' : 'hidden' %>>
+                  <button type="button" class="co-btn" id="logoPickBtn">
+                    <i class="fa-solid fa-arrow-up-from-bracket" style="margin-right:6px;"></i>
+                    <span id="logoPickLabel"><%= (company && company.logo) ? 'Replace logo' : 'Upload logo' %></span>
+                  </button>
+                  <button type="button" class="co-btn" id="logoRemoveBtn"
+                          <%= (company && company.logo) ? '' : 'hidden' %>>Remove</button>
+                  <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+                </div>
+              </div>
+              <p class="logo-hint" id="logoHint">
+                <%= company ? 'PNG or JPG. If no logo is set, the first letter of the company name is used.' : 'You can add a logo after registering the company.' %>
+              </p>
+            </div>
+
             <div class="fg-12">
               <label class="field-label" for="companyName">Company Name<span class="req">*</span></label>
               <input type="text" id="companyName" autocomplete="off" maxlength="150"
@@ -424,6 +474,19 @@
   </div>
 </div>
 
+<!-- Rename confirmation -- uses the app's .logout-modal / .logout-dialog styles
+     (boilerplate.ejs), NOT window.confirm(). -->
+<div class="logout-modal" id="switchModal" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="switchTitle">
+    <h2 class="logout-title" id="switchTitle">Change the company?</h2>
+    <p class="logout-text" id="switchText"></p>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" id="switchCancel">Cancel</button>
+      <button class="logout-btn primary" type="button" id="switchConfirm">Change &amp; switch</button>
+    </div>
+  </div>
+</div>
+
 <script id="company-data" type="application/json"><%- safeJson(company || null) %></script>
 <script>
   // safeJson() serialises null as "{}" (utils/security.js) and {} is truthy,
@@ -471,6 +534,98 @@
   // A saved company starts locked; a fresh page starts as an open form.
   if (company) setDisabled(true);
 
+  // ---- Logo -----------------------------------------------------------------
+  let hasLogo = !!(company && company.logo && company.logo.filename);
+
+  function paintLogo() {
+    const img = el("logoImg");
+    const letter = el("logoLetter");
+    const nameForLetter = (company ? company.companyName : el("companyName").value) || "";
+    letter.textContent = (nameForLetter.trim().charAt(0) || "").toUpperCase();
+    if (hasLogo) {
+      img.hidden = false;
+      letter.style.display = "none";
+    } else {
+      img.hidden = true;
+      img.removeAttribute("src");
+      letter.style.display = "";
+    }
+    if (company) {
+      el("logoRemoveBtn").hidden = !hasLogo;
+      el("logoPickLabel").textContent = hasLogo ? "Replace logo" : "Upload logo";
+    }
+  }
+
+  // Keep the placeholder letter in sync while typing the name (registration).
+  el("companyName").addEventListener("input", () => { if (!hasLogo) paintLogo(); });
+
+  function bustFavicon() {
+    document.querySelectorAll('link[rel~="icon"]').forEach((lnk) => {
+      lnk.href = "/company/favicon?v=" + Date.now();
+    });
+  }
+
+  if (company) {
+    el("logoPickBtn").addEventListener("click", () => el("logoFile").click());
+
+    el("logoFile").addEventListener("change", async () => {
+      const file = el("logoFile").files[0];
+      if (!file) return;
+      if (!/^image\//.test(file.type)) { showError("Please choose an image file."); return; }
+      if (file.size > 5 * 1024 * 1024) { showError("Image is too large (max 5MB)."); return; }
+      hideError();
+      const pick = el("logoPickBtn");
+      pick.disabled = true;
+      el("logoRemoveBtn").disabled = true;
+      try {
+        const fd = new FormData();
+        fd.append("logo", file);
+        const res = await fetch("/acme/api/company/" + company._id + "/logo", { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.success) {
+          hasLogo = true;
+          const img = el("logoImg");
+          img.src = "/company/favicon?v=" + Date.now();
+          paintLogo();
+          bustFavicon();
+        } else {
+          showError(data.message || "Could not save the logo.");
+        }
+      } catch {
+        showError("Server error while uploading the logo.");
+      } finally {
+        pick.disabled = false;
+        el("logoRemoveBtn").disabled = false;
+        el("logoFile").value = "";
+      }
+    });
+
+    el("logoRemoveBtn").addEventListener("click", async () => {
+      hideError();
+      const rm = el("logoRemoveBtn");
+      rm.disabled = true;
+      el("logoPickBtn").disabled = true;
+      try {
+        const res = await fetch("/acme/api/company/" + company._id + "/logo", { method: "DELETE" });
+        const data = await res.json();
+        if (data.success) {
+          hasLogo = false;
+          paintLogo();
+          bustFavicon();
+        } else {
+          showError(data.message || "Could not remove the logo.");
+        }
+      } catch {
+        showError("Server error while removing the logo.");
+      } finally {
+        rm.disabled = false;
+        el("logoPickBtn").disabled = false;
+      }
+    });
+  }
+
+  paintLogo();
+
   function startEdit() {
     setDisabled(false);
     el("editBtn").style.display = "none";
@@ -498,6 +653,63 @@
     return payload;
   }
 
+  // Must match slugifyCompany() in utils/companyBrand.js -- first word, lowered,
+  // letters/digits only. When this changes, the app moves to /<slug>/ and onto
+  // that company's database.
+  function slugOf(name) {
+    const first = String(name || "").trim().split(/\s+/)[0] || "";
+    return first.toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  // In-app confirmation (not window.confirm). Resolves true / false.
+  function confirmSwitch(name, slug) {
+    return new Promise((resolve) => {
+      const modal = el("switchModal");
+      el("switchText").innerHTML =
+        'Saving this name moves the app to <strong>/' + slug + '/…</strong> and onto ' +
+        'the <strong>' + slug + '</strong> database — a new empty one is created if it ' +
+        "doesn't exist yet, otherwise its existing data is used. Everyone is signed out. " +
+        "The data in the current database is left untouched.";
+      let done = false;
+      const finish = (val) => {
+        if (done) return;
+        done = true;
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+        el("switchConfirm").removeEventListener("click", onYes);
+        el("switchCancel").removeEventListener("click", onNo);
+        modal.removeEventListener("click", onBackdrop);
+        document.removeEventListener("keydown", onKey);
+        resolve(val);
+      };
+      const onYes = () => finish(true);
+      const onNo = () => finish(false);
+      const onBackdrop = (e) => { if (e.target === modal) finish(false); };
+      const onKey = (e) => { if (e.key === "Escape") finish(false); };
+      el("switchConfirm").addEventListener("click", onYes);
+      el("switchCancel").addEventListener("click", onNo);
+      modal.addEventListener("click", onBackdrop);
+      document.addEventListener("keydown", onKey);
+      modal.classList.add("show");
+      modal.setAttribute("aria-hidden", "false");
+      el("switchConfirm").focus();
+    });
+  }
+
+  function showReloadOverlay(redirect) {
+    const o = document.createElement("div");
+    o.style.cssText =
+      "position:fixed;inset:0;z-index:100000;background:rgba(4,74,120,0.96);color:#fff;" +
+      "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;" +
+      "font-size:15px;text-align:center;padding:24px;";
+    o.innerHTML =
+      '<i class="fa-solid fa-circle-notch fa-spin" style="font-size:30px"></i>' +
+      "<div>Switched to the company database.</div>" +
+      '<div style="font-size:12.5px;opacity:.8">Taking you to the sign-in page…</div>';
+    document.body.appendChild(o);
+    setTimeout(() => { window.location.href = redirect; }, 1500);
+  }
+
   async function submitForm() {
     const payload = collect();
 
@@ -508,24 +720,38 @@
         return;
       }
     }
+
+    // Renaming to a different first word moves the app to another URL + database.
+    // Confirm in-app before doing something that big.
+    const newSlug = slugOf(payload.companyName);
+    const slugChanges = newSlug && newSlug !== slugOf(company ? company.companyName : "");
+    if (slugChanges && company) {
+      const ok = await confirmSwitch(payload.companyName, newSlug);
+      if (!ok) return;
+    }
+
     hideError();
     setLoading(true);
 
     try {
       const res = company
-        ? await fetch("/sachiko/api/company/" + company._id, {
+        ? await fetch("/acme/api/company/" + company._id, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           })
-        : await fetch("/sachiko/form/company", {
+        : await fetch("/acme/form/company", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/form/company";
+        if (data.reload) {
+          showReloadOverlay(data.redirect || "/");
+        } else {
+          window.location.href = data.redirect || "/acme/form/company";
+        }
       } else {
         showError(data.message || "Failed to save company.");
       }

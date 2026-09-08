@@ -254,7 +254,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     const tapeDoc = await Tape.findById(tapeObjectId).select("tapeProductId").lean();
     res.locals.auditDescription = `Added ${qty} tape stock for "${tapeDoc?.tapeProductId || tapeId}" at "${location}" (finish ${tapeFinish})`;
     req.flash("notification", "Tape stock added successfully");
-    res.redirect("/sachiko/tapestock");
+    res.redirect("/acme/tapestock");
   } catch (err) {
     console.error(err);
     res.status(400).json({ success: false, message: "Failed to add tape stock" });

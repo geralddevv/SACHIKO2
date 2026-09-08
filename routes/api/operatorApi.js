@@ -287,6 +287,10 @@ router.post("/jobcard/material/check", requireOperatorApiAuth, createLimiter, as
         reelMtrs: Number(reel.reelMtrs) || 0,
         location: reel.location || "",
         allotted: allotted.has(String(reel._id)),
+        // The reel's own vendor SKU code, so the operator app can flag a layer
+        // whose mounted reel differs from the order's recipe code (shown in
+        // brackets beside it on the Production Entry recipe table).
+        code: reel.vendorSkuCode || "",
       },
       variant,
     });

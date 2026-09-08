@@ -117,7 +117,7 @@
         rowEl.querySelector(".mode-delete").checked = false;
       }
 
-      fetch(`/sachiko/employee/admin/permissions/${data._id}`, {
+      fetch(`/acme/employee/admin/permissions/${data._id}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role, permissions, canRead, canWrite, canDelete })

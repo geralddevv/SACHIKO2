@@ -30,7 +30,7 @@ router.post("/form/type", requireAuth, requireTypeMaster, createLimiter, async (
 
     res.locals.auditDescription = `Created type "${typeName}"`;
     req.flash("notification", "Type created successfully!");
-    res.json({ success: true, redirect: "/sachiko/form/type" });
+    res.json({ success: true, redirect: "/acme/form/type" });
   } catch (err) {
     console.error("TYPE MASTER CREATE ERROR:", err);
     const isDup = err.code === 11000;

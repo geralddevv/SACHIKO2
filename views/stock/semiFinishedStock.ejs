@@ -514,7 +514,7 @@
 
     let res;
     try {
-      res = await fetch(`/sachiko/semifinishedstock/label/${row._id}`, { credentials: "same-origin" });
+      res = await fetch(`/acme/semifinishedstock/label/${row._id}`, { credentials: "same-origin" });
     } catch (e) {
       return labelMessage("Couldn't reach the server to build this label.");
     }
@@ -592,7 +592,7 @@
     hideError("editSemiFinishedError");
     setLoading("editSubmitBtn", true);
     try {
-      const res = await fetch(`/sachiko/semifinishedstock/${editId}`, {
+      const res = await fetch(`/acme/semifinishedstock/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -631,7 +631,7 @@
     if (!deleteId) return;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/sachiko/semifinishedstock/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/acme/semifinishedstock/${deleteId}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
         window.location.reload();

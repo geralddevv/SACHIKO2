@@ -24,7 +24,7 @@
 
 <!-- The main content -->
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form action="/sachiko/label-stock-binding/edit/<%= binding._id %>" method="post" onsubmit="return handleLabelStockBindingSubmit(event)" class="needs-validation" autocomplete="off" novalidate>
+  <form action="/acme/label-stock-binding/edit/<%= binding._id %>" method="post" onsubmit="return handleLabelStockBindingSubmit(event)" class="needs-validation" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <div class="span-full form-heading">
       <h1>Edit Label Stock Binding</h1>
@@ -91,7 +91,7 @@
     <input type="hidden" name="labelStockId" id="resolved-label-stock-id" value="<%= binding.labelStock?._id || '' %>">
 
     <div class="btn-grp span-full" style="display:flex;flex-direction:row;gap:10px;">
-      <a href="/sachiko/label-stock-binding/view/<%= binding.userId?._id %>" style="width:50%;color:white;background-color:#044a78;font-size:1.25rem;font-weight:500;padding:0.5rem 1.5rem;border:2px solid #044a78;border-radius:0.5rem;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.3s ease-in-out;">Cancel</a>
+      <a href="/acme/label-stock-binding/view/<%= binding.userId?._id %>" style="width:50%;color:white;background-color:#044a78;font-size:1.25rem;font-weight:500;padding:0.5rem 1.5rem;border:2px solid #044a78;border-radius:0.5rem;cursor:pointer;text-decoration:none;text-align:center;transition:all 0.3s ease-in-out;">Cancel</a>
       <button type="submit">Update Label Stock Binding</button>
     </div>
   </form>
@@ -238,7 +238,7 @@ async function handleLabelStockBindingSubmit(event) {
     const data = await res.json().catch(() => null);
 
     if (data?.success) {
-      window.location.href = data.redirect || "/sachiko/client/view";
+      window.location.href = data.redirect || "/acme/client/view";
     } else {
       showClientToast(data?.message || "Failed to update Label Stock binding.", true);
       submitBtn.disabled = false;

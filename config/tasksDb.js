@@ -21,12 +21,12 @@ function deriveTasksUri(mainUri) {
   const prefix = mainUri.slice(0, schemeSepIdx + 2);
   const afterScheme = mainUri.slice(schemeSepIdx + 2);
   const pathIdx = afterScheme.indexOf("/");
-  if (pathIdx === -1) return `${prefix}${afterScheme}/sachiko_tasks`;
+  if (pathIdx === -1) return `${prefix}${afterScheme}/acme_tasks`;
 
   const hostPart = afterScheme.slice(0, pathIdx);
   const rest = afterScheme.slice(pathIdx + 1);
   const qIdx = rest.indexOf("?");
-  const dbName = (qIdx === -1 ? rest : rest.slice(0, qIdx)) || "sachiko";
+  const dbName = (qIdx === -1 ? rest : rest.slice(0, qIdx)) || "acme";
   const query = qIdx === -1 ? "" : rest.slice(qIdx);
 
   return `${prefix}${hostPart}/${dbName}_tasks${query}`;
@@ -42,7 +42,7 @@ let tasksConnection = null;
 export function getTasksConnection() {
   if (tasksConnection) return tasksConnection;
 
-  const mainUri = process.env.MONGO_URI || "mongodb://localhost:27017/sachiko";
+  const mainUri = process.env.MONGO_URI || "mongodb://localhost:27017/acme";
   const uri = withAuth(process.env.TASKS_MONGO_URI || deriveTasksUri(mainUri));
 
   tasksConnection = mongoose.createConnection(uri);
@@ -50,4 +50,15 @@ export function getTasksConnection() {
   tasksConnection.on("error", (err) => console.error("Error connecting to Tasks MongoDB:", err));
 
   return tasksConnection;
+}
+
+// Drop the cached tasks connection so the next getTasksConnection() rebuilds it
+// from the current environment -- used when the company (and its databases)
+// change under us (utils/companyDb.js).
+export async function resetTasksConnection() {
+  const conn = tasksConnection;
+  tasksConnection = null;
+  if (conn) {
+    try { await conn.close(); } catch { /* already gone */ }
+  }
 }

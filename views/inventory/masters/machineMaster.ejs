@@ -404,14 +404,14 @@
     hideError("addMachineError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/form/machine", {
+      const res = await fetch("/acme/form/machine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ machineName: name, machineWidth: width, locationId, machineType }),
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/form/machine";
+        window.location.href = data.redirect || "/acme/form/machine";
       } else {
         showError("addMachineError", data.message || "Failed to add machine.");
       }
@@ -468,7 +468,7 @@
     hideError("editMachineError");
     setLoading("editSubmitBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/machines/${editId}`, {
+      const res = await fetch(`/acme/api/machines/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ machineName: name, machineWidth: width, locationId, machineType }),
@@ -503,7 +503,7 @@
     if (!deleteId) return;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/machines/${deleteId}`, {
+      const res = await fetch(`/acme/api/machines/${deleteId}`, {
         method: "DELETE",
       });
       const data = await res.json();

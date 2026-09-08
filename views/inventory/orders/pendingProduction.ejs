@@ -60,7 +60,7 @@
     <h1><%= initialTab === 'wip' ? 'Work In Progress' : 'Pending Production' %></h1>
     <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
       <a
-        href="/sachiko/sales/order"
+        href="/acme/sales/order"
         style="padding: 6px 14px; background: #044a78; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
         onmouseover="this.style.opacity = '0.85'" onmouseout="this.style.opacity = '1'"
       >
@@ -228,7 +228,7 @@
 
   /* ----- Assign/start production ----- */
   window.startProduction = function (orderId) {
-    window.location.href = `/sachiko/labels/production/assign/${orderId}`;
+    window.location.href = `/acme/labels/production/assign/${orderId}`;
   };
 
   window.closeCustomDialog = () => (document.getElementById("custom-confirm-dialog").style.display = "none");
@@ -247,7 +247,7 @@
   function submitUnassign(orderId) {
     const form = document.createElement("form");
     form.method = "POST";
-    form.action = `/sachiko/labels/production/unassign/${orderId}`;
+    form.action = `/acme/labels/production/unassign/${orderId}`;
     const input = document.createElement("input");
     input.type = "hidden";
     input.name = "_csrf";
@@ -358,7 +358,7 @@
         formatter: (cell) => {
           const row = cell.getRow().getData();
           const queueBtn = row.assignedMachineId?._id
-            ? `<button onclick="window.open('/sachiko/machine/${row.assignedMachineId._id}/queue', '_blank')" class="btn-action" style="background:#044A78;" title="View Machine Queue"><i class="fa-solid fa-list-check"></i></button>`
+            ? `<button onclick="window.open('/acme/machine/${row.assignedMachineId._id}/queue', '_blank')" class="btn-action" style="background:#044A78;" title="View Machine Queue"><i class="fa-solid fa-list-check"></i></button>`
             : "";
           const unassignBtn = row.liveUpdate
             ? `<button class="btn-action" disabled style="background:#9ca3af;cursor:not-allowed;" title="Job Card already filed — can't send back to Pending"><i class="fa-solid fa-rotate-left"></i></button>`
@@ -455,7 +455,7 @@
   // without the operator having to reload the page.
   setInterval(async () => {
     try {
-      const res = await fetch("/sachiko/labels/production/wip-progress");
+      const res = await fetch("/acme/labels/production/wip-progress");
       if (!res.ok) return;
       const updates = await res.json();
       if (Array.isArray(updates) && updates.length) wipTable.updateData(updates);

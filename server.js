@@ -60,6 +60,9 @@ import csrf from "csurf";
 import cookieParser from "cookie-parser";
 import MongoSessionStore from "./utils/mongoSessionStore.js";
 import { safeJson } from "./utils/security.js";
+import { currentBrand, ensureFreshBrand, refreshBrand, shortBrand } from "./utils/companyBrand.js";
+import { brandPrefix } from "./middleware/brandPrefix.js";
+import { sendAsset } from "./utils/media.js";
 import { loginLimiter, createLimiter, updateLimiter, deleteLimiter } from "./utils/limiters.js";
 
 const app = express();
@@ -67,6 +70,8 @@ const port = 3001;
 
 /* DB (env already loaded by the config/loadEnv.js import at the top of this file) */
 connectDB();
+// Prime the company name / URL-slug cache (mongoose buffers this until connected).
+refreshBrand().catch(() => {});
 
 // Validate required environment variables
 const sessionSecret = process.env.SESSION_SECRET;
@@ -181,7 +186,7 @@ const sessionStore = new MongoSessionStore({
 
 app.use(
   session({
-    name: "sachiko.sid",
+    name: "acme.sid",
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
@@ -254,11 +259,34 @@ app.use((req, res, next) => {
   next();
 });
 
+/* Company-slug URL prefix: maps the live /<company>/... the user sees onto the
+   constant internal mount, and rewrites it back on the way out. Must sit above
+   every "/acme" route mount and above auditLogger / auth path checks. */
+app.use(brandPrefix);
+
 /* AUDIT LOG — records every mutating request made by a logged-in user */
 app.use(auditLogger);
 
-/* Favicon */
-app.get("/favicon.ico", (req, res) => res.status(204).end());
+/* Favicon / app icon -- the company logo if one is set, otherwise a square with
+   the first letter of the company name. Public (also used on the login page).
+   Referenced as /company/favicon?v=<brandVer> so a logo change busts the cache. */
+function serveBrandFavicon(req, res) {
+  const { name, logo } = currentBrand();
+  if (logo && logo.filename) {
+    try { return sendAsset(res, logo, { thumb: true }); } catch { /* fall through to letter */ }
+  }
+  const letter = (String(name || "S").trim().toUpperCase().match(/[A-Z0-9]/) || ["S"])[0];
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">` +
+    `<rect width="64" height="64" rx="14" fill="#044a78"/>` +
+    `<text x="32" y="34" dominant-baseline="central" text-anchor="middle" ` +
+    `font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-weight="700" ` +
+    `font-size="34" fill="#ffffff">${letter}</text></svg>`;
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.type("image/svg+xml").send(svg);
+}
+app.get("/company/favicon", serveBrandFavicon);
+app.get("/favicon.ico", serveBrandFavicon);
 
 /* Session check endpoint – used by client-side polling (exempt from CSRF) */
 app.get("/check-session", (req, res) => {
@@ -275,7 +303,7 @@ app.get("/check-session", (req, res) => {
 /* JSON operator API for the Sachiko Operator mobile app -- bearer-token
    authenticated (middleware/apiAuth.js), not session/CSRF based, so it must
    sit here, exempt from CSRF the same way /check-session above is. */
-app.use("/sachiko/api/operator", operatorApiRoutes);
+app.use("/acme/api/operator", operatorApiRoutes);
 
 /* Apply CSRF protection to ALL routes */
 app.use(csrfProtection);
@@ -289,7 +317,16 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   res.locals.selfBrand = "sachiko";
   res.locals.fairtechLoginUrl = `${process.env.FAIRTECH_URL || "http://localhost:3000"}/fairtech/login`;
-  res.locals.sachikoLoginUrl = "/sachiko/login";
+  res.locals.sachikoLoginUrl = "/acme/login";
+  // Company name from the Company master -- drives every page <title>, the nav
+  // header and the login screen. Read synchronously from the cache
+  // (utils/companyBrand.js); brandPrefix already kicked off any needed refresh.
+  ensureFreshBrand();
+  const _b = currentBrand();
+  res.locals.brandName = _b.name;
+  res.locals.brandShort = shortBrand(_b.name);
+  res.locals.brandVer = _b.ver;
+  res.locals.faviconUrl = `/company/favicon?v=${encodeURIComponent(_b.ver)}`;
   next();
 });
 
@@ -482,18 +519,18 @@ app.get("/images/thumb/:folder/:filename", requireAuth, async (req, res) => {
 /* ROUTES */
 const redirectByRole = (role) => {
   if (["proprietor", "admin", "hod", "sales", "hr", "employee"].includes(role)) {
-    return "/sachiko/welcome";
+    return "/acme/welcome";
   }
-  return "/sachiko/login";
+  return "/acme/login";
 };
 
 // Operators sign in through their own portal and land straight on their work
 // queue (resolved from PendingProduction.operatorId at login), so they never
 // have to navigate the main menus.
 const landingForUser = (authUser) => {
-  if (!authUser) return "/sachiko/login";
+  if (!authUser) return "/acme/login";
   if (authUser.role === "operator") {
-    return "/sachiko/operator/queue";
+    return "/acme/operator/queue";
   }
   return redirectByRole(authUser.role);
 };
@@ -506,9 +543,9 @@ app.get("/", (req, res) => {
 });
 
 // Back-compat: old /login path now lives at /sachiko/login
-app.get("/login", (req, res) => res.redirect("/sachiko/login"));
+app.get("/login", (req, res) => res.redirect("/acme/login"));
 
-app.get("/sachiko/login", (req, res) => {
+app.get("/acme/login", (req, res) => {
   if (req.session?.authUser) {
     return res.redirect(landingForUser(req.session.authUser));
   }
@@ -527,7 +564,7 @@ const DEV_PERMISSIONS_BY_ROLE = {
   hr: { sales: false, inventory: false, hr: true, accounting: true, master: false },
 };
 
-app.post("/sachiko/login", loginLimiter, async (req, res) => {
+app.post("/acme/login", loginLimiter, async (req, res) => {
   const { profileCode, username, password } = req.body;
   const loginCode = String(profileCode || username || "").trim();
   const brand = req.body.brand === "sachiko" ? "sachiko" : "fairdesk";
@@ -691,7 +728,7 @@ app.post("/sachiko/login", loginLimiter, async (req, res) => {
    name, their location and their password -- and land on their own work queue:
    every order assigned to them, grouped by machine. Kept separate from the
    staff login so the terminal on the floor never shows the full portal. */
-app.get("/sachiko/operator/login", async (req, res) => {
+app.get("/acme/operator/login", async (req, res) => {
   if (req.session?.authUser) {
     return res.redirect(landingForUser(req.session.authUser));
   }
@@ -703,7 +740,7 @@ app.get("/sachiko/operator/login", async (req, res) => {
 // once the operator types their nick name. Rate-limited the same as the
 // login POST itself, since this is otherwise an easy oracle for "does this
 // nick name exist, and where" without a password.
-app.get("/sachiko/operator/login/lookup", loginLimiter, async (req, res) => {
+app.get("/acme/operator/login/lookup", loginLimiter, async (req, res) => {
   try {
     const operatorNick = String(req.query.nick || "").trim();
     if (!operatorNick) return res.json({ locations: [] });
@@ -730,7 +767,7 @@ app.get("/sachiko/operator/login/lookup", loginLimiter, async (req, res) => {
   }
 });
 
-app.post("/sachiko/operator/login", loginLimiter, async (req, res) => {
+app.post("/acme/operator/login", loginLimiter, async (req, res) => {
   const operatorNick = String(req.body.operatorNick || "").trim();
   const locationName = normalizeLocationName(req.body.location);
   const password = String(req.body.password || "").trim();
@@ -780,18 +817,18 @@ app.get("/logout", (req, res) => {
   // account for. A shopfloor terminal is often left sitting until the session
   // has already expired, and by then the role is gone -- so fall back to the
   // page the Logout link was clicked from.
-  const fromOperatorPortal = String(req.get("referer") || "").includes("/sachiko/operator");
+  const fromOperatorPortal = String(req.get("referer") || "").includes("/acme/operator");
   const isOperator = authUser ? authUser.role === "operator" : fromOperatorPortal;
-  const loginUrl = isOperator ? "/sachiko/operator/login" : "/sachiko/login";
+  const loginUrl = isOperator ? "/acme/operator/login" : "/acme/login";
   req.session.destroy(() => {
-    res.clearCookie("sachiko.sid");
+    res.clearCookie("acme.sid");
     res.redirect(loginUrl);
   });
 });
-app.use("/sachiko/payroll", requireAuth, requireRole(["proprietor", "admin", "hr"]), payrollRoute);
+app.use("/acme/payroll", requireAuth, requireRole(["proprietor", "admin", "hr"]), payrollRoute);
 
 /* PROFILE / ACCOUNT SECURITY - Accessible to all roles */
-app.post("/sachiko/profile/password", requireAuth, async (req, res) => {
+app.post("/acme/profile/password", requireAuth, async (req, res) => {
   try {
     const { oldPassword, newPassword, confirmPassword } = req.body;
     const authUser = req.session.authUser;
@@ -827,13 +864,13 @@ app.post("/sachiko/profile/password", requireAuth, async (req, res) => {
   }
 });
 
-app.use("/sachiko/loan", requireAuth, requireRole(["proprietor", "admin", "hr"]), loanRoute);
-app.use("/sachiko/advance", requireAuth, requireRole(["proprietor", "admin", "hr"]), advanceRoute);
-app.use("/sachiko/employee", requireAuth, requireRole(["proprietor", "admin", "hr", "sales"]), employeeRoute);
-app.use("/sachiko/pettycash", requireAuth, requireRole(["proprietor", "admin", "hr", "sales"]), pettycashRoute);
+app.use("/acme/loan", requireAuth, requireRole(["proprietor", "admin", "hr"]), loanRoute);
+app.use("/acme/advance", requireAuth, requireRole(["proprietor", "admin", "hr"]), advanceRoute);
+app.use("/acme/employee", requireAuth, requireRole(["proprietor", "admin", "hr", "sales"]), employeeRoute);
+app.use("/acme/pettycash", requireAuth, requireRole(["proprietor", "admin", "hr", "sales"]), pettycashRoute);
 
 app.use(
-  "/sachiko/client",
+  "/acme/client",
   requireAuth,
   requireRole(["proprietor", "admin", "hod", "sales", "master"]),
   clientFormRoute,
@@ -846,43 +883,43 @@ app.use(
 // there must be no requireRole here: it would 403 sales/hr/hod on their own
 // pages before the request ever fell through. The roles are enforced per
 // route inside the router instead.
-app.use("/sachiko", requireAuth, machineRoutes);
+app.use("/acme", requireAuth, machineRoutes);
 // The slitting step that follows lamination -- Deckles (Semi Finished Goods)
 // cut into finished rolls. Bare-mounted for the same reason as machineRoutes
 // above: it is shopfloor work, so operators must reach it before
 // fairdeskRoute's requireRole below turns them away. Roles are enforced per
 // route inside the router.
-app.use("/sachiko", requireAuth, slittingRoutes);
+app.use("/acme", requireAuth, slittingRoutes);
 // Shopfloor maintenance tickets: raised by operators, actioned by management.
 // Also bare-mounted with no role gate -- operators need to reach
 // /sachiko/operator/maintenance before fairdeskRoute's requireRole below
 // would turn them away.
-app.use("/sachiko", requireAuth, maintenanceRoutes);
-app.use("/sachiko", requireAuth, facestockMasterRoutes);
-app.use("/sachiko", requireAuth, familyMasterRoutes);
-app.use("/sachiko", requireAuth, companyRoutes);
-app.use("/sachiko", requireAuth, typeMasterRoutes);
-app.use("/sachiko", requireAuth, coreMasterRoutes);
-app.use("/sachiko", requireAuth, adhesiveMasterRoutes);
-app.use("/sachiko", requireAuth, releaseMasterRoutes);
+app.use("/acme", requireAuth, maintenanceRoutes);
+app.use("/acme", requireAuth, facestockMasterRoutes);
+app.use("/acme", requireAuth, familyMasterRoutes);
+app.use("/acme", requireAuth, companyRoutes);
+app.use("/acme", requireAuth, typeMasterRoutes);
+app.use("/acme", requireAuth, coreMasterRoutes);
+app.use("/acme", requireAuth, adhesiveMasterRoutes);
+app.use("/acme", requireAuth, releaseMasterRoutes);
 
-app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales", "hr"]), fairdeskRoute);
-app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeBindingRoutes);
-app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), vendorItemBindingRoutes);
-app.use("/sachiko/tapestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeStockRoutes);
-app.use("/sachiko/stocks", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), stockViewRoutes);
-app.use("/sachiko/facestockstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), facestockStockRoutes);
-app.use("/sachiko/stock/wip", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), wipStockRoutes);
-app.use("/sachiko/adhesivestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), adhesiveStockRoutes);
-app.use("/sachiko/releaselinerstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), releaseLinerStockRoutes);
-app.use("/sachiko/corestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), coreStockRoutes);
-app.use("/sachiko/semifinishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), semiFinishedStockRoutes);
-app.use("/sachiko/finishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), finishedStockRoutes);
-app.use("/sachiko/labelstockproduction", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockProductionRoutes);
-app.use("/sachiko/inventory", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), reorderRoutes);
-app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod"]), sachikoRoute);
-app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockBindingRoutes);
-app.use("/sachiko", requireAuth, requireRole(["proprietor", "admin", "hod"]), labelStockAdhesiveBindingRoutes);
+app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod", "sales", "hr"]), fairdeskRoute);
+app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeBindingRoutes);
+app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), vendorItemBindingRoutes);
+app.use("/acme/tapestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), tapeStockRoutes);
+app.use("/acme/stocks", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), stockViewRoutes);
+app.use("/acme/facestockstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), facestockStockRoutes);
+app.use("/acme/stock/wip", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), wipStockRoutes);
+app.use("/acme/adhesivestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), adhesiveStockRoutes);
+app.use("/acme/releaselinerstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), releaseLinerStockRoutes);
+app.use("/acme/corestock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), coreStockRoutes);
+app.use("/acme/semifinishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), semiFinishedStockRoutes);
+app.use("/acme/finishedstock", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), finishedStockRoutes);
+app.use("/acme/labelstockproduction", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockProductionRoutes);
+app.use("/acme/inventory", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), reorderRoutes);
+app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod"]), sachikoRoute);
+app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod", "sales"]), labelStockBindingRoutes);
+app.use("/acme", requireAuth, requireRole(["proprietor", "admin", "hod"]), labelStockAdhesiveBindingRoutes);
 
 /* 404 */
 app.all("*", (req, res) => {
@@ -901,7 +938,7 @@ app.use((err, req, res, next) => {
     if (req.xhr || req.headers.accept?.includes("json")) {
       return res.status(403).json({ success: false, message: "Your session ended. Please sign in again." });
     }
-    return res.redirect("/sachiko/login?reason=session-ended");
+    return res.redirect("/acme/login?reason=session-ended");
   }
   console.error("[Error Handler]", err);
   const status = err.statusCode || 500;

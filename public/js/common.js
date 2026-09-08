@@ -19,7 +19,7 @@
   const redirectToLogin = () => {
     // Operators sign in at their own portal; the layout tells us which one.
     const loginUrl =
-      document.querySelector('meta[name="login-url"]')?.getAttribute("content") || "/sachiko/login";
+      document.querySelector('meta[name="login-url"]')?.getAttribute("content") || "/acme/login";
     if (window.location.pathname === loginUrl) return;
     window.location.replace(`${loginUrl}?reason=session-ended`);
   };
@@ -51,14 +51,14 @@
   };
 
   const startSessionWatchdog = () => {
-    if (window.location.pathname === "/sachiko/login") return;
+    if (window.location.pathname.endsWith("/login")) return;
 
     const sessionExpiresAt = getSessionExpiresAt();
     scheduleSessionLogout(sessionExpiresAt);
   };
 
   const keepSessionAlive = async ({ force = false } = {}) => {
-    if (window.location.pathname === "/sachiko/login") return;
+    if (window.location.pathname.endsWith("/login")) return;
     if (!force && document.visibilityState === "hidden") return;
     if (keepAliveInFlight) return;
 
@@ -108,7 +108,7 @@
       sessionKeepAliveTimerId = null;
     }
 
-    if (window.location.pathname === "/sachiko/login") return;
+    if (window.location.pathname.endsWith("/login")) return;
 
     sessionKeepAliveTimerId = setInterval(() => {
       keepSessionAlive();

@@ -323,14 +323,14 @@
     hideError("addFamilyError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/form/family", {
+      const res = await fetch("/acme/form/family", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ familyName: name }),
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/form/family";
+        window.location.href = data.redirect || "/acme/form/family";
       } else {
         showError("addFamilyError", data.message || "Failed to add family.");
       }
@@ -374,7 +374,7 @@
     hideError("editFamilyError");
     setLoading("editSubmitBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/family/${editId}`, {
+      const res = await fetch(`/acme/api/family/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ familyName: name }),
@@ -409,7 +409,7 @@
     if (!deleteId) return;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/family/${deleteId}`, {
+      const res = await fetch(`/acme/api/family/${deleteId}`, {
         method: "DELETE",
       });
       const data = await res.json();

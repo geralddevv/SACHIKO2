@@ -36,7 +36,7 @@
       <span id="tape-value-display" class="order-highlight">Tape: ₹0.00</span>
       <span id="total-value-display" class="order-highlight active">Total: ₹0.00</span>
       <a
-        href="/sachiko/sales/order/logs"
+        href="/acme/sales/order/logs"
         style="
           padding: 6px 14px;
           background: #044a78;
@@ -423,7 +423,7 @@
       () => {
         const form = document.createElement("form");
         form.method = "POST";
-        form.action = "/sachiko/sales/order/status";
+        form.action = "/acme/sales/order/status";
 
         const idInput = document.createElement("input");
         idInput.type = "hidden";
@@ -499,8 +499,8 @@
           let itemType = "TAPE";
           if (row.onModel === "SachikoLabelStock") itemType = String(row.tapeId?.rollOrSheet || "").toUpperCase();
 
-          const confirmUrl = `/sachiko/sales/order/confirm?orderId=${row._id}&type=${itemType}&client=${encodeURIComponent(client)}&user=${user}&item=${item}`;
-          const editUrl = `/sachiko/sales/order?orderId=${row._id}&type=${itemType}&client=${encodeURIComponent(client)}&user=${user}&item=${item}`;
+          const confirmUrl = `/acme/sales/order/confirm?orderId=${row._id}&type=${itemType}&client=${encodeURIComponent(client)}&user=${user}&item=${item}`;
+          const editUrl = `/acme/sales/order?orderId=${row._id}&type=${itemType}&client=${encodeURIComponent(client)}&user=${user}&item=${item}`;
           // Use data-* attributes to avoid broken onclick when data contains apostrophes
           const safeRowId = encodeURIComponent(String(row._id || ""));
           const safeConfirmUrl = encodeURIComponent(confirmUrl);
@@ -719,7 +719,7 @@
 
           if (!itemId || !model) return val;
 
-          const url = `/sachiko/tape/profile/${itemId}`;
+          const url = `/acme/tape/profile/${itemId}`;
 
           let color = Number(val) < balance ? "#dc2626" : "#059669";
           if (row.hasPendingPo) color = "#d97706"; // Yellowish orange for pending PO

@@ -212,7 +212,7 @@
     responsiveLayout: false,
     movableColumns:   true,
     placeholder:      "No machines found.",
-    rowClick: (e, row) => { window.location.href = `/sachiko/machine/${row.getData()._id}/queue`; },
+    rowClick: (e, row) => { window.location.href = `/acme/machine/${row.getData()._id}/queue`; },
     columns: [
       {
         title: "S. No", formatter: "rownum", hozAlign: "center", headerHozAlign: "center",
@@ -239,7 +239,7 @@
           const val = cell.getValue() || 0;
           const rowId = cell.getRow().getData()._id;
           const link = document.createElement("a");
-          link.href = `/sachiko/machine/${rowId}/queue`;
+          link.href = `/acme/machine/${rowId}/queue`;
           link.className = "mq-count-badge " + (val > 0 ? "has-pending" : "empty");
           link.textContent = val;
           return link;
@@ -276,7 +276,7 @@
     ].filter(Boolean);
 
     return `
-      <a class="mq-job" href="/sachiko/machine/${encodeURIComponent(machineId)}/queue">
+      <a class="mq-job" href="/acme/machine/${encodeURIComponent(machineId)}/queue">
         ${parts
           .map(part => `<span${part.startsWith("(") ? ' class="mq-job-rolls"' : ""}>${escapeHtml(part)}</span>`)
           .join('<i class="mq-job-sep">-</i>')}
@@ -293,7 +293,7 @@
     return `
       <div class="mq-card">
         <div class="mq-card-head" data-machine-id="${escapeHtml(machine._id)}"
-             onclick="window.location.href='/sachiko/machine/' + encodeURIComponent(this.dataset.machineId) + '/queue'">
+             onclick="window.location.href='/acme/machine/' + encodeURIComponent(this.dataset.machineId) + '/queue'">
           <div style="min-width:0;">
             <div class="mq-card-name">${escapeHtml(machine.machineName || "—")}</div>
             <div class="mq-card-meta">

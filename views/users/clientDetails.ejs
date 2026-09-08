@@ -334,10 +334,10 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="action-btn-header" onclick="window.location.href='/sachiko/form/client?tab=user&clientName=<%= encodeURIComponent(userData.clientName) %>'">
+        <button class="action-btn-header" onclick="window.location.href='/acme/form/client?tab=user&clientName=<%= encodeURIComponent(userData.clientName) %>'">
           <i class="fa-solid fa-user-plus"></i> Add User
         </button>
-        <a href="/sachiko/form/edit/user/<%= userData._id %>" class="action-btn-header">
+        <a href="/acme/form/edit/user/<%= userData._id %>" class="action-btn-header">
           <i class="fa-solid fa-pen"></i> Edit User
         </a>
         <button class="action-btn-header danger" onclick="confirmDeleteUser()">
@@ -601,7 +601,7 @@
 </div>
 
 <!-- Delete Modal -->
-<form id="deleteUserForm" method="POST" action="/sachiko/client/details/<%= userData._id %>/delete" style="display:none;">
+<form id="deleteUserForm" method="POST" action="/acme/client/details/<%= userData._id %>/delete" style="display:none;">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 </form>
 

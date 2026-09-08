@@ -269,7 +269,7 @@
     const id = document.getElementById("advance-edit-id").value;
     const amount = Number(document.getElementById("advance-edit-amount").value);
     if (!id || amount <= 0) return alert("Invalid amount");
-    const res = await fetch(`/sachiko/advance/logs/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount }) });
+    const res = await fetch(`/acme/advance/logs/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount }) });
     if (res.ok) window.location.reload();
     else alert("Update failed");
   }
@@ -277,7 +277,7 @@
   async function submitAdvanceDelete() {
     const id = document.getElementById("advance-delete-id").value;
     if (!id) return;
-    const res = await fetch(`/sachiko/advance/logs/${id}`, { method: "DELETE" });
+    const res = await fetch(`/acme/advance/logs/${id}`, { method: "DELETE" });
     if (res.ok) window.location.reload();
     else alert("Delete failed");
   }

@@ -1,7 +1,7 @@
 <% layout('/layout/boilerplate') -%>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form class="rottary-content" method="post" action="/sachiko/tapestock/create">
+  <form class="rottary-content" method="post" action="/acme/tapestock/create">
 
     <!-- ================= HEADER ================= -->
     <div class="span-full form-heading" style="display:flex; justify-content:space-between; flex-direction:row;">
@@ -206,7 +206,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     try {
-      const res = await fetch(`/sachiko/tapestock/filter-specs?${params}`);
+      const res = await fetch(`/acme/tapestock/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -262,7 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
       values[id] = el.value;
     }
 
-    const res = await fetch("/sachiko/tapestock/resolve", {
+    const res = await fetch("/acme/tapestock/resolve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -369,7 +369,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      const res = await fetch(`/sachiko/tapestock/stock-info/${resolvedTapeId.value}`);
+      const res = await fetch(`/acme/tapestock/stock-info/${resolvedTapeId.value}`);
       const data = await res.json();
       const locations = Array.isArray(data?.locations) ? data.locations : [];
       const preferredLocation = normalizeLocationName(locationInput.value || "");

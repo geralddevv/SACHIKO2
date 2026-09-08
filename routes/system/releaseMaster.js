@@ -272,7 +272,7 @@ router.post("/form/release", requireAuth, requireReleaseMaster, createLimiter, a
 
     res.locals.auditDescription = `Created release master "${skuId}" (${payload.vendorName})`;
     req.flash("notification", "Release master created successfully!");
-    res.json({ success: true, redirect: "/sachiko/form/release" });
+    res.json({ success: true, redirect: "/acme/form/release" });
   } catch (err) {
     console.error("RELEASE MASTER CREATE ERROR:", err);
     const isDup = err.code === 11000 && err.keyPattern && Object.prototype.hasOwnProperty.call(err.keyPattern, "releaseSignature");

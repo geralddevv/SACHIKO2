@@ -267,14 +267,14 @@
     <h1>Deckle Sorting</h1>
     <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
       <a
-        href="/sachiko/labels/production/deckle-queue"
+        href="/acme/labels/production/deckle-queue"
         style="padding: 6px 14px; background: #044a78; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
         onmouseover="this.style.opacity = '0.85'" onmouseout="this.style.opacity = '1'"
       >
         <i class="fa-solid fa-layer-group"></i><span>Deckle Queue</span>
       </a>
       <a
-        href="/sachiko/labels/production/pending?tab=wip"
+        href="/acme/labels/production/pending?tab=wip"
         style="padding: 6px 14px; background: #044a78; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
         onmouseover="this.style.opacity = '0.85'" onmouseout="this.style.opacity = '1'"
       >
@@ -297,7 +297,7 @@
       <button type="button" class="ds-close-btn" id="ds-close-btn" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
-    <form id="ds-dialog-form" method="post" action="/sachiko/labels/production/deckle-set" novalidate>
+    <form id="ds-dialog-form" method="post" action="/acme/labels/production/deckle-set" novalidate>
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <input type="hidden" name="itemId" id="ds-item-id" />
       <input type="hidden" name="paperSize" id="ds-paper-size" />
@@ -551,7 +551,7 @@
   window.dissolveBatch = function (batchId) {
     if (!confirm("Dissolve this deckle batch? Its orders go back to Deckle Sorting.")) return;
     const form = document.getElementById("ds-dissolve-form");
-    form.action = `/sachiko/labels/production/deckle-batch/${batchId}/dissolve`;
+    form.action = `/acme/labels/production/deckle-batch/${batchId}/dissolve`;
     form.submit();
   };
 

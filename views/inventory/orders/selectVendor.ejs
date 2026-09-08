@@ -47,9 +47,9 @@
         let bindUrl = '#';
         const itype = String(type || "").toUpperCase();
         if (itype === 'TTR') {
-          bindUrl = `/sachiko/form/ttr-vendor-binding?itemId=${item._id}`;
+          bindUrl = `/acme/form/ttr-vendor-binding?itemId=${item._id}`;
         } else if (itype === 'TAPE') {
-          bindUrl = `/sachiko/form/vendor-item-binding/tape?itemId=${item._id}`;
+          bindUrl = `/acme/form/vendor-item-binding/tape?itemId=${item._id}`;
         }
       %>
       <a href="<%= bindUrl %>" style="background: #dc2626; color: white; padding: 8px 16px; border-radius: 6px; font-weight: 700; text-decoration: none; font-size: 13px; white-space: nowrap;">
@@ -58,7 +58,7 @@
     </div>
   <% } %>
 
-  <form id="purchase-order-form" action="/sachiko/inventory/reorder/create-po" method="post" class="needs-validation" autocomplete="off" novalidate>
+  <form id="purchase-order-form" action="/acme/inventory/reorder/create-po" method="post" class="needs-validation" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
     <input type="hidden" name="itemId" value="<%= item._id %>" />
     <input type="hidden" name="itemType" value="<%= type %>" />

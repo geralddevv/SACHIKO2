@@ -26,7 +26,7 @@
 
 
 <div class="main-content">
-  <form class="rottary-content" method="post" action="/sachiko/advance/create">
+  <form class="rottary-content" method="post" action="/acme/advance/create">
 
     <div class="span-full form-heading">
       <h1>Employee Advance</h1>
@@ -140,13 +140,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const advanceBalanceInput = document.getElementById("advance-balance");
 
   async function fetchEmployee(empId) {
-    const res = await fetch(`/sachiko/payroll/employee/${empId}`);
+    const res = await fetch(`/acme/payroll/employee/${empId}`);
     if (!res.ok) throw new Error("Employee fetch failed");
     return await res.json();
   }
 
   async function fetchAdvance(empId) {
-    const res = await fetch(`/sachiko/payroll/advance/${empId}`);
+    const res = await fetch(`/acme/payroll/advance/${empId}`);
     if (!res.ok) return null;
     return await res.json();
   }
@@ -215,13 +215,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function fetchEmployee(empId) {
-    const res = await fetch(`/sachiko/payroll/employee/${empId}`);
+    const res = await fetch(`/acme/payroll/employee/${empId}`);
     if (!res.ok) throw new Error("Employee fetch failed");
     return await res.json();
   }
 
   async function fetchAdvance(empId) {
-    const res = await fetch(`/sachiko/payroll/advance/${empId}`);
+    const res = await fetch(`/acme/payroll/advance/${empId}`);
     if (!res.ok) return null;
     return await res.json();
   }
@@ -284,7 +284,7 @@ document.addEventListener("DOMContentLoaded", () => {
           throw new Error(data?.message || "Failed to save advance");
         }
 
-        window.location.href = data.redirect || "/sachiko/advance/view";
+        window.location.href = data.redirect || "/acme/advance/view";
       })
       .catch((err) => {
         console.error(err);

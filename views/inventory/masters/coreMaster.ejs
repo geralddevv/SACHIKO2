@@ -569,7 +569,7 @@
     hideError("addCoreError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/form/core", {
+      const res = await fetch("/acme/form/core", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -585,7 +585,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/form/core";
+        window.location.href = data.redirect || "/acme/form/core";
       } else {
         showError("addCoreError", data.message || "Failed to add core.");
       }
@@ -644,7 +644,7 @@
     hideError("editCoreError");
     setLoading("editSubmitBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/core/${editId}`, {
+      const res = await fetch(`/acme/api/core/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -688,7 +688,7 @@
     if (!deleteId) return;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/core/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/acme/api/core/${deleteId}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
         window.location.reload();

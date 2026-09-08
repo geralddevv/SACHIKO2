@@ -323,14 +323,14 @@
     hideError("addLocationError");
     setLoading("addSubmitBtn", true);
     try {
-      const res = await fetch("/sachiko/form/location", {
+      const res = await fetch("/acme/form/location", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ locationName: name }),
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/form/location";
+        window.location.href = data.redirect || "/acme/form/location";
       } else {
         showError("addLocationError", data.message || "Failed to add location.");
       }
@@ -374,7 +374,7 @@
     hideError("editLocationError");
     setLoading("editSubmitBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/locations/${editId}`, {
+      const res = await fetch(`/acme/api/locations/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ locationName: name }),
@@ -409,7 +409,7 @@
     if (!deleteId) return;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/locations/${deleteId}`, {
+      const res = await fetch(`/acme/api/locations/${deleteId}`, {
         method: "DELETE",
       });
       const data = await res.json();

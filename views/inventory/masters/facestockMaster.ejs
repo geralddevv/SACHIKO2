@@ -708,7 +708,7 @@
     setLoading("addSubmitBtn", true);
     try {
       const { gsm, micron } = measurePayload("add");
-      const res = await fetch("/sachiko/form/facestock", {
+      const res = await fetch("/acme/form/facestock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -725,7 +725,7 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/sachiko/form/facestock";
+        window.location.href = data.redirect || "/acme/form/facestock";
       } else {
         showError("addFacestockError", data.message || "Failed to add facestock.");
       }
@@ -786,7 +786,7 @@
     setLoading("editSubmitBtn", true);
     try {
       const { gsm, micron } = measurePayload("edit");
-      const res = await fetch(`/sachiko/api/facestock/${editId}`, {
+      const res = await fetch(`/acme/api/facestock/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -831,7 +831,7 @@
     if (!deleteId) return;
     setLoading("deleteConfirmBtn", true);
     try {
-      const res = await fetch(`/sachiko/api/facestock/${deleteId}`, { method: "DELETE" });
+      const res = await fetch(`/acme/api/facestock/${deleteId}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
         window.location.reload();

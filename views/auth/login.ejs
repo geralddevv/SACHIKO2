@@ -4,11 +4,15 @@
   const self = (typeof selfBrand !== 'undefined' && selfBrand === 'fairdesk') ? 'fairdesk' : 'sachiko';
   const urlFor = {
     fairdesk: (typeof fairtechLoginUrl !== 'undefined' ? fairtechLoginUrl : '/fairtech/login'),
-    sachiko:  (typeof sachikoLoginUrl  !== 'undefined' ? sachikoLoginUrl  : '/sachiko/login'),
+    sachiko:  (typeof sachikoLoginUrl  !== 'undefined' ? sachikoLoginUrl  : '/acme/login'),
   };
+  // The Sachiko-side name comes from the Company master (res.locals.brandName);
+  // the Fairtech entry is the "switch to the other app" option and stays fixed.
+  const sachikoName = (typeof brandName !== 'undefined' && brandName) ? brandName : 'Sachiko Packaging';
+  const sachikoLogo = (typeof faviconUrl !== 'undefined' && faviconUrl) ? faviconUrl : '/company/favicon';
   const brandMeta = {
-    fairdesk: { logo: '/assets/fairfavicon.png',    name: 'Fairtech Systems',  subtitle: 'Secure access for Fairtech Systems' },
-    sachiko:  { logo: '/assets/sachikofavicon.png', name: 'Sachiko Packaging', subtitle: 'Secure access for Sachiko Packaging' },
+    fairdesk: { logo: '/assets/fairfavicon.png', name: 'Fairtech Systems',  subtitle: 'Secure access for Fairtech Systems' },
+    sachiko:  { logo: sachikoLogo, name: sachikoName, subtitle: 'Secure access for ' + sachikoName },
   };
   const meta = brandMeta[self];
 -%>

@@ -21,7 +21,7 @@
     inputEl.readOnly = true;
     try {
       const params = new URLSearchParams({ material, category });
-      const res = await fetch(`/sachiko/form/samples/next-code?${params}`);
+      const res = await fetch(`/acme/form/samples/next-code?${params}`);
       const data = await res.json();
       inputEl.value = data.code || "";
     } catch {

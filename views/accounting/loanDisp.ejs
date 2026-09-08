@@ -59,7 +59,7 @@
 
     <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
       <a
-        href="/sachiko/loan/create"
+        href="/acme/loan/create"
         class="header-action-btn"
         style="
           height: 30px;
@@ -82,7 +82,7 @@
       </a>
 
       <a
-        href="/sachiko/loan/logs"
+        href="/acme/loan/logs"
         style="
           height: 30px;
           padding: 0 14px;
@@ -441,7 +441,7 @@
     const employeeId = e.target.dataset.id;
     currentEmployeeId = employeeId;
 
-    const res = await fetch(`/sachiko/loan/employee/${employeeId}/logs`);
+    const res = await fetch(`/acme/loan/employee/${employeeId}/logs`);
     const { history, summary } = await res.json();
 
     if (!history.length) return;
@@ -521,7 +521,7 @@
     async function refreshLoanLogs() {
       if (!currentEmployeeId) return;
 
-      const res = await fetch(`/sachiko/loan/employee/${currentEmployeeId}/logs`);
+      const res = await fetch(`/acme/loan/employee/${currentEmployeeId}/logs`);
       const data = await res.json();
       table.replaceData(data.history || []);
 
@@ -544,7 +544,7 @@
       }
 
       try {
-        const res = await fetch(`/sachiko/loan/logs/${id}`, {
+        const res = await fetch(`/acme/loan/logs/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ amount }),
@@ -569,7 +569,7 @@
       if (!id) return;
 
       try {
-        const res = await fetch(`/sachiko/loan/logs/${id}`, {
+        const res = await fetch(`/acme/loan/logs/${id}`, {
           method: "DELETE",
         });
         const data = await res.json();

@@ -254,7 +254,7 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
 
     res.locals.auditDescription = `Slit Deckle "${deckle.rollId}" into ${createdRollIds.length} finished roll(s) for order ${pending.lotNo || pending._id}: ${createdRollIds.join(", ")}`;
     req.flash("notification", `${createdRollIds.length} finished roll(s) created successfully!`);
-    res.json({ success: true, redirect: "/sachiko/finishedstock" });
+    res.json({ success: true, redirect: "/acme/finishedstock" });
   } catch (err) {
     console.error("FINISHED STOCK CREATE ERROR:", err);
     const msg = err.code === 11000 ? "Roll ID collision, please retry." : "Failed to produce finished rolls.";

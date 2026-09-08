@@ -343,7 +343,7 @@
 
     console.log("Vendor changed (triggered once):", vendorName);
 
-    fetch(`/sachiko/form/vendor/${encodeURIComponent(vendorName)}`)
+    fetch(`/acme/form/vendor/${encodeURIComponent(vendorName)}`)
       .then((response) => response.json())
       .then((data) => {
         console.log("Response:", data);

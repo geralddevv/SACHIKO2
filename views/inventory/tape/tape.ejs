@@ -3,7 +3,7 @@
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
   <form
     id="tape-form"
-    action="/sachiko/form/tape"
+    action="/acme/form/tape"
     method="post"
     class="needs-validation"
     autocomplete="off"
@@ -186,7 +186,7 @@
           if (tapeSubmitBtn) tapeSubmitBtn.disabled = false;
           return;
         }
-        window.location.href = data.redirect || "/sachiko/tape/view";
+        window.location.href = data.redirect || "/acme/tape/view";
       } catch (err) {
         console.error(err);
         if (window.showToast) window.showToast("Failed to save Tape Master", true);

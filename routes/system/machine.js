@@ -95,7 +95,7 @@ const consolidateUsageRows = (rows, amountKey) => {
 
 // ----------------------------------Machine Master---------------------------------->
 
-// This router is mounted on the bare "/sachiko" prefix with no role gate (see
+// This router is mounted on the bare "/acme" prefix with no role gate (see
 // server.js for why), so every route below carries its own. The machine
 // master -- adding, editing and deleting machines -- stays with management;
 // the queue and job card pages additionally admit shopfloor operators.
@@ -147,7 +147,7 @@ router.post("/form/machine", requireAuth, requireMachineMaster, createLimiter, a
     await Machine.create({ machineName, machineWidth, location: locationId, machineType });
     res.locals.auditDescription = `Created machine "${machineName}" at "${locationDoc.locationName}"`;
     req.flash("notification", "Machine created successfully!");
-    res.json({ success: true, redirect: "/sachiko/form/machine" });
+    res.json({ success: true, redirect: "/acme/form/machine" });
   } catch (err) {
     console.error(err);
     const msg = err.code === 11000 ? "Machine already exists at this location" : err.message;
@@ -434,6 +434,24 @@ export async function buildQueueRows(match) {
     : [];
   const rollMap = new Map(rollDocs.map((r) => [String(r._id), r]));
 
+  // Deckles already laminated for these orders. One MaterialStock doc per
+  // Production Log row, minted the instant that row's Stop was punched (POST
+  // /jobcard/log/produce -> produceDecklesFromLog). PendingProduction
+  // .producedRolls only catches up at the final job-card save, so a job that
+  // is still running would otherwise show a stale "produced" count here even
+  // though the Deckle is already in Semi Finished Stock and on the operator's
+  // Logs. Batched per pending id across every order in this match.
+  const pendingIds = pending.map((p) => p._id);
+  const jobcardDeckleCounts = pendingIds.length
+    ? await MaterialStock.aggregate([
+        { $match: { producedFor: { $in: pendingIds }, producedVia: "jobcard" } },
+        { $group: { _id: "$producedFor", n: { $sum: 1 } } },
+      ])
+    : [];
+  const deckleCountByPending = new Map(
+    jobcardDeckleCounts.map((d) => [String(d._id), d.n]),
+  );
+
   // Raw-material layer picks (Facestock/Adhesive/Release Liner, ...) recorded
   // on the assign form -- kept as { pool, stockIds } on each order (see
   // models/inventory/pendingProduction.js's allottedLayers, one or more
@@ -471,11 +489,17 @@ export async function buildQueueRows(match) {
       : (p.quantity != null ? Number(p.quantity) : null);
     const rolls = deckleTarget;
     const allottedRolls = p.allottedRolls != null ? p.allottedRolls : null;
-    // Rolls this order's Job Cards have already produced (POST /machine/
-    // jobcard/form accumulates one per Production Log row). The balance is
-    // what's still to run -- distinct from allotment: allottedRolls /
-    // rollsStatus below still track how many reels the office set aside.
-    const producedRolls = Number(p.producedRolls) || 0;
+    // Rolls this order's Job Cards have already produced -- one per Production
+    // Log row, laminated on each Stop punch. Counted live off MaterialStock
+    // (deckleCountByPending) rather than the cached p.producedRolls, which
+    // only updates at final job-card save; the persisted value is kept as a
+    // floor so nothing regresses if a Deckle doc is removed downstream. The
+    // balance is what's still to run -- distinct from allotment: allottedRolls
+    // / rollsStatus below still track how many reels the office set aside.
+    const producedRolls = Math.max(
+      Number(p.producedRolls) || 0,
+      deckleCountByPending.get(String(p._id)) || 0,
+    );
     const balanceRolls =
       rolls == null ? null : Math.max(rolls - producedRolls, 0);
     const rollsStatus =
@@ -715,7 +739,7 @@ export async function reelsInUseElsewhere(exceptPendingId) {
 // that hasn't been produced yet.
 router.get("/machine/:id/queue", requireMachineFloor, async (req, res) => {
   const fallbackUrl =
-    req.session?.authUser?.role === "operator" ? "/sachiko/machine/queue" : "/sachiko/form/machine";
+    req.session?.authUser?.role === "operator" ? "/acme/machine/queue" : "/acme/form/machine";
 
   if (!mongoose.isValidObjectId(req.params.id)) {
     req.flash("notification", "Invalid machine");
@@ -781,7 +805,7 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
   // deliberate blank-entry route the POST handler's "new" case covers.
   if (pendingId && !prefill) {
     req.flash("notification", "That production order no longer exists — pick a job from the queue.");
-    return res.redirect("/sachiko/machine/queue");
+    return res.redirect("/acme/machine/queue");
   }
 
   // Not every raw-material layer has a reel set aside on Assign Production
@@ -791,7 +815,7 @@ router.get("/machine/jobcard/form", requireMachineFloor, async (req, res) => {
   if (prefill && !prefill.canStart) {
     req.flash("notification", "Allot every raw material (Facestock / Adhesive / Release Liner) to this order before starting production.");
     return res.redirect(
-      prefill.machineId ? `/sachiko/machine/${prefill.machineId}/queue` : "/sachiko/machine/queue"
+      prefill.machineId ? `/acme/machine/${prefill.machineId}/queue` : "/acme/machine/queue"
     );
   }
 
@@ -2303,17 +2327,17 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
     });
 
     if (result.status === "duplicate") {
-      return res.redirect(`/sachiko/machine/jobcard/view?saved=${encodeURIComponent(result.pendingId)}`);
+      return res.redirect(`/acme/machine/jobcard/view?saved=${encodeURIComponent(result.pendingId)}`);
     }
     if (result.status === "gate-failed" || result.status === "wip-clash") {
       req.flash("notification", result.message);
       return res.redirect(
-        mongoose.isValidObjectId(result.machineId) ? `/sachiko/machine/${result.machineId}/queue` : "/sachiko/machine/queue",
+        mongoose.isValidObjectId(result.machineId) ? `/acme/machine/${result.machineId}/queue` : "/acme/machine/queue",
       );
     }
 
     req.flash("notification", result.message);
-    return res.redirect(`/sachiko/machine/jobcard/view?saved=${encodeURIComponent(result.pendingId)}`);
+    return res.redirect(`/acme/machine/jobcard/view?saved=${encodeURIComponent(result.pendingId)}`);
   } catch (err) {
     console.error("JOB CARD CREATE ERROR:", err);
     req.flash("notification", "Failed to save production entry");

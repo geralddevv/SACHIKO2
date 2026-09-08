@@ -29,7 +29,7 @@
 
 <!-- The main content -->
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form action="/sachiko/form/label-stock-binding" method="post" onsubmit="return handleLabelStockBindingSubmit(event)" class="needs-validation" autocomplete="off" novalidate>
+  <form action="/acme/form/label-stock-binding" method="post" onsubmit="return handleLabelStockBindingSubmit(event)" class="needs-validation" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <div class="span-full form-heading">
       <h1>Client Label Stock</h1>
@@ -445,7 +445,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     try {
-      const res = await fetch(`/sachiko/form/label-stock-binding/filter-specs?${params}`);
+      const res = await fetch(`/acme/form/label-stock-binding/filter-specs?${params}`);
       const data = await res.json();
       if (!data) return;
 
@@ -495,7 +495,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     hardResetUserSelection();
 
-    const res = await fetch(`/sachiko/form/label-stock-binding/client/${clientName}`);
+    const res = await fetch(`/acme/form/label-stock-binding/client/${clientName}`);
     const clientData = await res.json();
     if (!clientData || !clientData.users) return;
 
@@ -565,7 +565,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const params = new URLSearchParams();
     specFields.forEach(id => params.set(fieldToKey[id], values[id]));
 
-    const res = await fetch(`/sachiko/form/label-stock-binding/resolve-label-stock?${params}`);
+    const res = await fetch(`/acme/form/label-stock-binding/resolve-label-stock?${params}`);
 
     if (!res.ok) {
       labelStockIdDisplay.value = "No matching Label Stock found";
@@ -657,7 +657,7 @@ async function handleLabelStockBindingSubmit(event) {
     const data = await res.json().catch(() => null);
 
     if (data?.success) {
-      window.location.href = data.redirect || "/sachiko/client/view";
+      window.location.href = data.redirect || "/acme/client/view";
     } else {
       showClientToast(data?.message || "Failed to save Label Stock binding.", true);
       submitBtn.disabled = false;

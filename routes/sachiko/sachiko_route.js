@@ -385,7 +385,7 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
     const materialSignature = buildMaterialSignature(payload);
     await SachikoLabelStock.create({ labelStockId, skuCode, ...payload, labelStockSignature, materialSignature });
     req.flash("notification", `Label Stock "${payload.productCode}" created successfully!`);
-    res.json({ success: true, redirect: "/sachiko/label-stock/view" });
+    res.json({ success: true, redirect: "/acme/label-stock/view" });
   } catch (err) {
     console.error("SACHIKO LABEL STOCK CREATE ERROR:", err);
     allLabelStockFiles(req).forEach((f) => {
@@ -404,7 +404,7 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
 // openCreateLabelStockDialog) instead of a standalone page -- this GET only
 // exists so old bookmarks/links to that page still land somewhere.
 router.get("/label-stock/edit/:id", (req, res) => {
-  res.redirect("/sachiko/label-stock/view");
+  res.redirect("/acme/label-stock/view");
 });
 
 router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploadJson, async (req, res) => {
@@ -505,7 +505,7 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
     const update = Object.keys(unset).length ? { $set: payload, $unset: unset } : payload;
     await SachikoLabelStock.findByIdAndUpdate(req.params.id, update);
     req.flash("notification", "Label Stock updated successfully!");
-    res.json({ success: true, redirect: "/sachiko/label-stock/view" });
+    res.json({ success: true, redirect: "/acme/label-stock/view" });
   } catch (err) {
     console.error("SACHIKO LABEL STOCK UPDATE ERROR:", err);
     allLabelStockFiles(req).forEach((f) => {
@@ -649,11 +649,11 @@ router.post("/jobcard/form", requireAuth, createLimiter, async (req, res) => {
     });
 
     req.flash("notification", "Job card created successfully!");
-    res.redirect("/sachiko/jobcard/view");
+    res.redirect("/acme/jobcard/view");
   } catch (err) {
     console.error("SACHIKO JOBCARD CREATE ERROR:", err);
     req.flash("notification", "Failed to create job card");
-    res.redirect("/sachiko/jobcard/form");
+    res.redirect("/acme/jobcard/form");
   }
 });
 
@@ -714,11 +714,11 @@ router.post("/sales/order", requireAuth, createLimiter, async (req, res) => {
     });
 
     req.flash("notification", "Sales order created successfully!");
-    res.redirect("/sachiko/sales/order");
+    res.redirect("/acme/sales/order");
   } catch (err) {
     console.error("SACHIKO SALES ORDER CREATE ERROR:", err);
     req.flash("notification", "Failed to create sales order");
-    res.redirect("/sachiko/sales/order");
+    res.redirect("/acme/sales/order");
   }
 });
 

@@ -201,7 +201,7 @@
       </div>
 
       <a
-        href="/sachiko/purchase/order/logs"
+        href="/acme/purchase/order/logs"
         style="
           padding: 6px 14px;
           background: #044a78;
@@ -495,13 +495,13 @@
   };
 
   window.requestReceivePO = function (orderId) {
-    window.location.href = `/sachiko/purchase/receive?orderId=${orderId}`;
+    window.location.href = `/acme/purchase/receive?orderId=${orderId}`;
   };
 
   function submitStatusUpdate(orderId, status, reason = "") {
     const form = document.createElement("form");
     form.method = "POST";
-    form.action = "/sachiko/inventory/purchase/status";
+    form.action = "/acme/inventory/purchase/status";
 
     const inputs = {
       orderId,
@@ -543,7 +543,7 @@
         formatter: (cell) => {
           const row = cell.getRow().getData();
           // Adjust URLs for Edit and Confirm as needed
-          const editUrl = `/sachiko/inventory/purchase/order?orderId=${row._id}`;
+          const editUrl = `/acme/inventory/purchase/order?orderId=${row._id}`;
 
           return `
             <div style="display:flex; gap:6px; justify-content:center; align-items:center;">

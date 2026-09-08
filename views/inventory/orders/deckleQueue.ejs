@@ -16,7 +16,7 @@
     <h1>Deckle Queue</h1>
     <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
       <a
-        href="/sachiko/labels/production/deckle-set"
+        href="/acme/labels/production/deckle-set"
         style="padding: 6px 14px; background: #044a78; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
         onmouseover="this.style.opacity = '0.85'" onmouseout="this.style.opacity = '1'"
       >
@@ -39,7 +39,7 @@
   const fmtMtrs = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
 
   window.startProduction = function (orderId) {
-    window.location.href = `/sachiko/labels/production/assign/${orderId}`;
+    window.location.href = `/acme/labels/production/assign/${orderId}`;
   };
 
   const table = new Tabulator("#deckle-queue-table", {

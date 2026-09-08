@@ -25,7 +25,7 @@
   <div class="indi-head">
     <h1>Production Binding View</h1>
     <div style="display: flex; gap: 10px; align-items: center">
-      <a href="/sachiko/form/prodcalc" class="header-action-btn">
+      <a href="/acme/form/prodcalc" class="header-action-btn">
         <i class="fa-solid fa-plus" style="margin-right: 6px"></i> New Prod Binding
       </a>
     </div>
@@ -67,7 +67,7 @@
         headerSort: false,
         formatter: (cell) => {
           const id = cell.getRow().getData()._id;
-          return `<a href="/sachiko/prodcalc/details/${id}" class="btn-action" style="background:#111827;" title="View Details"><i class="fa-solid fa-eye"></i></a>`;
+          return `<a href="/acme/prodcalc/details/${id}" class="btn-action" style="background:#111827;" title="View Details"><i class="fa-solid fa-eye"></i></a>`;
         },
       },
       withTextFilter({ title: "Date", field: "createdAt", width: 110 }),
