@@ -163,10 +163,11 @@
   .dsf-web-tr { cursor: pointer; }
   .dsf-web-tr:hover td { background: #f7fbff; }
   .dsf-web-tr.is-chosen td { background: #eef5ff; }
-  /* Deckle Size, Remaining and Across all share one big value font. */
-  .dsf-web-size, .dsf-web-rem, .dsf-web-across .flag {
+  /* Deckle Size, Remaining, Across and Deckle Count all share one big value font. */
+  .dsf-web-size, .dsf-web-rem, .dsf-web-dc, .dsf-web-across .flag {
     font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums;
   }
+  .dsf-web-dc { width: 96px; text-align: center; color: #1f2a44; }
   .dsf-web-size {
     width: 120px; color: #1f2a44; white-space: nowrap; text-align: center;
   }
@@ -322,7 +323,7 @@
               <% cutSlots.forEach((s) => { %><th style="width:46px;"><%= s %></th><% }) %>
               <th style="width:104px;">Deckle R.M.</th>
               <th style="width:88px;">R. Meter</th>
-              <th style="width:60px;">Webs</th>
+              <th style="width:96px;">Deckle Count</th>
               <th style="width:38px;"></th>
             </tr>
           </thead>
@@ -486,7 +487,7 @@
       ${SLOTS.map((s) => `<td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-roll-width sl-width-input" data-slot="${s}" placeholder="${s}" title="Roll ${s} width in mm" /></td>`).join("")}
       <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control dsf-drm" placeholder="Mtrs" title="Length of one deckle web" /></td>
       <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control dsf-rm" placeholder="Mtrs" title="Length wound on each finished roll" /></td>
-      <td><input type="number" step="1" min="1" inputmode="numeric" class="form-control dsf-webs" placeholder="Qty" value="1" title="How many deckle webs use this same layout" /></td>
+      <td><input type="number" step="1" min="1" inputmode="numeric" class="form-control dsf-webs" placeholder="Qty" value="1" title="How many deckle webs (reels) use this same layout" /></td>
       <td><button type="button" class="dsf-row-btn dsf-remove" title="Remove this layout" aria-label="Remove this layout"><i class="fa-solid fa-xmark"></i></button></td>`;
 
     const sub = document.createElement("tr");
@@ -576,10 +577,10 @@
   }
 
   const WEB_TABLE_HEAD =
-    `<thead><tr><th>Deckle Size</th><th>Remaining</th><th>Across</th><th>Layout</th><th>Use</th></tr></thead>`;
+    `<thead><tr><th>Deckle Size</th><th>Remaining</th><th>Across</th><th>Deckle Count</th><th>Layout</th><th>Use</th></tr></thead>`;
 
-  // One "deckle size | remaining | across | diagram | pick" row.
-  function webRowHTML(cuts, sz, chosen, isBest) {
+  // One "deckle size | remaining | across | deckle count | diagram | pick" row.
+  function webRowHTML(cuts, sz, chosen, isBest, webs) {
     const cutSum = round2(cuts.reduce((n, [, w]) => n + w, 0));
     const cuttable = round2(sz - 2 * EDGE);
     const remaining = round2(cuttable - cutSum);
@@ -594,6 +595,7 @@
           <span class="flag ${over ? "sl-bad" : (cuts.length ? "sl-ok" : "")}">${cap}</span>
           ${isBest && !chosen ? `<span class="dsf-tag">best fit</span>` : ""}
         </td>
+        <td class="dsf-web-dc">${esc(fmt(webs))}</td>
         <td class="dsf-web-diag">
           <div class="sl-web${over ? " is-over" : ""}">${webInnerHTML(cuts, sz)}</div>
         </td>
@@ -638,7 +640,7 @@
       // Table: one row per available deckle size -- size | remaining | diagram | pick.
       const stack = tr.__sub.querySelector(".dsf-webs-stack");
       stack.innerHTML = SIZE_LIST.length
-        ? `<table class="dsf-web-table">${WEB_TABLE_HEAD}<tbody>${SIZE_LIST.map((s) => webRowHTML(r.cuts, s, s === selectedSize, s === best)).join("")}</tbody></table>`
+        ? `<table class="dsf-web-table">${WEB_TABLE_HEAD}<tbody>${SIZE_LIST.map((s) => webRowHTML(r.cuts, s, s === selectedSize, s === best, r.webs)).join("")}</tbody></table>`
         : `<div style="font-size:12px;font-weight:700;color:#7c8ba1;padding:6px 2px;">Add a deckle size above (pencil next to “Available Sizes”).</div>`;
       stack.querySelectorAll(".dsf-web-tr").forEach((el) => {
         el.addEventListener("click", () => selectSize(el.dataset.size));
@@ -671,12 +673,13 @@
         const qty = Number(otr.dataset.qty) || 0;
         const take = idx === trs.length - 1 ? pool : Math.min(pool, qty);
         pool = Math.max(0, pool - take);
-        const bal = qty - take;
+        // Balance = rolls set − rolls ordered: negative = short, positive = extra made.
+        const bal = round2(take - qty);
         otr.querySelector(".dsf-o-rpw").textContent = webs > 0 ? fmt(round2(take / webs)) : "—";
         otr.querySelector(".dsf-o-set").textContent = fmtI(take);
         const balEl = otr.querySelector(".dsf-o-bal");
-        balEl.textContent = fmtI(bal);
-        balEl.style.color = bal < 0 ? "#b91c1c" : bal > 0 ? "#b45309" : "#15803d";
+        balEl.textContent = (bal > 0 ? "+" : "") + fmtI(bal);
+        balEl.style.color = bal < 0 ? "#b45309" : "#15803d";
       });
     });
 
