@@ -4743,11 +4743,6 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
   const sumRM = members.reduce((s, m) => s + num(m.runningMeters), 0);
   const enteredTotalRM = Number(req.body.runningMeters);
   const runningMeters = Number.isFinite(enteredTotalRM) && enteredTotalRM > 0 ? enteredTotalRM : sumRM;
-  const enteredDeckleRM = Number(req.body.deckleRunningMeters);
-  const deckleRunningMeters = Number.isFinite(enteredDeckleRM) && enteredDeckleRM > 0 ? enteredDeckleRM : undefined;
-  const runningMetersText = deckleRunningMeters
-    ? `${deckleRunningMeters.toLocaleString("en-IN")} M/DECKLE · ${runningMeters.toLocaleString("en-IN")} M TOTAL`
-    : undefined;
 
   // The deckle layouts the planner drew on the Set Deckle page -- one entry per
   // cut pattern (all cut from the one chosen deckleSize), each with its own
@@ -4781,11 +4776,27 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     .map((L) => {
       const cuts = normCuts(L.cuts);
       const rm = Number(L.rm);
+      const drm = Number(L.drm);
       const count = Math.max(1, Math.floor(Number(L.webs) || 1));
-      return cuts.length ? { cuts, plannedRunningMeter: Number.isFinite(rm) && rm > 0 ? rm : undefined, count } : null;
+      return cuts.length
+        ? {
+            cuts,
+            deckleRunningMeter: Number.isFinite(drm) && drm > 0 ? drm : undefined,
+            plannedRunningMeter: Number.isFinite(rm) && rm > 0 ? rm : undefined,
+            count,
+          }
+        : null;
     })
     .filter(Boolean);
   const layoutWebs = deckleLayout.reduce((n, L) => n + L.count, 0);
+  // The batch's own "one web length" -- from the layouts, else the legacy form
+  // field. Downstream reads pending.deckleRunningMeters.
+  const enteredDeckleRM = Number(req.body.deckleRunningMeters);
+  const deckleRunningMeters = deckleLayout.find((L) => L.deckleRunningMeter > 0)?.deckleRunningMeter
+    ?? (Number.isFinite(enteredDeckleRM) && enteredDeckleRM > 0 ? enteredDeckleRM : undefined);
+  const runningMetersText = deckleRunningMeters
+    ? `${deckleRunningMeters.toLocaleString("en-IN")} M/DECKLE · ${runningMeters.toLocaleString("en-IN")} M TOTAL`
+    : undefined;
 
   // Total edge trim (both edges) the planner set on the Set Deckle page while
   // fitting the layouts. Pre-fills Slitting Allocation's own Trim field.

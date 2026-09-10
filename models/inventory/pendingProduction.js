@@ -106,6 +106,10 @@ const pendingProductionSchema = new mongoose.Schema(
         {
           _id: false,
           cuts: [{ _id: false, slot: { type: String }, width: { type: Number } }],
+          // Length of one deckle web for this layout; with plannedRunningMeter
+          // it gives finished rolls per knife position (deckleRunningMeter /
+          // plannedRunningMeter).
+          deckleRunningMeter: { type: Number },
           plannedRunningMeter: { type: Number },
           count: { type: Number },
         },
