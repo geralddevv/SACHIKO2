@@ -1,0 +1,618 @@
+<% layout('/layout/boilerplate') %>
+
+<%
+  const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+  const dash = (v) => (isEmpty(v) ? "—" : v);
+  const sizes = Array.isArray(group.candidateSizes) ? group.candidateSizes : [];
+  const kids = Array.isArray(group._children) ? group._children : [];
+  const fmtN = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
+  const fmtD = (v) => (v ? new Date(v).toLocaleDateString("en-IN") : "—");
+  // # + A..L + R.Meter + Webs + remove -- the web-view sub-row spans the lot.
+  const subColspan = cutSlots.length + 4;
+  // Default total edge trim -- always a real number (10 mm unless the recipe
+  // math says otherwise).
+  const trimDefault = Number(group.edgeTrim) > 0 ? Number(group.edgeTrim)
+    : (Number(edgeTrimPerSide) > 0 ? Number(edgeTrimPerSide) * 2 : 10);
+%>
+
+<style>
+  .span-full { padding: 0 !important; }
+  .span-full.form-heading, .span-full.form-subheading { padding: 10px !important; }
+  .sl-panel { align-self: stretch; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .sl-sec-head { display: flex; flex-direction: row; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .sl-sec-head h1 { margin: 0; }
+
+  .sl-job-grid {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); grid-template-rows: 1fr;
+    overflow-x: auto;
+  }
+  .sl-job-cell {
+    background: #f8fafc; padding: 11px 10px; display: flex; flex-direction: column; gap: 5px; min-width: 0;
+    border-right: 1px solid #e2e8f0;
+  }
+  .sl-job-cell:last-child { border-right: none; }
+  .sl-job-cell.is-input { background: #fff; }
+  /* Product Code: compact. Available Sizes: wide. */
+  .sl-job-grid .sl-job-cell.dsf-pc { grid-column: span 1; }
+  .sl-job-grid .sl-job-cell.dsf-avail { grid-column: span 3; }
+  .sl-job-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #7c8ba1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sl-job-label .req { color: #dc2626; }
+  /* Every recipe fact -- value text and the Edge Trim input -- at one big size. */
+  .sl-job-value { font-size: 20px; font-weight: 800; color: #1f2a44; line-height: 1.3; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+  .sl-job-value.sl-bad { color: #b91c1c; }
+  .sl-job-cell.is-input input.form-control {
+    height: 40px !important; font-size: 20px !important; font-weight: 800 !important; color: #1f2a44;
+  }
+  /* Edge Trim: value text with a pencil pinned top-right; the input shows on click. */
+  .dsf-trim-cell { position: relative; }
+  .dsf-edit-ic {
+    position: absolute; top: 7px; right: 7px;
+    border: none; background: rgba(4,74,120,0.09); color: #044a78; cursor: pointer;
+    width: 24px; height: 24px; border-radius: 6px; font-size: 11px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .dsf-edit-ic:hover { background: rgba(4,74,120,0.18); }
+  #dsfTrim {
+    height: 40px !important; font-size: 20px !important; font-weight: 800 !important; color: #1f2a44;
+    width: 100%; padding: 4px 8px; border-radius: 6px; border: 1px solid #044a78; background: #f4f9ff;
+  }
+  #dsfTrim:focus { outline: none; box-shadow: 0 0 0 3px rgba(4,74,120,0.14); }
+
+  .sl-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; }
+  .sl-table th {
+    background: #044a78; color: #fff; font-size: 11.5px; font-weight: 600; padding: 7px 5px;
+    text-align: center; letter-spacing: 0.02em; border-right: 1px solid rgba(255,255,255,0.22); white-space: nowrap;
+  }
+  .sl-table th:last-child { border-right: none; }
+  .sl-table td {
+    padding: 5px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;
+    vertical-align: middle; text-align: center; background: #fff;
+  }
+  .sl-table td:last-child { border-right: none; }
+  .sl-table input.form-control {
+    padding: 4px 6px !important; font-size: 12.5px !important; height: 30px !important;
+    min-width: 0; width: 100%; text-align: center; border-radius: 6px !important;
+    font-variant-numeric: tabular-nums; border: 1px solid #cbd5e1 !important; background-color: #fff;
+    transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+  }
+  .sl-table input.form-control:focus {
+    outline: none; border-color: #044a78 !important; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12);
+  }
+  .sl-table input[type="number"]::-webkit-outer-spin-button,
+  .sl-table input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .sl-table input[type="number"] { -moz-appearance: textfield; }
+  .sl-table tbody tr:hover > td { background: #fbfdff; }
+  .sl-table td.dsf-rownum { font-size: 12.5px; font-weight: 800; color: #1f2a44; background: #f8fafc; }
+
+  .sl-scroll { align-self: stretch; overflow-x: auto; }
+  .sl-scroll::-webkit-scrollbar { height: 9px; }
+  .sl-scroll::-webkit-scrollbar-thumb { background: #044a78; border-radius: 8px; }
+
+  .sl-width-input.is-set { border-color: #044a78 !important; background-color: #f4f9ff !important; font-weight: 700; }
+
+  /* ---- Web view: A..L drawn to scale across the reel's web ---- */
+  .sl-web {
+    display: flex; align-items: stretch; height: 32px; width: 100%; max-width: 960px; margin: 0 auto;
+    border: 1px solid #cbd5e1; border-radius: 7px; overflow: hidden; background: #fff;
+  }
+  .sl-web.is-over { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15); }
+  .sl-web-seg {
+    flex-basis: 0; min-width: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1px;
+    border-right: 1px solid #fff; overflow: hidden; white-space: nowrap;
+    background: #16a34a; color: #fff;
+  }
+  .sl-web-seg:nth-child(even) { background: #15803d; }
+  .sl-web-seg:last-child { border-right: none; }
+  .sl-web-seg .sl-seg-slot { font-size: 9px; font-weight: 700; opacity: 0.8; letter-spacing: 0.06em; }
+  .sl-web-seg .sl-seg-w { font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .sl-web-seg.sl-web-edge { background: #f97316; color: #fff; }
+  .sl-web-seg.sl-web-trim { background: #dc2626; color: #fff; }
+  .sl-web-empty {
+    display: flex; align-items: center; justify-content: center; width: 100%;
+    font-size: 11.5px; font-weight: 600; color: #94a3b8;
+    background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #f8fafc 6px, #f8fafc 12px);
+  }
+  .dsf-sub-cell { background: #f8fafc !important; padding: 10px !important; text-align: left !important; }
+  .sl-table tbody tr:hover > td.dsf-sub-cell { background: #f8fafc !important; }
+
+  /* Per-layout table: deckle size | remaining | diagram + caption | pick.
+     The table fills the available width; the diagram column keeps its own
+     capped width (below) so widening the table never stretches the strip. */
+  .dsf-web-table { width: 100%; border-collapse: separate; border-spacing: 0;
+    background: #fff; border: 1.5px solid #e6eaf2; border-radius: 10px; overflow: hidden; }
+  .dsf-web-table th {
+    background: #044a78; color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; padding: 6px 10px; text-align: left; white-space: nowrap;
+  }
+  .dsf-web-table td { padding: 8px 10px; border-top: 1px solid #eef1f6; vertical-align: middle; }
+  .dsf-web-tr { cursor: pointer; }
+  .dsf-web-tr:hover td { background: #f7fbff; }
+  .dsf-web-tr.is-chosen td { background: #eef5ff; }
+  .dsf-web-size {
+    width: 120px; font-size: 22px; font-weight: 800; color: #1f2a44; white-space: nowrap;
+    font-variant-numeric: tabular-nums; text-align: center;
+  }
+  .dsf-web-tr.is-chosen .dsf-web-size { color: #044a78; }
+  .dsf-web-rem {
+    width: 96px; text-align: center; font-size: 15px; font-weight: 800;
+    font-variant-numeric: tabular-nums; color: #15803d; white-space: nowrap;
+  }
+  .dsf-web-rem.sl-bad { color: #b91c1c; }
+  /* Diagram column soaks up the extra table width; its contents stay centered
+     and the strip keeps its own capped width. */
+  .dsf-web-diag { min-width: 0; text-align: center; }
+  .dsf-web-diag .flag {
+    display: block; margin-bottom: 5px; font-size: 11px; font-weight: 700; color: #7c8ba1;
+  }
+  .dsf-web-diag .flag.sl-bad { color: #b91c1c; }
+  .dsf-web-diag .flag.sl-ok { color: #15803d; }
+  .dsf-web-diag .dsf-tag { color: #059669; }
+  .dsf-web-diag .sl-web { margin: 0 auto; max-width: 880px; width: 100%; }
+  /* Diagram segments show the width number only -- no A/B/C / EDGE / TRIM label. */
+  .dsf-web-diag .sl-seg-slot { display: none; }
+  .dsf-web-diag .sl-web-seg .sl-seg-w { font-size: 12.5px; }
+  .dsf-web-pick { width: 48px; text-align: center; }
+  .dsf-web-pick .dsf-radio {
+    display: inline-flex; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #cbd5e1;
+    align-items: center; justify-content: center; background: #fff;
+  }
+  .dsf-web-tr.is-chosen .dsf-web-pick .dsf-radio { border-color: #044a78; }
+  .dsf-web-tr.is-chosen .dsf-web-pick .dsf-radio::after {
+    content: ""; width: 10px; height: 10px; border-radius: 50%; background: #044a78;
+  }
+
+  .sl-warn-note {
+    align-self: stretch; background: #fff8e1; border: 1px solid #f0c36d; color: #7a5b00;
+    border-radius: 8px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; line-height: 1.5;
+  }
+  .sl-save-wrap { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 100%; }
+
+  /* ---- Deckle-Set-form-only ---- */
+  .dsf-add-btn {
+    display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid #044a78; background: #fff;
+    color: #044a78; border-radius: 7px; padding: 7px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  }
+  .dsf-add-btn:hover { background: #f0f7ff; }
+  .dsf-row-btn {
+    width: 26px; height: 26px; padding: 0; border: 1px solid #e2e8f0; background: #fff;
+    color: #b91c1c; border-radius: 5px; font-size: 11.5px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .dsf-row-btn:hover { background: #fef2f2; border-color: #fecaca; }
+  .dsf-row-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .dsf-layout-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; }
+  .dsf-layout-status { font-size: 12.5px; font-weight: 700; color: #7c8ba1; }
+  .dsf-order-check { width: 16px; height: 16px; accent-color: #044a78; cursor: pointer; }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
+  <form id="dsfForm" method="post" action="/app/labels/production/deckle-set" autocomplete="off" novalidate
+        style="display:flex; flex-direction:column; gap:10px;">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="itemId" value="<%= group.itemId %>" />
+    <input type="hidden" name="deckleSize" id="dsfDeckleSize" />
+    <input type="hidden" name="noOfRolls" id="dsfNoOfRolls" />
+    <input type="hidden" name="layoutsJson" id="dsfLayoutsJson" />
+
+    <div class="span-full form-heading" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h1>Set Deckle</h1>
+    </div>
+
+    <!-- Recipe facts -->
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-panel">
+        <div class="sl-job-grid">
+          <div class="sl-job-cell dsf-pc">
+            <span class="sl-job-label">Product Code</span>
+            <span class="sl-job-value"><%= dash(group.productCode) %></span>
+          </div>
+          <div class="sl-job-cell">
+            <span class="sl-job-label">Roll Type</span>
+            <span class="sl-job-value"><%= dash(group.rollType) %></span>
+          </div>
+          <div class="sl-job-cell dsf-trim-cell">
+            <button type="button" id="dsfTrimEdit" class="dsf-edit-ic" title="Edit edge trim" aria-label="Edit edge trim">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+            <span class="sl-job-label">Edge Trim (total mm)</span>
+            <span class="sl-job-value" id="dsfTrimText"><%= trimDefault %> mm</span>
+            <input type="number" step="any" min="0" id="dsfTrim" name="deckleTrim"
+                   value="<%= trimDefault %>"
+                   class="form-control" title="Total edge trim across both edges, netted out of every web width." hidden />
+          </div>
+          <div class="sl-job-cell dsf-avail">
+            <span class="sl-job-label">Available Sizes</span>
+            <span class="sl-job-value"><%= sizes.length ? sizes.map((s) => s.size).join(", ") + " mm" : "—" %></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Orders in this deckle -->
+    <div class="span-full form-subheading sl-sec-head"><h1>Orders In This Deckle</h1></div>
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-panel sl-scroll">
+        <table class="sl-table" style="min-width: 820px;">
+          <thead>
+            <tr>
+              <th style="width:44px;"></th>
+              <th>Client</th><th>PO Number</th><th>Paper Size</th>
+              <th>Running Mtrs</th><th>Roll Qty</th><th>Sq Mtr</th><th>Est. Delivery</th>
+            </tr>
+          </thead>
+          <tbody id="dsfOrderBody">
+            <% kids.forEach((m) => { %>
+              <tr data-order-id="<%= m._id %>">
+                <td><input type="checkbox" class="dsf-order-check" name="orderIds" value="<%= m._id %>" checked /></td>
+                <td style="text-align:left;"><%= dash(m.clientName) %></td>
+                <td><%= dash(m.poNumber) %></td>
+                <td><%= dash(m.paperSize) %></td>
+                <td style="text-align:right;"><%= fmtN(m.runningMeters) %></td>
+                <td><%= fmtN(m.quantity) %></td>
+                <td style="text-align:right;"><%= fmtN(m.sqMtr) %></td>
+                <td><%= fmtD(m.estimatedDate) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Deckle layouts: one row per cut pattern; Webs = how many deckle reels use it -->
+    <div class="span-full form-subheading sl-sec-head"><h1>Deckle Layouts</h1></div>
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-panel sl-scroll">
+        <table class="sl-table" style="min-width: 820px;">
+          <thead>
+            <tr>
+              <th style="width:38px;">#</th>
+              <% cutSlots.forEach((s) => { %><th style="width:48px;"><%= s %></th><% }) %>
+              <th style="width:86px;">R. Meter</th>
+              <th style="width:64px;">Webs</th>
+              <th style="width:38px;"></th>
+            </tr>
+          </thead>
+          <tbody id="dsfLayoutBody"></tbody>
+        </table>
+      </div>
+      <div class="dsf-layout-toolbar">
+        <span id="dsfLayoutStatus" class="dsf-layout-status"></span>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <% if (!sizes.length) { %>
+          <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#5a6586;">
+            Deckle Size (mm)
+            <input type="number" step="any" min="0" id="dsfManualSize" placeholder="mm"
+                   style="width:100px; height:32px; text-align:center; border:1.5px solid #cbd5e1; border-radius:6px;" />
+          </label>
+          <% } %>
+          <button type="button" id="dsfAddLayout" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Deckle Layout</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="span-full btn-grp" style="margin-top: 10px;">
+      <div class="sl-save-wrap">
+        <button type="submit" id="dsfSubmit" class="submit-btn">Create Deckle Batch</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script id="dsf-group" type="application/json"><%- safeJson(group) %></script>
+<script id="dsf-slots" type="application/json"><%- safeJson(cutSlots) %></script>
+<script id="dsf-cfg" type="application/json"><%- safeJson({ edge: edgeTrimPerSide, subColspan }) %></script>
+
+<script>
+  const GROUP = JSON.parse(document.getElementById("dsf-group").textContent);
+  const SLOTS = JSON.parse(document.getElementById("dsf-slots").textContent);
+  const CFG = JSON.parse(document.getElementById("dsf-cfg").textContent);
+  const SUB_COLSPAN = Number(CFG.subColspan) || (SLOTS.length + 4);
+  const dsfTrim = document.getElementById("dsfTrim");
+  const dsfTrimText = document.getElementById("dsfTrimText");
+  const DEFAULT_TRIM = Number(CFG.edge) * 2 || 10;
+  // Per-side edge trim, live from the editable "Edge Trim (total mm)" field.
+  let EDGE = DEFAULT_TRIM / 2;
+  function readTrim() {
+    const t = Number(dsfTrim && dsfTrim.value);
+    EDGE = (Number.isFinite(t) && t >= 0 ? t : DEFAULT_TRIM) / 2;
+  }
+  // Edge Trim shows as text; the pencil (top-right) swaps in the input.
+  function showTrimText() {
+    const t = Number(dsfTrim.value);
+    if (!(Number.isFinite(t) && t >= 0)) dsfTrim.value = DEFAULT_TRIM;
+    dsfTrimText.textContent = round2(Number(dsfTrim.value)).toLocaleString("en-IN") + " mm";
+    dsfTrim.hidden = true;
+    dsfTrimText.hidden = false;
+  }
+  function editTrim() {
+    dsfTrimText.hidden = true;
+    dsfTrim.hidden = false;
+    dsfTrim.focus();
+    dsfTrim.select();
+  }
+  const SIZES = Array.isArray(GROUP.candidateSizes) ? GROUP.candidateSizes : [];
+  const KIDS = Array.isArray(GROUP._children) ? GROUP._children : [];
+
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const fmt = (n) => (Number.isFinite(n) ? round2(n).toLocaleString("en-IN") : "—");
+  const fmtI = (n) => (Number.isFinite(n) ? Math.round(n).toLocaleString("en-IN") : "—");
+  const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  const dsfDeckleSize = document.getElementById("dsfDeckleSize");
+  const dsfNoOfRolls = document.getElementById("dsfNoOfRolls");
+  const dsfLayoutsJson = document.getElementById("dsfLayoutsJson");
+  const manualSizeEl = document.getElementById("dsfManualSize");
+  const layoutBody = document.getElementById("dsfLayoutBody");
+  const layoutStatus = document.getElementById("dsfLayoutStatus");
+  const orderBody = document.getElementById("dsfOrderBody");
+
+  // In-stock sizes, ascending. The deckle web is chosen automatically -- the
+  // smallest that fits the widest layout (least trim), or a hand-typed size
+  // when nothing matching is in stock.
+  const SIZE_LIST = SIZES.map((s) => Number(s.size)).filter((n) => n > 0).sort((a, b) => a - b);
+  let selectedSize = null;
+  let userPickedSize = false;
+
+  // ---- web-view segment builders ----
+  function edgeSeg(side) {
+    return `<div class="sl-web-seg sl-web-edge" style="flex-grow:${EDGE}" title="${side} edge trim — ${EDGE} mm">`
+      + `<span class="sl-seg-slot">EDGE</span><span class="sl-seg-w">${EDGE}</span></div>`;
+  }
+  function cutSeg(slot, w) {
+    return `<div class="sl-web-seg" style="flex-grow:${w}" title="${esc(slot)} — ${esc(fmt(w))} mm">`
+      + `<span class="sl-seg-slot">${esc(slot)}</span><span class="sl-seg-w">${esc(fmt(w))}</span></div>`;
+  }
+  function trimSeg(w) {
+    return `<div class="sl-web-seg sl-web-trim" style="flex-grow:${w}" title="Trim (uncut slack) — ${esc(fmt(w))} mm">`
+      + `<span class="sl-seg-slot">TRIM</span><span class="sl-seg-w">${esc(fmt(w))}</span></div>`;
+  }
+  function webInnerHTML(cuts, webWidth) {
+    const sum = round2(cuts.reduce((n, [, w]) => n + w, 0));
+    const cuttable = round2(webWidth - 2 * EDGE);
+    const over = webWidth > 0 && sum > cuttable;
+    const slack = round2(cuttable - sum);
+    if (!cuts.length) {
+      return `${edgeSeg("Left")}<div class="sl-web-empty" style="flex-grow:${Math.max(cuttable, 1)};flex-basis:0;min-width:0;width:auto;">${webWidth > 0 ? esc(fmt(cuttable)) + " mm — no roll widths yet" : "enter roll widths"}</div>${edgeSeg("Right")}`;
+    }
+    const segs = cuts.map(([slot, w]) => cutSeg(slot, w));
+    if (!over && slack > 0) segs.push(trimSeg(slack));
+    return `${edgeSeg("Left")}${segs.join("")}${edgeSeg("Right")}`;
+  }
+
+  // ---- layout rows ----
+  function readRow(tr) {
+    const cuts = SLOTS
+      .map((s) => [s, Number(tr.querySelector(`.sl-roll-width[data-slot="${s}"]`).value)])
+      .filter(([, w]) => Number.isFinite(w) && w > 0);
+    return {
+      cuts,
+      rm: Number(tr.querySelector(".dsf-rm").value) || null,
+      webs: Math.max(0, Math.floor(Number(tr.querySelector(".dsf-webs").value) || 0)),
+    };
+  }
+
+  function addLayoutRow(preset) {
+    const tr = document.createElement("tr");
+    tr.className = "dsf-layout-row";
+    tr.innerHTML = `
+      <td class="dsf-rownum">1</td>
+      ${SLOTS.map((s) => `<td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-roll-width sl-width-input" data-slot="${s}" placeholder="${s}" title="Roll ${s} width in mm" /></td>`).join("")}
+      <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control dsf-rm" placeholder="Mtrs" title="Length wound on each finished roll (optional)" /></td>
+      <td><input type="number" step="1" min="1" inputmode="numeric" class="form-control dsf-webs" placeholder="Qty" value="1" title="How many deckle webs use this same layout" /></td>
+      <td><button type="button" class="dsf-row-btn dsf-remove" title="Remove this layout" aria-label="Remove this layout"><i class="fa-solid fa-xmark"></i></button></td>`;
+
+    const sub = document.createElement("tr");
+    sub.className = "dsf-layout-sub";
+    sub.innerHTML = `<td class="dsf-sub-cell" colspan="${SUB_COLSPAN}">
+        <div class="dsf-webs-stack"></div>
+      </td>`;
+    tr.__sub = sub;
+
+    if (preset) {
+      if (preset.rm != null) tr.querySelector(".dsf-rm").value = preset.rm;
+      if (preset.webs != null) tr.querySelector(".dsf-webs").value = preset.webs;
+      (preset.cuts || []).forEach(([slot, w]) => {
+        const el = tr.querySelector(`.sl-roll-width[data-slot="${slot}"]`);
+        if (el) el.value = w;
+      });
+    }
+
+    const widthInputs = [...tr.querySelectorAll(".sl-roll-width")];
+    widthInputs.forEach((el, idx) => {
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Enter") return;
+        ev.preventDefault();
+        (widthInputs[idx + 1] || widthInputs[idx]).focus();
+      });
+    });
+    tr.querySelectorAll("input").forEach((el) => el.addEventListener("input", recalcAll));
+    tr.querySelector(".dsf-remove").addEventListener("click", () => {
+      if (layoutBody.querySelectorAll(".dsf-layout-row").length <= 1) return;
+      sub.remove();
+      tr.remove();
+      recalcAll();
+    });
+
+    layoutBody.appendChild(tr);
+    layoutBody.appendChild(sub);
+    recalcAll();
+  }
+
+  function layoutRows() { return [...layoutBody.querySelectorAll(".dsf-layout-row")]; }
+
+  // Widest single layout drawn so far -- the chosen web must at least fit this.
+  function maxLayoutSum() {
+    return layoutRows().reduce((mx, tr) => {
+      const s = round2(readRow(tr).cuts.reduce((n, [, w]) => n + w, 0));
+      return Math.max(mx, s);
+    }, 0);
+  }
+
+  // The recommended web: smallest in-stock size whose cuttable width covers the
+  // widest layout (least trim); largest if none fits; the hand-typed value when
+  // nothing matching is in stock.
+  function bestFitSize(widest) {
+    if (manualSizeEl) {
+      const m = Number(manualSizeEl.value);
+      return Number.isFinite(m) && m > 0 ? m : null;
+    }
+    if (!SIZE_LIST.length) return null;
+    return widest > 0
+      ? (SIZE_LIST.find((sz) => round2(sz - 2 * EDGE) >= widest) ?? SIZE_LIST[SIZE_LIST.length - 1])
+      : SIZE_LIST[0];
+  }
+
+  // Resolve the size in play: the planner's pick if they ticked one, else the
+  // best fit. Writes #dsfDeckleSize.
+  function autoSize() {
+    const widest = maxLayoutSum();
+    const best = bestFitSize(widest);
+    if (userPickedSize && SIZE_LIST.includes(selectedSize)) {
+      // keep the picked one
+    } else if (manualSizeEl) {
+      selectedSize = best;
+    } else {
+      selectedSize = best;
+    }
+    dsfDeckleSize.value = selectedSize != null ? selectedSize : "";
+    return { widest, best, fits: selectedSize != null && round2(selectedSize - 2 * EDGE) >= widest };
+  }
+
+  function selectSize(sz) {
+    const n = Number(sz);
+    if (!Number.isFinite(n)) return;
+    userPickedSize = true;
+    selectedSize = n;
+    dsfDeckleSize.value = n;
+    recalcAll();
+  }
+
+  const WEB_TABLE_HEAD =
+    `<thead><tr><th>Deckle Size</th><th>Remaining</th><th>Layout</th><th>Use</th></tr></thead>`;
+
+  // One "deckle size | remaining | diagram + caption | pick" row.
+  function webRowHTML(cuts, sz, chosen, isBest) {
+    const cutSum = round2(cuts.reduce((n, [, w]) => n + w, 0));
+    const cuttable = round2(sz - 2 * EDGE);
+    const remaining = round2(cuttable - cutSum);
+    const over = cutSum > cuttable;
+    const rollWord = `${cuts.length} roll${cuts.length === 1 ? "" : "s"}`;
+    const cap = !cuts.length
+      ? `${esc(fmt(cuttable))} mm cuttable`
+      : over
+        ? `${rollWord} · over by ${esc(fmt(cutSum - cuttable))} mm`
+        : `${rollWord} · ${esc(fmt(cutSum))} of ${esc(fmt(cuttable))} mm cuttable`;
+    return `
+      <tr class="dsf-web-tr${chosen ? " is-chosen" : ""}" data-size="${sz}" role="radio" aria-checked="${chosen}" tabindex="0">
+        <td class="dsf-web-size">${esc(fmt(sz))} mm</td>
+        <td class="dsf-web-rem${over ? " sl-bad" : ""}">${cuts.length ? esc(fmt(remaining)) + " mm" : "—"}</td>
+        <td class="dsf-web-diag">
+          <span class="flag ${over ? "sl-bad" : (cuts.length ? "sl-ok" : "")}">${cap}${isBest && !chosen ? ` <span class="dsf-tag">· best fit</span>` : ""}</span>
+          <div class="sl-web${over ? " is-over" : ""}">${webInnerHTML(cuts, sz)}</div>
+        </td>
+        <td class="dsf-web-pick"><span class="dsf-radio"></span></td>
+      </tr>`;
+  }
+
+  // Renumber rows, redraw every row's webs (chosen + every other in-stock size),
+  // update totals.
+  function recalcAll() {
+    readTrim();
+    const rows = layoutRows();
+    const { widest, best, fits } = autoSize();
+    const sz = Number(dsfDeckleSize.value) || 0;
+    const cuttable = sz > 0 ? round2(sz - 2 * EDGE) : 0;
+    let totalWebs = 0;
+    let firstBlock = "";
+
+    rows.forEach((tr, i) => {
+      tr.querySelector(".dsf-rownum").textContent = String(i + 1);
+      tr.querySelector(".dsf-remove").disabled = rows.length <= 1;
+      tr.querySelectorAll(".sl-roll-width").forEach((el) => el.classList.toggle("is-set", el.value.trim() !== ""));
+
+      const r = readRow(tr);
+      totalWebs += r.webs;
+      const cutSum = round2(r.cuts.reduce((n, [, w]) => n + w, 0));
+      const over = sz > 0 && cutSum > cuttable;
+
+      // Table: one row per in-stock web size (or the hand-typed one) --
+      // size | diagram+caption | pick radio.
+      const stack = tr.__sub.querySelector(".dsf-webs-stack");
+      const list = SIZE_LIST.length ? SIZE_LIST : (sz > 0 ? [sz] : []);
+      stack.innerHTML = list.length
+        ? `<table class="dsf-web-table">${WEB_TABLE_HEAD}<tbody>${list.map((s) => webRowHTML(r.cuts, s, s === selectedSize, s === best)).join("")}</tbody></table>`
+        : `<div style="font-size:12px;font-weight:700;color:#7c8ba1;padding:6px 2px;">Enter a deckle size — nothing matching is in stock.</div>`;
+      stack.querySelectorAll(".dsf-web-tr").forEach((el) => {
+        el.addEventListener("click", () => selectSize(el.dataset.size));
+        el.addEventListener("keydown", (ev) => {
+          if (ev.key === " " || ev.key === "Enter") { ev.preventDefault(); selectSize(el.dataset.size); }
+        });
+      });
+
+      const why = !sz ? (SIZE_LIST.length ? "" : "enter a deckle size")
+        : !r.cuts.length ? `Layout #${i + 1}: enter at least one roll width`
+        : over ? `Layout #${i + 1}: ${fmt(cutSum)} mm layout won't fit the ${fmt(sz)} mm deckle size — split it`
+        : r.webs < 1 ? `Layout #${i + 1}: enter how many webs use it`
+        : "";
+      if (why && !firstBlock) firstBlock = why;
+    });
+
+    dsfNoOfRolls.value = String(totalWebs);
+    const sizeTag = sz > 0 ? ` · deckle size ${fmt(sz)} mm${fits ? "" : " (too small — split a layout)"}` : "";
+    layoutStatus.textContent = firstBlock
+      || `${rows.length} layout${rows.length === 1 ? "" : "s"} · ${totalWebs} deckle web${totalWebs === 1 ? "" : "s"}${sizeTag}`;
+    layoutStatus.style.color = firstBlock || (sz > 0 && !fits) ? "#b45309" : "#15803d";
+  }
+
+  function checkedIds() {
+    return [...orderBody.querySelectorAll('input[name="orderIds"]:checked')].map((c) => c.value);
+  }
+
+  // ---- wiring ----
+  document.getElementById("dsfAddLayout").addEventListener("click", () => addLayoutRow());
+  if (manualSizeEl) manualSizeEl.addEventListener("input", recalcAll);
+  if (dsfTrim) {
+    dsfTrim.addEventListener("input", recalcAll);
+    dsfTrim.addEventListener("blur", showTrimText);
+    dsfTrim.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" || ev.key === "Escape") { ev.preventDefault(); dsfTrim.blur(); }
+    });
+    document.getElementById("dsfTrimEdit").addEventListener("click", editTrim);
+    showTrimText();
+  }
+  orderBody.querySelectorAll('input[name="orderIds"]').forEach((c) => c.addEventListener("change", () => {
+    const tr = c.closest("tr");
+    if (tr) tr.style.opacity = c.checked ? "1" : "0.45";
+  }));
+
+  document.getElementById("dsfForm").addEventListener("submit", (e) => {
+    recalcAll();
+    const ids = checkedIds();
+    if (!ids.length) { e.preventDefault(); showToast("Tick at least one order for this deckle.", "error"); return; }
+    const sz = Number(dsfDeckleSize.value);
+    if (!Number.isFinite(sz) || sz <= 0) { e.preventDefault(); showToast("Enter a deckle size — nothing matching is in stock.", "error"); return; }
+
+    const rows = layoutRows().map(readRow).filter((r) => r.cuts.length);
+    if (!rows.length) { e.preventDefault(); showToast("Enter at least one deckle layout (roll widths).", "error"); return; }
+    if (rows.some((r) => r.webs < 1)) { e.preventDefault(); showToast("Every layout needs at least 1 web.", "error"); return; }
+
+    const cuttable = round2(sz - 2 * EDGE);
+    if (rows.some((r) => round2(r.cuts.reduce((n, [, w]) => n + w, 0)) > cuttable)) {
+      showToast("Heads up: a layout is wider than the chosen deckle size — saving anyway.", "error");
+    }
+
+    dsfLayoutsJson.value = JSON.stringify(rows.map((r) => ({
+      cuts: r.cuts.map(([slot, width]) => ({ slot, width })),
+      rm: r.rm,
+      webs: r.webs,
+    })));
+    dsfNoOfRolls.value = String(rows.reduce((n, r) => n + r.webs, 0));
+  });
+
+  // ---- init ----
+  addLayoutRow();
+</script>

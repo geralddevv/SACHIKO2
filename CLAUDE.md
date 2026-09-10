@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm start          # Run the server (node server.js) on port 3000
+npm start          # Run the server (node server.js) — port from PORT in .env, default 3001
 ```
 
 No test suite exists. There is no build step — this is a plain Node.js ES-module project.

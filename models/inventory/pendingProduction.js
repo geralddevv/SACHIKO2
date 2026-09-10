@@ -90,6 +90,32 @@ const pendingProductionSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Set by POST /labels/production/deckle-set on the batch row only
+    // (isDeckleBatch). The deckle layouts the planner drew on the Set Deckle
+    // page -- one entry per cut pattern, all cut from the one chosen deckleSize
+    // (see "Same size, many webs"). Each entry: `cuts` (A..L knife widths --
+    // CUT_SLOTS in routes/system/slitting.js -- slot "A".."L", width mm),
+    // `plannedRunningMeter` (per-finished-roll length, optional) and `count`
+    // (how many deckle webs use this layout; the sum is the batch's noOfRolls).
+    // Carried forward to PRE-FILL Slitting Allocation's layout rows for this
+    // batch (GET /slitting/allocate/:pendingId) so the widths are not re-typed.
+    // Advisory only. Order-sync upserts never touch it (only ever lives on a
+    // synthetic batch doc).
+    deckleLayout: {
+      type: [
+        {
+          _id: false,
+          cuts: [{ _id: false, slot: { type: String }, width: { type: Number } }],
+          plannedRunningMeter: { type: Number },
+          count: { type: Number },
+        },
+      ],
+      default: undefined,
+    },
+    // Total edge trim (both edges) the planner set on the Set Deckle page while
+    // fitting the layouts above. Pre-fills Slitting Allocation's Trim field.
+    deckleTrim: { type: Number },
+
     // Set by GET/POST /sachiko/labels/production/assign/:id. Order-sync
     // upserts never touch these fields (see upsertPendingProduction).
     assignedMachineId: {

@@ -288,7 +288,7 @@
                 job that needs something else. A layout row carried over from
                 an already-allocated Deckle keeps its own saved width and
                 ignores this. %>
-            <input type="number" id="slTrim" class="form-control" value="10" min="0" step="any"
+            <input type="number" id="slTrim" class="form-control" value="<%= typeof defaultTrim !== 'undefined' ? defaultTrim : 10 %>" min="0" step="any"
                    title="Total edge trim (both sides) netted out of the web width for new layouts. Default 10 mm." />
           </div>
           <div class="sl-job-cell is-input">
@@ -445,12 +445,19 @@
 
 <script id="sl-target-data" type="application/json"><%- safeJson(targetDeckles) %></script>
 <script id="sl-order-data" type="application/json"><%- safeJson(order) %></script>
+<script id="sl-batch-layout" type="application/json"><%- safeJson(typeof batchLayout !== "undefined" ? batchLayout : null) %></script>
 <script id="sl-slots-data" type="application/json"><%- safeJson(cutSlots) %></script>
 <script id="sl-config-data" type="application/json"><%- safeJson({ pendingId: order._id, submissionToken, fixedCols }) %></script>
 
 <script>
   const TARGETS = JSON.parse(document.getElementById("sl-target-data").textContent);
   const ORDER = JSON.parse(document.getElementById("sl-order-data").textContent);
+  // The Set Deckle page's stored deckle layouts for this batch (array of
+  // { cuts:{A:..}, plannedRunningMeter, count }), or []. safeJson turns null
+  // into {}, so normalise defensively.
+  const _batchLayoutRaw = JSON.parse(document.getElementById("sl-batch-layout").textContent);
+  const BATCH_LAYOUT = (Array.isArray(_batchLayoutRaw) ? _batchLayoutRaw : [])
+    .filter((L) => L && L.cuts && Object.keys(L.cuts).length);
   const SLOTS = JSON.parse(document.getElementById("sl-slots-data").textContent);
   const CONFIG = JSON.parse(document.getElementById("sl-config-data").textContent);
   const SUB_COLSPAN = CONFIG.fixedCols + SLOTS.length;
@@ -853,7 +860,21 @@
   // One row per layout group -- Deckles sharing an identical existing
   // allocation (or all blank, on a fresh one) start collapsed together;
   // qty is seeded from how many Deckles that group has.
-  [...layoutGroups.values()].forEach((group) => {
-    addLayoutRow(group.length, group[0].existing ? group[0].existing.row : undefined);
-  });
+  const anyExisting = [...layoutGroups.values()].some((g) => g[0].existing);
+  if (!anyExisting && BATCH_LAYOUT.length) {
+    // Fresh allocation of a batch the Set Deckle page planned: seed one row per
+    // planned deckle layout, qty = its web count. Widths/R. Meter only -- never
+    // a web width, so GROUP_WIDTH (size - Trim) still governs.
+    BATCH_LAYOUT.forEach((L) => {
+      addLayoutRow(Math.max(1, Math.floor(L.count || 1)), {
+        plannedRunningMeter: L.plannedRunningMeter,
+        cuts: L.cuts,
+      });
+    });
+  } else {
+    [...layoutGroups.values()].forEach((group) => {
+      // An existing SlittingJobCard row wins; otherwise a single blank row.
+      addLayoutRow(group.length, group[0].existing ? group[0].existing.row : undefined);
+    });
+  }
 </script>

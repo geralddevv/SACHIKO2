@@ -654,6 +654,21 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
       curing: { cured: !r.curing, curedAtLabel: r.curingUntilLabel },
     }));
 
+  // The deckle layouts the planner drew on the Set Deckle page for this batch
+  // (models/inventory/pendingProduction.js deckleLayout -- one entry per cut
+  // pattern, each with its own A..L widths + R. Meter + web count). Pre-fills a
+  // fresh allocation's layout rows so the widths are not re-typed here. An
+  // existing SlittingJobCard row always wins over this (see the view).
+  const batchLayout = (pending.isDeckleBatch && Array.isArray(pending.deckleLayout) && pending.deckleLayout.length)
+    ? pending.deckleLayout
+        .filter((L) => Array.isArray(L.cuts) && L.cuts.length)
+        .map((L) => ({
+          plannedRunningMeter: L.plannedRunningMeter ?? null,
+          count: L.count ?? 1,
+          cuts: Object.fromEntries(L.cuts.map((c) => [c.slot, c.width])),
+        }))
+    : null;
+
   res.render("inventory/masters/slittingAllocation.ejs", {
     title: "Slitting Allocation",
     CSS: false,
@@ -663,6 +678,9 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     // below. Fixed -- not a picker.
     targetDeckles,
     groupDeckles,
+    batchLayout,
+    // Trim the Set Deckle planner used for this batch, else the 10 mm default.
+    defaultTrim: pending.isDeckleBatch && Number(pending.deckleTrim) >= 0 ? Number(pending.deckleTrim) : 10,
     cutSlots: CUT_SLOTS,
     previewCardId,
     machines: machines.map((m) => ({

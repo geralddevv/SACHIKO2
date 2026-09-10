@@ -66,7 +66,7 @@ import { sendAsset, assetExists } from "./utils/media.js";
 import { loginLimiter, createLimiter, updateLimiter, deleteLimiter } from "./utils/limiters.js";
 
 const app = express();
-const port = 3001;
+const port = Number(process.env.PORT) || 3001;
 
 /* DB (env already loaded by the config/loadEnv.js import at the top of this file) */
 connectDB();

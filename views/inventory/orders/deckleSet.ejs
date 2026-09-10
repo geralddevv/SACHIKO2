@@ -4,11 +4,6 @@
 <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
 
 <style>
-  @keyframes popIn {
-    0% { transform: scale(0.94); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
-  }
-
   .btn-action {
     height: 24px; padding: 2px 10px; color: white; border: none; border-radius: 4px; cursor: pointer;
     font-size: 11px; transition: opacity 0.2s; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;
@@ -20,9 +15,7 @@
   #deckle-set-table .tabulator-row[data-ds-child="true"] .tabulator-cell { color: #475569; }
   #deckle-set-table .tabulator-row[data-ds-batched="true"] { background: #eef5ff; }
 
-  /* ---- dataTree expand/collapse toggle (the "+" chip on each SKU row) ----
-     Same house pattern as views/sachiko/labelStockView.ejs: a rounded brand
-     chip with a Font Awesome chevron that rotates 90deg when open. */
+  /* ---- dataTree expand/collapse toggle (the "+" chip on each SKU row) ---- */
   #deckle-set-table .tabulator-data-tree-control {
     width: 22px !important;
     height: 22px !important;
@@ -72,14 +65,10 @@
     content: none !important;
     display: none !important;
   }
-  /* Hide Tabulator's own "L"-shaped branch guides on child rows -- the row
-     shading + "↳" prefix already read as nesting. */
   #deckle-set-table .tabulator-data-tree-branch,
   #deckle-set-table .tabulator-data-tree-branch-empty {
     display: none !important;
   }
-  /* Child rows sit under a parent -- nudge their first cell in a touch so the
-     "↳ client" lines up past where the parent's toggle chip sits. */
   #deckle-set-table .tabulator-row[data-ds-child="true"] .tabulator-cell:first-child { padding-left: 14px; }
   .ds-count-badge {
     display: inline-block; font-size: 11px; font-weight: 800; color: #044a78;
@@ -89,177 +78,6 @@
     display: inline-block; font-size: 10px; font-weight: 800; color: #065f46;
     background: #d1fae5; border: 1px solid #a7f3d0; border-radius: 999px; padding: 2px 9px; letter-spacing: 0.3px;
   }
-
-  /* ============ Set Deckle dialog ============
-     .logout-modal is global (boilerplate.ejs, handles the fade backdrop);
-     .ds-dialog replaces .logout-dialog's own sizing/padding so the header/
-     body/footer can each own their own chrome -- overflow:hidden here is
-     safe (unlike the CLAUDE.md dialog rule against it) because nothing
-     inside this dialog is a Choices.js dropdown that could get clipped. */
-  .ds-dialog {
-    width: min(940px, 96vw);
-    max-height: min(680px, 88vh);
-    padding: 0;
-    border: none;
-    border-radius: 16px;
-    overflow: hidden;
-    background: #fff;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 24px 60px rgba(4, 74, 120, 0.28);
-    transform: scale(0.96);
-    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  #setDeckleDialog.show .ds-dialog { transform: scale(1); }
-
-  .ds-dialog-header {
-    flex: none;
-    background: linear-gradient(135deg, #044a78 0%, #03365a 100%);
-    padding: 14px 24px;
-    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-  }
-  .ds-dialog-header h2 { margin: 0; font-size: 17px; font-weight: 700; color: #fff; letter-spacing: 0.2px; }
-  .ds-dialog-subtitle { margin: 4px 0 0; font-size: 12.5px; color: rgba(255, 255, 255, 0.75); }
-  .ds-close-btn {
-    flex: none; border: none; background: rgba(255, 255, 255, 0.14); color: #fff;
-    width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 13px;
-    display: flex; align-items: center; justify-content: center; transition: background 0.15s ease;
-  }
-  .ds-close-btn:hover { background: rgba(255, 255, 255, 0.26); }
-
-  #ds-dialog-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-  .ds-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 24px; }
-
-  .ds-dialog-columns { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 26px; align-items: stretch; }
-  .ds-dialog-col-left { display: flex; flex-direction: column; min-width: 0; }
-  .ds-dialog-col-right { display: flex; flex-direction: column; min-width: 0; border-left: 1px solid #e6eaf2; padding-left: 26px; }
-  .ds-dialog-col-right .ds-size-list { flex: 0 1 auto; max-height: 360px; margin-bottom: 0; }
-  @media (max-width: 720px) {
-    .ds-dialog-columns { grid-template-columns: 1fr; }
-    .ds-dialog-col-right { border-left: none; padding-left: 0; border-top: 1px dashed #e6eaf2; padding-top: 20px; margin-top: 4px; }
-  }
-
-  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-  .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-  .custom-scrollbar::-webkit-scrollbar-thumb { background: #044a78; border-radius: 10px; }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
-
-  .ds-summary-item {
-    display: flex; flex-direction: column; gap: 6px;
-    padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px dashed #e2e8f0;
-  }
-  .ds-summary-label { font-size: 12px; color: #5a6586; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
-  .ds-summary-value {
-    display: block; font-size: 16px; color: #1f2a44; font-weight: 700;
-    border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 9px 12px; background: #f8fafc;
-  }
-
-  .ds-section-label { font-size: 12px; font-weight: 700; color: #044a78; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
-
-  /* ---- Orders-in-this-batch picker ---- */
-  .ds-orders-block { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px dashed #e2e8f0; }
-  .ds-orders-list { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow-y: auto; padding-right: 2px; }
-  .ds-order-row {
-    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
-    border: 1.5px solid #e6eaf2; border-radius: 9px; cursor: pointer; font-size: 12.5px;
-  }
-  .ds-order-row:hover { border-color: #a9c8e8; background: #f7fbff; }
-  .ds-order-row input { width: 16px; height: 16px; flex: none; accent-color: #044a78; }
-  .ds-order-row.is-off { opacity: 0.5; }
-  .ds-order-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-  .ds-order-top { font-weight: 700; color: #1f2a44; }
-  .ds-order-sub { color: #64748b; }
-  .ds-batch-totals {
-    margin-top: 12px; display: flex; flex-wrap: wrap;
-    border: 1px solid #e6eaf2; border-radius: 10px; background: #f8fafc; overflow: hidden;
-  }
-  .ds-batch-totals:empty { display: none; }
-  .ds-batch-stat {
-    flex: 1 1 0; min-width: 78px; padding: 8px 12px; text-align: center;
-    border-right: 1px solid #e6eaf2;
-  }
-  .ds-batch-stat:last-child { border-right: none; }
-  .ds-batch-stat .bs-label {
-    display: block; font-size: 10px; font-weight: 700; color: #7c8ba1;
-    text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px;
-  }
-  .ds-batch-stat .bs-value { display: block; font-size: 14.5px; font-weight: 800; color: #1f2a44; }
-
-  .ds-size-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px 2px 2px 0; margin-bottom: 12px; }
-  .ds-size-row {
-    display: flex; align-items: center; gap: 12px; padding: 9px 14px;
-    border-radius: 10px; border: 1.5px solid #e6eaf2; cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-  }
-  .ds-size-row:hover { border-color: #a9c8e8; background: #f7fbff; }
-  .ds-size-row.is-selected { border-color: #044a78; background: #eef5ff; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.08); }
-
-  .ds-size-radio {
-    flex: none; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #cbd5e1;
-    display: flex; align-items: center; justify-content: center; transition: border-color 0.15s ease;
-  }
-  .ds-size-row.is-selected .ds-size-radio { border-color: #044a78; }
-  .ds-size-radio::after { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #044a78; transform: scale(0); transition: transform 0.15s ease; }
-  .ds-size-row.is-selected .ds-size-radio::after { transform: scale(1); }
-
-  .ds-size-info { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .ds-size-main-row { display: flex; align-items: center; gap: 8px; }
-  .ds-size-main { font-size: 15px; font-weight: 800; color: #1f2a44; }
-  .ds-size-badge {
-    display: none; font-size: 9.5px; font-weight: 700; color: #fff; background: #059669;
-    border-radius: 999px; padding: 2px 8px; letter-spacing: 0.3px;
-  }
-  .ds-size-row.is-suggested .ds-size-badge { display: inline-block; }
-  .ds-size-meta { font-size: 12px; color: #64748b; }
-
-  .ds-size-row.is-other-spec { border-style: dashed; background: #fafafa; }
-  .ds-size-row.is-other-spec .ds-size-main { color: #78716c; }
-  .ds-size-tag-other {
-    display: inline-block; font-size: 9.5px; font-weight: 700; color: #92400e;
-    background: #fef3c7; border: 1px solid #fde68a; border-radius: 999px; padding: 2px 8px; letter-spacing: 0.3px;
-  }
-
-  .ds-size-empty {
-    display: flex; align-items: center; gap: 10px; padding: 14px 16px; margin-bottom: 16px;
-    background: #fffaf0; border: 1px solid #fde8c9; border-radius: 10px; color: #92400e; font-size: 13px;
-  }
-  .ds-size-empty i { font-size: 16px; }
-
-  .ds-manual-field { padding-bottom: 18px; }
-  .ds-manual-field label {
-    display: block; font-size: 12px; font-weight: 700; color: #5a6586;
-    margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.3px;
-  }
-  /* Two manual fields sharing one row (the pair of running-meters inputs). */
-  .ds-field-row { display: flex; gap: 14px; flex-wrap: wrap; }
-  .ds-field-row .ds-manual-field { flex: 1 1 130px; min-width: 130px; }
-  .ds-input-wrap { position: relative; }
-  #ds-size-input { padding-right: 44px !important; }
-  #ds-size-input, #ds-deckle-rm-input, #ds-total-rm-input, #ds-deckle-qty-input { font-size: 16px !important; font-weight: 700 !important; }
-  .ds-input-suffix {
-    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-    font-size: 13px; font-weight: 700; color: #94a3b8; pointer-events: none;
-  }
-  .ds-error-text { color: #dc2626; font-size: 12px; font-weight: 600; }
-  .ds-error-text:not(:empty) { margin-top: 4px; }
-  .premium-input.is-invalid {
-    border-color: #dc2626 !important;
-    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15) !important;
-  }
-
-  .ds-dialog-footer {
-    flex: none; display: flex; justify-content: flex-end; gap: 10px;
-    padding: 12px 24px; border-top: 1px solid #e6eaf2; background: #fafbfd;
-  }
-  .ds-btn {
-    border: none; border-radius: 9px; padding: 11px 20px; font-size: 14px; font-weight: 700; cursor: pointer;
-    transition: opacity 0.18s ease, transform 0.1s ease; display: inline-flex; align-items: center; gap: 8px;
-  }
-  .ds-btn:active { transform: scale(0.98); }
-  .ds-btn-ghost { background: #eef1f5; color: #475569; }
-  .ds-btn-ghost:hover { background: #e2e6ec; }
-  .ds-btn-primary { background: linear-gradient(135deg, #044a78 0%, #03365a 100%); color: #fff; }
-  .ds-btn-primary:hover { opacity: 0.92; }
 </style>
 
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
@@ -286,90 +104,6 @@
   <div id="deckle-set-table" class="tabulator tabulator-modern"></div>
 </div>
 
-<!-- Set Deckle dialog -->
-<div class="logout-modal" id="setDeckleDialog" aria-hidden="true">
-  <div class="ds-dialog" role="dialog" aria-modal="true" aria-labelledby="setDeckleDialogTitle">
-    <div class="ds-dialog-header">
-      <div>
-        <h2 id="setDeckleDialogTitle">Set Deckle</h2>
-        <p class="ds-dialog-subtitle" id="ds-dialog-subtitle"></p>
-      </div>
-      <button type="button" class="ds-close-btn" id="ds-close-btn" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-
-    <form id="ds-dialog-form" method="post" action="/app/labels/production/deckle-set" novalidate>
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-      <input type="hidden" name="itemId" id="ds-item-id" />
-      <input type="hidden" name="paperSize" id="ds-paper-size" />
-
-      <div class="ds-dialog-body custom-scrollbar">
-        <div class="ds-orders-block">
-          <div class="ds-section-label">Orders in this deckle</div>
-          <div id="ds-orders-list" class="ds-orders-list custom-scrollbar"></div>
-          <div class="ds-batch-totals" id="ds-batch-totals"></div>
-          <div id="ds-orders-error" class="ds-error-text"></div>
-        </div>
-
-        <div class="ds-dialog-columns">
-          <div class="ds-dialog-col-left">
-            <div class="ds-summary-item">
-              <span class="ds-summary-label">SKU no.</span>
-              <span class="ds-summary-value" id="ds-product-code">—</span>
-            </div>
-
-            <div class="ds-manual-field">
-              <label for="ds-size-input">Deckle Size</label>
-              <div class="ds-input-wrap">
-                <input type="number" step="any" min="0" id="ds-size-input" name="deckleSize" class="form-control premium-input" placeholder="Enter deckle size" required />
-                <span class="ds-input-suffix">mm</span>
-              </div>
-              <div id="ds-size-error" class="ds-error-text"></div>
-            </div>
-
-            <div class="ds-field-row">
-              <div class="ds-manual-field">
-                <label for="ds-deckle-rm-input">Deckle RM</label>
-                <div class="ds-input-wrap">
-                  <input type="number" step="any" min="0" id="ds-deckle-rm-input" name="deckleRunningMeters" class="form-control premium-input" placeholder="Per deckle" />
-                </div>
-              </div>
-              <div class="ds-manual-field">
-                <label for="ds-total-rm-input">Total RM</label>
-                <div class="ds-input-wrap">
-                  <input type="number" step="any" min="0" id="ds-total-rm-input" name="runningMeters" class="form-control premium-input" placeholder="Whole job" />
-                </div>
-              </div>
-            </div>
-            <div id="ds-running-mtrs-error" class="ds-error-text" style="margin-top:-10px;margin-bottom:14px;"></div>
-
-            <div class="ds-manual-field">
-              <label for="ds-deckle-qty-input">Deckle Quantity</label>
-              <div class="ds-input-wrap">
-                <input type="number" step="1" min="1" id="ds-deckle-qty-input" name="noOfRolls" class="form-control premium-input" placeholder="Enter deckle qty" required />
-              </div>
-              <div id="ds-deckle-qty-error" class="ds-error-text"></div>
-            </div>
-          </div>
-
-          <div class="ds-dialog-col-right">
-            <div class="ds-section-label">Available Facestock Sizes</div>
-            <div id="ds-size-list" class="ds-size-list custom-scrollbar"></div>
-            <div id="ds-size-empty" class="ds-size-empty" style="display: none;">
-              <i class="fa-solid fa-triangle-exclamation"></i>
-              <span>No matching Facestock in stock for this recipe &mdash; enter a size manually.</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="ds-dialog-footer">
-        <button type="button" class="ds-btn ds-btn-ghost" id="ds-cancel-btn">Cancel</button>
-        <button type="submit" class="ds-btn ds-btn-primary"><i class="fa-solid fa-arrow-right-long"></i> Create Deckle Batch</button>
-      </div>
-    </form>
-  </div>
-</div>
-
 <!-- Dissolve batch (hidden form, submitted from the table Actions) -->
 <form id="ds-dissolve-form" method="post" action="" style="display:none;">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
@@ -386,167 +120,6 @@
   const fmtMtrs = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
   const fmtInt = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN") : "—");
   const fmtDate = (v) => (v ? new Date(v).toLocaleDateString("en-IN") : "—");
-  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-
-  /* ----- Set Deckle dialog ----- */
-  const setDeckleDialog = document.getElementById("setDeckleDialog");
-  const dsDialogForm = document.getElementById("ds-dialog-form");
-  const dsItemId = document.getElementById("ds-item-id");
-  const dsPaperSize = document.getElementById("ds-paper-size");
-  const dsSizeInput = document.getElementById("ds-size-input");
-  const dsSizeError = document.getElementById("ds-size-error");
-  const dsDeckleQtyInput = document.getElementById("ds-deckle-qty-input");
-  const dsDeckleQtyError = document.getElementById("ds-deckle-qty-error");
-  const dsDeckleRmInput = document.getElementById("ds-deckle-rm-input");
-  const dsTotalRmInput = document.getElementById("ds-total-rm-input");
-  const dsRunningMtrsError = document.getElementById("ds-running-mtrs-error");
-  const dsSizeList = document.getElementById("ds-size-list");
-  const dsSizeEmpty = document.getElementById("ds-size-empty");
-  const dsOrdersList = document.getElementById("ds-orders-list");
-  const dsBatchTotals = document.getElementById("ds-batch-totals");
-  const dsOrdersError = document.getElementById("ds-orders-error");
-
-  let currentGroup = null;
-
-  function closeSetDeckleDialog() {
-    setDeckleDialog.classList.remove("show");
-    setDeckleDialog.setAttribute("aria-hidden", "true");
-  }
-  document.getElementById("ds-cancel-btn").addEventListener("click", closeSetDeckleDialog);
-  document.getElementById("ds-close-btn").addEventListener("click", closeSetDeckleDialog);
-  setDeckleDialog.addEventListener("click", (e) => { if (e.target === setDeckleDialog) closeSetDeckleDialog(); });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && setDeckleDialog.classList.contains("show")) closeSetDeckleDialog();
-  });
-
-  function checkedMembers() {
-    return [...dsOrdersList.querySelectorAll('input[name="orderIds"]:checked')].map((cb) => {
-      const m = (currentGroup._children || []).find((c) => String(c._id) === cb.value);
-      return m;
-    }).filter(Boolean);
-  }
-
-  // Live "N orders · Σ RM · Σ rolls · Σ qty" summary as the checkboxes toggle.
-  // Purely informational -- Deckle Size / Quantity / Running Meters are all
-  // entered by hand by the planner (not prefilled), same as the old dialog.
-  function refreshBatchTotals() {
-    const picked = checkedMembers();
-    const sumRM = picked.reduce((s, m) => s + num(m.runningMeters), 0);
-    const sumRolls = picked.reduce((s, m) => s + num(m.noOfRolls), 0);
-    const sumQty = picked.reduce((s, m) => s + num(m.quantity), 0);
-    // Same Sq Mtr as the table column: paper width (mm) x running length (m)
-    // / 1000 x qty, per order (m.sqMtr, computed server-side), summed here.
-    const sumSqMtr = Math.round(picked.reduce((s, m) => s + num(m.sqMtr), 0) * 100) / 100;
-    dsBatchTotals.innerHTML = `
-      <div class="ds-batch-stat"><span class="bs-label">Orders</span><span class="bs-value">${fmtInt(picked.length)}</span></div>
-      <div class="ds-batch-stat"><span class="bs-label">Running Mtrs</span><span class="bs-value">${fmtMtrs(sumRM)}</span></div>
-      <div class="ds-batch-stat"><span class="bs-label">Rolls Qty</span><span class="bs-value">${fmtInt(sumQty)}</span></div>
-      <div class="ds-batch-stat"><span class="bs-label">Sq Mtr</span><span class="bs-value">${fmtMtrs(sumSqMtr)}</span></div>
-    `;
-    dsOrdersList.querySelectorAll(".ds-order-row").forEach((r) => {
-      const cb = r.querySelector("input");
-      r.classList.toggle("is-off", !cb.checked);
-    });
-    if (picked.length) dsOrdersError.textContent = "";
-    return { sumRM, sumRolls, sumQty };
-  }
-
-  function renderOrdersList(group) {
-    const kids = Array.isArray(group._children) ? group._children : [];
-    dsOrdersList.innerHTML = kids.map((m) => `
-      <label class="ds-order-row">
-        <input type="checkbox" name="orderIds" value="${m._id}" checked />
-        <span class="ds-order-main">
-          <span class="ds-order-top">${m.clientName || "—"} &middot; ${m.poNumber || "—"}</span>
-          <span class="ds-order-sub">paper ${m.paperSize || "—"} &nbsp;·&nbsp; qty ${fmtInt(m.quantity)} &nbsp;·&nbsp; RM ${fmtMtrs(m.runningMeters)} &nbsp;·&nbsp; ${fmtInt(m.noOfRolls)} rolls &nbsp;·&nbsp; due ${fmtDate(m.estimatedDate)}</span>
-        </span>
-      </label>
-    `).join("");
-    dsOrdersList.querySelectorAll('input[name="orderIds"]').forEach((cb) => {
-      cb.addEventListener("change", refreshBatchTotals);
-    });
-  }
-
-  function renderSizeList(group) {
-    const sizes = Array.isArray(group.candidateSizes) ? group.candidateSizes : [];
-    dsSizeEmpty.style.display = sizes.length ? "none" : "flex";
-    dsSizeList.style.display = sizes.length ? "flex" : "none";
-
-    const sorted = [...sizes].sort((a, b) => {
-      const aBest = group.suggestedSize != null && a.size === group.suggestedSize;
-      const bBest = group.suggestedSize != null && b.size === group.suggestedSize;
-      if (aBest !== bBest) return aBest ? -1 : 1;
-      if (a.isRecipeMatch !== b.isRecipeMatch) return a.isRecipeMatch ? -1 : 1;
-      return a.size - b.size;
-    });
-    const currentValue = group.suggestedSize;
-
-    dsSizeList.innerHTML = sorted.map((s) => {
-      const isSuggested = group.suggestedSize != null && s.size === group.suggestedSize;
-      const isCurrent = currentValue != null && s.size === currentValue;
-      return `
-        <div class="ds-size-row${isCurrent ? " is-selected" : ""}${isSuggested ? " is-suggested" : ""}${s.isRecipeMatch ? "" : " is-other-spec"}" data-size="${s.size}">
-          <span class="ds-size-radio"></span>
-          <span class="ds-size-info">
-            <span class="ds-size-main-row">
-              <span class="ds-size-main">${s.size}mm</span>
-              <span class="ds-size-badge">Best Fit</span>
-              ${s.isRecipeMatch ? "" : `<span class="ds-size-tag-other">Other Spec</span>`}
-            </span>
-          </span>
-        </div>
-      `;
-    }).join("");
-
-    dsSizeList.querySelectorAll(".ds-size-row").forEach((el) => {
-      el.addEventListener("click", () => {
-        dsSizeList.querySelectorAll(".ds-size-row").forEach((r) => r.classList.remove("is-selected"));
-        el.classList.add("is-selected");
-        dsSizeInput.value = el.dataset.size;
-        dsSizeError.textContent = "";
-      });
-    });
-  }
-
-  dsSizeInput.addEventListener("input", () => {
-    const typed = dsSizeInput.value;
-    dsSizeList.querySelectorAll(".ds-size-row").forEach((r) => {
-      r.classList.toggle("is-selected", r.dataset.size === typed);
-    });
-  });
-
-  window.openSetDeckleDialog = function (groupId) {
-    const group = rowsData.find((r) => String(r._id) === String(groupId) && r.isGroup && !r.isBatch);
-    if (!group) return;
-    currentGroup = group;
-
-    document.getElementById("setDeckleDialogTitle").textContent = "Set Deckle";
-    document.getElementById("ds-dialog-subtitle").textContent = group.productCode || "Label Stock";
-    document.getElementById("ds-product-code").textContent = group.productCode || "—";
-
-    dsItemId.value = group.itemId || "";
-    dsPaperSize.value = group.paperSize || "";
-
-    // Deckle Size / Quantity / Running Meters are entered fresh each time.
-    dsDeckleQtyInput.value = "";
-    dsDeckleRmInput.value = "";
-    dsTotalRmInput.value = "";
-    dsDeckleRmInput.classList.remove("is-invalid");
-    dsTotalRmInput.classList.remove("is-invalid");
-    dsRunningMtrsError.textContent = "";
-    dsDeckleQtyError.textContent = "";
-
-    renderOrdersList(group);
-    renderSizeList(group);
-    refreshBatchTotals();
-
-    dsSizeInput.value = group.suggestedSize != null ? group.suggestedSize : "";
-    dsSizeError.textContent = "";
-    dsOrdersError.textContent = "";
-
-    setDeckleDialog.classList.add("show");
-    setDeckleDialog.setAttribute("aria-hidden", "false");
-  };
 
   window.dissolveBatch = function (batchId) {
     if (!confirm("Dissolve this deckle batch? Its orders go back to Deckle Sorting.")) return;
@@ -555,51 +128,7 @@
     form.submit();
   };
 
-  dsDialogForm.addEventListener("submit", (e) => {
-    refreshBatchTotals();
-    const picked = checkedMembers();
-    if (picked.length === 0) {
-      e.preventDefault();
-      dsOrdersError.textContent = "Tick at least one order for this deckle.";
-      return;
-    }
-    const deckleSize = Number(dsSizeInput.value);
-    if (!deckleSize || deckleSize <= 0) {
-      e.preventDefault();
-      dsSizeError.textContent = "Enter a valid deckle size to continue.";
-      dsSizeInput.focus();
-      return;
-    }
-    const deckleQty = Number(dsDeckleQtyInput.value);
-    if (!deckleQty || deckleQty <= 0) {
-      e.preventDefault();
-      dsDeckleQtyError.textContent = "Enter a valid deckle quantity.";
-      dsDeckleQtyInput.focus();
-      return;
-    }
-    // Both running-meters fields are optional, but if entered must be > 0.
-    dsDeckleRmInput.classList.remove("is-invalid");
-    dsTotalRmInput.classList.remove("is-invalid");
-    dsRunningMtrsError.textContent = "";
-    const deckleRm = dsDeckleRmInput.value.trim();
-    const totalRm = dsTotalRmInput.value.trim();
-    for (const [val, input] of [[deckleRm, dsDeckleRmInput], [totalRm, dsTotalRmInput]]) {
-      if (val !== "" && !(Number(val) > 0)) {
-        e.preventDefault();
-        input.classList.add("is-invalid");
-        dsRunningMtrsError.textContent = "Running meters must be a number greater than 0.";
-        input.focus();
-        return;
-      }
-    }
-  });
-
   /* ----- Table (SKU groups as parent rows, member orders as children) ----- */
-  const groupText = (cell, groupVal, childVal) => {
-    const row = cell.getRow().getData();
-    return row.isGroup ? groupVal(row) : childVal(row);
-  };
-
   const table = new Tabulator("#deckle-set-table", {
     data: rowsData,
     placeholder: "No orders waiting on a deckle",
@@ -638,8 +167,6 @@
           return row.isGroup ? `<span class="ds-count-badge">${row.orderCount}</span>` : "";
         } },
       { title: "Paper Size", field: "paperSize", hozAlign: "center", headerSort: false,
-        // Paper size lives only on the per-order child rows -- never on the
-        // SKU group / batch parent row.
         formatter: (cell) => (cell.getRow().getData().isGroup ? "" : (cell.getValue() || "—")) },
       { title: "Running Mtrs", hozAlign: "right", headerSort: false,
         formatter: (cell) => {
@@ -652,8 +179,6 @@
           return fmtInt(row.isGroup ? row.sumQuantity : row.quantity);
         } },
       { title: "Sq Mtr", hozAlign: "right", headerSort: false,
-        // width (paper size, mm) x length (running mtrs, m) / 1000, per order;
-        // the group / batch row shows the sum of its orders'.
         formatter: (cell) => {
           const row = cell.getRow().getData();
           const v = row.isGroup ? row.sumSqMtr : row.sqMtr;
@@ -677,7 +202,7 @@
           if (row.isBatch) {
             return `<button onclick="dissolveBatch('${row.batchId}')" class="btn-action" style="background:#b91c1c;" title="Dissolve batch"><i class="fa-solid fa-link-slash"></i> Dissolve</button>`;
           }
-          return `<button onclick="openSetDeckleDialog('${row._id}')" class="btn-action" style="background:#10b981;" title="Set Deckle"><i class="fa-solid fa-ruler"></i> Set Deckle</button>`;
+          return `<a href="/app/labels/production/deckle-set/plan/${encodeURIComponent(row.itemId)}" class="btn-action" style="background:#10b981; text-decoration:none;" title="Set Deckle"><i class="fa-solid fa-ruler"></i> Set Deckle</a>`;
         },
       },
     ],

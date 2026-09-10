@@ -53,7 +53,8 @@ import {
   syncLabelBindingIdentity,
 } from "../utils/reconcileBindingLocations.js";
 import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
-import { produceDeckle, dissolveDeckle, requiredLayersFor, trackAllottedCombinations, suggestDeckleSize, LAYER_META, POOL_MODELS, pickStockIds } from "../utils/labelStockProduction.js";
+import { produceDeckle, dissolveDeckle, requiredLayersFor, trackAllottedCombinations, suggestDeckleSize, DECKLE_EDGE_TRIM_MM, LAYER_META, POOL_MODELS, pickStockIds } from "../utils/labelStockProduction.js";
+import { CUT_SLOTS } from "./system/slitting.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 
@@ -4496,6 +4497,69 @@ async function buildJobCardProgressMap(pendingIds) {
   return map;
 }
 
+// ---- Deckle Set shared helpers (used by the list page, the per-group Set
+// Deckle planning page, and the batch-forming POST below) --------------------
+const dsNum = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+// Sq. metres for one order = paper width (mm) x running length (m) / 1000 x qty.
+const dsSqM = (width, lengthM, qty) =>
+  Math.round((dsNum(width) * dsNum(lengthM) / 1000 * dsNum(qty)) * 100) / 100;
+
+// One member order, shaped for the Deckle Set table's child rows and the
+// planning page's order picker.
+const dsFmtChild = (r) => ({
+  _id: String(r._id),
+  isGroup: false,
+  clientName: r.userId?.clientName || r.userId?.userName || "—",
+  poNumber: r.poNumber || "—",
+  paperSize: r.paperSize || "—",
+  quantity: r.quantity ?? "—",
+  runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
+  sqMtr: dsSqM(r.paperSize, r.runningMeters, r.quantity),
+  noOfRolls: r.noOfRolls ?? "—",
+  estimatedDate: r.estimatedDate || null,
+  remarks: r.remarks || "",
+});
+
+// One Product-Code group of loose orders: the sums shown on the list row plus
+// everything the size picker needs (suggestDeckleSize sizes the web to the
+// widest single member -- orders are slit off the one web, not laid side by
+// side). `item` is the populated itemId (SachikoLabelStock w/ .facestock).
+async function buildLooseDeckleRow(item, members) {
+  const sumRolls = members.reduce((s, m) => s + dsNum(m.noOfRolls), 0);
+  const maxOrderWidth = members.reduce(
+    (w, m) => Math.max(w, dsNum(m.paperSize) * (dsNum(m.noOfRolls) || 1)),
+    0,
+  );
+  const { neededWidth, rollsWidth, edgeTrim, sizes, suggestedSize, short } = await suggestDeckleSize({
+    labelStock: item,
+    paperSize: maxOrderWidth || undefined,
+    noOfRolls: 1,
+  });
+  return {
+    _id: `grp:${String(item._id || "none")}`,
+    isGroup: true,
+    isBatch: false,
+    itemId: String(item._id || ""),
+    productCode: item.productCode || item.skuCode || "—",
+    paperSize: "",
+    rollType: item.rollType || "—",
+    orderCount: members.length,
+    sumQuantity: members.reduce((s, m) => s + dsNum(m.quantity), 0),
+    sumRunningMeters: members.reduce((s, m) => s + dsNum(m.runningMeters), 0),
+    sumSqMtr: Math.round(members.reduce((s, m) => s + dsSqM(m.paperSize, m.runningMeters, m.quantity), 0) * 100) / 100,
+    sumRolls,
+    neededWidth,
+    rollsWidth,
+    edgeTrim,
+    candidateSizes: sizes,
+    suggestedSize,
+    short,
+    _children: members
+      .map(dsFmtChild)
+      .sort((a, b) => new Date(a.estimatedDate || 0) - new Date(b.estimatedDate || 0)),
+  };
+}
+
 // Deckle Set -- deckle setting is per-SKU + paper size, not per order. Every
 // still-loose PendingProduction order (unassigned, no deckle size, not yet in
 // a batch) is grouped by its Product Code + paper size. The planner opens a
@@ -4508,10 +4572,8 @@ async function buildJobCardProgressMap(pendingIds) {
 // group's size picker, sized to the widest single member (orders are slit off
 // the one web, not laid side by side).
 router.get("/labels/production/deckle-set", async (req, res) => {
-  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-  // Sq. metres for one order = paper width (mm) x running length (m) / 1000 x qty.
-  const sqM = (width, lengthM, qty) =>
-    Math.round((num(width) * num(lengthM) / 1000 * num(qty)) * 100) / 100;
+  const num = dsNum;
+  const sqM = dsSqM;
 
   const [loose, batches] = await Promise.all([
     PendingProduction.find({
@@ -4535,19 +4597,7 @@ router.get("/labels/production/deckle-set", async (req, res) => {
       .lean(),
   ]);
 
-  const fmtChild = (r) => ({
-    _id: String(r._id),
-    isGroup: false,
-    clientName: r.userId?.clientName || r.userId?.userName || "—",
-    poNumber: r.poNumber || "—",
-    paperSize: r.paperSize || "—",
-    quantity: r.quantity ?? "—",
-    runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
-    sqMtr: sqM(r.paperSize, r.runningMeters, r.quantity),
-    noOfRolls: r.noOfRolls ?? "—",
-    estimatedDate: r.estimatedDate || null,
-    remarks: r.remarks || "",
-  });
+  const fmtChild = dsFmtChild;
 
   // ---- loose orders, grouped by Product Code (itemId) only -- paper size can
   // vary within a batch: each order is slit off the one deckle web separately,
@@ -4560,47 +4610,9 @@ router.get("/labels/production/deckle-set", async (req, res) => {
     g.members.push(r);
   }
 
-  const looseRows = await Promise.all([...groupMap.values()].map(async (g) => {
-    const item = g.item || {};
-    const sumRolls = g.members.reduce((s, m) => s + num(m.noOfRolls), 0);
-    // Widest single order = max over members of (paper size x its roll count).
-    // Feed that to suggestDeckleSize as a one-roll width so it sizes the web
-    // to the largest slit layout in the batch, not the sum.
-    const maxOrderWidth = g.members.reduce(
-      (w, m) => Math.max(w, num(m.paperSize) * (num(m.noOfRolls) || 1)),
-      0,
-    );
-    const { neededWidth, rollsWidth, edgeTrim, sizes, suggestedSize, short } = await suggestDeckleSize({
-      labelStock: item,
-      paperSize: maxOrderWidth || undefined,
-      noOfRolls: 1,
-    });
-    return {
-      _id: `grp:${g.key}`,
-      isGroup: true,
-      isBatch: false,
-      itemId: String(item._id || ""),
-      productCode: item.productCode || item.skuCode || "—",
-      // Never on the group row -- each order's own paper size shows on its
-      // child row (with the rest of that order's detail).
-      paperSize: "",
-      rollType: item.rollType || "—",
-      orderCount: g.members.length,
-      sumQuantity: g.members.reduce((s, m) => s + num(m.quantity), 0),
-      sumRunningMeters: g.members.reduce((s, m) => s + num(m.runningMeters), 0),
-      sumSqMtr: Math.round(g.members.reduce((s, m) => s + sqM(m.paperSize, m.runningMeters, m.quantity), 0) * 100) / 100,
-      sumRolls,
-      neededWidth,
-      rollsWidth,
-      edgeTrim,
-      candidateSizes: sizes,
-      suggestedSize,
-      short,
-      _children: g.members
-        .map(fmtChild)
-        .sort((a, b) => new Date(a.estimatedDate || 0) - new Date(b.estimatedDate || 0)),
-    };
-  }));
+  const looseRows = await Promise.all(
+    [...groupMap.values()].map((g) => buildLooseDeckleRow(g.item || {}, g.members)),
+  );
 
   // ---- batches already formed but not yet assigned ----
   const batchRows = batches.map((b) => {
@@ -4632,6 +4644,50 @@ router.get("/labels/production/deckle-set", async (req, res) => {
     CSS: "tableDisp.css",
     JS: false,
     rows: [...batchRows, ...looseRows],
+    notification: req.flash("notification"),
+  });
+});
+
+// The per-Product-Code "Set Deckle" planning page -- opened from the Set Deckle
+// button on the Deckle Set list (replaces the old in-page dialog). Shows the
+// loose member orders to bundle, the in-stock Facestock sizes for this recipe,
+// and a multi-bar web view: the planner draws one A..L roll-width layout and
+// compares its trim against every candidate size, picks the least-waste web,
+// then POSTs to /labels/production/deckle-set (same handler as the old dialog).
+router.get("/labels/production/deckle-set/plan/:itemId", async (req, res) => {
+  const backTo = "/app/labels/production/deckle-set";
+  const { itemId } = req.params;
+  if (!mongoose.isValidObjectId(itemId)) {
+    req.flash("notification", "Invalid Product Code.");
+    return res.redirect(backTo);
+  }
+
+  const members = await PendingProduction.find({
+    itemId,
+    assignedMachineId: null,
+    deckleSize: null,
+    deckleBatchId: null,
+    isDeckleBatch: { $ne: true },
+  })
+    .populate("userId", "clientName userName clientType")
+    .populate("itemId", "productCode skuCode rollType facestock")
+    .sort({ createdAt: 1 })
+    .lean();
+
+  if (!members.length) {
+    req.flash("notification", "No loose orders left for that Product Code — refresh Deckle Sorting.");
+    return res.redirect(backTo);
+  }
+
+  const group = await buildLooseDeckleRow(members[0].itemId || { _id: itemId }, members);
+
+  res.render("inventory/orders/deckleSetForm.ejs", {
+    title: "Set Deckle",
+    CSS: false,
+    JS: false,
+    group,
+    cutSlots: CUT_SLOTS,
+    edgeTrimPerSide: DECKLE_EDGE_TRIM_MM,
     notification: req.flash("notification"),
   });
 });
@@ -4693,11 +4749,57 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     ? `${deckleRunningMeters.toLocaleString("en-IN")} M/DECKLE · ${runningMeters.toLocaleString("en-IN")} M TOTAL`
     : undefined;
 
-  // Deckle Qty -- the rolls the batch job produces. Defaults to the member sum;
-  // the planner can override it on the dialog (e.g. an extra roll for wastage).
+  // The deckle layouts the planner drew on the Set Deckle page -- one entry per
+  // cut pattern (all cut from the one chosen deckleSize), each with its own
+  // A..L roll widths, per-roll R. Meter and `count` = how many deckle webs use
+  // it. Optional (absent from the no-facestock manual path / an older client);
+  // stored on the batch to pre-fill Slitting Allocation, never blocks creation.
+  const normCuts = (arr) =>
+    CUT_SLOTS
+      .map((slot) => {
+        const hit = Array.isArray(arr) ? arr.find((c) => c && c.slot === slot) : null;
+        return { slot, width: Number(hit?.width) };
+      })
+      .filter((c) => Number.isFinite(c.width) && c.width > 0);
+
+  let parsedLayouts = [];
+  try {
+    const j = JSON.parse(req.body.layoutsJson || "[]");
+    if (Array.isArray(j)) parsedLayouts = j;
+  } catch { parsedLayouts = []; }
+
+  // Fallback: the old single-layout form fields (cuts[A..L] + layoutRunningMeter).
+  if (!parsedLayouts.length && req.body.cuts && typeof req.body.cuts === "object") {
+    parsedLayouts = [{
+      cuts: CUT_SLOTS.map((slot) => ({ slot, width: req.body.cuts[slot] })),
+      rm: req.body.layoutRunningMeter,
+      webs: req.body.noOfRolls,
+    }];
+  }
+
+  const deckleLayout = parsedLayouts
+    .map((L) => {
+      const cuts = normCuts(L.cuts);
+      const rm = Number(L.rm);
+      const count = Math.max(1, Math.floor(Number(L.webs) || 1));
+      return cuts.length ? { cuts, plannedRunningMeter: Number.isFinite(rm) && rm > 0 ? rm : undefined, count } : null;
+    })
+    .filter(Boolean);
+  const layoutWebs = deckleLayout.reduce((n, L) => n + L.count, 0);
+
+  // Total edge trim (both edges) the planner set on the Set Deckle page while
+  // fitting the layouts. Pre-fills Slitting Allocation's own Trim field.
+  const enteredTrim = Number(req.body.deckleTrim);
+  const deckleTrim = Number.isFinite(enteredTrim) && enteredTrim >= 0 ? enteredTrim : undefined;
+
+  // Deckle Qty -- how many deckle webs to laminate. The Set Deckle page derives
+  // it from the sum of every layout's Webs count; falls back to whatever the
+  // form posted, then to the member roll sum.
   const sumRolls = members.reduce((s, m) => s + num(m.noOfRolls), 0);
   const enteredRolls = Number(req.body.noOfRolls);
-  const noOfRolls = enteredRolls && enteredRolls > 0 ? Math.round(enteredRolls) : sumRolls;
+  const noOfRolls = layoutWebs > 0
+    ? layoutWebs
+    : (enteredRolls && enteredRolls > 0 ? Math.round(enteredRolls) : sumRolls);
 
   const oldest = members.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
   const dueDates = members.map((m) => m.estimatedDate).filter(Boolean).sort((a, b) => new Date(a) - new Date(b));
@@ -4716,6 +4818,8 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     runningMetersText: runningMetersText || undefined,
     deckleRunningMeters,
     deckleSize,
+    deckleLayout: deckleLayout.length ? deckleLayout : undefined,
+    deckleTrim,
     deckleOption: oldest.deckleOption,
     estimatedDate: dueDates[0] || undefined,
     poNumber: members.map((m) => m.poNumber).filter(Boolean).join(", ").slice(0, 200) || undefined,
@@ -4727,7 +4831,8 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     { $set: { deckleBatchId: batch._id, deckleSize } },
   );
 
-  res.locals.auditDescription = `Created deckle batch ${batch._id} covering ${members.length} order(s)`;
+  res.locals.auditDescription = `Created deckle batch ${batch._id} covering ${members.length} order(s)`
+    + (deckleLayout.length ? ` (${deckleLayout.length} layout${deckleLayout.length === 1 ? "" : "s"}, ${layoutWebs} webs)` : "");
   req.flash("notification", `Deckle batch created — ${members.length} order(s) bundled at deckle size ${deckleSize}. Now in the Deckle Queue.`);
   res.redirect(backTo);
 });
