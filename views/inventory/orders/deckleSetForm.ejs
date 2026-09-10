@@ -9,10 +9,8 @@
   const fmtD = (v) => (v ? new Date(v).toLocaleDateString("en-IN") : "—");
   // # + A..L + R.Meter + Webs + remove -- the web-view sub-row spans the lot.
   const subColspan = cutSlots.length + 4;
-  // Default total edge trim -- always a real number (10 mm unless the recipe
-  // math says otherwise).
-  const trimDefault = Number(group.edgeTrim) > 0 ? Number(group.edgeTrim)
-    : (Number(edgeTrimPerSide) > 0 ? Number(edgeTrimPerSide) * 2 : 10);
+  // Default total edge trim (mm). Planner can edit it via the pencil.
+  const trimDefault = 5;
 %>
 
 <style>
@@ -275,21 +273,28 @@
     <!-- Orders in this deckle -->
     <div class="span-full form-subheading sl-sec-head"><h1>Orders In This Deckle</h1></div>
     <div class="span-full" style="border:none !important;">
-      <div class="sl-panel sl-scroll">
-        <table class="sl-table" style="min-width: 420px;">
+      <div class="sl-panel sl-scroll" style="display:inline-block; width:auto; max-width:100%;">
+        <table class="sl-table" style="width:auto; min-width:0;">
           <thead>
             <tr>
               <th style="width:44px;"></th>
-              <th>Paper Size</th><th>Running Mtrs</th><th>Roll Qty</th>
+              <th style="width:126px;">Paper Size</th>
+              <th style="width:138px;">Running Mtrs</th>
+              <th style="width:112px;">Roll Qty</th>
+              <th style="width:118px;">Rolls Set</th>
+              <th style="width:112px;">Balance</th>
             </tr>
           </thead>
           <tbody id="dsfOrderBody">
             <% kids.forEach((m) => { %>
-              <tr data-order-id="<%= m._id %>">
+              <tr data-order-id="<%= m._id %>"
+                  data-size="<%= Number(m.paperSize) || 0 %>" data-qty="<%= Number(m.quantity) || 0 %>">
                 <td><input type="checkbox" class="dsf-order-check" name="orderIds" value="<%= m._id %>" checked /></td>
                 <td><%= dash(m.paperSize) %></td>
-                <td style="text-align:right;"><%= fmtN(m.runningMeters) %></td>
+                <td><%= fmtN(m.runningMeters) %></td>
                 <td><%= fmtN(m.quantity) %></td>
+                <td class="dsf-o-set" style="font-weight:800;">0</td>
+                <td class="dsf-o-bal" style="font-weight:800;">—</td>
               </tr>
             <% }) %>
           </tbody>
@@ -339,7 +344,7 @@
   const SUB_COLSPAN = Number(CFG.subColspan) || (SLOTS.length + 4);
   const dsfTrim = document.getElementById("dsfTrim");
   const dsfTrimText = document.getElementById("dsfTrimText");
-  const DEFAULT_TRIM = Number(CFG.edge) * 2 || 10;
+  const DEFAULT_TRIM = 5;
   // Per-side edge trim, live from the editable "Edge Trim (total mm)" field.
   let EDGE = DEFAULT_TRIM / 2;
   function readTrim() {
@@ -580,6 +585,8 @@
     const cuttable = sz > 0 ? round2(sz - 2 * EDGE) : 0;
     let totalWebs = 0;
     let firstBlock = "";
+    // rolls "deckle set" per roll width = Σ (cuts of that width in a layout) × its Webs
+    const setByWidth = new Map();
 
     rows.forEach((tr, i) => {
       tr.querySelector(".dsf-rownum").textContent = String(i + 1);
@@ -588,6 +595,7 @@
 
       const r = readRow(tr);
       totalWebs += r.webs;
+      r.cuts.forEach(([, w]) => setByWidth.set(w, (setByWidth.get(w) || 0) + r.webs));
       const cutSum = round2(r.cuts.reduce((n, [, w]) => n + w, 0));
       const over = sz > 0 && cutSum > cuttable;
 
@@ -609,6 +617,29 @@
         : r.webs < 1 ? `Layout #${i + 1}: enter how many webs use it`
         : "";
       if (why && !firstBlock) firstBlock = why;
+    });
+
+    // "Rolls Set" / "Balance" per order -- rolls of an order's paper size that
+    // the layouts above cover. Orders sharing a paper size split the pool in
+    // list order; the last one absorbs any overflow.
+    const ordersByWidth = new Map();
+    [...orderBody.querySelectorAll("tr")].forEach((otr) => {
+      const w = Number(otr.dataset.size) || 0;
+      if (!ordersByWidth.has(w)) ordersByWidth.set(w, []);
+      ordersByWidth.get(w).push(otr);
+    });
+    ordersByWidth.forEach((trs, w) => {
+      let pool = setByWidth.get(w) || 0;
+      trs.forEach((otr, idx) => {
+        const qty = Number(otr.dataset.qty) || 0;
+        const take = idx === trs.length - 1 ? pool : Math.min(pool, qty);
+        pool = Math.max(0, pool - take);
+        const bal = qty - take;
+        otr.querySelector(".dsf-o-set").textContent = fmtI(take);
+        const balEl = otr.querySelector(".dsf-o-bal");
+        balEl.textContent = fmtI(bal);
+        balEl.style.color = bal < 0 ? "#b91c1c" : bal > 0 ? "#b45309" : "#15803d";
+      });
     });
 
     dsfNoOfRolls.value = String(totalWebs);
