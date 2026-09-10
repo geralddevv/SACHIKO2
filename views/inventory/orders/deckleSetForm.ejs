@@ -55,6 +55,37 @@
     display: inline-flex; align-items: center; justify-content: center;
   }
   .dsf-edit-ic:hover { background: rgba(4,74,120,0.18); }
+  .dsf-edit-ic.is-on { background: #044a78; color: #fff; }
+
+  /* Available Sizes: one "Available Sizes" heading, then the sizes in a single
+     horizontal row -- each separated by a divider, the edit pencil at the end
+     of the same row. Header + size font/weight unchanged (label + value styles). */
+  .dsf-avail-cell { position: relative; }
+  .dsf-size-line {
+    display: flex; align-items: center; gap: 14px;
+    border-top: 1px solid #e2e8f0; padding-top: 7px; margin-top: 2px;
+  }
+  .dsf-size-row { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+  .dsf-size-item { display: inline-flex; align-items: center; gap: 6px; }
+  .dsf-size-item:not(:first-child) { border-left: 1.5px solid #cbd5e1; padding-left: 14px; }
+  .dsf-size-item .x {
+    border: none; background: none; color: #b91c1c; cursor: pointer;
+    font-size: 15px; line-height: 1; padding: 0 2px; flex: none;
+  }
+  .dsf-size-item .x:hover { color: #7f1d1d; }
+  .dsf-size-none { color: #94a3b8; }
+  .dsf-edit-inline { position: static; flex: none; }
+  .dsf-chip-add { display: flex; gap: 6px; margin-top: 8px; }
+  .dsf-chip-add input {
+    width: 100px; height: 30px; text-align: center; font-weight: 700; font-size: 14px;
+    border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 2px 6px;
+  }
+  .dsf-chip-add input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+  .dsf-mini-btn {
+    display: inline-flex; align-items: center; gap: 5px; border: 1.5px solid #044a78; background: #fff;
+    color: #044a78; border-radius: 6px; padding: 3px 11px; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .dsf-mini-btn:hover { background: #f0f7ff; }
   #dsfTrim {
     height: 40px !important; font-size: 20px !important; font-weight: 800 !important; color: #1f2a44;
     width: 100%; padding: 4px 8px; border-radius: 6px; border: 1px solid #044a78; background: #f4f9ff;
@@ -224,9 +255,18 @@
                    value="<%= trimDefault %>"
                    class="form-control" title="Total edge trim across both edges, netted out of every web width." hidden />
           </div>
-          <div class="sl-job-cell dsf-avail">
+          <div class="sl-job-cell dsf-avail dsf-avail-cell">
             <span class="sl-job-label">Available Sizes</span>
-            <span class="sl-job-value"><%= sizes.length ? sizes.map((s) => s.size).join(", ") + " mm" : "—" %></span>
+            <div class="dsf-size-line">
+              <div id="dsfSizeChips" class="dsf-size-row"></div>
+              <button type="button" id="dsfSizeEdit" class="dsf-edit-ic dsf-edit-inline" title="Edit deckle sizes" aria-label="Edit deckle sizes">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+            </div>
+            <div id="dsfSizeAdd" class="dsf-chip-add" hidden>
+              <input type="number" step="any" min="0" id="dsfSizeInput" placeholder="mm" />
+              <button type="button" id="dsfSizeAddBtn" class="dsf-mini-btn"><i class="fa-solid fa-plus"></i> Add</button>
+            </div>
           </div>
         </div>
       </div>
@@ -236,25 +276,20 @@
     <div class="span-full form-subheading sl-sec-head"><h1>Orders In This Deckle</h1></div>
     <div class="span-full" style="border:none !important;">
       <div class="sl-panel sl-scroll">
-        <table class="sl-table" style="min-width: 820px;">
+        <table class="sl-table" style="min-width: 420px;">
           <thead>
             <tr>
               <th style="width:44px;"></th>
-              <th>Client</th><th>PO Number</th><th>Paper Size</th>
-              <th>Running Mtrs</th><th>Roll Qty</th><th>Sq Mtr</th><th>Est. Delivery</th>
+              <th>Paper Size</th><th>Running Mtrs</th><th>Roll Qty</th>
             </tr>
           </thead>
           <tbody id="dsfOrderBody">
             <% kids.forEach((m) => { %>
               <tr data-order-id="<%= m._id %>">
                 <td><input type="checkbox" class="dsf-order-check" name="orderIds" value="<%= m._id %>" checked /></td>
-                <td style="text-align:left;"><%= dash(m.clientName) %></td>
-                <td><%= dash(m.poNumber) %></td>
                 <td><%= dash(m.paperSize) %></td>
                 <td style="text-align:right;"><%= fmtN(m.runningMeters) %></td>
                 <td><%= fmtN(m.quantity) %></td>
-                <td style="text-align:right;"><%= fmtN(m.sqMtr) %></td>
-                <td><%= fmtD(m.estimatedDate) %></td>
               </tr>
             <% }) %>
           </tbody>
@@ -281,16 +316,7 @@
       </div>
       <div class="dsf-layout-toolbar">
         <span id="dsfLayoutStatus" class="dsf-layout-status"></span>
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <% if (!sizes.length) { %>
-          <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#5a6586;">
-            Deckle Size (mm)
-            <input type="number" step="any" min="0" id="dsfManualSize" placeholder="mm"
-                   style="width:100px; height:32px; text-align:center; border:1.5px solid #cbd5e1; border-radius:6px;" />
-          </label>
-          <% } %>
-          <button type="button" id="dsfAddLayout" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Deckle Layout</button>
-        </div>
+        <button type="button" id="dsfAddLayout" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Deckle Layout</button>
       </div>
     </div>
 
@@ -345,17 +371,52 @@
   const dsfDeckleSize = document.getElementById("dsfDeckleSize");
   const dsfNoOfRolls = document.getElementById("dsfNoOfRolls");
   const dsfLayoutsJson = document.getElementById("dsfLayoutsJson");
-  const manualSizeEl = document.getElementById("dsfManualSize");
   const layoutBody = document.getElementById("dsfLayoutBody");
   const layoutStatus = document.getElementById("dsfLayoutStatus");
   const orderBody = document.getElementById("dsfOrderBody");
+  const sizeChipsEl = document.getElementById("dsfSizeChips");
+  const sizeAddEl = document.getElementById("dsfSizeAdd");
+  const sizeInputEl = document.getElementById("dsfSizeInput");
 
-  // In-stock sizes, ascending. The deckle web is chosen automatically -- the
-  // smallest that fits the widest layout (least trim), or a hand-typed size
-  // when nothing matching is in stock.
-  const SIZE_LIST = SIZES.map((s) => Number(s.size)).filter((n) => n > 0).sort((a, b) => a - b);
+  // The available deckle sizes -- seeded from in-stock facestock, then the
+  // planner can add/remove (pencil = edit). Kept ascending + deduped. The web
+  // is chosen automatically: smallest that fits the widest layout (least trim).
+  let SIZE_LIST = SIZES.map((s) => Number(s.size)).filter((n) => n > 0);
+  let sizesEditing = false;
+  function normSizeList() {
+    SIZE_LIST = [...new Set(SIZE_LIST.map((n) => round2(Number(n))).filter((n) => Number.isFinite(n) && n > 0))]
+      .sort((a, b) => a - b);
+  }
+  normSizeList();
   let selectedSize = null;
   let userPickedSize = false;
+
+  function renderSizeChips() {
+    document.getElementById("dsfSizeEdit").classList.toggle("is-on", sizesEditing);
+    sizeAddEl.hidden = !sizesEditing;
+    sizeChipsEl.innerHTML = SIZE_LIST.length
+      ? SIZE_LIST.map((sz, i) =>
+          `<span class="sl-job-value dsf-size-item"><span>${esc(fmt(sz))} mm</span>`
+          + `${sizesEditing ? `<button type="button" class="x" data-i="${i}" title="Remove">&times;</button>` : ""}</span>`
+        ).join("")
+      : `<span class="sl-job-value dsf-size-none">${sizesEditing ? "add a size below" : "none — click the pencil to add"}</span>`;
+    sizeChipsEl.querySelectorAll(".x").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      SIZE_LIST.splice(Number(b.dataset.i), 1);
+      renderSizeChips();
+      recalcAll();
+    }));
+  }
+  function addSize() {
+    const v = round2(Number(sizeInputEl.value));
+    if (!(Number.isFinite(v) && v > 0)) { sizeInputEl.focus(); return; }
+    SIZE_LIST.push(v);
+    normSizeList();
+    sizeInputEl.value = "";
+    sizeInputEl.focus();
+    renderSizeChips();
+    recalcAll();
+  }
 
   // ---- web-view segment builders ----
   function edgeSeg(side) {
@@ -452,14 +513,9 @@
     }, 0);
   }
 
-  // The recommended web: smallest in-stock size whose cuttable width covers the
-  // widest layout (least trim); largest if none fits; the hand-typed value when
-  // nothing matching is in stock.
+  // The recommended web: smallest available size whose cuttable width covers the
+  // widest layout (least trim); largest if none fits.
   function bestFitSize(widest) {
-    if (manualSizeEl) {
-      const m = Number(manualSizeEl.value);
-      return Number.isFinite(m) && m > 0 ? m : null;
-    }
     if (!SIZE_LIST.length) return null;
     return widest > 0
       ? (SIZE_LIST.find((sz) => round2(sz - 2 * EDGE) >= widest) ?? SIZE_LIST[SIZE_LIST.length - 1])
@@ -471,13 +527,9 @@
   function autoSize() {
     const widest = maxLayoutSum();
     const best = bestFitSize(widest);
-    if (userPickedSize && SIZE_LIST.includes(selectedSize)) {
-      // keep the picked one
-    } else if (manualSizeEl) {
-      selectedSize = best;
-    } else {
-      selectedSize = best;
-    }
+    // Keep the planner's pick while it is still an available size; otherwise
+    // follow the best fit.
+    if (!(userPickedSize && SIZE_LIST.includes(selectedSize))) selectedSize = best;
     dsfDeckleSize.value = selectedSize != null ? selectedSize : "";
     return { widest, best, fits: selectedSize != null && round2(selectedSize - 2 * EDGE) >= widest };
   }
@@ -539,13 +591,11 @@
       const cutSum = round2(r.cuts.reduce((n, [, w]) => n + w, 0));
       const over = sz > 0 && cutSum > cuttable;
 
-      // Table: one row per in-stock web size (or the hand-typed one) --
-      // size | diagram+caption | pick radio.
+      // Table: one row per available deckle size -- size | remaining | diagram | pick.
       const stack = tr.__sub.querySelector(".dsf-webs-stack");
-      const list = SIZE_LIST.length ? SIZE_LIST : (sz > 0 ? [sz] : []);
-      stack.innerHTML = list.length
-        ? `<table class="dsf-web-table">${WEB_TABLE_HEAD}<tbody>${list.map((s) => webRowHTML(r.cuts, s, s === selectedSize, s === best)).join("")}</tbody></table>`
-        : `<div style="font-size:12px;font-weight:700;color:#7c8ba1;padding:6px 2px;">Enter a deckle size — nothing matching is in stock.</div>`;
+      stack.innerHTML = SIZE_LIST.length
+        ? `<table class="dsf-web-table">${WEB_TABLE_HEAD}<tbody>${SIZE_LIST.map((s) => webRowHTML(r.cuts, s, s === selectedSize, s === best)).join("")}</tbody></table>`
+        : `<div style="font-size:12px;font-weight:700;color:#7c8ba1;padding:6px 2px;">Add a deckle size above (pencil next to “Available Sizes”).</div>`;
       stack.querySelectorAll(".dsf-web-tr").forEach((el) => {
         el.addEventListener("click", () => selectSize(el.dataset.size));
         el.addEventListener("keydown", (ev) => {
@@ -553,7 +603,7 @@
         });
       });
 
-      const why = !sz ? (SIZE_LIST.length ? "" : "enter a deckle size")
+      const why = !sz ? (SIZE_LIST.length ? "" : "add a deckle size")
         : !r.cuts.length ? `Layout #${i + 1}: enter at least one roll width`
         : over ? `Layout #${i + 1}: ${fmt(cutSum)} mm layout won't fit the ${fmt(sz)} mm deckle size — split it`
         : r.webs < 1 ? `Layout #${i + 1}: enter how many webs use it`
@@ -574,7 +624,9 @@
 
   // ---- wiring ----
   document.getElementById("dsfAddLayout").addEventListener("click", () => addLayoutRow());
-  if (manualSizeEl) manualSizeEl.addEventListener("input", recalcAll);
+  document.getElementById("dsfSizeEdit").addEventListener("click", () => { sizesEditing = !sizesEditing; renderSizeChips(); });
+  document.getElementById("dsfSizeAddBtn").addEventListener("click", addSize);
+  sizeInputEl.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); addSize(); } });
   if (dsfTrim) {
     dsfTrim.addEventListener("input", recalcAll);
     dsfTrim.addEventListener("blur", showTrimText);
@@ -594,7 +646,7 @@
     const ids = checkedIds();
     if (!ids.length) { e.preventDefault(); showToast("Tick at least one order for this deckle.", "error"); return; }
     const sz = Number(dsfDeckleSize.value);
-    if (!Number.isFinite(sz) || sz <= 0) { e.preventDefault(); showToast("Enter a deckle size — nothing matching is in stock.", "error"); return; }
+    if (!Number.isFinite(sz) || sz <= 0) { e.preventDefault(); showToast("Add at least one deckle size.", "error"); return; }
 
     const rows = layoutRows().map(readRow).filter((r) => r.cuts.length);
     if (!rows.length) { e.preventDefault(); showToast("Enter at least one deckle layout (roll widths).", "error"); return; }
@@ -614,5 +666,6 @@
   });
 
   // ---- init ----
+  renderSizeChips();
   addLayoutRow();
 </script>
