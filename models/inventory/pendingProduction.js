@@ -81,6 +81,25 @@ const pendingProductionSchema = new mongoose.Schema(
     // snapshot; editing a member's qty/rolls afterward does not resize it.
     isDeckleBatch: { type: Boolean, default: false },
     batchOrderIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "PendingProduction" }],
+    // Set on a REMAINDER row -> the order row it was carved out of. A deckle
+    // rarely covers a member order exactly: when POST /labels/production/
+    // deckle-set finds the layouts produce fewer rolls of a width than that
+    // order asked for, the order row keeps only what the deckle actually makes
+    // (and joins the batch), and the shortfall is split off into a new loose
+    // row pointing here -- so the uncovered rolls come straight back onto the
+    // Deckle Sorting page to be set on a later deckle.
+    //
+    // Such a row is the one exception to "_id is the source order's _id": it
+    // has no TapeSalesOrder of its own. utils/pendingProduction.js keeps the
+    // family in sync -- an edit to the sales order reconciles the total across
+    // the parent and its remainder rows, and a dispatch/cancel removes them
+    // all.
+    parentOrderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PendingProduction",
+      index: true,
+    },
+
     // Set on each MEMBER order -> points at its batch row above. A member with
     // this set is hidden from Deckle Set / Deckle Queue / WIP-pending (it is in
     // production as part of the batch) but still dispatched normally.

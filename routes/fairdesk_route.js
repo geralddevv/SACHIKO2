@@ -63,6 +63,7 @@ import {
 } from "../utils/deckleOptimizer/index.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
+import { computeRawMaterialNeed } from "../utils/rawMaterialNeed.js";
 
 const router = express.Router();
 
@@ -4572,38 +4573,26 @@ async function buildLooseDeckleRow(item, members) {
 // group, ticks the orders to bundle, and picks one deckle size -- that creates
 // a "batch" PendingProduction (isDeckleBatch) covering them all as a single
 // production job, which then flows through the Deckle Queue -> Assign
-// Production -> Machine Queue exactly like one order. Members stay listed here
-// (greyed, under their batch) until the batch is assigned; they are still
-// dispatched individually the normal way. suggestDeckleSize feeds each loose
-// group's size picker, sized to the widest single member (orders are slit off
-// the one web, not laid side by side).
+// Production -> Machine Queue exactly like one order. Once that batch exists it
+// leaves this page entirely -- it (and its members) are listed on the Deckle
+// Queue, which is also where it can be dissolved back to loose. So this page
+// only ever answers "what still needs a deckle set". suggestDeckleSize feeds
+// each loose group's size picker, sized to the widest single member (orders are
+// slit off the one web, not laid side by side).
 router.get("/labels/production/deckle-set", async (req, res) => {
-  const num = dsNum;
-  const sqM = dsSqM;
-
-  const [loose, batches] = await Promise.all([
-    PendingProduction.find({
-      assignedMachineId: null,
-      deckleSize: null,
-      deckleBatchId: null,
-      isDeckleBatch: { $ne: true },
-    })
-      .populate("userId", "clientName userName clientType")
-      .populate("itemId", "productCode skuCode rollType facestock")
-      .sort({ createdAt: 1 })
-      .lean(),
-    PendingProduction.find({ isDeckleBatch: true, assignedMachineId: null })
-      .populate("itemId", "productCode skuCode rollType")
-      .populate({
-        path: "batchOrderIds",
-        select: "poNumber paperSize quantity runningMeters noOfRolls estimatedDate remarks createdAt userId",
-        populate: { path: "userId", select: "clientName userName" },
-      })
-      .sort({ createdAt: -1 })
-      .lean(),
-  ]);
-
-  const fmtChild = dsFmtChild;
+  // Only still-loose orders belong here -- once a batch is formed it IS the
+  // deckle to make, and it lives on the Deckle Queue (where it can also be
+  // dissolved back to loose). This page stays "what still needs a deckle set".
+  const loose = await PendingProduction.find({
+    assignedMachineId: null,
+    deckleSize: null,
+    deckleBatchId: null,
+    isDeckleBatch: { $ne: true },
+  })
+    .populate("userId", "clientName userName clientType")
+    .populate("itemId", "productCode skuCode rollType facestock")
+    .sort({ createdAt: 1 })
+    .lean();
 
   // ---- loose orders, grouped by Product Code (itemId) only -- paper size can
   // vary within a batch: each order is slit off the one deckle web separately,
@@ -4620,36 +4609,11 @@ router.get("/labels/production/deckle-set", async (req, res) => {
     [...groupMap.values()].map((g) => buildLooseDeckleRow(g.item || {}, g.members)),
   );
 
-  // ---- batches already formed but not yet assigned ----
-  const batchRows = batches.map((b) => {
-    const item = b.itemId || {};
-    const members = Array.isArray(b.batchOrderIds) ? b.batchOrderIds : [];
-    return {
-      _id: `batch:${String(b._id)}`,
-      isGroup: true,
-      isBatch: true,
-      batchId: String(b._id),
-      itemId: String(item._id || ""),
-      productCode: item.productCode || item.skuCode || "—",
-      // The deckle width is on the BATCHED tag; each member's paper size is on
-      // its child row -- nothing meaningful for the batch row's own cell.
-      paperSize: "",
-      rollType: item.rollType || "—",
-      deckleSize: b.deckleSize ?? null,
-      orderCount: members.length,
-      sumQuantity: num(b.quantity),
-      sumRunningMeters: num(b.runningMeters),
-      sumSqMtr: Math.round(members.reduce((s, m) => s + sqM(m.paperSize, m.runningMeters, m.quantity), 0) * 100) / 100,
-      sumRolls: num(b.noOfRolls),
-      _children: members.map(fmtChild),
-    };
-  });
-
   res.render("inventory/orders/deckleSet.ejs", {
     title: "Deckle Sorting",
     CSS: "tableDisp.css",
     JS: false,
-    rows: [...batchRows, ...looseRows],
+    rows: looseRows,
     notification: req.flash("notification"),
   });
 });
@@ -4953,8 +4917,52 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     ? layoutWebs
     : (enteredRolls && enteredRolls > 0 ? Math.round(enteredRolls) : sumRolls);
 
-  const oldest = members.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
-  const dueDates = members.map((m) => m.estimatedDate).filter(Boolean).sort((a, b) => new Date(a) - new Date(b));
+  // ---- how much of each ticked order this deckle actually covers ----------
+  // The layouts produce a fixed number of finished rolls per roll width; an
+  // order wanting more than that is only PARTLY set. Mirrors exactly what the
+  // Set Deckle page shows in "Rolls Set" / "Balance" (recalcAll()), so what the
+  // planner reviewed is what gets saved: rolls of a width are handed to the
+  // orders of that width in listed (oldest-first) order, and the last one
+  // absorbs any overflow.
+  const rollsByWidth = new Map();
+  for (const L of deckleLayout) {
+    const rpw = L.deckleRunningMeter > 0 && L.plannedRunningMeter > 0
+      ? Math.max(1, Math.floor(L.deckleRunningMeter / L.plannedRunningMeter))
+      : 1;
+    for (const c of L.cuts) {
+      rollsByWidth.set(c.width, (rollsByWidth.get(c.width) || 0) + (L.count || 1) * rpw);
+    }
+  }
+
+  const ordered = members.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const byWidth = new Map();
+  for (const m of ordered) {
+    const w = num(m.paperSize);
+    if (!byWidth.has(w)) byWidth.set(w, []);
+    byWidth.get(w).push(m);
+  }
+  // covered[orderId] = finished rolls of that order these layouts make.
+  const covered = new Map();
+  for (const [w, list] of byWidth) {
+    let pool = rollsByWidth.get(w) || 0;
+    list.forEach((m, idx) => {
+      const qty = num(m.quantity);
+      const take = idx === list.length - 1 ? pool : Math.min(pool, qty);
+      pool = Math.max(0, pool - take);
+      covered.set(String(m._id), Math.min(take, qty));
+    });
+  }
+
+  // An order the layouts don't touch at all is simply not batched -- it stays
+  // loose on Deckle Sorting, exactly as if it had never been ticked.
+  const batched = ordered.filter((m) => covered.get(String(m._id)) > 0);
+  if (!batched.length) {
+    req.flash("notification", "These layouts don't cut any of the ticked orders' roll widths — nothing to batch.");
+    return res.redirect(backTo);
+  }
+
+  const oldest = batched[0];
+  const dueDates = batched.map((m) => m.estimatedDate).filter(Boolean).sort((a, b) => new Date(a) - new Date(b));
 
   const batch = await PendingProduction.create({
     onModel: oldest.onModel || "SachikoLabelStock",
@@ -4964,7 +4972,10 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     // Members can have different per-roll paper sizes -- the batch produces one
     // web at the chosen deckle width, so that's the size that characterises it.
     paperSize: String(deckleSize),
-    quantity: members.reduce((s, m) => s + num(m.quantity), 0),
+    // What the deckle makes, not what was ordered -- an order these layouts
+    // only partly cover joins with its covered rolls and the rest is split off
+    // below.
+    quantity: batched.reduce((s, m) => s + covered.get(String(m._id)), 0),
     noOfRolls,
     runningMeters,
     runningMetersText: runningMetersText || undefined,
@@ -4974,14 +4985,53 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     deckleTrim,
     deckleOption: oldest.deckleOption,
     estimatedDate: dueDates[0] || undefined,
-    poNumber: members.map((m) => m.poNumber).filter(Boolean).join(", ").slice(0, 200) || undefined,
-    batchOrderIds: members.map((m) => m._id),
+    poNumber: batched.map((m) => m.poNumber).filter(Boolean).join(", ").slice(0, 200) || undefined,
+    batchOrderIds: batched.map((m) => m._id),
   });
 
   await PendingProduction.updateMany(
-    { _id: { $in: members.map((m) => m._id) } },
+    { _id: { $in: batched.map((m) => m._id) } },
     { $set: { deckleBatchId: batch._id, deckleSize } },
   );
+
+  // ---- the shortfall goes back to Deckle Sorting ---------------------------
+  // A member the deckle covers only partly keeps just the rolls it makes; the
+  // balance is carved off into a fresh loose row (parentOrderId = the order it
+  // came from) so it reappears on Deckle Sorting and can be set on a later
+  // deckle. Nothing is lost: parent + remainders still add up to the order.
+  const remainders = [];
+  for (const m of batched) {
+    const qty = num(m.quantity);
+    const take = covered.get(String(m._id));
+    const short = Math.round((qty - take) * 100) / 100;
+    if (short <= 0) continue;
+    // Rolls track quantity on these orders; scale rather than assume they match.
+    const rollsFor = (part) => (num(m.noOfRolls) > 0 && qty > 0
+      ? Math.max(1, Math.round((num(m.noOfRolls) * part) / qty))
+      : undefined);
+    remainders.push({
+      onModel: m.onModel || "SachikoLabelStock",
+      parentOrderId: m._id,
+      itemId: m.itemId,
+      userId: m.userId,
+      quantity: short,
+      dispatchedQuantity: 0,
+      poNumber: m.poNumber,
+      deckleOption: m.deckleOption,
+      orderRate: m.orderRate,
+      estimatedDate: m.estimatedDate,
+      remarks: m.remarks,
+      paperSize: m.paperSize,
+      // Per-roll length -- the same rolls, just fewer of them.
+      runningMeters: m.runningMeters,
+      noOfRolls: rollsFor(short),
+    });
+    await PendingProduction.updateOne(
+      { _id: m._id },
+      { $set: { quantity: take, ...(rollsFor(take) != null ? { noOfRolls: rollsFor(take) } : {}) } },
+    );
+  }
+  if (remainders.length) await PendingProduction.insertMany(remainders);
 
   // Widths actually laminated. Normally just the batch's own deckleSize, but a
   // mixed-web plan runs several -- worth spelling out in the audit trail and to
@@ -4990,14 +5040,25 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     .sort((a, b) => a - b);
   const mixedWebs = webWidths.length > 1;
 
-  res.locals.auditDescription = `Created deckle batch ${batch._id} covering ${members.length} order(s)`
+  // Rolls handed back: the shortfall rows above, plus any ticked order these
+  // layouts never cut at all (left loose, untouched).
+  const untouched = ordered.length - batched.length;
+  const backRolls = remainders.reduce((n, r) => n + num(r.quantity), 0);
+  const leftBehind = [
+    remainders.length ? `${Math.round(backRolls * 100) / 100} roll(s) from ${remainders.length} part-set order(s)` : "",
+    untouched ? `${untouched} untouched order(s)` : "",
+  ].filter(Boolean).join(" + ");
+
+  res.locals.auditDescription = `Created deckle batch ${batch._id} covering ${batched.length} order(s)`
     + (deckleLayout.length ? ` (${deckleLayout.length} layout${deckleLayout.length === 1 ? "" : "s"}, ${layoutWebs} webs)` : "")
-    + (mixedWebs ? ` on mixed webs ${webWidths.join(" + ")} mm` : "");
+    + (mixedWebs ? ` on mixed webs ${webWidths.join(" + ")} mm` : "")
+    + (leftBehind ? `; ${leftBehind} back to Deckle Sorting` : "");
   req.flash(
     "notification",
-    mixedWebs
-      ? `Deckle batch created — ${members.length} order(s) bundled on mixed webs (${webWidths.join(" + ")} mm; recorded at ${deckleSize}). Now in the Deckle Queue.`
-      : `Deckle batch created — ${members.length} order(s) bundled at deckle size ${deckleSize}. Now in the Deckle Queue.`,
+    (mixedWebs
+      ? `Deckle batch created — ${batched.length} order(s) bundled on mixed webs (${webWidths.join(" + ")} mm; recorded at ${deckleSize}). Now in the Deckle Queue.`
+      : `Deckle batch created — ${batched.length} order(s) bundled at deckle size ${deckleSize}. Now in the Deckle Queue.`)
+    + (leftBehind ? ` ${leftBehind.charAt(0).toUpperCase()}${leftBehind.slice(1)} stayed on Deckle Sorting.` : ""),
   );
   res.redirect(backTo);
 });
@@ -5005,7 +5066,12 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
 // Un-bundle a batch that hasn't been assigned to a machine yet -- its member
 // orders drop back to loose on Deckle Set.
 router.post("/labels/production/deckle-batch/:id/dissolve", requireAuth, updateLimiter, async (req, res) => {
-  const backTo = "/app/labels/production/deckle-set";
+  // Batches live on the Deckle Queue, so that is where Dissolve is pressed --
+  // but the old Deckle Sorting entry point still works. Whitelisted, never a
+  // raw redirect target from the body.
+  const backTo = req.body.from === "queue"
+    ? "/app/labels/production/deckle-queue"
+    : "/app/labels/production/deckle-set";
   const { id } = req.params;
   if (!mongoose.isValidObjectId(id)) {
     req.flash("notification", "Invalid batch id.");
@@ -5020,19 +5086,48 @@ router.post("/labels/production/deckle-batch/:id/dissolve", requireAuth, updateL
     req.flash("notification", "This batch is already assigned to a machine — send it back from WIP first.");
     return res.redirect(backTo);
   }
+  const memberIds = await PendingProduction.find({ deckleBatchId: batch._id })
+    .select("_id quantity noOfRolls")
+    .lean();
   await PendingProduction.updateMany(
     { deckleBatchId: batch._id },
     { $unset: { deckleBatchId: "", deckleSize: "" } },
   );
   await PendingProduction.deleteOne({ _id: batch._id });
-  res.locals.auditDescription = `Dissolved deckle batch ${id}`;
+
+  // Un-split what forming this batch split: a member only partly covered by it
+  // had its balance carved off into a loose remainder row. With the batch gone
+  // the member is whole again, so fold each still-loose remainder back in
+  // rather than leaving one order sitting on Deckle Sorting as two rows. A
+  // remainder already set on a LATER deckle is left alone -- it is spoken for.
+  let remerged = 0;
+  for (const m of memberIds) {
+    const spare = await PendingProduction.find({
+      parentOrderId: m._id,
+      deckleBatchId: null,
+      assignedMachineId: null,
+    }).select("_id quantity noOfRolls").lean();
+    if (!spare.length) continue;
+    const qty = spare.reduce((n, r) => n + (Number(r.quantity) || 0), 0);
+    const rolls = spare.reduce((n, r) => n + (Number(r.noOfRolls) || 0), 0);
+    await PendingProduction.updateOne(
+      { _id: m._id },
+      { $inc: { quantity: qty, ...(rolls ? { noOfRolls: rolls } : {}) } },
+    );
+    await PendingProduction.deleteMany({ _id: { $in: spare.map((r) => r._id) } });
+    remerged += spare.length;
+  }
+
+  res.locals.auditDescription = `Dissolved deckle batch ${id}`
+    + (remerged ? ` (folded ${remerged} remainder row(s) back into their orders)` : "");
   req.flash("notification", "Deckle batch dissolved — its orders are back on Deckle Set.");
   res.redirect(backTo);
 });
 
 // Deckle Queue -- deckle batches (and any legacy per-order rows) that HAVE a
 // deckle size but aren't yet assigned to a machine. Just the spec needed to
-// make the deckle -- SKU, deckle size, running mtrs, qty -- plus a Play button
+// make the deckle -- Product Code, the two running lengths, deckle qty and
+// deckle size -- plus a Play button
 // straight into Assign Production (/labels/production/assign/:id). Batched
 // member orders (deckleBatchId set) are excluded -- only the batch itself
 // shows. A size change goes back through Deckle Set (dissolve + re-batch).
@@ -5042,7 +5137,6 @@ router.get("/labels/production/deckle-queue", async (req, res) => {
     deckleSize: { $ne: null },
     deckleBatchId: null,
   })
-    .populate("userId", "clientName userName")
     .populate("itemId", "productCode skuCode")
     .sort({ createdAt: 1 })
     .lean();
@@ -5052,15 +5146,21 @@ router.get("/labels/production/deckle-queue", async (req, res) => {
     return {
       _id: String(r._id),
       productCode: item.productCode || item.skuCode || "—",
-      clientName: r.isDeckleBatch ? "—" : (r.userId?.clientName || r.userId?.userName || "—"),
-      paperSize: r.isDeckleBatch ? "—" : (r.paperSize || "—"),
       isBatch: !!r.isDeckleBatch,
       orderCount: r.isDeckleBatch ? (r.batchOrderIds || []).length : 1,
+      // Dissolve lives here now -- Deckle Sorting only lists orders that still
+      // need a deckle set, so a formed batch is un-made from this page.
+      canDissolve: !!r.isDeckleBatch,
       deckleSize: r.deckleSize ?? null,
+      // The two lengths the shopfloor needs, as separate numbers rather than
+      // the one "1,000 M/DECKLE · 4,000 M TOTAL" line: one deckle web's length,
+      // and the whole job across every roll slit off it.
       runningMeters:
+        r.deckleRunningMeters != null && r.deckleRunningMeters !== ""
+          ? Number(r.deckleRunningMeters)
+          : null,
+      totalRunningMeters:
         r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
-      runningMetersText: r.runningMetersText || "",
-      quantity: r.quantity,
       // Deckle Qty -- how many deckle webs to laminate (set on Deckle Set from
       // the layouts' Webs counts), not the order's roll quantity.
       deckleQty: r.noOfRolls != null ? Number(r.noOfRolls) : null,
@@ -5282,17 +5382,6 @@ router.get("/labels/production/assign/:id", async (req, res) => {
       return res.redirect("/app/labels/production/deckle-set");
     }
 
-    // A deckle batch covers several sales orders as one job -- surface them so
-    // assignProduction.ejs can show which orders this run is producing for.
-    let batchOrders = [];
-    if (pendingProduction.isDeckleBatch && Array.isArray(pendingProduction.batchOrderIds) && pendingProduction.batchOrderIds.length) {
-      batchOrders = await PendingProduction.find({ _id: { $in: pendingProduction.batchOrderIds } })
-        .populate("userId", "clientName userName")
-        .select("poNumber paperSize quantity runningMeters noOfRolls estimatedDate userId")
-        .sort({ estimatedDate: 1 })
-        .lean();
-    }
-
     const [allMachines, operatorEmployees, helperEmployees] = await Promise.all([
       Machine.find().populate("location").sort({ machineName: 1 }).lean(),
       Employee.find({ isActive: true, empProfile: "OPERATOR" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
@@ -5301,12 +5390,17 @@ router.get("/labels/production/assign/:id", async (req, res) => {
 
     const previewLotNo = pendingProduction.lotNo || (await previewNextLotNo());
 
+    // How much facestock/adhesive/release liner this deckle will eat -- the
+    // formulas from "raw material formula.xlsx" (see utils/rawMaterialNeed.js).
+    // null when the deckle has no size/web length yet to weigh from.
+    const rawNeed = computeRawMaterialNeed(pendingProduction, pendingProduction.itemId || {});
+
     res.render("inventory/orders/assignProduction.ejs", {
       title: "Assign Production",
       CSS: "tableDisp.css",
       JS: false,
       pp: pendingProduction,
-      batchOrders,
+      rawNeed,
       allMachines,
       operatorEmployees,
       helperEmployees,

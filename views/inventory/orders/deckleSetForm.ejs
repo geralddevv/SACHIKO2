@@ -241,7 +241,7 @@
   .dsf-row-btn:hover { background: #fef2f2; border-color: #fecaca; }
   .dsf-row-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   /* "Show all sizes" link under a layout's size table -- only rendered while the
-     table is collapsed to the chosen size (after an Auto Set Deckle run). */
+     table is collapsed to the chosen size (after an AI Deckle Set run). */
   .dsf-sizes-toggle {
     margin-top: 6px; border: none; background: none; padding: 2px 0; cursor: pointer;
     font-size: 11.5px; font-weight: 700; color: #044a78; text-decoration: underline;
@@ -298,7 +298,7 @@
     border: 1.5px dashed #dbe3ec; border-radius: 10px; padding: 14px; text-align: center;
   }
 
-  /* ---- Auto Deckle (utils/deckleOptimizer) ---- */
+  /* ---- AI Deckle Set (utils/deckleOptimizer) ---- */
   .dsa-panel { align-self: stretch; background: #fff; border: 1.5px solid #cfe0f0; border-radius: 10px; overflow: hidden; }
   .dsa-bar {
     display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
@@ -350,7 +350,6 @@
     padding: 10px 14px; background: #fef2f2; color: #991b1b;
     font-size: 12.5px; font-weight: 700; line-height: 1.5;
   }
-  .dsa-hint { padding: 9px 14px; font-size: 11.5px; color: #7c8ba1; line-height: 1.5; }
   .dsa-check {
     display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
     margin: 0; padding: 5px 10px 5px 8px; border: 1.5px solid #cbd5e1;
@@ -359,7 +358,6 @@
   .dsa-check:hover { border-color: #044a78; }
   .dsa-check input { width: 16px; height: 16px; accent-color: #044a78; cursor: pointer; flex: none; margin: 0; }
   .dsa-check span.t { display: block; font-size: 12px; font-weight: 700; color: #1f2a44; white-space: nowrap; }
-  .dsa-check span.s { display: block; font-size: 9.5px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
   .dsa-check:has(input:checked) { border-color: #044a78; background: #f4f9ff; }
   /* Mixed webs on: each layout's size table is its own pick, so say which
      width the row is currently cut from right in the layout table. */
@@ -458,12 +456,12 @@
       </div>
     </div>
 
-    <!-- Auto Deckle -- utils/deckleOptimizer works out the least-waste layouts
+    <!-- AI Deckle Set -- utils/deckleOptimizer works out the least-waste layouts
          and drops them into the table below for review. Read-only: it never
          creates the batch, the planner still presses Create Deckle Batch.
          Hidden entirely when DECKLE_AUTO_ENABLED=false. -->
     <% if (autoDeckle && autoDeckle.enabled) { %>
-      <div class="span-full form-subheading sl-sec-head"><h1>Auto Set Deckle</h1></div>
+      <div class="span-full form-subheading sl-sec-head"><h1>AI Deckle Set</h1></div>
       <div class="span-full" style="border:none !important;">
         <div class="dsa-panel">
           <div class="dsa-bar">
@@ -488,21 +486,14 @@
             <label class="dsa-check" for="dsaMixed"
                    title="Let each layout be cut from whichever deckle width suits it, instead of one width for the whole batch. Usually less trim, but more than one facestock size to pull for the job.">
               <input type="checkbox" id="dsaMixed" checked />
-              <span>
-                <span class="t">Different web per layout</span>
-                <span class="s">less trim · more reels to handle</span>
-              </span>
+              <span class="t">Different web per layout</span>
             </label>
             <div class="dsa-spacer"></div>
             <button type="button" id="dsaRun" class="dsa-run">
-              <i class="fa-solid fa-wand-magic-sparkles"></i> Auto Set Deckle
+              <i class="fa-solid fa-wand-magic-sparkles"></i> AI Deckle Set
             </button>
           </div>
           <div class="dsa-body" id="dsaBody"></div>
-          <div class="dsa-hint">
-            Plans the ticked orders against the Available Sizes and Edge Trim above, then fills the
-            layouts below. Nothing is saved until you press Create Deckle Batch — edit anything first.
-          </div>
         </div>
       </div>
     <% } %>
@@ -828,14 +819,14 @@
   }
 
   // Mixed webs: each layout may be cut from a different deckle width instead of
-  // one width serving the whole batch. Follows the Auto Set panel's "Different
+  // one width serving the whole batch. Follows the AI Deckle Set panel's "Different
   // web per layout" toggle, which is on by default -- so it starts on whenever
-  // that panel is rendered, and stays off when Auto Deckle is disabled and
+  // that panel is rendered, and stays off when AI Deckle Set is disabled and
   // there is no toggle to turn it back off. While off, everything below
   // behaves exactly as it always has -- one `selectedSize` for every row.
   let MIXED_WEBS = false;
 
-  // After an Auto Set Deckle run the planner has already been told which web
+  // After an AI Deckle Set run the planner has already been told which web
   // each layout runs on, so every other size's diagram is noise -- each
   // layout's size table collapses to the chosen row until the planner asks to
   // see the rest again (per row, via "Show all sizes"). Hand-drawn planning is
@@ -1066,8 +1057,21 @@
     // "Rolls Set" / "Balance" per order -- rolls of an order's paper size that
     // the layouts above cover. Orders sharing a paper size split the pool in
     // list order; the last one absorbs any overflow.
+    // Only TICKED orders are in this deckle. An unticked one is not batched at
+    // all -- it stays loose and goes back to the Deckle Sorting page -- so it
+    // must not be handed any of the rolls these layouts produce either.
     const ordersByWidth = new Map();
     [...orderBody.querySelectorAll("tr")].forEach((otr) => {
+      const picked = !!otr.querySelector('input[name="orderIds"]:checked');
+      if (!picked) {
+        otr.querySelector(".dsf-o-rpw").textContent = "—";
+        otr.querySelector(".dsf-o-set").textContent = "—";
+        const skipEl = otr.querySelector(".dsf-o-bal");
+        skipEl.textContent = "Not in this deckle";
+        skipEl.style.color = "#94a3b8";
+        skipEl.style.fontSize = "11px";
+        return;
+      }
       const w = Number(otr.dataset.size) || 0;
       if (!ordersByWidth.has(w)) ordersByWidth.set(w, []);
       ordersByWidth.get(w).push(otr);
@@ -1086,6 +1090,12 @@
         const balEl = otr.querySelector(".dsf-o-bal");
         balEl.textContent = (bal > 0 ? "+" : "") + fmtI(bal);
         balEl.style.color = bal < 0 ? "#b45309" : "#15803d";
+        balEl.style.fontSize = "";
+        // A short order is only partly set: those rolls are split back onto
+        // Deckle Sorting when the batch is created.
+        balEl.title = bal < 0
+          ? `${fmtI(-bal)} roll(s) short — they go back to Deckle Sorting when you create the batch`
+          : (bal > 0 ? `${fmtI(bal)} spare roll(s) beyond what was ordered` : "Exactly covered");
       });
     });
 
@@ -1172,7 +1182,7 @@
     if (!set.length) {
       dsfSetSub.textContent = "";
       dsfSetBody.innerHTML =
-        `<div class="dsf-set-empty">Nothing set yet — draw a layout above (or run Auto Set Deckle) and it appears here.</div>`;
+        `<div class="dsf-set-empty">Nothing set yet — draw a layout above (or run AI Deckle Set) and it appears here.</div>`;
       return;
     }
 
@@ -1208,7 +1218,7 @@
             <th>Rolls Across</th>
             <th>Layout</th>
             <th title="Width scrapped off every web — both edge trims plus the uncut slack">Trim</th>
-            <th title="Usable web left after the knives (edge trims already netted out)">Remaining</th>
+            <th title="Usable web left after the knives (edge trims already netted out)">Siderun</th>
             <th>Deckle R.M.</th>
             <th>Roll R.M.</th>
             <th>Total Rolls</th>
@@ -1316,7 +1326,7 @@
   });
 
   <% if (autoDeckle && autoDeckle.enabled) { %>
-  // ---- Auto Deckle -----------------------------------------------------
+  // ---- AI Deckle Set --------------------------------------------------
   // Asks the server (utils/deckleOptimizer, behind DECKLE_AUTO_ENABLED) for the
   // least-waste set of layouts and writes them into the table above. Purely a
   // drafting aid: it replaces the layout rows and the chosen size, then hands
@@ -1362,10 +1372,11 @@
         dsaStat("Recoverable Trim", `${fmt(avoidPct)} %`, avoidPct <= 2 ? "good" : "warn"),
         dsaStat("Extra Rolls", `${fmtI(extra)}`, extra ? "warn" : "good"),
       ].join("");
-      const notes = (data.notes || []).length
-        ? `<div class="dsa-notes"><ul>${data.notes.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>`
-        : "";
-      dsaBody.innerHTML = `<div class="dsa-result">${stats}</div>${notes}`;
+      // Just the numbers -- the planner reviews the layouts themselves below,
+      // so the optimizer's running commentary (search budget, mixed-web
+      // breakdown) is not shown on a successful plan. Notes on a FAILED plan
+      // still render, since there they are the explanation.
+      dsaBody.innerHTML = `<div class="dsa-result">${stats}</div>`;
     }
 
     // Replace every layout row with the planned ones. Deckle R.M. and R. Meter
@@ -1437,11 +1448,11 @@
         let data = null;
         try { data = await res.json(); } catch { data = null; }
         if (!data) {
-          dsaShowError(`Auto Deckle failed (HTTP ${res.status}). Plan the layouts by hand below.`);
+          dsaShowError(`AI Deckle Set failed (HTTP ${res.status}). Plan the layouts by hand below.`);
           return;
         }
         if (!data.ok) {
-          dsaShowError(data.error || "Auto Deckle could not plan these orders.");
+          dsaShowError(data.error || "AI Deckle Set could not plan these orders.");
           if (Array.isArray(data.notes) && data.notes.length) {
             dsaBody.innerHTML +=
               `<div class="dsa-notes"><ul>${data.notes.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>`;
@@ -1451,11 +1462,11 @@
         dsaApply(data.plan);
         dsaShowPlan(data);
         showToast(
-          `Auto Deckle: ${data.plan.layouts.length} layout(s), ${data.plan.webs} web(s), ${fmt(data.plan.waste.wastePct)}% waste — review and save.`,
+          `AI Deckle Set: ${data.plan.layouts.length} layout(s), ${data.plan.webs} web(s), ${fmt(data.plan.waste.wastePct)}% waste — review and save.`,
           "success",
         );
       } catch (err) {
-        dsaShowError("Auto Deckle could not be reached. Plan the layouts by hand below.");
+        dsaShowError("AI Deckle Set could not be reached. Plan the layouts by hand below.");
       } finally {
         dsaRun.disabled = false;
         dsaRun.innerHTML = label;

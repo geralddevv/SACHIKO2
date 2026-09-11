@@ -617,10 +617,34 @@ router.put("/:id", requireAuth, updateLimiter, async (req, res) => {
 
 router.delete("/:id", requireAuth, deleteLimiter, async (req, res) => {
   try {
-    const existing = await ReleaseLinerStock.findByIdAndDelete(req.params.id);
+    const existing = await ReleaseLinerStock.findById(req.params.id);
     if (!existing) {
       return res.status(404).json({ success: false, message: "Release liner stock reel not found." });
     }
+
+    // The Remove button already disables itself for a reel that's spoken
+    // for, but that's only the page's view of it -- a reel can be allotted
+    // or started on between the page load and the click. Re-read the same
+    // usage the page was drawn from and refuse here, so removing a reel can
+    // never leave an order's allotment or a job card's recorded usage
+    // pointing at a reel that no longer exists.
+    const { allottedByReel, usedByReel } = await loadReleaseReelUsage();
+    const key = String(existing._id);
+    const allotted = allottedByReel.get(key);
+    if (allotted) {
+      return res.status(409).json({
+        success: false,
+        message: `This reel is allotted to ${allotted.lotNo || allotted.productCode || "an order"}. Un-allot it before removing it.`,
+      });
+    }
+    if (usedByReel.has(key)) {
+      return res.status(409).json({
+        success: false,
+        message: "This reel is already in use on a job card, so it can't be removed.",
+      });
+    }
+
+    await existing.deleteOne();
     res.locals.auditDescription = `Deleted release liner stock reel "${existing.rollId}"`;
     res.json({ success: true });
   } catch (err) {

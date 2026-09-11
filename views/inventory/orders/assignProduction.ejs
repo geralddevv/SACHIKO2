@@ -2,7 +2,6 @@
 
 <%
   const item = pp.itemId || {};
-  const owner = pp.userId || {};
   const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
   const dash = (v) => (isEmpty(v) ? "—" : v);
   const escHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -77,7 +76,6 @@
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 14px;">
   <style>
     .ap-head h1 { font-size: 20px; color: #fff; margin: 0; }
-    .ap-head .ap-sub { font-size: 13px; color: rgba(255, 255, 255, 0.85); margin-top: 2px; }
 
     .ap-card {
       width: 100%;
@@ -154,6 +152,43 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+
+    /* ---- Raw Material Required (utils/rawMaterialNeed.js) ----
+       One strip, same as the Material Details head above, with a rule between
+       each layer's compartment. Each compartment carries just "kg | GSM". ---- */
+    .rm-need-row {
+      display: flex; flex-wrap: wrap; align-items: stretch;
+      padding: 14px 18px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f8fafc;
+    }
+    .rm-need-cell {
+      /* Share the strip's full width -- each compartment grows out of its own
+         content, so the wider adhesive one keeps its room. */
+      flex: 1 1 auto; min-width: 0;
+      display: flex; flex-direction: column; gap: 4px; padding: 0 30px;
+      border-left: 1px solid #dbe3ec;
+    }
+    .rm-need-cell:first-child { border-left: none; padding-left: 0; }
+    .rm-need-label {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      color: #7c8ba1;
+    }
+    .rm-need-value {
+      font-size: 19px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .rm-need-sep { color: #94a3b8; font-weight: 700; padding: 0 3px; }
+    .rm-need-wet { font-size: 12.5px; font-weight: 700; color: #b45309; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rm-need-none { font-size: 19px; font-weight: 800; color: #b45309; }
+    /* Allotment progress -- how much of this layer the ticked reels cover. */
+    .rm-need-track {
+      display: block; height: 5px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 2px;
+    }
+    .rm-need-track i { display: block; height: 100%; width: 0; background: #b45309; border-radius: 999px; transition: width 0.18s ease; }
+    .rm-need-track.is-covered i { background: #15803d; }
+    .rm-need-left { font-size: 12.5px; font-weight: 700; color: #b45309; font-variant-numeric: tabular-nums; }
+    .rm-need-left.is-covered { color: #15803d; }
+    .rm-need-left b { font-weight: 800; }
+    .rm-need-left .rm-need-of { color: #94a3b8; font-weight: 600; }
 
     .material-group--facestock { --mg-border: #93c5fd; --mg-bg: #eff6ff; --mg-text: #1d4ed8; }
     .material-group--adhesive  { --mg-border: #fcd34d; --mg-bg: #fffbeb; --mg-text: #b45309; }
@@ -405,9 +440,6 @@
   <div class="indi-head ap-head" style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
     <div>
       <h1>Assign Production</h1>
-      <div class="ap-sub">
-        <%= dash(owner.clientName) %><% if (owner.userName) { %> / <%= owner.userName %><% } %>
-      </div>
     </div>
     <div style="text-align:right; color:#fff; line-height:1.4;">
       <div style="font-size:17px; font-weight:600;">Date: <%= fmtDate(new Date()) %></div>
@@ -415,52 +447,20 @@
     </div>
   </div>
 
-  <% if (pp.isDeckleBatch && Array.isArray(batchOrders) && batchOrders.length) { %>
-    <div class="ap-card" style="border-color:#a7c8e6;">
-      <div class="ap-card-title" style="background:#0b5c94;"><span><i class="fa-solid fa-object-group"></i> Deckle Batch &mdash; one job for <%= batchOrders.length %> order<%= batchOrders.length === 1 ? "" : "s" %></span></div>
-      <div style="padding:10px 14px; overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse; font-size:13px;">
-          <thead>
-            <tr style="color:#044a78; text-align:left;">
-              <th style="padding:5px 10px;">Client</th>
-              <th style="padding:5px 10px;">PO Number</th>
-              <th style="padding:5px 10px; text-align:center;">Paper Size</th>
-              <th style="padding:5px 10px; text-align:right;">Qty</th>
-              <th style="padding:5px 10px; text-align:right;">Running Mtrs</th>
-              <th style="padding:5px 10px; text-align:center;">Rolls</th>
-              <th style="padding:5px 10px;">Est. Delivery</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% batchOrders.forEach(function (o) { %>
-              <tr style="border-top:1px solid #e5e7eb;">
-                <td style="padding:5px 10px;"><%= dash(o.userId && (o.userId.clientName || o.userId.userName)) %></td>
-                <td style="padding:5px 10px;"><%= dash(o.poNumber) %></td>
-                <td style="padding:5px 10px; text-align:center;"><%= dash(o.paperSize) %></td>
-                <td style="padding:5px 10px; text-align:right;"><%= fmtQty(o.quantity) %></td>
-                <td style="padding:5px 10px; text-align:right;"><%= fmtQty(o.runningMeters) %></td>
-                <td style="padding:5px 10px; text-align:center;"><%= dash(o.noOfRolls) %></td>
-                <td style="padding:5px 10px;"><%= fmtDate(o.estimatedDate) %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  <% } %>
-
   <div class="ap-card">
     <div class="ap-card-title"><span><i class="fa-solid fa-layer-group"></i> Material Details</span></div>
     <div style="padding: 14px;">
       <div class="material-id-row">
-        <div class="mid-item"><span class="mid-label">Label Stock Code</span><span class="mid-value"><%= dash(item.productCode || item.skuCode) %></span></div>
-        <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= pp.runningMetersText ? pp.runningMetersText : fmtQty(pp.runningMeters) %></span></div>
-        <div class="mid-item"><span class="mid-label">Qty</span><span class="mid-value"><%= fmtQty(pp.quantity) %></span></div>
-        <div class="mid-item"><span class="mid-label">Roll Type</span><span class="mid-value"><%= dash(rollType) %></span></div>
+        <div class="mid-item"><span class="mid-label">Product Code</span><span class="mid-value"><%= dash(item.productCode || item.skuCode) %></span></div>
         <!-- Set on the Deckle Set page (before an order ever reaches Assign
              Production); the dialog below only asks again for a legacy
              order that somehow got here without one. -->
         <div class="mid-item"><span class="mid-label">Deckle Size</span><span class="mid-value" id="midDeckleSize"><%= dash(pp.deckleSize) %></span></div>
+        <!-- The two lengths kept apart, same as the Deckle Queue: one deckle
+             web, then the whole job across every roll slit off it. -->
+        <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= pp.deckleRunningMeters ? fmtQty(pp.deckleRunningMeters) : "—" %></span></div>
+        <div class="mid-item"><span class="mid-label">Total Running Mtrs</span><span class="mid-value"><%= fmtQty(pp.runningMeters) %></span></div>
+        <div class="mid-item"><span class="mid-label">Deckle Qty</span><span class="mid-value"><%= dash(pp.noOfRolls) %></span></div>
       </div>
 
       <div class="layer-stack custom-scrollbar">
@@ -487,6 +487,41 @@
 
     </div>
   </div>
+
+  <!-- Raw material this deckle will eat. Quantities only, worked out in
+       utils/rawMaterialNeed.js from the deckle's own webs and the recipe's
+       GSMs, using the formulas in "raw material formula.xlsx". Read-only: the
+       reels are still picked by hand in Raw Material Allotment below. -->
+  <% if (rawNeed) { %>
+    <div class="ap-card">
+      <div class="ap-card-title"><span><i class="fa-solid fa-weight-hanging"></i> Raw Material Required</span></div>
+      <div style="padding: 14px;">
+        <div class="rm-need-row">
+          <% rawNeed.rows.forEach(function (r) { %>
+            <div class="rm-need-cell" data-layer="<%= r.key %>"
+                 data-need="<%= r.wetKg != null ? r.wetKg : (r.kg != null ? r.kg : "") %>">
+              <span class="rm-need-label"><%= r.title.toUpperCase() %></span>
+              <span class="rm-need-value">
+                <% if (r.kg != null) { %>
+                  <%= fmtQty(r.kg) %> kg <span class="rm-need-sep">|</span> <%= fmtQty(r.gsm) %> GSM<% if (r.wetKg != null) { %>
+                  <span class="rm-need-wet">(<%= fmtQty(r.wetKg) %> kg <span class="rm-need-sep">|</span> <%= fmtQty(r.wetGsm) %> GSM wet)</span><% } %>
+                <% } else { %>
+                  <span class="rm-need-none">—<%= r.micron != null ? " (" + fmtQty(r.micron) + " MIC)" : "" %></span>
+                <% } %>
+              </span>
+              <!-- Filled in live as reels are ticked in Raw Material Allotment
+                   below: the bar fills, and the text counts what is still
+                   needed down to zero. Hidden until something is picked. -->
+              <% if (r.kg != null) { %>
+                <span class="rm-need-track" hidden><i></i></span>
+                <span class="rm-need-left" hidden></span>
+              <% } %>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    </div>
+  <% } %>
 
   <form id="assign-form" class="ap-form-card needs-validation" action="/app/labels/production/assign/<%= pp._id %>" method="post" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
@@ -967,7 +1002,7 @@
         }).join("");
         const rowAttrs = noInvoice ? ` class="raw-layer-row-no-invoice" title="No invoice"` : "";
         return `<tr${rowAttrs}>` +
-          `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"${checked ? " checked" : ""}${noInvoice ? " disabled" : ""} /></td>` +
+          `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}" data-kg="${Number(r.reelMtrs) || 0}"${checked ? " checked" : ""}${noInvoice ? " disabled" : ""} /></td>` +
           cells +
         `</tr>`;
       }).join("");
@@ -976,6 +1011,49 @@
       // column's search box currently holds, so a refresh doesn't quietly
       // un-filter it.
       filterLayerRows(layerKey);
+      updateRawNeed(layerKey);
+    }
+
+    // ---- Raw Material Required <- Raw Material Allotment -------------------
+    // Every reel in these pools is weighed (its "Kg" column is the stock row's
+    // reelMtrs), so ticking reels is directly comparable to what the deckle
+    // needs: the compartment's bar fills and its line counts down what is
+    // still to be found. Adhesive is compared against the WET figure -- drums
+    // hold wet adhesive, which is what the dry coat weight was converted to.
+    const fmtKg = (n) => Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
+    function updateRawNeed(onlyLayer) {
+      const cells = document.querySelectorAll(
+        onlyLayer ? `.rm-need-cell[data-layer="${onlyLayer}"]` : ".rm-need-cell[data-layer]",
+      );
+      cells.forEach((cell) => {
+        const track = cell.querySelector(".rm-need-track");
+        const left = cell.querySelector(".rm-need-left");
+        if (!track || !left) return;                       // layer with no GSM to weigh
+        const need = Number(cell.dataset.need);
+        if (!Number.isFinite(need) || need <= 0) return;
+
+        const boxes = document.querySelectorAll(
+          `#rawLayersGrid input[type="checkbox"][name="rawLayers[${cell.dataset.layer}]"]:checked`,
+        );
+        const picked = Array.from(boxes).reduce((n, el) => n + (Number(el.dataset.kg) || 0), 0);
+        if (!picked) {                                     // nothing ticked yet -- stay quiet
+          track.hidden = true;
+          left.hidden = true;
+          return;
+        }
+
+        const short = Math.round((need - picked) * 100) / 100;
+        const covered = short <= 0;
+        track.hidden = false;
+        left.hidden = false;
+        track.querySelector("i").style.width = Math.min(100, (picked / need) * 100) + "%";
+        track.classList.toggle("is-covered", covered);
+        left.classList.toggle("is-covered", covered);
+        left.innerHTML = covered
+          ? `<b>covered</b> <span class="rm-need-of">· ${fmtKg(picked)} kg picked${short < 0 ? `, ${fmtKg(-short)} kg extra` : ""}</span>`
+          : `<b>${fmtKg(short)} kg still needed</b> <span class="rm-need-of">· ${fmtKg(picked)} of ${fmtKg(need)} kg</span>`;
+      });
     }
 
     // Filters one layer column's candidate reels from its own header row of
@@ -1093,7 +1171,15 @@
       if (e.target.closest("input[type='checkbox']")) return; // browser toggles it natively
       const row = e.target.closest(".raw-layer-table tbody tr");
       const checkbox = row?.querySelector("input[type='checkbox']");
-      if (checkbox && !checkbox.disabled) checkbox.checked = !checkbox.checked;
+      if (checkbox && !checkbox.disabled) {
+        checkbox.checked = !checkbox.checked;
+        // Set in code, so no "change" event fires -- retally by hand.
+        updateRawNeed();
+      }
+    });
+
+    document.getElementById("rawLayersGrid").addEventListener("change", (e) => {
+      if (e.target.matches("input[type='checkbox']")) updateRawNeed();
     });
 
     // Clicking a column heading sorts that table by it -- ascending on the

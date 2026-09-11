@@ -28,6 +28,14 @@
   <div id="deckle-queue-table" class="tabulator tabulator-modern"></div>
 </div>
 
+<!-- Dissolve batch (hidden form, submitted from the table Actions). A batch is
+     un-made from here now -- Deckle Sorting lists only orders still waiting on
+     a deckle size. -->
+<form id="dq-dissolve-form" method="post" action="" style="display:none;">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+  <input type="hidden" name="from" value="queue" />
+</form>
+
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
@@ -57,6 +65,15 @@
     window.location.href = `/app/labels/production/assign/${orderId}`;
   };
 
+  // Un-make a batch: its member orders drop back to loose on Deckle Sorting,
+  // ready to be set again.
+  window.dissolveBatch = function (batchId) {
+    if (!confirm("Dissolve this deckle batch? Its orders go back to Deckle Sorting.")) return;
+    const form = document.getElementById("dq-dissolve-form");
+    form.action = `/app/labels/production/deckle-batch/${batchId}/dissolve`;
+    form.submit();
+  };
+
   const table = new Tabulator("#deckle-queue-table", {
     data: rowsData,
     placeholder: "No deckles waiting to be made",
@@ -68,19 +85,43 @@
         title: "Actions",
         hozAlign: "center",
         headerSort: false,
+        width: 190,
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          return `<button onclick="startProduction('${row._id}')" class="btn-action" style="background:#10b981;" title="Assign Production"><i class="fa-solid fa-play"></i> Play</button>`;
+          const play = `<button onclick="startProduction('${row._id}')" class="btn-action" style="background:#10b981;" title="Assign Production"><i class="fa-solid fa-play"></i> Play</button>`;
+          const dissolve = row.canDissolve
+            ? `<button onclick="dissolveBatch('${row._id}')" class="btn-action" style="background:#b91c1c;" title="Dissolve batch — its orders go back to Deckle Sorting"><i class="fa-solid fa-link-slash"></i> Dissolve</button>`
+            : "";
+          return `<div style="display:inline-flex; gap:6px;">${play}${dissolve}</div>`;
         },
       },
-      { title: "Client", field: "clientName", headerFilter: "input", headerFilterPlaceholder: "Filter client...",
+      // Product Code carries the batch badge too, now that Client is gone --
+      // it says at a glance whether this deckle covers one order or several.
+      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter code...",
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          if (row.isBatch) return `<span class="ds-count-badge" style="display:inline-block;font-size:11px;font-weight:800;color:#044a78;background:#e0ecf8;border-radius:999px;padding:1px 9px;">Batch · ${row.orderCount} order${row.orderCount === 1 ? "" : "s"}</span>`;
-          return `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>`;
+          const badge = row.isBatch
+            ? ` <span class="ds-count-badge" style="display:inline-block;font-size:11px;font-weight:800;color:#044a78;background:#e0ecf8;border-radius:999px;padding:1px 9px;">Batch · ${row.orderCount} order${row.orderCount === 1 ? "" : "s"}</span>`
+            : "";
+          return `<span style="font-weight:700; color:#044A78;">${cell.getValue() || "N/A"}</span>${badge}`;
         } },
-      { title: "SKU", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter SKU...", formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>` },
-      { title: "Paper Size", field: "paperSize", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "Size" },
+      { title: "Running Mtrs", field: "runningMeters", hozAlign: "right", headerFilter: "input", headerFilterPlaceholder: "Mtrs",
+        headerTooltip: "Length of ONE deckle web",
+        formatter: (cell) => {
+          const v = cell.getValue();
+          return v != null ? `${fmtMtrs(v)} m` : `<span style="color:#9ca3af;">—</span>`;
+        } },
+      { title: "Total Running Mtrs", field: "totalRunningMeters", hozAlign: "right", headerFilter: "input", headerFilterPlaceholder: "Mtrs",
+        headerTooltip: "The whole job — every roll slit off this deckle",
+        formatter: (cell) => {
+          const v = cell.getValue();
+          return v != null ? `<span style="font-weight:700; color:#044A78;">${fmtMtrs(v)} m</span>` : `<span style="color:#9ca3af;">—</span>`;
+        } },
+      { title: "Deckle Qty", field: "deckleQty", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#",
+        formatter: (cell) => {
+          const v = cell.getValue();
+          return v != null && v !== "" ? `<span style="font-weight:700; color:#044A78;">${v}</span>` : `<span style="color:#9ca3af;">—</span>`;
+        } },
       {
         title: "Deckle Size",
         field: "deckleSize",
@@ -89,16 +130,6 @@
         headerFilterPlaceholder: "Size",
         formatter: (cell) => (cell.getValue() != null ? `<span style="font-weight:700; color:#044A78;">${cell.getValue()}mm</span>` : `<span style="color:#9ca3af;">—</span>`),
       },
-      { title: "Running Mtrs", field: "runningMeters", hozAlign: "right", headerFilter: "input", headerFilterPlaceholder: "Mtrs",
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          return row.runningMetersText ? row.runningMetersText : fmtMtrs(cell.getValue());
-        } },
-      { title: "Deckle Qty", field: "deckleQty", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#",
-        formatter: (cell) => {
-          const v = cell.getValue();
-          return v != null && v !== "" ? `<span style="font-weight:700; color:#044A78;">${v}</span>` : `<span style="color:#9ca3af;">—</span>`;
-        } },
       { title: "Date", field: "createdAt", hozAlign: "center", sorter: "string",
         formatter: (cell) => fmtDate(cell.getValue()) },
       { title: "Time", field: "createdAt", hozAlign: "center", headerSort: false,

@@ -280,6 +280,25 @@
     #core-masters-table .tabulator-row.roll-detail-row > .tabulator-col-resize-handle {
       display: none !important;
     }
+    /* The one action on a lot row -- outlined rather than filled, so a
+       destructive button can't be hit by muscle memory. Solid red on hover.
+       Same class name and look as the Remove button on Facestock/Adhesive/
+       Release Liner Stock, which carry Edit and Print beside it. */
+    .roll-remove-btn {
+      padding: 3px 10px;
+      border: 1px solid #fca5a5;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #b91c1c;
+      background: #fff;
+    }
+    .roll-remove-btn:hover {
+      background: #dc2626;
+      border-color: #dc2626;
+      color: #fff;
+    }
   </style>
 
   <!-- Core Master rows are the only table here: current stock (total pieces
@@ -434,6 +453,29 @@
       <div class="dialog-actions" style="flex: 0 0 auto;">
         <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
         <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Lots</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REMOVE CORE LOT DIALOG ============ -->
+<div class="logout-modal" id="removeRollDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="removeRollDialogTitle"
+    style="width: min(440px, 95vw); padding: 0; border-radius: 14px;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="removeRollDialogTitle">Remove Lot from Stock</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeRemoveRollDialog()" aria-label="Close">&times;</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div style="margin-bottom: 14px; padding: 10px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; font-size: 13px; font-weight: 600; color: #991b1b;" id="removeRollSummary"></div>
+      <p style="font-size: 13px; color: #4b5563; margin: 0 0 4px;">
+        This takes the lot out of stock permanently. It can't be undone &mdash; the lot would have to be keyed in again at inward.
+      </p>
+      <div id="removeRollError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeRemoveRollDialog()">Cancel</button>
+        <button class="logout-btn" type="button" id="removeRollSubmitBtn" onclick="submitRemoveRoll()"
+          style="background: #ef4444; color: #fff; border-color: #ef4444;">Yes, Remove</button>
       </div>
     </div>
   </div>
@@ -615,7 +657,7 @@
     btn.style.opacity = loading ? "0.7" : "";
   }
 
-  ["addDialog", "poDialog"].forEach(id => {
+  ["addDialog", "poDialog", "removeRollDialog"].forEach(id => {
     document.getElementById(id).addEventListener("click", function (e) {
       if (e.target === this) closeModal(id);
     });
@@ -623,7 +665,7 @@
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    ["addDialog", "poDialog"].forEach(id => {
+    ["addDialog", "poDialog", "removeRollDialog"].forEach(id => {
       if (document.getElementById(id).classList.contains("show")) closeModal(id);
     });
   });
@@ -701,6 +743,18 @@
         data.remarks ? escapeHtml(data.remarks) : "",
       ].filter(Boolean);
       bar.innerHTML = parts.map((p, i) => (i === 0 ? p : `<span>${p}</span>`)).join('<span style="color:#334155; font-size:16px; font-weight:700; line-height:1;">&middot;</span>');
+      // Remove this lot from stock -- for an inward keyed in by mistake
+      // (wrong spec, duplicated lot, stock that never physically arrived).
+      // Unlike Facestock/Adhesive/Release Liner there's nothing to block it
+      // on: Core isn't a Label Stock recipe layer, so no PendingProduction
+      // allotment or job card usage ever points at a CoreStock lot.
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "roll-remove-btn";
+      removeBtn.title = "Remove this lot from stock";
+      removeBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Remove';
+      removeBtn.addEventListener("click", () => openRemoveRollDialog(data, findMasterForRoll(data._id)));
+      bar.insertBefore(removeBtn, bar.firstChild);
       el.appendChild(bar);
     },
     columns: [
@@ -1037,4 +1091,56 @@
     }
   }
 
+  // ---- Remove Lot dialog ----
+  // Core Master rows don't carry their lots' identity, so the lot's own
+  // master is looked up the same way the other stock pages do it.
+  function findMasterForRoll(rollId) {
+    return mastersData.find((m) => (m.rolls || []).some((r) => r._id === rollId)) || {};
+  }
+
+  let removingRollId = null;
+
+  function openRemoveRollDialog(lot, master) {
+    removingRollId = lot._id;
+    const specBits = [
+      master.type, master.make, master.vendorName, master.printType,
+      master.thickness != null ? `${master.thickness} THK` : null,
+      master.od != null ? `OD ${master.od}` : null,
+      master.length != null ? `L ${master.length}` : null,
+    ].filter(Boolean);
+    const detail = [
+      `Pcs ${fmtQty(lot.quantity)}`,
+      lot.location || "",
+      lot.invoiceNo ? `Invoice ${lot.invoiceNo}` : "No Invoice",
+    ].filter(Boolean).join(" \u00b7 ");
+    const summary = document.getElementById("removeRollSummary");
+    summary.textContent = `${lot.rollId || "\u2014"} \u2014 ${specBits.join(" \u00b7 ") || "\u2014"}\n${detail}`;
+    summary.style.whiteSpace = "pre-line";
+
+    hideError("removeRollError");
+    openModal("removeRollDialog");
+  }
+  function closeRemoveRollDialog() {
+    closeModal("removeRollDialog");
+    removingRollId = null;
+  }
+
+  async function submitRemoveRoll() {
+    if (!removingRollId) return;
+    hideError("removeRollError");
+    setLoading("removeRollSubmitBtn", true);
+    try {
+      const res = await fetch(`/app/corestock/${removingRollId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        showError("removeRollError", data.message || "Failed to remove this lot.");
+      }
+    } catch {
+      showError("removeRollError", "Server error. Please try again.");
+    } finally {
+      setLoading("removeRollSubmitBtn", false);
+    }
+  }
 </script>

@@ -13,7 +13,6 @@
   /* SKU-group parent vs. member child rows in the dataTree table. */
   #deckle-set-table .tabulator-row[data-ds-child="true"] { background: #f8fafc; }
   #deckle-set-table .tabulator-row[data-ds-child="true"] .tabulator-cell { color: #475569; }
-  #deckle-set-table .tabulator-row[data-ds-batched="true"] { background: #eef5ff; }
 
   /* ---- dataTree expand/collapse toggle (the "+" chip on each SKU row) ---- */
   #deckle-set-table .tabulator-data-tree-control {
@@ -74,10 +73,6 @@
     display: inline-block; font-size: 11px; font-weight: 800; color: #044a78;
     background: #e0ecf8; border-radius: 999px; padding: 1px 9px;
   }
-  .ds-batched-tag {
-    display: inline-block; font-size: 10px; font-weight: 800; color: #065f46;
-    background: #d1fae5; border: 1px solid #a7f3d0; border-radius: 999px; padding: 2px 9px; letter-spacing: 0.3px;
-  }
 </style>
 
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
@@ -104,11 +99,6 @@
   <div id="deckle-set-table" class="tabulator tabulator-modern"></div>
 </div>
 
-<!-- Dissolve batch (hidden form, submitted from the table Actions) -->
-<form id="ds-dissolve-form" method="post" action="" style="display:none;">
-  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-</form>
-
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
@@ -120,13 +110,6 @@
   const fmtMtrs = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
   const fmtInt = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN") : "—");
   const fmtDate = (v) => (v ? new Date(v).toLocaleDateString("en-IN") : "—");
-
-  window.dissolveBatch = function (batchId) {
-    if (!confirm("Dissolve this deckle batch? Its orders go back to Deckle Sorting.")) return;
-    const form = document.getElementById("ds-dissolve-form");
-    form.action = `/app/labels/production/deckle-batch/${batchId}/dissolve`;
-    form.submit();
-  };
 
   /* ----- Table (SKU groups as parent rows, member orders as children) ----- */
   const table = new Tabulator("#deckle-set-table", {
@@ -140,7 +123,6 @@
     rowFormatter: (row) => {
       const d = row.getData();
       if (!d.isGroup) row.getElement().setAttribute("data-ds-child", "true");
-      else if (d.isBatch) row.getElement().setAttribute("data-ds-batched", "true");
     },
     columns: [
       {
@@ -150,11 +132,10 @@
         widthGrow: 3,
         formatter: (cell) => {
           const row = cell.getRow().getData();
+          // Every group here is loose -- a formed batch has moved to the
+          // Deckle Queue, so there is no BATCHED state left to tag.
           if (row.isGroup) {
-            const tag = row.isBatch
-              ? ` <span class="ds-batched-tag">BATCHED${row.deckleSize != null ? ` · ${row.deckleSize}mm` : ""}</span>`
-              : "";
-            return `<span style="font-weight:800; color:#044A78;">${row.productCode || "—"}</span>${tag}`;
+            return `<span style="font-weight:800; color:#044A78;">${row.productCode || "—"}</span>`;
           }
           return `<span style="padding-left:6px;">↳ ${row.clientName || "—"}</span>`;
         },
@@ -199,9 +180,6 @@
         formatter: (cell) => {
           const row = cell.getRow().getData();
           if (!row.isGroup) return "";
-          if (row.isBatch) {
-            return `<button onclick="dissolveBatch('${row.batchId}')" class="btn-action" style="background:#b91c1c;" title="Dissolve batch"><i class="fa-solid fa-link-slash"></i> Dissolve</button>`;
-          }
           return `<a href="/app/labels/production/deckle-set/plan/${encodeURIComponent(row.itemId)}" class="btn-action" style="background:#10b981; text-decoration:none;" title="Set Deckle"><i class="fa-solid fa-ruler"></i> Set Deckle</a>`;
         },
       },
