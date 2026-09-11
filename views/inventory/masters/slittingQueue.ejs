@@ -193,6 +193,20 @@
   const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const fmtMtrs = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
 
+  // Same pair as the Deckle Queue: dd/mm/yy and a 12-hour clock.
+  const fmtDate = (v) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    if (isNaN(d)) return "—";
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  };
+  const fmtTime = (v) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    if (isNaN(d)) return "—";
+    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+  };
+
   // Each top-level row is a Product Code + Size + Running Meters group; _children are the
   // physical Deckles clubbed into it (routes/system/slitting.js).
   const rowsData = JSON.parse(document.getElementById("sq-data").textContent).map((g) => ({
@@ -366,8 +380,18 @@
           if (!row.deckleCount) {
             return `<span style="color:#b45309;font-weight:800;">0</span>${of}`;
           }
-          return `<span class="sq-count-badge">${row.deckleCount}</span>${of}`;
+          return `<span style="color:#15803d;font-weight:800;">${row.deckleCount}</span>${of}`;
         },
+      },
+      {
+        // Group: when the deckle was set (or its first Deckle made, for stock
+        // no config claims any more). Child: when that Deckle was laminated.
+        title: "Date", hozAlign: "center", width: 110, headerSort: false,
+        formatter: (cell) => fmtDate(cell.getRow().getData().createdAt),
+      },
+      {
+        title: "Time", hozAlign: "center", width: 110, headerSort: false,
+        formatter: (cell) => fmtTime(cell.getRow().getData().createdAt),
       },
       {
         title: "Actions", hozAlign: "center", headerSort: false, width: 110,

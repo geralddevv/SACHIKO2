@@ -380,6 +380,8 @@ async function buildAvailableDeckleRows() {
       runningMeters,
       location: reel.location || "—",
       lotNo: reel.lotNo || "",
+      // When this web was laminated -- the Deckle's own date/time on the queue.
+      createdAt: reel.createdAt || null,
       // Advisory: a Deckle can be allocated while it cures, but not run.
       curing: !cure.cured,
       curingUntilLabel: cure.curedAt && !cure.cured ? curingWhenLabel(cure.curedAt) : "",
@@ -487,6 +489,9 @@ async function buildPlannedDeckleGroups() {
         made,
         pendingId: String(p._id),
         assigned: !!p.assignedMachineId,
+        // When the deckle was set on Deckle Sorting -- how long this job has
+        // been waiting here.
+        createdAt: p.createdAt || null,
       });
     }
   }
@@ -526,8 +531,17 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     // against. 0 for a group that exists only because Deckles do (an order
     // from before deckle configs, or stock no config now claims).
     expected: 0,
+    // Oldest date in this group -- when its work first landed on this queue:
+    // the deckle config's own date, or its first Deckle's if the config is
+    // already gone.
+    createdAt: null,
     _children: [],
   });
+
+  const keepOldest = (group, when) => {
+    if (!when) return;
+    if (!group.createdAt || new Date(when) < new Date(group.createdAt)) group.createdAt = when;
+  };
 
   for (const r of visibleRows) {
     const key = `${r.productCode}::${r.size}::${r.runningMeters ?? ""}`;
@@ -538,6 +552,7 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     g.deckleCount += 1;
     g.totalMtrs = round2(g.totalMtrs + r.mtrs);
     if (r.curing) g.anyCuring = true;
+    keepOldest(g, r.createdAt);
     g._children.push({ ...r, isGroup: false, _id: r.deckleStockId });
   }
 
@@ -561,10 +576,13 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     const hit = groupForPending(p.pendingId, p.size);
     if (hit) {
       hit.expected += p.expected;
+      keepOldest(hit, p.createdAt);
       continue;
     }
     if (!groupMap.has(p.key)) groupMap.set(p.key, newGroup(p.key, p.productCode, p.size, p.runningMeters));
-    groupMap.get(p.key).expected += p.expected;
+    const g = groupMap.get(p.key);
+    g.expected += p.expected;
+    keepOldest(g, p.createdAt);
   }
 
   const groups = [...groupMap.values()].sort(
