@@ -124,6 +124,24 @@
 
   .sl-width-input.is-set { border-color: #044a78 !important; background-color: #f4f9ff !important; font-weight: 700; }
 
+  /* Validation states */
+  .sl-table input.form-control.is-bad,
+  #dsfTrim.is-bad,
+  .dsf-chip-add input.is-bad {
+    border-color: #dc2626 !important; background-color: #fef2f2 !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
+  }
+  .sl-table input.form-control:disabled {
+    background-color: #f1f5f9 !important; border-color: #e2e8f0 !important;
+    color: #cbd5e1; cursor: not-allowed;
+  }
+  #dsfIssuesBody.is-error { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+  #dsfIssuesBody ul { margin: 4px 0 0; padding-left: 18px; }
+  #dsfIssuesBody li { margin: 2px 0; }
+  #dsfIssuesBody .dsf-issue-head { font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .dsf-chip-msg { font-size: 11.5px; font-weight: 700; color: #b91c1c; margin-top: 6px; }
+
   /* ---- Web view: A..L drawn to scale across the reel's web ---- */
   .sl-web {
     display: flex; align-items: stretch; height: 32px; width: 100%; max-width: 960px; margin: 0 auto;
@@ -214,6 +232,7 @@
     color: #044a78; border-radius: 7px; padding: 7px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;
   }
   .dsf-add-btn:hover { background: #f0f7ff; }
+  .dsf-add-btn:disabled { opacity: 0.45; cursor: not-allowed; background: #fff; }
   .dsf-row-btn {
     width: 26px; height: 26px; padding: 0; border: 1px solid #e2e8f0; background: #fff;
     color: #b91c1c; border-radius: 5px; font-size: 11.5px; cursor: pointer;
@@ -221,9 +240,131 @@
   }
   .dsf-row-btn:hover { background: #fef2f2; border-color: #fecaca; }
   .dsf-row-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  /* "Show all sizes" link under a layout's size table -- only rendered while the
+     table is collapsed to the chosen size (after an Auto Set Deckle run). */
+  .dsf-sizes-toggle {
+    margin-top: 6px; border: none; background: none; padding: 2px 0; cursor: pointer;
+    font-size: 11.5px; font-weight: 700; color: #044a78; text-decoration: underline;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .dsf-sizes-toggle:hover { color: #02648f; }
   .dsf-layout-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; }
   .dsf-layout-status { font-size: 12.5px; font-weight: 700; color: #7c8ba1; }
   .dsf-order-check { width: 16px; height: 16px; accent-color: #044a78; cursor: pointer; }
+
+  /* ---- "Deckle Set" recap under the layout table ---- */
+  .dsf-set-wrap { padding: 4px 14px 14px; }
+  .dsf-set-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .dsf-set-head h2 {
+    margin: 0; font-size: 13px; font-weight: 800; color: #1f2a44;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .dsf-set-sub { font-size: 12px; font-weight: 700; color: #7c8ba1; }
+  .dsf-set-table {
+    width: 100%; min-width: 1280px; border-collapse: separate; border-spacing: 0; background: #fff;
+    border: 1.5px solid #e6eaf2; border-radius: 10px; overflow: hidden;
+  }
+  .dsf-set-table th {
+    background: #eef3f9; color: #44566e; font-size: 10.5px; font-weight: 800; letter-spacing: 0.05em;
+    text-transform: uppercase; padding: 7px 10px; text-align: center; white-space: nowrap;
+  }
+  .dsf-set-table td {
+    padding: 8px 10px; border-top: 1px solid #eef1f6; text-align: center; vertical-align: middle;
+    font-size: 13px; font-weight: 700; color: #1f2a44; font-variant-numeric: tabular-nums;
+  }
+  .dsf-set-table tbody tr:hover td { background: #f7fbff; }
+  .dsf-set-table .dsf-set-no { width: 40px; color: #7c8ba1; }
+  .dsf-set-table .dsf-set-size { width: 112px; color: #044a78; font-weight: 800; font-size: 17px; }
+  .dsf-set-table .dsf-set-cuts { text-align: left; font-weight: 600; color: #44566e; width: 150px; }
+  /* The web strip is the point of this table -- give it the bulk of the width
+     and let the strip itself fill the cell rather than sitting capped in the
+     middle of it. */
+  .dsf-set-table .dsf-web-diag { width: 60%; min-width: 560px; padding-left: 14px; padding-right: 14px; }
+  .dsf-set-table .dsf-web-diag .sl-web { max-width: none; height: 40px; }
+  /* Each segment carries its roll width -- big enough to read off the screen. */
+  .dsf-set-table .dsf-web-diag .sl-web-seg .sl-seg-w { font-size: 15px; }
+  .dsf-set-table .dsf-set-cuts b { color: #1f2a44; font-weight: 800; }
+  .dsf-set-table .dsf-set-trim { width: 92px; color: #b45309; }
+  .dsf-set-table .dsf-set-rem { width: 96px; color: #15803d; }
+  .dsf-set-table .dsf-set-rem.sl-bad { color: #b91c1c; }
+  .dsf-set-table .dsf-set-rolls { color: #15803d; font-weight: 800; }
+  .dsf-set-table tfoot td {
+    background: #f4f8fc; border-top: 1.5px solid #d8e3ef; font-weight: 800; color: #044a78;
+  }
+  .dsf-set-empty {
+    font-size: 12.5px; font-weight: 700; color: #7c8ba1; background: #fff;
+    border: 1.5px dashed #dbe3ec; border-radius: 10px; padding: 14px; text-align: center;
+  }
+
+  /* ---- Auto Deckle (utils/deckleOptimizer) ---- */
+  .dsa-panel { align-self: stretch; background: #fff; border: 1.5px solid #cfe0f0; border-radius: 10px; overflow: hidden; }
+  .dsa-bar {
+    display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+    padding: 11px 14px; background: linear-gradient(180deg, #f6fbff, #eef5fc);
+    border-bottom: 1px solid #dfeaf5;
+  }
+  .dsa-field { display: flex; flex-direction: column; gap: 4px; }
+  .dsa-field label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #7c8ba1; white-space: nowrap;
+  }
+  .dsa-field input {
+    width: 104px; height: 34px; padding: 4px 8px; text-align: center;
+    font-size: 15px; font-weight: 800; color: #1f2a44;
+    border: 1.5px solid #cbd5e1; border-radius: 7px; background: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+  .dsa-field input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+  .dsa-field input.is-bad { border-color: #dc2626 !important; background: #fef2f2; }
+  .dsa-field.dsa-narrow input { width: 74px; }
+  .dsa-spacer { flex: 1 1 auto; }
+  .dsa-run {
+    display: inline-flex; align-items: center; gap: 8px; border: none;
+    background: #044a78; color: #fff; border-radius: 8px;
+    padding: 9px 18px; font-size: 13px; font-weight: 800; cursor: pointer;
+    letter-spacing: 0.02em; white-space: nowrap;
+  }
+  .dsa-run:hover { background: #06639f; }
+  .dsa-run:disabled { opacity: 0.5; cursor: not-allowed; }
+  .dsa-body { padding: 0; }
+  .dsa-body:empty { display: none; }
+  .dsa-result { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid #eef1f6; }
+  .dsa-stat {
+    flex: 1 1 130px; min-width: 130px; padding: 10px 14px;
+    border-right: 1px solid #eef1f6; display: flex; flex-direction: column; gap: 3px;
+  }
+  .dsa-stat:last-child { border-right: none; }
+  .dsa-stat .k {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #7c8ba1; white-space: nowrap;
+  }
+  .dsa-stat .v { font-size: 19px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums; }
+  .dsa-stat .v.good { color: #15803d; }
+  .dsa-stat .v.warn { color: #b45309; }
+  .dsa-notes { padding: 9px 14px; font-size: 12px; line-height: 1.55; color: #5b6b80; }
+  .dsa-notes ul { margin: 0; padding-left: 17px; }
+  .dsa-notes li { margin: 2px 0; }
+  .dsa-err {
+    padding: 10px 14px; background: #fef2f2; color: #991b1b;
+    font-size: 12.5px; font-weight: 700; line-height: 1.5;
+  }
+  .dsa-hint { padding: 9px 14px; font-size: 11.5px; color: #7c8ba1; line-height: 1.5; }
+  .dsa-check {
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    margin: 0; padding: 5px 10px 5px 8px; border: 1.5px solid #cbd5e1;
+    border-radius: 8px; background: #fff; height: 34px;
+  }
+  .dsa-check:hover { border-color: #044a78; }
+  .dsa-check input { width: 16px; height: 16px; accent-color: #044a78; cursor: pointer; flex: none; margin: 0; }
+  .dsa-check span.t { display: block; font-size: 12px; font-weight: 700; color: #1f2a44; white-space: nowrap; }
+  .dsa-check span.s { display: block; font-size: 9.5px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
+  .dsa-check:has(input:checked) { border-color: #044a78; background: #f4f9ff; }
+  /* Mixed webs on: each layout's size table is its own pick, so say which
+     width the row is currently cut from right in the layout table. */
+  .dsf-row-web {
+    font-size: 10px; font-weight: 800; letter-spacing: 0.04em; color: #044a78;
+    background: #eef5ff; border-radius: 999px; padding: 2px 7px; white-space: nowrap;
+  }
 </style>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
@@ -269,9 +410,12 @@
                 <i class="fa-solid fa-pen"></i>
               </button>
             </div>
-            <div id="dsfSizeAdd" class="dsf-chip-add" hidden>
-              <input type="number" step="any" min="0" id="dsfSizeInput" placeholder="mm" />
-              <button type="button" id="dsfSizeAddBtn" class="dsf-mini-btn"><i class="fa-solid fa-plus"></i> Add</button>
+            <div id="dsfSizeAdd" hidden>
+              <div class="dsf-chip-add">
+                <input type="number" step="any" min="0" id="dsfSizeInput" placeholder="mm" inputmode="decimal" />
+                <button type="button" id="dsfSizeAddBtn" class="dsf-mini-btn"><i class="fa-solid fa-plus"></i> Add</button>
+              </div>
+              <div id="dsfSizeMsg" class="dsf-chip-msg" hidden></div>
             </div>
           </div>
         </div>
@@ -312,6 +456,55 @@
       </div>
     </div>
 
+    <!-- Auto Deckle -- utils/deckleOptimizer works out the least-waste layouts
+         and drops them into the table below for review. Read-only: it never
+         creates the batch, the planner still presses Create Deckle Batch.
+         Hidden entirely when DECKLE_AUTO_ENABLED=false. -->
+    <% if (autoDeckle && autoDeckle.enabled) { %>
+      <div class="span-full form-subheading sl-sec-head"><h1>Auto Set Deckle</h1></div>
+      <div class="span-full" style="border:none !important;">
+        <div class="dsa-panel">
+          <div class="dsa-bar">
+            <div class="dsa-field">
+              <label for="dsaDrm">Deckle R.M.</label>
+              <input type="number" step="any" min="1" id="dsaDrm" inputmode="decimal"
+                     value="<%= autoDeckle.defaultRunningMeters %>"
+                     title="Length of one deckle web, in metres. Every layout is planned against this." />
+            </div>
+            <div class="dsa-field dsa-narrow">
+              <label for="dsaOvPct">Max Overrun %</label>
+              <input type="number" step="any" min="0" id="dsaOvPct" inputmode="decimal"
+                     value="<%= Math.round(autoDeckle.overrun.pct * 100) %>"
+                     title="Spare rolls allowed, as a % of what was ordered. 10% on a 30-roll order allows 3 spares. Extra rolls come off web width that would otherwise be trimmed away and scrapped. Set 0 for no spares at all." />
+            </div>
+            <div class="dsa-field dsa-narrow">
+              <label for="dsaOvRolls">Max Extra Rolls</label>
+              <input type="number" step="1" min="0" id="dsaOvRolls" inputmode="numeric"
+                     value="<%= autoDeckle.overrun.maxExtraRolls %>"
+                     title="Hard ceiling on spare rolls of any one width, whatever the percentage works out to. Stops a large order authorising a pile of spares. Whichever of the two limits is tighter applies. Set 0 for no spares at all." />
+            </div>
+            <label class="dsa-check" for="dsaMixed"
+                   title="Let each layout be cut from whichever deckle width suits it, instead of one width for the whole batch. Usually less trim, but more than one facestock size to pull for the job.">
+              <input type="checkbox" id="dsaMixed" checked />
+              <span>
+                <span class="t">Different web per layout</span>
+                <span class="s">less trim · more reels to handle</span>
+              </span>
+            </label>
+            <div class="dsa-spacer"></div>
+            <button type="button" id="dsaRun" class="dsa-run">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Auto Set Deckle
+            </button>
+          </div>
+          <div class="dsa-body" id="dsaBody"></div>
+          <div class="dsa-hint">
+            Plans the ticked orders against the Available Sizes and Edge Trim above, then fills the
+            layouts below. Nothing is saved until you press Create Deckle Batch — edit anything first.
+          </div>
+        </div>
+      </div>
+    <% } %>
+
     <!-- Deckle layouts: one row per cut pattern; Webs = how many deckle reels use it -->
     <div class="span-full form-subheading sl-sec-head"><h1>Deckle Layouts</h1></div>
     <div class="span-full" style="border:none !important;">
@@ -334,6 +527,22 @@
         <span id="dsfLayoutStatus" class="dsf-layout-status"></span>
         <button type="button" id="dsfAddLayout" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Deckle Layout</button>
       </div>
+
+      <!-- Read-only recap of the deckle as it currently stands: one line per
+           layout, with the totals the batch will be created with. Redrawn by
+           recalcAll(); nothing here is an input. -->
+      <div class="dsf-set-wrap">
+        <div class="dsf-set-head">
+          <h2>Deckle Set</h2>
+          <span id="dsfSetSub" class="dsf-set-sub"></span>
+        </div>
+        <div class="sl-scroll" id="dsfSetBody"></div>
+      </div>
+    </div>
+
+    <!-- Blocking issues, refreshed on every edit -->
+    <div class="span-full" id="dsfIssues" hidden style="border:none !important;">
+      <div class="sl-warn-note" id="dsfIssuesBody"></div>
     </div>
 
     <div class="span-full btn-grp" style="margin-top: 10px;">
@@ -379,6 +588,14 @@
   const SIZES = Array.isArray(GROUP.candidateSizes) ? GROUP.candidateSizes : [];
   const KIDS = Array.isArray(GROUP._children) ? GROUP._children : [];
 
+  // Sane bounds -- a deckle web is a label reel, never a few mm and never metres
+  // wide; roll R.Meter figures are lengths, not widths. Used only to catch
+  // fat-finger input, not to model the real machine limits.
+  const MIN_DECKLE_MM = 25;
+  const MAX_DECKLE_MM = 2000;
+  const MIN_WIDTH_MM = 1;
+  const MAX_RM = 1000000;
+
   const round2 = (n) => Math.round(n * 100) / 100;
   const fmt = (n) => (Number.isFinite(n) ? round2(n).toLocaleString("en-IN") : "—");
   const fmtI = (n) => (Number.isFinite(n) ? Math.round(n).toLocaleString("en-IN") : "—");
@@ -389,10 +606,18 @@
   const dsfLayoutsJson = document.getElementById("dsfLayoutsJson");
   const layoutBody = document.getElementById("dsfLayoutBody");
   const layoutStatus = document.getElementById("dsfLayoutStatus");
+  const dsfAddLayout = document.getElementById("dsfAddLayout");
+  const dsfSetBody = document.getElementById("dsfSetBody");
+  const dsfSetSub = document.getElementById("dsfSetSub");
   const orderBody = document.getElementById("dsfOrderBody");
   const sizeChipsEl = document.getElementById("dsfSizeChips");
   const sizeAddEl = document.getElementById("dsfSizeAdd");
   const sizeInputEl = document.getElementById("dsfSizeInput");
+  const dsfSubmit = document.getElementById("dsfSubmit");
+  const dsfIssues = document.getElementById("dsfIssues");
+  const dsfIssuesBody = document.getElementById("dsfIssuesBody");
+  // Last computed validation state -- recalcAll() refreshes it, submit reads it.
+  let ISSUES = { errors: [], notReady: false };
 
   // The available deckle sizes -- seeded from in-stock facestock, then the
   // planner can add/remove (pencil = edit). Kept ascending + deduped. The web
@@ -423,12 +648,30 @@
       recalcAll();
     }));
   }
+  const sizeMsgEl = document.getElementById("dsfSizeMsg");
+  function showSizeMsg(text) {
+    if (!sizeMsgEl) return;
+    sizeMsgEl.textContent = text || "";
+    sizeMsgEl.hidden = !text;
+    sizeInputEl.classList.toggle("is-bad", !!text);
+  }
   function addSize() {
-    const v = round2(Number(sizeInputEl.value));
-    if (!(Number.isFinite(v) && v > 0)) { sizeInputEl.focus(); return; }
+    const raw = String(sizeInputEl.value).trim();
+    const v = round2(Number(raw));
+    const trim = Number(dsfTrim && dsfTrim.value);
+    if (raw === "" || !Number.isFinite(v)) { showSizeMsg("Enter a number in mm."); sizeInputEl.focus(); return; }
+    if (v <= 0) { showSizeMsg("Deckle size must be greater than 0."); sizeInputEl.focus(); return; }
+    if (v < MIN_DECKLE_MM || v > MAX_DECKLE_MM) {
+      showSizeMsg(`Deckle size looks wrong — expected ${MIN_DECKLE_MM}–${MAX_DECKLE_MM} mm.`); sizeInputEl.focus(); return;
+    }
+    if (Number.isFinite(trim) && trim >= 0 && v <= trim) {
+      showSizeMsg(`Deckle size must be more than the ${round2(trim)} mm edge trim.`); sizeInputEl.focus(); return;
+    }
+    if (SIZE_LIST.some((s) => round2(s) === v)) { showSizeMsg(`${fmt(v)} mm is already listed.`); sizeInputEl.focus(); return; }
     SIZE_LIST.push(v);
     normSizeList();
     sizeInputEl.value = "";
+    showSizeMsg("");
     sizeInputEl.focus();
     renderSizeChips();
     recalcAll();
@@ -473,6 +716,18 @@
     };
   }
 
+  // Raw per-slot state for validation -- keeps the blanks and bad values that
+  // readRow() silently drops.
+  function rowSlots(tr) {
+    return SLOTS.map((s) => {
+      const el = tr.querySelector(`.sl-roll-width[data-slot="${s}"]`);
+      const raw = String(el.value).trim();
+      return { slot: s, el, raw, num: raw === "" ? null : Number(raw) };
+    });
+  }
+  const lastFilledIdx = (slots) => slots.reduce((idx, s, k) => (s.raw !== "" ? k : idx), -1);
+  const trimmedVal = (el) => (el ? String(el.value).trim() : "");
+
   // Finished rolls per knife position from one deckle web = Deckle R.M. / roll
   // R. Meter (e.g. 900 / 300 = 3). Falls back to 1 when it can't be computed.
   function rollsPerWeb(r) {
@@ -501,6 +756,9 @@
       if (preset.drm != null) tr.querySelector(".dsf-drm").value = preset.drm;
       if (preset.rm != null) tr.querySelector(".dsf-rm").value = preset.rm;
       if (preset.webs != null) tr.querySelector(".dsf-webs").value = preset.webs;
+      // The deckle web this layout is cut from -- only meaningful while mixed
+      // webs are on; rowSize() falls back to the batch pick otherwise.
+      if (preset.size != null) tr.dataset.size = String(preset.size);
       (preset.cuts || []).forEach(([slot, w]) => {
         const el = tr.querySelector(`.sl-roll-width[data-slot="${slot}"]`);
         if (el) el.value = w;
@@ -567,9 +825,58 @@
     return { widest, best, fits: selectedSize != null && round2(selectedSize - 2 * EDGE) >= widest };
   }
 
-  function selectSize(sz) {
+  // Mixed webs: each layout may be cut from a different deckle width instead of
+  // one width serving the whole batch. Follows the Auto Set panel's "Different
+  // web per layout" toggle, which is on by default -- so it starts on whenever
+  // that panel is rendered, and stays off when Auto Deckle is disabled and
+  // there is no toggle to turn it back off. While off, everything below
+  // behaves exactly as it always has -- one `selectedSize` for every row.
+  let MIXED_WEBS = false;
+
+  // After an Auto Set Deckle run the planner has already been told which web
+  // each layout runs on, so every other size's diagram is noise -- each
+  // layout's size table collapses to the chosen row until the planner asks to
+  // see the rest again (per row, via "Show all sizes"). Hand-drawn planning is
+  // unaffected: the full table is how you choose a size in the first place.
+  let ONLY_CHOSEN = false;
+
+  // The deckle width a given layout row is cut from: its own, when mixed webs
+  // are on and one has been chosen for it, else the batch-wide pick.
+  function rowSize(tr) {
+    if (MIXED_WEBS) {
+      const own = Number(tr.dataset.size);
+      if (Number.isFinite(own) && own > 0 && SIZE_LIST.includes(own)) return own;
+    }
+    return selectedSize;
+  }
+
+  // The one width the BATCH is recorded at -- PendingProduction.deckleSize.
+  // With mixed webs that is the width carrying the most webs (ties to the
+  // wider), matching what utils/deckleOptimizer reports as its headline size.
+  // Every layout still stores its own width alongside it.
+  function headlineSize() {
+    if (!MIXED_WEBS) return selectedSize;
+    const byS = new Map();
+    layoutRows().forEach((tr) => {
+      const s = rowSize(tr);
+      if (!(s > 0)) return;
+      const webs = Math.max(0, Math.floor(Number(tr.querySelector(".dsf-webs").value) || 0));
+      byS.set(s, (byS.get(s) || 0) + webs);
+    });
+    if (!byS.size) return selectedSize;
+    return [...byS.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+  }
+
+  function selectSize(sz, tr) {
     const n = Number(sz);
     if (!Number.isFinite(n)) return;
+    // With mixed webs on, picking a size in a layout's own table sets THAT
+    // layout's web; otherwise it sets the batch's single web, as before.
+    if (MIXED_WEBS && tr) {
+      tr.dataset.size = String(n);
+      recalcAll();
+      return;
+    }
     userPickedSize = true;
     selectedSize = n;
     dsfDeckleSize.value = n;
@@ -609,10 +916,18 @@
     readTrim();
     const rows = layoutRows();
     const { widest, best, fits } = autoSize();
+    // Batch-wide web. With mixed webs on this is only the headline figure --
+    // each row's own size is resolved inside the loop by rowSize(tr).
     const sz = Number(dsfDeckleSize.value) || 0;
-    const cuttable = sz > 0 ? round2(sz - 2 * EDGE) : 0;
     let totalWebs = 0;
-    let firstBlock = "";
+    const errors = [];
+    // Layout rows the planner hasn't started filling -- not an error, just
+    // "not ready": these keep the form + the Add-layout button locked but never
+    // show a red "fix this" line.
+    let blankRows = 0;
+    // Layout numbers (1-based) that currently carry a hard error -- gates the
+    // "Add Deckle Layout" button so a new row can't be piled on a broken one.
+    const brokenRows = new Set();
     // rolls "deckle set" per roll width = Σ over layouts (cuts of that width ×
     // Webs × Rolls-per-web), where Rolls-per-web = Deckle R.M. ÷ roll R. Meter.
     const setByWidth = new Map();
@@ -620,41 +935,130 @@
     const websByWidth = new Map();
 
     rows.forEach((tr, i) => {
-      tr.querySelector(".dsf-rownum").textContent = String(i + 1);
+      // Row number, plus the web this row is cut from once the layouts can
+      // differ -- otherwise the size only appears in the sub-table and it is
+      // not obvious at a glance which row runs on what.
+      const numCell = tr.querySelector(".dsf-rownum");
+      const ownSize = rowSize(tr);
+      numCell.innerHTML = MIXED_WEBS && ownSize > 0
+        ? `${i + 1}<div class="dsf-row-web">${esc(fmt(ownSize))}</div>`
+        : String(i + 1);
       tr.querySelectorAll(".sl-roll-width").forEach((el) => el.classList.toggle("is-set", el.value.trim() !== ""));
+      const L = `Layout #${i + 1}: `;
+      const errBefore = errors.length;
+      // This row's own web. Identical to the batch's for every row unless
+      // mixed webs are on, so all the checks below read the same either way.
+      const rSz = rowSize(tr);
+      const cuttable = rSz > 0 ? round2(rSz - 2 * EDGE) : 0;
+
+      const slots = rowSlots(tr);
+      const drmEl = tr.querySelector(".dsf-drm");
+      const rmEl = tr.querySelector(".dsf-rm");
+      const websEl = tr.querySelector(".dsf-webs");
+      const drmRaw = trimmedVal(drmEl);
+      const rmRaw = trimmedVal(rmEl);
+      const websRaw = trimmedVal(websEl);
+      const anyWidth = slots.some((s) => s.raw !== "");
+
+      // A row the planner hasn't started -- no widths, no lengths, web count
+      // still at its default. Counts as "not ready" (keeps the form + the
+      // Add-layout button locked) but never raises a red error.
+      const rowBlank = !anyWidth && drmRaw === "" && rmRaw === "" && (websRaw === "" || websRaw === "1");
+      if (rowBlank) blankRows += 1;
+
+      // --- roll widths: filled A -> L, in order, no gaps ---
+      const lastIdx = lastFilledIdx(slots);
+      let prevFilled = true;
+      slots.forEach((s) => {
+        // A slot opens once every slot before it holds a value; a slot that
+        // already has a value stays open so it can be corrected.
+        s.el.disabled = !(prevFilled || s.raw !== "");
+        if (s.raw === "") prevFilled = false;
+        const badNum = s.raw !== "" && (!Number.isFinite(s.num) || s.num < MIN_WIDTH_MM);
+        const wide = rSz > 0 && Number.isFinite(s.num) && s.num > cuttable;
+        s.el.classList.toggle("is-bad", badNum || wide);
+        if (wide) errors.push(`${L}roll ${s.slot} (${fmt(s.num)} mm) is wider than the ${fmt(cuttable)} mm usable web`);
+      });
+      const hasGap = slots.some((s, k) => k < lastIdx && s.raw === "");
+      if (hasGap) errors.push(`${L}fill roll widths A→L in order — no blank slot between them`);
+      if (slots.some((s) => s.raw !== "" && (!Number.isFinite(s.num) || s.num < MIN_WIDTH_MM)))
+        errors.push(`${L}every roll width must be a number greater than 0`);
 
       const r = readRow(tr);
       const rpw = rollsPerWeb(r);
-      // The × removes the row; on the last remaining row it clears the values
-      // instead, and is disabled only while that row is already blank.
+
+      // --- Deckle R.M. / Roll R. Meter: both or neither, roll <= web ---
+      const drmN = Number(drmRaw);
+      const rmN = Number(rmRaw);
+      const drmBad = drmRaw !== "" && (!Number.isFinite(drmN) || drmN <= 0 || drmN > MAX_RM);
+      const rmBad = rmRaw !== "" && (!Number.isFinite(rmN) || rmN <= 0 || rmN > MAX_RM);
+      if (drmBad) errors.push(`${L}Deckle R.M. must be a length greater than 0`);
+      if (rmBad) errors.push(`${L}Roll R. Meter must be a length greater than 0`);
+      if ((drmRaw === "") !== (rmRaw === ""))
+        errors.push(`${L}enter both Deckle R.M. and Roll R. Meter, or leave both blank`);
+      let rmOverWeb = false;
+      if (!drmBad && !rmBad && drmRaw !== "" && rmRaw !== "" && rmN > drmN) {
+        rmOverWeb = true;
+        errors.push(`${L}Roll R. Meter (${fmt(rmN)} m) can't be longer than the deckle web (${fmt(drmN)} m)`);
+      }
+      drmEl.classList.toggle("is-bad", drmBad);
+      rmEl.classList.toggle("is-bad", rmBad || rmOverWeb);
+
+      // --- Deckle Count (webs): whole number, 1 or more (skipped on a blank row) ---
+      const websNum = Number(websRaw);
+      const websBad = !rowBlank
+        && (websRaw === "" || !Number.isFinite(websNum) || websNum < 1 || !Number.isInteger(websNum));
+      if (websBad) errors.push(`${L}Deckle Count must be a whole number of 1 or more`);
+      websEl.classList.toggle("is-bad", websBad);
+
+      // The × removes the row; on the sole remaining row it just clears the
+      // values, and is disabled while that row is already untouched.
       const rmBtn = tr.querySelector(".dsf-remove");
       const isLast = rows.length <= 1;
-      rmBtn.disabled = isLast && !r.cuts.length && !r.rm && !r.drm && r.webs <= 1;
+      rmBtn.disabled = isLast && rowBlank;
       rmBtn.title = isLast ? "Clear this layout" : "Remove this layout";
       totalWebs += r.webs;
       r.cuts.forEach(([, w]) => setByWidth.set(w, (setByWidth.get(w) || 0) + r.webs * rpw));
       new Set(r.cuts.map(([, w]) => w)).forEach((w) => websByWidth.set(w, (websByWidth.get(w) || 0) + r.webs));
       const cutSum = round2(r.cuts.reduce((n, [, w]) => n + w, 0));
-      const over = sz > 0 && cutSum > cuttable;
+      const over = rSz > 0 && cutSum > cuttable;
 
       // Table: one row per available deckle size -- size | remaining | diagram | pick.
       const stack = tr.__sub.querySelector(".dsf-webs-stack");
+      // Collapsed (auto-planned) rows show only the size actually in use; the
+      // chosen size must still be an available one, else fall back to the full
+      // list rather than drawing an empty table.
+      const collapsed = ONLY_CHOSEN && SIZE_LIST.length > 1
+        && tr.dataset.showAll !== "1" && SIZE_LIST.includes(rSz);
+      const sizesShown = collapsed ? [rSz] : SIZE_LIST;
       stack.innerHTML = SIZE_LIST.length
-        ? `<table class="dsf-web-table">${WEB_TABLE_HEAD}<tbody>${SIZE_LIST.map((s) => webRowHTML(r.cuts, s, s === selectedSize, s === best, r.webs)).join("")}</tbody></table>`
+        ? `<table class="dsf-web-table">${WEB_TABLE_HEAD}<tbody>${sizesShown.map((s) => webRowHTML(r.cuts, s, s === rSz, s === best, r.webs)).join("")}</tbody></table>`
+          + (collapsed
+              ? `<button type="button" class="dsf-sizes-toggle" title="Show every available deckle size for this layout"><i class="fa-solid fa-chevron-down"></i>Show all ${SIZE_LIST.length} sizes</button>`
+              : (ONLY_CHOSEN && SIZE_LIST.length > 1
+                  ? `<button type="button" class="dsf-sizes-toggle" data-hide="1" title="Show only the deckle size this layout uses"><i class="fa-solid fa-chevron-up"></i>Show only the selected size</button>`
+                  : ""))
         : `<div style="font-size:12px;font-weight:700;color:#7c8ba1;padding:6px 2px;">Add a deckle size above (pencil next to “Available Sizes”).</div>`;
       stack.querySelectorAll(".dsf-web-tr").forEach((el) => {
-        el.addEventListener("click", () => selectSize(el.dataset.size));
+        el.addEventListener("click", () => selectSize(el.dataset.size, tr));
         el.addEventListener("keydown", (ev) => {
-          if (ev.key === " " || ev.key === "Enter") { ev.preventDefault(); selectSize(el.dataset.size); }
+          if (ev.key === " " || ev.key === "Enter") { ev.preventDefault(); selectSize(el.dataset.size, tr); }
         });
       });
+      const sizesToggle = stack.querySelector(".dsf-sizes-toggle");
+      if (sizesToggle) {
+        sizesToggle.addEventListener("click", () => {
+          if (sizesToggle.dataset.hide === "1") delete tr.dataset.showAll;
+          else tr.dataset.showAll = "1";
+          recalcAll();
+        });
+      }
 
-      const why = !sz ? (SIZE_LIST.length ? "" : "add a deckle size")
-        : !r.cuts.length ? `Layout #${i + 1}: enter at least one roll width`
-        : over ? `Layout #${i + 1}: ${fmt(cutSum)} mm layout won't fit the ${fmt(sz)} mm deckle size — split it`
-        : r.webs < 1 ? `Layout #${i + 1}: enter how many webs use it`
-        : "";
-      if (why && !firstBlock) firstBlock = why;
+      if (!rowBlank && !r.cuts.length && !hasGap)
+        errors.push(`${L}enter at least one roll width`);
+      if (over) errors.push(`${L}widths total ${fmt(cutSum)} mm — only ${fmt(cuttable)} mm of the ${fmt(rSz)} mm web is usable; split the layout or pick a bigger deckle size`);
+
+      if (errors.length > errBefore) brokenRows.add(i + 1);
     });
 
     // "Rolls Set" / "Balance" per order -- rolls of an order's paper size that
@@ -683,11 +1087,173 @@
       });
     });
 
+    // ---- whole-form checks ----
+    if (!SIZE_LIST.length) {
+      errors.push("Add at least one deckle size — click the pencil next to “Available Sizes”.");
+    }
+    const trimRaw = trimmedVal(dsfTrim);
+    const trimNum = Number(trimRaw);
+    const trimInvalid = trimRaw === "" || !Number.isFinite(trimNum) || trimNum < 0;
+    if (trimInvalid) {
+      errors.push("Edge Trim must be 0 mm or more.");
+    } else if (SIZE_LIST.length && trimNum >= SIZE_LIST[0]) {
+      errors.push(`Edge Trim (${fmt(trimNum)} mm) leaves nothing to cut on the smallest deckle size (${fmt(SIZE_LIST[0])} mm).`);
+    }
+    if (dsfTrim) dsfTrim.classList.toggle("is-bad", trimInvalid || (SIZE_LIST.length && trimNum >= SIZE_LIST[0]));
+
+    if (!checkedIds().length) errors.push("Tick at least one order to bundle into this deckle.");
+
     dsfNoOfRolls.value = String(totalWebs);
-    const sizeTag = sz > 0 ? ` · deckle size ${fmt(sz)} mm${fits ? "" : " (too small — split a layout)"}` : "";
-    layoutStatus.textContent = firstBlock
+    // The batch is saved at ONE deckle size. With mixed webs that is whichever
+    // width carries the most webs; each layout still posts its own alongside.
+    const headline = headlineSize();
+    dsfDeckleSize.value = headline != null ? headline : "";
+    // A layout the planner hasn't started isn't an error -- it just keeps the
+    // form + the Add-layout button locked, with no message.
+    const notReady = blankRows > 0;
+    ISSUES = { errors, notReady };
+    renderIssues();
+    dsfAddLayout.disabled = blankRows > 0 || brokenRows.size > 0;
+
+    // With mixed webs on, name the distinct widths in play rather than one
+    // size that would only be true of some of the layouts.
+    const distinct = MIXED_WEBS
+      ? [...new Set(rows.map(rowSize).filter((s) => s > 0))].sort((a, b) => a - b)
+      : [];
+    const sizeTag = MIXED_WEBS && distinct.length > 1
+      ? ` · webs ${distinct.map((s) => `${fmt(s)}`).join(" + ")} mm`
+      : (headline > 0 ? ` · deckle size ${fmt(headline)} mm${fits || MIXED_WEBS ? "" : " (too small)"}` : "");
+    layoutStatus.textContent = errors[0]
       || `${rows.length} layout${rows.length === 1 ? "" : "s"} · ${totalWebs} deckle web${totalWebs === 1 ? "" : "s"}${sizeTag}`;
-    layoutStatus.style.color = firstBlock || (sz > 0 && !fits) ? "#b45309" : "#15803d";
+    layoutStatus.style.color =
+      errors.length || (!MIXED_WEBS && sz > 0 && !fits) ? "#b45309" : "#15803d";
+
+    renderSetSummary();
+  }
+
+  // ---- "Deckle Set" recap ------------------------------------------------
+  // A read-only picture of what pressing Create Deckle Batch would make: one
+  // line per layout (web it runs on, the knives across it, what one web yields
+  // and how many webs), then the batch totals. Purely derived from the layout
+  // rows above -- redrawn by recalcAll(), never edited here.
+  function renderSetSummary() {
+    const rows = layoutRows();
+    // Only layouts that are actually drawn (at least one roll width) make it
+    // into the recap -- a half-filled row would only show noise.
+    const set = rows
+      .map((tr, i) => {
+        const r = readRow(tr);
+        if (!r.cuts.length) return null;
+        const size = rowSize(tr) || 0;
+        const cutSum = round2(r.cuts.reduce((n, [, w]) => n + w, 0));
+        const rpw = rollsPerWeb(r);
+        return {
+          no: i + 1,
+          size,
+          cuts: r.cuts,
+          cutSum,
+          // Usable web left over after the knives -- negative means the layout
+          // overflows the web.
+          remaining: size > 0 ? round2(size - 2 * EDGE - cutSum) : null,
+          // Everything scrapped off one web: both edge trims plus that slack.
+          trim: size > 0 ? round2(2 * EDGE + Math.max(0, round2(size - 2 * EDGE - cutSum))) : null,
+          drm: r.drm,
+          rm: r.rm,
+          rpw,
+          webs: r.webs,
+          // Finished rolls this layout yields = knives × webs × rolls per knife.
+          rolls: r.cuts.length * r.webs * rpw,
+        };
+      })
+      .filter(Boolean);
+
+    if (!set.length) {
+      dsfSetSub.textContent = "";
+      dsfSetBody.innerHTML =
+        `<div class="dsf-set-empty">Nothing set yet — draw a layout above (or run Auto Set Deckle) and it appears here.</div>`;
+      return;
+    }
+
+    const totWebs = set.reduce((n, L) => n + L.webs, 0);
+    const totRolls = set.reduce((n, L) => n + L.rolls, 0);
+    // Facestock the batch consumes: Σ web width × web length × webs, in m².
+    const sqm = round2(set.reduce((n, L) => n + (L.size / 1000) * (L.drm || 0) * L.webs, 0));
+    // Webs per distinct deckle width -- the reels to pull for this job.
+    const byS = new Map();
+    set.forEach((L) => { if (L.size > 0) byS.set(L.size, (byS.get(L.size) || 0) + L.webs); });
+    const sizeLine = [...byS.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([sz2, w]) => `${fmt(sz2)} mm × ${fmtI(w)}`)
+      .join("  ·  ");
+    dsfSetSub.textContent = sizeLine ? `Deckle webs: ${sizeLine}` : "";
+
+    // "3 × 100 mm, 150 mm" -- the knives across the web, like a cutting slip.
+    const cutsText = (cuts) => {
+      const byW = new Map();
+      cuts.forEach(([, w]) => byW.set(w, (byW.get(w) || 0) + 1));
+      return [...byW.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .map(([w, n]) => `${n > 1 ? `<b>${n} ×</b> ` : ""}<b>${esc(fmt(w))}</b> mm`)
+        .join(", ");
+    };
+
+    dsfSetBody.innerHTML = `
+      <table class="dsf-set-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Deckle Size</th>
+            <th>Rolls Across</th>
+            <th>Layout</th>
+            <th title="Width scrapped off every web — both edge trims plus the uncut slack">Trim</th>
+            <th title="Usable web left after the knives (edge trims already netted out)">Remaining</th>
+            <th>Deckle R.M.</th>
+            <th>Roll R.M.</th>
+            <th>Total Rolls</th>
+            <th>Deckle Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${set.map((L) => `
+            <tr>
+              <td class="dsf-set-no">${L.no}</td>
+              <td class="dsf-set-size">${L.size > 0 ? esc(fmt(L.size)) + " mm" : "—"}</td>
+              <td class="dsf-set-cuts">${cutsText(L.cuts)}</td>
+              <td class="dsf-web-diag">
+                <div class="sl-web${L.remaining != null && L.remaining < 0 ? " is-over" : ""}">${webInnerHTML(L.cuts, L.size)}</div>
+              </td>
+              <td class="dsf-set-trim">${L.trim != null ? esc(fmt(L.trim)) + " mm" : "—"}</td>
+              <td class="dsf-set-rem${L.remaining != null && L.remaining < 0 ? " sl-bad" : ""}">${L.remaining != null ? esc(fmt(L.remaining)) + " mm" : "—"}</td>
+              <td>${L.drm > 0 ? esc(fmt(L.drm)) + " m" : "—"}</td>
+              <td>${L.rm > 0 ? esc(fmt(L.rm)) + " m" : "—"}</td>
+              <td class="dsf-set-rolls">${esc(fmtI(L.rolls))}</td>
+              <td>${esc(fmtI(L.webs))}</td>
+            </tr>`).join("")}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" style="text-align:left;">Total — ${set.length} layout${set.length === 1 ? "" : "s"}</td>
+            <td colspan="4" style="text-align:right;">${sqm > 0 ? `Facestock ${esc(fmt(sqm))} m²` : ""}</td>
+            <td>${esc(fmtI(totRolls))}</td>
+            <td>${esc(fmtI(totWebs))}</td>
+          </tr>
+        </tfoot>
+      </table>`;
+  }
+
+  // Paint the issues panel + gate the submit button from ISSUES.
+  function renderIssues() {
+    const { errors, notReady } = ISSUES;
+    if (!errors.length) {
+      dsfIssues.hidden = true;
+      dsfIssuesBody.innerHTML = "";
+    } else {
+      dsfIssues.hidden = false;
+      dsfIssuesBody.classList.add("is-error");
+      dsfIssuesBody.innerHTML =
+        `<div class="dsf-issue-head">Fix before saving</div><ul>${errors.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>`;
+    }
+    dsfSubmit.disabled = errors.length > 0 || notReady;
   }
 
   function checkedIds() {
@@ -695,7 +1261,7 @@
   }
 
   // ---- wiring ----
-  document.getElementById("dsfAddLayout").addEventListener("click", () => addLayoutRow());
+  dsfAddLayout.addEventListener("click", () => { if (!dsfAddLayout.disabled) addLayoutRow(); });
   document.getElementById("dsfSizeEdit").addEventListener("click", () => { sizesEditing = !sizesEditing; renderSizeChips(); });
   document.getElementById("dsfSizeAddBtn").addEventListener("click", addSize);
   sizeInputEl.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); addSize(); } });
@@ -711,32 +1277,201 @@
   orderBody.querySelectorAll('input[name="orderIds"]').forEach((c) => c.addEventListener("change", () => {
     const tr = c.closest("tr");
     if (tr) tr.style.opacity = c.checked ? "1" : "0.45";
+    recalcAll();
   }));
 
+  let dsfSubmitting = false;
   document.getElementById("dsfForm").addEventListener("submit", (e) => {
     recalcAll();
-    const ids = checkedIds();
-    if (!ids.length) { e.preventDefault(); showToast("Tick at least one order for this deckle.", "error"); return; }
-    const sz = Number(dsfDeckleSize.value);
-    if (!Number.isFinite(sz) || sz <= 0) { e.preventDefault(); showToast("Add at least one deckle size.", "error"); return; }
-
-    const rows = layoutRows().map(readRow).filter((r) => r.cuts.length);
-    if (!rows.length) { e.preventDefault(); showToast("Enter at least one deckle layout (roll widths).", "error"); return; }
-    if (rows.some((r) => r.webs < 1)) { e.preventDefault(); showToast("Every layout needs at least 1 web.", "error"); return; }
-
-    const cuttable = round2(sz - 2 * EDGE);
-    if (rows.some((r) => round2(r.cuts.reduce((n, [, w]) => n + w, 0)) > cuttable)) {
-      showToast("Heads up: a layout is wider than the chosen deckle size — saving anyway.", "error");
+    if (ISSUES.errors.length) {
+      e.preventDefault();
+      showToast(ISSUES.errors[0], "error");
+      dsfIssues.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
     }
+    if (ISSUES.notReady) { e.preventDefault(); return; }
+    if (dsfSubmitting) { e.preventDefault(); return; }
 
+    const rows = layoutRows()
+      .map((tr) => ({ ...readRow(tr), size: rowSize(tr) }))
+      .filter((r) => r.cuts.length);
     dsfLayoutsJson.value = JSON.stringify(rows.map((r) => ({
       cuts: r.cuts.map(([slot, width]) => ({ slot, width })),
+      // The web THIS layout is cut from. Always sent, so a batch records the
+      // width behind every layout even when they all share one -- Slitting
+      // Allocation pre-fills each row from it.
+      size: r.size,
       drm: r.drm,
       rm: r.rm,
       webs: r.webs,
     })));
     dsfNoOfRolls.value = String(rows.reduce((n, r) => n + r.webs, 0));
+
+    // Lock the button so a double-click can't create two batches.
+    dsfSubmitting = true;
+    dsfSubmit.disabled = true;
+    dsfSubmit.textContent = "Creating…";
   });
+
+  <% if (autoDeckle && autoDeckle.enabled) { %>
+  // ---- Auto Deckle -----------------------------------------------------
+  // Asks the server (utils/deckleOptimizer, behind DECKLE_AUTO_ENABLED) for the
+  // least-waste set of layouts and writes them into the table above. Purely a
+  // drafting aid: it replaces the layout rows and the chosen size, then hands
+  // straight back to recalcAll() -- so every validation, every warning and the
+  // Create Deckle Batch button behave exactly as they do for a hand-drawn plan.
+  const dsaRun = document.getElementById("dsaRun");
+  if (dsaRun) {
+    const dsaBody = document.getElementById("dsaBody");
+    const dsaDrm = document.getElementById("dsaDrm");
+    const dsaOvPct = document.getElementById("dsaOvPct");
+    const dsaOvRolls = document.getElementById("dsaOvRolls");
+    const dsaMixed = document.getElementById("dsaMixed");
+    // The toggle ships on, so the manual planner starts in per-layout mode too
+    // -- picking a size inside a layout's table sets that layout's web.
+    MIXED_WEBS = dsaMixed.checked;
+
+    const dsaStat = (k, v, cls) =>
+      `<div class="dsa-stat"><span class="k">${esc(k)}</span><span class="v${cls ? " " + cls : ""}">${esc(v)}</span></div>`;
+
+    function dsaShowError(msg) {
+      dsaBody.innerHTML = `<div class="dsa-err">${esc(msg)}</div>`;
+    }
+
+    function dsaShowPlan(data) {
+      const p = data.plan;
+      const w = p.waste;
+      // Only the side trim is something a different layout could recover --
+      // edge trim is fixed by the machine, the end tail by Deckle R.M. against
+      // the roll length, and any overrun by the rolls-per-web granularity. So
+      // that is the number worth showing next to the headline waste.
+      const avoidPct = w.consumedSqM > 0 ? round2((w.avoidableSqM / w.consumedSqM) * 100) : 0;
+      const extra = (p.rolls || []).reduce((n, r) => n + (r.extra || 0), 0);
+      const stats = [
+        // With mixed webs the batch is still recorded at one size, so show that
+        // AND what is actually run, rather than a number that is only half true.
+        p.mixed
+          ? dsaStat("Deckle Webs Used", p.sizesUsed.map((s) => `${fmt(s.size)}×${s.webs}`).join("  "))
+          : dsaStat("Deckle Size", `${fmt(p.deckleSize)} mm`),
+        dsaStat("Layouts", `${p.layouts.length}`),
+        dsaStat("Deckle Webs", `${fmtI(p.webs)}`),
+        dsaStat("Facestock Used", `${fmt(w.consumedSqM)} m²`),
+        dsaStat("Total Waste", `${fmt(w.wastePct)} %`, w.wastePct <= 10 ? "good" : "warn"),
+        dsaStat("Recoverable Trim", `${fmt(avoidPct)} %`, avoidPct <= 2 ? "good" : "warn"),
+        dsaStat("Extra Rolls", `${fmtI(extra)}`, extra ? "warn" : "good"),
+      ].join("");
+      const notes = (data.notes || []).length
+        ? `<div class="dsa-notes"><ul>${data.notes.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>`
+        : "";
+      dsaBody.innerHTML = `<div class="dsa-result">${stats}</div>${notes}`;
+    }
+
+    // Replace every layout row with the planned ones. Deckle R.M. and R. Meter
+    // go in together or not at all -- the form treats them as both-or-neither.
+    function dsaApply(plan) {
+      layoutBody.innerHTML = "";
+      // The optimizer has picked the web for every layout -- show just that
+      // one diagram per layout instead of one per available size.
+      ONLY_CHOSEN = true;
+      // The batch's headline width first, while MIXED_WEBS is still whatever
+      // it was -- with mixed on, selectSize() would otherwise write onto a row.
+      MIXED_WEBS = false;
+      selectSize(plan.deckleSize);
+      // Mixed only stays on when the plan actually came back mixed; a plan that
+      // settled on one width should not leave the form in per-row mode.
+      MIXED_WEBS = !!plan.mixed;
+
+      if (!plan.layouts.length) { addLayoutRow(); return; }
+      plan.layouts.forEach((L) => {
+        const hasLen = L.rm != null && L.drm != null;
+        addLayoutRow({
+          cuts: L.cuts.map((c) => [c.slot, c.width]),
+          drm: hasLen ? L.drm : null,
+          rm: hasLen ? L.rm : null,
+          webs: L.webs,
+          // Each layout remembers the web it was planned for; rowSize() reads
+          // it back and every check below runs against that width.
+          size: L.size,
+        });
+      });
+      recalcAll();
+    }
+
+    async function dsaPlan() {
+      const orderIds = checkedIds();
+      if (!orderIds.length) { dsaShowError("Tick at least one order to plan."); return; }
+      if (!SIZE_LIST.length) {
+        dsaShowError("Add at least one deckle size first — the pencil next to “Available Sizes”.");
+        return;
+      }
+      const drm = Number(dsaDrm.value);
+      dsaDrm.classList.toggle("is-bad", !(Number.isFinite(drm) && drm > 0));
+      if (!(Number.isFinite(drm) && drm > 0)) {
+        dsaShowError("Deckle R.M. must be a length greater than 0.");
+        return;
+      }
+
+      dsaRun.disabled = true;
+      const label = dsaRun.innerHTML;
+      dsaRun.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Planning…`;
+      dsaBody.innerHTML = "";
+      try {
+        const res = await fetch(
+          `/app/labels/production/deckle-set/plan/${encodeURIComponent(GROUP.itemId)}/auto`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderIds,
+              sizes: SIZE_LIST,
+              trim: Number(dsfTrim.value),
+              drm,
+              mixedSizes: !!dsaMixed.checked,
+              overrunPct: Number(dsaOvPct.value) / 100,
+              overrunRolls: Number(dsaOvRolls.value),
+            }),
+          },
+        );
+        let data = null;
+        try { data = await res.json(); } catch { data = null; }
+        if (!data) {
+          dsaShowError(`Auto Deckle failed (HTTP ${res.status}). Plan the layouts by hand below.`);
+          return;
+        }
+        if (!data.ok) {
+          dsaShowError(data.error || "Auto Deckle could not plan these orders.");
+          if (Array.isArray(data.notes) && data.notes.length) {
+            dsaBody.innerHTML +=
+              `<div class="dsa-notes"><ul>${data.notes.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div>`;
+          }
+          return;
+        }
+        dsaApply(data.plan);
+        dsaShowPlan(data);
+        showToast(
+          `Auto Deckle: ${data.plan.layouts.length} layout(s), ${data.plan.webs} web(s), ${fmt(data.plan.waste.wastePct)}% waste — review and save.`,
+          "success",
+        );
+      } catch (err) {
+        dsaShowError("Auto Deckle could not be reached. Plan the layouts by hand below.");
+      } finally {
+        dsaRun.disabled = false;
+        dsaRun.innerHTML = label;
+      }
+    }
+
+    dsaRun.addEventListener("click", dsaPlan);
+
+    // The toggle governs the manual planner too, not just the next auto run:
+    // with it on, the size table inside each layout picks that layout's web.
+    // Turning it off drops every per-row width so the batch goes back to one.
+    dsaMixed.addEventListener("change", () => {
+      MIXED_WEBS = dsaMixed.checked;
+      if (!MIXED_WEBS) layoutRows().forEach((tr) => { delete tr.dataset.size; });
+      recalcAll();
+    });
+  }
+  <% } %>
 
   // ---- init ----
   renderSizeChips();

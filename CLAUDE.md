@@ -31,6 +31,7 @@ node scripts/serialize-labelstock-sku-codes.js   # close gaps in SachikoLabelSto
 node scripts/dissolve-deckle.js [deckleId]       # un-make a Deckle, returning its mtrs to the raw reels it was laminated from
 node scripts/backfill-family-master-seed.js      # seed the Family master with values already in use on Label Stock / Facestock Master + the old hardcoded dropdown list
 node scripts/backfill-type-master-seed.js        # seed the Type master with values already in use on Facestock / Adhesive / Release Master + the old hardcoded dropdown lists
+node scripts/deckle-optimizer-bench.js [--verbose]  # bench + invariant check for utils/deckleOptimizer; no DB, exits non-zero on failure
 ```
 
 ## Environment
@@ -39,6 +40,7 @@ Requires a `.env` file with at minimum:
 - `SESSION_SECRET` — app crashes at startup without this
 - `MONGO_URI` (or equivalent — see `config/db.js`)
 - `TASKS_MONGO_URI` (optional) — the `/fairtech/tasks` feature stores its data in a separate, isolated database (`config/tasksDb.js`), for privacy. Without this set, it defaults to a sibling database named `<main db>_tasks` on the same server as `MONGO_URI`.
+- `DECKLE_AUTO_ENABLED` (optional) — kill switch for the Auto Deckle optimizer (see below). Enabled unless set to `false`/`0`/`off`/`no`. Set it to `false` and restart to remove the feature entirely: the Set Deckle page then renders with no Auto Set panel and no client code for it, and the API returns 503.
 - In dev only: `PROPRIETOR_USER`, `PROPRIETOR_PASS`, `ADMIN_USER`, `ADMIN_PASS`, `HR_USER`, `HR_PASS`, `HOD_USER`, `HOD_PASS`, `SALES_USER`, `SALES_PASS` (backdoor accounts; blocked in production)
 
 ## Architecture
@@ -191,3 +193,83 @@ Use `data-*` attributes on buttons; read them in the handler via `this.dataset`.
 5. No family yet → saved under the plain entered code, no suffix.
 
 Only applies at create time — editing an existing row still uses the plain exact-duplicate `buildLabelStockSignature()` check and never renames a row into a new variant on its own.
+
+### Auto Deckle (`utils/deckleOptimizer/`)
+
+Automatic deckle layout planning behind the **Auto Set Deckle** panel on
+`/labels/production/deckle-set/plan/:itemId`. Deliberately a standalone module —
+no mongoose, no express, no session; plain numbers in, plain numbers out — so
+the algorithm can be developed and benchmarked without disturbing the manual
+planner it sits beside.
+
+| File | Role |
+|---|---|
+| `patterns.js` | Enumerates every feasible A–L knife layout. Widths handled as integer hundredths of a mm (decimal paper sizes make float `<=` unsafe). |
+| `solver.js` | Picks how many webs of each pattern to run: greedy warm start, then branch & bound under node/time budgets. |
+| `index.js` | Public API `planDeckleLayouts()`, the `deckleSize` outer loop, overrun caps, waste accounting, `isDeckleAutoEnabled()`. |
+
+The underlying problem is one-dimensional cutting stock with three wrinkles:
+
+1. **Deckle size is an outer choice** — by default one size serves the whole
+   batch: each candidate is solved independently and the cheapest wins. With
+   **mixed webs** (below) every size's patterns go into one solve and each
+   layout may come off a different width.
+2. **One roll length per layout** — `plannedRunningMeter` belongs to the layout,
+   not to a knife position, so orders wanting different roll lengths can never
+   share a layout. Orders are partitioned by running metres, one instance each.
+3. **Demand is in rolls, supply is in position-webs** — one knife position on one
+   web yields `floor(deckleRunningMeters / plannedRunningMeter)` rolls. This
+   granularity, not the packing, is usually what forces an overrun.
+
+**Objective**: minimise facestock consumed (`deckleSize × deckleRunningMeters ×
+webs`). Under-production is never allowed and the ordered roll area is fixed, so
+useful area is identical in every feasible plan — which makes "least consumed"
+exactly equivalent to "least waste", and with Deckle R.M. fixed by the planner
+the whole objective collapses to minimising `deckleSize × totalWebs`.
+
+**Mixed webs** (the *Different web per layout* toggle) lets each layout be cut
+from whichever deckle width suits it. Often a large trim reduction — on a real
+4-order job it took waste from 6.38% to 1.48% and removed the overrun entirely.
+Because the mixed search space *contains* every single-size answer it can only
+match or beat one width — but only if its search gets far enough, and that space
+is much bigger for the same budget. So `planDeckleLayouts` always runs the
+single-size search too and keeps the mixed plan only if it is genuinely cheaper,
+which turns that property into a guarantee. When mixed loses, `notes` says so.
+
+Mixed webs changes what has to be persisted, so it goes all the way through:
+
+- `PendingProduction.deckleLayout[].deckleSize` — the width **that** layout is
+  cut from. The batch-level `deckleSize` holds whichever width carries the most
+  webs (it is one number, and the Deckle Queue / Assign Production / job card
+  all show it). Read per-layout as `L.deckleSize ?? pending.deckleSize` —
+  batches saved before mixed webs have no per-layout width.
+- Slitting Allocation allocates the Deckles of **one** width at a time (they are
+  grouped by reel size), so its layout pre-fill filters `BATCH_LAYOUT` down to
+  the layouts planned for that web. Without that filter a 1250 mm layout would
+  seed onto a 510 mm deckle.
+
+**Overrun** — spare rolls made beyond what was ordered — is bounded by two
+ceilings, both editable on the page, of which the tighter one binds:
+
+    allowed extra = min( ceil(qty * pct), maxExtraRolls )
+
+`pct` (default 10%) scales with the order and usually governs; `maxExtraRolls`
+(default 5) is the absolute stop that keeps a large order from authorising a
+pile of spares. Either at 0 means no overrun at all. The percentage is rounded
+up so even a 3-roll order gets a whole roll of room.
+
+Spares are not extra consumption: the web count is already at its minimum, so a
+knife position carrying a spare uses width that would otherwise have been
+trimmed off and scrapped. Where the rolls-per-web granularity makes even the cap
+unreachable (4 rolls ordered, 3 per knife position — 6 must be made), the cap is
+widened for that width rather than the plan being refused, and `notes` says so,
+so a forced overrun is never silent.
+
+`POST /labels/production/deckle-set/plan/:itemId/auto` is **read-only**: it
+creates nothing and changes nothing, it only answers "here is the least-waste way
+to cut these". Order widths, quantities and roll lengths are re-read from the
+database — the client chooses *which* orders to plan, never what they say. The
+planner reviews the layouts it drops into the form and still presses Create
+Deckle Batch, which goes through the same POST and the same validation as a
+hand-drawn plan. That is what makes it safe on a production server: a wrong
+answer is discarded by not saving it.

@@ -659,10 +659,19 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
   // pattern, each with its own A..L widths + R. Meter + web count). Pre-fills a
   // fresh allocation's layout rows so the widths are not re-typed here. An
   // existing SlittingJobCard row always wins over this (see the view).
+  //
+  // `width` is the web the row runs on. A batch may have been planned with its
+  // layouts on DIFFERENT deckle widths (mixed webs -- see deckleLayout's own
+  // comment), so each entry's own deckleSize is what to pre-fill; only where
+  // it is absent (every batch saved before mixed webs existed) does the
+  // batch-level deckleSize stand in for it.
   const batchLayout = (pending.isDeckleBatch && Array.isArray(pending.deckleLayout) && pending.deckleLayout.length)
     ? pending.deckleLayout
         .filter((L) => Array.isArray(L.cuts) && L.cuts.length)
         .map((L) => ({
+          width: Number(L.deckleSize) > 0
+            ? Number(L.deckleSize)
+            : (Number(pending.deckleSize) > 0 ? Number(pending.deckleSize) : null),
           plannedRunningMeter: L.plannedRunningMeter ?? null,
           count: L.count ?? 1,
           cuts: Object.fromEntries(L.cuts.map((c) => [c.slot, c.width])),

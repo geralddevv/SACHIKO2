@@ -453,8 +453,9 @@
   const TARGETS = JSON.parse(document.getElementById("sl-target-data").textContent);
   const ORDER = JSON.parse(document.getElementById("sl-order-data").textContent);
   // The Set Deckle page's stored deckle layouts for this batch (array of
-  // { cuts:{A:..}, plannedRunningMeter, count }), or []. safeJson turns null
-  // into {}, so normalise defensively.
+  // { cuts:{A:..}, width, plannedRunningMeter, count }), or []. `width` is the
+  // deckle web that layout was planned for -- see BATCH_LAYOUT_FOR_WEB below.
+  // safeJson turns null into {}, so normalise defensively.
   const _batchLayoutRaw = JSON.parse(document.getElementById("sl-batch-layout").textContent);
   const BATCH_LAYOUT = (Array.isArray(_batchLayoutRaw) ? _batchLayoutRaw : [])
     .filter((L) => L && L.cuts && Object.keys(L.cuts).length);
@@ -861,11 +862,23 @@
   // allocation (or all blank, on a fresh one) start collapsed together;
   // qty is seeded from how many Deckles that group has.
   const anyExisting = [...layoutGroups.values()].some((g) => g[0].existing);
-  if (!anyExisting && BATCH_LAYOUT.length) {
+
+  // A batch may have been planned across SEVERAL deckle widths ("mixed webs" --
+  // see PendingProduction.deckleLayout). This page allocates the Deckles of one
+  // width at a time (routes/system/slitting.js groups them by reel size), so
+  // only the layouts planned for this web belong here; the rest seed the
+  // allocation of the reels made at their own width. A layout carrying no
+  // planned width at all is from a batch saved before mixed webs existed and
+  // always applies.
+  const BATCH_LAYOUT_FOR_WEB = BATCH_LAYOUT.filter(
+    (L) => !(L.width > 0) || rawWebWidth === null || round2(L.width) === round2(rawWebWidth),
+  );
+
+  if (!anyExisting && BATCH_LAYOUT_FOR_WEB.length) {
     // Fresh allocation of a batch the Set Deckle page planned: seed one row per
     // planned deckle layout, qty = its web count. Widths/R. Meter only -- never
     // a web width, so GROUP_WIDTH (size - Trim) still governs.
-    BATCH_LAYOUT.forEach((L) => {
+    BATCH_LAYOUT_FOR_WEB.forEach((L) => {
       addLayoutRow(Math.max(1, Math.floor(L.count || 1)), {
         plannedRunningMeter: L.plannedRunningMeter,
         cuts: L.cuts,

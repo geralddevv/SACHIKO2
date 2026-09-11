@@ -55,6 +55,12 @@ import {
 import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
 import { produceDeckle, dissolveDeckle, requiredLayersFor, trackAllottedCombinations, suggestDeckleSize, DECKLE_EDGE_TRIM_MM, LAYER_META, POOL_MODELS, pickStockIds } from "../utils/labelStockProduction.js";
 import { CUT_SLOTS } from "./system/slitting.js";
+import {
+  planDeckleLayouts,
+  isDeckleAutoEnabled,
+  DEFAULT_DECKLE_RUNNING_METERS,
+  OVERRUN_DEFAULTS,
+} from "../utils/deckleOptimizer/index.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 
@@ -4688,9 +4694,120 @@ router.get("/labels/production/deckle-set/plan/:itemId", async (req, res) => {
     group,
     cutSlots: CUT_SLOTS,
     edgeTrimPerSide: DECKLE_EDGE_TRIM_MM,
+    // Auto Deckle (utils/deckleOptimizer) is a separate, newer module behind
+    // its own kill switch -- when it is off the page renders exactly as it did
+    // before, with no Auto Set panel and no reference to it.
+    autoDeckle: isDeckleAutoEnabled()
+      ? {
+          enabled: true,
+          defaultRunningMeters: DEFAULT_DECKLE_RUNNING_METERS,
+          overrun: OVERRUN_DEFAULTS,
+        }
+      : { enabled: false },
     notification: req.flash("notification"),
   });
 });
+
+// Auto Deckle -- hand the ticked orders to utils/deckleOptimizer and return the
+// layouts it works out, as JSON. Deliberately READ-ONLY: it creates nothing and
+// changes nothing, it only answers "here is the least-waste way to cut these".
+// The planner reviews the layouts it drops into the form and still has to press
+// Create Deckle Batch, which goes through the same POST handler and the same
+// validation as a hand-drawn plan. That is what makes it safe to run on a
+// production server -- a wrong answer is discarded by not saving it.
+//
+// Switched off wholesale by DECKLE_AUTO_ENABLED=false in .env (see
+// isDeckleAutoEnabled) -- the manual planner is untouched either way.
+//
+// Order widths, roll quantities and roll lengths are re-read from the database
+// rather than taken from the request: the client may choose WHICH orders to
+// plan, never what they say. Deckle sizes, edge trim and Deckle R.M. do come
+// from the request -- they are the planner's own editable inputs on the page --
+// and are range-checked by the optimizer before use.
+router.post(
+  "/labels/production/deckle-set/plan/:itemId/auto",
+  requireAuth,
+  updateLimiter,
+  async (req, res) => {
+    if (!isDeckleAutoEnabled()) {
+      return res.status(503).json({
+        ok: false,
+        disabled: true,
+        error: "Auto Deckle is switched off on this server.",
+      });
+    }
+
+    const { itemId } = req.params;
+    if (!mongoose.isValidObjectId(itemId)) {
+      return res.status(400).json({ ok: false, error: "Invalid Product Code." });
+    }
+
+    const wanted = [
+      ...new Set(
+        (Array.isArray(req.body?.orderIds) ? req.body.orderIds : [])
+          .filter((x) => mongoose.isValidObjectId(x))
+          .map(String),
+      ),
+    ];
+    if (!wanted.length) {
+      return res.status(400).json({ ok: false, error: "Tick at least one order to plan." });
+    }
+
+    // Same gate as the batch POST: only orders still loose under this Product
+    // Code can be planned, so a stale page cannot plan something already batched.
+    const members = await PendingProduction.find({
+      _id: { $in: wanted },
+      itemId,
+      assignedMachineId: null,
+      deckleSize: null,
+      deckleBatchId: null,
+      isDeckleBatch: { $ne: true },
+    })
+      .select("paperSize quantity runningMeters")
+      .lean();
+
+    if (!members.length) {
+      return res.status(409).json({
+        ok: false,
+        error: "Those orders are no longer available to plan — refresh the page.",
+      });
+    }
+
+    const result = planDeckleLayouts({
+      orders: members.map((m) => ({
+        id: String(m._id),
+        width: Number(m.paperSize),
+        qty: Number(m.quantity),
+        rm: Number(m.runningMeters),
+      })),
+      sizes: Array.isArray(req.body?.sizes) ? req.body.sizes : [],
+      edgeTrimTotal: req.body?.trim,
+      deckleRunningMeters: req.body?.drm,
+      // Not a planner setting: how many knives a layout uses is decided BY the
+      // layout. The only ceiling is how many positions the system can record --
+      // CUT_SLOTS (A..L), the same twelve columns the manual form and the
+      // slitting job card carry. The slitter itself is not even chosen yet at
+      // this point; that happens later, at Slitting Allocation.
+      maxSlots: CUT_SLOTS.length,
+      // Let each layout come off whatever deckle width suits it. Off unless
+      // the planner ticks it -- see the module header's "Mixed webs".
+      mixedSizes: req.body?.mixedSizes === true,
+      // Two ceilings on spare rolls; the tighter binds (see OVERRUN_DEFAULTS).
+      overrun: {
+        pct: Number(req.body?.overrunPct),
+        maxExtraRolls: Number(req.body?.overrunRolls),
+      },
+    });
+
+    if (members.length !== wanted.length) {
+      result.notes.push(
+        `${wanted.length - members.length} ticked order(s) are no longer loose and were left out of the plan.`,
+      );
+    }
+
+    return res.status(result.ok ? 200 : 422).json(result);
+  },
+);
 
 // Bundle the ticked orders of one Product Code + paper size into a deckle
 // batch. Body: deckleSize, runningMeters ("Total Running Meters" -- optional
@@ -4701,7 +4818,7 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
   const deckleSize = Number(req.body.deckleSize);
-  if (!deckleSize || deckleSize <= 0) {
+  if (!Number.isFinite(deckleSize) || deckleSize <= 0 || deckleSize > 20000) {
     req.flash("notification", "Enter a valid deckle size.");
     return res.redirect(backTo);
   }
@@ -4772,15 +4889,35 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     }];
   }
 
+  // Edge trim as posted, used only to check each layout's cuts fit its own web.
+  // Falls back to 0 when it is missing or nonsense, so a bad trim value can
+  // never reject an otherwise-valid layout; the real deckleTrim is validated
+  // against the batch's deckleSize further down.
+  const rawTrim = Number(req.body.deckleTrim);
+  const fitTrim = Number.isFinite(rawTrim) && rawTrim >= 0 ? rawTrim : 0;
+
   const deckleLayout = parsedLayouts
     .map((L) => {
       const cuts = normCuts(L.cuts);
       const rm = Number(L.rm);
       const drm = Number(L.drm);
       const count = Math.max(1, Math.floor(Number(L.webs) || 1));
+      // The web width THIS layout is cut from -- present when the planner let
+      // layouts use different widths ("mixed webs"). Kept only when it is a
+      // sane width whose cuts actually fit inside it once the edge trim is
+      // taken off, the same bound the form enforces client-side. Anything else
+      // falls back to the batch's single deckleSize rather than persisting a
+      // width the slitter could not run.
+      const size = Number(L.size);
+      const cutSum = cuts.reduce((n, c) => n + c.width, 0);
+      const sizeOk = Number.isFinite(size)
+        && size > 0
+        && size <= 20000
+        && cutSum <= size - fitTrim;
       return cuts.length
         ? {
             cuts,
+            deckleSize: sizeOk ? size : undefined,
             deckleRunningMeter: Number.isFinite(drm) && drm > 0 ? drm : undefined,
             plannedRunningMeter: Number.isFinite(rm) && rm > 0 ? rm : undefined,
             count,
@@ -4800,8 +4937,12 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
 
   // Total edge trim (both edges) the planner set on the Set Deckle page while
   // fitting the layouts. Pre-fills Slitting Allocation's own Trim field.
+  // Edge trim is netted out of every web width, so it must leave something to
+  // cut -- a trim >= the deckle size (or negative) is dropped, not stored.
   const enteredTrim = Number(req.body.deckleTrim);
-  const deckleTrim = Number.isFinite(enteredTrim) && enteredTrim >= 0 ? enteredTrim : undefined;
+  const deckleTrim = Number.isFinite(enteredTrim) && enteredTrim >= 0 && enteredTrim < deckleSize
+    ? enteredTrim
+    : undefined;
 
   // Deckle Qty -- how many deckle webs to laminate. The Set Deckle page derives
   // it from the sum of every layout's Webs count; falls back to whatever the
@@ -4842,9 +4983,22 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     { $set: { deckleBatchId: batch._id, deckleSize } },
   );
 
+  // Widths actually laminated. Normally just the batch's own deckleSize, but a
+  // mixed-web plan runs several -- worth spelling out in the audit trail and to
+  // the planner, since `deckleSize` alone only names the most-used one.
+  const webWidths = [...new Set(deckleLayout.map((L) => L.deckleSize).filter((s) => s > 0))]
+    .sort((a, b) => a - b);
+  const mixedWebs = webWidths.length > 1;
+
   res.locals.auditDescription = `Created deckle batch ${batch._id} covering ${members.length} order(s)`
-    + (deckleLayout.length ? ` (${deckleLayout.length} layout${deckleLayout.length === 1 ? "" : "s"}, ${layoutWebs} webs)` : "");
-  req.flash("notification", `Deckle batch created — ${members.length} order(s) bundled at deckle size ${deckleSize}. Now in the Deckle Queue.`);
+    + (deckleLayout.length ? ` (${deckleLayout.length} layout${deckleLayout.length === 1 ? "" : "s"}, ${layoutWebs} webs)` : "")
+    + (mixedWebs ? ` on mixed webs ${webWidths.join(" + ")} mm` : "");
+  req.flash(
+    "notification",
+    mixedWebs
+      ? `Deckle batch created — ${members.length} order(s) bundled on mixed webs (${webWidths.join(" + ")} mm; recorded at ${deckleSize}). Now in the Deckle Queue.`
+      : `Deckle batch created — ${members.length} order(s) bundled at deckle size ${deckleSize}. Now in the Deckle Queue.`,
+  );
   res.redirect(backTo);
 });
 
@@ -4907,6 +5061,9 @@ router.get("/labels/production/deckle-queue", async (req, res) => {
         r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
       runningMetersText: r.runningMetersText || "",
       quantity: r.quantity,
+      // Deckle Qty -- how many deckle webs to laminate (set on Deckle Set from
+      // the layouts' Webs counts), not the order's roll quantity.
+      deckleQty: r.noOfRolls != null ? Number(r.noOfRolls) : null,
       createdAt: r.createdAt,
     };
   });

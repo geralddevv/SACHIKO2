@@ -106,6 +106,21 @@ const pendingProductionSchema = new mongoose.Schema(
         {
           _id: false,
           cuts: [{ _id: false, slot: { type: String }, width: { type: Number } }],
+          // The deckle WIDTH this one layout is cut from, in mm. Normally the
+          // same as the batch's own `deckleSize` for every layout -- but the
+          // Set Deckle page can plan a batch whose layouts come off different
+          // widths ("mixed webs", utils/deckleOptimizer), which is often a big
+          // reduction in trim: a layout wanting only 500 mm of rolls runs on a
+          // 510 mm web instead of wasting half a 1250 mm one.
+          //
+          // When that happens the batch-level `deckleSize` holds the width
+          // carrying the MOST webs (it is one number, and the Deckle Queue /
+          // Assign Production / job card all show it), and this is the one to
+          // trust per layout. Absent on batches saved before mixed webs
+          // existed -- read it as `L.deckleSize ?? pending.deckleSize`, which
+          // is what Slitting Allocation does when pre-filling each row's web
+          // width.
+          deckleSize: { type: Number },
           // Length of one deckle web for this layout; with plannedRunningMeter
           // it gives finished rolls per knife position (deckleRunningMeter /
           // plannedRunningMeter).
