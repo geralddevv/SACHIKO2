@@ -320,22 +320,35 @@
     },
     columns: [
       {
-        title: "Product Code / Deckle", field: "item", headerSort: false, widthGrow: 3,
+        // Group = the deckle config / its clubbed Deckles. Child = one physical
+        // Deckle, named by its Deckle ID, with its own metres, location, lot
+        // and curing state alongside -- the detail that used to need a column
+        // each, now that the group rows are down to the four facts that
+        // identify a job.
+        title: "Product Code / Deckle ID", field: "item", headerSort: false, widthGrow: 3,
         formatter: (cell) => {
           const row = cell.getRow().getData();
           if (row.isGroup) return `<span style="font-weight:800;color:#044a78;">${esc(row.productCode)}</span>`;
-          return `<span style="font-weight:700;color:#044a78;">↳ ${esc(row.rollId)}</span>`;
+          const bits = [`${fmtMtrs(row.mtrs)} mtrs`, esc(row.location)];
+          if (row.lotNo) bits.push(`lot ${esc(row.lotNo)}`);
+          const cure = row.curingLabel === "Hot melt"
+            ? '<span style="color:#15803d;font-weight:700;"><i class="fa-solid fa-fire"></i> hot melt</span>'
+            : row.curing
+              ? `<span style="color:#b45309;font-weight:700;"><i class="fa-solid fa-hourglass-half"></i> ${esc(row.curingLabel)}</span>`
+              : '<span style="color:#64748b;font-weight:600;"><i class="fa-solid fa-check"></i> cured</span>';
+          return `<span style="font-weight:700;color:#044a78;">↳ ${esc(row.rollId)}</span>`
+            + `<span style="color:#94a3b8;font-weight:600;"> &nbsp;·&nbsp; ${bits.join(" &nbsp;·&nbsp; ")} &nbsp;·&nbsp; </span>${cure}`;
         },
       },
       {
-        title: "Size", hozAlign: "center", width: 110, headerSort: false,
+        title: "Deckle Size", hozAlign: "center", width: 130, headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          return row.isGroup ? `${esc(row.size)}mm` : "";
+          return row.isGroup ? `<span style="font-weight:700;color:#044a78;">${esc(row.size)}mm</span>` : "";
         },
       },
       {
-        title: "R. Meter", hozAlign: "center", width: 110, headerSort: false,
+        title: "Running Mtrs", hozAlign: "center", width: 140, headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
           if (!row.isGroup) return "";
@@ -343,45 +356,17 @@
         },
       },
       {
-        title: "Deckles", hozAlign: "center", width: 100, headerSort: false,
+        // Deckles of this width actually made and still free to slit, against
+        // what the config calls for. 0 of N = set, not yet run.
+        title: "Stock", hozAlign: "center", width: 120, headerSort: false,
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          return row.isGroup ? `<span class="sq-count-badge">${row.deckleCount}</span>` : "";
-        },
-      },
-      {
-        title: "Mtrs", hozAlign: "right", width: 120, headerSort: false,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          return fmtMtrs(row.isGroup ? row.totalMtrs : row.mtrs);
-        },
-      },
-      {
-        title: "Location", minWidth: 120, headerSort: false,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          return row.isGroup ? "" : esc(row.location);
-        },
-      },
-      {
-        title: "Lot No", minWidth: 120, headerSort: false,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          return row.isGroup ? "" : esc(row.lotNo);
-        },
-      },
-      {
-        title: "Curing", minWidth: 150, headerSort: false,
-        formatter: (cell) => {
-          const row = cell.getRow().getData();
-          if (row.isGroup) {
-            return row.anyCuring
-              ? '<span style="color:#b45309;font-weight:700;"><i class="fa-solid fa-hourglass-half"></i> Curing</span>'
-              : '<span style="color:#64748b;font-weight:600;"><i class="fa-solid fa-check"></i> Cured</span>';
+          if (!row.isGroup) return "";
+          const of = row.expected ? `<span style="color:#94a3b8;font-weight:600;"> of ${row.expected}</span>` : "";
+          if (!row.deckleCount) {
+            return `<span style="color:#b45309;font-weight:800;">0</span>${of}`;
           }
-          if (row.curingLabel === "Hot melt") return '<span style="color:#15803d;font-weight:700;"><i class="fa-solid fa-fire"></i> Hot melt</span>';
-          if (row.curing) return `<span style="color:#b45309;font-weight:700;"><i class="fa-solid fa-hourglass-half"></i> ${esc(row.curingLabel)}</span>`;
-          return '<span style="color:#64748b;font-weight:600;"><i class="fa-solid fa-check"></i> Cured</span>';
+          return `<span class="sq-count-badge">${row.deckleCount}</span>${of}`;
         },
       },
       {
@@ -389,6 +374,10 @@
         formatter: (cell) => {
           const row = cell.getRow().getData();
           if (!row.isGroup) return "";
+          // Nothing laminated yet -- the config is only waiting here.
+          if (!row.deckleCount) {
+            return `<span style="color:#94a3b8;font-weight:700;font-size:11.5px;" title="No Deckle of this width has been produced yet"><i class="fa-solid fa-hourglass-half"></i> Waiting</span>`;
+          }
           return `<button onclick="openChooseDeckleDialog('${row._id}')" class="sq-act" title="Allocate one or more Deckles from this group"><i class="fa-solid fa-scissors"></i> Slit</button>`;
         },
       },

@@ -418,12 +418,90 @@ async function buildAvailableDeckleRows() {
   return visibleRows;
 }
 
+// Deckle configs that are SET but not yet (fully) made -- what the planner
+// fixed on Deckle Sorting, sitting here waiting for the machine to laminate
+// it. Without these the queue only ever showed Deckles that already exist, so
+// a job disappeared between "deckle set" and "deckle produced"; now the config
+// lands here the moment it is set and its Stock count fills in as webs come
+// off the machine.
+//
+// One group per WIDTH, not per batch: a mixed-web plan (utils/deckleOptimizer)
+// laminates several widths off one batch, and Slitting Allocation takes one
+// width at a time -- so each width waits for its own webs. Keys are built
+// exactly like the produced rows' below, so a config and the Deckles that
+// fulfil it land in the same group.
+async function buildPlannedDeckleGroups() {
+  const pendings = await PendingProduction.find({
+    deckleSize: { $ne: null },
+    // A batch stands for its member orders -- listing both would double it.
+    deckleBatchId: null,
+  })
+    .populate({ path: "itemId", select: "productCode skuCode" })
+    .sort({ createdAt: 1 })
+    .lean();
+  if (!pendings.length) return [];
+
+  // Deckles ever made for these orders, counted per order + width. Counted
+  // from every reel, not just the ones still carrying metres, so a config
+  // does not pop back up as "waiting" once its webs have been slit away.
+  const madeReels = await MaterialStock.find({ producedFor: { $in: pendings.map((p) => p._id) } })
+    .select("producedFor size")
+    .lean();
+  const madeCount = new Map();
+  for (const r of madeReels) {
+    const k = `${String(r.producedFor)}::${trim(r.size)}`;
+    madeCount.set(k, (madeCount.get(k) || 0) + 1);
+  }
+
+  const groups = [];
+  for (const p of pendings) {
+    const productCode = trim(p.itemId?.productCode || p.itemId?.skuCode) || "—";
+    // Same running-meters expression the produced rows use, so the keys meet.
+    const runningMeters = p.deckleRunningMeters ?? p.runningMeters ?? null;
+
+    // Webs planned per width: from the layouts when there are any, else the
+    // batch's single width and web count.
+    const byWidth = new Map();
+    const layouts = Array.isArray(p.deckleLayout) ? p.deckleLayout : [];
+    if (layouts.length) {
+      for (const L of layouts) {
+        const size = trim(L.deckleSize ?? p.deckleSize);
+        if (!size) continue;
+        byWidth.set(size, (byWidth.get(size) || 0) + Math.max(1, Math.floor(Number(L.count) || 1)));
+      }
+    } else {
+      const size = trim(p.deckleSize);
+      if (size) byWidth.set(size, Math.max(1, Math.floor(Number(p.noOfRolls) || 1)));
+    }
+
+    for (const [size, expected] of byWidth) {
+      const made = madeCount.get(`${String(p._id)}::${size}`) || 0;
+      // Fully laminated -- its real Deckles speak for it from here on.
+      if (made >= expected) continue;
+      groups.push({
+        key: `${productCode}::${size}::${runningMeters ?? ""}`,
+        productCode,
+        size,
+        runningMeters,
+        expected,
+        made,
+        pendingId: String(p._id),
+        assigned: !!p.assignedMachineId,
+      });
+    }
+  }
+  return groups;
+}
+
 // ---- Slitting Queue: every Deckle web still carrying metres ----------------
 // One row per Deckle (the laminated web made upstream), not per order. The
 // planner picks a Deckle here and "Allocate" opens the Slitting Job Card for
 // that Deckle's order with the Deckle pre-filled as the first row.
 router.get("/slitting/queue", requireSlittingView, async (req, res) => {
-  const visibleRows = await buildAvailableDeckleRows();
+  const [visibleRows, planned] = await Promise.all([
+    buildAvailableDeckleRows(),
+    buildPlannedDeckleGroups(),
+  ]);
 
   // Club same Product Code + Size + Running Meters together -- these are
   // interchangeable for slitting, so the queue shows one group with one
@@ -434,20 +512,27 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
   // that they are not actually interchangeable. The dialog this opens is
   // where the planner actually picks which Deckle to cut.
   const groupMap = new Map();
+  const newGroup = (key, productCode, size, runningMeters) => ({
+    _id: key,
+    isGroup: true,
+    productCode,
+    size,
+    runningMeters,
+    deckleCount: 0,
+    totalMtrs: 0,
+    anyCuring: false,
+    // How many webs of this width the deckle config calls for, so Stock can
+    // read "5 of 13" rather than a bare count with nothing to measure it
+    // against. 0 for a group that exists only because Deckles do (an order
+    // from before deckle configs, or stock no config now claims).
+    expected: 0,
+    _children: [],
+  });
+
   for (const r of visibleRows) {
     const key = `${r.productCode}::${r.size}::${r.runningMeters ?? ""}`;
     if (!groupMap.has(key)) {
-      groupMap.set(key, {
-        _id: key,
-        isGroup: true,
-        productCode: r.productCode,
-        size: r.size,
-        runningMeters: r.runningMeters,
-        deckleCount: 0,
-        totalMtrs: 0,
-        anyCuring: false,
-        _children: [],
-      });
+      groupMap.set(key, newGroup(key, r.productCode, r.size, r.runningMeters));
     }
     const g = groupMap.get(key);
     g.deckleCount += 1;
@@ -455,6 +540,33 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     if (r.curing) g.anyCuring = true;
     g._children.push({ ...r, isGroup: false, _id: r.deckleStockId });
   }
+
+  // Now fold in the configs that are set but not yet fully made, so a job set
+  // on Deckle Sorting shows here from the moment it is set -- Stock 0 until
+  // the machine runs it.
+  //
+  // A Deckle is often laminated under a VARIANT Product Code of the order's
+  // own (C003AC-D against an order reading C003FG -- see the Label Stock
+  // variant scheme), so matching a config to its stock by Product Code would
+  // strand the two in separate groups. Attach by the order + width the
+  // Deckles were actually produced for, and only fall back to a group of its
+  // own when this width has nothing made yet.
+  const groupForPending = (pendingId, size) => {
+    for (const g of groupMap.values()) {
+      if (g._children.some((c) => c.order && String(c.order._id) === pendingId && trim(c.size) === size)) return g;
+    }
+    return null;
+  };
+  for (const p of planned) {
+    const hit = groupForPending(p.pendingId, p.size);
+    if (hit) {
+      hit.expected += p.expected;
+      continue;
+    }
+    if (!groupMap.has(p.key)) groupMap.set(p.key, newGroup(p.key, p.productCode, p.size, p.runningMeters));
+    groupMap.get(p.key).expected += p.expected;
+  }
+
   const groups = [...groupMap.values()].sort(
     (a, b) =>
       a.productCode.localeCompare(b.productCode)

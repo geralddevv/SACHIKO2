@@ -113,6 +113,9 @@ router.get("/raw-stock", async (req, res) => {
       const reels = await poolMeta.Model.find({ location, reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
         .sort({ reelMtrs: 1, rollId: 1, createdAt: 1 })
         .lean();
+      // Whatever this Label Stock is bound to, full stop -- the binding page
+      // is where that choice is made, so the recipe's own adhesive Type is
+      // not applied as a second filter on top of it.
       ({ drums: matched, hasBinding } = await applyAdhesiveBindings(reels, itemId));
     } else if (meta.pool === "release") {
       // Sensing alone -- no Type/Make/Vendor/Vendor SKU Code/Colour/Size/GSM

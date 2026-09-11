@@ -158,7 +158,7 @@
   .sl-web-seg:last-child { border-right: none; }
   .sl-web-seg .sl-seg-slot { font-size: 9px; font-weight: 700; opacity: 0.8; letter-spacing: 0.06em; }
   .sl-web-seg .sl-seg-w { font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .sl-web-seg.sl-web-edge { background: #f97316; color: #fff; }
+  .sl-web-seg.sl-web-edge { background: #111827; color: #fff; }
   .sl-web-seg.sl-web-trim { background: #dc2626; color: #fff; }
   .sl-web-empty {
     display: flex; align-items: center; justify-content: center; width: 100%;
@@ -191,7 +191,7 @@
   }
   .dsf-web-tr.is-chosen .dsf-web-size { color: #044a78; }
   .dsf-web-rem {
-    width: 104px; text-align: center; color: #15803d; white-space: nowrap;
+    width: 104px; text-align: center; color: #dc2626; white-space: nowrap;
   }
   .dsf-web-rem.sl-bad { color: #b91c1c; }
   /* "Across" column -- the "N rolls" line. */
@@ -261,7 +261,7 @@
   }
   .dsf-set-sub { font-size: 12px; font-weight: 700; color: #7c8ba1; }
   .dsf-set-table {
-    width: 100%; min-width: 1315px; border-collapse: separate; border-spacing: 0; background: #fff;
+    width: 100%; min-width: 1355px; border-collapse: separate; border-spacing: 0; background: #fff;
     border: 1.5px solid #e6eaf2; border-radius: 10px; overflow: hidden;
   }
   .dsf-set-table th {
@@ -286,7 +286,7 @@
   /* Each segment carries its roll width -- big enough to read off the screen. */
   .dsf-set-table .dsf-web-diag .sl-web-seg .sl-seg-w { font-size: 15px; }
   .dsf-set-table .dsf-set-cuts b { color: #1f2a44; font-weight: 800; }
-  .dsf-set-table .dsf-set-trim { width: 92px; color: #b45309; }
+  .dsf-set-table .dsf-set-trim { width: 130px; min-width: 130px; color: #b45309; }
   .dsf-set-table .dsf-set-rem { width: 96px; color: #15803d; }
   .dsf-set-table .dsf-set-rem.sl-bad { color: #b91c1c; }
   .dsf-set-table .dsf-set-rolls { color: #15803d; font-weight: 800; }
@@ -483,7 +483,10 @@
                      value="<%= autoDeckle.overrun.maxExtraRolls %>"
                      title="Hard ceiling on spare rolls of any one width, whatever the percentage works out to. Stops a large order authorising a pile of spares. Whichever of the two limits is tighter applies. Set 0 for no spares at all." />
             </div>
-            <label class="dsa-check" for="dsaMixed"
+            <!-- Hidden, not removed: the checkbox still ships checked, so mixed
+                 webs stay on for both the auto run and the manual planner --
+                 there is just no longer a control for turning them off. -->
+            <label class="dsa-check" for="dsaMixed" style="display: none;"
                    title="Let each layout be cut from whichever deckle width suits it, instead of one width for the whole batch. Usually less trim, but more than one facestock size to pull for the job.">
               <input type="checkbox" id="dsaMixed" checked />
               <span class="t">Different web per layout</span>

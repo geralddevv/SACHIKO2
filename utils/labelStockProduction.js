@@ -158,20 +158,30 @@ export function adhesiveIdentityKey(o) {
   return [String(o.vendorId || ""), s(o.type), s(o.make), s(o.vendorSkuCode)].join("||");
 }
 
+// Narrows drums to the Adhesive Master(s) bound to this Label Stock at
+// /form/label-stock-adhesive-binding. The binding IS the decision: whatever is
+// bound to the SKU is what can be allotted to it, whatever chemistry the
+// recipe's own adhesive fields happen to say. (This used to also filter by the
+// recipe's adhesive Type, which silently hid bound adhesives of another type --
+// a SKU typed WATERBASE could not be offered its own bound ACRYLIC drums. The
+// binding page is where that choice is made, so it is not second-guessed here.)
 export async function applyAdhesiveBindings(drums, labelStockId) {
   const bindings = await LabelStockAdhesiveBinding.find({
     labelStock: labelStockId,
   }).select("adhesive").lean();
   if (!bindings.length) return { drums: [], hasBinding: false };
-  if (!drums.length) return { drums, hasBinding: true };
 
   const masters = await AdhesiveMaster.find({ _id: { $in: bindings.map((b) => b.adhesive) } })
     .select("vendorId type make vendorSkuCode")
     .lean();
   if (!masters.length) return { drums: [], hasBinding: false };
+  if (!drums.length) return { drums, hasBinding: true };
 
   const allowed = new Set(masters.map(adhesiveIdentityKey));
-  return { drums: drums.filter((d) => allowed.has(adhesiveIdentityKey(d))), hasBinding: true };
+  return {
+    drums: drums.filter((d) => allowed.has(adhesiveIdentityKey(d))),
+    hasBinding: true,
+  };
 }
 
 // Resolves all raw-material reels/drums eligible for an order's Label Stock SKU --
@@ -244,7 +254,11 @@ export async function getEligibleRawMaterials({ labelStock, allottedLayers }) {
       ...(adAllottedIds.length ? [{ _id: { $in: adAllottedIds } }] : []),
     ],
   }).sort({ reelMtrs: -1, rollId: 1 }).lean();
-  const { drums: boundAdDrums, hasBinding } = await applyAdhesiveBindings(adDocs, labelStockDoc._id);
+  // Same rule as Assign Production: whatever is bound to this Label Stock.
+  const { drums: boundAdDrums, hasBinding } = await applyAdhesiveBindings(
+    adDocs,
+    labelStockDoc._id,
+  );
   const boundAdSet = new Set(boundAdDrums.map((d) => String(d._id)));
   const adhesive = adDocs
     .filter((r) =>
