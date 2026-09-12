@@ -67,6 +67,66 @@ const numOrNull = (value) => {
   return Number.isFinite(n) ? n : null;
 };
 
+// ---- Deckle layouts ------------------------------------------------------->
+// A "layout" is one A..L knife pattern the Set Deckle planner drew for a batch
+// (PendingProduction.deckleLayout). It matters on the Slitting Queue because a
+// single deckle width can be planned with SEVERAL different patterns: those
+// webs are physically identical but they are not interchangeable jobs -- each
+// has to be cut to its own pattern -- so the queue keys a row on the layout as
+// well as the Product Code, width and roll length, and one row is one cut job.
+//
+// Identity is the multiset of roll widths, not the slot letters: A/B/C and
+// B/A/C cut the same web, and the slitting card's own row is often typed in a
+// different order than the plan was.
+function cutsSignature(cuts) {
+  const widths = (Array.isArray(cuts) ? cuts : [])
+    .map((c) => Number(c?.width))
+    .filter((w) => Number.isFinite(w) && w > 0)
+    .map((w) => round2(w))
+    .sort((a, b) => a - b);
+  return widths.length ? widths.join("+") : "";
+}
+
+// Deckle widths reach here as Strings on the reel ("635") and Numbers on the
+// layout (635), so every width used as a map key goes through this.
+const widthKey = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && trim(value) !== "" ? String(round2(n)) : trim(value);
+};
+
+// One order's planned layouts, in the order they were planned. `width` is the
+// width THAT layout is cut from -- a mixed-web batch runs several (see
+// PendingProduction.deckleLayout) -- falling back to the batch's own.
+function pendingLayouts(pending) {
+  const list = Array.isArray(pending?.deckleLayout) ? pending.deckleLayout : [];
+  return list
+    .filter((L) => Array.isArray(L.cuts) && L.cuts.length)
+    .map((L) => {
+      const own = Number(L.deckleSize);
+      const width = own > 0 ? own : Number(pending?.deckleSize);
+      return {
+        width: Number.isFinite(width) && width > 0 ? widthKey(width) : "",
+        sig: cutsSignature(L.cuts),
+        cuts: L.cuts
+          .filter((c) => Number(c?.width) > 0)
+          .map((c) => ({ slot: trim(c.slot), width: round2(c.width) })),
+        count: Math.max(1, Math.floor(Number(L.count) || 1)),
+        plannedRunningMeter: L.plannedRunningMeter ?? null,
+        // Total edge trim (both edges) the planner fitted these cuts inside,
+        // so the queue can draw the layout against the full web the way the
+        // Set Deckle and Allocate pages do. Null where the batch stored none:
+        // the Allocate page's own 10 mm default is that page's input default,
+        // not a fact about this batch, so the view shows no edge rather than
+        // inventing one. Note Number(null) is 0, hence the explicit check.
+        trim: pending?.deckleTrim != null && Number(pending.deckleTrim) >= 0
+          ? round2(pending.deckleTrim)
+          : null,
+      };
+    })
+    .filter((L) => L.sig && L.width);
+}
+// <------------------------------------------------------- Deckle layouts ---
+
 // ---- Deckle curing -------------------------------------------------------->
 // After lamination the adhesive has to cure before the web can be slit --
 // CURING_HOURS from the moment the Deckle (MaterialStock reel) was created.
@@ -139,10 +199,15 @@ const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // material a Deckle was laminated from -- for tracing a client defect back --
 // so for slitting a "C003WB" order every "C003WB-*" Deckle is the same
 // product. A genuinely different code ("C014AC") is not.
-function productCodeFamilyRe(productCode) {
+function productCodeBase(productCode) {
   const code = trim(productCode);
-  if (!code) return null;
-  const base = /^(.*[^-])-[A-Z]+$/.exec(code)?.[1] || code;
+  if (!code) return "";
+  return /^(.*[^-])-[A-Z]+$/.exec(code)?.[1] || code;
+}
+
+function productCodeFamilyRe(productCode) {
+  const base = productCodeBase(productCode);
+  if (!base) return null;
   return new RegExp(`^${escapeRegExp(base)}(-[A-Z]+)?$`);
 }
 
@@ -340,7 +405,7 @@ async function buildAvailableDeckleRows() {
   // Every Deckle already named on a Slitting Job Card row, so the queue can
   // flag it -- "on <card>", or slit if that row / card is finished.
   const cards = await SlittingJobCard.find({ status: { $in: ["allocated", "completed"] } })
-    .select("slittingJobCardId machineName operatorName status slittingLog")
+    .select("slittingJobCardId pendingProductionId machineName operatorName status slittingLog")
     .lean();
   const deckleCard = new Map();
   for (const c of cards) {
@@ -361,6 +426,31 @@ async function buildAvailableDeckleRows() {
     }
   }
 
+  // Webs of each planned layout already spoken for: every Slitting Job Card
+  // row -- merely allocated or fully run -- counted against the order and the
+  // layout it cuts. This is what tells the queue how many webs a layout still
+  // wants, so the Deckles left in stock go to the layouts that have not had
+  // theirs yet instead of always filling the first one planned.
+  //
+  // Keyed on the order + cut signature and deliberately NOT on the web width:
+  // a card row's `width` is the CUTTABLE width (the deckle less its edge trim
+  // -- 200 on a 210 mm reel), while a layout's is the deckle width, so keying
+  // on it matched nothing and every layout read as though none of its webs had
+  // been allocated yet. The cut signature alone identifies a layout within one
+  // order; two layouts of the same order with identical roll widths on
+  // different webs would share a count, which is the same plan cut twice over.
+  const slitByLayout = new Map();
+  for (const c of cards) {
+    const pid = String(c.pendingProductionId || "");
+    if (!pid) continue;
+    for (const lr of c.slittingLog || []) {
+      const sig = cutsSignature(lr.cuts);
+      if (!sig) continue;
+      const k = `${pid}::${sig}`;
+      slitByLayout.set(k, (slitByLayout.get(k) || 0) + 1);
+    }
+  }
+
   const rows = reels.map((reel) => {
     const { order, by } = orderForReel(reel);
     const card = deckleCard.get(String(reel._id)) || null;
@@ -374,7 +464,12 @@ async function buildAvailableDeckleRows() {
     return {
       deckleStockId: String(reel._id),
       rollId: reel.rollId || "—",
+      // The reel's own code, suffix and all -- it names the finished rolls and
+      // traces a defect back to the raw material brand.
       productCode: trim(reel.material?.productCode || reel.material?.skuCode) || "—",
+      // ...and the variant family it belongs to, which is what the Slitting
+      // Queue clubs on: "C001WB-A" and "C001WB" are one product to slit.
+      productCodeBase: productCodeBase(reel.material?.productCode || reel.material?.skuCode) || "—",
       mtrs: round2(Number(reel.reelMtrs) || 0),
       size: reel.size || "—",
       runningMeters,
@@ -396,6 +491,14 @@ async function buildAvailableDeckleRows() {
           }
         : null,
       matchedBy: by,
+      // Which of its batch's planned A..L patterns this web is queued to be
+      // cut to -- filled in by the attribution pass below, and left empty for
+      // a Deckle whose order has no layout at this width (every order from
+      // before the Set Deckle planner stored them), which is exactly how the
+      // queue grouped before layouts existed.
+      layoutSig: "",
+      layoutCuts: null,
+      layoutTrim: null,
       card,
       // Deckle-scoped: the allocation page cuts exactly the Deckle named here,
       // never "the order". Every Deckle row therefore carries its own stock id.
@@ -413,6 +516,45 @@ async function buildAvailableDeckleRows() {
   // metres behind) belong in this queue.
   const visibleRows = rows.filter((r) => !(r.card && !r.card.run));
 
+  // ---- which layout each free Deckle is waiting for ----------------------
+  // Deckle webs of one width off one batch are physically identical; what
+  // separates them is the pattern they are to be cut to. So the plan's layouts
+  // are handed the webs they still want, oldest web first: a layout whose webs
+  // are already on a slitting card takes none, and a web beyond anything the
+  // plan asks for is left without a layout rather than padded onto the last
+  // one. Nothing here changes a document -- it is how the queue sorts the
+  // stock in front of the planner, who still names the layout on the Allocate
+  // page.
+  const byOrderWidth = new Map();
+  for (const r of visibleRows) {
+    if (!r.order) continue;
+    const k = `${r.order._id}::${widthKey(r.size)}`;
+    if (!byOrderWidth.has(k)) byOrderWidth.set(k, []);
+    byOrderWidth.get(k).push(r);
+  }
+  for (const [k, reelRows] of byOrderWidth) {
+    const sep = k.lastIndexOf("::");
+    const pid = k.slice(0, sep);
+    const w = k.slice(sep + 2);
+    const layouts = pendingLayouts(pendingById.get(pid)).filter((L) => L.width === w);
+    if (!layouts.length) continue;
+    // Oldest web first -- the order they came off the laminator.
+    const queueOrder = reelRows.slice().sort(
+      (a, b) =>
+        new Date(a.createdAt || 0) - new Date(b.createdAt || 0)
+        || a.rollId.localeCompare(b.rollId),
+    );
+    let i = 0;
+    for (const L of layouts) {
+      const need = Math.max(0, L.count - (slitByLayout.get(`${pid}::${L.sig}`) || 0));
+      for (let n = 0; n < need && i < queueOrder.length; n++, i++) {
+        queueOrder[i].layoutSig = L.sig;
+        queueOrder[i].layoutCuts = L.cuts;
+        queueOrder[i].layoutTrim = L.trim;
+      }
+    }
+  }
+
   visibleRows.sort((a, b) =>
     a.location.localeCompare(b.location) || a.rollId.localeCompare(b.rollId),
   );
@@ -427,11 +569,12 @@ async function buildAvailableDeckleRows() {
 // lands here the moment it is set and its Stock count fills in as webs come
 // off the machine.
 //
-// One group per WIDTH, not per batch: a mixed-web plan (utils/deckleOptimizer)
-// laminates several widths off one batch, and Slitting Allocation takes one
-// width at a time -- so each width waits for its own webs. Keys are built
-// exactly like the produced rows' below, so a config and the Deckles that
-// fulfil it land in the same group.
+// One group per LAYOUT, not per batch and not merely per width: a mixed-web
+// plan (utils/deckleOptimizer) laminates several widths off one batch, and a
+// single width can be planned with several different A..L patterns -- each of
+// those is its own cut job waiting for its own webs. Keys are built exactly
+// like the produced rows' below, so a config and the Deckles that fulfil it
+// land in the same group.
 async function buildPlannedDeckleGroups() {
   const pendings = await PendingProduction.find({
     deckleSize: { $ne: null },
@@ -451,41 +594,64 @@ async function buildPlannedDeckleGroups() {
     .lean();
   const madeCount = new Map();
   for (const r of madeReels) {
-    const k = `${String(r.producedFor)}::${trim(r.size)}`;
+    const k = `${String(r.producedFor)}::${widthKey(r.size)}`;
     madeCount.set(k, (madeCount.get(k) || 0) + 1);
   }
 
   const groups = [];
   for (const p of pendings) {
-    const productCode = trim(p.itemId?.productCode || p.itemId?.skuCode) || "—";
+    // The base of the variant family, not the exact code: a Deckle laminated as
+    // "C001WB-A" is the same product as an order reading "C001WB" -- the suffix
+    // only records which brand of raw material went into it (see
+    // productCodeFamilyRe). Keying on the base is what lets a config and the
+    // Deckles that fulfil it share one row.
+    const productCode = productCodeBase(p.itemId?.productCode || p.itemId?.skuCode) || "—";
     // Same running-meters expression the produced rows use, so the keys meet.
     const runningMeters = p.deckleRunningMeters ?? p.runningMeters ?? null;
 
-    // Webs planned per width: from the layouts when there are any, else the
-    // batch's single width and web count.
-    const byWidth = new Map();
-    const layouts = Array.isArray(p.deckleLayout) ? p.deckleLayout : [];
+    // One waiting entry per planned layout -- { size, expected, sig, cuts } --
+    // else, for a batch the Set Deckle planner never stored layouts for, the
+    // one entry per width this queue showed before layouts existed.
+    const layouts = pendingLayouts(p);
+    const wanted = [];
     if (layouts.length) {
       for (const L of layouts) {
-        const size = trim(L.deckleSize ?? p.deckleSize);
-        if (!size) continue;
-        byWidth.set(size, (byWidth.get(size) || 0) + Math.max(1, Math.floor(Number(L.count) || 1)));
+        wanted.push({ size: L.width, expected: L.count, sig: L.sig, cuts: L.cuts, trim: L.trim });
       }
     } else {
-      const size = trim(p.deckleSize);
-      if (size) byWidth.set(size, Math.max(1, Math.floor(Number(p.noOfRolls) || 1)));
+      const size = widthKey(p.deckleSize);
+      if (size) {
+        wanted.push({
+          size,
+          expected: Math.max(1, Math.floor(Number(p.noOfRolls) || 1)),
+          sig: "",
+          cuts: null,
+          trim: null,
+        });
+      }
     }
 
-    for (const [size, expected] of byWidth) {
-      const made = madeCount.get(`${String(p._id)}::${size}`) || 0;
+    // The webs already laminated at a width fill that width's layouts in the
+    // order they were planned -- the order the machine works them -- so a
+    // layout drops off this waiting list only once its own webs exist, rather
+    // than the whole width going quiet as soon as the first ones are made.
+    const madeLeft = new Map();
+    for (const w of wanted) {
+      if (!madeLeft.has(w.size)) madeLeft.set(w.size, madeCount.get(`${String(p._id)}::${w.size}`) || 0);
+      const pool = madeLeft.get(w.size);
+      const made = Math.min(pool, w.expected);
+      madeLeft.set(w.size, pool - made);
       // Fully laminated -- its real Deckles speak for it from here on.
-      if (made >= expected) continue;
+      if (made >= w.expected) continue;
       groups.push({
-        key: `${productCode}::${size}::${runningMeters ?? ""}`,
+        key: `${productCode}::${w.size}::${runningMeters ?? ""}::${w.sig}`,
         productCode,
-        size,
+        size: w.size,
         runningMeters,
-        expected,
+        layoutSig: w.sig,
+        layoutCuts: w.cuts,
+        layoutTrim: w.trim,
+        expected: w.expected,
         made,
         pendingId: String(p._id),
         assigned: !!p.assignedMachineId,
@@ -508,24 +674,56 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     buildPlannedDeckleGroups(),
   ]);
 
-  // Club same Product Code + Size + Running Meters together -- these are
-  // interchangeable for slitting, so the queue shows one group with one
+  // Club same Product Code + Size + Running Meters + Layout together -- these
+  // are interchangeable for slitting, so the queue shows one group with one
+  // NOTE Product Code here means the variant FAMILY ("C001WB"), not the exact
+  // code on the reel ("C001WB-A"): the suffix only records the brand of raw
+  // material laminated in, so for slitting they are one product (see
+  // productCodeFamilyRe). Each Deckle still carries its own full code in its
+  // Deckle ID on the child row beneath.
   // "Slit" action rather than a separate row (and separate button) per
-  // physical Deckle. Running Meters is part of the key too: two Deckles of
-  // the same Product Code + Size but wound to a different finished-roll
-  // length still need their own cut plan, so clubbing them would just hide
-  // that they are not actually interchangeable. The dialog this opens is
-  // where the planner actually picks which Deckle to cut.
+  // physical Deckle. The last two are part of the key for the same reason:
+  // two Deckles of the same Product Code + Size but wound to a different
+  // finished-roll length, or planned to a different A..L knife pattern, still
+  // need their own cut plan, so clubbing them would just hide that they are
+  // not actually interchangeable. One row is therefore one cut job, named by
+  // its Product Code and its Layout. The dialog this opens is where the
+  // planner actually picks which Deckle to cut.
   const groupMap = new Map();
-  const newGroup = (key, productCode, size, runningMeters) => ({
+  const newGroup = (key, productCode, size, runningMeters, layout) => ({
     _id: key,
     isGroup: true,
     productCode,
+    // Every full code the Deckles in this group were laminated under. Same as
+    // `productCode` unless the group clubs more than one brand variant, which
+    // the view spells out on the row.
+    variantCodes: [],
     size,
     runningMeters,
+    // The planned knife pattern this row's webs are queued to be cut to:
+    // `layoutSig` is its identity (the sorted roll widths, also what the Slit
+    // button hands to the Allocate page so it seeds THIS layout), `layoutCuts`
+    // the A..L widths, and `layoutTrim` the edge trim they were fitted inside
+    // -- enough for the view to draw the web to scale. All empty for stock
+    // whose order never had a layout planned: those rows read "—" and behave
+    // exactly as before.
+    layoutSig: layout?.sig || "",
+    layoutCuts: layout?.cuts || null,
+    layoutTrim: layout?.trim ?? null,
+    // The order this row's cut job belongs to -- what Slit opens the Allocate
+    // page against. It is the batch that PLANNED the layout, which is not
+    // necessarily the batch a given web was laminated for: webs are pooled by
+    // Product Code + width, so a job routinely cuts one borrowed from an
+    // earlier run. Allocating against the planning batch is what seeds this
+    // row's layout and books the finished rolls to the order that wants them
+    // (the Allocate page accepts the borrowed web -- see deckleOptionsFor).
+    pendingId: null,
     deckleCount: 0,
     totalMtrs: 0,
     anyCuring: false,
+    // Deckles in this group that are out of curing and can actually be run --
+    // what decides whether the group reads Waiting / Curing / Ready.
+    readyCount: 0,
     // How many webs of this width the deckle config calls for, so Stock can
     // read "5 of 13" rather than a bare count with nothing to measure it
     // against. 0 for a group that exists only because Deckles do (an order
@@ -544,14 +742,19 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
   };
 
   for (const r of visibleRows) {
-    const key = `${r.productCode}::${r.size}::${r.runningMeters ?? ""}`;
+    const key = `${r.productCodeBase}::${widthKey(r.size)}::${r.runningMeters ?? ""}::${r.layoutSig}`;
     if (!groupMap.has(key)) {
-      groupMap.set(key, newGroup(key, r.productCode, r.size, r.runningMeters));
+      groupMap.set(key, newGroup(key, r.productCodeBase, r.size, r.runningMeters, {
+        sig: r.layoutSig, cuts: r.layoutCuts, trim: r.layoutTrim,
+      }));
     }
     const g = groupMap.get(key);
+    if (r.productCode && !g.variantCodes.includes(r.productCode)) g.variantCodes.push(r.productCode);
+    if (!g.pendingId && r.order) g.pendingId = r.order._id;
     g.deckleCount += 1;
     g.totalMtrs = round2(g.totalMtrs + r.mtrs);
     if (r.curing) g.anyCuring = true;
+    else g.readyCount += 1;
     keepOldest(g, r.createdAt);
     g._children.push({ ...r, isGroup: false, _id: r.deckleStockId });
   }
@@ -566,30 +769,105 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
   // strand the two in separate groups. Attach by the order + width the
   // Deckles were actually produced for, and only fall back to a group of its
   // own when this width has nothing made yet.
-  const groupForPending = (pendingId, size) => {
+  //
+  // The layout is matched too, for the same reason it keys the group at all:
+  // a width planned with two patterns waits for each of them separately, so a
+  // config must meet the Deckles queued for ITS pattern, not the other one's.
+  const groupForPending = (pendingId, size, layoutSig) => {
     for (const g of groupMap.values()) {
-      if (g._children.some((c) => c.order && String(c.order._id) === pendingId && trim(c.size) === size)) return g;
+      if (g.layoutSig !== layoutSig) continue;
+      if (g._children.some((c) => c.order && String(c.order._id) === pendingId && widthKey(c.size) === size)) return g;
     }
     return null;
   };
   for (const p of planned) {
-    const hit = groupForPending(p.pendingId, p.size);
+    const hit = groupForPending(p.pendingId, p.size, p.layoutSig);
     if (hit) {
       hit.expected += p.expected;
+      hit.pendingId = hit.pendingId || p.pendingId;
       keepOldest(hit, p.createdAt);
       continue;
     }
-    if (!groupMap.has(p.key)) groupMap.set(p.key, newGroup(p.key, p.productCode, p.size, p.runningMeters));
+    if (!groupMap.has(p.key)) {
+      groupMap.set(p.key, newGroup(p.key, p.productCode, p.size, p.runningMeters, {
+        sig: p.layoutSig, cuts: p.layoutCuts, trim: p.layoutTrim,
+      }));
+    }
     const g = groupMap.get(p.key);
     g.expected += p.expected;
+    g.pendingId = g.pendingId || p.pendingId;
     keepOldest(g, p.createdAt);
+  }
+
+  // ---- the free webs of a Product Code at a width are ONE shared pool ------
+  // Up to here each Deckle sat under the single cut job it was attributed to,
+  // which left a job reading "0 in stock" while webs it could be cut from were
+  // sitting in another row -- three different C001WB jobs want a 635 mm web,
+  // and the five free ones only showed under the batch they were laminated
+  // for. But a free 635 mm C001WB web is a free 635 mm C001WB web: the floor
+  // routinely finishes one order off a web laminated on an earlier run, which
+  // is exactly what the Allocate page already offers (see deckleOptionsFor --
+  // "any other Deckle of the same Product Code still in stock").
+  //
+  // So every group of a family + width now lists that whole pool. The counts
+  // are deliberately NOT additive across those rows -- the same webs are
+  // available to each of them, and `poolShared` tells the view to say so.
+  // Which webs a job actually takes is settled at Slit: the attribution above
+  // survives as `forThisLayout`, the dialog's default tick.
+  const poolByFamilyWidth = new Map();
+  for (const r of visibleRows) {
+    const k = `${r.productCodeBase}::${widthKey(r.size)}`;
+    if (!poolByFamilyWidth.has(k)) poolByFamilyWidth.set(k, []);
+    poolByFamilyWidth.get(k).push(r);
+  }
+
+  for (const g of groupMap.values()) {
+    const pool = poolByFamilyWidth.get(`${g.productCode}::${widthKey(g.size)}`) || [];
+    // How many cut jobs draw on this same pool -- 1 means it is this row's alone.
+    const sharedBy = [...groupMap.values()].filter(
+      (o) => o.productCode === g.productCode && widthKey(o.size) === widthKey(g.size),
+    ).length;
+
+    // What the Slit dialog ticks by default: as many webs as this job still
+    // wants, its OWN attributed ones first (the layout attribution in
+    // buildAvailableDeckleRows), then the rest of the pool oldest-first. A web
+    // borrowed from another batch never carries this job's layout, so ticking
+    // on the attribution alone would leave a borrowing job with nothing
+    // ticked. A job whose webs are all laminated takes the pool as it comes.
+    const wants = g.expected > 0 ? g.expected : pool.length;
+    const order = [
+      ...pool.filter((r) => g.layoutSig && r.layoutSig === g.layoutSig),
+      ...pool.filter((r) => !(g.layoutSig && r.layoutSig === g.layoutSig)),
+    ];
+    const ticked = new Set(order.slice(0, wants).map((r) => r.deckleStockId));
+
+    g._children = pool.map((r) => ({
+      ...r,
+      isGroup: false,
+      _id: r.deckleStockId,
+      // Unique per row in the tree: the same Deckle appears under every job
+      // that can use it, and Tabulator indexes rows by this.
+      _rowId: `${g._id}|${r.deckleStockId}`,
+      forThisLayout: ticked.has(r.deckleStockId),
+    }));
+    g._rowId = g._id;
+    g.deckleCount = pool.length;
+    g.readyCount = pool.filter((r) => !r.curing).length;
+    g.anyCuring = pool.some((r) => r.curing);
+    g.totalMtrs = round2(pool.reduce((n, r) => n + r.mtrs, 0));
+    // Only worth saying when there are actually webs to share.
+    g.poolShared = sharedBy > 1 && pool.length > 0;
+    g.variantCodes = [...new Set(pool.map((r) => r.productCode).filter(Boolean))];
+    for (const r of pool) keepOldest(g, r.createdAt);
   }
 
   const groups = [...groupMap.values()].sort(
     (a, b) =>
       a.productCode.localeCompare(b.productCode)
+      || (Number(a.size) || 0) - (Number(b.size) || 0)
       || String(a.size).localeCompare(String(b.size))
-      || (Number(a.runningMeters) || 0) - (Number(b.runningMeters) || 0),
+      || (Number(a.runningMeters) || 0) - (Number(b.runningMeters) || 0)
+      || a.layoutSig.localeCompare(b.layoutSig),
   );
 
   res.render("inventory/masters/slittingQueue.ejs", {
@@ -664,6 +942,13 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     req.flash("notification", "Open Allocate from Deckle Slitting so it knows which Deckle to cut.");
     return res.redirect("/app/slitting/queue");
   }
+
+  // The Slitting Queue keys a row on the batch layout those Deckles are queued
+  // to be cut to, and its Slit button passes that layout's signature through
+  // (see cutsSignature). Used twice below: to seed only that pattern's rows,
+  // and to scope the "other Deckles in this group" list to the same cut job.
+  // Absent on an older link, and on stock whose batch had no layouts planned.
+  const wantLayout = trim(req.query.layout);
 
   const deckles = await deckleOptionsFor(pending);
   if (!deckles.length) {
@@ -757,22 +1042,25 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
 
   const targetIds = new Set(targets.map((t) => t._id));
   // Every other Deckle clubbed with these on the Slitting Queue (same
-  // Product Code + Size + Running Meters) but NOT ticked in -- context only,
-  // same as the Slitting Queue's "Choose Deckle" dialog this page was opened
-  // from. Sourced from buildAvailableDeckleRows() -- the exact pool the
+  // Product Code + Size + Running Meters + Layout) but NOT ticked in --
+  // context only, same as the Slitting Queue's "Choose Deckle" dialog this
+  // page was opened from. Sourced from buildAvailableDeckleRows() -- the exact pool the
   // queue itself clubs from -- rather than deckleOptionsFor's order-scoped
   // pool above, which can miss Deckles linked (producedFor) to a *different*
   // order that nonetheless shares this batch's Product Code + Size +
   // Running Meters, undercounting Total/Available here.
-  const groupProductCode = trim(targets[0].productCode);
+  // The variant family, matching how the queue clubbed these Deckles into one
+  // row -- "C001WB-A" and "C001WB" are one product to slit.
+  const groupProductCode = productCodeBase(targets[0].productCode);
   const groupSize = targets[0].size;
   const groupRunningMeters = order.runningMeters ?? null;
   const availableRows = await buildAvailableDeckleRows();
   const groupDeckles = availableRows
     .filter((r) =>
-      r.productCode === groupProductCode
+      r.productCodeBase === groupProductCode
       && r.size === groupSize
       && (r.runningMeters ?? null) === groupRunningMeters
+      && (!wantLayout || r.layoutSig === wantLayout)
       && !targetIds.has(r.deckleStockId),
     )
     .map((r) => ({
@@ -795,17 +1083,97 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
   // comment), so each entry's own deckleSize is what to pre-fill; only where
   // it is absent (every batch saved before mixed webs existed) does the
   // batch-level deckleSize stand in for it.
-  const batchLayout = (pending.isDeckleBatch && Array.isArray(pending.deckleLayout) && pending.deckleLayout.length)
-    ? pending.deckleLayout
-        .filter((L) => Array.isArray(L.cuts) && L.cuts.length)
-        .map((L) => ({
-          width: Number(L.deckleSize) > 0
-            ? Number(L.deckleSize)
-            : (Number(pending.deckleSize) > 0 ? Number(pending.deckleSize) : null),
-          plannedRunningMeter: L.plannedRunningMeter ?? null,
-          count: L.count ?? 1,
-          cuts: Object.fromEntries(L.cuts.map((c) => [c.slot, c.width])),
-        }))
+  //
+  // The Slitting Queue keys a row on the layout, so its Slit button names the
+  // one pattern these Deckles are queued for (?layout=<signature>) -- seed
+  // just that one rather than every pattern the batch happens to hold. A link
+  // without it, or naming a layout this batch no longer has, falls back to all
+  // of them, which is what this page did before the queue was layout-keyed.
+  const plannedLayouts = (pending.isDeckleBatch && Array.isArray(pending.deckleLayout))
+    ? pending.deckleLayout.filter((L) => Array.isArray(L.cuts) && L.cuts.length)
+    : [];
+  let scopedLayouts = wantLayout
+    ? plannedLayouts.filter((L) => cutsSignature(L.cuts) === wantLayout)
+    : [];
+
+  // ...and when it isn't one of THIS order's, look for it across the Product
+  // Code family. The Slitting Queue pools free webs by Product Code + width,
+  // so a cut job routinely runs on a web laminated for an earlier batch, and
+  // this page then opens against an order that never planned the pattern its
+  // row names. The planner did set it -- on a sibling batch of the same
+  // Product Code -- so the widths are on record and the slitter should not
+  // have to re-type them. The edge trim rides along with it: the layout was
+  // fitted inside that batch's trim, and defaulting to this page's 10 mm
+  // instead would flag a layout that actually fits as over the web.
+  let borrowedTrim = null;
+  if (wantLayout && !scopedLayouts.length) {
+    const familyIds = await labelStockFamilyIds(
+      pending.itemId?.productCode || pending.itemId?.skuCode,
+    );
+    if (familyIds.length) {
+      const kin = await PendingProduction.find({
+        _id: { $ne: pending._id },
+        itemId: { $in: familyIds },
+        deckleBatchId: null,
+        deckleLayout: { $exists: true, $ne: null },
+      }).select("deckleSize deckleTrim deckleLayout").lean();
+
+      const targetWidth = numOrNull(targets[0].size);
+      const hits = [];
+      for (const k of kin) {
+        for (const L of k.deckleLayout || []) {
+          if (!Array.isArray(L.cuts) || !L.cuts.length) continue;
+          if (cutsSignature(L.cuts) !== wantLayout) continue;
+          const w = Number(L.deckleSize) > 0 ? Number(L.deckleSize) : Number(k.deckleSize);
+          hits.push({ L, w, trim: k.deckleTrim != null && Number(k.deckleTrim) >= 0 ? Number(k.deckleTrim) : null });
+        }
+      }
+      // Prefer one planned for the very width these Deckles are.
+      const pick = hits.find((h) => targetWidth !== null && round2(h.w) === round2(targetWidth)) || hits[0];
+      if (pick) {
+        scopedLayouts = [pick.L];
+        borrowedTrim = pick.trim;
+      }
+    }
+  }
+
+  const layoutSource = scopedLayouts.length ? scopedLayouts : plannedLayouts;
+
+  // ---- how many webs this cut job actually calls for ----------------------
+  // The Deckles ticked in are what is being allocated NOW; this is what the
+  // whole layout wants ("8 webs of 210+210+210"), less the ones already on a
+  // card, so the planner can see at a glance that allocating these 5 still
+  // leaves 3 to come. Cards this page is itself editing are not counted --
+  // they are the rows on screen, not work already done elsewhere.
+  let layoutNeed = null;
+  let layoutAllocated = 0;
+  if (layoutSource.length) {
+    layoutNeed = layoutSource.reduce(
+      (n, L) => n + Math.max(1, Math.floor(Number(L.count) || 1)), 0,
+    );
+    const sigs = new Set(layoutSource.map((L) => cutsSignature(L.cuts)));
+    const editingIds = new Set(scopedCards.map((c) => String(c._id)));
+    const doneCards = await SlittingJobCard.find({
+      pendingProductionId: pending._id,
+      status: { $in: ["allocated", "completed"] },
+    }).select("slittingLog").lean();
+    for (const c of doneCards) {
+      if (editingIds.has(String(c._id))) continue;
+      for (const lr of c.slittingLog || []) {
+        if (sigs.has(cutsSignature(lr.cuts))) layoutAllocated += 1;
+      }
+    }
+  }
+
+  const batchLayout = layoutSource.length
+    ? layoutSource.map((L) => ({
+        width: Number(L.deckleSize) > 0
+          ? Number(L.deckleSize)
+          : (Number(pending.deckleSize) > 0 ? Number(pending.deckleSize) : null),
+        plannedRunningMeter: L.plannedRunningMeter ?? null,
+        count: L.count ?? 1,
+        cuts: Object.fromEntries(L.cuts.map((c) => [c.slot, c.width])),
+      }))
     : null;
 
   res.render("inventory/masters/slittingAllocation.ejs", {
@@ -818,8 +1186,23 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
     targetDeckles,
     groupDeckles,
     batchLayout,
-    // Trim the Set Deckle planner used for this batch, else the 10 mm default.
-    defaultTrim: pending.isDeckleBatch && Number(pending.deckleTrim) >= 0 ? Number(pending.deckleTrim) : 10,
+    // True when this page is cutting to a layout the planner already fixed on
+    // the Set Deckle page and the Slitting Queue named in the link. The layout
+    // is then shown read-only -- it is not this page's to change; a different
+    // pattern is a different cut job, drawn on Set Deckle. Without it (a bare
+    // Allocate link, or stock no deckle config claims) the A..L grid stays
+    // editable exactly as before.
+    layoutLocked: !!(wantLayout && scopedLayouts.length),
+    // Webs this layout calls for in total, and how many are already on another
+    // card -- the "Deckles Needed" figure. Null when no planned layout applies.
+    layoutNeed,
+    layoutAllocated,
+    // Trim the Set Deckle planner used for this batch -- or, for a layout
+    // borrowed from a sibling batch above, the trim IT was fitted inside --
+    // else the 10 mm default.
+    defaultTrim: pending.isDeckleBatch && pending.deckleTrim != null && Number(pending.deckleTrim) >= 0
+      ? Number(pending.deckleTrim)
+      : (borrowedTrim ?? 10),
     cutSlots: CUT_SLOTS,
     previewCardId,
     machines: machines.map((m) => ({

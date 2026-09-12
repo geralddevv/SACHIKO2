@@ -12,7 +12,7 @@
   // queue for the operator to work on /sachiko/slitting/jobcard/:cardId.
   const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
   const dash = (v) => (isEmpty(v) ? "—" : v);
-  // Log columns that are not roll-width slots: #, Remaining, R. Meter,
+  // Log columns that are not roll-width slots: #, Siderun, R. Meter,
   // Deckle Rolls, and the trailing remove-layout action. The web strip
   // spans the lot.
   const fixedCols = 5;
@@ -70,7 +70,10 @@
     text-transform: uppercase; color: #7c8ba1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .sl-job-label .req { color: #dc2626; }
-  .sl-job-value { font-size: 15px; font-weight: 800; color: #1f2a44; line-height: 1.3; overflow-wrap: anywhere; }
+  .sl-job-value {
+    font-size: 20px; font-weight: 900; color: #1f2a44; line-height: 1.25;
+    overflow-wrap: anywhere; font-variant-numeric: tabular-nums;
+  }
   .sl-job-value.sl-bad { color: #b91c1c; }
   .sl-job-cell select.form-control {
     height: 34px !important; font-size: 13px !important; width: 100%;
@@ -210,6 +213,46 @@
     background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #f8fafc 6px, #f8fafc 12px);
   }
 
+  /* ---- Locked layout panel -------------------------------------------
+     The Set Deckle plan's own summary table, reused verbatim so a layout
+     reads identically on the page that fixed it and the page that cuts to it
+     (views/inventory/orders/deckleSetForm.ejs .dsf-web-table). */
+  .dsf-web-table { width: 100%; border-collapse: separate; border-spacing: 0;
+    background: #fff; border: 1.5px solid #e6eaf2; border-radius: 10px; overflow: hidden; }
+  .dsf-web-table th {
+    background: #044a78; color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; padding: 6px 10px; text-align: left; white-space: nowrap;
+  }
+  .dsf-web-table td { padding: 8px 10px; border-top: 1px solid #eef1f6; vertical-align: middle; }
+  /* Column separators, same rule the top header's cells use -- without them
+     Deckle Size / Siderun / Across / Deckle Count run together as one line of
+     big numbers. */
+  .dsf-web-table th, .dsf-web-table td { border-right: 1px solid #e2e8f0; }
+  .dsf-web-table th { border-right-color: rgba(255, 255, 255, 0.22); }
+  .dsf-web-table th:last-child, .dsf-web-table td:last-child { border-right: none; }
+  .dsf-web-size, .dsf-web-rem, .dsf-web-dc, .dsf-web-across .flag {
+    font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums;
+  }
+  .dsf-web-size { width: 120px; color: #044a78; white-space: nowrap; text-align: center; }
+  .dsf-web-rem { width: 104px; text-align: center; color: #dc2626; white-space: nowrap; }
+  .dsf-web-rem.sl-bad { color: #b91c1c; }
+  .dsf-web-across { width: 130px; }
+  .dsf-web-across .flag { color: #475569; }
+  .dsf-web-across .flag.sl-bad { color: #b91c1c; }
+  .dsf-web-across .flag.sl-ok { color: #15803d; }
+  .dsf-web-dc { width: 96px; text-align: center; color: #1f2a44; }
+  .dsf-web-diag { min-width: 0; text-align: center; }
+  .dsf-web-diag .sl-web { margin: 0 auto; max-width: 880px; width: 100%; height: 36px; }
+  /* Diagram segments show the width number only -- no A/B/C / EDGE / TRIM label. */
+  .dsf-web-diag .sl-seg-slot { display: none; }
+  .dsf-web-diag .sl-web-seg .sl-seg-w { font-size: 13px; }
+  /* `.span-full` is display:flex (common.css), which beats the `hidden`
+     attribute's UA display:none -- without this both panels would show. */
+  #slLockedPanel[hidden], #slEditablePanel[hidden] { display: none !important; }
+  /* "Deckles Needed" reads short when fewer Deckles are ticked in than the
+     layout still wants -- the run will not finish the job. */
+  .sl-job-value.sl-short { color: #b45309; }
+  .sl-job-of { font-size: 0.62em; font-weight: 700; color: #94a3b8; }
   .sl-warn-note {
     align-self: stretch; background: #fff8e1; border: 1px solid #f0c36d; color: #7a5b00;
     border-radius: 8px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; line-height: 1.5;
@@ -218,6 +261,17 @@
     align-self: stretch; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46;
     border-radius: 8px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; line-height: 1.5;
   }
+  /* The submit button draws its own border; the shared .btn-grp container
+     (common.css) boxes it in a second one, which here just reads as an empty
+     frame around a single button. Only the top edge is kept, as a rule
+     separating the form above from the action below. Scoped to this page --
+     .btn-grp is used across the app. */
+  .sl-save-grp {
+    border: none !important;
+    border-top: 1px solid #b8c4d4 !important;
+    border-radius: 0 !important;
+    padding: 16px 0 0 !important;
+  }
   .sl-save-wrap { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 100%; }
   #slSubmitBtn:disabled { opacity: 0.55; cursor: not-allowed; }
   #slSubmitBtn:disabled:hover { transform: none; box-shadow: none; }
@@ -225,7 +279,7 @@
   @media screen and (max-width: 768px) {
     .sl-job-cell { padding: 9px 6px; }
     .sl-job-label { font-size: 9.5px; }
-    .sl-job-value { font-size: 13px; }
+    .sl-job-value { font-size: 16px; }
   }
 </style>
 
@@ -280,17 +334,45 @@
                 set to 5 -> 1 still available for another layout). %>
             <span class="sl-job-value" id="slAvailableValue"><%= deckleAvailable %></span>
           </div>
+          <% if (typeof layoutNeed !== "undefined" && layoutNeed) {
+               const stillNeeded = Math.max(0, layoutNeed - (layoutAllocated || 0)); %>
+          <div class="sl-job-cell">
+            <span class="sl-job-label">Deckles Needed</span>
+            <%# What the planner's layout calls for, as opposed to "Total
+                Deckles" / "Available" above, which are the webs in stock.
+                Shown as "still needed of planned" once some are already on
+                another card, so allocating fewer than the layout wants is
+                visible here rather than only showing up as a short run
+                later. %>
+            <span class="sl-job-value<%= targetDeckles.length < stillNeeded ? " sl-short" : "" %>"
+                  title="This layout calls for <%= layoutNeed %> Deckle web(s)<%= layoutAllocated ? ` — ${layoutAllocated} already on another slitting card, ${stillNeeded} still to allocate` : "" %>. <%= targetDeckles.length %> ticked in here.">
+              <%= stillNeeded %><% if (layoutAllocated) { %><span class="sl-job-of"> of <%= layoutNeed %></span><% } %>
+            </span>
+          </div>
+          <% } %>
+          <%# Total edge trim netted out of the web width before cutting (split
+              evenly across both edges) when defaulting a fresh layout row's
+              width -- 10 mm by default.
+
+              With the layout locked it is not an input at all: the cuts were
+              fitted inside the trim the planner set on the Deckle Set plan, so
+              changing it here could only make a layout that fits read as over
+              the web. It stays in the DOM as a hidden field because the width
+              maths reads its value (TOTAL_TRIM_MM). Editable otherwise -- for
+              stock no deckle config claims, this is the only place to set it. %>
+          <% if (typeof layoutLocked !== "undefined" && layoutLocked) { %>
+          <div class="sl-job-cell">
+            <span class="sl-job-label">Trim (mm)</span>
+            <span class="sl-job-value" title="Total edge trim (both sides), set with the deckle layout on the Deckle Set plan."><%= typeof defaultTrim !== 'undefined' ? defaultTrim : 10 %></span>
+            <input type="hidden" id="slTrim" value="<%= typeof defaultTrim !== 'undefined' ? defaultTrim : 10 %>" />
+          </div>
+          <% } else { %>
           <div class="sl-job-cell is-input">
             <span class="sl-job-label">Trim (mm)</span>
-            <%# Total edge trim netted out of the web width before cutting
-                (split evenly across both edges) when defaulting a fresh
-                layout row's width -- 10 mm by default, editable here for a
-                job that needs something else. A layout row carried over from
-                an already-allocated Deckle keeps its own saved width and
-                ignores this. %>
             <input type="number" id="slTrim" class="form-control" value="<%= typeof defaultTrim !== 'undefined' ? defaultTrim : 10 %>" min="0" step="any"
                    title="Total edge trim (both sides) netted out of the web width for new layouts. Default 10 mm." />
           </div>
+          <% } %>
           <div class="sl-job-cell is-input">
             <span class="sl-job-label">Machine <span class="req">*</span></span>
             <%# Only slitting machines are offered (routes/system/slitting.js
@@ -400,7 +482,30 @@
     <div class="span-full form-subheading sl-sec-head">
       <h1><%= targetDeckles.length === 1 ? "Deckle Layout" : "Deckle Layouts" %></h1>
     </div>
-    <div class="span-full" style="border:none !important;">
+    <!-- Read-only view, used when the Slitting Queue opened this page for a
+         layout the planner already fixed on Set Deckle (layoutLocked). Same
+         "Deckle Size | Siderun | Across | Deckle Count | Layout" table that
+         page shows under its own Deckle Layout heading
+         (views/inventory/orders/deckleSetForm.ejs WEB_TABLE_HEAD), minus its
+         "Use" picker -- there is nothing to pick here, the layout is settled.
+         The editable table below still exists, hidden, and is what recalc()
+         and Save read: this panel only changes what the planner can touch. -->
+    <div class="span-full" id="slLockedPanel" hidden style="border:none !important;">
+      <table class="dsf-web-table">
+        <thead>
+          <tr>
+            <th style="width:120px;">Deckle Size</th>
+            <th style="width:104px;">Siderun</th>
+            <th style="width:130px;">Across</th>
+            <th style="width:96px;">Deckle Count</th>
+            <th>Layout</th>
+          </tr>
+        </thead>
+        <tbody id="slLockedBody"></tbody>
+      </table>
+    </div>
+
+    <div class="span-full" id="slEditablePanel" style="border:none !important;">
       <div class="sl-panel sl-scroll">
         <table class="sl-table sl-log-table">
           <colgroup>
@@ -412,7 +517,7 @@
           <thead>
             <tr>
               <th rowspan="2" style="vertical-align:middle;">#</th>
-              <th rowspan="2" style="vertical-align:middle;">Remaining</th>
+              <th rowspan="2" style="vertical-align:middle;">Siderun</th>
               <th colspan="<%= cutSlots.length %>">Roll Widths (mm)</th>
               <th rowspan="2" style="vertical-align:middle;">R. Meter</th>
               <th rowspan="2" style="vertical-align:middle;">Deckle Rolls</th>
@@ -433,7 +538,7 @@
       </div>
     </div>
 
-    <div class="span-full btn-grp" style="margin-top: 10px;">
+    <div class="span-full btn-grp sl-save-grp" style="margin-top: 10px;">
       <div class="sl-save-wrap">
         <button type="submit" id="slSubmitBtn" class="submit-btn">
           <%= existingTargets.length && existingTargets.length === targetDeckles.length ? "Update Allocation" : "Allocate to Machine" %>
@@ -447,7 +552,7 @@
 <script id="sl-order-data" type="application/json"><%- safeJson(order) %></script>
 <script id="sl-batch-layout" type="application/json"><%- safeJson(typeof batchLayout !== "undefined" ? batchLayout : null) %></script>
 <script id="sl-slots-data" type="application/json"><%- safeJson(cutSlots) %></script>
-<script id="sl-config-data" type="application/json"><%- safeJson({ pendingId: order._id, submissionToken, fixedCols }) %></script>
+<script id="sl-config-data" type="application/json"><%- safeJson({ pendingId: order._id, submissionToken, fixedCols, layoutLocked: !!(typeof layoutLocked !== "undefined" && layoutLocked), layoutNeed: typeof layoutNeed !== "undefined" ? layoutNeed : null, layoutAllocated: typeof layoutAllocated !== "undefined" ? layoutAllocated : 0 }) %></script>
 
 <script>
   const TARGETS = JSON.parse(document.getElementById("sl-target-data").textContent);
@@ -533,7 +638,7 @@
       <td class="sl-derived sl-log-no">
         <span class="sl-log-no-num"></span>
       </td>
-      <td class="sl-derived sl-width-cell" title="Cuttable web width left -- already nets out the default 5 mm edge trim on each side (10 mm total), and counts down further as roll widths (A–L) are entered">
+      <td class="sl-derived sl-width-cell" title="Siderun -- the cuttable web width still unallocated. Already nets out the default 5 mm edge trim on each side (10 mm total), and counts down further as roll widths (A–L) are entered">
         <input type="hidden" class="sl-width" />
         <span class="sl-width-remaining">—</span>
       </td>
@@ -858,6 +963,69 @@
     recalc();
   });
 
+  // Swap the editable A..L grid for the Set Deckle plan's own read-only
+  // summary -- "Deckle Size | Siderun | Across | Deckle Count | Layout", the
+  // same table and the same web strip that page draws, so one layout reads
+  // identically wherever it is shown. The editable table stays in the DOM but
+  // hidden: recalc() and Save still read it, so nothing downstream changes --
+  // this only takes the layout out of the planner's hands here.
+  function lockLayout(L) {
+    const cuts = Object.entries(L.cuts || {}).filter(([, w]) => Number(w) > 0);
+    const cutSum = round2(cuts.reduce((n, [, w]) => n + Number(w), 0));
+    // Cuttable width -- the web less both edge trims, exactly as GROUP_WIDTH.
+    const web = rawWebWidth;
+    const cuttable = web !== null ? round2(web - TOTAL_TRIM_MM) : null;
+    const remaining = cuttable !== null ? round2(cuttable - cutSum) : null;
+    const over = remaining !== null && remaining < 0;
+    const rollWord = `${cuts.length} roll${cuts.length === 1 ? "" : "s"}`;
+
+    // Deckle Count is what is being cut HERE; the layout may want more than is
+    // ticked in (8 planned, 5 in hand), so the shortfall rides alongside
+    // rather than the row quietly reading as the whole job.
+    const stillNeeded = CONFIG.layoutNeed
+      ? Math.max(0, CONFIG.layoutNeed - (CONFIG.layoutAllocated || 0))
+      : null;
+    const dcTitle = stillNeeded === null
+      ? `${SEQUENCED.length} Deckle(s) cut to this layout`
+      : `${SEQUENCED.length} of ${stillNeeded} Deckle web(s) this layout still needs`
+        + ` (${CONFIG.layoutNeed} planned${CONFIG.layoutAllocated ? `, ${CONFIG.layoutAllocated} already on another card` : ""})`;
+
+    document.getElementById("slLockedBody").innerHTML = `
+      <tr>
+        <td class="dsf-web-size">${web !== null ? esc(fmt(web)) + " mm" : "—"}</td>
+        <td class="dsf-web-rem${over ? " sl-bad" : ""}">${remaining !== null ? esc(fmt(remaining)) + " mm" : "—"}</td>
+        <td class="dsf-web-across"><span class="flag ${over ? "sl-bad" : "sl-ok"}">${rollWord}</span></td>
+        <td class="dsf-web-dc" title="${esc(dcTitle)}">${SEQUENCED.length}${
+          stillNeeded !== null && stillNeeded !== SEQUENCED.length
+            ? `<span class="sl-job-of"> of ${stillNeeded}</span>` : ""
+        }</td>
+        <td class="dsf-web-diag">
+          <div class="sl-web${over ? " is-over" : ""}">${lockedWebHTML(cuts, web)}</div>
+        </td>
+      </tr>`;
+
+    document.getElementById("slLockedPanel").hidden = false;
+    document.getElementById("slEditablePanel").hidden = true;
+  }
+
+  // The strip for the locked row: edge trim each side, a segment per roll
+  // width, then whatever is left uncut -- same colour key as paintWeb().
+  function lockedWebHTML(cuts, web) {
+    const segs = cuts.map(([slot, w]) => `
+      <div class="sl-web-seg" style="flex-grow:${w}" title="${esc(slot)} — ${esc(fmt(w))} mm">
+        <span class="sl-seg-slot">${esc(slot)}</span><span class="sl-seg-w">${esc(fmt(w))}</span>
+      </div>`);
+    if (web === null) return segs.join("");
+    const slack = round2(web - TOTAL_TRIM_MM - cuts.reduce((n, [, w]) => n + Number(w), 0));
+    if (slack > 0) {
+      segs.push(`
+        <div class="sl-web-seg sl-web-trim" style="flex-grow:${slack}" title="Trim (uncut slack) — ${esc(fmt(slack))} mm">
+          <span class="sl-seg-slot">TRIM</span><span class="sl-seg-w">${esc(fmt(slack))}</span>
+        </div>`);
+    }
+    return `${edgeTrimSeg("Left")}${segs.join("")}${edgeTrimSeg("Right")}`;
+  }
+
   // One row per layout group -- Deckles sharing an identical existing
   // allocation (or all blank, on a fresh one) start collapsed together;
   // qty is seeded from how many Deckles that group has.
@@ -874,7 +1042,23 @@
     (L) => !(L.width > 0) || rawWebWidth === null || round2(L.width) === round2(rawWebWidth),
   );
 
-  if (!anyExisting && BATCH_LAYOUT_FOR_WEB.length) {
+  // The Slitting Queue opened this page for ONE layout the planner already
+  // fixed on Set Deckle. It is not this page's to change -- a different cut
+  // pattern is a different job -- so every ticked Deckle goes on that layout
+  // and the A..L grid is replaced by the read-only summary below.
+  //
+  // Note the qty: the planned web count is what the BATCH wants (8 webs), not
+  // what is being allocated right now. Seeding that would leave recalc() with
+  // more Deckles assigned than are ticked and block Save on "3 too many
+  // Deckles assigned" until the planner hand-corrected a number they are not
+  // allowed to choose. The ticked Deckles are the count.
+  const LAYOUT_LOCKED = !!CONFIG.layoutLocked && !anyExisting && BATCH_LAYOUT_FOR_WEB.length === 1;
+
+  if (LAYOUT_LOCKED) {
+    const L = BATCH_LAYOUT_FOR_WEB[0];
+    addLayoutRow(SEQUENCED.length, { plannedRunningMeter: L.plannedRunningMeter, cuts: L.cuts });
+    lockLayout(L);
+  } else if (!anyExisting && BATCH_LAYOUT_FOR_WEB.length) {
     // Fresh allocation of a batch the Set Deckle page planned: seed one row per
     // planned deckle layout, qty = its web count. Widths/R. Meter only -- never
     // a web width, so GROUP_WIDTH (size - Trim) still governs.

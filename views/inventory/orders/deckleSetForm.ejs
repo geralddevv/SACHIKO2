@@ -168,7 +168,7 @@
   .dsf-sub-cell { background: #f8fafc !important; padding: 10px !important; text-align: left !important; }
   .sl-table tbody tr:hover > td.dsf-sub-cell { background: #f8fafc !important; }
 
-  /* Per-layout table: deckle size | remaining | diagram + caption | pick.
+  /* Per-layout table: deckle size | siderun | diagram + caption | pick.
      The table fills the available width; the diagram column keeps its own
      capped width (below) so widening the table never stretches the strip. */
   .dsf-web-table { width: 100%; border-collapse: separate; border-spacing: 0;
@@ -181,7 +181,7 @@
   .dsf-web-tr { cursor: pointer; }
   .dsf-web-tr:hover td { background: #f7fbff; }
   .dsf-web-tr.is-chosen td { background: #eef5ff; }
-  /* Deckle Size, Remaining, Across and Deckle Count all share one big value font. */
+  /* Deckle Size, Siderun, Across and Deckle Count all share one big value font. */
   .dsf-web-size, .dsf-web-rem, .dsf-web-dc, .dsf-web-across .flag {
     font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums;
   }
@@ -483,10 +483,13 @@
                      value="<%= autoDeckle.overrun.maxExtraRolls %>"
                      title="Hard ceiling on spare rolls of any one width, whatever the percentage works out to. Stops a large order authorising a pile of spares. Whichever of the two limits is tighter applies. Set 0 for no spares at all." />
             </div>
-            <!-- Hidden, not removed: the checkbox still ships checked, so mixed
-                 webs stay on for both the auto run and the manual planner --
-                 there is just no longer a control for turning them off. -->
-            <label class="dsa-check" for="dsaMixed" style="display: none;"
+            <!-- Visible again. It was hidden while still shipping checked, which
+                 left mixed webs permanently on with no way to say no: a batch
+                 could come out planned on 660 + 635 mm with nothing having
+                 offered that choice, and only the raw-material working further
+                 downstream showing the second width at all. Still ON by
+                 default -- it usually cuts trim -- but now it is a decision. -->
+            <label class="dsa-check" for="dsaMixed"
                    title="Let each layout be cut from whichever deckle width suits it, instead of one width for the whole batch. Usually less trim, but more than one facestock size to pull for the job.">
               <input type="checkbox" id="dsaMixed" checked />
               <span class="t">Different web per layout</span>
@@ -880,9 +883,9 @@
   }
 
   const WEB_TABLE_HEAD =
-    `<thead><tr><th>Deckle Size</th><th>Remaining</th><th>Across</th><th>Deckle Count</th><th>Layout</th><th>Use</th></tr></thead>`;
+    `<thead><tr><th>Deckle Size</th><th>Siderun</th><th>Across</th><th>Deckle Count</th><th>Layout</th><th>Use</th></tr></thead>`;
 
-  // One "deckle size | remaining | across | deckle count | diagram | pick" row.
+  // One "deckle size | siderun | across | deckle count | diagram | pick" row.
   function webRowHTML(cuts, sz, chosen, isBest, webs) {
     const cutSum = round2(cuts.reduce((n, [, w]) => n + w, 0));
     const cuttable = round2(sz - 2 * EDGE);

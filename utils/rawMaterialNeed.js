@@ -8,19 +8,50 @@
 // The sheet's other columns (Rs/kg, expenses, margin, sale rate) are costing,
 // not quantity, and are deliberately not modelled here.
 //
-// Everything comes back in KILOGRAMS, which is what the raw pools actually
-// hold: FacestockStock/AdhesiveStock/ReleaseLinerStock `reelMtrs` is really
-// kg (see routes/stock/semiFinishedStock.js), as is every usage figure on a
-// job card.
+// Weights come back in KILOGRAMS, which is what the raw pools actually hold:
+// FacestockStock/AdhesiveStock/ReleaseLinerStock `reelMtrs` is really kg (see
+// routes/stock/semiFinishedStock.js), as is every usage figure on a job card.
+//
+// SQUARE METRES ride alongside them, and are what Assign Production shows and
+// tallies against. Area is the quantity a lamination actually consumes: every
+// layer covers the whole deckle, so each needs the job's area plus wastage,
+// whatever its GSM. It is also the only unit that compares reels of different
+// widths -- a 2,300 m reel of 510 mm web is less material than a 2,000 m reel
+// of 660 mm, which bare running metres would get backwards. Stock is held in
+// kg and converted for display with kgToSqMetres(); nothing about how material
+// is received or deducted changes.
 
-// Trim/start-up loss allowed on every layer -- WASTAGE % in the sheet.
-export const WASTAGE_PCT = 3;
+// Trim/start-up loss allowed on every layer. The sheet's own WASTAGE % column
+// (D2/D3/D4) says 3, but it is applied there to the RATE, as a costing adder;
+// as a quantity the shopfloor pulls 1% over theoretical, so that is what this
+// is set to. Change it here and every figure on Assign Production follows --
+// it is the only place the number lives.
+export const WASTAGE_PCT = 1;
 // Solids in the wet adhesive: the sheet's "XX / 60 * 100 = ADH. COATING", i.e.
 // a 20 gsm dry coat needs 33.3 gsm of wet adhesive off the drum.
 export const ADHESIVE_SOLIDS_PCT = 60;
 
 const num = (v) => (Number.isFinite(Number(v)) && v !== "" && v !== null ? Number(v) : null);
 const round2 = (n) => Math.round(n * 100) / 100;
+
+// kg -> square metres. The exact inverse of `kg = area x gsm / 1000`:
+//
+//     area (m2) = kg x 1000 / gsm
+//
+// Width does not enter into it, which is the point: a reel's area is what it
+// can cover however it is slit, so reels of different widths are directly
+// comparable and every reel carrying a GSM converts -- no width needed, and
+// none available for an adhesive drum anyway.
+//
+// Returns null without a GSM to divide by: a facestock reel recorded in
+// microns has no weight-per-area, so its area is unknown and must be reported
+// as such rather than guessed at.
+export function kgToSqMetres(kg, gsm) {
+  const k = num(kg);
+  const g = num(gsm);
+  if (!(k > 0) || !(g > 0)) return null;
+  return round2((k * 1000) / g);
+}
 
 // Which recipe layers a roll type calls for, and where each one's GSM lives.
 // Mirrors LAYER_ORDER in utils/labelStockProduction.js -- keep in step.
@@ -65,24 +96,48 @@ const specFieldFor = {
   releaseLiner2: "releaseLiner2",
 };
 
-// The webs this job actually laminates: one entry per deckle layout (a mixed-web
-// plan runs several widths), falling back to the batch's own single web for a
-// row saved before layouts existed.
+// The webs this job laminates, at ONE width.
+//
+// A mixed-web plan stores a width per layout (660 mm × 2 + 635 mm × 1), but
+// that is a SLITTING optimisation -- it decides how each web is cut up, not
+// what the laminator runs. The laminator mounts one facestock reel and runs
+// the whole lot off it, which is also all Assign Production can allot against:
+// the reel picker below the requirement is one pool with one Size filter.
+// Budgeting across two widths described a job nobody runs and made the figure
+// impossible to buy to.
+//
+// So every deckle is budgeted at one width: the batch's own `deckleSize`, or
+// the widest layout if some layout is wider than that. `deckleSize` holds
+// whichever width carries the MOST webs, not the largest, so on a plan whose
+// odd web is wider it would under-state -- and being short of facestock on the
+// floor is the one outcome worth spending a little trim to avoid. Where they
+// agree (this is the usual case, and every single-width batch) it is simply
+// the deckle size on the card.
+//
+// The per-layout run LENGTHS are still honoured, in case a batch mixes them.
 export function webRunsFor(pp) {
   const layouts = Array.isArray(pp?.deckleLayout) ? pp.deckleLayout : [];
-  const runs = layouts
-    .map((L) => ({
-      width: num(L.deckleSize) ?? num(pp.deckleSize),
-      length: num(L.deckleRunningMeter) ?? num(pp.deckleRunningMeters),
-      webs: Math.max(1, Math.floor(num(L.count) || 1)),
-    }))
-    .filter((r) => r.width > 0 && r.length > 0);
+  const layoutWidths = layouts.map((L) => num(L.deckleSize)).filter((w) => w > 0);
+  const width = Math.max(num(pp?.deckleSize) || 0, ...layoutWidths, 0);
+  if (!(width > 0)) return [];
+
+  // Layouts that now share a width AND a run length are one and the same web
+  // as far as raw material goes -- merged, so the working shows "660 x 3"
+  // rather than "660 x 2" and "660 x 1" on two lines, which reads like two
+  // configs again. Only a genuinely different run length keeps its own row.
+  const merged = new Map();
+  for (const L of layouts) {
+    const length = num(L.deckleRunningMeter) ?? num(pp.deckleRunningMeters);
+    if (!(length > 0)) continue;
+    const webs = Math.max(1, Math.floor(num(L.count) || 1));
+    merged.set(length, (merged.get(length) || 0) + webs);
+  }
+  const runs = [...merged.entries()].map(([length, webs]) => ({ width, length, webs }));
   if (runs.length) return runs;
 
-  const width = num(pp?.deckleSize);
   const length = num(pp?.deckleRunningMeters);
   const webs = Math.max(1, Math.floor(num(pp?.noOfRolls) || 1));
-  return width > 0 && length > 0 ? [{ width, length, webs }] : [];
+  return length > 0 ? [{ width, length, webs }] : [];
 }
 
 // Returns null when the deckle isn't described well enough to weigh (no size or
@@ -94,6 +149,11 @@ export function computeRawMaterialNeed(pp, item) {
   const areaSqM = round2(runs.reduce((a, r) => a + (r.width / 1000) * r.length * r.webs, 0));
   const webMetres = round2(runs.reduce((a, r) => a + r.length * r.webs, 0));
   const waste = 1 + WASTAGE_PCT / 100;
+
+  // Every layer covers the whole deckle, so the area each one needs is the
+  // job's own area plus wastage -- no GSM involved, which is why a layer too
+  // thin to weigh still has a requirement the shopfloor can work to.
+  const needSqM = round2(areaSqM * waste);
 
   const rollType = item?.rollType || "NORMAL";
   const rows = (LAYER_ORDER[rollType] || LAYER_ORDER.NORMAL).map((key) => {
@@ -117,6 +177,17 @@ export function computeRawMaterialNeed(pp, item) {
       // Adhesive only: what comes off the drum, wet.
       wetGsm,
       wetKg: wetGsm != null ? round2((areaSqM * wetGsm) / 1000 * waste) : null,
+
+      // ---- square metres: what Assign Production shows and tallies on ----
+      // The same for every layer (they all cover the deckle), and known even
+      // where `kg` is null.
+      sqM: needSqM,
+      // The GSM a reel's kg is divided by to get its area for THIS layer. The
+      // adhesive's is the WET figure -- a drum holds wet adhesive, so that is
+      // what its weight spreads at. Used as the fallback for a web reel that
+      // carries no GSM of its own, and as the only source for a drum, which
+      // never does.
+      stockGsm: meta.wet ? wetGsm : gsm,
     };
   });
 
@@ -126,6 +197,7 @@ export function computeRawMaterialNeed(pp, item) {
   return {
     areaSqM,
     webMetres,
+    needSqM,
     runs,
     rows,
     wastagePct: WASTAGE_PCT,

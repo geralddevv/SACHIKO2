@@ -1,16 +1,18 @@
 <% layout('/layout/boilerplate') -%>
 
 <!-- The slitting entry point: Deckle webs still carrying metres, clubbed by
-     Product Code + Size + Running Meters (interchangeable for slitting
-     purposes only when all three match -- two Deckles of the same code and
-     size wound to a different finished-roll length still need separate cut
-     plans) into one row with one "Slit" action. That opens a dialog where
-     every Deckle in the group is ticked by default (untick the ones you
-     don't want) -- Continue
+     Product Code + Size + Running Meters + Layout (interchangeable for
+     slitting purposes only when all four match -- two Deckles of the same code
+     and size wound to a different finished-roll length, or planned to a
+     different A..L knife pattern, still need separate cut plans) into one row
+     with one "Slit" action. One row is one cut job, identified by its Product
+     Code and the Layout column. That opens a dialog where every Deckle in the
+     group is ticked by default (untick the ones you don't want) -- Continue
      carries the ticked ones to the same Allocate page used for a single
      Deckle (routes/system/slitting.js GET "/slitting/allocate/:pendingId",
-     one ?deckle= per ticked Deckle), which lists one row per Deckle with the
-     machine/operator/helper and the A..L knife layout entered once for all
+     one ?deckle= per ticked Deckle plus this row's ?layout=), which lists one
+     row per Deckle with the machine/operator/helper and the A..L knife layout
+     -- seeded from the planned layout this row names -- entered once for all
      of them. Same shell as the Slitting Logs list (slittingJobCardView.ejs)
      and the same clubbed-group + dialog pattern as Deckle Sorting
      (views/inventory/orders/deckleSet.ejs). -->
@@ -62,6 +64,30 @@
     #master-table .tabulator-data-tree-branch,
     #master-table .tabulator-data-tree-branch-empty { display: none !important; }
     #master-table .tabulator-row[data-sq-child="true"] .tabulator-cell:first-child { padding-left: 14px; }
+    /* Layout cell: this row's web drawn to scale -- the same strip, colour key
+       and class names as the Set Deckle planner and Slitting Allocation
+       (.sl-web in views/inventory/orders/deckleSetForm.ejs and
+       views/inventory/masters/slittingAllocation.ejs), shrunk to fit a table
+       row. Cut rolls green, the fixed edge trim orange, uncut slack left
+       inside the web red -- so a glance says where every mm of the deckle
+       goes. Segment widths are flex-grow, so the strip is proportional at any
+       column width. */
+    .sq-web {
+      display: flex; align-items: stretch; height: 24px; width: 100%;
+      border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background: #fff;
+    }
+    .sq-web.is-over { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.14); }
+    .sq-web-seg {
+      flex-basis: 0; min-width: 0; display: flex; align-items: center; justify-content: center;
+      border-right: 1px solid #fff; overflow: hidden; white-space: nowrap;
+      background: #16a34a; color: #fff;
+      font-size: 10.5px; font-weight: 800; font-variant-numeric: tabular-nums;
+    }
+    .sq-web-seg:nth-child(even) { background: #15803d; }
+    .sq-web-seg:last-child { border-right: none; }
+    .sq-web-seg.sq-web-edge { background: #f97316; }
+    .sq-web-seg.sq-web-trim { background: #dc2626; }
+    .sq-cut-none { color: #cbd5e1; font-weight: 700; }
     .sq-count-badge {
       display: inline-block; font-size: 11px; font-weight: 800; color: #044a78;
       background: #e0ecf8; border-radius: 999px; padding: 1px 9px;
@@ -167,6 +193,7 @@
     <form id="sq-dialog-form" novalidate>
       <div class="sq-dialog-body">
         <div class="sq-section-label">Deckles to allocate — untick any you don't want to include</div>
+        <p id="sq-pool-note" style="margin:0 0 10px;font-size:12px;color:#64748b;"></p>
         <div id="sq-deckle-list" class="sq-deckle-list"></div>
         <div id="sq-deckle-error" class="sq-error-text"></div>
       </div>
@@ -207,15 +234,119 @@
     return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
   };
 
-  // Each top-level row is a Product Code + Size + Running Meters group; _children are the
-  // physical Deckles clubbed into it (routes/system/slitting.js).
+  // Where this job stands: nothing laminated yet, laminated but still inside
+  // the curing window, or a Deckle is out of curing and can be cut. Only
+  // "ready" opens the Slit dialog.
+  const groupStatus = (row) => {
+    if (!row.deckleCount) return "waiting";
+    return row.readyCount ? "ready" : "curing";
+  };
+
+  // The A..L knife pattern a row's webs are queued to be cut to
+  // (routes/system/slitting.js pendingLayouts). The cell draws it as the web
+  // strip below; these build the plain-text forms of it -- one for the Excel
+  // download, one for the tooltip, where the slot letters ride along.
+  const layoutWidths = (cuts) => (Array.isArray(cuts) ? cuts : []).map((c) => fmtMtrs(c.width));
+  const layoutLabelOf = (cuts) => (layoutWidths(cuts).length ? layoutWidths(cuts).join(" + ") : "—");
+  const layoutTitleOf = (cuts) => (Array.isArray(cuts) ? cuts : [])
+    .map((c) => `${c.slot || "?"} ${fmtMtrs(c.width)}`).join("  ·  ");
+
+  // The layout drawn to scale across its deckle web, exactly as the Set Deckle
+  // planner and Slitting Allocation draw it: half the batch's total edge trim
+  // at each side, a segment per roll width in between, and whatever slack is
+  // left over uncut. flex-grow carries the millimetres, so the strip stays
+  // proportional at any column width.
+  //
+  // A batch that stored no edge trim draws none: that page's 10 mm input
+  // default is not a fact about this batch, and assuming it would both invent
+  // an edge and wrongly flag a layout that actually fits as over the web. The
+  // unaccounted millimetres show as slack instead.
+  const seg = (cls, grow, label, title) =>
+    `<div class="sq-web-seg${cls ? " " + cls : ""}" style="flex-grow:${grow}" title="${esc(title)}">${esc(label)}</div>`;
+
+  function layoutWebHtml(row) {
+    const cuts = row.layoutCuts || [];
+    if (!cuts.length) return "";
+
+    const web = Number(row.size);
+    // Note Number(null) is 0, so a missing trim has to be checked for itself.
+    const knownTrim = row.layoutTrim != null && Number(row.layoutTrim) >= 0;
+    const totalTrim = knownTrim ? Number(row.layoutTrim) : 0;
+    const edge = Math.round((totalTrim / 2) * 100) / 100;
+    const cutSum = cuts.reduce((n, c) => n + (Number(c.width) || 0), 0);
+    const hasWeb = Number.isFinite(web) && web > 0;
+    const slack = hasWeb ? Math.round((web - totalTrim - cutSum) * 100) / 100 : null;
+
+    const segs = cuts.map((c) =>
+      seg("", Number(c.width) || 0, fmtMtrs(c.width), `${c.slot || "?"} — ${fmtMtrs(c.width)} mm`));
+
+    // Cuts that don't fit their web -- or no web width to fit them in -- can't
+    // be drawn against it, so show the cuts alone (flagged when they overflow)
+    // rather than a strip that silently misstates the trim.
+    if (slack === null || slack < 0) {
+      const why = slack === null
+        ? `${cuts.length} roll(s) · ${layoutTitleOf(cuts)} · ${fmtMtrs(cutSum)} mm — no deckle width to draw against`
+        : `${fmtMtrs(cutSum)} mm of rolls${totalTrim ? ` + ${fmtMtrs(totalTrim)} mm edge trim` : ""}`
+          + ` is over the ${fmtMtrs(web)} mm web by ${fmtMtrs(Math.abs(slack))} mm`;
+      return `<div class="sq-web${slack === null ? "" : " is-over"}" title="${esc(why)}">${segs.join("")}</div>`;
+    }
+
+    const edgeSeg = (side) => (edge > 0
+      ? seg("sq-web-edge", edge, fmtMtrs(edge), `${side} edge trim — ${fmtMtrs(edge)} mm`)
+      : "");
+    const trimSeg = slack > 0
+      ? seg("sq-web-trim", slack, fmtMtrs(slack),
+          knownTrim ? `Trim (uncut slack) — ${fmtMtrs(slack)} mm` : `Uncut — ${fmtMtrs(slack)} mm (no edge trim recorded)`)
+      : "";
+    const title = `${fmtMtrs(web)} mm web · ${cuts.length} roll${cuts.length === 1 ? "" : "s"}`
+      + ` · ${layoutTitleOf(cuts)} · ${fmtMtrs(slack)} mm uncut`
+      + (knownTrim ? ` + ${fmtMtrs(totalTrim)} mm edge trim` : " · no edge trim recorded");
+    return `<div class="sq-web" title="${esc(title)}">`
+      + edgeSeg("Left") + segs.join("") + trimSeg + edgeSeg("Right")
+      + "</div>";
+  }
+
+  const STATUS_TEXT = { waiting: "Waiting", curing: "Curing", ready: "Ready" };
+
+  // Every column paints its own HTML from the row, so none of them read a
+  // plain value -- which is exactly what a header filter needs to match on,
+  // and what the Excel download writes out. So each row also carries the text
+  // of what its cells say. Display still comes from the formatters; these are
+  // what "Search" searches.
+  const groupText = (g) => ({
+    item: g.productCode,
+    sizeText: g.size != null && g.size !== "" ? `${g.size} mm` : "—",
+    rmText: g.runningMeters != null ? `${fmtMtrs(g.runningMeters)} mtrs` : "—",
+    layoutLabel: layoutLabelOf(g.layoutCuts),
+    stockText: g.expected ? `${g.deckleCount} of ${g.expected}` : String(g.deckleCount),
+    statusText: STATUS_TEXT[groupStatus(g)],
+    dateText: fmtDate(g.createdAt),
+    timeText: fmtTime(g.createdAt),
+  });
+
+  const childText = (r) => ({
+    item: r.rollId,
+    sizeText: "",
+    rmText: "",
+    layoutLabel: "",
+    stockText: `${fmtMtrs(r.mtrs)} mtrs`,
+    statusText: r.hotMelt || !r.curing ? "Ready" : "Curing",
+    dateText: fmtDate(r.createdAt),
+    timeText: fmtTime(r.createdAt),
+  });
+
+  // Each top-level row is a Product Code + Size + Running Meters + Layout
+  // group; _children are the physical Deckles clubbed into it
+  // (routes/system/slitting.js).
   const rowsData = JSON.parse(document.getElementById("sq-data").textContent).map((g) => ({
     ...g,
+    ...groupText(g),
     _children: (g._children || []).map((r) => ({
       ...r,
       isGroup: false,
       lotNo: r.order ? (r.order.lotNo || "-") : "-",
       curingLabel: r.hotMelt ? "Hot melt" : (r.curing ? (r.curingUntilLabel ? `Curing · ${r.curingUntilLabel}` : "Curing") : "Cured"),
+      ...childText(r),
     })),
   }));
 
@@ -247,13 +378,28 @@
     }).filter(Boolean);
   }
 
+  // The dialog lists every free Deckle of this Product Code + width -- the
+  // shared pool -- but ticks only the ones this cut job's layout still wants
+  // (routes/system/slitting.js `forThisLayout`). The rest are there to take if
+  // the planner wants them; a job with no layout planned starts all ticked.
   function renderDeckleList(group) {
+    // Defensive only: a "waiting" group has no Deckles to tick and its Slit
+    // button is disabled, so this should not be reachable -- better an
+    // explanation than an empty box if it ever is.
+    if (!(group._children || []).length) {
+      sqDeckleList.innerHTML = `<div class="sq-deckle-row is-disabled" style="cursor:default;">`
+        + `<span class="sq-deckle-main"><span class="sq-deckle-top">No Deckle produced yet</span>`
+        + `<span class="sq-deckle-sub">This layout is still waiting for its webs to come off the laminator.</span>`
+        + `</span></div>`;
+      return;
+    }
     sqDeckleList.innerHTML = (group._children || []).map((d) => {
       const curingTag = d.curing ? `<span class="sq-deckle-curing"><i class="fa-solid fa-hourglass-half"></i> curing</span>` : "";
       const disabled = !d.allocateHref;
+      const tick = !disabled && d.forThisLayout !== false;
       return `
-        <label class="sq-deckle-row${disabled ? " is-disabled" : ""}">
-          <input type="checkbox" value="${esc(d._id)}" ${disabled ? "disabled" : "checked"} />
+        <label class="sq-deckle-row${disabled ? " is-disabled" : ""}${tick ? "" : " is-off"}">
+          <input type="checkbox" value="${esc(d._id)}" ${disabled ? "disabled" : (tick ? "checked" : "")} />
           <span class="sq-deckle-main">
             <span class="sq-deckle-top">${esc(d.rollId)}</span>
             <span class="sq-deckle-sub">${fmtMtrs(d.mtrs)} mtrs &nbsp;·&nbsp; ${esc(d.location)} &nbsp;·&nbsp; lot ${esc(d.lotNo)}${disabled ? " &nbsp;·&nbsp; not linked to any pending order" : ""}</span>
@@ -276,10 +422,27 @@
     currentGroup = group;
 
     const rmLabel = group.runningMeters != null ? `${fmtMtrs(group.runningMeters)} mtrs` : "no running meters set";
+    const layoutLabel = (group.layoutCuts || []).length ? ` · layout ${layoutLabelOf(group.layoutCuts)}` : "";
     document.getElementById("sq-dialog-subtitle").textContent =
-      `${group.productCode || "—"} · ${group.size || "—"}mm · ${rmLabel} · ${group.deckleCount} Deckle${group.deckleCount === 1 ? "" : "s"}`;
+      `${group.productCode || "—"} · ${group.size || "—"}mm · ${rmLabel}${layoutLabel}`
+      + ` · ${group.deckleCount} Deckle${group.deckleCount === 1 ? "" : "s"}`;
 
     renderDeckleList(group);
+
+    // Say plainly that these webs are not this job's alone, and what the
+    // default tick means, so the list is not read as reserved stock.
+    const pooled = (group._children || []).length;
+    const ticked = (group._children || []).filter((d) => d.allocateHref && d.forThisLayout !== false).length;
+    const note = [];
+    if (group.poolShared) {
+      note.push(`These ${pooled} free Deckle${pooled === 1 ? "" : "s"} of ${group.productCode} at ${group.size}mm`
+        + " are shared with the other cut jobs of this width.");
+    }
+    if (pooled && ticked !== pooled) {
+      note.push(`${ticked} of them ticked — what this job still needs.`);
+    }
+    document.getElementById("sq-pool-note").textContent = note.join(" ");
+
     sqDeckleError.textContent = "";
 
     chooseDeckleDialog.classList.add("show");
@@ -304,11 +467,18 @@
       sqDeckleError.textContent = "One of the ticked Deckles isn't linked to any pending order.";
       return;
     }
-    // The Allocate page is scoped to one order (:pendingId) -- ticked
-    // Deckles usually share one anyway (same clubbed group), but if not,
-    // ask the planner to split the pick rather than silently dropping some.
+
+    // The Allocate page is scoped to one order (:pendingId), and it is THIS
+    // ROW's cut job -- the order that planned the layout -- not whichever
+    // order a given web happened to be laminated for. Free webs are pooled by
+    // Product Code + width, so a job routinely cuts one from an earlier run;
+    // allocating against the planning order is what seeds this row's layout
+    // and books the finished rolls to the order that actually wants them.
+    // Only when the row has no cut job of its own (plain stock no config
+    // claims) do the ticked Deckles have to agree on one order themselves.
     const pendingIds = [...new Set(picked.map((d) => d.order._id))];
-    if (pendingIds.length > 1) {
+    const targetPendingId = currentGroup.pendingId || pendingIds[0];
+    if (!currentGroup.pendingId && pendingIds.length > 1) {
       sqDeckleError.textContent =
         `These Deckles belong to ${pendingIds.length} different orders — untick until only one order's Deckles are left.`;
       return;
@@ -316,15 +486,37 @@
 
     const params = new URLSearchParams();
     picked.forEach((d) => params.append("deckle", d._id));
-    window.location.href = `/app/slitting/allocate/${pendingIds[0]}?${params.toString()}`;
+    // This row IS one cut job, so name its layout -- the Allocate page seeds
+    // that pattern's rows alone instead of every layout the batch holds.
+    if (currentGroup.layoutSig) params.append("layout", currentGroup.layoutSig);
+    window.location.href = `/app/slitting/allocate/${targetPendingId}?${params.toString()}`;
   });
 
+  // Numbers are grouped for reading in these cells ("1,000 mtrs", "210 + 210"),
+  // so a planner typing "1000" or "210+210" would match nothing against the
+  // literal text. Compare with the separators taken out of both sides.
+  const loose = (v) => String(v ?? "").toLowerCase().replace(/[\s,]/g, "");
+  const numLikeFilter = (term, value) => !term || loose(value).includes(loose(term));
+
+  // Every column carries the same per-column "Search" box as the Slitting Logs
+  // list (slittingJobCardView.ejs), which is this page's shell -- set on each
+  // column below rather than through a wrapper, since these columns are whole
+  // objects with their own formatters.
   const table = new Tabulator("#master-table", {
     data: rowsData,
     height: "100%",
     placeholder: "No Deckle stock left to slit",
-    index: "_id",
+    // Not "_id": a Deckle is listed under every cut job that can use it, so
+    // the tree needs a key unique per ROW (routes/system/slitting.js sets it).
+    // The dialog still works off `_id`, the Deckle's own stock id.
+    index: "_rowId",
     dataTree: true,
+    // Filter the GROUP rows only -- a group is one cut job, so a search should
+    // return whole jobs and keep every Deckle clubbed into them. (Tabulator
+    // filters child rows too by default, which would hide Deckles from a group
+    // that matched.) Searching a Deckle ID still finds its group: the Product
+    // Code column's filter looks through the children as well, below.
+    dataTreeFilter: false,
     dataTreeStartExpanded: false,
     dataTreeChildField: "_children",
     dataTreeElementColumn: "item",
@@ -340,9 +532,34 @@
         // each, now that the group rows are down to the four facts that
         // identify a job.
         title: "Product Code / Deckle ID", field: "item", headerSort: false, widthGrow: 3,
+        minWidth: 240,
+        headerFilter: "input", headerFilterPlaceholder: "Search code / Deckle ID",
+        // The group row shows only the family's base code and hides the Deckle
+        // IDs until it is expanded, so the search has to look wider than the
+        // cell: the base code, every full variant code clubbed under it
+        // ("C003FG-I"), and every Deckle ID inside. Otherwise typing any of
+        // those -- all of them things the planner actually has in hand -- would
+        // find nothing.
+        headerFilterFunc: (term, value, row) => {
+          const needle = String(term || "").toLowerCase();
+          if (!needle) return true;
+          const hay = [value, ...(row.variantCodes || []), ...(row._children || []).map((c) => c.rollId)];
+          return hay.some((h) => String(h || "").toLowerCase().includes(needle));
+        },
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          if (row.isGroup) return `<span style="font-weight:800;color:#044a78;">${esc(row.productCode)}</span>`;
+          if (row.isGroup) {
+            // The variant family's base code. When the Deckles under it were
+            // laminated under more than one brand variant (C001WB-A, C001WB-B)
+            // the row names them, so clubbing them never hides which raw
+            // material each web actually carries -- each child row spells its
+            // own out in full in its Deckle ID anyway.
+            const variants = (row.variantCodes || []).filter((c) => c && c !== row.productCode);
+            const tail = variants.length
+              ? `<span style="color:#94a3b8;font-weight:600;"> &nbsp;·&nbsp; ${esc(variants.join(", "))}</span>`
+              : "";
+            return `<span style="font-weight:800;color:#044a78;">${esc(row.productCode)}</span>${tail}`;
+          }
           const bits = [`${fmtMtrs(row.mtrs)} mtrs`, esc(row.location)];
           if (row.lotNo) bits.push(`lot ${esc(row.lotNo)}`);
           const cure = row.curingLabel === "Hot melt"
@@ -355,14 +572,18 @@
         },
       },
       {
-        title: "Deckle Size", hozAlign: "center", width: 130, headerSort: false,
+        title: "Deckle Size", field: "sizeText", hozAlign: "center", width: 130, headerSort: false,
+        headerFilter: "input", headerFilterPlaceholder: "Search",
+        headerFilterFunc: numLikeFilter,
         formatter: (cell) => {
           const row = cell.getRow().getData();
           return row.isGroup ? `<span style="font-weight:700;color:#044a78;">${esc(row.size)}mm</span>` : "";
         },
       },
       {
-        title: "Running Mtrs", hozAlign: "center", width: 140, headerSort: false,
+        title: "Running Mtrs", field: "rmText", hozAlign: "center", width: 140, headerSort: false,
+        headerFilter: "input", headerFilterPlaceholder: "Search",
+        headerFilterFunc: numLikeFilter,
         formatter: (cell) => {
           const row = cell.getRow().getData();
           if (!row.isGroup) return "";
@@ -370,37 +591,92 @@
         },
       },
       {
+        // The knife pattern this row's webs are queued to be cut to -- what
+        // makes a row unique alongside the Product Code, since one width can
+        // be planned with several patterns and those are different jobs.
+        // Blank on the child rows: every Deckle under a group shares its
+        // layout, which is why they are clubbed there in the first place.
+        title: "Layout", field: "layoutLabel", hozAlign: "left",
+        widthGrow: 3, minWidth: 220, headerSort: false,
+        headerFilter: "input", headerFilterPlaceholder: "Search a roll width",
+        headerFilterFunc: numLikeFilter,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isGroup) return "";
+          if (!(row.layoutCuts || []).length) {
+            return '<span class="sq-cut-none" title="No deckle layout was planned for this stock">—</span>';
+          }
+          return layoutWebHtml(row);
+        },
+      },
+      {
         // Deckles of this width actually made and still free to slit, against
         // what the config calls for. 0 of N = set, not yet run.
-        title: "Stock", hozAlign: "center", width: 120, headerSort: false,
+        title: "Stock", field: "stockText", hozAlign: "center", width: 120, headerSort: false,
+        headerFilter: "input", headerFilterPlaceholder: "Search",
+        headerFilterFunc: numLikeFilter,
         formatter: (cell) => {
           const row = cell.getRow().getData();
           if (!row.isGroup) return "";
           const of = row.expected ? `<span style="color:#94a3b8;font-weight:600;"> of ${row.expected}</span>` : "";
+          // Free webs of this Product Code + width are one pool, so the same
+          // Deckles count for every cut job of that width -- these numbers do
+          // not add up across those rows, and the row says so rather than
+          // letting them be read as separate stock.
+          const shared = row.poolShared
+            ? ` <i class="fa-solid fa-link" style="color:#94a3b8;font-size:9px;"></i>`
+            : "";
+          const why = row.poolShared
+            ? `${row.deckleCount} free Deckle(s) of ${row.productCode} at ${row.size}mm — shared with the other cut jobs of this width`
+            : `${row.deckleCount} free Deckle(s) of ${row.productCode} at ${row.size}mm`;
           if (!row.deckleCount) {
-            return `<span style="color:#b45309;font-weight:800;">0</span>${of}`;
+            return `<span title="${esc(why)}"><span style="color:#b45309;font-weight:800;">0</span>${of}${shared}</span>`;
           }
-          return `<span style="color:#15803d;font-weight:800;">${row.deckleCount}</span>${of}`;
+          return `<span title="${esc(why)}"><span style="color:#15803d;font-weight:800;">${row.deckleCount}</span>${of}${shared}</span>`;
+        },
+      },
+      {
+        title: "Status", field: "statusText", hozAlign: "center", width: 130, headerSort: false,
+        headerFilter: "input", headerFilterPlaceholder: "Search",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isGroup) {
+            if (row.curingLabel === "Hot melt") return '<span style="color:#15803d;font-weight:700;">Ready</span>';
+            return row.curing
+              ? '<span style="color:#b45309;font-weight:700;">Curing</span>'
+              : '<span style="color:#15803d;font-weight:700;">Ready</span>';
+          }
+          const status = groupStatus(row);
+          if (status === "waiting") return '<span style="color:#94a3b8;font-weight:800;"><i class="fa-solid fa-hourglass-half"></i> Waiting</span>';
+          if (status === "curing") return '<span style="color:#b45309;font-weight:800;"><i class="fa-solid fa-hourglass-half"></i> Curing</span>';
+          return '<span style="color:#15803d;font-weight:800;"><i class="fa-solid fa-check"></i> Ready</span>';
         },
       },
       {
         // Group: when the deckle was set (or its first Deckle made, for stock
         // no config claims any more). Child: when that Deckle was laminated.
-        title: "Date", hozAlign: "center", width: 110, headerSort: false,
+        title: "Date", field: "dateText", hozAlign: "center", width: 110, headerSort: false,
+        headerFilter: "input", headerFilterPlaceholder: "Search",
         formatter: (cell) => fmtDate(cell.getRow().getData().createdAt),
       },
       {
-        title: "Time", hozAlign: "center", width: 110, headerSort: false,
+        title: "Time", field: "timeText", hozAlign: "center", width: 110, headerSort: false,
+        headerFilter: "input", headerFilterPlaceholder: "Search",
         formatter: (cell) => fmtTime(cell.getRow().getData().createdAt),
       },
       {
-        title: "Actions", hozAlign: "center", headerSort: false, width: 110,
+        title: "Actions", hozAlign: "center", headerSort: false, headerFilter: false, width: 110,
         formatter: (cell) => {
           const row = cell.getRow().getData();
           if (!row.isGroup) return "";
-          // Nothing laminated yet -- the config is only waiting here.
-          if (!row.deckleCount) {
-            return `<span style="color:#94a3b8;font-weight:700;font-size:11.5px;" title="No Deckle of this width has been produced yet"><i class="fa-solid fa-hourglass-half"></i> Waiting</span>`;
+          // Only a group with a Deckle that is out of curing can be cut --
+          // .is-disabled also kills pointer events, so the dialog can't open.
+          const status = groupStatus(row);
+          const why = status === "waiting"
+            ? "No Deckle of this width has been produced yet"
+            : "Every Deckle here is still curing";
+          if (status !== "ready") {
+            return `<button class="sq-act is-disabled" disabled title="${why}"><i class="fa-solid fa-scissors"></i> Slit</button>`;
           }
           return `<button onclick="openChooseDeckleDialog('${row._id}')" class="sq-act" title="Allocate one or more Deckles from this group"><i class="fa-solid fa-scissors"></i> Slit</button>`;
         },
