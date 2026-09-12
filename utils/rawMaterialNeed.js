@@ -155,6 +155,17 @@ export function computeRawMaterialNeed(pp, item) {
   // thin to weigh still has a requirement the shopfloor can work to.
   const needSqM = round2(areaSqM * waste);
 
+  // ...and the same again as a LENGTH. Every layer runs the full length of
+  // every web, so this is one figure for all of them. It is only meaningful
+  // now that the job is budgeted at a single width (see webRunsFor): metres of
+  // a 510 mm reel and metres of a 660 mm one are not the same material, so a
+  // length is only comparable once the width is pinned down.
+  const needMetres = round2(runs.reduce((a, r) => a + r.length * r.webs, 0) * waste);
+
+  // That single width -- what an adhesive drum's weight is spread over to say
+  // how much web it can coat.
+  const budgetWidthMm = runs[0]?.width ?? null;
+
   const rollType = item?.rollType || "NORMAL";
   const rows = (LAYER_ORDER[rollType] || LAYER_ORDER.NORMAL).map((key) => {
     const meta = LAYER_META[key.replace(/2$/, "")];
@@ -178,16 +189,28 @@ export function computeRawMaterialNeed(pp, item) {
       wetGsm,
       wetKg: wetGsm != null ? round2((areaSqM * wetGsm) / 1000 * waste) : null,
 
-      // ---- square metres: what Assign Production shows and tallies on ----
-      // The same for every layer (they all cover the deckle), and known even
-      // where `kg` is null.
+      // ---- square metres ----
+      // The area this layer covers: the same for every layer (they all cover
+      // the deckle), and known even where `kg` is null.
       sqM: needSqM,
-      // The GSM a reel's kg is divided by to get its area for THIS layer. The
-      // adhesive's is the WET figure -- a drum holds wet adhesive, so that is
-      // what its weight spreads at. Used as the fallback for a web reel that
-      // carries no GSM of its own, and as the only source for a drum, which
-      // never does.
-      stockGsm: meta.wet ? wetGsm : gsm,
+      // The GSM a reel's kg is divided by to get its AREA -- the third figure
+      // on the requirement line. The tally itself runs on kg and metres; see
+      // `needKg` / `needMtrs` below.
+      stockGsm: gsm,
+
+      // ---- what the requirement states, and is tallied on ---------------
+      // Both sides of the same material: the WEIGHT the store issues against,
+      // and the LENGTH the machine runs. A reel has both, so both are compared.
+      needKg: meta.wet ? (wetGsm != null ? round2((areaSqM * wetGsm) / 1000 * waste) : null) : kg,
+      needMtrs: needMetres,
+      // The GSM a reel's kg is turned into metres with, and the width it is
+      // spread over. A web reel has a width of its own, so `mtrsWidthMm` is
+      // null there -- its true length is kg / (own width x own gsm). A drum
+      // has neither: it is spread over the job's web at the recipe's wet coat
+      // weight, which is what these two carry for the adhesive layer.
+      mtrsGsm: meta.wet ? wetGsm : gsm,
+      mtrsWidthMm: meta.wet ? budgetWidthMm : null,
+
     };
   });
 
@@ -198,6 +221,8 @@ export function computeRawMaterialNeed(pp, item) {
     areaSqM,
     webMetres,
     needSqM,
+    needMetres,
+    budgetWidthMm,
     runs,
     rows,
     wastagePct: WASTAGE_PCT,

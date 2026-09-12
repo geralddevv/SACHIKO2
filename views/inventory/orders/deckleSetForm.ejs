@@ -335,6 +335,7 @@
     flex: 1 1 130px; min-width: 130px; padding: 10px 14px;
     border-right: 1px solid #eef1f6; display: flex; flex-direction: column; gap: 3px;
   }
+  .dsa-stat.dsa-stat-wide { flex-basis: 190px; min-width: 190px; }
   .dsa-stat:last-child { border-right: none; }
   .dsa-stat .k {
     font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
@@ -483,13 +484,13 @@
                      value="<%= autoDeckle.overrun.maxExtraRolls %>"
                      title="Hard ceiling on spare rolls of any one width, whatever the percentage works out to. Stops a large order authorising a pile of spares. Whichever of the two limits is tighter applies. Set 0 for no spares at all." />
             </div>
-            <!-- Visible again. It was hidden while still shipping checked, which
-                 left mixed webs permanently on with no way to say no: a batch
-                 could come out planned on 660 + 635 mm with nothing having
-                 offered that choice, and only the raw-material working further
-                 downstream showing the second width at all. Still ON by
-                 default -- it usually cuts trim -- but now it is a decision. -->
-            <label class="dsa-check" for="dsaMixed"
+            <!-- Hidden again at user request (2026-09-12). Stays checked by
+                 default, so mixed webs remain on with no UI way to opt out --
+                 the same tradeoff that caused the earlier incident (a batch
+                 planned on 660 + 635 mm with nothing having offered that
+                 choice). See the git history on this block if it needs to
+                 come back. -->
+            <label class="dsa-check" for="dsaMixed" style="display:none;"
                    title="Let each layout be cut from whichever deckle width suits it, instead of one width for the whole batch. Usually less trim, but more than one facestock size to pull for the job.">
               <input type="checkbox" id="dsaMixed" checked />
               <span class="t">Different web per layout</span>
@@ -1349,8 +1350,8 @@
     // -- picking a size inside a layout's table sets that layout's web.
     MIXED_WEBS = dsaMixed.checked;
 
-    const dsaStat = (k, v, cls) =>
-      `<div class="dsa-stat"><span class="k">${esc(k)}</span><span class="v${cls ? " " + cls : ""}">${esc(v)}</span></div>`;
+    const dsaStat = (k, v, cls, wrapCls) =>
+      `<div class="dsa-stat${wrapCls ? " " + wrapCls : ""}"><span class="k">${esc(k)}</span><span class="v${cls ? " " + cls : ""}">${esc(v)}</span></div>`;
 
     function dsaShowError(msg) {
       dsaBody.innerHTML = `<div class="dsa-err">${esc(msg)}</div>`;
@@ -1364,6 +1365,16 @@
       // the roll length, and any overrun by the rolls-per-web granularity. So
       // that is the number worth showing next to the headline waste.
       const avoidPct = w.consumedSqM > 0 ? round2((w.avoidableSqM / w.consumedSqM) * 100) : 0;
+      // Run-length-weighted average side trim width, in mm -- same weighting
+      // (drm x webs) the backend used to turn each layout's sideTrim into
+      // avoidableSqM, so this is the mm figure that pct is actually built from.
+      const runM = (p.layouts || []).reduce((n, l) => n + (l.drm || 0) * (l.webs || 0), 0);
+      const avoidMm = runM > 0
+        ? round2((p.layouts || []).reduce((n, l) => n + l.sideTrim * l.drm * l.webs, 0) / runM)
+        : 0;
+      // Same area/run-length conversion, applied to the whole waste figure
+      // (edge + side + end + overrun) rather than just the recoverable part.
+      const wasteMm = runM > 0 ? round2((w.wasteSqM * 1000) / runM) : 0;
       const extra = (p.rolls || []).reduce((n, r) => n + (r.extra || 0), 0);
       const stats = [
         // With mixed webs the batch is still recorded at one size, so show that
@@ -1374,9 +1385,9 @@
         dsaStat("Layouts", `${p.layouts.length}`),
         dsaStat("Deckle Webs", `${fmtI(p.webs)}`),
         dsaStat("Facestock Used", `${fmt(w.consumedSqM)} m²`),
-        dsaStat("Total Waste", `${fmt(w.wastePct)} %`, w.wastePct <= 10 ? "good" : "warn"),
-        dsaStat("Recoverable Trim", `${fmt(avoidPct)} %`, avoidPct <= 2 ? "good" : "warn"),
         dsaStat("Extra Rolls", `${fmtI(extra)}`, extra ? "warn" : "good"),
+        dsaStat("Side Run", `${fmt(avoidPct)} % | ${fmt(avoidMm)} mm`, avoidPct <= 2 ? "good" : "warn"),
+        dsaStat("Total Waste", `${fmt(w.wastePct)} % | ${fmt(wasteMm)} mm`, w.wastePct <= 10 ? "good" : "warn", "dsa-stat-wide"),
       ].join("");
       // Just the numbers -- the planner reviews the layouts themselves below,
       // so the optimizer's running commentary (search budget, mixed-web

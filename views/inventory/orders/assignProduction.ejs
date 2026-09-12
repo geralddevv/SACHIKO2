@@ -20,9 +20,16 @@
   // grouped into one card per physical layer -- Facestock / Adhesive /
   // Release Liner never share a box, so the spec reads as distinct materials
   // rather than one mixed list. Nothing else (Vendor Name, Size, Adhesive's
-  // Viscosity/Cohesion/Shear/Density/GSM, Release's Size/GSM) is part of
-  // that match, so it isn't shown here either -- same trim as this page's
-  // own reelDetail()/specSummary() further down, keep all three in step.
+  // Viscosity/Cohesion/Shear/Density, Release's Size) is part of that match,
+  // so it isn't shown here either -- same trim as this page's own
+  // reelDetail()/specSummary() further down, keep all three in step.
+  //
+  // GSM is the exception on all three layers. It is not matched on, but every
+  // figure in Raw Material Required is worked out from it -- the kilograms
+  // directly, and the metres through it -- and the Adhesive's is what its wet
+  // coat weight is derived from. Leaving it off the Adhesive and Release
+  // blocks meant the one input those numbers hang on was only visible for the
+  // Facestock.
   // Layer order and keys mirror LAYER_ORDER/LAYER_META in utils/
   // labelStockProduction.js (the same grouping the raw-material columns
   // further down this page use) -- keep the two in step.
@@ -49,6 +56,9 @@
       fields: (s) => [
         ["Type", s?.adhesiveType], ["Make", s?.adhesiveMake],
         ["Vendor SKU Code", s?.adhesiveVendorSkuCode],
+        // The DRY coat weight -- what the wet figure in Raw Material Required
+        // is worked out from (dry / ADHESIVE_SOLIDS_PCT x 100).
+        ["GSM", gsm(s?.adhesiveGsm)],
       ],
     },
     releaseLiner: {
@@ -56,6 +66,7 @@
       fields: (s) => [
         ["Type", s?.releaseLinerType], ["Make", s?.releaseLinerMake],
         ["Vendor SKU Code", s?.releaseLinerVendorSkuCode], ["Color", s?.releaseLinerColor],
+        ["GSM", gsm(s?.releaseLinerGsm)],
       ],
     },
   };
@@ -157,14 +168,19 @@
        One strip, same as the Material Details head above, with a rule between
        each layer's compartment. Each compartment carries just "kg | GSM". ---- */
     .rm-need-row {
-      display: flex; flex-wrap: wrap; align-items: stretch;
+      /* One row, always. It used to wrap, which dropped the third compartment
+         onto a line of its own as soon as the adhesive one grew (it carries the
+         most: wet GSM, the dry coat, and the area). The compartments shrink
+         instead, and the grey tail inside each wraps if it has to. */
+      display: flex; flex-wrap: nowrap; align-items: stretch;
       padding: 14px 18px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f8fafc;
     }
     .rm-need-cell {
-      /* Share the strip's full width -- each compartment grows out of its own
-         content, so the wider adhesive one keeps its room. */
+      /* Share the strip's width -- each grows out of its own content, so the
+         wider adhesive one keeps its room, and all three give way together
+         when there isn't enough. */
       flex: 1 1 auto; min-width: 0;
-      display: flex; flex-direction: column; gap: 4px; padding: 0 30px;
+      display: flex; flex-direction: column; gap: 4px; padding: 0 18px;
       border-left: 1px solid #dbe3ec;
     }
     .rm-need-cell:first-child { border-left: none; padding-left: 0; }
@@ -173,17 +189,36 @@
       color: #7c8ba1;
     }
     .rm-need-value {
-      font-size: 19px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums;
+      font-size: 18px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
     .rm-need-sep { color: #94a3b8; font-weight: 700; padding: 0 3px; }
-    .rm-need-wet { font-size: 12.5px; font-weight: 700; color: #b45309; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* The adhesive's kilograms carry the whole figure in yellow -- "66.65 kg
+       wet" -- because it is the one layer whose weight is a derived wet coat
+       rather than the material as stocked. Yellow-600: a true yellow, dark
+       enough to stay readable on the strip's near-white background. Every
+       other layer's kg keeps the default ink. */
+    .rm-need-kg.is-wet, .rm-need-kg.is-wet .rm-need-wet { color: #ca8a04; }
+    .rm-need-wet { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
     .rm-need-none { font-size: 12.5px; font-weight: 700; color: #b45309; white-space: nowrap; }
     /* Rides on the same line as the big figure -- the adhesive's dry coat and
        the area its wet weight works out to. */
+    /* One row is what a normal desktop gets. Narrower than this the three
+       compartments genuinely cannot sit side by side without the figures
+       colliding, so they wrap again -- the left rules go and each gets its own
+       line, which reads better than a clipped strip. Without this, nowrap above
+       would simply overflow: there are no other media queries on this page. */
+    @media (max-width: 1100px) {
+      .rm-need-row { flex-wrap: wrap; row-gap: 12px; }
+      .rm-need-cell { flex: 1 1 260px; border-left: none; padding-left: 0; }
+    }
+
+    /* The grey tail after the big figure. Rides on the same line while there is
+       room, and is the one part allowed to wrap when there isn't -- the kg and
+       R.Mtrs in front never break. */
     .rm-need-sub {
       font-size: 12px; font-weight: 700; color: #64748b;
-      font-variant-numeric: tabular-nums; white-space: nowrap;
+      font-variant-numeric: tabular-nums; white-space: normal;
     }
     /* Allotment progress -- how much of this layer the ticked reels cover. */
     .rm-need-track {
@@ -191,11 +226,23 @@
     }
     .rm-need-track i { display: block; height: 100%; width: 0; background: #b45309; border-radius: 999px; transition: width 0.18s ease; }
     .rm-need-track.is-covered i { background: #15803d; }
-    .rm-need-left { font-size: 12.5px; font-weight: 700; color: #b45309; font-variant-numeric: tabular-nums; }
+    .rm-need-left {
+      font-size: 12.5px; font-weight: 700; color: #b45309;
+      font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; gap: 2px 0;
+    }
     .rm-need-left.is-covered { color: #15803d; }
     .rm-need-left b { font-weight: 800; }
     .rm-need-left .rm-need-of { color: #94a3b8; font-weight: 600; }
-    .rm-need-left .rm-need-unknown { color: #b45309; font-weight: 700; }
+    .rm-need-left .rm-need-unknown { color: #b45309; font-weight: 700; margin-left: 10px; }
+    /* One clause per unit -- kg and mtrs sit side by side, each coloured by
+       whether that side is covered. */
+    .rm-need-left .rm-part { color: #b45309; }
+    .rm-need-left .rm-part.is-covered { color: #15803d; }
+    /* A reel narrower than the web this job runs -- it cannot be mounted on it
+       however many metres it holds. Still tickable; just never silently. */
+    .raw-layer-table tbody tr.raw-layer-row-narrow td[data-col="size"],
+    .raw-layer-table tbody tr.raw-layer-row-narrow td[data-col="mtrs"] { color: #b45309; font-weight: 700; }
+    .rm-need-left .rm-part + .rm-part { margin-left: 12px; padding-left: 12px; border-left: 1px solid #dbe3ec; }
     .mid-mixed {
       display: inline-block; margin-left: 7px; font-size: 10px; font-weight: 800;
       letter-spacing: 0.04em; text-transform: uppercase; color: #b45309;
@@ -387,15 +434,15 @@
     .raw-layer-table.roll-table { table-layout: fixed; }
     .raw-layer-table.roll-table th,
     .raw-layer-table.roll-table td { width: auto; padding-left: 12px; padding-right: 12px; }
-    /* Size/Sq.Mtrs carry the 12px side padding above on both sides, so their
-       widths are 24px of padding plus room for the value itself. Sq.Mtrs is
-       wider than the Kg column it replaced: a reel that weighed 516 kg is
-       6,450 sq.mtrs, so the figures run to four or five digits -- and the
+    /* Size/Kg/R.Mtrs carry the 12px side padding above on both sides, so their
+       widths are 24px of padding plus room for the value itself. R.Mtrs needs
+       the most: a 516 kg reel is 12,647 metres, four or five digits, and the
        header word is longer than the numbers under it. */
     .raw-layer-table col.rl-col-check { width: 34px; }  /* 20px checkbox + 7px each side */
     .raw-layer-table col.rl-col-size  { width: 62px; }  /* facestock columns only */
     .raw-layer-table col.rl-col-gsm   { width: 58px; }  /* facestock columns only */
-    .raw-layer-table col.rl-col-sqm   { width: 92px; }
+    .raw-layer-table col.rl-col-kg    { width: 66px; }
+    .raw-layer-table col.rl-col-sqm   { width: 78px; }
     .raw-layer-table col.rl-col-sensing { width: 92px; }  /* release column only */
     /* Checkbox cell keeps a tighter padding than the rest -- the two have to
        be kept in step with the col width above: 20px box + these two
@@ -603,32 +650,28 @@
         <div class="rm-need-row">
           <% rawNeed.rows.forEach(function (r) { %>
             <div class="rm-need-cell" data-layer="<%= r.key %>"
-                 data-need="<%= r.sqM != null ? r.sqM : "" %>"
-                 data-gsm="<%= r.stockGsm != null ? r.stockGsm : "" %>">
+                 data-need-kg="<%= r.needKg != null ? r.needKg : "" %>"
+                 data-need-mtrs="<%= r.needMtrs != null ? r.needMtrs : "" %>"
+                 data-gsm="<%= r.mtrsGsm != null ? r.mtrsGsm : "" %>"
+                 data-width="<%= r.mtrsWidthMm != null ? r.mtrsWidthMm : "" %>"
+                 data-jobwidth="<%= rawNeed.budgetWidthMm != null ? rawNeed.budgetWidthMm : "" %>">
               <span class="rm-need-label"><%= r.title.toUpperCase() %></span>
-              <%# Adhesive leads on WEIGHT: a drum holds kilograms, is bought and
-                  issued in kilograms, and has no area of its own -- its sq.mtrs
-                  is something we derive from the wet coat weight purely so it
-                  can be tallied beside the web layers. So the kg is the big
-                  number here, with the wet GSM, the DRY coat it came from, and
-                  the derived area underneath it. Every other layer is a web and
-                  leads on area, as before. %>
-              <% if (r.wetKg != null) { %>
-                <span class="rm-need-value">
-                  <%= fmtQty(r.wetKg) %> kg
-                  <span class="rm-need-wet">wet <%= fmtQty(r.wetGsm) %> GSM</span>
-                  <span class="rm-need-sub"><span class="rm-need-sep">·</span> dry <%= fmtQty(r.kg) %> kg <span class="rm-need-sep">|</span> <%= fmtQty(r.gsm) %> GSM <span class="rm-need-sep">·</span> <%= fmtQty(r.sqM) %> sq.mtrs</span>
+              <%# Both sides of the same material: the WEIGHT the store issues
+                  against and the LENGTH the machine runs. A reel has both, so
+                  the allotment below is tallied on both. Metres are only
+                  comparable because the job is budgeted at one width (see
+                  webRunsFor) -- metres of a 510 mm reel and of a 660 mm one
+                  are not the same material.
+                  The adhesive's kg is the WET figure, what actually comes off
+                  the drum, with the dry coat it was converted from alongside. %>
+              <span class="rm-need-value">
+                <% if (r.needKg != null) { %><span class="rm-need-kg<%= r.wetKg != null ? " is-wet" : "" %>"><%= fmtQty(r.needKg) %> kg<% if (r.wetKg != null) { %> <span class="rm-need-wet">wet</span><% } %></span><% } else { %><span class="rm-need-none" title="No GSM on this layer<%= r.micron != null ? " (recorded as " + fmtQty(r.micron) + " microns)" : "" %>, so it cannot be weighed -- the R.Mtrs still stand.">no GSM</span><% } %>
+                <span class="rm-need-sep">|</span> <%= fmtQty(r.needMtrs) %> R.Mtrs
+                <span class="rm-need-sub">
+                  <% if (r.wetKg != null) { %><span class="rm-need-sep">·</span> dry <%= fmtQty(r.kg) %> kg<% } %>
+                  <span class="rm-need-sep">·</span> <%= fmtQty(r.sqM) %> sq.mtrs
                 </span>
-              <% } else { %>
-                <span class="rm-need-value">
-                  <%= fmtQty(r.sqM) %> sq.mtrs
-                  <% if (r.kg != null) { %>
-                    <span class="rm-need-wet">(<%= fmtQty(r.kg) %> kg <span class="rm-need-sep">|</span> <%= fmtQty(r.gsm) %> GSM)</span>
-                  <% } else { %>
-                    <span class="rm-need-none" title="No GSM on this layer<%= r.micron != null ? " (recorded as " + fmtQty(r.micron) + " microns)" : "" %>, so it cannot be weighed -- the area above still stands.">(no GSM<%= r.micron != null ? " · " + fmtQty(r.micron) + " MIC" : "" %>)</span>
-                  <% } %>
-                </span>
-              <% } %>
+              </span>
               <!-- Filled in live as reels are ticked in Raw Material Allotment
                    below: the bar fills, and the text counts what is still
                    needed down to zero. Hidden until something is picked. -->
@@ -688,8 +731,11 @@
               <span class="rm-work-label">Every layer covers the whole deckle, plus <%= rawNeed.wastagePct %>% wastage</span>
             </div>
             <p class="rm-work-eqline">
-              <%= fmtQty(rawNeed.areaSqM) %> × <%= (1 + rawNeed.wastagePct / 100).toFixed(2) %>
-              = <b><%= fmtQty(rawNeed.needSqM) %> sq.mtrs</b> — the figure each layer above is measured against.
+              <%= fmtQty(rawNeed.webMetres) %> × <%= (1 + rawNeed.wastagePct / 100).toFixed(2) %>
+              = <b><%= fmtQty(rawNeed.needMetres) %> R.Mtrs</b>,
+              and <%= fmtQty(rawNeed.areaSqM) %> × <%= (1 + rawNeed.wastagePct / 100).toFixed(2) %>
+              = <%= fmtQty(rawNeed.needSqM) %> sq.mtrs — the same for every layer. The weight each one needs
+              is its own, and is worked out in step 3.
             </p>
 
             <div class="rm-work-step">
@@ -718,34 +764,36 @@
 
             <div class="rm-work-step">
               <span class="rm-work-no">4</span>
-              <span class="rm-work-label">Turning stock into sq.mtrs to tick against it</span>
+              <span class="rm-work-label">Turning stock into kg and R.Mtrs to tick against it</span>
             </div>
             <p class="rm-work-eqline" style="margin-bottom:6px;">
-              Stock is held in kilograms, so every reel below is converted with
-              <span class="rm-work-eq">kg × 1000 ÷ GSM</span>. Width does not come into it — a reel's area is what
-              it covers however it is slit, which is what makes reels of different widths comparable and lets an
-              adhesive drum convert on the same footing.
+              Every layer is tallied against its own pool, on both sides of the same material. <b>Kg</b> comes
+              straight off the reel — <span class="rm-work-eq">reelMtrs</span> on every raw pool is really kilograms,
+              so nothing is converted. <b>R.Mtrs</b> is
+              <span class="rm-work-eq">kg × 1e6 ÷ (GSM × width)</span>, which is only comparable because this job is
+              budgeted at one web width (step 1).
             </p>
             <table class="rm-work-table">
-              <thead><tr><th>Layer</th><th>Divided by</th><th>Which GSM</th><th>Where it comes from</th></tr></thead>
+              <thead><tr><th>Layer</th><th class="ta-r">Needs</th><th>GSM used</th><th>Width used</th></tr></thead>
               <tbody>
                 <% rawNeed.rows.forEach(function (r) { %>
                   <tr>
                     <td><%= r.title %></td>
-                    <td><span class="rm-work-eq">kg × 1000 ÷ <%= r.wetGsm != null ? fmtQty(r.wetGsm) : "GSM" %></span></td>
-                    <td>
-                      <% if (r.wetGsm != null) { %><%= fmtQty(r.wetGsm) %> wet<% }
-                         else if (r.gsm != null) { %>the reel's own<% }
-                         else { %><span class="rm-work-warn">none</span><% } %>
-                    </td>
+                    <td class="ta-r"><b><%= r.needKg != null ? fmtQty(r.needKg) + " kg" : "—" %></b>
+                      <span class="rm-work-note">· <%= fmtQty(r.needMtrs) %> R.Mtrs</span></td>
                     <td class="rm-work-note">
                       <% if (r.wetGsm != null) { %>
-                        recipe <%= fmtQty(r.gsm) %> GSM dry ÷ <%= rawNeed.adhesiveSolidsPct %> × 100 — always, since no drum records a coat weight
+                        <%= fmtQty(r.wetGsm) %> wet — recipe <%= fmtQty(r.gsm) %> dry ÷ <%= rawNeed.adhesiveSolidsPct %> × 100, since no drum records one
                       <% } else if (r.gsm != null) { %>
-                        falling back to the recipe's <%= fmtQty(r.gsm) %> GSM where a reel has none
+                        the reel's own, falling back to the recipe's <%= fmtQty(r.gsm) %>
                       <% } else { %>
-                        no GSM on the recipe<%= r.micron != null ? " (" + fmtQty(r.micron) + " microns)" : "" %> — a reel without its own cannot be measured
+                        <span class="rm-work-warn">none</span><%= r.micron != null ? " — recorded as " + fmtQty(r.micron) + " microns" : "" %>
                       <% } %>
+                    </td>
+                    <td class="rm-work-note">
+                      <%= r.mtrsWidthMm != null
+                        ? "this job's web, " + fmtQty(r.mtrsWidthMm) + " mm — a drum has none of its own"
+                        : "the reel's own" %>
                     </td>
                   </tr>
                 <% }) %>
@@ -1040,7 +1088,7 @@
       const detail = reelDetail(k, r);
       return detail === "—" ? String(r.rollId || "") : `${r.rollId} -- ${detail}`;
     };
-    // ---- kg on the shelf -> square metres ------------------------------------
+    // ---- what a reel on the shelf gives: kg and running metres ---------------
     // Raw stock is held in kilograms (FacestockStock/AdhesiveStock/
     // ReleaseLinerStock `reelMtrs` is really kg); this page works in area, so
     // every reel is converted for display and for the tally. Same formula as
@@ -1068,42 +1116,84 @@
 
     const isAdhesiveLayer = (layerKey) => layerKey.startsWith("adhesive");
 
-    // The GSM this reel's kg will actually be divided by -- pulled out on its
-    // own so the working can show the number it used, not just the rule.
+    // The GSM a reel's kilograms are turned into metres with. A web reel's own
+    // where it has one, falling back to the recipe's (the pools are filtered to
+    // this recipe's spec, so it is the same material). For adhesive there is no
+    // reel GSM to use -- no drum records a coat weight -- so it is always the
+    // recipe's WET figure, handed down on the need cell.
     function reelGsmUsed(reel, layerKey) {
       const recipeGsm = numOr(needCellFor(layerKey)?.dataset.gsm);
-      // A drum's own `gsm`, on the rare row that has one, is not a coat weight
-      // for THIS recipe -- the recipe's wet figure is what it will be spread
-      // at, so that wins for adhesive.
       return isAdhesiveLayer(layerKey) ? recipeGsm : (numOr(reel.gsm) ?? recipeGsm);
     }
 
-    function reelSqMtrs(reel, layerKey) {
-      const kg = numOr(reel.reelMtrs);
+    // The width a reel's kilograms are spread over to give a length.
+    //
+    //   web reel   its OWN width -- that is its true physical length, however
+    //              wide it is.
+    //   drum       the job's web width, handed down on the need cell: adhesive
+    //              has no width of its own, it coats whatever is running.
+    function reelWidthUsed(reel, layerKey) {
+      const jobWidth = numOr(needCellFor(layerKey)?.dataset.width);
+      return isAdhesiveLayer(layerKey) ? jobWidth : numOr(reel.size);
+    }
+
+    // What this reel holds, in kilograms (as stocked) and in running metres.
+    //
+    //     metres = kg x 1e6 / (gsm x widthMm)
+    //
+    // `reelMtrs` on every raw pool is really KILOGRAMS -- despite the name --
+    // so the kg side needs no conversion at all. Metres are null when there is
+    // no GSM or no width to work from; the reel then counts as nothing on that
+    // side of the tally and is called out rather than quietly dropped.
+    function reelKg(reel) {
+      return numOr(reel.reelMtrs);
+    }
+    function reelMtrs(reel, layerKey) {
+      const kg = reelKg(reel);
       const gsm = reelGsmUsed(reel, layerKey);
-      if (kg == null || gsm == null) return null;
-      return Math.round(((kg * 1000) / gsm) * 100) / 100;
+      const width = reelWidthUsed(reel, layerKey);
+      if (kg == null || gsm == null || width == null) return null;
+      return Math.round(((kg * 1e6) / (gsm * width)) * 100) / 100;
     }
 
     const fmtNum = (n) => Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
-    // The Sq.Mtrs cell: the converted area, with the kilograms it came from --
-    // and, for a web reel, the length that area works out to at its own width
-    // -- on hover, so the figure can always be traced back to what the store
-    // holds. Returned as a bare number (no thousands separators) and null when
-    // it cannot be converted: the row builder renders null as "—", the column
-    // sort reads it as a number, and the column's search box matches the digits
-    // typed. All three would break on a formatted string.
-    const sqmCell = (r, layerKey) => reelSqMtrs(r, layerKey);
-    const sqmTitle = (r, layerKey) => {
-      const kg = numOr(r.reelMtrs);
-      const a = reelSqMtrs(r, layerKey);
-      if (a == null) {
-        return `${kg != null ? fmtNum(kg) + " kg" : "No kg"} -- no GSM to convert to sq.mtrs`;
+    // Two columns now -- Kg as stocked, and the running metres it works out to.
+    // Both are returned as bare numbers (no thousands separators), and metres
+    // as null when they cannot be worked out: the row builder renders null as
+    // "—", the column sort reads a number, and the column's search box matches
+    // the digits typed. All three would break on a formatted string.
+    const kgCell = (r) => reelKg(r);
+    const mtrsCell = (r, layerKey) => reelMtrs(r, layerKey);
+
+    // A web reel narrower than the web this job runs cannot be mounted on it,
+    // however many metres it holds -- and metres alone would happily read
+    // "covered" off a reel that physically will not fit. Flagged here rather
+    // than dropped from the tally: the Size column and its filter are still
+    // where the planner chooses, and a narrow reel can have legitimate uses.
+    const jobWidthMm = () => numOr(document.querySelector(".rm-need-cell[data-jobwidth]")?.dataset.jobwidth);
+    const reelTooNarrow = (r, layerKey) => {
+      if (isAdhesiveLayer(layerKey)) return false;        // a drum has no width to be short of
+      const w = numOr(r.size);
+      const job = jobWidthMm();
+      return w != null && job != null && w < job;
+    };
+
+    const mtrsTitle = (r, layerKey) => {
+      const kg = reelKg(r);
+      const m = reelMtrs(r, layerKey);
+      const gsm = reelGsmUsed(r, layerKey);
+      const width = reelWidthUsed(r, layerKey);
+      if (m == null) {
+        return `${kg != null ? fmtNum(kg) + " kg" : "No kg"} — ${gsm == null ? "no GSM" : "no width"} to work a length from`;
       }
-      const width = isAdhesiveLayer(layerKey) ? null : numOr(r.size);
-      const runLen = width != null ? ` · ${fmtNum(Math.round((a / (width / 1000)) * 100) / 100)} m at ${fmtNum(width)} mm` : "";
-      return `${fmtNum(kg)} kg in stock${runLen}`;
+      if (isAdhesiveLayer(layerKey)) {
+        return `${fmtNum(kg)} kg spread at ${fmtNum(gsm)} GSM wet over a ${fmtNum(width)} mm web`;
+      }
+      const narrow = reelTooNarrow(r, layerKey)
+        ? ` — TOO NARROW for this job's ${fmtNum(jobWidthMm())} mm web`
+        : "";
+      return `${fmtNum(kg)} kg at ${fmtNum(gsm)} GSM, ${fmtNum(width)} mm wide${narrow}`;
     };
 
     const POOL_COLUMNS = {
@@ -1113,20 +1203,25 @@
         { key: "code", label: "Code", trunc: true, value: (r) => r.vendorSkuCode },
         { key: "size", label: "Size", col: "rl-col-size", value: (r) => r.size },
         { key: "gsm", label: "GSM", col: "rl-col-gsm", value: (r) => r.gsm },
-        { key: "sqm", label: "Sq.Mtrs", col: "rl-col-sqm", value: sqmCell, title: sqmTitle },
+        { key: "kg", label: "Kg", col: "rl-col-kg", value: kgCell },
+        { key: "mtrs", label: "R.Mtrs", col: "rl-col-sqm", value: mtrsCell, title: mtrsTitle },
       ],
       adhesive: [
         { key: "vendor", label: "Vendor", trunc: true, value: (r) => r.vendorName, title: reelTitle },
         { key: "make", label: "Make", trunc: true, value: (r) => r.make },
         { key: "code", label: "Code", trunc: true, value: (r) => r.vendorSkuCode },
-        { key: "sqm", label: "Sq.Mtrs", col: "rl-col-sqm", value: sqmCell, title: sqmTitle },
+        // `reelMtrs` on a drum is kilograms already; Mtrs is how much web that
+        // weight coats at the recipe's wet GSM over this job's width.
+        { key: "kg", label: "Kg", col: "rl-col-kg", value: kgCell },
+        { key: "mtrs", label: "R.Mtrs", col: "rl-col-sqm", value: mtrsCell, title: mtrsTitle },
       ],
       release: [
         { key: "vendor", label: "Vendor", trunc: true, value: (r) => r.vendorName, title: reelTitle },
         { key: "sensing", label: "Sensing", col: "rl-col-sensing", trunc: true, value: (r) => r.sensing },
         { key: "size", label: "Size", col: "rl-col-size", value: (r) => r.size },
         { key: "gsm", label: "GSM", col: "rl-col-gsm", value: (r) => r.gsm },
-        { key: "sqm", label: "Sq.Mtrs", col: "rl-col-sqm", value: sqmCell, title: sqmTitle },
+        { key: "kg", label: "Kg", col: "rl-col-kg", value: kgCell },
+        { key: "mtrs", label: "R.Mtrs", col: "rl-col-sqm", value: mtrsCell, title: mtrsTitle },
       ],
     };
     const layerColumns = (layerKey) => POOL_COLUMNS[LAYER_META[layerKey].pool];
@@ -1305,11 +1400,15 @@
           const cls = c.trunc ? ' class="raw-layer-detail-cell"' : "";
           return `<td data-col="${c.key}"${cls}${title}>${text}</td>`;
         }).join("");
-        const rowAttrs = noInvoice ? ` class="raw-layer-row-no-invoice" title="No invoice"` : "";
+        const narrow = !noInvoice && reelTooNarrow(r, layerKey);
+        const rowAttrs = noInvoice
+          ? ` class="raw-layer-row-no-invoice" title="No invoice"`
+          : (narrow ? ` class="raw-layer-row-narrow" title="${escAttr(r.size)} mm — narrower than this job's ${escAttr(jobWidthMm() ?? "")} mm web"` : "");
         return `<tr${rowAttrs}>` +
           `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"` +
-            ` data-kg="${Number(r.reelMtrs) || 0}" data-sqm="${reelSqMtrs(r, layerKey) ?? ""}"` +
+            ` data-kg="${reelKg(r) ?? ""}" data-mtrs="${reelMtrs(r, layerKey) ?? ""}"` +
             ` data-roll="${escAttr(r.rollId || "")}" data-usedgsm="${reelGsmUsed(r, layerKey) ?? ""}"` +
+            ` data-usedwidth="${reelWidthUsed(r, layerKey) ?? ""}"` +
             `${checked ? " checked" : ""}${noInvoice ? " disabled" : ""} /></td>` +
           cells +
         `</tr>`;
@@ -1323,15 +1422,20 @@
     }
 
     // ---- Raw Material Required <- Raw Material Allotment -------------------
-    // Ticking reels is compared against what the deckle needs in SQUARE
-    // METRES: each reel's kilograms are converted by reelSqMtrs() above, the
-    // compartment's bar fills, and its line counts down what is still to be
-    // found. Adhesive converts at the WET gsm -- a drum holds wet adhesive,
-    // which is what the dry coat weight was converted to.
+    // Every layer is tallied against its OWN pool -- facestock against the
+    // facestock reels, adhesive against the adhesive drums -- on both sides of
+    // the same material:
     //
-    // A reel that cannot be converted (no GSM of its own and no recipe GSM to
-    // fall back on) counts as nothing and is called out by name in the line,
-    // rather than quietly leaving the tally short with no explanation.
+    //   Kg     what the store issues. Straight off the reel: `reelMtrs` on
+    //          every raw pool is really kilograms, so nothing is converted.
+    //   Mtrs   what the machine runs. kg x 1e6 / (gsm x width) -- a web reel
+    //          at its own width and GSM, a drum spread at the recipe's wet GSM
+    //          over this job's web.
+    //
+    // The bar fills on whichever side is further behind, so it only goes green
+    // when BOTH are covered: enough weight but not enough length (or the other
+    // way round) is still short. A reel whose metres cannot be worked out
+    // counts on the kg side only and is called out by name.
     function updateRawNeed(onlyLayer) {
       const cells = document.querySelectorAll(
         onlyLayer ? `.rm-need-cell[data-layer="${onlyLayer}"]` : ".rm-need-cell[data-layer]",
@@ -1340,39 +1444,57 @@
         const track = cell.querySelector(".rm-need-track");
         const left = cell.querySelector(".rm-need-left");
         if (!track || !left) return;
-        const need = Number(cell.dataset.need);
-        if (!Number.isFinite(need) || need <= 0) return;   // deckle not described yet
+
+        const needKg = Number(cell.dataset.needKg);
+        const needMtrs = Number(cell.dataset.needMtrs);
+        const hasKg = Number.isFinite(needKg) && needKg > 0;
+        const hasMtrs = Number.isFinite(needMtrs) && needMtrs > 0;
+        if (!hasKg && !hasMtrs) return;                  // deckle not described yet
 
         const boxes = Array.from(document.querySelectorAll(
           `#rawLayersGrid input[type="checkbox"][name="rawLayers[${cell.dataset.layer}]"]:checked`,
         ));
-        if (!boxes.length) {                               // nothing ticked yet -- stay quiet
+        if (!boxes.length) {                             // nothing ticked yet -- stay quiet
           track.hidden = true;
           left.hidden = true;
           return;
         }
 
-        let picked = 0;
-        let unmeasured = 0;
+        let pickedKg = 0;
+        let pickedMtrs = 0;
+        let noMtrs = 0;
         boxes.forEach((el) => {
-          const a = Number(el.dataset.sqm);
-          if (Number.isFinite(a) && a > 0) picked += a;
-          else unmeasured += 1;
+          const kg = Number(el.dataset.kg);
+          const m = Number(el.dataset.mtrs);
+          if (Number.isFinite(kg) && kg > 0) pickedKg += kg;
+          if (Number.isFinite(m) && m > 0) pickedMtrs += m;
+          else noMtrs += 1;
         });
+        pickedKg = Math.round(pickedKg * 100) / 100;
+        pickedMtrs = Math.round(pickedMtrs * 100) / 100;
 
-        const short = Math.round((need - picked) * 100) / 100;
-        const covered = short <= 0;
-        const unknownNote = unmeasured
-          ? ` <span class="rm-need-unknown">· ${unmeasured} reel${unmeasured === 1 ? "" : "s"} not measurable</span>`
-          : "";
+        const part = (label, picked, need, on) => {
+          if (!on) return "";
+          const short = Math.round((need - picked) * 100) / 100;
+          return short <= 0
+            ? `<span class="rm-part is-covered">${label} <b>covered</b> <span class="rm-need-of">${fmtNum(picked)} of ${fmtNum(need)}</span></span>`
+            : `<span class="rm-part"><b>${fmtNum(short)} ${label} short</b> <span class="rm-need-of">${fmtNum(picked)} of ${fmtNum(need)}</span></span>`;
+        };
+
+        // Furthest behind of the two -- the bar is the honest one, not the
+        // flattering one.
+        const pct = (picked, need, on) => (on ? Math.min(100, (picked / need) * 100) : 100);
+        const fill = Math.min(pct(pickedKg, needKg, hasKg), pct(pickedMtrs, needMtrs, hasMtrs));
+        const covered = fill >= 100;
+
         track.hidden = false;
         left.hidden = false;
-        track.querySelector("i").style.width = Math.min(100, (picked / need) * 100) + "%";
+        track.querySelector("i").style.width = fill + "%";
         track.classList.toggle("is-covered", covered);
         left.classList.toggle("is-covered", covered);
-        left.innerHTML = covered
-          ? `<b>covered</b> <span class="rm-need-of">· ${fmtNum(picked)} sq.mtrs picked${short < 0 ? `, ${fmtNum(-short)} sq.mtrs extra` : ""}</span>${unknownNote}`
-          : `<b>${fmtNum(short)} sq.mtrs still needed</b> <span class="rm-need-of">· ${fmtNum(picked)} of ${fmtNum(need)} sq.mtrs</span>${unknownNote}`;
+        left.innerHTML = part("kg", pickedKg, needKg, hasKg)
+          + part("R.Mtrs", pickedMtrs, needMtrs, hasMtrs)
+          + (noMtrs ? `<span class="rm-need-unknown">${noMtrs} reel${noMtrs === 1 ? "" : "s"} with no length</span>` : "");
       });
 
       // Always rebuilt whole, not just the layer that changed -- it is one
@@ -1381,10 +1503,10 @@
       renderPickedWorking();
     }
 
-    // The same sum the bars above run, written out reel by reel under step 4
-    // of the working, so the total can be checked by hand. Each line is the
+    // The same sums the bars above run, written out reel by reel under step 4
+    // of the working, so both totals can be checked by hand. Each line is the
     // conversion as it was actually applied -- this reel's kilograms, the GSM
-    // it was divided by, and what that gave.
+    // and width they were spread over, and the metres that gave.
     function renderPickedWorking() {
       const host = document.getElementById("rm-work-picked");
       if (!host) return;
@@ -1393,43 +1515,53 @@
       document.querySelectorAll(".rm-need-cell[data-layer]").forEach((cell) => {
         const layerKey = cell.dataset.layer;
         const title = cell.querySelector(".rm-need-label")?.textContent || layerKey;
-        const need = Number(cell.dataset.need);
+        const needKg = Number(cell.dataset.needKg);
+        const needMtrs = Number(cell.dataset.needMtrs);
         const boxes = Array.from(document.querySelectorAll(
           `#rawLayersGrid input[type="checkbox"][name="rawLayers[${layerKey}]"]:checked`,
         ));
         if (!boxes.length) return;
 
-        let total = 0;
+        let totKg = 0;
+        let totMtrs = 0;
         const rows = boxes.map((el) => {
-          const kg = Number(el.dataset.kg) || 0;
+          const kg = Number(el.dataset.kg);
+          const m = Number(el.dataset.mtrs);
           const gsm = Number(el.dataset.usedgsm);
-          const sqm = Number(el.dataset.sqm);
-          const ok = Number.isFinite(sqm) && sqm > 0;
-          if (ok) total += sqm;
+          const width = Number(el.dataset.usedwidth);
+          if (Number.isFinite(kg) && kg > 0) totKg += kg;
+          const okM = Number.isFinite(m) && m > 0;
+          if (okM) totMtrs += m;
           return `
             <tr>
               <td class="rm-work-roll">${escAttr(el.dataset.roll || "—")}</td>
-              <td>${fmtNum(kg)} kg</td>
-              <td>${Number.isFinite(gsm) && gsm > 0 ? fmtNum(gsm) + " GSM" : '<span class="rm-work-warn">no GSM</span>'}</td>
-              <td class="ta-r">${ok ? fmtNum(sqm) : '<span class="rm-work-warn">—</span>'}</td>
+              <td class="ta-r">${Number.isFinite(kg) && kg > 0 ? fmtNum(kg) : '<span class="rm-work-warn">—</span>'}</td>
+              <td class="rm-work-note">${
+                Number.isFinite(gsm) && gsm > 0 && Number.isFinite(width) && width > 0
+                  ? `× 1e6 ÷ (${fmtNum(gsm)} GSM × ${fmtNum(width)} mm)`
+                  : '<span class="rm-work-warn">no GSM/width</span>'
+              }</td>
+              <td class="ta-r">${okM ? fmtNum(m) : '<span class="rm-work-warn">—</span>'}</td>
             </tr>`;
         }).join("");
 
-        total = Math.round(total * 100) / 100;
-        const short = Math.round((need - total) * 100) / 100;
-        const covered = short <= 0;
+        totKg = Math.round(totKg * 100) / 100;
+        totMtrs = Math.round(totMtrs * 100) / 100;
+        const cls = (picked, need) =>
+          (!(Number.isFinite(need) && need > 0) ? "" : picked >= need ? "is-covered" : "is-short");
+
         blocks.push(`
           <div class="rm-work-sub">${escAttr(title)} — ticked so far</div>
           <table class="rm-work-table">
-            <thead><tr><th>Reel</th><th>Kg</th><th>÷ GSM</th><th class="ta-r">Sq.Mtrs</th></tr></thead>
+            <thead><tr><th>Reel</th><th class="ta-r">Kg</th><th>Spread over</th><th class="ta-r">R.Mtrs</th></tr></thead>
             <tbody>
               ${rows}
               <tr class="rm-work-sum">
-                <td colspan="3">Picked &nbsp;<span class="rm-work-eq">Σ kg × 1000 ÷ GSM</span>
-                  &nbsp;·&nbsp; needs ${fmtNum(need)}</td>
-                <td class="ta-r ${covered ? "is-covered" : "is-short"}">${fmtNum(total)}${
-                  covered ? "" : `<br><span style="font-weight:600;">${fmtNum(short)} short</span>`
-                }</td>
+                <td>Picked</td>
+                <td class="ta-r ${cls(totKg, needKg)}">${fmtNum(totKg)}</td>
+                <td class="rm-work-note">needs ${Number.isFinite(needKg) && needKg > 0 ? fmtNum(needKg) + " kg" : "—"}
+                  &nbsp;·&nbsp; ${Number.isFinite(needMtrs) && needMtrs > 0 ? fmtNum(needMtrs) + " R.Mtrs" : "—"}</td>
+                <td class="ta-r ${cls(totMtrs, needMtrs)}">${fmtNum(totMtrs)}</td>
               </tr>
             </tbody>
           </table>`);

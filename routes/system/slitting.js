@@ -1389,7 +1389,11 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
         clientOrderNo: trim(b.clientOrderNo) || pending.poNumber || "",
         clientName: pending.userId?.clientName || pending.userId?.userName || "",
         productCode: pending.itemId?.productCode || pending.itemId?.skuCode || "",
-        lotNo: pending.lotNo || "",
+        // A slitting card is one Deckle's own cut job, not the sales order's
+        // batch -- named by that Deckle's id rather than the order's lot no,
+        // which is shared by every Deckle laminated for the order and so
+        // wouldn't tell two cards apart on the machine queue or job card log.
+        lotNo: deckleId || pending.lotNo || "",
         location: reel.location,
         allocatedBy,
       };

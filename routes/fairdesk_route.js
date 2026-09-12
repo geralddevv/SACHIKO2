@@ -5217,7 +5217,12 @@ router.get("/labels/production/pending", async (req, res) => {
 
   let jobCardProgress = new Map();
   if (initialTab === "wip") {
-    const wipIds = all.filter((r) => r.assignedMachineId).map((r) => r._id);
+    // Same "currently in the machine" definition the machine queue itself
+    // uses (buildQueueRows in routes/system/machine.js): assignedMachineId
+    // set AND producedAt still unset. Once producedAt is stamped the order
+    // is fully produced and off every machine queue -- it belongs in the Job
+    // Card log (GET /machine/jobcard/view), not this WIP list.
+    const wipIds = all.filter((r) => r.assignedMachineId && !r.producedAt).map((r) => r._id);
     jobCardProgress = await buildJobCardProgressMap(wipIds);
   }
 
@@ -5316,8 +5321,11 @@ router.get("/labels/production/pending", async (req, res) => {
   // A batched member order (deckleBatchId set) is in production as part of its
   // batch -- it must not show here as a loose pending row; only the batch does.
   const orders = mapped.filter((r) => !r.assignedMachineId && r.deckleSize != null && !r.deckleBatchId);
+  // Same producedAt condition as jobCardProgress above -- a fully produced
+  // order is no longer "in the machine", just waiting on Sales to
+  // confirm/dispatch it off this queue entirely.
   const wipOrders = mapped
-    .filter((r) => r.assignedMachineId)
+    .filter((r) => r.assignedMachineId && !r.producedAt)
     .sort((a, b) => new Date(b.estimatedDate || 0) - new Date(a.estimatedDate || 0));
 
   res.render("inventory/orders/pendingProduction.ejs", {

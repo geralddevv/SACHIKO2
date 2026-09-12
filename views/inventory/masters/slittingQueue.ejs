@@ -63,7 +63,7 @@
     #master-table .tabulator-data-tree-control-collapse::after { content: none !important; display: none !important; }
     #master-table .tabulator-data-tree-branch,
     #master-table .tabulator-data-tree-branch-empty { display: none !important; }
-    #master-table .tabulator-row[data-sq-child="true"] .tabulator-cell:first-child { padding-left: 14px; }
+    #master-table .tabulator-row[data-sq-child="true"] .tabulator-cell:nth-child(2) { padding-left: 14px; }
     /* Layout cell: this row's web drawn to scale -- the same strip, colour key
        and class names as the Set Deckle planner and Slitting Allocation
        (.sl-web in views/inventory/orders/deckleSetForm.ejs and
@@ -338,17 +338,24 @@
   // Each top-level row is a Product Code + Size + Running Meters + Layout
   // group; _children are the physical Deckles clubbed into it
   // (routes/system/slitting.js).
-  const rowsData = JSON.parse(document.getElementById("sq-data").textContent).map((g) => ({
-    ...g,
-    ...groupText(g),
-    _children: (g._children || []).map((r) => ({
+  const rowsData = JSON.parse(document.getElementById("sq-data").textContent).map((g) => {
+    const kids = (g._children || []).map((r) => ({
       ...r,
       isGroup: false,
       lotNo: r.order ? (r.order.lotNo || "-") : "-",
       curingLabel: r.hotMelt ? "Hot melt" : (r.curing ? (r.curingUntilLabel ? `Curing · ${r.curingUntilLabel}` : "Curing") : "Cured"),
       ...childText(r),
-    })),
-  }));
+    }));
+    return {
+      ...g,
+      ...groupText(g),
+      // Tabulator's dataTree module treats a present (even empty) array as
+      // "this row can expand" and still draws the caret -- omit the field
+      // entirely for a group with nothing to show so no dropdown icon
+      // appears for it.
+      _children: kids.length ? kids : undefined,
+    };
+  });
 
   /* ----- Choose Deckle dialog: pick which Deckles to allocate (all ticked
      by default) -- Machine, Operator, Helper and the A..L knife layout are
@@ -519,12 +526,20 @@
     dataTreeFilter: false,
     dataTreeStartExpanded: false,
     dataTreeChildField: "_children",
-    dataTreeElementColumn: "item",
+    // The expand/collapse caret gets its own slim column rather than riding
+    // inside "Product Code / Deckle ID" -- Tabulator only ever puts the
+    // control on a row that actually has _children (empty/undefined draws
+    // none), so a "Waiting" group with nothing produced yet shows no caret.
+    dataTreeElementColumn: "_tree",
     rowFormatter: (row) => {
       const d = row.getData();
       if (!d.isGroup) row.getElement().setAttribute("data-sq-child", "true");
     },
     columns: [
+      {
+        field: "_tree", title: "", headerSort: false, headerFilter: false,
+        width: 34, minWidth: 34, hozAlign: "center", formatter: () => "",
+      },
       {
         // Group = the deckle config / its clubbed Deckles. Child = one physical
         // Deckle, named by its Deckle ID, with its own metres, location, lot
