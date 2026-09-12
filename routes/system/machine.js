@@ -15,6 +15,7 @@ import MachineJobCard from "../../models/inventory/machineJobCard.js";
 import MaintenanceRequest from "../../models/system/maintenanceRequest.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { deckleTotalRunningMetres, deckleRunningMetersText } from "../../utils/deckleTotals.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { normalizeLocationName } from "../../utils/locations.js";
 import { normalizeRollId, extractScannedRollId, findScannedReel, generateDeckleId } from "../../utils/rollId.js";
@@ -624,11 +625,15 @@ export async function buildQueueRows(match) {
       paperSize: p.paperSize || "—",
       rollType: item.rollType || "—",
       deckleSize: p.deckleSize ?? null,
-      runningMeters: p.runningMeters ?? null,
+      // Both derived rather than read straight off the order: on a batch the
+      // stored `runningMeters` (and the text built from it) is a sum of the
+      // member orders' per-roll lengths, which counted orders rather than
+      // metres -- see utils/deckleTotals.js.
+      runningMeters: deckleTotalRunningMetres(p),
       // Free-text run spec set on Deckle Set (e.g. "1000 MTRS OF 5 ROLL") --
       // shown in place of the bare number where present, same as the Deckle
       // Queue / Assign Production pages.
-      runningMetersText: p.runningMetersText || "",
+      runningMetersText: deckleRunningMetersText(p) || p.runningMetersText || "",
       // Length of ONE deckle web, as typed into Deckle Set's "Per deckle"
       // input -- distinct from runningMeters above, which is the whole job's
       // finished length across every roll slit off that web (see the field

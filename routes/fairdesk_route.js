@@ -64,6 +64,7 @@ import {
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 import { computeRawMaterialNeed } from "../utils/rawMaterialNeed.js";
+import { deckleTotalRunningMetres, deckleRunningMetersText } from "../utils/deckleTotals.js";
 
 const router = express.Router();
 
@@ -4821,9 +4822,16 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
   // defaults to the member sum; Deckle RM is optional. runningMetersText is a
   // readable one-liner kept only when a Deckle RM was given, so the existing
   // "runningMetersText || fmtQty(runningMeters)" displays stay meaningful.
-  const sumRM = members.reduce((s, m) => s + num(m.runningMeters), 0);
+  //
+  // NOT the member sum. A member order's `runningMeters` is the length of ONE
+  // finished roll (1,000 m), the same figure on every line of the order, so
+  // adding them up counted ORDERS, not metres: four 1,000 m orders read
+  // "4,000 M TOTAL" whatever the deckle actually ran, and splitting the same
+  // job into eight orders would have read 8,000. The real total is the web
+  // this batch laminates -- one web's length x how many webs -- which is
+  // filled in below once Deckle Qty is known.
   const enteredTotalRM = Number(req.body.runningMeters);
-  const runningMeters = Number.isFinite(enteredTotalRM) && enteredTotalRM > 0 ? enteredTotalRM : sumRM;
+  let runningMeters = Number.isFinite(enteredTotalRM) && enteredTotalRM > 0 ? enteredTotalRM : 0;
 
   // The deckle layouts the planner drew on the Set Deckle page -- one entry per
   // cut pattern (all cut from the one chosen deckleSize), each with its own
@@ -4895,9 +4903,6 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
   const enteredDeckleRM = Number(req.body.deckleRunningMeters);
   const deckleRunningMeters = deckleLayout.find((L) => L.deckleRunningMeter > 0)?.deckleRunningMeter
     ?? (Number.isFinite(enteredDeckleRM) && enteredDeckleRM > 0 ? enteredDeckleRM : undefined);
-  const runningMetersText = deckleRunningMeters
-    ? `${deckleRunningMeters.toLocaleString("en-IN")} M/DECKLE · ${runningMeters.toLocaleString("en-IN")} M TOTAL`
-    : undefined;
 
   // Total edge trim (both edges) the planner set on the Set Deckle page while
   // fitting the layouts. Pre-fills Slitting Allocation's own Trim field.
@@ -4916,6 +4921,18 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
   const noOfRolls = layoutWebs > 0
     ? layoutWebs
     : (enteredRolls && enteredRolls > 0 ? Math.round(enteredRolls) : sumRolls);
+
+  // Total Running Meters, now that both halves are known: one web's length x
+  // the number of webs. Reads consistently with the two figures shown beside
+  // it -- Running Mtrs x Deckle Qty -- instead of a sum of per-roll lengths
+  // that never had a physical meaning. An explicitly entered total still wins;
+  // with no Deckle RM to multiply, the member sum stands in as before.
+  if (!(runningMeters > 0)) {
+    runningMeters = deckleTotalRunningMetres({ deckleRunningMeters, noOfRolls })
+      ?? members.reduce((s, m) => s + num(m.runningMeters), 0);
+  }
+  const runningMetersText = deckleRunningMetersText({ deckleRunningMeters, noOfRolls, runningMeters })
+    ?? undefined;
 
   // ---- how much of each ticked order this deckle actually covers ----------
   // The layouts produce a fixed number of finished rolls per roll width; an
@@ -5159,8 +5176,9 @@ router.get("/labels/production/deckle-queue", async (req, res) => {
         r.deckleRunningMeters != null && r.deckleRunningMeters !== ""
           ? Number(r.deckleRunningMeters)
           : null,
-      totalRunningMeters:
-        r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
+      // Derived, not `r.runningMeters` -- see utils/deckleTotals.js for why
+      // that field cannot be trusted as a total on a batch.
+      totalRunningMeters: deckleTotalRunningMetres(r),
       // Deckle Qty -- how many deckle webs to laminate (set on Deckle Set from
       // the layouts' Webs counts), not the order's roll quantity.
       deckleQty: r.noOfRolls != null ? Number(r.noOfRolls) : null,
@@ -5401,6 +5419,10 @@ router.get("/labels/production/assign/:id", async (req, res) => {
       JS: false,
       pp: pendingProduction,
       rawNeed,
+      // One web's length x how many webs. Derived here rather than read off
+      // pp.runningMeters, which on a batch is a sum of the member orders'
+      // per-roll lengths -- see utils/deckleTotals.js.
+      totalRunningMeters: deckleTotalRunningMetres(pendingProduction),
       allMachines,
       operatorEmployees,
       helperEmployees,

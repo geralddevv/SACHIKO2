@@ -179,6 +179,12 @@
     .rm-need-sep { color: #94a3b8; font-weight: 700; padding: 0 3px; }
     .rm-need-wet { font-size: 12.5px; font-weight: 700; color: #b45309; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .rm-need-none { font-size: 12.5px; font-weight: 700; color: #b45309; white-space: nowrap; }
+    /* Rides on the same line as the big figure -- the adhesive's dry coat and
+       the area its wet weight works out to. */
+    .rm-need-sub {
+      font-size: 12px; font-weight: 700; color: #64748b;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
     /* Allotment progress -- how much of this layer the ticked reels cover. */
     .rm-need-track {
       display: block; height: 5px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-top: 2px;
@@ -526,7 +532,7 @@
         %>
         <div class="mid-item">
           <span class="mid-label">Deckle Size<%= mixedWebs ? "s" : "" %></span>
-          <span class="mid-value" id="midDeckleSize"<%= mixedWebs ? ' title="This batch was planned on mixed webs — each layout cut from whichever width suits it. Set on the Deckle Set page."' : "" %>>
+          <span class="mid-value" id="midDeckleSize" title="<%= mixedWebs ? "This batch was planned on mixed webs — each layout cut from whichever width suits it. Set on the Deckle Set page." : "" %>">
             <% if (mixedWebs) { %>
               <%= widths.map(function (x) { return fmtQty(x[0]) + " × " + x[1]; }).join("  +  ") %>
               <span class="mid-mixed">mixed webs</span>
@@ -538,7 +544,14 @@
         <!-- The two lengths kept apart, same as the Deckle Queue: one deckle
              web, then the whole job across every roll slit off it. -->
         <div class="mid-item"><span class="mid-label">Running Mtrs</span><span class="mid-value"><%= pp.deckleRunningMeters ? fmtQty(pp.deckleRunningMeters) : "—" %></span></div>
-        <div class="mid-item"><span class="mid-label">Total Running Mtrs</span><span class="mid-value"><%= fmtQty(pp.runningMeters) %></span></div>
+        <%# One web's length x how many webs, worked out in the route with
+            utils/deckleTotals.js -- pp.runningMeters is not a usable total on
+            a batch (it holds a sum of the member orders' per-roll lengths). %>
+        <% const webCount = Number(pp.noOfRolls) || 0, webLen = Number(pp.deckleRunningMeters) || 0; %>
+        <div class="mid-item">
+          <span class="mid-label">Total Running Mtrs</span>
+          <span class="mid-value" title="<%= webLen > 0 && webCount > 0 ? `${fmtQty(webLen)} m per deckle × ${fmtQty(webCount)} deckles` : "" %>"><%= fmtQty(totalRunningMeters) %></span>
+        </div>
         <div class="mid-item"><span class="mid-label">Deckle Qty</span><span class="mid-value"><%= dash(pp.noOfRolls) %></span></div>
       </div>
 
@@ -593,14 +606,29 @@
                  data-need="<%= r.sqM != null ? r.sqM : "" %>"
                  data-gsm="<%= r.stockGsm != null ? r.stockGsm : "" %>">
               <span class="rm-need-label"><%= r.title.toUpperCase() %></span>
-              <span class="rm-need-value">
-                <%= fmtQty(r.sqM) %> sq.mtrs
-                <% if (r.kg != null) { %>
-                  <span class="rm-need-wet">(<%= fmtQty(r.wetKg != null ? r.wetKg : r.kg) %> kg <span class="rm-need-sep">|</span> <%= fmtQty(r.wetGsm != null ? r.wetGsm : r.gsm) %> GSM<%= r.wetGsm != null ? " wet" : "" %>)</span>
-                <% } else { %>
-                  <span class="rm-need-none" title="No GSM on this layer<%= r.micron != null ? " (recorded as " + fmtQty(r.micron) + " microns)" : "" %>, so it cannot be weighed -- the area above still stands.">(no GSM<%= r.micron != null ? " · " + fmtQty(r.micron) + " MIC" : "" %>)</span>
-                <% } %>
-              </span>
+              <%# Adhesive leads on WEIGHT: a drum holds kilograms, is bought and
+                  issued in kilograms, and has no area of its own -- its sq.mtrs
+                  is something we derive from the wet coat weight purely so it
+                  can be tallied beside the web layers. So the kg is the big
+                  number here, with the wet GSM, the DRY coat it came from, and
+                  the derived area underneath it. Every other layer is a web and
+                  leads on area, as before. %>
+              <% if (r.wetKg != null) { %>
+                <span class="rm-need-value">
+                  <%= fmtQty(r.wetKg) %> kg
+                  <span class="rm-need-wet">wet <%= fmtQty(r.wetGsm) %> GSM</span>
+                  <span class="rm-need-sub"><span class="rm-need-sep">·</span> dry <%= fmtQty(r.kg) %> kg <span class="rm-need-sep">|</span> <%= fmtQty(r.gsm) %> GSM <span class="rm-need-sep">·</span> <%= fmtQty(r.sqM) %> sq.mtrs</span>
+                </span>
+              <% } else { %>
+                <span class="rm-need-value">
+                  <%= fmtQty(r.sqM) %> sq.mtrs
+                  <% if (r.kg != null) { %>
+                    <span class="rm-need-wet">(<%= fmtQty(r.kg) %> kg <span class="rm-need-sep">|</span> <%= fmtQty(r.gsm) %> GSM)</span>
+                  <% } else { %>
+                    <span class="rm-need-none" title="No GSM on this layer<%= r.micron != null ? " (recorded as " + fmtQty(r.micron) + " microns)" : "" %>, so it cannot be weighed -- the area above still stands.">(no GSM<%= r.micron != null ? " · " + fmtQty(r.micron) + " MIC" : "" %>)</span>
+                  <% } %>
+                </span>
+              <% } %>
               <!-- Filled in live as reels are ticked in Raw Material Allotment
                    below: the bar fills, and the text counts what is still
                    needed down to zero. Hidden until something is picked. -->
