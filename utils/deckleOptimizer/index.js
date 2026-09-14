@@ -645,8 +645,25 @@ function buildPlan({ best, drm, edge, slots, notes }) {
     .sort((a, b) => b.webs - a.webs || b.size - a.size);
   const headlineSize = sizesUsed[0]?.size ?? null;
 
-  const useful = rollArea - overrunArea;
-  const waste = consumed - useful;
+  // Waste is what the job actually scraps: the fixed edge trim, the uncut
+  // slack across the web, and the unusable tail of each web. The overrun is
+  // deliberately NOT in here.
+  //
+  // A spare roll is facestock that came off a knife position -- width the
+  // layout would otherwise have trimmed away and binned (which is exactly
+  // what the note below tells the planner). It is wound onto a finished roll,
+  // so it is already inside rollArea, and it adds nothing to `consumed`:
+  // consumption is fixed by size x drm x webs before any of it is cut. Booking
+  // it as waste therefore charged the plan twice for width it never lost, and
+  // left the headline unable to reconcile with its own parts -- Total Waste
+  // read far higher than edge trim + Side Run, the two things a planner can
+  // actually see on the machine.
+  //
+  // It is still reported, as overrunSqM beside the Extra Rolls count, so the
+  // stock nobody ordered stays visible; it just isn't scrap.
+  const useful = rollArea;                    // everything wound onto a roll
+  const ordered = rollArea - overrunArea;     // ... of that, what was asked for
+  const waste = edgeWaste + sideWaste + endWaste;
 
   if (overrunArea > 0) {
     const extraRolls = rolls.reduce((n, r) => n + r.extra, 0);
@@ -676,8 +693,12 @@ function buildPlan({ best, drm, edge, slots, notes }) {
     layouts,
     rolls,
     waste: {
+      // consumedSqM = usefulSqM + edgeSqM + sideTrimSqM + endTrimSqM, and
+      // usefulSqM = orderedSqM + overrunSqM. overrunSqM is a *slice of*
+      // usefulSqM, not a sibling of it -- see the waste comment above.
       consumedSqM: round2(consumed),
       usefulSqM: round2(useful),
+      orderedSqM: round2(ordered),
       wasteSqM: round2(waste),
       wastePct: consumed > 0 ? round2((waste / consumed) * 100) : 0,
       edgeSqM: round2(edgeWaste),

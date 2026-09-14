@@ -32,6 +32,7 @@ node scripts/dissolve-deckle.js [deckleId]       # un-make a Deckle, returning i
 node scripts/backfill-family-master-seed.js      # seed the Family master with values already in use on Label Stock / Facestock Master + the old hardcoded dropdown list
 node scripts/backfill-type-master-seed.js        # seed the Type master with values already in use on Facestock / Adhesive / Release Master + the old hardcoded dropdown lists
 node scripts/deckle-optimizer-bench.js [--verbose]  # bench + invariant check for utils/deckleOptimizer; no DB, exits non-zero on failure
+node scripts/reset-transactional-data.js         # empty orders/production/bindings, KEEP masters+stock+people (dry-run; --apply --db=<name>)
 ```
 
 ## Environment
@@ -181,6 +182,99 @@ Use `data-*` attributes on buttons; read them in the handler via `this.dataset`.
 
 `common.js` automatically converts all `input[type="text"]` values to uppercase on input. This matches the Mongoose model convention of storing names in uppercase.
 
+### Label Stock order rates follow the binding, not the product
+
+On `/sachiko/sales/order`, a Label Stock row's Rate is a property of the
+**`LabelStockBinding`**, whose identity is product + client + **Paper Size +
+RM** (`buildLabelStockBindingSignature` in `routes/fairdesk_route.js`). One
+product legitimately has several bindings at different rates — `C001WB` is
+bound at 62.5/RM 300 = ₹20, 210/RM 1000 = ₹26 and 250/RM 2000 = ₹27.
+
+So the rate **cannot** be settled when the Product Code is picked. `aiResolveRow()`
+in `views/inventory/orders/salesOrderForm.ejs` re-runs on Product Code, Paper
+Size *and* RM input, and:
+
+- an exact binding match fills its rate and sets the row's `itemId`;
+- no exact match leaves `itemId` empty and sets `labelStockMasterId` instead
+  (the server auto-creates the binding), filling the rate from the client's
+  other binding for the same product purely as a starting point;
+- a hand-typed rate (`dataset.userEdited`) is never overwritten.
+
+An auto-filled rate shows yellow until clicked — `aiValidateRows()` blocks
+submit until it is acknowledged, so a rate that changed with the size can't be
+submitted unseen. The acknowledgement is only re-armed when the figure actually
+moves, since typing a size re-runs the resolve on every keystroke.
+
+**`aiFindBinding()` must match the way the server's signature does** — Paper
+Size trimmed and uppercased with whitespace runs collapsed, RM compared as a
+number, blanks rejected (`Number("")` is `0` and would match a binding with no
+RM). If the two drift apart the form shows a rate the order is not placed at.
+
+### Paper re-order import (from the FAIRTECH ERP)
+
+`/sachiko/sales/pending` has an **Import** button that takes the JSON file
+FAIRTECH's `/fairtech/inventory/paper-reorder` page exports and turns it into a
+multi-line Label Stock PO here. The two apps are separate deployments on
+separate databases — the file is the whole interface, so everything has to be
+re-resolved locally on the way in.
+
+The handshake is the Product Code string both masters already share
+(`SachikoLabelStock.productCode` ↔ FAIRTECH's `Paper.prodCode`: `C001WB`,
+`P002WB`, …), plus the client name (`Username.clientName`) FAIRTECH is filed
+under here. Neither is an id, so a rename on either side breaks the match —
+which is why an unmatched code is reported per line rather than skipped.
+
+Two steps, because nothing should be written from a file nobody has read:
+
+1. `POST /sales/pending/import/preview` (multipart, field `file`) — parses the
+   file, resolves every line, and parks the resolved rows **on the session**.
+   Writes nothing. Each row reports its Label Stock master, whether a
+   `LabelStockBinding` for that client + paper size + RM already exists (and so
+   what rate to pre-fill), and whether this PO already brought the same line
+   in. A line that can't be ordered carries an `error` and can't be ticked.
+2. `POST /sales/pending/import/commit` — creates the ticked lines. The browser
+   sends only *which* rows to include and at what rate; the products,
+   quantities and sizes come from the session copy of the preview, so a
+   doctored post can't smuggle in a line that was never shown.
+
+Both call `createLabelStockPoLines()` in `routes/fairdesk_route.js` — the same
+helper `POST /sales/order`'s multi-item branch uses. An imported PO is the same
+PO, just typed by FAIRTECH's export instead of by hand, and it has to land on
+exactly the same bindings, `orderSignature`s and `PendingProduction` rows.
+**Don't fork it**: a second copy of that loop is how the two paths drift.
+
+Notes on the resolution rules:
+
+- **Location is never asked for.** It decides one thing — where a *newly
+  created* binding is filed — and a client's paper belongs wherever that
+  client's existing bindings already sit, so there is nothing to choose. The
+  preview resolves it (this user's binding locations → the user's own location
+  → the Location master when it holds exactly one entry) and carries it on the
+  session to the commit; the browser never sends it. It can't simply be
+  skipped: `resolveLabelStockBinding()` validates a location for *every* line,
+  including lines whose binding already exists. A client with nothing to go on
+  fails at preview with a message saying to bind a product first, rather than
+  halfway through the commit.
+- A rate is always required, even where a binding exists, because
+  `resolveLabelStockBinding()` validates the rate before it looks the binding
+  up. The preview pre-fills it from the matching binding, or failing that from
+  the client's most recent binding for the same product (clearly marked as a
+  guess). Editing it writes the new rate back to the binding, exactly as the
+  Sales Order form does.
+- Same PO + product + size + RM already on the books means the file has most
+  likely been uploaded twice. That isn't an error — a genuine top-up under one
+  PO number is legitimate — so the line starts **unticked** rather than
+  blocked.
+- `submissionToken` is `import-<upload token>-<line index>`, and the session
+  entry is cleared on a successful commit, so re-confirming the same staged
+  preview can't double-create.
+- "-A"/"-B" variant Product Codes are excluded from the match, the same way
+  `GET /sales/order`'s own Product Code picker excludes them (see "Label Stock
+  Product Code variants").
+
+The upload is multipart, so csurf can't find its token in the body — the client
+sends it as an `x-csrf-token` header instead.
+
 ### Label Stock Product Code variants
 
 `SachikoLabelStock.productCode` (`models/sachiko/sachikoLabelStock.js`) is free text, not itself unique — only the full `labelStockSignature` (every user-editable field, Product Code included) is unique-indexed, so nothing used to stop the *same* Product Code being entered again for a genuinely different recipe (e.g. `C011` re-entered against a different vendor).
@@ -264,6 +358,33 @@ trimmed off and scrapped. Where the rolls-per-web granularity makes even the cap
 unreachable (4 rolls ordered, 3 per knife position — 6 must be made), the cap is
 widened for that width rather than the plan being refused, and `notes` says so,
 so a forced overrun is never silent.
+
+**Waste accounting** follows from that, and the two balances are asserted by
+`scripts/deckle-optimizer-bench.js` — break either and the bench fails:
+
+    consumedSqM = usefulSqM + edgeSqM + sideTrimSqM + endTrimSqM
+    usefulSqM   = orderedSqM + overrunSqM
+
+`wasteSqM` (and so `wastePct`, the page's **Total Waste**) is **scrap only** —
+edge trim + side trim + end tail. `overrunSqM` is a *slice of* `usefulSqM`, not
+a sibling of it: a spare roll is wound onto a finished roll off width that would
+otherwise have been trimmed away, and consumption is fixed by `size x drm x
+webs` before anything is cut, so booking it as waste charges the plan twice for
+width it never lost. It once did exactly that, which left Total Waste roughly
+double and unable to reconcile with its own parts.
+
+The page's **Side Run** and **Total Waste** are both **whole-job totals**, in
+mm as well as %, never a per-web average — Side Run mm is every web's side trim
+added up, and Total Waste mm is the same for all the scrap. That makes them
+reconcile by eye, which is the quickest check the figures are sane: with no end
+tail,
+
+    Total Waste  =  edge trim x webs  +  Side Run
+
+in mm and in % alike. (Showing a per-web average beside a whole-job percentage
+is what previously made these two look like they disagreed.) The spare stock
+stays visible as m² beside the Extra Rolls count, so nothing is hidden by
+keeping it out of the headline.
 
 `POST /labels/production/deckle-set/plan/:itemId/auto` is **read-only**: it
 creates nothing and changes nothing, it only answers "here is the least-waste way

@@ -1179,6 +1179,11 @@
     const rate = selectedOption?.customProperties?.rate;
     const hasRate = rate === 0 || rate === "0" || (rate !== null && typeof rate !== "undefined" && rate !== "");
     rateDisplayInput.value = hasRate ? String(rate) : "";
+    // This function owns the field whenever the picked item changes, and has
+    // just overwritten whatever was in it -- so drop the hand-typed flag with
+    // it, or syncLabelStockRateFromSpec() below would stay locked out for the
+    // newly picked item.
+    delete rateDisplayInput.dataset.userEdited;
 
     if (!orderRateInput) return;
     if (orderRateInput.dataset.userEdited === "true") return;
@@ -1524,6 +1529,50 @@
       rateDisplayInput.readOnly = !master;
       rateDisplayInput.placeholder = master ? "Enter rate (new client binding)" : "Rate";
     }
+  }
+
+  // Edit mode's counterpart to aiResolveRow (the Order Items table's version).
+  // The single-item fields resolve their binding from the Product Code alone,
+  // so editing an order's Paper Size or RM left Rate showing whichever binding
+  // for that product was listed first. That is worse here than a stale
+  // display: the LABEL_STOCK branch of POST /sales/order writes the submitted
+  // itemRate back onto whichever binding the order's size/RM actually resolve
+  // to, so a rate left over from a different size would silently overwrite
+  // that binding's own rate -- for this order and every future one on it.
+  function syncLabelStockRateFromSpec() {
+    if (confirmMode) return; // dispatch view -- nothing here is editable
+    if (!rateDisplayInput) return;
+    if (!isLabelStockItemType(itemTypeSelect.value)) return;
+    // A hand-typed rate is a deliberate revision of the binding's rate (see
+    // POST /sales/order) -- never overwrite it.
+    if (rateDisplayInput.dataset.userEdited === "true") return;
+
+    const sku = document.getElementById("label-stock-product-select")?.value || "";
+    if (!sku) return;
+
+    // Same matcher the Order Items table uses, so the two paths can't drift.
+    const exact = aiFindBinding(
+      sku,
+      document.getElementById("paper-size")?.value,
+      document.getElementById("running-meters")?.value,
+    );
+    // Rate-only fallback: this client's other binding for the same product.
+    // The size/RM differ so it isn't the binding this order resolves to -- the
+    // server creates that one, at whatever rate is showing here, which is
+    // exactly why a stale figure must not be left sitting in the field.
+    const sameProduct = !exact
+      ? (latestLabelStockItems || []).find((it) => (it.details?.skuCode || "") === sku) || null
+      : null;
+
+    const source = exact || sameProduct;
+    if (!source) return; // product has no binding at all -- rate is typed by hand
+
+    const newRate = source.rate != null && source.rate !== "" ? String(source.rate) : "";
+    if (newRate !== rateDisplayInput.value) rateDisplayInput.value = newRate;
+    rateDisplayInput.title = exact
+      ? `Rate from this client's binding for Paper Size ${exact.paperSize} / RM ${exact.runningMeters}`
+      : `No binding for this Paper Size and RM yet — one will be created at this rate ` +
+        `(shown from Paper Size ${sameProduct.paperSize} / RM ${sameProduct.runningMeters})`;
   }
 
   async function updateStockDisplay() {
@@ -1944,6 +1993,17 @@
 
   // 4. Item → update stock display
   itemSelect.addEventListener("change", updateStockDisplay);
+
+  // Paper Size / RM are half of a LabelStockBinding's identity, so they drive
+  // the Rate here exactly as they do in the Order Items table -- see
+  // syncLabelStockRateFromSpec above for why a stale Rate here is a write-back
+  // hazard, not just a display one.
+  ["paper-size", "running-meters"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", syncLabelStockRateFromSpec);
+  });
+  rateDisplayInput?.addEventListener("input", () => {
+    rateDisplayInput.dataset.userEdited = "true";
+  });
   quantityInput.addEventListener("input", checkStockWarning);
   if (orderRateInput) {
     orderRateInput.addEventListener("input", () => {
@@ -2415,6 +2475,12 @@
       }
       syncEstDeliveryMin();
 
+      // The prefill above put the *order's* Paper Size / RM in the fields,
+      // which may not be the ones the currently-picked binding carries. Settle
+      // the Rate against what's actually in the fields before the user touches
+      // anything -- a no-op when order and binding agree (the normal case).
+      syncLabelStockRateFromSpec();
+
       // Ensure all fields are enabled for editing
       itemTypeChoices?.enable();
       clientChoices?.enable();
@@ -2831,46 +2897,98 @@
     );
   }
 
-  // Row-scoped port of onLabelStockProductChange: resolve the picked SKU to an
-  // existing binding for this client/location if one exists (fills Paper Size /
-  // RM / Rate from it), otherwise fall back to the master id -- POST
-  // /sales/order auto-creates the binding from the row's Rate + the header
-  // location.
-  function aiOnRowProductChange(row) {
-    const sel = row.querySelector(".ai-product");
-    const sku = sel.value || "";
+  // A LabelStockBinding is identified by product + client + Paper Size + RM,
+  // and each of those combinations carries its own rate. So which binding a
+  // row resolves to -- and therefore what it costs -- can't be settled when
+  // the Product Code is picked: it has to be re-resolved whenever Paper Size
+  // or RM changes too. Resolving on the product alone took whichever binding
+  // for that product happened to be listed first, so a row could sit there
+  // showing size 150 priced at the size 210 binding's rate.
+  //
+  // Matched the same way the server does (buildLabelStockBindingSignature in
+  // routes/fairdesk_route.js): Paper Size trimmed and uppercased with runs of
+  // whitespace collapsed, RM compared as a number. Keep the two in step -- if
+  // they ever disagree, the rate shown here is not the rate the order gets
+  // placed at.
+  const aiNormSize = (v) => String(v ?? "").trim().toUpperCase().replace(/\s+/g, " ");
+
+  function aiFindBinding(sku, paperSize, runningMeters) {
+    if (!sku) return null;
+    const size = aiNormSize(paperSize);
+    const rm = Number(runningMeters);
+    // Guard the blanks explicitly: Number("") is 0, which would otherwise
+    // match a binding that has no RM stored.
+    if (!size || !Number.isFinite(rm) || rm <= 0) return null;
+    return (
+      (latestLabelStockItems || []).find(
+        (it) =>
+          (it.details?.skuCode || "") === sku &&
+          aiNormSize(it.paperSize) === size &&
+          Number(it.runningMeters) === rm,
+      ) || null
+    );
+  }
+
+  // Row-scoped port of onLabelStockProductChange, re-run on every input that
+  // takes part in the binding's identity. Resolves the row to the client's
+  // binding for this exact product + size + RM if there is one, otherwise
+  // falls back to the master id -- POST /sales/order auto-creates the binding
+  // from the row's Rate + the header location.
+  function aiResolveRow(row) {
+    const sku = row.querySelector(".ai-product").value || "";
     const itemIdInp = row.querySelector(".ai-item-id");
     const masterIdInp = row.querySelector(".ai-master-id");
     const rateInp = row.querySelector(".ai-rate");
+    const paperSize = row.querySelector(".ai-paper-size").value;
+    const runningMeters = row.querySelector(".ai-rm").value;
 
-    const match = sku
-      ? (latestLabelStockItems || []).find((it) => (it.details?.skuCode || "") === sku)
-      : null;
+    const exact = aiFindBinding(sku, paperSize, runningMeters);
+    // Rate-only fallback: this client's other binding for the same product.
+    // NOT a binding this order can be placed against -- its size/RM differ,
+    // so itemId stays empty and the server creates the right one. It is here
+    // purely so a size that hasn't been ordered before doesn't have to be
+    // priced from scratch, and it is flagged as unconfirmed below like any
+    // other auto-filled rate.
+    const sameProduct =
+      !exact && sku
+        ? (latestLabelStockItems || []).find((it) => (it.details?.skuCode || "") === sku) || null
+        : null;
+    const master = sku ? (allLabelStockMasters || []).find((m) => (m.skuCode || "") === sku) : null;
 
-    if (match) {
-      itemIdInp.value = match._id;
-      masterIdInp.value = "";
-      // Paper Size and RM are never auto-filled -- always entered by hand.
-      if (!rateInp.dataset.userEdited) {
-        const newRate = match.rate != null && match.rate !== "" ? String(match.rate) : "";
-        if (newRate !== rateInp.value) {
-          rateInp.value = newRate;
-          // Auto-filled from the binding -- must be confirmed (click) before submit.
-          rateInp.dataset.rateAutofilled = "1";
-          aiSetRateAck(rateInp, false);
-        }
-      }
+    itemIdInp.value = exact ? exact._id : "";
+    masterIdInp.value = exact ? "" : master?._id || "";
+
+    // A hand-typed rate is never overwritten, whatever the size changes to.
+    if (rateInp.dataset.userEdited) return;
+
+    const source = exact || sameProduct;
+    const newRate = source && source.rate != null && source.rate !== "" ? String(source.rate) : "";
+
+    if (!newRate) {
+      // Nothing to go on -- drop a stale auto-filled value so a fresh one is
+      // typed; there is nothing to acknowledge.
+      if (rateInp.dataset.rateAutofilled === "1") rateInp.value = "";
+      rateInp.dataset.rateAutofilled = "";
+      rateInp.title = master ? "No binding for this product yet — enter a rate" : "";
+      aiSetRateAck(rateInp, true);
       return;
     }
 
-    itemIdInp.value = "";
-    const master = sku ? (allLabelStockMasters || []).find((m) => (m.skuCode || "") === sku) : null;
-    masterIdInp.value = master?._id || "";
-    // No binding -> Rate is entered by hand. Drop a stale auto-filled value so
-    // the user types a fresh one; nothing to acknowledge.
-    if (!rateInp.dataset.userEdited && rateInp.dataset.rateAutofilled === "1") rateInp.value = "";
-    rateInp.dataset.rateAutofilled = "";
-    aiSetRateAck(rateInp, true);
+    rateInp.title = exact
+      ? `Rate from this client's binding for Paper Size ${exact.paperSize} / RM ${exact.runningMeters}`
+      : `No binding for this Paper Size and RM yet — showing this client's rate for ` +
+        `Paper Size ${sameProduct.paperSize} / RM ${sameProduct.runningMeters}`;
+
+    // Only re-arm the acknowledgement when the figure actually moves. Typing
+    // a size digit by digit re-runs this on every keystroke, and re-yellowing
+    // a rate the user already confirmed -- for a value that hasn't changed --
+    // only trains them to click past it.
+    if (newRate !== rateInp.value) {
+      rateInp.value = newRate;
+      // Auto-filled -- must be confirmed (click) before submit.
+      rateInp.dataset.rateAutofilled = "1";
+      aiSetRateAck(rateInp, false);
+    }
   }
 
   // Rate acknowledgement: an auto-filled Rate shows yellow until the user
@@ -2944,10 +3062,16 @@
       row.style.zIndex = "";
     });
 
-    sel.addEventListener("change", () => aiOnRowProductChange(row));
+    sel.addEventListener("change", () => aiResolveRow(row));
     [".ai-paper-size", ".ai-rm", ".ai-rate"].forEach((c) => {
       const el = row.querySelector(c);
       el.addEventListener("input", () => { el.dataset.userEdited = "1"; });
+    });
+    // Paper Size and RM are the other half of the binding's identity (see
+    // aiResolveRow), so the rate is re-resolved as they're typed -- not only
+    // when the Product Code is picked.
+    [".ai-paper-size", ".ai-rm"].forEach((c) => {
+      row.querySelector(c).addEventListener("input", () => aiResolveRow(row));
     });
     // Confirm the auto-filled Rate on click (focus) or manual edit.
     const rateEl = row.querySelector(".ai-rate");
@@ -2982,7 +3106,7 @@
       return;
     }
     if (aiRowCount() === 0) aiAddRow();
-    aiRows().forEach((row) => { aiPopulateRowSelect(row, true); aiOnRowProductChange(row); });
+    aiRows().forEach((row) => { aiPopulateRowSelect(row, true); aiResolveRow(row); });
     aiRenumber();
   }
 
@@ -3001,7 +3125,7 @@
         aiPrefillDone = true;
       }
     }
-    aiRows().forEach((row) => { aiPopulateRowSelect(row, true); aiOnRowProductChange(row); });
+    aiRows().forEach((row) => { aiPopulateRowSelect(row, true); aiResolveRow(row); });
   }
 
   function aiValidateRows() {

@@ -205,9 +205,11 @@ function check(result, scenario, opts) {
     }
   }
 
-  // 5: the square metres have to add up.
+  // 5: the square metres have to add up. Every millimetre of the web either
+  // ends up on a roll or in the bin -- overrun is a *slice of* usefulSqM (the
+  // spare rolls came off knife positions), never a term of its own here.
   const w = plan.waste;
-  const rebuilt = w.usefulSqM + w.edgeSqM + w.sideTrimSqM + w.endTrimSqM + w.overrunSqM;
+  const rebuilt = w.usefulSqM + w.edgeSqM + w.sideTrimSqM + w.endTrimSqM;
   if (Math.abs(rebuilt - w.consumedSqM) > 0.05) {
     failures.push(
       `area does not balance: consumed ${w.consumedSqM}, parts sum ${round2(rebuilt)}`,
@@ -215,6 +217,18 @@ function check(result, scenario, opts) {
   }
   if (Math.abs(w.consumedSqM - w.usefulSqM - w.wasteSqM) > 0.05) {
     failures.push(`waste != consumed - useful (${w.consumedSqM} / ${w.usefulSqM} / ${w.wasteSqM})`);
+  }
+  if (Math.abs(w.usefulSqM - w.orderedSqM - w.overrunSqM) > 0.05) {
+    failures.push(
+      `useful != ordered + overrun (${w.usefulSqM} / ${w.orderedSqM} / ${w.overrunSqM})`,
+    );
+  }
+  // Waste is scrap only, so it must be exactly the three trim terms -- this is
+  // what stops the overrun creeping back into the headline.
+  if (Math.abs(w.wasteSqM - (w.edgeSqM + w.sideTrimSqM + w.endTrimSqM)) > 0.05) {
+    failures.push(
+      `waste != edge + side + end (${w.wasteSqM} / ${w.edgeSqM} / ${w.sideTrimSqM} / ${w.endTrimSqM})`,
+    );
   }
 
   // The webs the layouts describe must be the webs the plan claims.

@@ -170,6 +170,50 @@
         scrollbar-width: auto;
       }
 
+      /* Aimerz watermark -- purely decorative brand mark, never load-bearing.
+         margin-top: auto means it only ever claims genuinely spare room at
+         the bottom of the side-nav's flex column: on a short nav list it sits
+         quietly below the last item, and once the list is long enough to
+         fill (or overflow) the panel it simply isn't shown rather than
+         floating over real nav items. The source SVG
+         (public/assets/aimerz-logo-watermark.svg) is a flat dark-navy
+         monochrome -- never the two-tone brand color -- but that reads as
+         near-invisible against the side-nav's own dark-blue gradient, so it's
+         rendered white here purely for contrast on this dark background. */
+      .side-nav-watermark {
+        width: 100%;
+        margin-top: auto;
+        padding: 14px 16px 4px;
+        display: flex;
+        justify-content: center;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .side-nav-watermark a {
+        display: block;
+        width: 100%;
+        max-width: 120px;
+      }
+
+      .side-nav-watermark img {
+        width: 100%;
+        height: auto;
+        display: block;
+        opacity: 0.3;
+        filter: brightness(0) invert(1);
+        transition: opacity 0.2s ease;
+      }
+
+      .side-nav-watermark a:hover img {
+        opacity: 0.55;
+      }
+
+      /* Icon-only collapsed rail (50px) has no room for a legible wordmark --
+         skip it there instead of showing an unreadable sliver. */
+      .side-nav:not(.nav-panel-toggle) .side-nav-watermark {
+        display: none;
+      }
+
       /* Header nav buttons */
       nav {
         display: flex;
@@ -1268,6 +1312,12 @@
           <i class="fa-solid fa-book-open" style="color: #ffffff"></i>
           <p class="nav-items-para">Daybook</p>
         </a>
+
+        <div class="side-nav-watermark">
+          <a href="https://aimerz.in" target="_blank" rel="noopener noreferrer" title="Aimerz">
+            <img src="/assets/aimerz-logo-watermark.svg" alt="Aimerz" draggable="false">
+          </a>
+        </div>
       </div>
       <% } %>
 

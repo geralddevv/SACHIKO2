@@ -499,6 +499,144 @@ async function resolveLabelStockLineBinding({ line, userId, sourceLocation, loca
   return { binding, paperSize, runningMeters, noOfRolls, itemRate };
 }
 
+// Creates the TapeSalesOrder lines of one multi-item Label Stock PO: every
+// line becomes its own order document (one product = one production unit
+// downstream), all sharing this PO's header fields and a common poGroupId.
+//
+// Shared by the Sales Order form's multi-item branch and by the paper
+// re-order import on the Pending Orders page -- an imported PO is the same
+// PO, just typed by FAIRTECH's export instead of by hand, and it must land on
+// exactly the same bindings, signatures and PendingProduction rows.
+//
+// Every line is resolved up front and nothing is created if any of them is
+// bad, so a rejected PO leaves no half-entered orders behind.
+async function createLabelStockPoLines({
+  poLines,
+  userId,
+  poNumber,
+  poDate,
+  estimatedDate,
+  remarks,
+  deckleOption,
+  sourceLocation,
+  locationRadio,
+  userLocation,
+  createdByUser,
+  submissionToken,
+}) {
+  const poNo = String(poNumber || "").trim();
+  if (!userId) return { error: "Select a client and user." };
+  if (!poNo) return { error: "PO Number is required." };
+  if (!estimatedDate) return { error: "Est Delivery Date is required." };
+
+  // 1. Resolve every line's binding first -- fail the whole submit (create
+  //    nothing) if any line is invalid.
+  const resolvedLines = [];
+  for (const line of poLines) {
+    const resolved = await resolveLabelStockLineBinding({
+      line,
+      userId,
+      sourceLocation,
+      locationRadio,
+      userLocation,
+    });
+    if (resolved.error) return { error: resolved.error };
+    resolvedLines.push(resolved);
+  }
+
+  // 2. Rate write-back -- once per distinct binding (a later manual edit
+  //    via the binding form works the same way).
+  const rateApplied = new Set();
+  for (const r of resolvedLines) {
+    const key = String(r.binding._id);
+    const submitted = Number(r.itemRate);
+    if (
+      !rateApplied.has(key) &&
+      Number.isFinite(submitted) &&
+      submitted > 0 &&
+      submitted !== Number(r.binding.rate)
+    ) {
+      r.binding.rate = submitted;
+      await r.binding.save();
+    }
+    rateApplied.add(key);
+  }
+
+  // 3. One order + PendingProduction + CREATED log per line.
+  const poGroupId = new mongoose.Types.ObjectId();
+  const token = String(submissionToken || "").trim();
+  const createdOrders = [];
+  for (let i = 0; i < resolvedLines.length; i++) {
+    const { binding, paperSize: lPaperSize, runningMeters: lRunningMeters, noOfRolls: lNoOfRolls } = resolvedLines[i];
+    const qty = Number(lNoOfRolls);
+    const rate = Number(binding.rate) || 0;
+    const lineSourceLocation = canonicalizeLocationName(binding.location);
+
+    const data = {
+      tapeBinding: binding._id,
+      userId: binding.userId,
+      tapeId: binding.labelStock,
+      sourceLocation: lineSourceLocation,
+      poDate: poDate ? new Date(poDate) : undefined,
+      poNumber: poNo,
+      poGroupId,
+      deckleOption,
+      orderRate: rate,
+      quantity: qty,
+      estimatedDate: new Date(estimatedDate),
+      remarks,
+      paperSize: lPaperSize,
+      runningMeters: Number(lRunningMeters),
+      noOfRolls: qty,
+      status: "PENDING",
+      onModel: "SachikoLabelStock",
+      onBindingModel: "LabelStockBinding",
+      createdBy: createdByUser,
+      orderSignature: buildSalesOrderSignature({
+        itemType: "LABEL_STOCK",
+        itemId: String(binding._id),
+        userId: binding.userId,
+        quantity: qty,
+        estimatedDate,
+        poNumber: poNo,
+        sourceLocation: lineSourceLocation,
+        orderRate: rate,
+        createdBy: createdByUser,
+        lineIndex: i,
+      }),
+      submissionToken: token ? `${token}-${i}` : undefined,
+    };
+
+    const dup = await TapeSalesOrder.findOne({ orderSignature: data.orderSignature }).select("_id").lean();
+    if (dup) continue;
+
+    let newOrder;
+    try {
+      newOrder = await TapeSalesOrder.create(data);
+    } catch (e) {
+      // Re-submit of the same form (same suffixed token / signature) -- the
+      // line already exists, skip it rather than failing the PO.
+      if (e?.code === 11000) continue;
+      throw e;
+    }
+
+    await upsertPendingProduction(newOrder);
+    await SalesOrderLog.create({
+      orderId: newOrder._id,
+      action: "CREATED",
+      quantity: qty,
+      performedBy: createdByUser,
+    });
+    createdOrders.push(newOrder);
+  }
+
+  return {
+    createdOrders,
+    poNumber: poNo,
+    totalQty: createdOrders.reduce((sum, o) => sum + (o.quantity || 0), 0),
+  };
+}
+
 function isTemplateOnlyInvoice(invoiceNumber) {
   const value = String(invoiceNumber || "").trim();
   if (!value) return true;
@@ -2781,117 +2919,25 @@ router.post("/sales/order", async (req, res) => {
       : null;
 
     if (!orderId && poLines && poLines.length) {
-      const poNo = String(poNumber || "").trim();
-      if (!userId) return res.status(400).json({ success: false, message: "Select a client and user." });
-      if (!poNo) return res.status(400).json({ success: false, message: "PO Number is required." });
-      if (!estimatedDate) return res.status(400).json({ success: false, message: "Est Delivery Date is required." });
+      const result = await createLabelStockPoLines({
+        poLines,
+        userId,
+        poNumber,
+        poDate,
+        estimatedDate,
+        remarks,
+        deckleOption: normalizedDeckleOption,
+        sourceLocation,
+        locationRadio,
+        userLocation,
+        createdByUser,
+        submissionToken,
+      });
+      if (result.error) return res.status(400).json({ success: false, message: result.error });
 
-      // 1. Resolve every line's binding first -- fail the whole submit (create
-      //    nothing) if any line is invalid.
-      const resolvedLines = [];
-      for (const line of poLines) {
-        const resolved = await resolveLabelStockLineBinding({
-          line,
-          userId,
-          sourceLocation,
-          locationRadio,
-          userLocation,
-        });
-        if (resolved.error) {
-          return res.status(400).json({ success: false, message: resolved.error });
-        }
-        resolvedLines.push(resolved);
-      }
-
-      // 2. Rate write-back -- once per distinct binding (a later manual edit
-      //    via the binding form works the same way).
-      const rateApplied = new Set();
-      for (const r of resolvedLines) {
-        const key = String(r.binding._id);
-        const submitted = Number(r.itemRate);
-        if (
-          !rateApplied.has(key) &&
-          Number.isFinite(submitted) &&
-          submitted > 0 &&
-          submitted !== Number(r.binding.rate)
-        ) {
-          r.binding.rate = submitted;
-          await r.binding.save();
-        }
-        rateApplied.add(key);
-      }
-
-      // 3. One order + PendingProduction + CREATED log per line.
-      const poGroupId = new mongoose.Types.ObjectId();
-      const token = String(submissionToken || "").trim();
-      const createdOrders = [];
-      for (let i = 0; i < resolvedLines.length; i++) {
-        const { binding, paperSize: lPaperSize, runningMeters: lRunningMeters, noOfRolls: lNoOfRolls } = resolvedLines[i];
-        const qty = Number(lNoOfRolls);
-        const rate = Number(binding.rate) || 0;
-        const lineSourceLocation = canonicalizeLocationName(binding.location);
-
-        const data = {
-          tapeBinding: binding._id,
-          userId: binding.userId,
-          tapeId: binding.labelStock,
-          sourceLocation: lineSourceLocation,
-          poDate: poDate ? new Date(poDate) : undefined,
-          poNumber: poNo,
-          poGroupId,
-          deckleOption: normalizedDeckleOption,
-          orderRate: rate,
-          quantity: qty,
-          estimatedDate: new Date(estimatedDate),
-          remarks,
-          paperSize: lPaperSize,
-          runningMeters: Number(lRunningMeters),
-          noOfRolls: qty,
-          status: "PENDING",
-          onModel: "SachikoLabelStock",
-          onBindingModel: "LabelStockBinding",
-          createdBy: createdByUser,
-          orderSignature: buildSalesOrderSignature({
-            itemType: "LABEL_STOCK",
-            itemId: String(binding._id),
-            userId: binding.userId,
-            quantity: qty,
-            estimatedDate,
-            poNumber: poNo,
-            sourceLocation: lineSourceLocation,
-            orderRate: rate,
-            createdBy: createdByUser,
-            lineIndex: i,
-          }),
-          submissionToken: token ? `${token}-${i}` : undefined,
-        };
-
-        const dup = await TapeSalesOrder.findOne({ orderSignature: data.orderSignature }).select("_id").lean();
-        if (dup) continue;
-
-        let newOrder;
-        try {
-          newOrder = await TapeSalesOrder.create(data);
-        } catch (e) {
-          // Re-submit of the same form (same suffixed token / signature) -- the
-          // line already exists, skip it rather than failing the PO.
-          if (e?.code === 11000) continue;
-          throw e;
-        }
-
-        await upsertPendingProduction(newOrder);
-        await SalesOrderLog.create({
-          orderId: newOrder._id,
-          action: "CREATED",
-          quantity: qty,
-          performedBy: createdByUser,
-        });
-        createdOrders.push(newOrder);
-      }
-
-      const totalQty = createdOrders.reduce((sum, o) => sum + (o.quantity || 0), 0);
+      const { createdOrders, totalQty } = result;
       const user = await Username.findById(userId).select("clientName").lean();
-      res.locals.auditDescription = `Created Label Stock sales order for "${user?.clientName || "Unknown Client"}" -- ${createdOrders.length} item line(s), total x${totalQty} (PO ${poNo})`;
+      res.locals.auditDescription = `Created Label Stock sales order for "${user?.clientName || "Unknown Client"}" -- ${createdOrders.length} item line(s), total x${totalQty} (PO ${result.poNumber})`;
       req.flash(
         "notification",
         createdOrders.length
@@ -3281,6 +3327,356 @@ router.get("/sales/pending", async (req, res) => {
   } catch (err) {
     console.error("PENDING ORDERS ERROR:", err);
     res.redirect("back");
+  }
+});
+
+/* ============ PAPER RE-ORDER IMPORT (from the FAIRTECH ERP export) ============ */
+
+// The file FAIRTECH's /fairtech/inventory/paper-reorder page produces. The two
+// apps share no database, so the only thing tying a paper spec there to a
+// Label Stock product here is the Prod Code / Product Code string they already
+// have in common (C001WB, P002WB, ...) -- resolved per line below.
+const PAPER_REORDER_IMPORT_FORMAT = "fairtech.paper-reorder.sachiko-sales-order";
+const PAPER_REORDER_IMPORT_VERSION = 1;
+
+const paperReorderImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (path.extname(file.originalname).toLowerCase() !== ".json") {
+      return cb(new Error("Upload the .json file the FAIRTECH Paper Re-Order page produced."), false);
+    }
+    cb(null, true);
+  },
+}).single("file");
+
+// "-A"/"-B"/... rows are an internal production-time split of a base recipe
+// (utils/labelStockVariant.js), never something an order is placed against --
+// same exclusion GET /sales/order applies to its own Product Code picker.
+const LABEL_STOCK_VARIANT_SUFFIX = /-[A-Z]+$/;
+
+// Resolves one exported line against this database: which Label Stock master
+// the Prod Code names, whether a binding for that client + size + RM already
+// exists (and so what rate to pre-fill), and whether this PO already brought
+// the same line in. Returns a row for the preview dialog; `error` set means
+// the line can't be ordered as it stands.
+async function resolvePaperReorderLine(line, { userId, poNumber }) {
+  const productCode = String(line?.productCode || "").trim();
+  const paperSize = String(line?.paperSize ?? "").trim();
+  const runningMeters = Number(line?.runningMeters);
+  const noOfRolls = Number(line?.noOfRolls);
+
+  const row = {
+    productCode,
+    family: String(line?.family || "").trim(),
+    paperSize,
+    runningMeters,
+    noOfRolls,
+    shortfallMtrs: Number(line?.shortfallMtrs) || 0,
+    skuCode: "",
+    labelStockMasterId: "",
+    bindingExists: false,
+    rate: "",
+    rateSource: "",
+    duplicate: false,
+    error: "",
+  };
+
+  if (!productCode) return { ...row, error: "No Product Code on this line." };
+  if (!(noOfRolls > 0)) return { ...row, error: "No of Rolls must be greater than zero." };
+
+  const dimError = validateLabelStockDims(paperSize, runningMeters);
+  if (dimError) return { ...row, error: dimError };
+
+  const masters = await SachikoLabelStock.find({
+    productCode: new RegExp(`^${escapeRegex(productCode)}$`, "i"),
+  })
+    .select("_id skuCode productCode family")
+    .lean();
+  const base = masters.filter((m) => !LABEL_STOCK_VARIANT_SUFFIX.test(String(m.productCode || "")));
+
+  if (!base.length) {
+    return { ...row, error: `No Label Stock product with code "${productCode}".` };
+  }
+  if (base.length > 1) {
+    return {
+      ...row,
+      error: `"${productCode}" matches ${base.length} Label Stock products (${base.map((m) => m.skuCode).join(", ")}).`,
+    };
+  }
+
+  const master = base[0];
+  row.skuCode = master.skuCode || "";
+  row.labelStockMasterId = String(master._id);
+  row.family = row.family || master.family || "";
+
+  // The binding this line will land on if one already exists -- looked up by
+  // the same signature resolveLabelStockBinding() would, so the rate shown in
+  // the preview is the rate the order will actually be placed at.
+  const binding = await LabelStockBinding.findOne({
+    bindingSignature: buildLabelStockBindingSignature({
+      labelStock: master._id,
+      userId,
+      paperSize,
+      runningMeters,
+    }),
+  })
+    .select("rate status location")
+    .lean();
+
+  if (binding) {
+    if (binding.status === "INACTIVE") {
+      return { ...row, error: `"${productCode}" is disabled for this client and cannot be ordered.` };
+    }
+    row.bindingExists = true;
+    row.rate = Number(binding.rate) || "";
+    row.rateSource = `binding (size ${paperSize}, RM ${runningMeters})`;
+  } else {
+    // No binding for this exact size + RM yet -- one will be created on
+    // confirm. Pre-fill its rate from the client's most recent binding for
+    // the same product so a new size doesn't have to be priced from scratch,
+    // but leave it clearly marked as a guess rather than a looked-up rate.
+    const nearest = await LabelStockBinding.findOne({ labelStock: master._id, userId })
+      .sort({ updatedAt: -1 })
+      .select("rate paperSize runningMeters")
+      .lean();
+    if (nearest) {
+      row.rate = Number(nearest.rate) || "";
+      row.rateSource = `last rate for this product (size ${nearest.paperSize}, RM ${nearest.runningMeters})`;
+    } else {
+      row.rateSource = "no binding yet — enter a rate";
+    }
+  }
+
+  // Same PO, same product, same size and RM already on the books: the file
+  // has most likely been uploaded twice. Not an error (a genuine top-up under
+  // one PO number is legitimate), but it starts unticked in the preview.
+  const dupe = await TapeSalesOrder.findOne({
+    onModel: "SachikoLabelStock",
+    userId,
+    tapeId: master._id,
+    poNumber: String(poNumber || "").trim(),
+    paperSize,
+    runningMeters,
+    status: { $ne: "CANCELLED" },
+  })
+    .select("_id")
+    .lean();
+  row.duplicate = Boolean(dupe);
+
+  return row;
+}
+
+// Step 1 of the upload: read the file, resolve every line, and hand the result
+// back for review. Writes nothing -- the resolved lines are parked on the
+// session so the confirm below works from what was actually shown, not from
+// whatever the browser posts back.
+router.post("/sales/pending/import/preview", requireAuth, createLimiter, (req, res) => {
+  paperReorderImportUpload(req, res, async (uploadErr) => {
+    try {
+      if (uploadErr) return res.status(400).json({ success: false, message: uploadErr.message });
+      if (!req.file) return res.status(400).json({ success: false, message: "Choose a file to upload." });
+
+      let payload;
+      try {
+        payload = JSON.parse(req.file.buffer.toString("utf8"));
+      } catch {
+        return res.status(400).json({ success: false, message: "That file isn't valid JSON." });
+      }
+
+      if (payload?.format !== PAPER_REORDER_IMPORT_FORMAT) {
+        return res.status(400).json({
+          success: false,
+          message: "That file isn't a FAIRTECH paper re-order export.",
+        });
+      }
+      if (Number(payload.version) !== PAPER_REORDER_IMPORT_VERSION) {
+        return res.status(400).json({
+          success: false,
+          message: `This file is version ${payload.version}; this page reads version ${PAPER_REORDER_IMPORT_VERSION}.`,
+        });
+      }
+
+      const order = payload.order || {};
+      const lines = Array.isArray(payload.lines) ? payload.lines : [];
+      if (!lines.length) return res.status(400).json({ success: false, message: "That file has no order lines." });
+
+      const clientName = String(order.clientName || "").trim();
+      if (!clientName) return res.status(400).json({ success: false, message: "That file names no client." });
+
+      const users = await Username.find({ clientName: new RegExp(`^${escapeRegex(clientName)}$`, "i") })
+        .select("_id userName clientName userLocation")
+        .sort({ userName: 1 })
+        .lean();
+      if (!users.length) {
+        return res.status(400).json({
+          success: false,
+          message: `No client user on file for "${clientName}" — add one under Clients before importing.`,
+        });
+      }
+      // More than one user under the client is legitimate; the first by name
+      // is used and named in the preview so it's visible before confirming.
+      const user = users[0];
+
+      const poNumber = String(order.poNumber || "").trim();
+      if (!poNumber) return res.status(400).json({ success: false, message: "That file carries no PO Number." });
+
+      const rows = [];
+      for (const line of lines) {
+        rows.push(await resolvePaperReorderLine(line, { userId: user._id, poNumber }));
+      }
+
+      // Location is never asked for on the import. It decides one thing only:
+      // where a *newly created* binding is filed -- and a client's paper
+      // belongs wherever that client's existing bindings already sit, so
+      // there is nothing for anyone to choose. It still has to be resolved
+      // rather than skipped: resolveLabelStockBinding() demands a location
+      // for every line, including lines whose binding already exists.
+      //
+      // The client's own bindings win over the Location master, which may
+      // have been renamed or pruned since those bindings were made -- filing
+      // a new one somewhere else would split one client's paper across two
+      // locations.
+      const [masterLocations, bindingLocations] = await Promise.all([
+        Location.distinct("locationName"),
+        LabelStockBinding.distinct("location", { userId: user._id }),
+      ]);
+      const resolvedLocation =
+        [...bindingLocations, user.userLocation]
+          .map((l) => normalizeLocationName(l))
+          .find((l) => l && l !== "ALL") ||
+        // Nothing bound yet: a single-location setup has only one answer.
+        (masterLocations.length === 1 ? normalizeLocationName(masterLocations[0]) : "");
+
+      if (!resolvedLocation) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `No location on file for "${user.clientName}" — bind a product to this client, ` +
+            `or set the user's location, before importing.`,
+        });
+      }
+      const token = crypto.randomUUID();
+      req.session.paperReorderImport = {
+        token,
+        userId: String(user._id),
+        location: resolvedLocation,
+        order: {
+          clientName: user.clientName,
+          userName: user.userName,
+          poNumber,
+          poDate: order.poDate || "",
+          estimatedDate: order.estimatedDate || "",
+          deckleOption: String(order.deckleOption || "").trim().toUpperCase(),
+          remarks: String(order.remarks || "").trim(),
+          vendorName: String(order.vendorName || "").trim(),
+          exportedBy: String(payload.source?.exportedBy || "").trim(),
+          generatedAt: payload.generatedAt || "",
+        },
+        rows,
+      };
+
+      res.json({
+        success: true,
+        token,
+        order: req.session.paperReorderImport.order,
+        userCount: users.length,
+        rows,
+      });
+    } catch (err) {
+      console.error("PAPER REORDER IMPORT PREVIEW ERROR:", err);
+      res.status(500).json({ success: false, message: "Failed to read that file." });
+    }
+  });
+});
+
+// Step 2: create the orders the user ticked. Lines come from the session copy
+// of the preview; the browser only says which ones to include and at what
+// rate, so a doctored post can't smuggle in a product or a quantity that was
+// never shown.
+router.post("/sales/pending/import/commit", requireAuth, createLimiter, async (req, res) => {
+  try {
+    const staged = req.session.paperReorderImport;
+    if (!staged || staged.token !== String(req.body.token || "")) {
+      return res.status(400).json({
+        success: false,
+        message: "That upload has expired — upload the file again.",
+      });
+    }
+
+    const selections = Array.isArray(req.body.lines) ? req.body.lines : [];
+    const byIndex = new Map(selections.map((s) => [Number(s.index), s]));
+
+    const poLines = [];
+    for (let i = 0; i < staged.rows.length; i++) {
+      const sel = byIndex.get(i);
+      if (!sel || !sel.include) continue;
+      const row = staged.rows[i];
+      if (row.error) {
+        return res.status(400).json({ success: false, message: `${row.productCode}: ${row.error}` });
+      }
+      const rate = Number(sel.rate);
+      if (!Number.isFinite(rate) || rate <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: `${row.productCode} (size ${row.paperSize}): a rate greater than zero is required.`,
+        });
+      }
+      poLines.push({
+        labelStockMasterId: row.labelStockMasterId,
+        paperSize: row.paperSize,
+        runningMeters: row.runningMeters,
+        noOfRolls: row.noOfRolls,
+        itemRate: rate,
+      });
+    }
+
+    if (!poLines.length) {
+      return res.status(400).json({ success: false, message: "Tick at least one line to import." });
+    }
+
+    // Resolved at preview time (see above) and carried on the session -- the
+    // browser never sends it, so it can't be pointed somewhere else.
+    const location = normalizeLocationName(staged.location || "");
+    if (!location || location === "ALL") {
+      return res.status(400).json({
+        success: false,
+        message: "That upload has no usable location — upload the file again.",
+      });
+    }
+
+    const result = await createLabelStockPoLines({
+      poLines,
+      userId: staged.userId,
+      poNumber: staged.order.poNumber,
+      poDate: staged.order.poDate,
+      estimatedDate: staged.order.estimatedDate,
+      remarks: staged.order.remarks,
+      deckleOption: staged.order.deckleOption || undefined,
+      sourceLocation: location,
+      createdByUser: req.user?.username || "SYSTEM",
+      // Ties every line of this import to the one upload it came from, so
+      // re-confirming the same staged preview can't double-create.
+      submissionToken: `import-${staged.token}`,
+    });
+    if (result.error) return res.status(400).json({ success: false, message: result.error });
+
+    delete req.session.paperReorderImport;
+
+    const created = result.createdOrders.length;
+    res.locals.auditDescription =
+      `Imported paper re-order from FAIRTECH for "${staged.order.clientName}" -- ` +
+      `${created} item line(s), total x${result.totalQty} (PO ${result.poNumber})`;
+    req.flash(
+      "notification",
+      created
+        ? `Imported ${created} line${created === 1 ? "" : "s"} as PO ${result.poNumber}.`
+        : "Every line in that file was already imported.",
+    );
+    res.json({ success: true, created, redirect: "/app/sales/pending" });
+  } catch (err) {
+    console.error("PAPER REORDER IMPORT COMMIT ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to create the orders." });
   }
 });
 
@@ -5077,7 +5473,7 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
       : `Deckle batch created — ${batched.length} order(s) bundled at deckle size ${deckleSize}. Now in the Deckle Queue.`)
     + (leftBehind ? ` ${leftBehind.charAt(0).toUpperCase()}${leftBehind.slice(1)} stayed on Deckle Sorting.` : ""),
   );
-  res.redirect(backTo);
+  res.redirect("/app/labels/production/deckle-queue");
 });
 
 // Un-bundle a batch that hasn't been assigned to a machine yet -- its member

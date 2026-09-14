@@ -1224,7 +1224,7 @@
             <th>Deckle Size</th>
             <th>Rolls Across</th>
             <th>Layout</th>
-            <th title="Width scrapped off every web — both edge trims plus the uncut slack">Trim</th>
+            <th title="Total width scrapped off this web — both edge trims plus the uncut slack (the Siderun beside it)">Total Wastage</th>
             <th title="Usable web left after the knives (edge trims already netted out)">Siderun</th>
             <th>Deckle R.M.</th>
             <th>Roll R.M.</th>
@@ -1350,8 +1350,12 @@
     // -- picking a size inside a layout's table sets that layout's web.
     MIXED_WEBS = dsaMixed.checked;
 
-    const dsaStat = (k, v, cls, wrapCls) =>
-      `<div class="dsa-stat${wrapCls ? " " + wrapCls : ""}"><span class="k">${esc(k)}</span><span class="v${cls ? " " + cls : ""}">${esc(v)}</span></div>`;
+    // `title` spells out what the mm figure is a total OF -- a bare "280 mm"
+    // beside a percentage is exactly the sort of number that gets read as
+    // per-web when it is per-job.
+    const dsaStat = (k, v, cls, wrapCls, title) =>
+      `<div class="dsa-stat${wrapCls ? " " + wrapCls : ""}"${title ? ` title="${esc(title)}"` : ""}>`
+      + `<span class="k">${esc(k)}</span><span class="v${cls ? " " + cls : ""}">${esc(v)}</span></div>`;
 
     function dsaShowError(msg) {
       dsaBody.innerHTML = `<div class="dsa-err">${esc(msg)}</div>`;
@@ -1365,16 +1369,22 @@
       // the roll length, and any overrun by the rolls-per-web granularity. So
       // that is the number worth showing next to the headline waste.
       const avoidPct = w.consumedSqM > 0 ? round2((w.avoidableSqM / w.consumedSqM) * 100) : 0;
-      // Run-length-weighted average side trim width, in mm -- same weighting
-      // (drm x webs) the backend used to turn each layout's sideTrim into
-      // avoidableSqM, so this is the mm figure that pct is actually built from.
-      const runM = (p.layouts || []).reduce((n, l) => n + (l.drm || 0) * (l.webs || 0), 0);
-      const avoidMm = runM > 0
-        ? round2((p.layouts || []).reduce((n, l) => n + l.sideTrim * l.drm * l.webs, 0) / runM)
-        : 0;
-      // Same area/run-length conversion, applied to the whole waste figure
-      // (edge + side + end + overrun) rather than just the recoverable part.
-      const wasteMm = runM > 0 ? round2((w.wasteSqM * 1000) / runM) : 0;
+      // TOTAL side trim for the job: every web's side trim added up, NOT an
+      // average per web. Both mm figures here are whole-job totals, which is
+      // what the percentages beside them have always been -- showing a per-web
+      // average next to a whole-job percentage is what made these two read as
+      // if they disagreed.
+      const sideMm = round2((p.layouts || []).reduce((n, l) => n + l.sideTrim * l.webs, 0));
+      // Same basis for the whole scrap figure. Waste area is built up as
+      // (trim width / 1000) x drm x webs, and drm is one plan-level number
+      // (every layout carries the same Deckle R.M.), so dividing the area back
+      // by it returns the summed trim width in mm.
+      //
+      // With no end tail this lands on exactly edge trim x webs + Side Run mm
+      // -- the arithmetic a planner can check by eye against the machine.
+      const drmM = Number(p.deckleRunningMeters) || 0;
+      const wasteMm = drmM > 0 ? round2((w.wasteSqM * 1000) / drmM) : 0;
+      const edgeMm = round2((p.edgeTrimTotal || 0) * (p.webs || 0));
       const extra = (p.rolls || []).reduce((n, r) => n + (r.extra || 0), 0);
       const stats = [
         // With mixed webs the batch is still recorded at one size, so show that
@@ -1385,9 +1395,31 @@
         dsaStat("Layouts", `${p.layouts.length}`),
         dsaStat("Deckle Webs", `${fmtI(p.webs)}`),
         dsaStat("Facestock Used", `${fmt(w.consumedSqM)} m²`),
-        dsaStat("Extra Rolls", `${fmtI(extra)}`, extra ? "warn" : "good"),
-        dsaStat("Side Run", `${fmt(avoidPct)} % | ${fmt(avoidMm)} mm`, avoidPct <= 2 ? "good" : "warn"),
-        dsaStat("Total Waste", `${fmt(w.wastePct)} % | ${fmt(wasteMm)} mm`, w.wastePct <= 10 ? "good" : "warn", "dsa-stat-wide"),
+        // Spare stock, not scrap -- those rolls come off width the layout
+        // would otherwise have trimmed away, so they are deliberately NOT in
+        // Total Waste below (see the waste comment in utils/deckleOptimizer).
+        // The area rides along here so it stays on screen regardless.
+        dsaStat(
+          "Extra Rolls",
+          extra ? `${fmtI(extra)} · ${fmt(w.overrunSqM)} m²` : "0",
+          extra ? "warn" : "good",
+        ),
+        dsaStat(
+          "Side Run",
+          `${fmt(avoidPct)} % | ${fmt(sideMm)} mm`,
+          avoidPct <= 2 ? "good" : "warn",
+          "",
+          `Total uncut slack across all ${fmtI(p.webs)} webs (${fmt(w.avoidableSqM)} m²).`,
+        ),
+        dsaStat(
+          "Total Waste",
+          `${fmt(w.wastePct)} % | ${fmt(wasteMm)} mm`,
+          w.wastePct <= 10 ? "good" : "warn",
+          "dsa-stat-wide",
+          `Edge trim ${fmt(edgeMm)} mm + Side Run ${fmt(sideMm)} mm`
+            + (w.endTrimSqM > 0 ? ` + end tail ${fmt(w.endTrimSqM)} m²` : "")
+            + ` = ${fmt(w.wasteSqM)} m² scrapped. Spare rolls are not counted here.`,
+        ),
       ].join("");
       // Just the numbers -- the planner reviews the layouts themselves below,
       // so the optimizer's running commentary (search budget, mixed-web

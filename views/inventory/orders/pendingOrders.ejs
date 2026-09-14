@@ -22,6 +22,256 @@
     background-color: rgba(16, 185, 129, 0.22);
     border-color: rgba(255, 255, 255, 0.65);
   }
+
+  /* ---- Import button (header bar) ----
+     The bar itself is #044a78, so a #044a78 button on it is invisible -- this
+     read as a bare icon + label, indistinguishable from the plain "View Logs"
+     link beside it. Solid white makes it the one action on this bar that
+     writes anything. Padding is kept tight: the bar already carries a title,
+     four value badges and two other controls, so there is no room to spend. */
+  #import-orders-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 13px;
+    border: none;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #044a78;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.18);
+  }
+  #import-orders-btn i { font-size: 13px; opacity: 0.9; }
+  #import-orders-btn:hover { background: #f4f8fc; }
+  #import-orders-btn:active { background: #e6eef7; }
+  #import-orders-btn:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+
+  /* ---- Paper re-order import dialog ----
+     Shows every line the uploaded file would create, with the rate it would
+     be placed at, before anything is written. Lines that can't be ordered are
+     tinted and can't be ticked; the rest stay editable, since a new paper size
+     still needs a rate agreeing before it becomes an order. */
+  #importOrdersModal .logout-dialog { width: min(860px, 96vw); }
+  #importOrdersModal .logout-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  #importOrdersModal .logout-title i {
+    font-size: 1.05rem;
+    color: #044a78;
+    background: rgba(4, 74, 120, 0.1);
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Auto-fit columns rather than a fixed two, so the PO header facts pack
+     into the width available instead of leaving half a row empty. */
+  #importOrdersModal .import-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 6px 18px;
+    font-size: 12.5px;
+    color: #4b5563;
+    background: #f8fafc;
+    border: 1px solid #e0e6f0;
+    border-radius: 9px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+  #importOrdersModal .import-meta b { color: #1f2a44; }
+  #importOrdersModal .import-meta .wide { grid-column: 1 / -1; }
+
+  /* Sized to what a rate is, not stretched -- a two-digit figure has no
+     business filling a third of the dialog (which is what the flex row this
+     replaced did, wrapping the product text to three lines to pay for it). */
+  #importOrdersModal input.import-rate {
+    height: 32px;
+    border: 1px solid #d5dceb;
+    border-radius: 7px;
+    background: #fff;
+    color: #1f2a44;
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  #importOrdersModal input.import-rate:hover { border-color: #b9c5db; }
+  #importOrdersModal input.import-rate:focus {
+    outline: none;
+    border-color: #044a78;
+    box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.14);
+  }
+
+  #importOrdersModal .import-lines {
+    border: 1px solid #e0e6f0;
+    border-radius: 10px;
+    max-height: 330px;
+    overflow-y: auto;
+    background: #fff;
+  }
+  #importOrdersModal .import-lines::-webkit-scrollbar { width: 9px; }
+  #importOrdersModal .import-lines::-webkit-scrollbar-thumb {
+    background: #cbd5e1; border-radius: 9px; border: 2px solid #fff;
+  }
+
+  /* One template shared by the header and every line, so the figures sit
+     under their own headings. The rate column is sized to what a rate
+     actually is -- the flex row this replaced let the input stretch to a
+     third of the dialog and wrapped the product text to three lines to pay
+     for it. */
+  #importOrdersModal .import-lines-head,
+  #importOrdersModal .import-line {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) 70px 104px;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+  }
+  #importOrdersModal .import-lines-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #eef2f7;
+    border-bottom: 1px solid #e0e6f0;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #044a78;
+  }
+  #importOrdersModal .import-line {
+    font-size: 13px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  #importOrdersModal .import-line:last-child { border-bottom: none; }
+  #importOrdersModal .import-line.invalid { background: #fef2f2; }
+  #importOrdersModal .import-line.duplicate { background: #fffbeb; }
+
+  #importOrdersModal .import-line input[type="checkbox"] {
+    width: 15px; height: 15px; margin: 0; cursor: pointer; accent-color: #044a78;
+  }
+  #importOrdersModal .import-line input[type="checkbox"]:disabled { cursor: not-allowed; }
+
+  /* Product cell: one line of identity, one of provenance. Both clipped
+     rather than wrapped so every row stays the same height. */
+  #importOrdersModal .import-line .spec {
+    color: #1f2a44;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #importOrdersModal .import-line .spec .sku { color: #94a3b8; font-size: 11px; }
+  #importOrdersModal .import-line .note {
+    font-size: 11px;
+    color: #6b7280;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #importOrdersModal .import-line.invalid .spec,
+  #importOrdersModal .import-line.invalid .note { color: #b91c1c; }
+
+  #importOrdersModal .import-line .rolls {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: #4b5563;
+  }
+  #importOrdersModal .import-line .rolls b { color: #1f2a44; }
+  #importOrdersModal .import-lines-head .num { text-align: right; }
+
+  /* Rate: a rupee prefix sits inside the box so the number needs no label of
+     its own, and the field is only as wide as a rate. */
+  #importOrdersModal .import-rate-wrap {
+    position: relative;
+    display: block;
+  }
+  #importOrdersModal .import-rate-wrap::before {
+    content: "₹";
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: #94a3b8;
+    pointer-events: none;
+  }
+  #importOrdersModal input.import-rate {
+    width: 100%;
+    padding: 0 9px 0 21px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Spinners steal width and nobody steps a rate by 1. */
+  #importOrdersModal input.import-rate::-webkit-outer-spin-button,
+  #importOrdersModal input.import-rate::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  #importOrdersModal input.import-rate { -moz-appearance: textfield; }
+  #importOrdersModal input.import-rate:disabled {
+    background: #f8fafc;
+    color: #cbd5e1;
+    cursor: not-allowed;
+  }
+  /* A ticked line with no rate is what blocks the submit -- say so on the
+     field itself rather than only by grey-ing out the button. */
+  #importOrdersModal .import-line.needs-rate input.import-rate {
+    border-color: #dc2626;
+    background: #fff5f5;
+  }
+
+  #importOrdersModal .import-empty {
+    padding: 20px 12px;
+    text-align: center;
+    color: #94a3b8;
+    font-style: italic;
+    font-size: 13px;
+  }
+
+  #importOrdersModal .import-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: #f1f6fb;
+    border: 1px solid #dce6f2;
+    font-size: 12.5px;
+    color: #4b5563;
+  }
+  #importOrdersModal .import-total b { color: #044a78; }
+  /* display:flex above outranks the UA's [hidden] { display: none }, so the
+     bar has to be hidden explicitly or it survives with stale totals. */
+  #importOrdersModal .import-total[hidden] { display: none; }
+
+  #importOrdersModal .logout-btn {
+    font-size: 0.92rem;
+    padding: 0.55rem 1.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #importOrdersModal .logout-btn:hover:not(:disabled) { opacity: 0.88; }
+  #importOrdersModal .logout-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  @media (max-width: 640px) {
+    #importOrdersModal .import-lines-head,
+    #importOrdersModal .import-line {
+      grid-template-columns: 22px minmax(0, 1fr) 58px 88px;
+      gap: 8px;
+      padding: 7px 9px;
+    }
+  }
 </style>
 
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
@@ -56,6 +306,15 @@
         <i class="fa-solid fa-clock-rotate-left"></i>
         <span>View Logs</span>
       </a>
+      <button
+        type="button"
+        id="import-orders-btn"
+        title="Upload a paper re-order file exported from FAIRTECH"
+      >
+        <i class="fa-solid fa-file-import"></i>
+        <span>Import</span>
+      </button>
+      <input type="file" id="import-orders-file" accept="application/json,.json" style="display: none" />
       <div class="download-selector" id="downloadSelector">
         <button class="download-selector__trigger">
           <span>
@@ -80,6 +339,28 @@
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
   <div id="master-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<div class="logout-modal" id="importOrdersModal" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="importOrdersTitle">
+    <h2 class="logout-title" id="importOrdersTitle">
+      <i class="fa-solid fa-file-import"></i>
+      <span>Import Paper Re-Order</span>
+    </h2>
+    <div class="import-meta" id="import-meta"></div>
+    <div class="import-lines" id="import-lines"></div>
+    <div class="import-total" id="import-total" hidden>
+      <span id="import-total-lines"></span>
+      <span id="import-total-rolls"></span>
+    </div>
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" id="import-orders-cancel">Cancel</button>
+      <button class="logout-btn primary" type="button" id="import-orders-confirm" disabled>
+        <i class="fa-solid fa-check"></i>
+        <span>Create Orders</span>
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- Tabulator JS -->
@@ -879,6 +1160,190 @@
   document.getElementById("download-xlsx").addEventListener("click", () => {
     table.download("xlsx", "pending_orders.xlsx", { sheetName: "PendingOrders" });
     selector.classList.remove("download-selector--active");
+  });
+
+  /* ================= IMPORT PAPER RE-ORDER (FAIRTECH export) ================= */
+  const importModal = document.getElementById("importOrdersModal");
+  const importMetaEl = document.getElementById("import-meta");
+  const importLinesEl = document.getElementById("import-lines");
+  const importFileInput = document.getElementById("import-orders-file");
+  const importConfirmBtn = document.getElementById("import-orders-confirm");
+  const importTotalEl = document.getElementById("import-total");
+  const importTotalLinesEl = document.getElementById("import-total-lines");
+  const importTotalRollsEl = document.getElementById("import-total-rolls");
+  let importToken = "";
+
+  const getCsrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+
+  const esc = (val) =>
+    String(val ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const num = (n) => (n === null || n === undefined || n === "" ? "—" : Number(n).toLocaleString("en-IN"));
+
+  // Stored as the DECKLE_FREE / DECKLE_SET enum (TapeSalesOrder.deckleOption);
+  // the underscore is a code detail, not something to read. Case is left as
+  // it is so it sits with the other uppercase facts in this panel.
+  const deckleLabel = (v) => String(v || "").trim().replace(/_/g, " ") || "—";
+
+  const closeImportModal = () => {
+    importModal.classList.remove("show");
+    importModal.setAttribute("aria-hidden", "true");
+    importTotalEl.hidden = true;
+    importToken = "";
+  };
+
+  // Confirm is enabled only while at least one line is ticked and every ticked
+  // line has a rate -- the server enforces the same thing, this just stops the
+  // round trip.
+  const syncImportConfirm = () => {
+    const rows = [...importLinesEl.querySelectorAll(".import-line[data-index]")];
+    let ticked = 0;
+    let rolls = 0;
+    let allRated = true;
+    rows.forEach((r) => {
+      const on = Boolean(r.querySelector(".import-include")?.checked);
+      const rated = Number(r.querySelector(".import-rate")?.value) > 0;
+      // Mark the row that is actually blocking the submit -- a greyed-out
+      // button on its own doesn't say which line still needs a rate.
+      r.classList.toggle("needs-rate", on && !rated);
+      if (!on) return;
+      ticked++;
+      rolls += Number(r.dataset.rolls) || 0;
+      if (!rated) allRated = false;
+    });
+    importConfirmBtn.disabled = !(ticked && allRated);
+
+    if (!rows.length) {
+      importTotalEl.hidden = true;
+      return;
+    }
+    importTotalLinesEl.innerHTML = `<b>${ticked}</b> of ${rows.length} line${rows.length === 1 ? "" : "s"} selected`;
+    importTotalRollsEl.innerHTML = `<b>${num(rolls)}</b> roll${rolls === 1 ? "" : "s"} to order`;
+    importTotalEl.hidden = false;
+  };
+
+  const renderImportPreview = (data) => {
+    const o = data.order || {};
+    importMetaEl.innerHTML = [
+      `<span>Client: <b>${esc(o.clientName)}</b>${o.userName ? ` / ${esc(o.userName)}` : ""}</span>`,
+      `<span>PO Number: <b>${esc(o.poNumber)}</b></span>`,
+      `<span>PO Date: <b>${esc(o.poDate || "—")}</b></span>`,
+      `<span>Est Delivery: <b>${esc(o.estimatedDate || "—")}</b></span>`,
+      `<span>Deckle: <b>${esc(deckleLabel(o.deckleOption))}</b></span>`,
+      `<span>From: <b>${esc(o.vendorName || "FAIRTECH")}</b>${o.exportedBy ? ` (${esc(o.exportedBy)})` : ""}</span>`,
+      data.userCount > 1
+        ? `<span class="wide" style="color:#92400e;">${data.userCount} users on this client — ordering under <b>${esc(o.userName)}</b>.</span>`
+        : "",
+      o.remarks ? `<span class="wide">Remarks: <b>${esc(o.remarks)}</b></span>` : "",
+    ]
+      .filter(Boolean)
+      .join("");
+
+    const rows = data.rows || [];
+    importLinesEl.innerHTML = rows.length
+      ? `<div class="import-lines-head"><span></span><span>Product</span><span class="num">Rolls</span><span class="num">Rate</span></div>` +
+        rows
+          .map((r, i) => {
+            const cls = r.error ? "invalid" : r.duplicate ? "duplicate" : "";
+            // An unorderable line can't be ticked at all; a duplicate can, but
+            // starts off so a second upload of the same file is a no-op unless
+            // it's deliberately re-ticked.
+            const checked = !r.error && !r.duplicate ? " checked" : "";
+            const note = r.error
+              ? esc(r.error)
+              : r.duplicate
+              ? `Already on this PO — ${esc(r.rateSource)}`
+              : esc(r.rateSource);
+            const spec =
+              `<b>${esc(r.productCode)}</b>` +
+              (r.skuCode ? ` <span class="sku">${esc(r.skuCode)}</span>` : "") +
+              ` · ${esc(r.family || "—")} · Size ${esc(r.paperSize)} · RM ${num(r.runningMeters)}`;
+            return `<div class="import-line ${cls}" data-index="${i}" data-rolls="${Number(r.noOfRolls) || 0}">
+              <input type="checkbox" class="import-include"${checked}${r.error ? " disabled" : ""} />
+              <div>
+                <div class="spec" title="${esc(r.productCode)} · ${esc(r.family)} · Size ${esc(r.paperSize)} · RM ${esc(r.runningMeters)}">${spec}</div>
+                <div class="note" title="${note}">${note}</div>
+              </div>
+              <span class="rolls"><b>${num(r.noOfRolls)}</b></span>
+              <span class="import-rate-wrap">
+                <input type="number" class="import-rate" min="0" step="0.01" value="${r.rate === "" || r.rate == null ? "" : r.rate}" placeholder="—"${r.error ? " disabled" : ""} />
+              </span>
+            </div>`;
+          })
+          .join("")
+      : `<div class="import-empty">That file has no lines.</div>`;
+
+    importLinesEl.querySelectorAll(".import-include, .import-rate").forEach((el) => {
+      el.addEventListener("input", syncImportConfirm);
+      el.addEventListener("change", syncImportConfirm);
+    });
+    syncImportConfirm();
+  };
+
+  document.getElementById("import-orders-btn").addEventListener("click", () => importFileInput.click());
+  document.getElementById("import-orders-cancel").addEventListener("click", closeImportModal);
+  importModal.addEventListener("click", (e) => {
+    if (e.target === importModal) closeImportModal();
+  });
+
+  importFileInput.addEventListener("change", async () => {
+    const file = importFileInput.files?.[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      // Multipart, so the CSRF token can't ride in the body — csurf reads it
+      // off this header instead.
+      const res = await fetch("/app/sales/pending/import/preview", {
+        method: "POST",
+        headers: { "x-csrf-token": getCsrfToken() },
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Failed to read that file");
+      importToken = data.token;
+      renderImportPreview(data);
+      importModal.classList.add("show");
+      importModal.setAttribute("aria-hidden", "false");
+    } catch (err) {
+      showToast(err.message || "Failed to read that file", "error");
+    } finally {
+      // Cleared so picking the same file again still fires a change event.
+      importFileInput.value = "";
+    }
+  });
+
+  importConfirmBtn.addEventListener("click", async () => {
+    const lines = [...importLinesEl.querySelectorAll(".import-line[data-index]")].map((r) => ({
+      index: Number(r.dataset.index),
+      include: Boolean(r.querySelector(".import-include")?.checked),
+      rate: r.querySelector(".import-rate")?.value || "",
+    }));
+
+    const confirmLabelEl = importConfirmBtn.querySelector("span");
+    importConfirmBtn.disabled = true;
+    const label = confirmLabelEl.textContent;
+    confirmLabelEl.textContent = "Creating…";
+    try {
+      const res = await fetch("/app/sales/pending/import/commit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-csrf-token": getCsrfToken() },
+        body: JSON.stringify({ token: importToken, lines }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Failed to create the orders");
+      closeImportModal();
+      window.location.href = data.redirect || "/app/sales/pending";
+    } catch (err) {
+      showToast(err.message || "Failed to create the orders", "error");
+      confirmLabelEl.textContent = label;
+      syncImportConfirm();
+    }
   });
 </script>
 
