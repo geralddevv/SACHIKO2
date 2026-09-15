@@ -242,17 +242,27 @@
         name="empReportingManager"
         required
       >
-        <option value="" disabled <%= !employee?.empReportingManager ? 'selected' : '' %> hidden>Select</option>
-        <% if (employee?.empReportingManager) { %>
-          <% const inList = (employees || []).some(e => e?.empName === employee.empReportingManager); %>
-          <% if (!inList) { %>
-            <option value="<%= employee.empReportingManager %>" selected><%= employee.empReportingManager %></option>
-          <% } %>
+        <%
+          // Someone has to sit at the top of the org chart -- the proprietor
+          // reports to nobody, and on a fresh database the very first employee
+          // has nobody to pick either. Without this option the list is empty
+          // and a required select with no selectable option makes it
+          // impossible to create the first employee at all.
+          const NO_MANAGER = "NONE";
+          const managerNames = (employees || []).map(e => e?.empName).filter(Boolean);
+          const currentManager = employee?.empReportingManager || "";
+          // Preselect NONE only for the first-ever employee, where it is the
+          // only possible answer; otherwise keep the usual "Select" prompt.
+          const noManagerSelected =
+            currentManager === NO_MANAGER || (!employee && !managerNames.length);
+        %>
+        <option value="" disabled <%= !currentManager && !noManagerSelected ? 'selected' : '' %> hidden>Select</option>
+        <option value="<%= NO_MANAGER %>" <%= noManagerSelected ? 'selected' : '' %>>NONE (TOP OF HIERARCHY)</option>
+        <% if (currentManager && currentManager !== NO_MANAGER && !managerNames.includes(currentManager)) { %>
+          <option value="<%= currentManager %>" selected><%= currentManager %></option>
         <% } %>
-        <% (employees || []).forEach(emp => { %>
-          <% if (emp?.empName) { %>
-            <option value="<%= emp.empName %>" <%= employee?.empReportingManager === emp.empName ? 'selected' : '' %>><%= emp.empName %></option>
-          <% } %>
+        <% managerNames.forEach(name => { %>
+          <option value="<%= name %>" <%= currentManager === name ? 'selected' : '' %>><%= name %></option>
         <% }) %>
       </select>
     </div>

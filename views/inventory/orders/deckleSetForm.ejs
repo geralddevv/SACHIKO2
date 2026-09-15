@@ -1218,6 +1218,23 @@
       })
       .filter(Boolean);
 
+    // Worst first: the layout that scraps the most width off its web leads,
+    // down to the tightest one -- so the rows worth re-drawing are read first
+    // and the recap ranks the set instead of echoing the order it was typed
+    // in. `no` stays the planner's Layout # above (errors name rows by it), so
+    // those numbers deliberately run out of order here.
+    set.sort((a, b) => {
+      // A layout with no web yet has nothing to scrap off -- park it last.
+      const at = a.trim == null ? -1 : a.trim;
+      const bt = b.trim == null ? -1 : b.trim;
+      if (bt !== at) return bt - at;
+      // Same trim per web: the one running more webs throws away more in all.
+      const bw = (b.trim || 0) * b.webs;
+      const aw = (a.trim || 0) * a.webs;
+      if (bw !== aw) return bw - aw;
+      return a.no - b.no;
+    });
+
     if (!set.length) {
       dsfSetSub.textContent = "";
       dsfSetBody.innerHTML =
@@ -1239,13 +1256,15 @@
       .join("  ·  ");
     dsfSetSub.textContent = sizeLine ? `Deckle webs: ${sizeLine}` : "";
 
-    // "3 × 100 mm, 150 mm" -- the knives across the web, like a cutting slip.
+    // "100 mm × 3, 150 mm × 1" -- roll size then how many of it sit across the
+    // web, the way the shopfloor calls a set out. The count is always shown,
+    // single knives included, so every entry reads the same way.
     const cutsText = (cuts) => {
       const byW = new Map();
       cuts.forEach(([, w]) => byW.set(w, (byW.get(w) || 0) + 1));
       return [...byW.entries()]
         .sort((a, b) => b[0] - a[0])
-        .map(([w, n]) => `${n > 1 ? `<b>${n} ×</b> ` : ""}<b>${esc(fmt(w))}</b> mm`)
+        .map(([w, n]) => `<b>${esc(fmt(w))}</b> mm × <b>${esc(fmtI(n))}</b>`)
         .join(", ");
     };
 
@@ -1253,11 +1272,11 @@
       <table class="dsf-set-table">
         <thead>
           <tr>
-            <th>#</th>
+            <th title="Layout # in the table above — the rows here are ranked by wastage, not by that number">#</th>
             <th>Deckle Size</th>
             <th>Rolls Across</th>
             <th>Layout</th>
-            <th title="Total width scrapped off this web — both edge trims plus the uncut slack (the Siderun beside it)">Total Wastage</th>
+            <th title="Total width scrapped off this web — both edge trims plus the uncut slack (the Siderun beside it). Rows are ordered by this, most wastage first.">Total Wastage ▾</th>
             <th title="Usable web left after the knives (edge trims already netted out)">Siderun</th>
             <th>Deckle R.M.</th>
             <th>Roll R.M.</th>

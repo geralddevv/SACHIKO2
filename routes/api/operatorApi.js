@@ -37,6 +37,15 @@ import {
   maintenanceUpload,
   MaintenanceInputError,
 } from "../system/maintenance.js";
+import {
+  buildSlittingCard,
+  saveSlittingSetting,
+  swapSlittingDeckle,
+  startSlittingRow,
+  produceSlittingRow,
+  editSlittingRowJoint,
+  slittingCardOperatorId,
+} from "../system/slitting.js";
 
 /*
  * JSON API for the Sachiko Operator mobile app (a separate bare React Native
@@ -656,6 +665,134 @@ router.post("/jobcard", requireOperatorApiAuth, createLimiter, async (req, res) 
   } catch (err) {
     console.error("OPERATOR API JOB CARD ERROR:", err);
     res.status(500).json({ error: "Failed to save production entry" });
+  }
+});
+
+/*
+ * Slitting -- the step AFTER lamination, and the JSON mirror of the operator's
+ * server-rendered slitting card (routes/system/slitting.js's
+ * GET /slitting/jobcard/:cardId and its row/* punches). The lamination job
+ * card above turns raw reels into Deckles; this one cuts an allocated Deckle
+ * web into the finished roll widths a client order asked for, which land in
+ * Finished Goods.
+ *
+ * The queue for these is NOT a route of its own: buildOperatorQueue already
+ * folds this operator's allocated slitting cards into GET /queue as
+ * `slittingRows` (see routes/system/machine.js), so the app reads its Work
+ * Queue -- lamination jobs and slitting cards both -- from that one call.
+ *
+ * Every handler below is a thin adapter over the exported core in
+ * routes/system/slitting.js, so the web card and the app punch exactly the
+ * same business logic, plus the per-operator ownership check the EJS card has
+ * no need of (staff can open any card there; this API is operator-only).
+ */
+
+// Gate every slitting call on the card actually being this operator's. Writes
+// the refusal itself and answers false, so a handler reads as one line.
+async function ownsSlittingCard(req, res, cardId) {
+  const ownerId = await slittingCardOperatorId(cardId);
+  if (ownerId === null) {
+    res.status(404).json({ success: false, message: "That slitting card no longer exists." });
+    return false;
+  }
+  if (ownerId !== String(req.authUser.empObjId || "")) {
+    res.status(403).json({ success: false, message: "That slitting card is allocated to another operator." });
+    return false;
+  }
+  return true;
+}
+
+router.get("/slitting/jobcard/:cardId", requireOperatorApiAuth, async (req, res) => {
+  const { cardId } = req.params;
+  if (!(await ownsSlittingCard(req, res, cardId))) return undefined;
+
+  const built = await buildSlittingCard(cardId);
+  if (!built.ok) {
+    return res.status(built.status).json({ error: built.message, code: built.code });
+  }
+  return res.json({ card: built.card });
+});
+
+router.post("/slitting/jobcard/setting", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    const { cardId, rows } = req.body || {};
+    if (!(await ownsSlittingCard(req, res, cardId))) return undefined;
+
+    const result = await saveSlittingSetting({ cardId, rows });
+    if (!result.ok) return res.status(result.status).json({ success: false, message: result.message });
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING SETTING ERROR:", err);
+    return res.status(500).json({ success: false, message: "Failed to save Job Setting." });
+  }
+});
+
+// Confirms the reel actually on the machine against this card's row -- and,
+// when a different but equivalent web was picked up off the floor, re-points
+// the row at it. `code` on a refusal names WHY (unknown / mismatch / empty /
+// short / curing / in-use), which is what the app's scan strip reads.
+router.post("/slitting/jobcard/row/swap-deckle", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    const { cardId, index, rollId } = req.body || {};
+    if (!(await ownsSlittingCard(req, res, cardId))) return undefined;
+
+    const result = await swapSlittingDeckle({ cardId, index, rollId });
+    if (!result.ok) {
+      return res.status(result.status).json({ success: false, message: result.message, code: result.code });
+    }
+    return res.json({ success: true, unchanged: result.unchanged, row: result.row });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING SWAP-DECKLE ERROR:", err);
+    return res.status(500).json({ success: false, message: "Failed to confirm that Deckle." });
+  }
+});
+
+router.post("/slitting/jobcard/row/start", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    const { cardId, index, startTime, startMtrs } = req.body || {};
+    if (!(await ownsSlittingCard(req, res, cardId))) return undefined;
+
+    const result = await startSlittingRow({ cardId, index, startTime, startMtrs });
+    if (!result.ok) {
+      return res.status(result.status).json({ success: false, message: result.message, code: result.code });
+    }
+    return res.json({ success: true, startTime: result.startTime, startMtrs: result.startMtrs });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING ROW START ERROR:", err);
+    return res.status(500).json({ success: false, message: "Failed to record the start time." });
+  }
+});
+
+// Stop -- the one call in the whole slitting flow that moves stock: this
+// row's finished rolls into Finished Goods, and the metres that ran off the
+// Deckle. Idempotent on a lost response (the core replays a done row's own
+// roll ids rather than inwarding a second set).
+router.post("/slitting/jobcard/row/produce", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!(await ownsSlittingCard(req, res, body.cardId))) return undefined;
+
+    const result = await produceSlittingRow(body, { createdBy: req.authUser.empName });
+    if (!result.ok) return res.status(result.status).json({ success: false, message: result.message });
+    const { ok, status, auditDescription, ...payload } = result;
+    return res.json({ success: true, ...payload });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING ROW PRODUCE ERROR:", err);
+    return res.status(500).json({ success: false, message: "Failed to move these rolls to Finished Stock." });
+  }
+});
+
+router.post("/slitting/jobcard/row/edit", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    const { cardId, index, joint, jointMtr } = req.body || {};
+    if (!(await ownsSlittingCard(req, res, cardId))) return undefined;
+
+    const result = await editSlittingRowJoint({ cardId, index, joint, jointMtr });
+    if (!result.ok) return res.status(result.status).json({ success: false, message: result.message });
+    return res.json({ success: true, joint: result.joint, jointMtr: result.jointMtr });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING ROW EDIT ERROR:", err);
+    return res.status(500).json({ success: false, message: "Failed to save the joint note." });
   }
 });
 
