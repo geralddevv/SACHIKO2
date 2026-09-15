@@ -57,6 +57,19 @@ const finishedStockSchema = new mongoose.Schema(
       required: true,
       default: 1,
     },
+    // Set when the roll is exported to FAIRTECH (routes/stock/finishedStock.js
+    // POST /export). The row and its whole ledger history are kept -- these
+    // are what say it has LEFT, so the Finished Goods page can list only what
+    // is actually in stock and the Dispatched page can show the rest with the
+    // invoice it went out on. Recorded outright rather than parsed back out
+    // of the OUTWARD log line's remarks.
+    dispatchedAt: {
+      type: Date,
+    },
+    dispatchInvoiceNo: {
+      type: String,
+      trim: true,
+    },
     // This roll's length.
     mtrs: {
       type: Number,

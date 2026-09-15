@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm start          # Run the server (node server.js) — port from PORT in .env, default 3001
+npm start          # Run the server (node server.js) — port from PORT in .env (required; the app refuses to start without it)
 ```
 
 No test suite exists. There is no build step — this is a plain Node.js ES-module project.
@@ -26,6 +26,7 @@ node scripts/send-back-to-pending.js <orderId>   # unassign one WIP order back t
 node scripts/clear-label-stock-layer-data.js     # wipe SachikoLabelStock facestock/adhesive/releaseLiner (+2) so they're re-picked from master
 node scripts/backfill-pendingproduction-allotted-layers.js  # PendingProduction allottedLayers <- parsed from the produced Deckle's log, where missing
 node scripts/backfill-labelstock-signatures.js   # repair SachikoLabelStock dup protection
+node scripts/backfill-finishedstock-rate.js      # price slit rolls that landed with no rate from their sales order's orderRate
 node scripts/resignature-labelstock.js           # resync every /sachiko/label-stock/view row's labelStockSignature + list rows sharing a recipe (--apply to write)
 node scripts/serialize-labelstock-sku-codes.js   # close gaps in SachikoLabelStock skuCode + re-anchor variant SKUs ("000002-A") to their base row's SKU
 node scripts/dissolve-deckle.js [deckleId]       # un-make a Deckle, returning its mtrs to the raw reels it was laminated from
@@ -39,6 +40,7 @@ node scripts/reset-transactional-data.js         # empty orders/production/bindi
 
 Requires a `.env` file with at minimum:
 - `SESSION_SECRET` — app crashes at startup without this
+- `PORT` — app crashes at startup without this (no hardcoded default)
 - `MONGO_URI` (or equivalent — see `config/db.js`)
 - `TASKS_MONGO_URI` (optional) — the `/fairtech/tasks` feature stores its data in a separate, isolated database (`config/tasksDb.js`), for privacy. Without this set, it defaults to a sibling database named `<main db>_tasks` on the same server as `MONGO_URI`.
 - `DECKLE_AUTO_ENABLED` (optional) — kill switch for the Auto Deckle optimizer (see below). Enabled unless set to `false`/`0`/`off`/`no`. Set it to `false` and restart to remove the feature entirely: the Set Deckle page then renders with no Auto Set panel and no client code for it, and the API returns 503.
@@ -209,6 +211,47 @@ moves, since typing a size re-runs the resolve on every keystroke.
 Size trimmed and uppercased with whitespace runs collapsed, RM compared as a
 number, blanks rejected (`Number("")` is `0` and would match a binding with no
 RM). If the two drift apart the form shows a rate the order is not placed at.
+
+### Finished stock export (to the FAIRTECH ERP)
+
+The mirror of the paper re-order import below, going the other way: `/sachiko/finishedstock`
+has an **Export to FAIRTECH** button that turns ticked finished rolls into the JSON file
+FAIRTECH's `/fairtech/paperstock` **Import from Sachiko** takes in as paper stock.
+
+Rolls are ticked **in the dialog** (the table's own ticks just pre-select it), styled after
+FAIRTECH's own "Export to Sachiko" dialog. A roll FAIRTECH would refuse can't be ticked at
+all — the file is all-or-nothing, so one bad roll must never reach the server.
+
+`POST /finishedstock/export` **dispatches** as it exports — the rolls physically leave, so
+they come off this stock in the same call, or the same reels are counted in both databases
+at once. Nothing is deleted: the roll keeps its row and its whole INWARD/OUTWARD history,
+`quantity` goes to 0 and `dispatchedAt` / `dispatchInvoiceNo` are stamped on it. A
+dispatched roll then drops off `/sachiko/finishedstock` (which lists stock only) and shows
+on **`/sachiko/finishedstock/dispatched`** with the invoice it went out on — recorded
+outright rather than parsed back out of the OUTWARD log line's remarks.
+Rolls are claimed with an atomic `quantity > 0` guard, so a double-click — or two people
+exporting at once — can't dispatch the same roll twice; if any claim loses the race the
+whole selection is put back.
+
+The mapping, all of which are **required** on a FAIRTECH `PaperStock`, so each is validated
+here rather than letting the import fail halfway through a delivery:
+
+| finished roll | → | FAIRTECH |
+|---|---|---|
+| `material.productCode` **base code** | → | `Paper.prodCode` |
+| `material.family` | → | `Paper.family` |
+| `paperSize` / `mtrs` / `rate` | → | `paperSize` / `paperMtrs` / `rate` |
+| `rollId` | → | `vendorRollId` (FAIRTECH mints its own `rollId`) |
+
+**The base code is the trap.** A finished roll is booked against the Deckle's own Label
+Stock, so its code is often a production-time variant (`C001WB-B`). That split is internal
+to this app — FAIRTECH files the paper under `C001WB` and knows nothing about variants, so
+exporting the variant verbatim misses the existing Paper there and mints a junk duplicate.
+`baseProductCode()` strips it; the full code still travels as `variantProductCode`, for
+tracing a reel back here only.
+
+Rate comes from the sales order (see the slitting Stop handler), which is what makes the
+export worth anything: it is what FAIRTECH books the reel in at.
 
 ### Paper re-order import (from the FAIRTECH ERP)
 

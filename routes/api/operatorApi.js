@@ -237,6 +237,14 @@ router.post("/jobcard/material/check", requireOperatorApiAuth, createLimiter, as
     const reel = await findScannedReel(POOL_MODELS[pool].Model, rollId);
     if (!reel) return res.json({ ok: false, code: "unknown" });
 
+    // A reel with nothing physically left can't be run, allotted or not --
+    // block the scan outright rather than mounting an empty reel the operator
+    // would just have to "Change" straight back out again. Kept in step with
+    // the same check in routes/system/machine.js's material/check.
+    if ((Number(reel.quantity) || 0) <= 0 || (Number(reel.reelMtrs) || 0) <= 0) {
+      return res.json({ ok: false, code: "empty", rollId: reel.rollId });
+    }
+
     // A reel inwarded without its purchase invoice is not fit to run: the
     // invoice is what ties the physical reel to what was actually bought, and
     // it is the LOT NO printed on its own label (see utils/facestockRollLabel.js

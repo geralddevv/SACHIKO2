@@ -242,6 +242,20 @@
     return row.readyCount ? "ready" : "curing";
   };
 
+  // "2h 14m" / "42m" countdown to a curingUntil ISO timestamp -- "" once it
+  // has passed (a manual refresh, not this, is what actually flips a Deckle
+  // to Ready; see the redraw poll below for what keeps this ticking down).
+  function curingTimeLeft(iso) {
+    if (!iso) return "";
+    const ms = Date.parse(iso) - Date.now();
+    if (!Number.isFinite(ms) || ms <= 0) return "";
+    const mins = Math.ceil(ms / 60000);
+    if (mins < 60) return `${mins}m`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m ? `${h}h ${m}m` : `${h}h`;
+  }
+
   // The A..L knife pattern a row's webs are queued to be cut to
   // (routes/system/slitting.js pendingLayouts). The cell draws it as the web
   // strip below; these build the plain-text forms of it -- one for the Excel
@@ -401,7 +415,10 @@
       return;
     }
     sqDeckleList.innerHTML = (group._children || []).map((d) => {
-      const curingTag = d.curing ? `<span class="sq-deckle-curing"><i class="fa-solid fa-hourglass-half"></i> curing</span>` : "";
+      const curingLeft = curingTimeLeft(d.curingUntil);
+      const curingTag = d.curing
+        ? `<span class="sq-deckle-curing"><i class="fa-solid fa-hourglass-half"></i> curing${curingLeft ? ` · ${esc(curingLeft)} left` : ""}</span>`
+        : "";
       const disabled = !d.allocateHref;
       const tick = !disabled && d.forThisLayout !== false;
       return `
@@ -577,10 +594,11 @@
           }
           const bits = [`${fmtMtrs(row.mtrs)} mtrs`, esc(row.location)];
           if (row.lotNo) bits.push(`lot ${esc(row.lotNo)}`);
+          const timeLeft = curingTimeLeft(row.curingUntil);
           const cure = row.curingLabel === "Hot melt"
             ? '<span style="color:#15803d;font-weight:700;"><i class="fa-solid fa-fire"></i> hot melt</span>'
             : row.curing
-              ? `<span style="color:#b45309;font-weight:700;"><i class="fa-solid fa-hourglass-half"></i> ${esc(row.curingLabel)}</span>`
+              ? `<span style="color:#b45309;font-weight:700;"><i class="fa-solid fa-hourglass-half"></i> ${esc(row.curingLabel)}${timeLeft ? ` (${esc(timeLeft)} left)` : ""}</span>`
               : '<span style="color:#64748b;font-weight:600;"><i class="fa-solid fa-check"></i> cured</span>';
           return `<span style="font-weight:700;color:#044a78;">↳ ${esc(row.rollId)}</span>`
             + `<span style="color:#94a3b8;font-weight:600;"> &nbsp;·&nbsp; ${bits.join(" &nbsp;·&nbsp; ")} &nbsp;·&nbsp; </span>${cure}`;
@@ -651,19 +669,22 @@
         },
       },
       {
-        title: "Status", field: "statusText", hozAlign: "center", width: 130, headerSort: false,
+        title: "Status", field: "statusText", hozAlign: "center", width: 180, headerSort: false,
         headerFilter: "input", headerFilterPlaceholder: "Search",
         formatter: (cell) => {
           const row = cell.getRow().getData();
           if (!row.isGroup) {
             if (row.curingLabel === "Hot melt") return '<span style="color:#15803d;font-weight:700;">Ready</span>';
-            return row.curing
-              ? '<span style="color:#b45309;font-weight:700;">Curing</span>'
-              : '<span style="color:#15803d;font-weight:700;">Ready</span>';
+            if (!row.curing) return '<span style="color:#15803d;font-weight:700;">Ready</span>';
+            const left = curingTimeLeft(row.curingUntil);
+            return `<span style="color:#b45309;font-weight:700;">Curing${left ? ` · ${esc(left)}` : ""}</span>`;
           }
           const status = groupStatus(row);
           if (status === "waiting") return '<span style="color:#94a3b8;font-weight:800;"><i class="fa-solid fa-hourglass-half"></i> Waiting</span>';
-          if (status === "curing") return '<span style="color:#b45309;font-weight:800;"><i class="fa-solid fa-hourglass-half"></i> Curing</span>';
+          if (status === "curing") {
+            const left = curingTimeLeft(row.curingUntil);
+            return `<span style="color:#b45309;font-weight:800;"><i class="fa-solid fa-hourglass-half"></i> Curing${left ? ` · ${esc(left)}` : ""}</span>`;
+          }
           return '<span style="color:#15803d;font-weight:800;"><i class="fa-solid fa-check"></i> Ready</span>';
         },
       },
@@ -701,6 +722,19 @@
 
   document.getElementById("download-xlsx").addEventListener("click", () =>
     table.download("xlsx", "sachiko-deckle-slitting.xlsx", { sheetName: "Deckle Slitting" }));
+
+  // Keep the "Curing · Xh Ym" countdowns ticking down without a page reload.
+  // Only while something is actually curing, and stop once nothing on the
+  // page is any more -- a Deckle passing its curing deadline still needs a
+  // manual refresh to move to Ready (this just keeps the displayed time left
+  // honest up to that point).
+  const anyCuring = () => rowsData.some((g) => g.curingUntil || (g._children || []).some((c) => c.curingUntil));
+  if (anyCuring()) {
+    const curingTick = setInterval(() => {
+      if (!anyCuring()) { clearInterval(curingTick); return; }
+      table.redraw(true);
+    }, 60000);
+  }
 </script>
 
 <% if (notification && notification.length) { %>

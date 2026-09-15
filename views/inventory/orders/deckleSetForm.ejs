@@ -139,7 +139,27 @@
   #dsfIssuesBody ul { margin: 4px 0 0; padding-left: 18px; }
   #dsfIssuesBody li { margin: 2px 0; }
   #dsfIssuesBody .dsf-issue-head { font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
+  /* Same look as the Slitting Queue's "Continue" button (sq-btn-primary). */
+  .submit-btn {
+    border: none; border-radius: 9px; padding: 11px 24px; font-size: 15px; font-weight: 700;
+    color: #fff; background: linear-gradient(135deg, #044a78 0%, #03365a 100%);
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: opacity 0.18s ease;
+  }
+  .submit-btn:hover { opacity: 0.92; }
   .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* Same separator as the Slitting Queue dialog's footer (sq-dialog-footer),
+     just the top edge -- .span-full's own border is dropped so it doesn't
+     also draw the other three sides. */
+  .dsf-submit-footer {
+    margin-top: 10px !important; border: none !important; border-top: 1px solid #b6c0d1 !important;
+    border-radius: 0 !important; background: #fafbfd; padding: 20px 24px 16px !important;
+    display: flex !important; flex-direction: row !important; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  /* Same stat-chip grid as the AI Deckle Set result (.dsa-result/.dsa-stat) --
+     sits to the left of the submit button instead of boxed in its own panel. */
+  .dsf-final-stats { border-bottom: none; flex: 1 1 auto; min-width: 0; }
+  .dsf-final-stats:empty { display: none; }
   .dsf-chip-msg { font-size: 11.5px; font-weight: 700; color: #b91c1c; margin-top: 6px; }
 
   /* ---- Web view: A..L drawn to scale across the reel's web ---- */
@@ -224,7 +244,7 @@
     align-self: stretch; background: #fff8e1; border: 1px solid #f0c36d; color: #7a5b00;
     border-radius: 8px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; line-height: 1.5;
   }
-  .sl-save-wrap { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 100%; }
+  .sl-save-wrap { display: flex; flex-direction: column; align-items: center; gap: 7px; flex: none; margin-left: auto; }
 
   /* ---- Deckle-Set-form-only ---- */
   .dsf-add-btn {
@@ -336,6 +356,7 @@
     border-right: 1px solid #eef1f6; display: flex; flex-direction: column; gap: 3px;
   }
   .dsa-stat.dsa-stat-wide { flex-basis: 190px; min-width: 190px; }
+  .dsa-stat.dsa-stat-narrow { flex: 0 1 80px; min-width: 80px; padding: 10px 10px; }
   .dsa-stat:last-child { border-right: none; }
   .dsa-stat .k {
     font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
@@ -545,7 +566,11 @@
       <div class="sl-warn-note" id="dsfIssuesBody"></div>
     </div>
 
-    <div class="span-full btn-grp" style="margin-top: 10px;">
+    <div class="span-full dsf-submit-footer">
+      <!-- Live totals off the layout table above -- same figures + look as the
+           AI Deckle Set result grid, but always on, mirroring whatever is
+           currently drawn (hand-built or AI-planned). -->
+      <div class="dsa-result dsf-final-stats" id="dsfFinalStats"></div>
       <div class="sl-save-wrap">
         <button type="submit" id="dsfSubmit" class="submit-btn">Create Deckle Batch</button>
       </div>
@@ -600,6 +625,12 @@
   const fmt = (n) => (Number.isFinite(n) ? round2(n).toLocaleString("en-IN") : "—");
   const fmtI = (n) => (Number.isFinite(n) ? Math.round(n).toLocaleString("en-IN") : "—");
   const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // Renders one .dsa-stat chip for the summary bar by the submit button --
+  // top-level (rather than inside the Auto Deckle block below) since it must
+  // render whether or not Auto Deckle is enabled.
+  const finalStat = (k, v, cls, wrapCls, title) =>
+    `<div class="dsa-stat${wrapCls ? " " + wrapCls : ""}"${title ? ` title="${esc(title)}"` : ""}>`
+    + `<span class="k">${esc(k)}</span><span class="v${cls ? " " + cls : ""}">${esc(v)}</span></div>`;
 
   const dsfDeckleSize = document.getElementById("dsfDeckleSize");
   const dsfNoOfRolls = document.getElementById("dsfNoOfRolls");
@@ -609,6 +640,7 @@
   const dsfAddLayout = document.getElementById("dsfAddLayout");
   const dsfSetBody = document.getElementById("dsfSetBody");
   const dsfSetSub = document.getElementById("dsfSetSub");
+  const dsfFinalStats = document.getElementById("dsfFinalStats");
   const orderBody = document.getElementById("dsfOrderBody");
   const sizeChipsEl = document.getElementById("dsfSizeChips");
   const sizeAddEl = document.getElementById("dsfSizeAdd");
@@ -1190,6 +1222,7 @@
       dsfSetSub.textContent = "";
       dsfSetBody.innerHTML =
         `<div class="dsf-set-empty">Nothing set yet — draw a layout above (or run AI Deckle Set) and it appears here.</div>`;
+      dsfFinalStats.innerHTML = "";
       return;
     }
 
@@ -1258,6 +1291,96 @@
           </tr>
         </tfoot>
       </table>`;
+
+    renderFinalStats(set, totWebs, sqm, byS, sizeLine);
+  }
+
+  // Same 7 figures as the AI Deckle Set result grid, kept live off whatever is
+  // currently drawn above (hand-built or AI-planned) so they read correctly
+  // even when Auto Deckle was never run. Sits beside the submit button.
+  function renderFinalStats(set, totWebs, sqm, byS, sizeLine) {
+    // Extra Rolls: rolls produced per width beyond what ticked orders asked
+    // for. Rolls-per-width comes off the layouts (same as setByWidth in
+    // recalcAll); the area uses each width's rolls-weighted average Roll R.M.,
+    // since two layouts of the same width can carry different roll lengths.
+    const widthAgg = new Map();
+    set.forEach((L) => {
+      const perCut = L.webs * L.rpw;
+      L.cuts.forEach(([, w]) => {
+        const acc = widthAgg.get(w) || { rolls: 0, rmSum: 0 };
+        acc.rolls += perCut;
+        acc.rmSum += perCut * (L.rm || 0);
+        widthAgg.set(w, acc);
+      });
+    });
+    const qtyByWidth = new Map();
+    [...orderBody.querySelectorAll("tr")].forEach((otr) => {
+      if (!otr.querySelector('input[name="orderIds"]:checked')) return;
+      const w = Number(otr.dataset.size) || 0;
+      qtyByWidth.set(w, (qtyByWidth.get(w) || 0) + (Number(otr.dataset.qty) || 0));
+    });
+    let extraRolls = 0;
+    let extraSqM = 0;
+    widthAgg.forEach((agg, w) => {
+      const extra = Math.max(0, agg.rolls - (qtyByWidth.get(w) || 0));
+      if (extra > 0) {
+        extraRolls += extra;
+        extraSqM += extra * (w / 1000) * (agg.rolls > 0 ? agg.rmSum / agg.rolls : 0);
+      }
+    });
+    extraSqM = round2(extraSqM);
+
+    // Side Run: the uncut slack left on each web after its knives (edge trims
+    // netted out already) -- the trim a different layout could still recover.
+    let sideMm = 0;
+    let avoidableSqM = 0;
+    set.forEach((L) => {
+      if (!(L.size > 0) || !(L.remaining > 0)) return;
+      sideMm += L.remaining * L.webs;
+      avoidableSqM += (L.remaining / 1000) * (L.drm || 0) * L.webs;
+    });
+    sideMm = round2(sideMm);
+    avoidableSqM = round2(avoidableSqM);
+    const avoidPct = sqm > 0 ? round2((avoidableSqM / sqm) * 100) : 0;
+
+    // Total Waste: scrap only (edge trim + Side Run) -- Extra Rolls are spare
+    // stock cut from width that would otherwise have been trimmed away, not a
+    // second helping of waste (see the Auto Deckle waste-accounting note).
+    const edgeMm = round2(2 * EDGE * totWebs);
+    const wasteMm = round2(edgeMm + sideMm);
+    let edgeSqM = 0;
+    set.forEach((L) => { if (L.size > 0) edgeSqM += (2 * EDGE / 1000) * (L.drm || 0) * L.webs; });
+    const wasteSqM = round2(edgeSqM + avoidableSqM);
+    const wastePct = sqm > 0 ? round2((wasteSqM / sqm) * 100) : 0;
+
+    const distinctSizes = byS.size;
+    dsfFinalStats.innerHTML = [
+      distinctSizes > 1
+        ? finalStat("Deckle Webs Used", sizeLine)
+        : finalStat("Deckle Size", `${fmt(Number(dsfDeckleSize.value) || 0)} mm`),
+      finalStat("Layouts", `${set.length}`, "", "dsa-stat-narrow"),
+      finalStat("Deckle Count", `${fmtI(totWebs)}`, "", "dsa-stat-narrow"),
+      finalStat("Facestock Used", `${fmt(sqm)} m²`),
+      finalStat(
+        "Extra Rolls",
+        extraRolls ? `${fmtI(extraRolls)} · ${fmt(extraSqM)} m²` : "0",
+        extraRolls ? "warn" : "good",
+      ),
+      finalStat(
+        "Side Run",
+        `${fmt(avoidPct)} % | ${fmt(sideMm)} mm`,
+        avoidPct <= 2 ? "good" : "warn",
+        "",
+        `Total uncut slack across all ${fmtI(totWebs)} webs (${fmt(avoidableSqM)} m²).`,
+      ),
+      finalStat(
+        "Total Waste",
+        `${fmt(wastePct)} % | ${fmt(wasteMm)} mm`,
+        wastePct <= 10 ? "good" : "warn",
+        "dsa-stat-wide",
+        `Edge trim ${fmt(edgeMm)} mm + Side Run ${fmt(sideMm)} mm = ${fmt(wasteSqM)} m² scrapped. Spare rolls are not counted here.`,
+      ),
+    ].join("");
   }
 
   // Paint the issues panel + gate the submit button from ISSUES.
@@ -1350,82 +1473,8 @@
     // -- picking a size inside a layout's table sets that layout's web.
     MIXED_WEBS = dsaMixed.checked;
 
-    // `title` spells out what the mm figure is a total OF -- a bare "280 mm"
-    // beside a percentage is exactly the sort of number that gets read as
-    // per-web when it is per-job.
-    const dsaStat = (k, v, cls, wrapCls, title) =>
-      `<div class="dsa-stat${wrapCls ? " " + wrapCls : ""}"${title ? ` title="${esc(title)}"` : ""}>`
-      + `<span class="k">${esc(k)}</span><span class="v${cls ? " " + cls : ""}">${esc(v)}</span></div>`;
-
     function dsaShowError(msg) {
       dsaBody.innerHTML = `<div class="dsa-err">${esc(msg)}</div>`;
-    }
-
-    function dsaShowPlan(data) {
-      const p = data.plan;
-      const w = p.waste;
-      // Only the side trim is something a different layout could recover --
-      // edge trim is fixed by the machine, the end tail by Deckle R.M. against
-      // the roll length, and any overrun by the rolls-per-web granularity. So
-      // that is the number worth showing next to the headline waste.
-      const avoidPct = w.consumedSqM > 0 ? round2((w.avoidableSqM / w.consumedSqM) * 100) : 0;
-      // TOTAL side trim for the job: every web's side trim added up, NOT an
-      // average per web. Both mm figures here are whole-job totals, which is
-      // what the percentages beside them have always been -- showing a per-web
-      // average next to a whole-job percentage is what made these two read as
-      // if they disagreed.
-      const sideMm = round2((p.layouts || []).reduce((n, l) => n + l.sideTrim * l.webs, 0));
-      // Same basis for the whole scrap figure. Waste area is built up as
-      // (trim width / 1000) x drm x webs, and drm is one plan-level number
-      // (every layout carries the same Deckle R.M.), so dividing the area back
-      // by it returns the summed trim width in mm.
-      //
-      // With no end tail this lands on exactly edge trim x webs + Side Run mm
-      // -- the arithmetic a planner can check by eye against the machine.
-      const drmM = Number(p.deckleRunningMeters) || 0;
-      const wasteMm = drmM > 0 ? round2((w.wasteSqM * 1000) / drmM) : 0;
-      const edgeMm = round2((p.edgeTrimTotal || 0) * (p.webs || 0));
-      const extra = (p.rolls || []).reduce((n, r) => n + (r.extra || 0), 0);
-      const stats = [
-        // With mixed webs the batch is still recorded at one size, so show that
-        // AND what is actually run, rather than a number that is only half true.
-        p.mixed
-          ? dsaStat("Deckle Webs Used", p.sizesUsed.map((s) => `${fmt(s.size)}×${s.webs}`).join("  "))
-          : dsaStat("Deckle Size", `${fmt(p.deckleSize)} mm`),
-        dsaStat("Layouts", `${p.layouts.length}`),
-        dsaStat("Deckle Webs", `${fmtI(p.webs)}`),
-        dsaStat("Facestock Used", `${fmt(w.consumedSqM)} m²`),
-        // Spare stock, not scrap -- those rolls come off width the layout
-        // would otherwise have trimmed away, so they are deliberately NOT in
-        // Total Waste below (see the waste comment in utils/deckleOptimizer).
-        // The area rides along here so it stays on screen regardless.
-        dsaStat(
-          "Extra Rolls",
-          extra ? `${fmtI(extra)} · ${fmt(w.overrunSqM)} m²` : "0",
-          extra ? "warn" : "good",
-        ),
-        dsaStat(
-          "Side Run",
-          `${fmt(avoidPct)} % | ${fmt(sideMm)} mm`,
-          avoidPct <= 2 ? "good" : "warn",
-          "",
-          `Total uncut slack across all ${fmtI(p.webs)} webs (${fmt(w.avoidableSqM)} m²).`,
-        ),
-        dsaStat(
-          "Total Waste",
-          `${fmt(w.wastePct)} % | ${fmt(wasteMm)} mm`,
-          w.wastePct <= 10 ? "good" : "warn",
-          "dsa-stat-wide",
-          `Edge trim ${fmt(edgeMm)} mm + Side Run ${fmt(sideMm)} mm`
-            + (w.endTrimSqM > 0 ? ` + end tail ${fmt(w.endTrimSqM)} m²` : "")
-            + ` = ${fmt(w.wasteSqM)} m² scrapped. Spare rolls are not counted here.`,
-        ),
-      ].join("");
-      // Just the numbers -- the planner reviews the layouts themselves below,
-      // so the optimizer's running commentary (search budget, mixed-web
-      // breakdown) is not shown on a successful plan. Notes on a FAILED plan
-      // still render, since there they are the explanation.
-      dsaBody.innerHTML = `<div class="dsa-result">${stats}</div>`;
     }
 
     // Replace every layout row with the planned ones. Deckle R.M. and R. Meter
@@ -1509,7 +1558,9 @@
           return;
         }
         dsaApply(data.plan);
-        dsaShowPlan(data);
+        // Numbers for the plan now live in the summary bar by the submit
+        // button (it's driven off the layout table dsaApply just filled) --
+        // nothing else to show here on a successful run.
         showToast(
           `AI Deckle Set: ${data.plan.layouts.length} layout(s), ${data.plan.webs} web(s), ${fmt(data.plan.waste.wastePct)}% waste — review and save.`,
           "success",

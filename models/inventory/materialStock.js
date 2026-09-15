@@ -36,6 +36,18 @@ const materialStockSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    // How many times this Deckle has already been through the slitter --
+    // one 0 (first run) / 1 / 2 / ... per Stop that has ever slit rolls off
+    // it, incremented in routes/system/slitting.js POST .../row/produce.
+    // Not the same as re-running the SAME job card row: a Deckle with mtrs
+    // left over from a partial Stop can be picked up on a later card (it's
+    // still in the free pool -- see the Slitting Queue's "one shared pool"
+    // grouping), and this keeps that later run's finished rolls named
+    // distinctly from the earlier one's off the same physical reel.
+    slitRunCount: {
+      type: Number,
+      default: 0,
+    },
     // Finished web size captured from the production order. This stays with
     // the physical Deckle even if the source order is edited later.
     size: {

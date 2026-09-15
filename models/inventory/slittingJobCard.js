@@ -71,6 +71,14 @@ const slittingRowSchema = new mongoose.Schema(
 
     // ---- actual (the run) ----
     status: { type: String, enum: ["pending", "done"], default: "pending" },
+    // The slitting machine's own counter readings at the moment Start and
+    // Stop were punched -- same role as MachineJobCard's productionLogRowSchema
+    // startMtrs/stopMtrs (and this card's own Job Setting mtrs1/mtrs2): the
+    // form won't let either be punched without its reading. `meter` below is
+    // NOT derived from these two -- the UI defaults it to their difference,
+    // but it stays the operator's own confirmed figure, editable before Stop.
+    startMtrs: { type: Number },
+    stopMtrs: { type: Number },
     // Metres that actually came OFF the Deckle (deducted from
     // MaterialStock.reelMtrs), and the length wound on each finished roll.
     // Normally equal, and deliberately kept apart: the paper card records

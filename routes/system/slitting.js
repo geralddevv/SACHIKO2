@@ -13,7 +13,7 @@ import Employee from "../../models/hr/employee_model.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter } from "../../utils/limiters.js";
-import { generateFinishedRollId } from "../../utils/finishedRollId.js";
+import { findScannedReel } from "../../utils/rollId.js";
 
 const router = express.Router();
 
@@ -172,7 +172,9 @@ function curingWhenLabel(curedAt, at = Date.now()) {
 function curingBlockedMessage(rollId, curedAt) {
   const mins = Math.max(0, Math.round((new Date(curedAt).getTime() - Date.now()) / 60000));
   const left = mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`;
-  return `Deckle ${rollId} is still curing (${CURING_HOURS} h after lamination) — ready at `
+  const gateMins = Math.round(CURING_HOURS * 60);
+  const gate = gateMins >= 60 ? `${CURING_HOURS} h` : `${gateMins} min`;
+  return `Deckle ${rollId} is still curing (${gate} after lamination) — ready at `
     + `${curingWhenLabel(curedAt)}, about ${left} from now. Only fully hot-melt Deckles skip curing.`;
 }
 // <----------------------------------Deckle curing --------------------------
@@ -480,6 +482,9 @@ async function buildAvailableDeckleRows() {
       // Advisory: a Deckle can be allocated while it cures, but not run.
       curing: !cure.cured,
       curingUntilLabel: cure.curedAt && !cure.cured ? curingWhenLabel(cure.curedAt) : "",
+      // ISO so the client can render (and tick down) a live "ready in Xh Ym"
+      // countdown alongside the fixed clock-time label above.
+      curingUntil: cure.curedAt && !cure.cured ? cure.curedAt.toISOString() : null,
       hotMelt: cure.hotMelt,
       order: order
         ? {
@@ -721,6 +726,10 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     deckleCount: 0,
     totalMtrs: 0,
     anyCuring: false,
+    // Soonest curedAt among this group's still-curing Deckles (ISO), so the
+    // queue can show "ready in Xh Ym" rather than a bare "Curing" tag. Set in
+    // the pool pass below, once every Deckle at this width is in view.
+    curingUntil: null,
     // Deckles in this group that are out of curing and can actually be run --
     // what decides whether the group reads Waiting / Curing / Ready.
     readyCount: 0,
@@ -854,6 +863,12 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     g.deckleCount = pool.length;
     g.readyCount = pool.filter((r) => !r.curing).length;
     g.anyCuring = pool.some((r) => r.curing);
+    // Earliest deadline among the ones still curing -- ISO strings sort the
+    // same as the dates they name, so a plain string sort finds it.
+    g.curingUntil = pool
+      .filter((r) => r.curing && r.curingUntil)
+      .map((r) => r.curingUntil)
+      .sort()[0] || null;
     g.totalMtrs = round2(pool.reduce((n, r) => n + r.mtrs, 0));
     // Only worth saying when there are actually webs to share.
     g.poolShared = sharedBy > 1 && pool.length > 0;
@@ -1542,6 +1557,8 @@ router.get("/slitting/jobcard/:cardId", requireSlittingFloor, async (req, res) =
             return m ? Number(m[0]) : null;
           })() : null,
           status: r.status || "pending",
+          startMtrs: r.startMtrs ?? null,
+          stopMtrs: r.stopMtrs ?? null,
           meter: r.meter ?? null,
           runningMeter: r.runningMeter ?? null,
           startTime: r.startTime || "",
@@ -1581,10 +1598,14 @@ router.post("/slitting/jobcard/setting", requireAuth, requireSlittingFloor, upda
     const card = await SlittingJobCard.findById(cardId);
     if (!card) return res.status(404).json({ success: false, message: "Card not found." });
 
+    // numOrNull, NOT `Number(x) || undefined`: a counter reading of 0 is a
+    // real reading (a fresh counter starts there), and the falsy-zero form
+    // silently dropped it -- which then rendered the field blank AND
+    // readonly on reload, with no way left to correct it.
     card.jobSetting = rows.map((r) => ({
-      mtrs1: Number(r?.mtrs1) || undefined,
+      mtrs1: numOrNull(r?.mtrs1),
       startTime: trim(r?.startTime),
-      mtrs2: Number(r?.mtrs2) || undefined,
+      mtrs2: numOrNull(r?.mtrs2),
       stopTime: trim(r?.stopTime),
     }));
     await card.save();
@@ -1595,12 +1616,142 @@ router.post("/slitting/jobcard/setting", requireAuth, requireSlittingFloor, upda
   }
 });
 
+// A scan doesn't have to be the exact Deckle the planner allocated -- any
+// free web of the same Product Code (brand variants included) and the same
+// raw size can be run in its place. This re-points the row at whatever was
+// actually scanned:
+//   - the reel the row is leaving is automatically free again -- nothing on
+//     any card references it once this save commits, and "free" is never
+//     tracked any other way;
+//   - the reel being scanned in is locked to THIS card the instant it does,
+//     because "in use" is exactly "referenced by an allocated card's row" --
+//     the clash check below is the whole lock, there is no separate flag.
+router.post("/slitting/jobcard/row/swap-deckle", requireAuth, requireSlittingFloor, updateLimiter, async (req, res) => {
+  const fail = (message, code) => res.status(400).json({ success: false, message, code });
+  try {
+    const { cardId, index, rollId } = req.body || {};
+    if (!mongoose.isValidObjectId(cardId)) return fail("Invalid card.");
+    if (!String(rollId ?? "").trim()) return fail("Scan a Deckle.", "unknown");
+
+    const card = await SlittingJobCard.findById(cardId);
+    if (!card) return res.status(404).json({ success: false, message: "Card not found." });
+    if (card.status === "completed") return fail(`${card.slittingJobCardId} is already finished.`);
+
+    const i = Number(index);
+    const row = card.slittingLog?.[i];
+    if (!row) return fail("That row is not on this card.");
+    if (row.status === "done") return fail("That Deckle has already been run.");
+
+    // The row's CURRENT reel names the spec every replacement has to match --
+    // same rule the planner's own allocation enforces (see POST
+    // /slitting/allocate above): Product Code family + raw web size. Falls
+    // back to the card's own snapshot code if that reel is somehow gone.
+    const specReel = await MaterialStock.findById(row.deckleStockId)
+      .select("size")
+      .populate({ path: "material", select: "productCode skuCode" })
+      .lean();
+    const codeRe = productCodeFamilyRe(
+      specReel?.material?.productCode || specReel?.material?.skuCode || card.productCode,
+    );
+    const sizeOf = (v) => {
+      const m = /-?\d+(\.\d+)?/.exec(String(v ?? ""));
+      return m ? Number(m[0]) : null;
+    };
+    const specSize = sizeOf(specReel?.size);
+
+    const scanned = await findScannedReel(MaterialStock, rollId, "_id");
+    if (!scanned) return fail("That isn't a known Deckle — check the label.", "unknown");
+
+    if (String(scanned._id) === String(row.deckleStockId)) {
+      return res.json({ success: true, unchanged: true });
+    }
+
+    // One fetch, fully populated, for every check below plus the curing gate.
+    const newReel = await MaterialStock.findById(scanned._id)
+      .select("rollId size location quantity reelMtrs createdAt")
+      .populate({ path: "material", select: "productCode skuCode adhesive adhesive2" })
+      .lean();
+
+    const newCode = trim(newReel.material?.productCode || newReel.material?.skuCode);
+    if (codeRe && (!newCode || !codeRe.test(newCode))) {
+      return fail(
+        `${newReel.rollId} is Product Code ${newCode || "unknown"} — this card needs ${specReel?.material?.productCode || card.productCode}.`,
+        "mismatch",
+      );
+    }
+
+    const newSize = sizeOf(newReel.size);
+    if (specSize != null && newSize !== specSize) {
+      return fail(`${newReel.rollId} is a ${newSize ?? "?"} mm web — this card needs ${specSize} mm.`, "mismatch");
+    }
+
+    if (!((Number(newReel.quantity) || 0) > 0 && (Number(newReel.reelMtrs) || 0) > 0)) {
+      return fail(`${newReel.rollId} has no stock left.`, "empty");
+    }
+    if (Number(newReel.reelMtrs) < Number(row.plannedMeter)) {
+      return fail(
+        `${newReel.rollId} only has ${round2(newReel.reelMtrs)} mtrs left — this row needs ${row.plannedMeter}.`,
+        "short",
+      );
+    }
+    if (!trim(newReel.location)) {
+      return fail(`${newReel.rollId} has no location on it.`, "no-location");
+    }
+
+    // Curing gate -- same check Start/Stop make, run here too so the operator
+    // hears about it the moment they scan rather than only at Start.
+    const cure = deckleCuring(newReel);
+    if (!cure.cured) {
+      return fail(curingBlockedMessage(newReel.rollId, cure.curedAt), "curing");
+    }
+
+    // Already claimed by another open card -- the entire "someone else can't
+    // take it" lock. No index qualifier: every card only ever has one row in
+    // practice, but this catches any that don't.
+    const clash = await SlittingJobCard.findOne({
+      _id: { $ne: card._id },
+      status: "allocated",
+      "slittingLog.deckleStockId": newReel._id,
+    }).select("slittingJobCardId machineName").lean();
+    if (clash) {
+      return fail(
+        `${newReel.rollId} is already on card ${clash.slittingJobCardId}${clash.machineName ? ` (${clash.machineName})` : ""}.`,
+        "in-use",
+      );
+    }
+
+    row.deckleStockId = newReel._id;
+    row.deckleId = newReel.rollId || "";
+    // The card's own snapshot fields should name the reel actually on it now.
+    card.lotNo = newReel.rollId || card.lotNo;
+    card.location = newReel.location || card.location;
+    await card.save();
+
+    res.json({
+      success: true,
+      row: {
+        deckleId: row.deckleId,
+        reelMtrs: round2(Number(newReel.reelMtrs) || 0),
+        curing: {
+          cured: cure.cured,
+          hotMelt: cure.hotMelt,
+          curedAt: cure.curedAt ? cure.curedAt.toISOString() : null,
+          curedAtLabel: cure.curedAt ? curingWhenLabel(cure.curedAt) : "",
+        },
+      },
+    });
+  } catch (err) {
+    console.error("SLITTING ROW SWAP-DECKLE ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to swap the Deckle." });
+  }
+});
+
 // Stamps the clock on one row when the operator punches Start. Deliberately
 // separate from produce: a run that is started and then abandoned leaves a
 // start time and no stock movement, which is exactly what happened.
 router.post("/slitting/jobcard/row/start", requireAuth, requireSlittingFloor, updateLimiter, async (req, res) => {
   try {
-    const { cardId, index, startTime } = req.body || {};
+    const { cardId, index, startTime, startMtrs } = req.body || {};
     if (!mongoose.isValidObjectId(cardId)) return res.status(400).json({ success: false, message: "Invalid card." });
 
     const card = await SlittingJobCard.findById(cardId);
@@ -1610,6 +1761,11 @@ router.post("/slitting/jobcard/row/start", requireAuth, requireSlittingFloor, up
     const row = card.slittingLog?.[i];
     if (!row) return res.status(400).json({ success: false, message: "That Deckle is not on this card." });
     if (row.status === "done") return res.status(400).json({ success: false, message: "That Deckle has already been run." });
+
+    // The machine's own counter reading at this moment -- same gate as the
+    // Job Setting table above: Start won't punch without it.
+    const startMtrsNum = numOrNull(startMtrs);
+    if (startMtrsNum === null) return res.status(400).json({ success: false, message: "Enter the machine's counter reading before punching Start." });
 
     // Curing gate: the adhesive must have cured before the web is run.
     const cureReel = await MaterialStock.findById(row.deckleStockId)
@@ -1626,9 +1782,10 @@ router.post("/slitting/jobcard/row/start", requireAuth, requireSlittingFloor, up
       }
     }
 
+    row.startMtrs = startMtrsNum;
     row.startTime = trim(startTime) || row.startTime;
     await card.save();
-    res.json({ success: true, startTime: row.startTime });
+    res.json({ success: true, startTime: row.startTime, startMtrs: row.startMtrs });
   } catch (err) {
     console.error("SLITTING ROW START ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to record the start time." });
@@ -1661,12 +1818,31 @@ router.post("/slitting/jobcard/row/produce", requireAuth, requireSlittingFloor, 
         rollIds: (row.cuts || []).map((c) => c.rollId).filter(Boolean),
         meter: row.meter,
         runningMeter: row.runningMeter,
+        stopMtrs: row.stopMtrs,
         endTime: row.endTime,
         cardCompleted: card.status === "completed",
       });
     }
 
-    // The operator confirms what actually ran; the plan is only the default.
+    // The machine's own counter reading at this moment -- same gate Start
+    // already passed. Must be at or past the Start reading; a smaller Stop
+    // reading means the wrong number was punched in, not a real run.
+    const stopMtrs = numOrNull(b.stopMtrs);
+    if (stopMtrs === null) return fail("Enter the machine's counter reading before punching Stop.");
+    // A row started before the Start reading was captured carries none --
+    // take the one the operator typed into its (still editable) Start box so
+    // the filed card isn't left with half a measurement. Never overwrites a
+    // reading the row already has.
+    if (row.startMtrs == null) {
+      const backfilled = numOrNull(b.startMtrs);
+      if (backfilled !== null) row.startMtrs = backfilled;
+    }
+    if (row.startMtrs != null && stopMtrs < row.startMtrs) {
+      return fail(`Stop reading (${stopMtrs}) can't be less than the Start reading (${row.startMtrs}).`);
+    }
+
+    // The operator confirms what actually ran; the plan (and the counter
+    // difference above) are only defaults -- see the schema note on `meter`.
     const meter = numOrNull(b.meter);
     if (!(meter > 0)) return fail("Enter the metres that actually ran.");
     const runningMeter = numOrNull(b.runningMeter);
@@ -1701,6 +1877,47 @@ router.post("/slitting/jobcard/row/produce", requireAuth, requireSlittingFloor, 
 
     const createdBy = req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM";
 
+    // ---- What each finished roll is worth ---------------------------------
+    // The rate a roll carries is the rate its own SALES ORDER was placed at
+    // (PendingProduction.orderRate, synced from the order -- see
+    // utils/pendingProduction.js). Deliberately NOT reel.rate, which this
+    // used to copy: a Deckle is semi-finished stock and carries a material
+    // cost at best, never a sale price, so that left every slit roll with a
+    // blank (or plain wrong) rate on Finished Stock.
+    //
+    // A deckle batch bundles SEVERAL orders' widths onto one web
+    // (isDeckleBatch/batchOrderIds), and those orders can be at different
+    // rates -- so this is matched per roll width, not taken once for the
+    // card: exact width + R. Meter first, then width alone, then the card's
+    // own order. Nothing matching leaves the rate unset rather than
+    // inventing one; Finished Stock can still have it typed in by hand.
+    const pending = await PendingProduction.findById(card.pendingProductionId)
+      .select("orderRate paperSize runningMeters batchOrderIds")
+      .lean();
+    const rateSources = [];
+    if (pending?.batchOrderIds?.length) {
+      rateSources.push(
+        ...(await PendingProduction.find({ _id: { $in: pending.batchOrderIds } })
+          .select("orderRate paperSize runningMeters")
+          .lean()),
+      );
+    }
+    if (pending) rateSources.push(pending);
+
+    const sizeNum = (v) => {
+      const m = /-?\d+(\.\d+)?/.exec(String(v ?? ""));
+      return m ? Number(m[0]) : null;
+    };
+    const priced = rateSources.filter((s) => Number(s?.orderRate) > 0);
+    const rateForWidth = (width) => {
+      const w = sizeNum(width);
+      if (w === null) return undefined;
+      const sameWidth = priced.filter((s) => sizeNum(s.paperSize) === w);
+      const exact = sameWidth.find((s) => Number(s.runningMeters) === round2(runningMeter));
+      const hit = exact || sameWidth[0];
+      return hit ? Number(hit.orderRate) : undefined;
+    };
+
     // ---- Finished Goods in ------------------------------------------------
     // One roll per allocated width. The roll is booked against the Deckle's
     // OWN Label Stock (a variant "-A" web stays an "-A" roll), not the
@@ -1711,9 +1928,19 @@ router.post("/slitting/jobcard/row/produce", requireAuth, requireSlittingFloor, 
     ]);
     let opening = bal[0]?.qty || 0;
 
+    // Every roll this Stop creates is named off the physical Deckle itself,
+    // not the generic ITEMCODE/YY-YY/NNN sequence: <deckleId>-<slot> for the
+    // first time this reel is slit, then <deckleId>-<slot><runIndex> (1, 2,
+    // ...) for a later run off whatever mtrs were left over from an earlier
+    // partial Stop -- runIndex is this reel's own slitRunCount, so it stays
+    // right regardless of which card that later run happens to be on.
+    const runIndex = Number(reel.slitRunCount) || 0;
+    const runSuffix = runIndex === 0 ? "" : String(runIndex);
+
     const createdRolls = [];
     for (const cut of cuts) {
-      const rollId = await generateFinishedRollId(code);
+      const rollId = `${reel.rollId}-${cut.slot}${runSuffix}`;
+      const rollRate = rateForWidth(cut.width);
       const doc = await FinishedStock.create({
         pendingProductionId: card.pendingProductionId,
         material,
@@ -1727,7 +1954,7 @@ router.post("/slitting/jobcard/row/produce", requireAuth, requireSlittingFloor, 
         clientName: card.clientName || "",
         quantity: 1,
         mtrs: round2(runningMeter),
-        rate: reel.rate,
+        rate: rollRate,
         rollId,
       });
       cut.rollId = rollId;
@@ -1741,7 +1968,7 @@ router.post("/slitting/jobcard/row/produce", requireAuth, requireSlittingFloor, 
         quantity: 1,
         closingStock: opening + 1,
         mtrs: round2(runningMeter),
-        rate: reel.rate,
+        rate: rollRate,
         rollId,
         type: "INWARD",
         source: "SYSTEM",
@@ -1758,7 +1985,10 @@ router.post("/slitting/jobcard/row/produce", requireAuth, requireSlittingFloor, 
     const emptied = remaining <= 0;
     await MaterialStock.updateOne(
       { _id: reel._id },
-      emptied ? { $set: { reelMtrs: 0, quantity: 0 } } : { $set: { reelMtrs: remaining } },
+      {
+        ...(emptied ? { $set: { reelMtrs: 0, quantity: 0 } } : { $set: { reelMtrs: remaining } }),
+        $inc: { slitRunCount: 1 },
+      },
     );
 
     const matBal = await MaterialStock.aggregate([
@@ -1786,6 +2016,7 @@ router.post("/slitting/jobcard/row/produce", requireAuth, requireSlittingFloor, 
     // ---- Close the row, and the card once its last row is done ------------
     const cutTotal = round2(cuts.reduce((n, c) => n + Number(c.width), 0));
     row.status = "done";
+    row.stopMtrs = stopMtrs;
     row.meter = round2(meter);
     row.runningMeter = round2(runningMeter);
     row.trim = row.width != null ? round2(row.width - cutTotal) : undefined;
@@ -1814,6 +2045,7 @@ router.post("/slitting/jobcard/row/produce", requireAuth, requireSlittingFloor, 
       rollIds: createdRolls,
       meter: row.meter,
       runningMeter: row.runningMeter,
+      stopMtrs: row.stopMtrs,
       endTime: row.endTime,
       emptied,
       cardCompleted: allDone,
@@ -1821,6 +2053,39 @@ router.post("/slitting/jobcard/row/produce", requireAuth, requireSlittingFloor, 
   } catch (err) {
     console.error("SLITTING ROW PRODUCE ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to move these rolls to Finished Stock." });
+  }
+});
+
+// Corrects the Joint note on an already-run row -- the one piece of a
+// finished row's record that ISN'T tied to a stock movement. meter,
+// runningMeter and cuts[].rollId already deducted the reel and inwarded the
+// finished rolls at Stop and are never reopened here or anywhere else; only
+// this note can still be off (wrong joint type, wrong metre reading) without
+// touching stock. Mirrors the lamination Job Card's own Edit pencil, which
+// likewise only ever unlocks non-quantity fields on a produced row.
+router.post("/slitting/jobcard/row/edit", requireAuth, requireSlittingFloor, updateLimiter, async (req, res) => {
+  try {
+    const { cardId, index, joint, jointMtr } = req.body || {};
+    if (!mongoose.isValidObjectId(cardId)) return res.status(400).json({ success: false, message: "Invalid card." });
+
+    const card = await SlittingJobCard.findById(cardId);
+    if (!card) return res.status(404).json({ success: false, message: "Card not found." });
+
+    const i = Number(index);
+    const row = card.slittingLog?.[i];
+    if (!row) return res.status(400).json({ success: false, message: "That row is not on this card." });
+    if (row.status !== "done") {
+      return res.status(400).json({ success: false, message: "Punch Stop on this Deckle before editing its joint note." });
+    }
+
+    row.joint = trim(joint);
+    row.jointMtr = numOrNull(jointMtr);
+    await card.save();
+
+    res.json({ success: true, joint: row.joint, jointMtr: row.jointMtr });
+  } catch (err) {
+    console.error("SLITTING ROW EDIT ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to save the joint note." });
   }
 });
 

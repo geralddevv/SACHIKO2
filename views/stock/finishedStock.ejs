@@ -3,6 +3,299 @@
 <!-- Tabulator CSS -->
 <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
 
+<style>
+  /* ---- Checkboxes (export dialog) ----
+     One drawn box for every tick, instead of the browser default -- which
+     renders differently on every platform and at a size that reads as an
+     afterthought next to the rest of the UI. Selection lives only in the
+     dialog; the table itself has no checkbox column. */
+  #exportFairtechModal input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
+    width: 17px;
+    height: 17px;
+    margin: 0;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 5px;
+    /* Longhand, never the `background` shorthand: the checked state carries
+       its mark as a background-image, and a shorthand here (or on :hover
+       below) would reset it to none and wipe the tick. */
+    background-color: #fff;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background-color 0.13s ease, border-color 0.13s ease, box-shadow 0.13s ease;
+  }
+  #exportFairtechModal input[type="checkbox"]:hover:not(:disabled) {
+    border-color: #044a78;
+  }
+  /* Only an empty box tints on hover -- a ticked one keeps its white ground
+     so the blue mark stays at full contrast. */
+  #exportFairtechModal input[type="checkbox"]:hover:not(:disabled):not(:checked):not(:indeterminate) {
+    background-color: #f4f9ff;
+  }
+  /* The mark is a background IMAGE, not a ::after -- an <input> is a replaced
+     element and browsers generate no pseudo-elements for it, so a ::after
+     tick renders nowhere (the box fills, the tick never appears). Inline SVG
+     keeps it crisp at any zoom with nothing to fetch. */
+  #exportFairtechModal input[type="checkbox"]:checked,
+  #exportFairtechModal input[type="checkbox"]:indeterminate {
+    background-color: #fff;
+    border-color: #044a78;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 12px 12px;
+  }
+  #exportFairtechModal input[type="checkbox"]:checked {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23044a78' stroke-width='2.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6'/%3E%3C/svg%3E");
+  }
+  /* Indeterminate ("some, not all" on Select all) reads as a dash, never a
+     tick -- it is a different state, not a half-hearted yes. */
+  #exportFairtechModal input[type="checkbox"]:indeterminate {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3.5' y='7' width='9' height='2' rx='1' fill='%23044a78'/%3E%3C/svg%3E");
+  }
+  #exportFairtechModal input[type="checkbox"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.22);
+  }
+  /* A roll that can't be exported: still visible, plainly not actionable. */
+  #exportFairtechModal input[type="checkbox"]:disabled {
+    background-color: #f1f5f9;
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+  }
+
+  /* ---- Export to FAIRTECH: dialog ----
+     Same shape as FAIRTECH's own "Export to Sachiko" dialog going the other
+     way (its views/inventory/orders/paperReorder.ejs): the delivery header
+     first, then exactly which reels the file will carry -- ticked right here,
+     so what leaves stock is read before it goes rather than after. */
+  /* The dialog's own padding is dropped so the header can run edge to edge;
+     the body below carries it instead. overflow:hidden keeps the header's
+     square corners inside the dialog's rounded ones. */
+  #exportFairtechModal .logout-dialog {
+    width: min(820px, 96vw); padding: 0; overflow: hidden;
+  }
+  #exportFairtechModal .export-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: #044a78; padding: 13px 16px;
+  }
+  #exportFairtechModal .logout-title {
+    display: flex; align-items: center; gap: 10px;
+    margin: 0; font-size: 1.08rem; color: #fff;
+  }
+  /* On blue, the icon chip is a lighter wash of the bar rather than a tint
+     of the accent -- the accent IS the bar now. */
+  #exportFairtechModal .logout-title i {
+    font-size: 1rem; color: #fff; background: rgba(255, 255, 255, 0.16);
+    width: 32px; height: 32px; border-radius: 9px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  #exportFairtechModal .export-close {
+    flex: none; width: 32px; height: 32px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: 8px; background: transparent;
+    color: rgba(255, 255, 255, 0.85); font-size: 24px; line-height: 1; cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  #exportFairtechModal .export-close:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+  #exportFairtechModal .export-close:focus-visible {
+    outline: none; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45);
+  }
+  #exportFairtechModal .export-body { padding: 18px 18px 16px; background: #fff; }
+  #exportFairtechModal .logout-text { font-size: 0.92rem; margin: 0 0 2px; }
+
+  /* 12-column grid so each header field takes the width of what it holds
+     (an invoice number is longer than a date) instead of equal thirds. */
+  #exportFairtechModal .export-grid {
+    display: grid; grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px 12px; margin: 18px 0;
+  }
+  #exportFairtechModal .export-field--invoice { grid-column: span 5; }
+  #exportFairtechModal .export-field--date { grid-column: span 3; }
+  #exportFairtechModal .export-field--remarks { grid-column: span 4; }
+  #exportFairtechModal .export-grid label {
+    display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; color: #044a78; margin-bottom: 5px;
+  }
+  #exportFairtechModal .export-grid label .req { color: #dc2626; margin-left: 2px; }
+  #exportFairtechModal .export-grid label .opt {
+    color: #94a3b8; font-weight: 600; text-transform: none; letter-spacing: 0;
+  }
+  /* One explicit height for every control: a native date input and a text
+     input otherwise render a couple of pixels apart, which shows up as a
+     ragged baseline across a row of mixed field types. */
+  #exportFairtechModal .export-grid .form-control {
+    width: 100%; height: 38px; padding: 0 11px;
+    border: 1px solid #d5dceb; border-radius: 8px; background: #fff;
+    color: #1f2a44; font-size: 13.5px; font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  #exportFairtechModal .export-grid .form-control::placeholder { color: #a9b4c6; }
+  #exportFairtechModal .export-grid .form-control:hover { border-color: #b9c5db; }
+  #exportFairtechModal .export-grid .form-control:focus {
+    outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.14);
+  }
+  /* The field still missing before this can be sent, marked on itself rather
+     than only by greying the button out. */
+  #exportFairtechModal .export-grid .form-control.missing {
+    border-color: #dc2626; background: #fff5f5;
+  }
+  #exportFairtechModal .export-grid input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer; opacity: 0.55; transition: opacity 0.15s ease;
+  }
+  #exportFairtechModal .export-grid input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+
+  #exportFairtechModal .export-section-head {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; color: #044a78; margin-bottom: 7px;
+  }
+  #exportFairtechModal .export-section-head .hint {
+    font-size: 11px; font-weight: 600; letter-spacing: 0;
+    text-transform: none; color: #94a3b8;
+  }
+  #exportFairtechModal .export-section-head .tick-all {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0;
+    text-transform: none; color: #044a78; cursor: pointer;
+  }
+  /* Slightly smaller than a line's tick: this is a control over the list,
+     not one of its rows. */
+  #exportFairtechModal .export-section-head .tick-all input { width: 15px; height: 15px; }
+
+  /* Search sits between the heading and the list -- what it filters is
+     directly under it, so the effect of typing is never off-screen. */
+  #exportFairtechModal .export-search {
+    position: relative; display: flex; align-items: center; margin-bottom: 8px;
+  }
+  #exportFairtechModal .export-search > i {
+    position: absolute; left: 11px; font-size: 12px; color: #94a3b8; pointer-events: none;
+  }
+  #exportFairtechModal .export-search input {
+    width: 100%; height: 34px; padding: 0 32px 0 31px;
+    border: 1px solid #d5dceb; border-radius: 8px; background: #fff;
+    color: #1f2a44; font-size: 13px; font-family: inherit;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  #exportFairtechModal .export-search input::placeholder { color: #a9b4c6; }
+  #exportFairtechModal .export-search input:hover { border-color: #b9c5db; }
+  #exportFairtechModal .export-search input:focus {
+    outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.14);
+  }
+  /* The native clear affordance differs per browser (and Firefox has none),
+     so it is suppressed for one of our own. */
+  #exportFairtechModal .export-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+  #exportFairtechModal .export-search button {
+    position: absolute; right: 8px; border: none; background: none;
+    color: #94a3b8; font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px;
+  }
+  #exportFairtechModal .export-search button:hover { color: #044a78; }
+  #exportFairtechModal .export-search button[hidden] { display: none; }
+
+  #exportFairtechModal .export-lines {
+    max-height: 280px; overflow-y: auto;
+    border: 1px solid #e0e6f0; border-radius: 10px; background: #fff;
+  }
+  #exportFairtechModal .export-lines::-webkit-scrollbar { width: 9px; }
+  #exportFairtechModal .export-lines::-webkit-scrollbar-thumb {
+    background: #cbd5e1; border-radius: 9px; border: 2px solid #fff;
+  }
+  #exportFairtechModal .export-lines::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+  /* One column template shared by the header row and every line, so the
+     figures actually sit under their own headings. */
+  #exportFairtechModal .export-lines-head,
+  #exportFairtechModal .export-line {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) 62px 76px 66px;
+    align-items: center; gap: 10px; padding: 7px 14px;
+  }
+  #exportFairtechModal .export-lines-head {
+    position: sticky; top: 0; z-index: 1;
+    background: #eef2f7; border-bottom: 1px solid #e0e6f0;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase; color: #044a78;
+  }
+  #exportFairtechModal .export-line {
+    font-size: 13px; color: #4b5563; border-bottom: 1px solid #f1f5f9;
+    /* The whole row is the target, not just the 17px box. */
+    cursor: pointer;
+    user-select: none;
+  }
+  #exportFairtechModal .export-line:last-child { border-bottom: none; }
+  /* The sticky header is child 1, so the *odd* children are the 2nd, 4th, ...
+     data rows -- which leaves the first line unshaded, the way a striped
+     table normally starts. */
+  #exportFairtechModal .export-line:nth-child(odd) { background: #fbfcfe; }
+  /* Declared after the stripe so it wins on both shaded and unshaded rows. */
+  #exportFairtechModal .export-line:hover { background: #f0f7ff; }
+  /* A roll FAIRTECH would refuse (no rate, no family, ...) can't be ticked --
+     the file is all-or-nothing, so it must never reach the server. Nothing to
+     click, so it doesn't pretend otherwise. */
+  #exportFairtechModal .export-line.invalid,
+  #exportFairtechModal .export-line.invalid:hover { background: #fef2f2; }
+  #exportFairtechModal .export-line.invalid { cursor: default; }
+  /* The row a tick is already on, so the selection is readable at a glance
+     rather than only from 17px of blue at the far left. */
+  #exportFairtechModal .export-line.is-on,
+  #exportFairtechModal .export-line.is-on:hover { background: #eaf3fb; }
+  #exportFairtechModal .export-line .code {
+    font-weight: 700; color: #1f2a44;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #exportFairtechModal .export-line .sub {
+    font-size: 11px; color: #6b7280;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #exportFairtechModal .export-line.invalid .code,
+  #exportFairtechModal .export-line.invalid .sub { color: #b91c1c; }
+  /* Figures right-aligned so they compare down the column at a glance. */
+  #exportFairtechModal .export-lines-head .num,
+  #exportFairtechModal .export-line .num {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  #exportFairtechModal .export-line .num b { color: #1f2a44; }
+  #exportFairtechModal .export-lines-empty {
+    padding: 22px 14px; text-align: center; color: #94a3b8;
+    font-style: italic; font-size: 13px;
+  }
+
+  #exportFairtechModal .export-total {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 10px; padding: 9px 14px; border-radius: 8px;
+    background: #f1f6fb; border: 1px solid #dce6f2;
+    font-size: 12.5px; color: #4b5563;
+  }
+  #exportFairtechModal .export-total b { color: #044a78; }
+  #exportFairtechModal .export-total[hidden] { display: none; }
+
+  #exportFairtechModal .export-err {
+    margin-top: 10px; color: #b91c1c; font-size: 12.5px;
+    font-weight: 700; white-space: pre-line;
+  }
+  #exportFairtechModal .export-err:empty { display: none; }
+
+  #exportFairtechModal .logout-btn {
+    font-size: 0.92rem; padding: 0.55rem 1.35rem;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: opacity 0.15s ease, box-shadow 0.15s ease;
+  }
+  #exportFairtechModal .logout-btn:hover:not(:disabled) { opacity: 0.88; }
+  #exportFairtechModal .logout-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  @media (max-width: 640px) {
+    #exportFairtechModal .export-field--invoice,
+    #exportFairtechModal .export-field--date,
+    #exportFairtechModal .export-field--remarks { grid-column: span 12; }
+    #exportFairtechModal .export-lines-head,
+    #exportFairtechModal .export-line {
+      grid-template-columns: 22px minmax(0, 1fr) 52px 64px 56px;
+      gap: 8px; padding: 7px 10px;
+    }
+  }
+</style>
+
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
   <style>
     .header-action-btn {
@@ -77,12 +370,6 @@
       gap: 10px;
       margin-top: 20px;
     }
-    .dialog-field-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin-bottom: 12px;
-    }
     .dialog-body .choices__inner {
       padding: 11px 14px !important;
       border-radius: 10px !important;
@@ -106,36 +393,6 @@
       border: 1.5px solid #e2e8f0 !important;
       z-index: 99999 !important;
     }
-    .dialog-section-label {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      color: #044a78;
-      text-transform: uppercase;
-      margin: 16px 0 10px;
-      flex: 0 0 auto;
-    }
-    .roll-row {
-      border: 1.5px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 12px 14px;
-      background: #f8fafc;
-      margin-bottom: 10px;
-    }
-    .roll-row-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: #044a78;
-      margin-bottom: 8px;
-    }
-    .deckle-hint {
-      font-size: 12px;
-      color: #64748b;
-      margin-top: 6px;
-    }
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
@@ -145,59 +402,17 @@
   <div class="indi-head">
     <h1>Finished Goods Stock</h1>
     <div style="display: flex; gap: 10px; align-items: center">
-      <button class="header-action-btn" onclick="openProduceDialog()">
-        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Produce Finished Rolls
+      <a href="/app/finishedstock/dispatched" class="header-action-btn" style="text-decoration:none;">
+        <i class="fa-solid fa-truck-fast" style="margin-right: 4px"></i> Dispatched
+      </a>
+      <button class="header-action-btn" id="exportBtn" onclick="openExportDialog()">
+        <i class="fa-solid fa-file-export" style="margin-right: 4px"></i> Export to FAIRTECH
       </button>
     </div>
   </div>
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
   <div id="finished-stock-table" class="tabulator tabulator-modern"></div>
-</div>
-
-<!-- ============ PRODUCE (SLIT) DIALOG ============ -->
-<div class="logout-modal" id="produceDialog" aria-hidden="true">
-  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="produceDialogTitle"
-    style="width: min(760px, 94vw); max-height: 90vh; padding: 0; border-radius: 14px; display: flex; flex-direction: column;">
-    <div class="dialog-header" style="border-radius: 14px 14px 0 0; flex: 0 0 auto;">
-      <h2 id="produceDialogTitle">Produce Finished Rolls (Slit a Deckle)</h2>
-      <button class="dialog-close-btn" type="button" onclick="closeProduceDialog()" aria-label="Close">×</button>
-    </div>
-    <div class="dialog-body custom-scrollbar" style="border-radius: 0 0 14px 14px; overflow-y: auto;">
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="produceOrderSelect">Order (Lot No)</label>
-          <select id="produceOrderSelect">
-            <option value="" disabled selected hidden>Select an order</option>
-          </select>
-        </div>
-        <div>
-          <label class="dialog-field-label" for="produceDeckleSelect">Deckle</label>
-          <select id="produceDeckleSelect">
-            <option value="" disabled selected hidden>Select an order first</option>
-          </select>
-          <div class="deckle-hint" id="deckleHint"></div>
-        </div>
-      </div>
-
-      <div class="dialog-field-row">
-        <div>
-          <label class="dialog-field-label" for="produceRollCountInput">No of Rolls</label>
-          <input type="number" id="produceRollCountInput" class="form-control premium-input" min="1" max="100" step="1" value="1" />
-        </div>
-        <div></div>
-      </div>
-
-      <div class="dialog-section-label"><span>Rolls</span></div>
-      <div id="produceRollsContainer"></div>
-
-      <div id="produceFinishedError" class="dialog-error"></div>
-      <div class="dialog-actions">
-        <button class="logout-btn" type="button" onclick="closeProduceDialog()">Cancel</button>
-        <button class="logout-btn primary" type="button" id="produceSubmitBtn" onclick="submitProduce()">Save Rolls</button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- ============ EDIT FINISHED ROLL DIALOG ============ -->
@@ -226,6 +441,75 @@
         <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
         <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Roll</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EXPORT TO FAIRTECH DIALOG ============
+     The file is the whole interface between the two apps (they are separate
+     deployments on separate databases) -- same handshake as FAIRTECH's own
+     paper re-order export coming the other way. Exporting DISPATCHES: the
+     ticked rolls leave this stock as the file is made, so the same reels
+     can't be counted here and in FAIRTECH at once. -->
+<div class="logout-modal" id="exportFairtechModal" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="exportFairtechTitle">
+    <div class="export-head">
+      <h2 class="logout-title" id="exportFairtechTitle">
+        <i class="fa-solid fa-file-export"></i>
+        <span>Export to FAIRTECH</span>
+      </h2>
+      <button type="button" class="export-close" id="export-close" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="export-body">
+    <p class="logout-text">
+      Builds a paper-stock file for <b>FAIRTECH</b> from the rolls you tick below.
+      Import it on FAIRTECH&rsquo;s Paper Stock page.
+    </p>
+
+    <div class="export-grid">
+      <div class="export-field--invoice">
+        <label for="export-invoice">Invoice No <span class="req" aria-hidden="true">*</span></label>
+        <input type="text" id="export-invoice" class="form-control" placeholder="Invoice this delivery goes out on" />
+      </div>
+      <div class="export-field--date">
+        <label for="export-date">Dispatch Date <span class="req" aria-hidden="true">*</span></label>
+        <input type="date" id="export-date" class="form-control" />
+      </div>
+      <div class="export-field--remarks">
+        <label for="export-remarks">Remarks <span class="opt">(optional)</span></label>
+        <input type="text" id="export-remarks" class="form-control" placeholder="Any notes for this delivery..." />
+      </div>
+    </div>
+
+    <div class="export-section-head">
+      <span>Rolls to export</span>
+      <span class="hint">In-stock rolls only — already-dispatched ones aren&rsquo;t listed</span>
+      <label class="tick-all"><input type="checkbox" id="export-tick-all" /> Select all</label>
+    </div>
+
+    <div class="export-search">
+      <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+      <input type="search" id="export-search" placeholder="Search roll ID, product code, lot, location..." autocomplete="off" />
+      <button type="button" id="export-search-clear" aria-label="Clear search" hidden>&times;</button>
+    </div>
+
+    <div class="export-lines" id="export-lines"></div>
+
+    <div class="export-total" id="export-total" hidden>
+      <span id="export-total-lines"></span>
+      <span id="export-total-value"></span>
+    </div>
+
+    <div class="export-err" id="export-error"></div>
+
+    <div class="logout-actions">
+      <button class="logout-btn" type="button" id="export-cancel">Cancel</button>
+      <button class="logout-btn primary" type="button" id="export-confirm" disabled>
+        <i class="fa-solid fa-check"></i>
+        <span>Export &amp; Dispatch</span>
+      </button>
+    </div>
     </div>
   </div>
 </div>
@@ -276,6 +560,8 @@
     responsiveLayout: false,
     movableColumns: true,
     placeholder: "No finished goods stock yet.",
+    // No selection column: picking what goes out is done in the Export
+    // dialog, which lists these same rolls with their own ticks.
     columns: [
       // getPosition(true) is the row's rank among currently sorted/filtered
       // rows, re-evaluated on every redraw -- stays correct after sorting or
@@ -355,178 +641,21 @@
     btn.style.opacity = loading ? "0.7" : "";
   }
 
-  ["produceDialog", "editDialog", "deleteDialog"].forEach(id => {
-    document.getElementById(id).addEventListener("click", function (e) {
+  // Backdrop click / Escape close. Guarded on the lookup: these run at parse
+  // time, so one id that isn't on the page any more would throw here and take
+  // every listener below it with it.
+  ["editDialog", "deleteDialog"].forEach(id => {
+    document.getElementById(id)?.addEventListener("click", function (e) {
       if (e.target === this) closeModal(id);
     });
   });
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    ["produceDialog", "editDialog", "deleteDialog"].forEach(id => {
-      if (document.getElementById(id).classList.contains("show")) closeModal(id);
+    ["editDialog", "deleteDialog"].forEach(id => {
+      if (document.getElementById(id)?.classList.contains("show")) closeModal(id);
     });
   });
-
-  // ---- PRODUCE (slit a Deckle into finished rolls) ----
-  let produceOrderChoices = null;
-  let produceDeckleChoices = null;
-  let eligibleOrders = [];
-  let orderDeckles = [];
-
-  function rollRowHtml(index, prevMtrs) {
-    return `
-      <div class="roll-row" data-index="${index}">
-        <div class="roll-row-title">Roll ${index + 1}</div>
-        <label class="dialog-field-label">Roll ID</label>
-        <input type="text" class="form-control premium-input roll-id-preview" readonly style="margin-bottom: 10px; background: #f1f5f9;" />
-        <label class="dialog-field-label">Mtrs</label>
-        <input type="number" class="form-control premium-input roll-mtrs" min="0" step="any" placeholder="Enter Mtrs" value="${prevMtrs || ""}" />
-      </div>`;
-  }
-
-  function renderProduceRollRows(count, preserveValues) {
-    const container = document.getElementById("produceRollsContainer");
-    const existing = preserveValues
-      ? Array.from(container.querySelectorAll(".roll-row")).map((row) => row.querySelector(".roll-mtrs").value)
-      : [];
-    container.innerHTML = Array.from({ length: count }, (_, i) => rollRowHtml(i, existing[i])).join("");
-    refreshProduceRollIdPreviews();
-  }
-
-  async function refreshProduceRollIdPreviews() {
-    const rows = document.querySelectorAll("#produceRollsContainer .roll-row");
-    const productCode = document.getElementById("produceOrderSelect").dataset.productCode || "";
-    if (!rows.length || !productCode) return;
-    try {
-      const res = await fetch(`/app/finishedstock/preview-roll-ids?productCode=${encodeURIComponent(productCode)}&count=${rows.length}`);
-      const data = await res.json();
-      const ids = data.rollIds || [];
-      rows.forEach((row, i) => {
-        row.querySelector(".roll-id-preview").value = ids[i] || "";
-      });
-    } catch {
-      // Preview is cosmetic only -- the server assigns the real id on save.
-    }
-  }
-
-  document.getElementById("produceRollCountInput").addEventListener("change", function () {
-    const count = Math.min(Math.max(parseInt(this.value, 10) || 1, 1), 100);
-    this.value = count;
-    renderProduceRollRows(count, true);
-  });
-
-  async function loadEligibleOrders() {
-    const sel = document.getElementById("produceOrderSelect");
-    sel.innerHTML = `<option value="" disabled selected hidden>Loading orders…</option>`;
-    try {
-      const res = await fetch("/app/finishedstock/eligible-orders");
-      const data = await res.json();
-      eligibleOrders = data.orders || [];
-    } catch {
-      eligibleOrders = [];
-    }
-
-    if (produceOrderChoices) { produceOrderChoices.destroy(); produceOrderChoices = null; }
-    if (!eligibleOrders.length) {
-      sel.innerHTML = `<option value="" disabled selected hidden>No orders with unslit Deckle stock</option>`;
-      produceOrderChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-      return;
-    }
-    sel.innerHTML = `<option value="" disabled selected hidden>Select an order</option>` +
-      eligibleOrders.map((o) => `<option value="${o._id}">${o.lotNo} — ${o.productCode} (${o.paperSize})</option>`).join("");
-    produceOrderChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-  }
-
-  async function loadOrderDeckles(pendingId) {
-    const sel = document.getElementById("produceDeckleSelect");
-    if (produceDeckleChoices) { produceDeckleChoices.destroy(); produceDeckleChoices = null; }
-    document.getElementById("deckleHint").textContent = "";
-    orderDeckles = [];
-
-    if (!pendingId) {
-      sel.innerHTML = `<option value="" disabled selected hidden>Select an order first</option>`;
-      produceDeckleChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-      return;
-    }
-
-    sel.innerHTML = `<option value="" disabled selected hidden>Loading Deckles…</option>`;
-    try {
-      const res = await fetch(`/app/finishedstock/order-deckles?pendingId=${encodeURIComponent(pendingId)}`);
-      const data = await res.json();
-      orderDeckles = data.deckles || [];
-    } catch {
-      orderDeckles = [];
-    }
-
-    if (!orderDeckles.length) {
-      sel.innerHTML = `<option value="" disabled selected hidden>No Deckle stock left for this order</option>`;
-      produceDeckleChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-      return;
-    }
-    sel.innerHTML = `<option value="" disabled selected hidden>Select a Deckle</option>` +
-      orderDeckles.map((d) => `<option value="${d._id}">${d.rollId} — ${d.reelMtrs} mtrs @ ${d.location}</option>`).join("");
-    produceDeckleChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-
-    sel.onchange = () => {
-      const deckle = orderDeckles.find((d) => d._id === sel.value);
-      document.getElementById("deckleHint").textContent = deckle ? `${deckle.reelMtrs} mtrs available at ${deckle.location}` : "";
-    };
-  }
-
-  async function openProduceDialog() {
-    document.getElementById("produceRollCountInput").value = "1";
-    hideError("produceFinishedError");
-
-    await loadEligibleOrders();
-    await loadOrderDeckles("");
-    renderProduceRollRows(1, false);
-
-    const orderSel = document.getElementById("produceOrderSelect");
-    orderSel.onchange = async () => {
-      const order = eligibleOrders.find((o) => o._id === orderSel.value);
-      orderSel.dataset.productCode = order?.productCode && order.productCode !== "—" ? order.productCode : "";
-      await loadOrderDeckles(orderSel.value);
-      refreshProduceRollIdPreviews();
-    };
-
-    openModal("produceDialog");
-  }
-  function closeProduceDialog() {
-    closeModal("produceDialog");
-  }
-
-  async function submitProduce() {
-    const pendingId = document.getElementById("produceOrderSelect").value;
-    const deckleStockId = document.getElementById("produceDeckleSelect").value;
-    if (!pendingId) return showError("produceFinishedError", "Select an order.");
-    if (!deckleStockId) return showError("produceFinishedError", "Select a Deckle.");
-
-    const rollRows = Array.from(document.querySelectorAll("#produceRollsContainer .roll-row"));
-    const rolls = rollRows.map((row) => ({ mtrs: row.querySelector(".roll-mtrs").value }));
-    const emptyIndex = rolls.findIndex((r) => !r.mtrs || Number(r.mtrs) <= 0);
-    if (emptyIndex !== -1) return showError("produceFinishedError", `Mtrs is required for roll ${emptyIndex + 1}.`);
-
-    hideError("produceFinishedError");
-    setLoading("produceSubmitBtn", true);
-    try {
-      const res = await fetch("/app/finishedstock/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pendingId, deckleStockId, rolls }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        window.location.href = data.redirect || "/app/finishedstock";
-      } else {
-        showError("produceFinishedError", data.message || "Failed to produce finished rolls.");
-      }
-    } catch {
-      showError("produceFinishedError", "Server error. Please try again.");
-    } finally {
-      setLoading("produceSubmitBtn", false);
-    }
-  }
 
   // ---- EDIT ----
   let editId = null;
@@ -613,4 +742,272 @@
       setLoading("deleteConfirmBtn", false);
     }
   }
+
+  // ---- Export to FAIRTECH ------------------------------------------------
+  // Rolls are ticked HERE, in the dialog, so what leaves stock is read on the
+  // way out. Anything already ticked in the table just arrives pre-ticked.
+  // POST /app/finishedstock/export answers with the FILE itself on success
+  // and with JSON on refusal, so the response is branched on rather than
+  // parsed blind -- the server re-reads and re-validates every roll, this
+  // just says which ones and on what invoice.
+  const exportModal = document.getElementById("exportFairtechModal");
+  const exportLinesEl = document.getElementById("export-lines");
+  const exportTotalEl = document.getElementById("export-total");
+  const exportTotalLinesEl = document.getElementById("export-total-lines");
+  const exportTotalValueEl = document.getElementById("export-total-value");
+  const exportInvoiceEl = document.getElementById("export-invoice");
+  const exportDateEl = document.getElementById("export-date");
+  const exportRemarksEl = document.getElementById("export-remarks");
+  const exportConfirmBtn = document.getElementById("export-confirm");
+  const exportErrEl = document.getElementById("export-error");
+
+  const exEsc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const exNum = (n) => (n === null || n === undefined || n === "" ? "\u2014" : Number(n).toLocaleString("en-IN"));
+
+  // Exactly what the server refuses, checked here too so an unexportable roll
+  // can't be ticked at all -- the file is all-or-nothing, and one bad roll
+  // would otherwise bounce the whole delivery back.
+  function exportBlocker(r) {
+    if (!(Number(r.quantity) > 0)) return "Already dispatched";
+    if (!r.productCode) return "No Product Code — FAIRTECH matches paper on it";
+    if (!r.family) return "No Family on its Label Stock";
+    if (!(Number(r.paperSize) > 0)) return "No usable Paper Size";
+    if (!(Number(r.mtrs) > 0)) return "No metres on it";
+    if (!(Number(r.rate) > 0)) return "No Rate — FAIRTECH books every reel in at a rate";
+    return "";
+  }
+
+  const inStockRolls = () => stockData.filter((r) => Number(r.quantity) > 0);
+
+  // Confirm is live only while at least one roll is ticked AND both required
+  // header fields are filled -- the server enforces the same, this just stops
+  // the round trip.
+  function syncExportConfirm() {
+    const rows = [...exportLinesEl.querySelectorAll(".export-line[data-id]")];
+    let ticked = 0;
+    let mtrs = 0;
+    let value = 0;
+    let tickedHidden = 0;
+    rows.forEach((r) => {
+      const on = Boolean(r.querySelector(".export-include")?.checked);
+      // Single owner of the row's selected look, so it stays right however
+      // the tick got there -- row click, the box itself, or Select all.
+      r.classList.toggle("is-on", on);
+      if (!on) return;
+      ticked++;
+      if (r.style.display === "none") tickedHidden++;
+      mtrs += Number(r.dataset.mtrs) || 0;
+      value += (Number(r.dataset.mtrs) || 0) * (Number(r.dataset.rate) || 0);
+    });
+
+    const hasInvoice = Boolean(exportInvoiceEl.value.trim());
+    const hasDate = Boolean(exportDateEl.value);
+    // Mark whichever field is actually blocking, rather than only greying
+    // the button out.
+    exportInvoiceEl.classList.toggle("missing", ticked > 0 && !hasInvoice);
+    exportDateEl.classList.toggle("missing", ticked > 0 && !hasDate);
+    exportConfirmBtn.disabled = !(ticked && hasInvoice && hasDate);
+
+    if (!rows.length) { exportTotalEl.hidden = true; return; }
+    // Ticked rolls the current search is hiding still go in the file, so they
+    // are counted here -- and called out, so the count never looks wrong
+    // against what is on screen.
+    const hiddenNote = tickedHidden
+      ? ` <span style="color:#b45309;">(${tickedHidden} hidden by search)</span>`
+      : "";
+    exportTotalLinesEl.innerHTML =
+      `<b>${ticked}</b> of ${rows.length} roll${rows.length === 1 ? "" : "s"} selected${hiddenNote} \u00b7 <b>${exNum(mtrs)}</b> mtrs`;
+    exportTotalValueEl.innerHTML = `Value <b>${exNum(Math.round(value * 100) / 100)}</b>`;
+    exportTotalEl.hidden = false;
+  }
+
+  function renderExportLines() {
+    const rolls = inStockRolls();
+    exportLinesEl.innerHTML = rolls.length
+      ? `<div class="export-lines-head"><span></span><span>Roll</span><span class="num">Size</span><span class="num">Mtrs</span><span class="num">Rate</span></div>`
+        + rolls.map((r) => {
+            const blocker = exportBlocker(r);
+            const sub = blocker
+              ? exEsc(blocker)
+              : `${exEsc(r.productCode)}${r.lotNo ? ` \u00b7 ${exEsc(r.lotNo)}` : ""}${r.location ? ` \u00b7 ${exEsc(r.location)}` : ""}`;
+            // Everything the search box matches on, lower-cased once here so
+            // filtering never re-reads the DOM text.
+            const hay = [r.rollId, r.productCode, r.lotNo, r.location, r.clientName, r.deckleRollId]
+              .filter(Boolean).join(" ").toLowerCase();
+            return `<div class="export-line ${blocker ? "invalid" : ""}" data-id="${exEsc(r._id)}"
+                data-mtrs="${Number(r.mtrs) || 0}" data-rate="${Number(r.rate) || 0}" data-hay="${exEsc(hay)}">
+              <input type="checkbox" class="export-include"${blocker ? " disabled" : ""} />
+              <div>
+                <div class="code" title="${exEsc(r.rollId)}">${exEsc(r.rollId)}</div>
+                <div class="sub" title="${sub}">${sub}</div>
+              </div>
+              <span class="num">${exNum(r.paperSize)}</span>
+              <span class="num"><b>${exNum(r.mtrs)}</b></span>
+              <span class="num">${exNum(r.rate)}</span>
+            </div>`;
+          }).join("")
+      : `<div class="export-lines-empty">No rolls in stock to export.</div>`;
+
+    syncTickAll();
+    syncExportConfirm();
+  }
+
+  // Anywhere on a row toggles it -- a 17px box is a small thing to ask people
+  // to hit for every roll in a delivery. Delegated, and bound once rather
+  // than per render, so re-rendering the list can't stack up handlers.
+  exportLinesEl.addEventListener("click", (e) => {
+    const row = e.target.closest(".export-line");
+    if (!row) return;
+    const box = row.querySelector(".export-include");
+    if (!box || box.disabled) return;
+    // The checkbox already toggled itself on its own click; toggling again
+    // here would put it straight back.
+    if (e.target !== box) box.checked = !box.checked;
+    syncExportConfirm();
+    syncTickAll();
+  });
+
+  // ---- Search -----------------------------------------------------------
+  // Filters the list in place. Rows hidden by a search keep whatever tick
+  // they had -- the file is built from what is TICKED, not from what happens
+  // to be on screen, so narrowing the view can never silently drop a roll
+  // from the delivery. The totals bar counts every ticked roll for that same
+  // reason, and says so when some of them are filtered out of sight.
+  const searchEl = document.getElementById("export-search");
+  const searchClearEl = document.getElementById("export-search-clear");
+
+  const tickableBoxes = ({ visibleOnly }) =>
+    [...exportLinesEl.querySelectorAll(".export-include:not(:disabled)")]
+      .filter((b) => !visibleOnly || b.closest(".export-line").style.display !== "none");
+
+  function applyExportSearch() {
+    const q = searchEl.value.trim().toLowerCase();
+    searchClearEl.hidden = !q;
+    let shown = 0;
+    exportLinesEl.querySelectorAll(".export-line").forEach((row) => {
+      const hit = !q || (row.dataset.hay || "").includes(q);
+      row.style.display = hit ? "" : "none";
+      if (hit) shown++;
+    });
+
+    // Say plainly when a search has emptied the list, rather than leaving a
+    // blank box that reads as "no stock".
+    let none = exportLinesEl.querySelector(".export-search-empty");
+    if (q && shown === 0) {
+      if (!none) {
+        none = document.createElement("div");
+        none.className = "export-lines-empty export-search-empty";
+        exportLinesEl.appendChild(none);
+      }
+      none.textContent = `No roll matches "${searchEl.value.trim()}".`;
+    } else if (none) {
+      none.remove();
+    }
+    syncTickAll();
+    syncExportConfirm();
+  }
+
+  searchEl.addEventListener("input", applyExportSearch);
+  searchClearEl.addEventListener("click", () => {
+    searchEl.value = "";
+    applyExportSearch();
+    searchEl.focus();
+  });
+
+  const tickAllEl = document.getElementById("export-tick-all");
+  // Reflects, and acts on, only what the search is currently showing --
+  // "Select all" while filtered means "all of these", not "all of them".
+  function syncTickAll() {
+    const boxes = tickableBoxes({ visibleOnly: true });
+    const on = boxes.filter((b) => b.checked).length;
+    tickAllEl.checked = boxes.length > 0 && on === boxes.length;
+    tickAllEl.indeterminate = on > 0 && on < boxes.length;
+    tickAllEl.disabled = boxes.length === 0;
+  }
+  tickAllEl.addEventListener("change", () => {
+    tickableBoxes({ visibleOnly: true }).forEach((b) => { b.checked = tickAllEl.checked; });
+    syncExportConfirm();
+  });
+
+  function openExportDialog() {
+    // Nothing is ticked to begin with: this dispatches stock, so what goes
+    // out is chosen deliberately here rather than defaulted to everything.
+    // "Select all" is one click away for a full delivery.
+    exportInvoiceEl.value = "";
+    exportDateEl.value = new Date().toISOString().slice(0, 10);
+    exportRemarksEl.value = "";
+    exportErrEl.textContent = "";
+    exportInvoiceEl.classList.remove("missing");
+    exportDateEl.classList.remove("missing");
+    searchEl.value = "";
+    searchClearEl.hidden = true;
+    renderExportLines();
+    exportModal.classList.add("show");
+    exportModal.setAttribute("aria-hidden", "false");
+    exportInvoiceEl.focus();
+  }
+  function closeExportDialog() {
+    exportModal.classList.remove("show");
+    exportModal.setAttribute("aria-hidden", "true");
+    exportTotalEl.hidden = true;
+  }
+
+  document.getElementById("export-cancel").addEventListener("click", closeExportDialog);
+  document.getElementById("export-close").addEventListener("click", closeExportDialog);
+  exportModal.addEventListener("click", (e) => { if (e.target === exportModal) closeExportDialog(); });
+  // Escape closes it too -- the page's own Escape handler only knows about
+  // the edit/delete dialogs.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && exportModal.classList.contains("show")) closeExportDialog();
+  });
+  [exportInvoiceEl, exportDateEl].forEach((el) => el.addEventListener("input", syncExportConfirm));
+
+  exportConfirmBtn.addEventListener("click", async () => {
+    const ids = [...exportLinesEl.querySelectorAll(".export-include:checked")]
+      .map((cb) => cb.closest(".export-line").dataset.id);
+    if (!ids.length) { exportErrEl.textContent = "Tick at least one roll to export."; return; }
+    const invoiceNo = exportInvoiceEl.value.trim();
+    const dispatchDate = exportDateEl.value;
+    if (!invoiceNo) { exportErrEl.textContent = "Enter the invoice number this delivery goes out on."; return; }
+    if (!dispatchDate) { exportErrEl.textContent = "Enter the dispatch date."; return; }
+    exportErrEl.textContent = "";
+
+    exportConfirmBtn.disabled = true;
+    try {
+      const res = await fetch("/app/finishedstock/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, invoiceNo, dispatchDate, remarks: exportRemarksEl.value.trim() }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        // A refusal lists every roll it refused rather than stopping at the
+        // first -- one trip to fix them all.
+        exportErrEl.textContent = [data.message, ...(data.problems || [])].filter(Boolean).join("\n");
+        exportConfirmBtn.disabled = false;
+        return;
+      }
+
+      // Save the file the browser just received, then reload so the
+      // dispatched rolls show as such.
+      const blob = await res.blob();
+      const name = (res.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/)?.[1]
+        || `sachiko-finished-stock-${invoiceNo}.json`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      closeExportDialog();
+      window.location.reload();
+    } catch {
+      exportErrEl.textContent = "Couldn't reach the server \u2014 nothing was exported.";
+      exportConfirmBtn.disabled = false;
+    }
+  });
 </script>

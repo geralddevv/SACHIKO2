@@ -66,7 +66,15 @@ import { sendAsset, assetExists } from "./utils/media.js";
 import { loginLimiter, createLimiter, updateLimiter, deleteLimiter } from "./utils/limiters.js";
 
 const app = express();
-const port = Number(process.env.PORT) || 3001;
+if (!process.env.PORT) {
+  console.error("❌ CRITICAL: PORT not set in .env");
+  process.exit(1);
+}
+const port = Number(process.env.PORT);
+if (!Number.isFinite(port) || port <= 0) {
+  console.error("❌ CRITICAL: PORT in .env is not a valid number");
+  process.exit(1);
+}
 
 /* DB (env already loaded by the config/loadEnv.js import at the top of this file) */
 connectDB();
@@ -186,7 +194,14 @@ const sessionStore = new MongoSessionStore({
 
 app.use(
   session({
-    name: "app.sid",
+    // Browsers key cookies by (domain, path, name) -- never by port. Three
+    // copies of this app on the same host (different PORTs, e.g. running
+    // several branded deployments side by side) would otherwise all write
+    // "app.sid" to the same cookie slot, so logging into one silently logs
+    // the others out (and worse, could hand one deployment's session to
+    // another's server). Folding the port into the cookie name gives each
+    // deployment its own slot in the browser's cookie jar.
+    name: `app.sid.${port}`,
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,

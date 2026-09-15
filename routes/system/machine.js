@@ -1446,6 +1446,15 @@ router.post("/machine/jobcard/material/check", requireAuth, requireMachineFloor,
     const reel = await findScannedReel(POOL_MODELS[pool].Model, rollId);
     if (!reel) return res.json({ ok: false, code: "unknown" });
 
+    // A reel with nothing physically left can't be run, allotted or not --
+    // block the scan outright rather than mounting an empty reel the operator
+    // would just have to "Change" straight back out again. getEligibleRawMaterials
+    // still lists an allotted-but-empty reel below (so it can be reconciled via
+    // "Change"), so this can't be caught by the recipe-match check that follows.
+    if ((Number(reel.quantity) || 0) <= 0 || (Number(reel.reelMtrs) || 0) <= 0) {
+      return res.json({ ok: false, code: "empty", rollId: reel.rollId });
+    }
+
     // A reel inwarded without its purchase invoice is not fit to run: the
     // invoice is what ties the physical reel to what was actually bought, and
     // it is the LOT NO printed on its own label (see utils/facestockRollLabel.js

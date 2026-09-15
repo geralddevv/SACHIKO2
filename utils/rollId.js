@@ -238,7 +238,14 @@ export async function findScannedReel(Model, value, select) {
   if (!candidates.length) return null;
 
   let query = Model.find({ rollId: { $in: candidates } });
-  if (select) query = query.select(select);
+  // rollId is what the matching below keys off of, so it must always come
+  // back even when a caller's own `select` (an inclusion list) doesn't ask
+  // for it -- an inclusion list without it would silently blank every doc's
+  // rollId, and every candidate lookup below would then miss.
+  if (select) {
+    const fields = String(select).trim().split(/\s+/).filter(Boolean);
+    query = query.select(fields.includes("rollId") ? select : `${select} rollId`);
+  }
   const docs = await query.lean();
   if (!docs.length) return null;
 

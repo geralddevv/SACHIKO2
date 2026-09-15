@@ -1439,6 +1439,7 @@
       if (data && data.ok === false) {
         const REFUSALS = {
           unknown: [`${cleanId} isn't a known reel — check the label.`, "unknown reel"],
+          empty: [`${cleanId} has no stock left — scan a different reel.`, "no stock left"],
           mismatch: [`${cleanId} doesn't match this recipe — verify the reel.`, "doesn't match the recipe"],
           "no-invoice": [
             `${cleanId} was inwarded with no purchase invoice — the office must add it before this reel can run.`,

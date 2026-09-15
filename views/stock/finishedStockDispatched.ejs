@@ -1,0 +1,93 @@
+<% layout('/layout/boilerplate') %>
+
+<!-- Tabulator CSS -->
+<link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
+  <style>
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+    }
+    .header-action-btn:hover { background-color: #e2e8f0; }
+  </style>
+
+  <div class="indi-head">
+    <h1>Dispatched Finished Goods</h1>
+    <div style="display: flex; gap: 10px; align-items: center">
+      <a href="/app/finishedstock" class="header-action-btn">
+        <i class="fa-solid fa-arrow-left"></i> Finished Goods Stock
+      </a>
+    </div>
+  </div>
+
+  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div id="dispatched-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
+
+<script id="dispatched-data" type="application/json"><%- safeJson(stock) %></script>
+<script>
+  // Rolls that have left for FAIRTECH. Read-only on purpose: the roll is gone,
+  // so there is nothing here to edit or produce -- this is the record of what
+  // went out and on which invoice.
+  const dispatchedData = JSON.parse(document.getElementById("dispatched-data").textContent);
+
+  const fmtDate = (v) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    if (isNaN(d)) return "—";
+    return `${d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" })}`
+      + ` ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}`;
+  };
+
+  const table = new Tabulator("#dispatched-table", {
+    data: dispatchedData,
+    height: "100%",
+    responsiveLayout: false,
+    movableColumns: true,
+    placeholder: "Nothing dispatched yet.",
+    initialSort: [{ column: "dispatchedAt", dir: "desc" }],
+    columns: [
+      // getPosition(true) is the row's rank among currently sorted/filtered
+      // rows, so it stays correct after sorting or filtering.
+      { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
+        formatter: (cell) => cell.getRow().getPosition(true) },
+      { title: "Roll ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 190 },
+      { title: "Invoice No", field: "invoiceNo", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150,
+        formatter: (cell) => cell.getValue() || "—" },
+      { title: "Dispatched", field: "dispatchedAt", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 165,
+        formatter: (cell) => fmtDate(cell.getValue()) },
+      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140,
+        formatter: (cell) => cell.getValue() || "—" },
+      { title: "Paper Size", field: "paperSize", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110,
+        formatter: (cell) => cell.getValue() || "—" },
+      { title: "Lot No", field: "lotNo", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120,
+        formatter: (cell) => cell.getValue() || "—" },
+      { title: "Client", field: "clientName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150,
+        formatter: (cell) => cell.getValue() || "—" },
+      { title: "Deckle ID", field: "deckleRollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150,
+        formatter: (cell) => cell.getValue() || "—" },
+      { title: "Mtrs", field: "mtrs", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 95 },
+      { title: "Rate", field: "rate", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 90,
+        formatter: (cell) => cell.getValue() ?? "—" },
+      { title: "Location", field: "location", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120 },
+    ],
+  });
+
+  table.on("tableBuilt", () => {
+    document.querySelector(".table-spinner")?.remove();
+  });
+</script>
