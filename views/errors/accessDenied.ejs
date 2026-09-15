@@ -1,34 +1,167 @@
 <% layout('/layout/auth') -%>
 
+<style>
+  /* Sits on the auth layout's card (login.css) so a blocked page looks like
+     the rest of the signed-out surfaces rather than a raw browser error. */
+  .denied-card { text-align: center; }
+
+  .denied-badge {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(220, 53, 69, 0.1);
+    display: grid;
+    place-items: center;
+    margin: 0 auto 1.1rem;
+  }
+  .denied-badge i { font-size: 26px; color: #dc3545; }
+
+  .denied-title {
+    margin: 0 0 0.4rem;
+    color: #1b2430;
+    font-size: 1.45rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .denied-lead {
+    margin: 0 0 1.4rem;
+    color: #5b6b7a;
+    font-size: 0.97rem;
+    line-height: 1.5;
+  }
+
+  /* What the administrator needs to be told, laid out as a definition list so
+     the labels and values stay aligned however long the values are. */
+  .denied-facts {
+    text-align: left;
+    background: rgba(4, 74, 120, 0.04);
+    border: 1px solid rgba(4, 74, 120, 0.12);
+    border-radius: 12px;
+    padding: 0.85rem 1rem;
+    margin: 0 0 1.4rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.5rem 1rem;
+    font-size: 0.85rem;
+  }
+  .denied-facts dt {
+    color: #8a97a3;
+    font-weight: 500;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .denied-facts dd {
+    margin: 0;
+    color: #1b2430;
+    font-weight: 600;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .denied-role {
+    display: inline-block;
+    background: rgba(220, 53, 69, 0.1);
+    color: #b02a37;
+    border-radius: 6px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+  }
+  .denied-path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+  }
+
+  .denied-actions {
+    display: grid;
+    gap: 0.6rem;
+    margin-bottom: 1.3rem;
+  }
+  .denied-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.72rem 1.4rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .denied-btn.primary { background: #044a78; color: #ffffff; }
+  .denied-btn.primary:hover { background: #033a5c; }
+  .denied-btn.secondary {
+    background: #ffffff;
+    color: #b02a37;
+    border-color: rgba(176, 42, 55, 0.35);
+  }
+  .denied-btn.secondary:hover { background: #fdf2f3; border-color: #b02a37; }
+
+  .denied-note {
+    margin: 0;
+    color: #8a97a3;
+    font-size: 0.82rem;
+    line-height: 1.55;
+  }
+  .denied-note + .denied-note { margin-top: 0.5rem; }
+
+  @media (min-width: 420px) {
+    .denied-actions { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
 <section class="login-shell">
-  <div class="login-accent" style="background: linear-gradient(90deg, rgba(220, 53, 69, 0.85), rgba(220, 53, 69, 0.15)); box-shadow: 0 8px 20px rgba(220, 53, 69, 0.2);"></div>
-  <div class="login-card" style="text-align: center;">
-    <div style="width: 72px; height: 72px; border-radius: 50%; background: rgba(220, 53, 69, 0.1); display: grid; place-items: center; margin: 0 auto 1.25rem;">
-      <i class="fa-solid fa-lock" style="font-size: 28px; color: #dc3545;"></i>
+  <div
+    class="login-accent"
+    style="background: linear-gradient(90deg, rgba(220, 53, 69, 0.85), rgba(220, 53, 69, 0.15)); box-shadow: 0 8px 20px rgba(220, 53, 69, 0.2);"
+  ></div>
+
+  <div class="login-card denied-card">
+    <div class="denied-badge"><i class="fa-solid fa-lock"></i></div>
+
+    <h2 class="denied-title">Access Denied</h2>
+    <p class="denied-lead">You don't have permission to view this page.</p>
+
+    <dl class="denied-facts">
+      <% if (typeof authUser !== "undefined" && authUser?.username) { %>
+        <dt>Signed in as</dt>
+        <dd><%= authUser.username %></dd>
+      <% } %>
+      <% if (typeof roleLabel !== "undefined" && roleLabel) { %>
+        <dt>Role</dt>
+        <dd><span class="denied-role"><%= roleLabel %></span></dd>
+      <% } %>
+      <% if (typeof requestedPath !== "undefined" && requestedPath) { %>
+        <dt>Page</dt>
+        <dd class="denied-path"><%= requestedPath %></dd>
+      <% } %>
+    </dl>
+
+    <div class="denied-actions">
+      <a
+        href="<%= typeof homeUrl !== 'undefined' && homeUrl ? homeUrl : '/app/welcome' %>"
+        class="denied-btn primary"
+      >
+        <i class="fa-solid fa-house"></i>
+        <span><%= typeof homeLabel !== "undefined" && homeLabel ? homeLabel : "Back to Dashboard" %></span>
+      </a>
+
+      <%# Permissions and role are read from the session snapshot taken at
+          sign-in, so being granted access changes nothing until the session is
+          replaced. GET /logout destroys it and returns the right login page
+          for this user (staff or operator). %>
+      <a href="/logout" class="denied-btn secondary">
+        <i class="fa-solid fa-right-from-bracket"></i>
+        <span>Log out</span>
+      </a>
     </div>
 
-    <h2 style="margin: 0 0 0.5rem; color: #1b2430; font-size: 1.5rem;">Access Denied</h2>
-    <p style="margin: 0 0 0.25rem; color: #5b6b7a; font-size: 0.98rem;">
-      You don't have permission to view this page.
+    <p class="denied-note">
+      Just been granted access? Your permissions are loaded when you sign in &mdash;
+      log out and sign in again to pick them up.
     </p>
-    <% if (typeof roleLabel !== "undefined" && roleLabel) { %>
-    <p style="margin: 0 0 1.5rem; color: #8a97a3; font-size: 0.85rem;">
-      Your current role (<strong><%= roleLabel %></strong>) doesn't include access to this section.
-    </p>
-    <% } else { %>
-    <div style="margin-bottom: 1.5rem;"></div>
-    <% } %>
-
-    <a
-      href="<%= typeof homeUrl !== 'undefined' ? homeUrl : '/app/welcome' %>"
-      class="login-submit"
-      style="display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; background: #044a78; color: #ffffff; text-decoration: none; padding: 0.7rem 1.4rem; border-radius: 10px; font-weight: 600;"
-    >
-      <i class="fa-solid fa-house"></i>
-      <span><%= typeof homeLabel !== "undefined" ? homeLabel : "Back to Dashboard" %></span>
-    </a>
-
-    <p class="login-help">
+    <p class="denied-note">
       If you believe this is a mistake, contact your administrator.
     </p>
   </div>

@@ -34,9 +34,15 @@ export const requireRole = (roles) => (req, res, next) => {
     }
     return res.status(403).render("errors/accessDenied", {
       title: "Access Denied",
-      CSS: false,
+      // The page is built on the auth layout's card, whose styles live in
+      // login.css -- without this it renders as bare unstyled text.
+      CSS: "login.css",
       JS: false,
       roleLabel: String(req.session.authUser.role || "").toUpperCase(),
+      // Shown so the user can tell their administrator exactly what to open
+      // up. brandPrefix rewrites the /app prefix back to the company slug on
+      // the way out, so this reads as the URL in their address bar.
+      requestedPath: String(req.originalUrl || "").split("?")[0],
     });
   }
   next();

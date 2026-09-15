@@ -124,6 +124,46 @@ const deleteUploadedEmployeeFiles = (files = {}) => {
   });
 };
 
+// Field labels as the form shows them, so a save error names the box the user
+// has to go and fix rather than the schema path.
+const EMPLOYEE_FIELD_LABELS = {
+  empId: "Employee ID",
+  empName: "Employee Name",
+  empNickName: "Nick Name",
+  empDateOfJoining: "Date of Joining",
+  empDept: "Department",
+  empProfile: "Profile",
+  empProfileCode: "Profile Code",
+  empLoc: "Location",
+  empUnder: "Under",
+  empReportingManager: "Reporting Manager",
+  empMobile1: "Mobile Number",
+  empAadhaar: "Aadhaar Number",
+  empPan: "PAN Number",
+  empAccNo: "Account Number",
+};
+const employeeFieldLabel = (path) => EMPLOYEE_FIELD_LABELS[path] || path;
+
+// Mongo/Mongoose save errors go straight into a toast on the form, so turn
+// the raw text ("E11000 duplicate key error ... index: empId_1 ...") into
+// something a person can act on.
+const saveErrorMessage = (err) => {
+  if (err?.name === "ValidationError") {
+    const missing = Object.values(err.errors || {}).map((e) => employeeFieldLabel(e.path));
+    return missing.length
+      ? `Please fill in ${missing.join(", ")}.`
+      : "Some required details are missing.";
+  }
+  if (err?.code === 11000) {
+    const fields = Object.keys(err.keyPattern || err.keyValue || {}).map(employeeFieldLabel);
+    const value = Object.values(err.keyValue || {})[0];
+    return fields.length
+      ? `${fields.join(", ")}${value ? ` "${value}"` : ""} is already used by another employee.`
+      : "That value is already used by another employee.";
+  }
+  return err?.message || "Could not save the employee.";
+};
+
 const handleUpload = (req, res, next) => {
   uploadMiddleware(req, res, (err) => {
     if (err) {
@@ -227,7 +267,7 @@ router.post("/form", requireAuth, createLimiter, handleUpload, async (req, res) 
     }
   } catch (err) {
     console.error(err);
-    res.status(400).json({ success: false, message: err.message });
+    res.status(400).json({ success: false, message: saveErrorMessage(err) });
   }
 });
 
@@ -351,7 +391,7 @@ router.post("/edit/:id", requireAuth, updateLimiter, handleUpload, async (req, r
     }
   } catch (err) {
     console.error(err);
-    res.status(400).json({ success: false, message: err.message });
+    res.status(400).json({ success: false, message: saveErrorMessage(err) });
   }
 });
 

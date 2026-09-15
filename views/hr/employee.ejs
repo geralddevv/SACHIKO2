@@ -128,6 +128,19 @@
   border-left: 4px solid #0a3646;
   display: none;
   align-items: center;
+  /* A "these fields are missing" toast names the fields, so it has to wrap
+     rather than run off the side of the screen. */
+  max-width: min(460px, calc(100vw - 40px));
+  line-height: 1.4;
+}
+
+/* ================= INVALID FIELD HIGHLIGHT ================= */
+/* A Choices.js select hides its real <select> and draws .choices__inner in
+   its place, so the highlight has to go on the wrapper for those. */
+.form-control.field-error,
+.choices.field-error .choices__inner {
+  border: 1px solid #dc3545 !important;
+  background-color: #fdf2f3;
 }
 
 .toast-close {
@@ -243,22 +256,26 @@
         required
       >
         <%
-          // Someone has to sit at the top of the org chart -- the proprietor
-          // reports to nobody, and on a fresh database the very first employee
-          // has nobody to pick either. Without this option the list is empty
-          // and a required select with no selectable option makes it
-          // impossible to create the first employee at all.
-          const NO_MANAGER = "NONE";
+          // The top of the org chart is the proprietor/director, who has no
+          // employee record of their own -- so on a fresh database the very
+          // first employee has nobody in the list to report to, and a required
+          // select with nothing selectable makes them impossible to create.
+          // Everyone above the line reports here, not to a named row.
+          const TOP_OF_HIERARCHY = "PROPRIETOR / DIRECTOR";
+          // The same option was briefly stored as "NONE"; keep those rows
+          // pointing at it rather than showing a stale one-off entry.
+          const LEGACY_TOP_OF_HIERARCHY = "NONE";
           const managerNames = (employees || []).map(e => e?.empName).filter(Boolean);
           const currentManager = employee?.empReportingManager || "";
-          // Preselect NONE only for the first-ever employee, where it is the
-          // only possible answer; otherwise keep the usual "Select" prompt.
-          const noManagerSelected =
-            currentManager === NO_MANAGER || (!employee && !managerNames.length);
+          const reportsToTop =
+            currentManager === TOP_OF_HIERARCHY || currentManager === LEGACY_TOP_OF_HIERARCHY;
+          // Preselect it for the first-ever employee, where it is the only
+          // possible answer; otherwise keep the usual "Select" prompt.
+          const topSelected = reportsToTop || (!employee && !managerNames.length);
         %>
-        <option value="" disabled <%= !currentManager && !noManagerSelected ? 'selected' : '' %> hidden>Select</option>
-        <option value="<%= NO_MANAGER %>" <%= noManagerSelected ? 'selected' : '' %>>NONE (TOP OF HIERARCHY)</option>
-        <% if (currentManager && currentManager !== NO_MANAGER && !managerNames.includes(currentManager)) { %>
+        <option value="" disabled <%= !currentManager && !topSelected ? 'selected' : '' %> hidden>Select</option>
+        <option value="<%= TOP_OF_HIERARCHY %>" <%= topSelected ? 'selected' : '' %>><%= TOP_OF_HIERARCHY %></option>
+        <% if (currentManager && !reportsToTop && !managerNames.includes(currentManager)) { %>
           <option value="<%= currentManager %>" selected><%= currentManager %></option>
         <% } %>
         <% managerNames.forEach(name => { %>
@@ -1072,8 +1089,92 @@ dependentsCountInput.addEventListener("input", (e) => {
   renderDependents(count);
 });
 
+/* ================= REQUIRED FIELD REPORTING ================= */
+// The form is novalidate, so the browser never raises its own "please fill in
+// this field" bubble -- pressing Submit with something missing simply did
+// nothing at all. Name the offending fields in the toast instead, which is
+// also the only workable option for the Choices.js selects: their real
+// <select> is hidden, so there is no visible element for a native bubble to
+// point at.
+
+// Turn a control's name into something readable, for the handful of fields
+// that carry no label (the dependents rows are built in JS without one):
+// empDateOfJoining -> "Date Of Joining",
+// dependentsDetails[0][dependentsDOB] -> "Dependent 1 DOB".
+function humanizeFieldName(name) {
+  const parts = String(name || "").match(/[^[\]]+/g) || [];
+  if (!parts.length) return "";
+  const words = parts[parts.length - 1]
+    .replace(/^(emp|dependents)(?=[A-Z])/, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\b[a-z]/g, (c) => c.toUpperCase());
+  const rowIndex = parts.length > 2 && /^\d+$/.test(parts[1]) ? Number(parts[1]) + 1 : null;
+  return rowIndex ? `Dependent ${rowIndex} ${words}` : words;
+}
+
+// Same label lookup the mandatory-star pass uses, minus the star it appended.
+function fieldLabelText(field) {
+  let label = null;
+  if (field.id) label = document.querySelector(`label[for='${field.id}']`);
+  if (!label && field.parentElement) label = field.parentElement.querySelector("label");
+  const text = (label?.textContent || "").replace(/[*:\s]+$/, "").trim();
+  return text || humanizeFieldName(field.name) || field.placeholder || "This field";
+}
+
+// Where to put the red outline / scroll to: the Choices wrapper when there is
+// one, since the control itself is hidden.
+const fieldAnchor = (field) => field.closest(".choices") || field;
+
+function clearFieldErrors(form) {
+  form.querySelectorAll(".field-error").forEach((el) => el.classList.remove("field-error"));
+}
+
+function reportInvalidFields(form) {
+  const invalid = [...form.querySelectorAll("input:invalid, select:invalid, textarea:invalid")];
+  if (!invalid.length) return false;
+
+  invalid.forEach((field) => fieldAnchor(field).classList.add("field-error"));
+
+  const missing = invalid.filter((f) => f.validity.valueMissing).map(fieldLabelText);
+  const malformed = invalid.filter((f) => !f.validity.valueMissing);
+
+  const list = (names) => {
+    const shown = names.slice(0, 4).join(", ");
+    return names.length > 4 ? `${shown} and ${names.length - 4} more` : shown;
+  };
+
+  const messages = [];
+  if (missing.length === 1) messages.push(`Please fill in ${missing[0]}.`);
+  else if (missing.length) messages.push(`${missing.length} required fields are missing: ${list(missing)}.`);
+  if (malformed.length === 1) {
+    messages.push(`${fieldLabelText(malformed[0])}: ${malformed[0].validationMessage}`);
+  } else if (malformed.length) {
+    messages.push(`Please check ${list(malformed.map(fieldLabelText))}.`);
+  }
+  showToast(messages.join(" "), true);
+
+  const anchor = fieldAnchor(invalid[0]);
+  anchor.scrollIntoView({ behavior: "smooth", block: "center" });
+  // A Choices wrapper is not focusable and focusing a hidden <select> throws
+  // in some browsers -- the outline plus the scroll is the feedback there.
+  if (anchor === invalid[0]) invalid[0].focus({ preventScroll: true });
+  return true;
+}
+
 /* ================= ASYNC FORM SUBMISSION ================= */
 const empForm = document.getElementById("employeeForm");
+// Drop a field's red outline as soon as it is touched. Capture, so the change
+// Choices.js fires on its hidden <select> is caught too.
+if (empForm) {
+  const clearOne = (e) => {
+    const field = e.target;
+    if (field?.matches?.("input, select, textarea")) fieldAnchor(field).classList.remove("field-error");
+  };
+  empForm.addEventListener("input", clearOne, true);
+  empForm.addEventListener("change", clearOne, true);
+}
 if (empForm) {
   empForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1099,7 +1200,8 @@ if (empForm) {
       return;
     }
 
-    if (!empForm.checkValidity()) {
+    clearFieldErrors(empForm);
+    if (reportInvalidFields(empForm)) {
       empForm.classList.add("was-validated");
       return;
     }
@@ -1146,6 +1248,7 @@ if (empForm) {
 
 const toast = document.getElementById("toast");
 const toastMsg = document.getElementById("toast-msg");
+let toastTimer = null;
 function showToast(message, isError) {
   if (!toast) return;
   toastMsg.textContent = message;
@@ -1157,10 +1260,17 @@ function showToast(message, isError) {
   toast.offsetHeight; // trigger reflow
   toast.style.display = "flex";
   toast.style.animation = "slideIn 0.5s forwards";
+
+  // A validation toast that never leaves sits on top of the page while the
+  // fields it names are being filled in. An error list takes longer to read
+  // than a "saved" confirmation, so give it more time.
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, isError ? 7000 : 4000);
 }
 
 function hideToast() {
   if (toast) {
+    clearTimeout(toastTimer);
     toast.style.animation = "slideOut 0.5s forwards";
     setTimeout(() => { toast.style.display = "none"; }, 500);
   }

@@ -192,25 +192,30 @@ const sessionStore = new MongoSessionStore({
   ttlMs: SESSION_TTL_MS,
 });
 
+// Browsers key cookies by (domain, path, name) -- never by port. Three
+// copies of this app on the same host (different PORTs, e.g. running several
+// branded deployments side by side) would otherwise all write "app.sid" to the
+// same cookie slot, so logging into one silently logs the others out (and
+// worse, could hand one deployment's session to another's server). Folding the
+// port into the cookie name gives each deployment its own slot in the browser's
+// cookie jar. Logout has to clear this exact name, so it lives in one constant.
+const SESSION_COOKIE_NAME = `app.sid.${port}`;
+const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+};
+
 app.use(
   session({
-    // Browsers key cookies by (domain, path, name) -- never by port. Three
-    // copies of this app on the same host (different PORTs, e.g. running
-    // several branded deployments side by side) would otherwise all write
-    // "app.sid" to the same cookie slot, so logging into one silently logs
-    // the others out (and worse, could hand one deployment's session to
-    // another's server). Folding the port into the cookie name gives each
-    // deployment its own slot in the browser's cookie jar.
-    name: `app.sid.${port}`,
+    name: SESSION_COOKIE_NAME,
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     rolling: true,
     store: sessionStore,
     cookie: {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...SESSION_COOKIE_OPTIONS,
       maxAge: SESSION_TTL_MS,
     },
   }),
@@ -839,7 +844,7 @@ app.get("/logout", (req, res) => {
   const isOperator = authUser ? authUser.role === "operator" : fromOperatorPortal;
   const loginUrl = isOperator ? "/app/operator/login" : "/app/login";
   req.session.destroy(() => {
-    res.clearCookie("app.sid");
+    res.clearCookie(SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS);
     res.redirect(loginUrl);
   });
 });
