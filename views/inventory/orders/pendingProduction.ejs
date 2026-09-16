@@ -226,8 +226,12 @@
     if (event.target === this) closeLiveStatusDialog();
   });
 
-  /* ----- Assign/start production ----- */
-  window.startProduction = function (orderId) {
+  /* ----- Assign Production -----
+     Opens the assignment form -- machine, operator, helper and raw-material
+     reels. It does NOT start anything: the job only runs once an operator
+     punches Start on its card from the machine queue. Named for that, the
+     same as the Deckle Queue's own button. */
+  window.openAssignProduction = function (orderId) {
     window.location.href = `/app/labels/production/assign/${orderId}`;
   };
 
@@ -279,7 +283,7 @@
           return `
             <div style="display:flex; gap:6px; justify-content:center; align-items:center;">
               <button onclick="viewProduction('${row._id}')" class="btn-action" style="background:#111827;" title="View Details"><i class="fa-solid fa-eye"></i></button>
-              <button onclick="startProduction('${row._id}')" class="btn-action" style="background:#10b981;" title="Assign Production"><i class="fa-solid fa-play"></i></button>
+              <button onclick="openAssignProduction('${row._id}')" class="btn-action" style="background:#10b981;" title="Assign Production — choose the machine, operator and raw material"><i class="fa-solid fa-clipboard-list"></i></button>
             </div>
           `;
         },

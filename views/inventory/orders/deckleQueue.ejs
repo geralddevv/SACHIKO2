@@ -61,7 +61,11 @@
     return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
   };
 
-  window.startProduction = function (orderId) {
+  // Opens Assign Production for this batch -- where the machine, operator,
+  // helper and raw-material reels are chosen. It does NOT start anything: the
+  // job only runs once an operator punches Start on its card from the machine
+  // queue, which is why this button is no longer a "Play".
+  window.openAssignProduction = function (orderId) {
     window.location.href = `/app/labels/production/assign/${orderId}`;
   };
 
@@ -88,11 +92,14 @@
         width: 190,
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          const play = `<button onclick="startProduction('${row._id}')" class="btn-action" style="background:#10b981;" title="Assign Production"><i class="fa-solid fa-play"></i> Play</button>`;
+          // "Play" read as though it ran the job -- the same green play button
+          // the machine queue uses for its Start, which genuinely does. This
+          // one only opens the assignment form, so it is named for that.
+          const assign = `<button onclick="openAssignProduction('${row._id}')" class="btn-action" style="background:#10b981;" title="Assign Production — choose the machine, operator and raw material for this deckle"><i class="fa-solid fa-clipboard-list"></i> Assign</button>`;
           const dissolve = row.canDissolve
             ? `<button onclick="dissolveBatch('${row._id}')" class="btn-action" style="background:#b91c1c;" title="Dissolve batch — its orders go back to Deckle Sorting"><i class="fa-solid fa-link-slash"></i> Dissolve</button>`
             : "";
-          return `<div style="display:inline-flex; gap:6px;">${play}${dissolve}</div>`;
+          return `<div style="display:inline-flex; gap:6px;">${assign}${dissolve}</div>`;
         },
       },
       { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter code...",
