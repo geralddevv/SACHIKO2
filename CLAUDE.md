@@ -548,26 +548,37 @@ so a forced overrun is never silent.
     consumedSqM = usefulSqM + edgeSqM + sideTrimSqM + endTrimSqM
     usefulSqM   = orderedSqM + overrunSqM
 
-`wasteSqM` (and so `wastePct`, the page's **Total Waste**) is **scrap only** —
-edge trim + side trim + end tail. `overrunSqM` is a *slice of* `usefulSqM`, not
-a sibling of it: a spare roll is wound onto a finished roll off width that would
-otherwise have been trimmed away, and consumption is fixed by `size x drm x
-webs` before anything is cut, so booking it as waste charges the plan twice for
-width it never lost. It once did exactly that, which left Total Waste roughly
-double and unable to reconcile with its own parts.
+The optimizer's own `wasteSqM` (and `wastePct`) is **scrap only** — edge trim +
+side trim + end tail. `overrunSqM` is a *slice of* `usefulSqM`, not a sibling of
+it: a spare roll is wound onto a finished roll off width that would otherwise
+have been trimmed away, and consumption is fixed by `size x drm x webs` before
+anything is cut, so booking it as waste charges the plan twice for width it
+never lost. It once did exactly that, which left the headline roughly double and
+unable to reconcile with its own parts.
 
-The page's **Side Run** and **Total Waste** are both **whole-job totals**, in
-mm as well as %, never a per-web average — Side Run mm is every web's side trim
-added up, and Total Waste mm is the same for all the scrap. That makes them
-reconcile by eye, which is the quickest check the figures are sane: with no end
-tail,
+**The Set Deckle page's headline is `Total`, not waste**, and it is a wider
+figure than the optimizer's: everything the job gives up beyond the widths that
+were **ordered**, which is edge trim + Side Run (both scrapped) *and* **Grace**
+(cut and wound, but handed to the rolls rather than billed). Grace is not scrap
+— that is exactly why the column and the chip are not called waste — but it is
+width the client did not order and is not paying for, so leaving it out of the
+headline made a graced plan look tighter than it is. Per layout it works out as
+`deckle size − the ordered roll widths`, which is what makes the row add up
+across.
 
-    Total Waste  =  edge trim x webs  +  Side Run
+Side Run, Grace and Total are all **whole-job totals**, in mm as well as %,
+never a per-web average — Side Run mm is every web's side trim added up, and the
+others likewise. That makes them reconcile by eye, which is the quickest check
+the figures are sane:
 
-in mm and in % alike. (Showing a per-web average beside a whole-job percentage
-is what previously made these two look like they disagreed.) The spare stock
-stays visible as m² beside the Extra Rolls count, so nothing is hidden by
-keeping it out of the headline.
+    Total  =  edge trim x webs  +  Side Run  +  Grace
+
+in mm and in % alike, matching the recap table's Siderun / Trim / Grace / Total
+columns. (Showing a per-web average beside a whole-job percentage is what
+previously made these look like they disagreed.) Grace is already netted out of
+Side Run — the slack is what is left *after* it was shared out — so the three
+never double-count. The spare stock stays visible as m² beside the Extra Rolls
+count, so nothing is hidden by keeping it out of the headline.
 
 `POST /labels/production/deckle-set/plan/:itemId/auto` is **read-only**: it
 creates nothing and changes nothing, it only answers "here is the least-waste way

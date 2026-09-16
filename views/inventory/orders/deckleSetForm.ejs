@@ -427,9 +427,13 @@
   .dsf-set-table .dsf-set-cuts b { color: #1f2a44; font-weight: 800; }
   .dsf-set-table .dsf-set-trim { width: 130px; min-width: 130px; color: #b45309; }
   .dsf-set-table .dsf-set-rem { width: 96px; color: #15803d; }
-  /* The constant half of the sum -- kept neutral so Total Wastage stays the
+  /* A constant part of the sum -- kept neutral so Total stays the
      figure the eye lands on. */
   .dsf-set-table .dsf-set-edge { width: 92px; color: #44566e; }
+  /* Grace is width the rolls keep, not width thrown away -- teal, so it does
+     not read as another scrap column beside the Siderun and Trim it sits
+     with. */
+  .dsf-set-table .dsf-set-grace { width: 92px; color: #0f766e; }
   .dsf-set-table .dsf-set-rem.sl-bad { color: #b91c1c; }
   .dsf-set-table .dsf-set-rolls { color: #15803d; font-weight: 800; }
   .dsf-set-table tfoot td {
@@ -1098,7 +1102,7 @@
   }
 
   // Layout rows are addressed by a stable id rather than by position: the
-  // Deckle Set recap sorts by wastage and hands that id back when its pencil is
+  // Deckle Set recap sorts by Total and hands that id back when its pencil is
   // pressed, so a row that moved (or one added since the recap was drawn) still
   // opens the layout the planner clicked.
   let LID = 0;
@@ -1208,7 +1212,7 @@
   // ---- grace panel --------------------------------------------------------
   // Scoped to the layout the dialog currently has open. Editing here writes
   // straight onto that row's grace and re-runs recalcAll(), so the web diagram,
-  // the Siderun and Total Wastage above all move as the numbers are typed --
+  // the Siderun, Grace and Total above all move as the numbers are typed --
   // which is the whole point: the planner watches the waste go to zero.
   const gracePanel = document.getElementById("dsfGracePanel");
   const graceBtn = document.getElementById("dsfGraceBtn");
@@ -1805,11 +1809,11 @@
       cell: (L) => `<div class="sl-web${L.remaining != null && L.remaining < 0 ? " is-over" : ""}">`
         + `${webInnerHTML(L.graced, L.size)}</div>`,
     },
-    // Siderun + Trim = Total Wastage, in that order across the row, so the
-    // headline figure can be checked against its two parts by eye.
+    // Siderun + Trim + Grace = Total, in that order across the row, so the
+    // headline figure can be checked against its three parts by eye.
     {
       key: "rem", label: "Siderun",
-      th: "Uncut web left over after the knives, edge trim already netted out. The slack half of Total Wastage.",
+      th: "Uncut web left over after the knives, edge trim and grace already netted out. The scrapped slack in Total.",
       cls: (L) => "dsf-set-rem" + (L.remaining != null && L.remaining < 0 ? " sl-bad" : ""),
       sort: (L) => (L.remaining == null ? -Infinity : L.remaining), text: (L) => mmText(L.remaining),
       cell: (L) => (L.remaining != null ? esc(fmt(L.remaining)) + " mm" : "—"),
@@ -1821,10 +1825,22 @@
       cell: (L) => (L.edge != null ? esc(fmt(L.edge)) + " mm" : "—"),
     },
     {
-      key: "trim", label: "Total Wastage", cls: "dsf-set-trim",
-      th: "Everything scrapped off this web — the Siderun and the Trim beside it added together. The table starts ranked by this, most wastage first.",
-      sort: (L) => (L.trim == null ? -1 : L.trim), text: (L) => mmText(L.trim),
-      cell: (L) => (L.trim != null ? esc(fmt(L.trim)) + " mm" : "—"),
+      // Grace is not scrap -- it is web the rolls actually carry -- but it is
+      // still width the client did not order and is not billed for, so it
+      // belongs beside the two that are scrapped and inside the Total with
+      // them. A layout with no grace reads a plain 0 rather than a dash: 0 mm
+      // of grace is a real and normal answer, unlike a web that has no size
+      // set yet.
+      key: "grace", label: "Grace", cls: "dsf-set-grace",
+      th: "Side trim handed to the rolls instead of being scrapped — the knives are set this much wider in total, and the client is still billed the width ordered.",
+      sort: (L) => (L.size > 0 ? L.grace : -1), text: (L) => (L.size > 0 ? mmText(L.grace) : "—"),
+      cell: (L) => (L.size > 0 ? esc(fmt(L.grace)) + " mm" : "—"),
+    },
+    {
+      key: "total", label: "Total", cls: "dsf-set-trim",
+      th: "Everything this web gives up beyond the widths ordered — the Siderun, Trim and Grace beside it added together (i.e. deckle size minus the ordered roll widths). The table starts ranked by this, most first.",
+      sort: (L) => (L.total == null ? -1 : L.total), text: (L) => mmText(L.total),
+      cell: (L) => (L.total != null ? esc(fmt(L.total)) + " mm" : "—"),
     },
     {
       key: "drm", label: "Deckle R.M.", th: "Length of the web this layout runs on.",
@@ -1855,7 +1871,7 @@
   // Both outlive a redraw -- recalcAll() rebuilds this table on every keystroke
   // in the layout dialog -- so they live out here rather than inside the
   // renderer. The opening sort is the ranking the recap has always used.
-  let SET_SORT = { key: "trim", dir: "desc" };
+  let SET_SORT = { key: "total", dir: "desc" };
   const SET_FILTERS = {};
   // What was last computed for the table, so a filter keystroke can repaint the
   // rows without re-deriving the whole plan.
@@ -1887,7 +1903,7 @@
       if (d) return d * dir;
       // Ties break the way this table always has, whichever way it is sorted:
       // the layout throwing away more in total leads, then layout order.
-      const t = (b.trim || 0) * b.webs - (a.trim || 0) * a.webs;
+      const t = (b.total || 0) * b.webs - (a.total || 0) * a.webs;
       return t !== 0 ? t : a.no - b.no;
     });
   }
@@ -1909,26 +1925,36 @@
         const size = rowSize(tr) || 0;
         const cutSum = round2(r.graced.reduce((n, [, w]) => n + w, 0));
         const rpw = rollsPerWeb(r);
+        // Width handed to the rolls rather than scrapped, this layout -- the
+        // difference between what the knives are set to and what the client
+        // ordered. Already netted out of `remaining` below (the slack is what
+        // is left AFTER grace was shared out), so the three never double-count.
+        const graceMm = round2(r.graced.reduce((n, [, w]) => n + w, 0)
+          - r.cuts.reduce((n, [, w]) => n + w, 0));
         return {
           no,
           lid,
           size,
           cuts: r.cuts,
           graced: r.graced,
-          // Total width handed to the rolls rather than scrapped, this layout.
-          grace: round2(r.graced.reduce((n, [, w]) => n + w, 0)
-            - r.cuts.reduce((n, [, w]) => n + w, 0)),
+          grace: graceMm,
           cutSum,
           // Usable web left over after the knives -- negative means the layout
           // overflows the web.
           remaining: size > 0 ? round2(size - 2 * EDGE - cutSum) : null,
           // Edge trim netted off this web -- both edges. It is the same on every
           // row (it comes off one field at the top of the page), but it earns a
-          // column of its own between Siderun and Total Wastage so the three
-          // read straight across as the sum they are.
+          // column of its own between Siderun and Grace so the four read
+          // straight across as the sum they are.
           edge: size > 0 ? round2(2 * EDGE) : null,
-          // Everything scrapped off one web: both edge trims plus that slack.
-          trim: size > 0 ? round2(2 * EDGE + Math.max(0, round2(size - 2 * EDGE - cutSum))) : null,
+          // Everything one web gives up beyond the widths that were ORDERED:
+          // both edge trims and the uncut slack (scrapped), plus the grace
+          // (cut, and run, but handed to the rolls instead of billed). It is
+          // exactly `size - the ordered widths`, which is why the three parts
+          // beside it add up to it on every row.
+          total: size > 0
+            ? round2(2 * EDGE + Math.max(0, round2(size - 2 * EDGE - cutSum)) + graceMm)
+            : null,
           drm: r.drm,
           rm: r.rm,
           rpw,
@@ -1946,12 +1972,12 @@
     // which is why the row counter on the left is a separate thing.
     set.sort((a, b) => {
       // A layout with no web yet has nothing to scrap off -- park it last.
-      const at = a.trim == null ? -1 : a.trim;
-      const bt = b.trim == null ? -1 : b.trim;
+      const at = a.total == null ? -1 : a.total;
+      const bt = b.total == null ? -1 : b.total;
       if (bt !== at) return bt - at;
-      // Same trim per web: the one running more webs throws away more in all.
-      const bw = (b.trim || 0) * b.webs;
-      const aw = (a.trim || 0) * a.webs;
+      // Same per web: the one running more webs gives up more in all.
+      const bw = (b.total || 0) * b.webs;
+      const aw = (a.total || 0) * a.webs;
       if (bw !== aw) return bw - aw;
       return a.no - b.no;
     });
@@ -2112,9 +2138,18 @@
     paintSetTable();
   }
 
-  // Same 7 figures as the AI Deckle Set result grid, kept live off whatever is
+  // The figures from the AI Deckle Set result grid, kept live off whatever is
   // currently drawn above (hand-built or AI-planned) so they read correctly
   // even when Auto Deckle was never run. Sits beside the submit button.
+  //
+  // Side Run, Grace and Total are whole-job totals, in mm as well as %, never
+  // a per-web average -- so they reconcile by eye, which is the quickest check
+  // the figures are sane:
+  //
+  //     Total = edge trim x webs + Side Run + Grace
+  //
+  // in mm and in % alike, matching the Siderun / Trim / Grace / Total columns
+  // of the recap table above.
   function renderFinalStats(set, totWebs, sqm, byS, sizeLine) {
     // Extra Rolls: rolls produced per width beyond what ticked orders asked
     // for. Rolls-per-width comes off the layouts (same as setByWidth in
@@ -2160,14 +2195,31 @@
     avoidableSqM = round2(avoidableSqM);
     const avoidPct = sqm > 0 ? round2((avoidableSqM / sqm) * 100) : 0;
 
-    // Total Waste: scrap only (edge trim + Side Run) -- Extra Rolls are spare
-    // stock cut from width that would otherwise have been trimmed away, not a
-    // second helping of waste (see the Auto Deckle waste-accounting note).
+    // Grace: side trim handed to the rolls instead of being scrapped. Not
+    // waste -- the web is cut and wound -- but not ordered or billed either,
+    // so it is reported on its own and counted in Total below.
+    let graceMm = 0;
+    let graceSqM = 0;
+    set.forEach((L) => {
+      if (!(L.size > 0) || !(L.grace > 0)) return;
+      graceMm += L.grace * L.webs;
+      graceSqM += (L.grace / 1000) * (L.drm || 0) * L.webs;
+    });
+    graceMm = round2(graceMm);
+    graceSqM = round2(graceSqM);
+    const gracePct = sqm > 0 ? round2((graceSqM / sqm) * 100) : 0;
+
+    // Total: everything the job gives up beyond the widths ORDERED -- edge
+    // trim + Side Run (both scrapped) + Grace (cut, but not billed). Equal to
+    // deckle size minus the ordered roll widths, over every web. Extra Rolls
+    // are NOT in it: they are spare stock cut from width that would otherwise
+    // have been trimmed away, not a second helping of loss (see the Auto
+    // Deckle waste-accounting note).
     const edgeMm = round2(2 * EDGE * totWebs);
-    const wasteMm = round2(edgeMm + sideMm);
+    const wasteMm = round2(edgeMm + sideMm + graceMm);
     let edgeSqM = 0;
     set.forEach((L) => { if (L.size > 0) edgeSqM += (2 * EDGE / 1000) * (L.drm || 0) * L.webs; });
-    const wasteSqM = round2(edgeSqM + avoidableSqM);
+    const wasteSqM = round2(edgeSqM + avoidableSqM + graceSqM);
     const wastePct = sqm > 0 ? round2((wasteSqM / sqm) * 100) : 0;
 
     const distinctSizes = byS.size;
@@ -2196,11 +2248,22 @@
         `Total uncut slack across all ${fmtI(totWebs)} webs (${fmt(avoidableSqM)} m²).`,
       ),
       finalStat(
-        "Total Waste",
+        "Grace",
+        `${fmt(gracePct)} % | ${fmt(graceMm)} mm`,
+        graceMm > 0 ? "good" : "",
+        "",
+        graceMm > 0
+          ? `Side trim shared out over the rolls across all ${fmtI(totWebs)} webs (${fmt(graceSqM)} m²) — cut and wound, but billed at the widths ordered.`
+          : "No grace given: every roll is cut at the width ordered.",
+      ),
+      finalStat(
+        "Total",
         `${fmt(wastePct)} % | ${fmt(wasteMm)} mm`,
         wastePct <= 10 ? "good" : "warn",
         "dsa-stat-wide",
-        `Edge trim ${fmt(edgeMm)} mm + Side Run ${fmt(sideMm)} mm = ${fmt(wasteSqM)} m² scrapped. Spare rolls are not counted here.`,
+        `Everything beyond the widths ordered: Edge trim ${fmt(edgeMm)} mm + Side Run ${fmt(sideMm)} mm`
+          + ` + Grace ${fmt(graceMm)} mm = ${fmt(wasteSqM)} m². Of that, ${fmt(round2(wasteSqM - graceSqM))} m² is scrapped`
+          + ` and ${fmt(graceSqM)} m² goes out on the rolls. Spare rolls are not counted here.`,
       ),
     ].join("");
   }

@@ -363,6 +363,88 @@
     .span-five .choices__list--single, .span-six .choices__list--single,
     .span-dual .choices__list--single { padding: 0; }
 
+    /* ---- Machine / Operator / Helper ----
+       One strip across the form, styled like the Material Details card at the
+       top of the page (small-caps label, thin rule between compartments) so
+       the two read as the same page. Each label sits BESIDE its control
+       rather than above it: three stacked label/control cards is most of a
+       screenful for three picks that are made once and then scrolled past.
+       Wraps to two rows only when the window is genuinely too narrow to hold
+       three controls at a usable width. */
+    .ap-picks {
+      grid-column: 1 / -1;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0;
+      padding: 9px 14px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f8fafc;
+    }
+    .ap-pick {
+      position: relative;
+      flex: 1 1 240px; min-width: 0;
+      display: flex; flex-direction: row; align-items: center; gap: 9px;
+      padding: 0 14px; border-left: 1px solid #dbe3ec;
+    }
+    .ap-pick:first-child { border-left: none; padding-left: 0; }
+    .ap-pick:last-child { padding-right: 0; }
+    .ap-pick > label {
+      flex: 0 0 auto; margin: 0;
+      font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+      /* common.css paints every label with --primary-dark; these are captions
+         beside their control, not headings, so they take the same muted grey
+         the rest of this page's small-caps labels use. */
+      text-transform: uppercase; color: #7c8ba1 !important; white-space: nowrap;
+    }
+    /* The bare <select> for the moment before Choices wraps it (and if the
+       script ever fails to load) -- same size and shape, so there is no jump
+       on first paint and the strip still works without JS. */
+    .ap-pick > select.form-control {
+      flex: 1 1 auto; min-width: 0;
+      height: 34px !important; padding: 0 26px 0 11px !important;
+      background: #fff; border: 1.5px solid #cbd5e1; border-radius: 7px;
+      font-size: 13.5px !important; font-weight: 600; color: #1f2a44;
+      appearance: none; -webkit-appearance: none;
+    }
+    /* Choices renders the real control; the <select> itself is hidden. These
+       override common.css, which pins .choices__inner to a 1px black border
+       with !important. */
+    /* basis 0 rather than auto: common.css puts `width: 100%` on .choices, and
+       next to a label in a flex row that would size it off the whole strip and
+       lean on shrink to claw it back. */
+    .ap-pick .choices { flex: 1 1 0%; width: auto; min-width: 0; margin-bottom: 0; }
+    .ap-pick .choices__inner {
+      min-height: 34px !important; height: 34px;
+      padding: 0 26px 0 11px !important;
+      display: flex; align-items: center;
+      background: #fff; border: 1.5px solid #cbd5e1 !important; border-radius: 7px;
+      font-size: 13.5px; font-weight: 600; color: #1f2a44;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .ap-pick .choices:hover .choices__inner { border-color: #94a3b8 !important; }
+    .ap-pick .choices__list--single { padding: 0; width: 100%; }
+    .ap-pick .choices__list--single .choices__item {
+      font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
+    }
+    .ap-pick .choices__placeholder { color: #94a3b8; opacity: 1; font-weight: 500; }
+    /* The chevron. Choices' own ::after arrow is switched off globally in
+       common.css, so this draws one on the field instead -- pointer-events
+       off, or it would swallow the click that opens the dropdown. */
+    .ap-pick::after {
+      content: ""; position: absolute; right: 24px; top: 50%; margin-top: -4px;
+      width: 6px; height: 6px; transform: rotate(45deg);
+      border-right: 1.6px solid #94a3b8; border-bottom: 1.6px solid #94a3b8;
+      pointer-events: none;
+    }
+    .ap-pick:last-child::after { right: 10px; }
+    /* The strip is compact, so the focus ring is drawn tight rather than the
+       3px one common.css puts on a full-size field. */
+    .ap-pick .choices.is-open .choices__inner,
+    .ap-pick .choices.is-focused .choices__inner,
+    .ap-pick .choices.choices--focused .choices__inner {
+      border-color: #044a78 !important; box-shadow: 0 0 0 2.5px rgba(4, 74, 120, 0.14) !important;
+    }
+    @media (max-width: 860px) {
+      .ap-picks { gap: 8px 0; }
+      .ap-pick { flex: 1 1 100%; border-left: none; padding: 0; }
+    }
+
     #assign-form {
       display: grid !important;
       grid-template-columns: repeat(32, 1fr);
@@ -929,31 +1011,41 @@
   <form id="assign-form" class="ap-form-card needs-validation" action="/app/labels/production/assign/<%= pp._id %>" method="post" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
 
-    <div class="span-dual" style="grid-column: span 11;">
-      <label for="machine-select">Machine</label>
-      <select id="machine-select" name="machineId" class="form-control select-tag" required>
-        <option value="" disabled selected hidden>Select Machine</option>
-      </select>
-    </div>
+    <!-- Who runs this job -- one strip, the same furniture as the Material
+         Details card above (label in small caps, thin rule between each) so
+         the page reads as one thing. They were three .span-dual boxes: a
+         bordered card each, 10px of padding and an 18px label above a
+         full-height control, which is a lot of the screen for three picks
+         that are usually made once and then scrolled past. The label now sits
+         beside its control rather than above it, which takes the strip from
+         ~90px to ~52px without shrinking the thing you actually click. -->
+    <div class="ap-picks">
+      <div class="ap-pick">
+        <label for="machine-select">Machine</label>
+        <select id="machine-select" name="machineId" class="form-control select-tag" required>
+          <option value="" disabled selected hidden>Select Machine</option>
+        </select>
+      </div>
 
-    <div class="span-dual" style="grid-column: span 11;">
-      <label for="operator-select">Operator</label>
-      <select id="operator-select" name="operatorId" class="form-control select-tag">
-        <option value="" selected>Select Operator</option>
-        <% operatorEmployees.forEach((emp) => { %>
-          <option value="<%= emp._id %>" data-profilecode="<%= emp.empProfileCode || '' %>"><%= emp.empName %></option>
-        <% }) %>
-      </select>
-    </div>
+      <div class="ap-pick">
+        <label for="operator-select">Operator</label>
+        <select id="operator-select" name="operatorId" class="form-control select-tag">
+          <option value="" selected>Select Operator</option>
+          <% operatorEmployees.forEach((emp) => { %>
+            <option value="<%= emp._id %>" data-profilecode="<%= emp.empProfileCode || '' %>"><%= emp.empName %></option>
+          <% }) %>
+        </select>
+      </div>
 
-    <div class="span-dual" style="grid-column: span 10;">
-      <label for="helper-select">Helper</label>
-      <select id="helper-select" name="helperId" class="form-control select-tag">
-        <option value="" selected>Select Helper</option>
-        <% helperEmployees.forEach((emp) => { %>
-          <option value="<%= emp._id %>" data-profilecode="<%= emp.empProfileCode || '' %>"><%= emp.empName %></option>
-        <% }) %>
-      </select>
+      <div class="ap-pick">
+        <label for="helper-select">Helper</label>
+        <select id="helper-select" name="helperId" class="form-control select-tag">
+          <option value="" selected>Select Helper</option>
+          <% helperEmployees.forEach((emp) => { %>
+            <option value="<%= emp._id %>" data-profilecode="<%= emp.empProfileCode || '' %>"><%= emp.empName %></option>
+          <% }) %>
+        </select>
+      </div>
     </div>
 
 
