@@ -32,7 +32,9 @@ node scripts/serialize-labelstock-sku-codes.js   # close gaps in SachikoLabelSto
 node scripts/dissolve-deckle.js [deckleId]       # un-make a Deckle, returning its mtrs to the raw reels it was laminated from
 node scripts/backfill-family-master-seed.js      # seed the Family master with values already in use on Label Stock / Facestock Master + the old hardcoded dropdown list
 node scripts/backfill-type-master-seed.js        # seed the Type master with values already in use on Facestock / Adhesive / Release Master + the old hardcoded dropdown lists
+node scripts/backfill-location-master-seed.js    # seed the Location master with values already in use on employee records + the old hardcoded Employee form dropdown
 node scripts/deckle-optimizer-bench.js [--verbose]  # bench + invariant check for utils/deckleOptimizer; no DB, exits non-zero on failure
+node scripts/raw-auto-allot-bench.js [--verbose]    # invariant check for public/js/rawAutoAllot.js (Assign Production's Auto Allot); no DB, exits non-zero on failure
 node scripts/reset-transactional-data.js         # empty orders/production/bindings, KEEP masters+stock+people (dry-run; --apply --db=<name>)
 ```
 
@@ -330,6 +332,144 @@ sends it as an `x-csrf-token` header instead.
 5. No family yet → saved under the plain entered code, no suffix.
 
 Only applies at create time — editing an existing row still uses the plain exact-duplicate `buildLabelStockSignature()` check and never renames a row into a new variant on its own.
+
+### One deckle batch per deckle size
+
+`POST /labels/production/deckle-set` creates **one `PendingProduction` batch per
+deckle size the plan cuts**, not one per plan. A single-width plan makes the one
+batch it always did; a mixed-web plan (660 × 8 + 635 × 15 + 510 × 3) makes
+three, because they are three different things to make — three reels off the
+shelf, three runs through the laminator, three rows in the Deckle Queue, three
+Lot Nos, three machine assignments, three raw-material allotments.
+
+Bundling them into one batch is what made Assign Production unreadable: the
+batch-level `deckleSize` holds only whichever width carries the most webs, so a
+635 mm batch asked for raw material against a 660 mm budget and the 635 mm reels
+— the ones the job mostly runs on — came up flagged as too narrow.
+
+How an order that is cut at more than one width is divided:
+
+- layouts are grouped by `L.deckleSize ?? deckleSize`, widest first, and each
+  group's `rollsByWidth` is worked out from its own layouts;
+- each roll width's orders are served group by group, oldest order first, with
+  the overflow landing on the last order out of the last group that cuts it
+  (exactly where it landed when there was one group);
+- the order's **own row** joins the first group it appears in; a further group
+  gets a **clone** (`parentOrderId` = the order), the same device the shortfall
+  rows have always used — which is why Dissolve already folds them back
+  correctly, one batch at a time (it only re-merges a spare row whose parent is
+  itself loose);
+- whatever no group cuts is carved off to Deckle Sorting as before.
+
+`rollsByWidth` is keyed on **`orderedWidth ?? width`**. Where the planner
+applied grace the knife is set wider than the order (157.5 mm for a 150 mm
+roll), but the roll that comes off is still that order's, and it is billed at
+150 — keying on the knife width left those rolls belonging to nobody, so the
+order read as short and had its balance carved off while the rolls were on the
+machine.
+
+Per-layout `deckleSize` is **not** stored on the new batches (inside a
+single-width batch it is the batch's own size). Slitting Allocation's
+`BATCH_LAYOUT_FOR_WEB` filter already treats a layout with no width as always
+applicable, so its pre-fill is unaffected.
+
+Batches created before this change are still mixed. There is no migration:
+dissolve one from the Deckle Queue and re-create it from Deckle Set, which is
+the documented way a batch's size is changed anyway.
+
+### Auto Allot (`public/js/rawAutoAllot.js`)
+
+The **Auto Allot (FIFO)** button in Raw Material Allotment on
+`/labels/production/assign/:id`. Ticks the Facestock/Adhesive/Release Liner
+reels the job needs, oldest stock first, and says how much of the batch can
+actually be laminated. It only ticks checkboxes a person could have ticked
+themselves — nothing is reserved until **Assign & Continue**, and the server
+neither knows nor cares that a pick came from it.
+
+Split the same way `utils/deckleOptimizer/` is: the planner is plain numbers in,
+plain numbers out (no DOM, no fetch), so it can be tested without a browser —
+`scripts/raw-auto-allot-bench.js` loads it into a `vm` context and asserts the
+rules below. `assignProduction.ejs` does the measuring (what a reel weighs, the
+length that weight gives at its own width) and the rendering.
+
+**A job is not one width.** This is the whole reason the planner works in
+*demands* rather than layer totals. A mixed-web batch laminates several widths
+(660 × 8 + 635 × 15 + 510 × 3) and the laminator mounts a reel per run, so the
+requirement is one demand per web width and a reel can only serve a demand it is
+wide enough for. Oldest-first over one flat list hands the three oldest 510 mm
+reels to the whole job and reads 100% allotted for a plan that cannot cut a
+single one of its 23 wider deckles. Demands are served widest first (those
+widths have the least to choose from). A **drum has no width**, so the adhesive
+states one demand for the whole job — splitting it per web would round a
+part-drum up once per width and lock drums the job never needed.
+
+The requirement per width is a *share* of the figures already on the Raw
+Material Required strip — metres by each width's share of the running metres, kg
+by its share of the area — so the parts add back to exactly what the bars show
+and the two can never disagree.
+
+Order of choice: exact-fit before wider (a 1020 mm reel run for a 660 mm web
+loses 360 mm to trim for the whole job), then FIFO on `inwardDate` (falling back
+to `createdAt`; a reel with neither sorts last), stopping the moment a demand is
+covered on **both** kg and running metres. A reel wider than the web it serves
+only counts the weight that lands on the web (`width / reel width` of it) — the
+rest is trim, and counting it says covered while the machine runs out.
+
+**The reel that tops a demand off is chosen by size, not by date.** While the
+next reel by date still leaves the demand short, take it — old stock the job
+will consume in full costs nothing. Only when that next reel would *overshoot*
+is the choice reopened, and then the leanest reel that finishes the job is taken
+instead. Without this, a 125 kg demand took the 102 kg remnant, landed 23 kg
+short, and reached for a 630 kg reel because that was next by date: 732 kg
+locked to a 125 kg job with a 27 kg remnant of the same paper still on the
+shelf. It now picks 102 + 27 = 129 kg. The test is on **the next FIFO reel**,
+not "can any reel finish this" — a full reel can nearly always finish a small
+demand alone, so asking that first walks straight past every remnant, which is
+the opposite of what FIFO is for. The width tier still outranks it: a wider reel
+loses trim down the whole run, which costs more than the tail it saves.
+
+**Matching to the shortest** (the toggle, on by default) allots every layer only
+what its widths can actually run: if the liner covers two thirds of the 635 mm
+webs, allotting a full 15 webs of facestock reserves paper that cannot be
+laminated for want of liner. Worked out per width, since a shortage at one width
+says nothing about another. What it cost is reported in **reels actually held
+back**, never as a percentage — whole reels mean a layer often comes out at the
+same pick either way, and claiming a layer was cut back when it wasn't is how a
+button like this loses trust.
+
+A layer with nothing pickable at all (no adhesive binding, nothing of that spec
+in the store) is reported as **blocked** and left out of the width arithmetic —
+letting its zero through would scale every other layer to nothing and tick
+nothing anywhere, which says less than ticking what is there and naming the
+blocker. `runMtrs` still goes to 0: a deckle is every layer at once.
+
+**The allotment tables list this deckle's own web width and nothing else**
+(`reelFitsBatchWeb`). A store holds every size the plant runs, and scrolling
+past 510 mm and 1020 mm reels to find the 635s — with the chance of ticking one
+by mistake — is not a choice worth offering on a page whose whole job is one
+deckle size. Drums are never narrowed (no width); a reel with no Size recorded
+is hidden with the rest. The count of off-width reels sits under the column
+heading as a **toggle**, off by default: a store can run out of the exact width
+while a 640 mm reel that would run a 635 mm web sits on the shelf, and hiding it
+outright would leave the job unassignable. A reel that is **ticked** stays
+listed whatever its width — the tick lives in the checkbox, so filtering its row
+away would silently un-allot it. Auto Allot only ever considers what the table
+shows.
+
+**Ticked reels are pinned to the top of their column** (`sortedReelsFor` takes
+the checked set as its first sort key; the column sort orders each half). A
+layer can hold several reels out of a fifty-row list, and a pick two thirds of
+the way down was invisible from the top of the page. A tick re-renders that
+column, so the row moves up as it is ticked.
+
+**"Too narrow" means narrower than *every* web in the plan.** Judging reels
+against the single widest web marked the batch's own main width unusable — on a
+batch whose `deckleSize` is 635 the page filtered the table down to 635 mm reels
+and then painted every one of them amber. For the same reason a mixed-web batch
+no longer has its Size filter seeded with one width, and `applyDeckleSize()`
+no longer overwrites the card's list of every web with the single headline
+number. `rawNeed.budgetWidthMm` (the widest web) is still what an adhesive
+drum's weight is spread over — it is not a fit test.
 
 ### Auto Deckle (`utils/deckleOptimizer/`)
 

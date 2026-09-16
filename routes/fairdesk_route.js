@@ -5170,10 +5170,19 @@ router.post(
   },
 );
 
-// Bundle the ticked orders of one Product Code + paper size into a deckle
-// batch. Body: deckleSize, runningMeters ("Total Running Meters" -- optional
-// override of the member sum), deckleRunningMeters (length of one deckle web --
-// optional), noOfRolls ("Deckle Quantity"), orderIds[] (the ticked members).
+// Bundle the ticked orders of one Product Code into deckle batches -- ONE PER
+// DECKLE SIZE the plan cuts. A single-width plan makes the one batch it always
+// did; a mixed-web plan (660 x 8 + 635 x 15 + 510 x 3) makes three, because
+// they are three different things to make: three reels off the shelf, three
+// runs through the laminator, three rows in the Deckle Queue, three Lot Nos.
+// See the "one batch per DECKLE SIZE" block below for how an order that is cut
+// on more than one of them is divided.
+//
+// Body: deckleSize (the headline width, used for layouts that carry none of
+// their own), deckleRunningMeters (length of one deckle web -- optional),
+// deckleTrim, layoutsJson (the drawn layouts), orderIds[] (the ticked
+// members). `runningMeters` and `noOfRolls` are no longer read: both belong to
+// a width, and are derived per batch.
 router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (req, res) => {
   const backTo = "/app/labels/production/deckle-set";
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -5213,32 +5222,40 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     return res.redirect(backTo);
   }
 
-  // The dialog now takes two numeric fields: "Deckle Running Meters" (one web's
-  // length) and "Total Running Meters" (the whole job across all rolls). Total
-  // defaults to the member sum; Deckle RM is optional. runningMetersText is a
-  // readable one-liner kept only when a Deckle RM was given, so the existing
-  // "runningMetersText || fmtQty(runningMeters)" displays stay meaningful.
-  //
-  // NOT the member sum. A member order's `runningMeters` is the length of ONE
-  // finished roll (1,000 m), the same figure on every line of the order, so
-  // adding them up counted ORDERS, not metres: four 1,000 m orders read
-  // "4,000 M TOTAL" whatever the deckle actually ran, and splitting the same
-  // job into eight orders would have read 8,000. The real total is the web
-  // this batch laminates -- one web's length x how many webs -- which is
-  // filled in below once Deckle Qty is known.
-  const enteredTotalRM = Number(req.body.runningMeters);
-  let runningMeters = Number.isFinite(enteredTotalRM) && enteredTotalRM > 0 ? enteredTotalRM : 0;
+  // Total Running Metres is NOT the member sum, and is not taken from the form
+  // either. A member order's `runningMeters` is the length of ONE finished
+  // roll (1,000 m), the same figure on every line of the order, so adding them
+  // up counted ORDERS, not metres: four 1,000 m orders read "4,000 M TOTAL"
+  // whatever the deckle actually ran. The real total is the web a batch
+  // laminates -- one web's length x how many webs of that width -- and since a
+  // mixed-web plan becomes one batch per width, it is worked out per batch
+  // below (deckleTotalRunningMetres, utils/deckleTotals.js).
 
   // The deckle layouts the planner drew on the Set Deckle page -- one entry per
   // cut pattern (all cut from the one chosen deckleSize), each with its own
   // A..L roll widths, per-roll R. Meter and `count` = how many deckle webs use
   // it. Optional (absent from the no-facestock manual path / an older client);
   // stored on the batch to pre-fill Slitting Allocation, never blocks creation.
+  //
+  // `width` is the width the knife is set to. `orderedWidth` rides alongside it
+  // when the planner applied "grace" -- spare web shared out over the rolls so
+  // it is cut instead of scrapped -- and is the width the client is billed at.
+  // It is kept only when it is a real width no LARGER than the cut: grace adds
+  // web to a roll, it never takes any away, so anything else is a doctored post
+  // and is dropped rather than trusted (billing a client for more than was
+  // made). Equal to the cut width means no grace, so it is not stored at all
+  // and the row stays the shape every batch before this one has.
   const normCuts = (arr) =>
     CUT_SLOTS
       .map((slot) => {
         const hit = Array.isArray(arr) ? arr.find((c) => c && c.slot === slot) : null;
-        return { slot, width: Number(hit?.width) };
+        const width = Number(hit?.width);
+        const ordered = Number(hit?.orderedWidth);
+        // A hair of grace is no grace -- and the same test rejects an ordered
+        // width at or above the cut, which is the doctored case.
+        const graced = Number.isFinite(ordered) && ordered > 0
+          && Number.isFinite(width) && width - ordered > 0.005;
+        return graced ? { slot, width, orderedWidth: ordered } : { slot, width };
       })
       .filter((c) => Number.isFinite(c.width) && c.width > 0);
 
@@ -5301,52 +5318,71 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     ?? (Number.isFinite(enteredDeckleRM) && enteredDeckleRM > 0 ? enteredDeckleRM : undefined);
 
   // Total edge trim (both edges) the planner set on the Set Deckle page while
-  // fitting the layouts. Pre-fills Slitting Allocation's own Trim field.
-  // Edge trim is netted out of every web width, so it must leave something to
-  // cut -- a trim >= the deckle size (or negative) is dropped, not stored.
+  // fitting the layouts. Pre-fills Slitting Allocation's own Trim field. Edge
+  // trim is netted out of every web width, so it must leave something to cut
+  // -- checked against each batch's OWN width further down, since a plan on
+  // mixed webs becomes one batch per width and the narrowest is the one a big
+  // trim would eat.
   const enteredTrim = Number(req.body.deckleTrim);
-  const deckleTrim = Number.isFinite(enteredTrim) && enteredTrim >= 0 && enteredTrim < deckleSize
-    ? enteredTrim
-    : undefined;
 
-  // Deckle Qty -- how many deckle webs to laminate. The Set Deckle page derives
-  // it from the sum of every layout's Webs count; falls back to whatever the
-  // form posted, then to the member roll sum.
-  const sumRolls = members.reduce((s, m) => s + num(m.noOfRolls), 0);
-  const enteredRolls = Number(req.body.noOfRolls);
-  const noOfRolls = layoutWebs > 0
-    ? layoutWebs
-    : (enteredRolls && enteredRolls > 0 ? Math.round(enteredRolls) : sumRolls);
+  // Deckle Qty and both running-metre figures are no longer worked out here:
+  // they belong to a width, not to the posted plan as a whole, and are derived
+  // per batch below from that width's own layouts. A total typed into the
+  // dialog can't be divided between widths and is not used -- the derived
+  // "one web's length x how many webs of THIS width" is the only figure that
+  // has a physical meaning once the plan is split.
 
-  // Total Running Meters, now that both halves are known: one web's length x
-  // the number of webs. Reads consistently with the two figures shown beside
-  // it -- Running Mtrs x Deckle Qty -- instead of a sum of per-roll lengths
-  // that never had a physical meaning. An explicitly entered total still wins;
-  // with no Deckle RM to multiply, the member sum stands in as before.
-  if (!(runningMeters > 0)) {
-    runningMeters = deckleTotalRunningMetres({ deckleRunningMeters, noOfRolls })
-      ?? members.reduce((s, m) => s + num(m.runningMeters), 0);
+  // ---- one batch per DECKLE SIZE ------------------------------------------
+  // A mixed-web plan cuts several widths (660 x 8 + 635 x 15 + 510 x 3), and
+  // they are three different things to make: three reels off the shelf, three
+  // runs through the laminator. Bundling them into one PendingProduction made
+  // the Deckle Queue show one row at whichever width carried the most webs,
+  // and Assign Production then had to allot raw material for a job whose own
+  // card admitted to only one of its widths -- reels for the other two read as
+  // "too narrow" against it.
+  //
+  // So the layouts are grouped by the width they are cut from and each group
+  // becomes its own batch: its own queue row, its own Lot No, its own machine
+  // and its own reels. A single-width plan has exactly one group and so lands
+  // as the one batch it always did -- nothing changes for it.
+  const layoutGroups = [];
+  for (const L of deckleLayout) {
+    const size = L.deckleSize > 0 ? L.deckleSize : deckleSize;
+    let g = layoutGroups.find((x) => x.size === size);
+    if (!g) { g = { size, layouts: [], webs: 0, rollsByWidth: new Map() }; layoutGroups.push(g); }
+    // Stored WITHOUT the per-layout deckleSize: inside a single-width batch it
+    // is the batch's own size, and leaving it on would have every reader fall
+    // back to the same number twice over.
+    const { deckleSize: _dropped, ...rest } = L;
+    g.layouts.push(rest);
+    g.webs += L.count || 1;
+    const rpw = L.deckleRunningMeter > 0 && L.plannedRunningMeter > 0
+      ? Math.max(1, Math.floor(L.deckleRunningMeter / L.plannedRunningMeter))
+      : 1;
+    for (const c of L.cuts) {
+      // Keyed on the ORDERED width, not the knife width. Where the planner
+      // applied grace the knife is set wider than the order (157.5 mm for a
+      // 150 mm roll) so spare web is cut instead of scrapped -- but the roll
+      // that comes off is still that 150 mm order's roll, and it is billed at
+      // 150. Keying on the knife width left those rolls belonging to nobody:
+      // the order they were cut for read as short and had its balance carved
+      // off to Deckle Sorting while the rolls were sitting on the machine.
+      const w = c.orderedWidth > 0 ? c.orderedWidth : c.width;
+      g.rollsByWidth.set(w, (g.rollsByWidth.get(w) || 0) + (L.count || 1) * rpw);
+    }
   }
-  const runningMetersText = deckleRunningMetersText({ deckleRunningMeters, noOfRolls, runningMeters })
-    ?? undefined;
+  // Widest first, so the queue reads the way the plan does and the group that
+  // needs the widest reel is the one created first.
+  layoutGroups.sort((a, b) => b.size - a.size);
 
-  // ---- how much of each ticked order this deckle actually covers ----------
+  // ---- how much of each ticked order each GROUP actually covers ------------
   // The layouts produce a fixed number of finished rolls per roll width; an
   // order wanting more than that is only PARTLY set. Mirrors exactly what the
   // Set Deckle page shows in "Rolls Set" / "Balance" (recalcAll()), so what the
   // planner reviewed is what gets saved: rolls of a width are handed to the
   // orders of that width in listed (oldest-first) order, and the last one
-  // absorbs any overflow.
-  const rollsByWidth = new Map();
-  for (const L of deckleLayout) {
-    const rpw = L.deckleRunningMeter > 0 && L.plannedRunningMeter > 0
-      ? Math.max(1, Math.floor(L.deckleRunningMeter / L.plannedRunningMeter))
-      : 1;
-    for (const c of L.cuts) {
-      rollsByWidth.set(c.width, (rollsByWidth.get(c.width) || 0) + (L.count || 1) * rpw);
-    }
-  }
-
+  // absorbs any overflow. The only difference from before is that this is now
+  // done group by group, so it also records WHICH width makes which rolls.
   const ordered = members.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   const byWidth = new Map();
   for (const m of ordered) {
@@ -5354,16 +5390,42 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     if (!byWidth.has(w)) byWidth.set(w, []);
     byWidth.get(w).push(m);
   }
-  // covered[orderId] = finished rolls of that order these layouts make.
-  const covered = new Map();
+  // takes[groupIndex].get(orderId) = finished rolls of that order this group's
+  // layouts make.
+  const takes = layoutGroups.map(() => new Map());
   for (const [w, list] of byWidth) {
-    let pool = rollsByWidth.get(w) || 0;
-    list.forEach((m, idx) => {
-      const qty = num(m.quantity);
-      const take = idx === list.length - 1 ? pool : Math.min(pool, qty);
-      pool = Math.max(0, pool - take);
-      covered.set(String(m._id), Math.min(take, qty));
+    const left = list.map((m) => num(m.quantity));                 // still to be set, per order
+    const pools = layoutGroups
+      .map((g, gi) => ({ gi, pool: g.rollsByWidth.get(w) || 0 }))
+      .filter((x) => x.pool > 0);
+    pools.forEach(({ gi, pool }, k) => {
+      const lastPool = k === pools.length - 1;
+      let spare = pool;
+      list.forEach((m, idx) => {
+        if (spare <= 0) return;
+        // Overflow lands on the last order of the width, and only out of the
+        // last group that cuts it -- exactly where it landed when there was
+        // one group. It empties the pool but is NOT recorded against the
+        // order beyond what was ordered: rolls made over the order are spare
+        // production, and writing them onto the member row would have the
+        // batch claim to be filling more of an order than the order asked
+        // for.
+        const take = lastPool && idx === list.length - 1 ? spare : Math.min(spare, left[idx]);
+        if (take <= 0) return;
+        const against = Math.min(take, left[idx]);
+        spare -= take;
+        left[idx] = Math.max(0, left[idx] - take);
+        if (against <= 0) return;
+        takes[gi].set(String(m._id), (takes[gi].get(String(m._id)) || 0) + against);
+      });
     });
+  }
+
+  // covered[orderId] = finished rolls of that order the whole plan makes.
+  const covered = new Map();
+  for (const m of ordered) {
+    const total = takes.reduce((n, t) => n + (t.get(String(m._id)) || 0), 0);
+    covered.set(String(m._id), Math.min(total, num(m.quantity)));
   }
 
   // An order the layouts don't touch at all is simply not batched -- it stays
@@ -5376,52 +5438,123 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
 
   const oldest = batched[0];
   const dueDates = batched.map((m) => m.estimatedDate).filter(Boolean).sort((a, b) => new Date(a) - new Date(b));
+  // Rolls track quantity on these orders; scale rather than assume they match.
+  const rollsFor = (m, part) => {
+    const qty = num(m.quantity);
+    return num(m.noOfRolls) > 0 && qty > 0 ? Math.max(1, Math.round((num(m.noOfRolls) * part) / qty)) : undefined;
+  };
 
-  const batch = await PendingProduction.create({
-    onModel: oldest.onModel || "SachikoLabelStock",
-    isDeckleBatch: true,
-    itemId: oldest.itemId,
-    userId: oldest.userId,
-    // Members can have different per-roll paper sizes -- the batch produces one
-    // web at the chosen deckle width, so that's the size that characterises it.
-    paperSize: String(deckleSize),
-    // What the deckle makes, not what was ordered -- an order these layouts
-    // only partly cover joins with its covered rolls and the rest is split off
-    // below.
-    quantity: batched.reduce((s, m) => s + covered.get(String(m._id)), 0),
-    noOfRolls,
-    runningMeters,
-    runningMetersText: runningMetersText || undefined,
-    deckleRunningMeters,
-    deckleSize,
-    deckleLayout: deckleLayout.length ? deckleLayout : undefined,
-    deckleTrim,
-    deckleOption: oldest.deckleOption,
-    estimatedDate: dueDates[0] || undefined,
-    poNumber: batched.map((m) => m.poNumber).filter(Boolean).join(", ").slice(0, 200) || undefined,
-    batchOrderIds: batched.map((m) => m._id),
-  });
+  // The member row that carries an order's share of a group. The order's OWN
+  // row is used for the first group it appears in; a further group gets a
+  // clone (parentOrderId = the order it came from), the same device the
+  // shortfall rows below have always used -- which is also why Dissolve
+  // already folds them back correctly, one batch at a time.
+  const usedOriginal = new Set();
+  const createdBatches = [];
+  const clonesToInsert = [];
 
-  await PendingProduction.updateMany(
-    { _id: { $in: batched.map((m) => m._id) } },
-    { $set: { deckleBatchId: batch._id, deckleSize } },
-  );
+  for (let gi = 0; gi < layoutGroups.length; gi += 1) {
+    const g = layoutGroups[gi];
+    const groupMembers = ordered.filter((m) => (takes[gi].get(String(m._id)) || 0) > 0);
+    if (!groupMembers.length) continue;                 // a width that cuts none of these orders
+
+    const groupWebs = g.webs;
+    const groupDrm = g.layouts.find((L) => L.deckleRunningMeter > 0)?.deckleRunningMeter ?? deckleRunningMeters;
+    const groupTotalRM = deckleTotalRunningMetres({ deckleRunningMeters: groupDrm, noOfRolls: groupWebs })
+      ?? groupMembers.reduce((s, m) => s + num(m.runningMeters), 0);
+    const groupDueDates = groupMembers.map((m) => m.estimatedDate).filter(Boolean).sort((a, b) => new Date(a) - new Date(b));
+    // Edge trim is netted out of THIS group's width, so re-check it against
+    // that rather than against the headline size.
+    const groupTrim = Number.isFinite(enteredTrim) && enteredTrim >= 0 && enteredTrim < g.size ? enteredTrim : undefined;
+
+    const batch = await PendingProduction.create({
+      onModel: oldest.onModel || "SachikoLabelStock",
+      isDeckleBatch: true,
+      itemId: oldest.itemId,
+      userId: groupMembers[0].userId,
+      // Members can have different per-roll paper sizes -- this batch produces
+      // one web at its own deckle width, so that's the size that characterises it.
+      paperSize: String(g.size),
+      quantity: groupMembers.reduce((s, m) => s + takes[gi].get(String(m._id)), 0),
+      noOfRolls: groupWebs,
+      runningMeters: groupTotalRM,
+      runningMetersText: deckleRunningMetersText({
+        deckleRunningMeters: groupDrm, noOfRolls: groupWebs, runningMeters: groupTotalRM,
+      }) || undefined,
+      deckleRunningMeters: groupDrm,
+      deckleSize: g.size,
+      deckleLayout: g.layouts.length ? g.layouts : undefined,
+      deckleTrim: groupTrim,
+      deckleOption: oldest.deckleOption,
+      estimatedDate: groupDueDates[0] || dueDates[0] || undefined,
+      poNumber: groupMembers.map((m) => m.poNumber).filter(Boolean).join(", ").slice(0, 200) || undefined,
+      batchOrderIds: [],                                 // filled in once the member rows exist
+    });
+    createdBatches.push({ batch, group: g, gi, memberIds: [] });
+
+    for (const m of groupMembers) {
+      const take = takes[gi].get(String(m._id));
+      if (!usedOriginal.has(String(m._id))) {
+        usedOriginal.add(String(m._id));
+        await PendingProduction.updateOne(
+          { _id: m._id },
+          {
+            $set: {
+              quantity: take,
+              ...(rollsFor(m, take) != null ? { noOfRolls: rollsFor(m, take) } : {}),
+              deckleBatchId: batch._id,
+              deckleSize: g.size,
+            },
+          },
+        );
+        createdBatches[createdBatches.length - 1].memberIds.push(m._id);
+      } else {
+        clonesToInsert.push({
+          doc: {
+            onModel: m.onModel || "SachikoLabelStock",
+            parentOrderId: m._id,
+            itemId: m.itemId,
+            userId: m.userId,
+            quantity: take,
+            dispatchedQuantity: 0,
+            poNumber: m.poNumber,
+            deckleOption: m.deckleOption,
+            orderRate: m.orderRate,
+            estimatedDate: m.estimatedDate,
+            remarks: m.remarks,
+            paperSize: m.paperSize,
+            runningMeters: m.runningMeters,      // per-roll length -- the same rolls, fewer of them
+            noOfRolls: rollsFor(m, take),
+            deckleBatchId: batch._id,
+            deckleSize: g.size,
+          },
+          batchIndex: createdBatches.length - 1,
+        });
+      }
+    }
+  }
+
+  if (clonesToInsert.length) {
+    const inserted = await PendingProduction.insertMany(clonesToInsert.map((c) => c.doc));
+    inserted.forEach((doc, i) => {
+      createdBatches[clonesToInsert[i].batchIndex].memberIds.push(doc._id);
+    });
+  }
+  for (const b of createdBatches) {
+    await PendingProduction.updateOne({ _id: b.batch._id }, { $set: { batchOrderIds: b.memberIds } });
+  }
 
   // ---- the shortfall goes back to Deckle Sorting ---------------------------
-  // A member the deckle covers only partly keeps just the rolls it makes; the
+  // A member the plan covers only partly keeps just the rolls it makes; the
   // balance is carved off into a fresh loose row (parentOrderId = the order it
   // came from) so it reappears on Deckle Sorting and can be set on a later
-  // deckle. Nothing is lost: parent + remainders still add up to the order.
+  // deckle. Nothing is lost: parent + clones + remainders still add up to the
+  // order.
   const remainders = [];
   for (const m of batched) {
     const qty = num(m.quantity);
-    const take = covered.get(String(m._id));
-    const short = Math.round((qty - take) * 100) / 100;
+    const short = Math.round((qty - covered.get(String(m._id))) * 100) / 100;
     if (short <= 0) continue;
-    // Rolls track quantity on these orders; scale rather than assume they match.
-    const rollsFor = (part) => (num(m.noOfRolls) > 0 && qty > 0
-      ? Math.max(1, Math.round((num(m.noOfRolls) * part) / qty))
-      : undefined);
     remainders.push({
       onModel: m.onModel || "SachikoLabelStock",
       parentOrderId: m._id,
@@ -5437,21 +5570,10 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
       paperSize: m.paperSize,
       // Per-roll length -- the same rolls, just fewer of them.
       runningMeters: m.runningMeters,
-      noOfRolls: rollsFor(short),
+      noOfRolls: rollsFor(m, short),
     });
-    await PendingProduction.updateOne(
-      { _id: m._id },
-      { $set: { quantity: take, ...(rollsFor(take) != null ? { noOfRolls: rollsFor(take) } : {}) } },
-    );
   }
   if (remainders.length) await PendingProduction.insertMany(remainders);
-
-  // Widths actually laminated. Normally just the batch's own deckleSize, but a
-  // mixed-web plan runs several -- worth spelling out in the audit trail and to
-  // the planner, since `deckleSize` alone only names the most-used one.
-  const webWidths = [...new Set(deckleLayout.map((L) => L.deckleSize).filter((s) => s > 0))]
-    .sort((a, b) => a - b);
-  const mixedWebs = webWidths.length > 1;
 
   // Rolls handed back: the shortfall rows above, plus any ticked order these
   // layouts never cut at all (left loose, untouched).
@@ -5462,15 +5584,24 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     untouched ? `${untouched} untouched order(s)` : "",
   ].filter(Boolean).join(" + ");
 
-  res.locals.auditDescription = `Created deckle batch ${batch._id} covering ${batched.length} order(s)`
+  // One line per batch made -- the widths are the point of the message now, so
+  // they are named rather than folded into a single "mixed webs" aside.
+  const madeText = createdBatches
+    .map((b) => `${b.group.size} mm × ${b.group.webs}`)
+    .join(" + ");
+  const split = createdBatches.length > 1;
+
+  res.locals.auditDescription = `Created ${createdBatches.length} deckle batch(es) `
+    + `${createdBatches.map((b) => b.batch._id).join(", ")} covering ${batched.length} order(s)`
     + (deckleLayout.length ? ` (${deckleLayout.length} layout${deckleLayout.length === 1 ? "" : "s"}, ${layoutWebs} webs)` : "")
-    + (mixedWebs ? ` on mixed webs ${webWidths.join(" + ")} mm` : "")
+    + (split ? ` split by deckle size: ${madeText}` : ` at ${madeText}`)
     + (leftBehind ? `; ${leftBehind} back to Deckle Sorting` : "");
   req.flash(
     "notification",
-    (mixedWebs
-      ? `Deckle batch created — ${batched.length} order(s) bundled on mixed webs (${webWidths.join(" + ")} mm; recorded at ${deckleSize}). Now in the Deckle Queue.`
-      : `Deckle batch created — ${batched.length} order(s) bundled at deckle size ${deckleSize}. Now in the Deckle Queue.`)
+    (split
+      ? `${createdBatches.length} deckle batches created — one per deckle size (${madeText}) from ${batched.length} order(s).`
+        + ` Each is its own row in the Deckle Queue, with its own Lot No and its own raw material.`
+      : `Deckle batch created — ${batched.length} order(s) bundled at deckle size ${createdBatches[0].group.size}. Now in the Deckle Queue.`)
     + (leftBehind ? ` ${leftBehind.charAt(0).toUpperCase()}${leftBehind.slice(1)} stayed on Deckle Sorting.` : ""),
   );
   res.redirect("/app/labels/production/deckle-queue");
@@ -5820,7 +5951,12 @@ router.get("/labels/production/assign/:id", async (req, res) => {
     res.render("inventory/orders/assignProduction.ejs", {
       title: "Assign Production",
       CSS: "tableDisp.css",
-      JS: false,
+      // The Auto Allot planner -- which raw-material reels this job should run
+      // off, FIFO, and how much of it the shortest layer allows. Kept out of
+      // the page so the arithmetic can be tested on its own (see
+      // scripts/raw-auto-allot-bench.js); the page measures the reels and
+      // renders the result.
+      JS: "rawAutoAllot.js",
       pp: pendingProduction,
       rawNeed,
       // One web's length x how many webs. Derived here rather than read off

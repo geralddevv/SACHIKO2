@@ -39,9 +39,20 @@ const finishedStockSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // The width this roll is SOLD as -- the sales order's own size. Everything
+    // commercial reads it: the rate lookup, the client's bill, the export to
+    // FAIRTECH.
     paperSize: {
       type: String,
       trim: true,
+    },
+    // What the knife actually cut, in mm, when the Set Deckle page's "grace"
+    // made the reel wider than it was ordered (spare web shared out over the
+    // rolls instead of being scrapped as side trim). Physical truth, for the
+    // shopfloor and for tracing a reel back to its layout -- never for
+    // pricing. Absent on an ungraced roll, where it equals paperSize.
+    cutWidth: {
+      type: Number,
     },
     lotNo: {
       type: String,

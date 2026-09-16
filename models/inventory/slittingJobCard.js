@@ -42,6 +42,13 @@ const rollWidthSchema = new mongoose.Schema(
   {
     slot: { type: String, trim: true, uppercase: true }, // A..L
     width: { type: Number },
+    // The sales-order width this knife is filling, when it differs from what
+    // is cut -- the Set Deckle page's "grace" shares spare web out over the
+    // rolls, so the reel comes off wider than it was ordered. Resolved from
+    // the batch's own deckleLayout when the allocation is saved, and it is
+    // this width the finished roll is booked and billed at. Absent on an
+    // ungraced cut, where the two are the same number.
+    orderedWidth: { type: Number },
     rollId: { type: String, trim: true, uppercase: true },
     stockId: { type: mongoose.Schema.Types.ObjectId, ref: "FinishedStock" },
   },

@@ -5,6 +5,7 @@ import Advance from "../../models/accounting/advance.js";
 import Client from "../../models/users/client.js";
 import Username from "../../models/users/username.js";
 import Machine from "../../models/system/machine.js";
+import Location from "../../models/system/location.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -109,6 +110,13 @@ const findEmployeeByProfileCode = async (profileCode, location, excludeId = null
   return employees.find((emp) => profileCodeLocationKey(emp.empProfileCode, emp.empLoc) === key) || null;
 };
 
+// The Location <select> is fed from the Location master (/form/location)
+// rather than a hardcoded list, so opening a new unit is a master entry
+// instead of a code change. Names are stored uppercase there; see
+// scripts/backfill-location-master-seed.js for seeding the ones already in
+// use on employee records.
+const getLocationNames = () => Location.distinct("locationName").then((names) => names.sort());
+
 const deleteUploadedEmployeeFiles = (files = {}) => {
   const folderByField = {
     empPhoto: "empimg",
@@ -186,6 +194,7 @@ router.get("/create", async (req, res) => {
     .lean();
   const existingProfileCodes = await getExistingProfileCodes();
   const machineNames = await Machine.distinct("machineName").then((names) => names.sort());
+  const locationNames = await getLocationNames();
 
   res.render("hr/employee.ejs", {
     title: "Employee Details",
@@ -196,6 +205,7 @@ router.get("/create", async (req, res) => {
     employees,
     existingProfileCodes,
     machineNames,
+    locationNames,
     loan: null,
     advance: null,
     notification: req.flash("notification"),
@@ -299,13 +309,14 @@ router.get("/:id", async (req, res) => {
 router.get("/edit/:id", async (req, res) => {
   const employee = await Employee.findById(req.params.id).lean();
   if (!employee) return res.redirect("back");
-  const [employees, existingProfileCodes, machineNames, loan, advance] = await Promise.all([
+  const [employees, existingProfileCodes, machineNames, locationNames, loan, advance] = await Promise.all([
     Employee.find({ _id: { $ne: req.params.id } }, "empName")
       .collation({ locale: "en", strength: 2 })
       .sort({ empName: 1 })
       .lean(),
     getExistingProfileCodes(req.params.id),
     Machine.distinct("machineName").then((names) => names.sort()),
+    getLocationNames(),
     Loan.findOne({ employee: req.params.id }).lean(),
     Advance.findOne({ employee: req.params.id }).lean(),
   ]);
@@ -319,6 +330,7 @@ router.get("/edit/:id", async (req, res) => {
     employees,
     existingProfileCodes,
     machineNames,
+    locationNames,
     loan,
     advance,
   });

@@ -94,6 +94,41 @@ const widthKey = (value) => {
   return Number.isFinite(n) && trim(value) !== "" ? String(round2(n)) : trim(value);
 };
 
+// Grace (Set Deckle): spare web that would have been scrapped as side trim is
+// shared out over a layout's rolls instead, so a roll is CUT wider than it was
+// ordered. The client is still billed the width they ordered, so the two have
+// to stay paired all the way to the finished roll
+// (PendingProduction.deckleLayout[].cuts[].orderedWidth).
+//
+// The allocation grid only ever sends widths -- the browser has no idea a width
+// is graced -- so the pairing is resolved here, server-side, off the batch's own
+// plan. Keyed on the cut width, which is all a saved row carries.
+//
+// A cut width that two layouts grace from DIFFERENT ordered widths is ambiguous
+// and is dropped: falling back to the width physically made is a defensible
+// bill, guessing between two client widths is not.
+function gracedWidthMap(pending) {
+  const byCut = new Map();
+  for (const L of Array.isArray(pending?.deckleLayout) ? pending.deckleLayout : []) {
+    for (const c of Array.isArray(L?.cuts) ? L.cuts : []) {
+      const cut = Number(c?.width);
+      const ordered = Number(c?.orderedWidth);
+      if (!(cut > 0) || !(ordered > 0) || !(cut - ordered > 0.005)) continue;
+      const key = widthKey(cut);
+      if (!byCut.has(key)) byCut.set(key, ordered);
+      else if (byCut.get(key) !== ordered) byCut.set(key, null);
+    }
+  }
+  return byCut;
+}
+
+// The ordered width behind a cut width, or null when it was never graced (or is
+// ambiguous) -- in which case the cut width IS the ordered width.
+function orderedWidthFor(map, width) {
+  const v = map.get(widthKey(width));
+  return Number(v) > 0 ? Number(v) : null;
+}
+
 // One order's planned layouts, in the order they were planned. `width` is the
 // width THAT layout is cut from -- a mixed-web batch runs several (see
 // PendingProduction.deckleLayout) -- falling back to the batch's own.
@@ -1269,6 +1304,10 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
     const rawRows = Array.isArray(b.rows) ? b.rows : [];
     if (!rawRows.length) return fail("Fill in the Deckle's layout.");
 
+    // Cut width -> the width it was ordered at, for this batch's graced layouts.
+    // Empty for every batch that was planned without grace, which is the norm.
+    const graceMap = gracedWidthMap(pending);
+
     // Normalize + validate the whole plan before writing any of it.
     const rows = [];
     for (let i = 0; i < rawRows.length; i++) {
@@ -1286,6 +1325,13 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
         .filter((c) => c.width !== null);
       if (!cuts.length) return fail(`${label}: enter at least one roll width (A–L).`);
       if (cuts.some((c) => !(c.width > 0))) return fail(`${label}: roll widths must be greater than zero.`);
+      // Record what each knife was ordered at where it differs from what it
+      // cuts, so the card itself carries the billing width rather than the Stop
+      // having to re-derive it from a plan that may have moved on since.
+      for (const c of cuts) {
+        const ordered = orderedWidthFor(graceMap, c.width);
+        if (ordered != null) c.orderedWidth = ordered;
+      }
 
       const width = numOrNull(r.width);
       const cutTotal = round2(cuts.reduce((n, c) => n + c.width, 0));
@@ -1545,7 +1591,11 @@ export async function buildSlittingCard(cardId) {
           index: i,
           deckleId: r.deckleId || reel?.rollId || "",
           width: r.width ?? null,
-          cuts: (r.cuts || []).map((c) => ({ slot: c.slot, width: c.width, rollId: c.rollId || "" })),
+          // orderedWidth rides along where the cut was graced, so the operator's
+          // card can say a roll is cut wider than it is sold at.
+          cuts: (r.cuts || []).map((c) => ({
+            slot: c.slot, width: c.width, orderedWidth: c.orderedWidth ?? null, rollId: c.rollId || "",
+          })),
           plannedMeter: r.plannedMeter ?? null,
           plannedRunningMeter: r.plannedRunningMeter ?? null,
           // Raw web size the Deckle was laminated to (its MaterialStock.size,
@@ -1981,7 +2031,18 @@ export async function produceSlittingRow(b, { createdBy }) {
   const createdRolls = [];
   for (const cut of cuts) {
     const rollId = `${reel.rollId}-${cut.slot}${runSuffix}`;
-    const rollRate = rateForWidth(cut.width);
+    // Grace: the knife cut `width`, but the client ordered -- and is billed --
+    // `orderedWidth`, which the allocation stamped on this cut from the batch's
+    // layout. Everything commercial runs off the ordered width: the rate lookup
+    // (it matches a sales order's own paperSize, which a graced width would
+    // never hit, leaving the roll unpriced), the roll's paperSize, and so the
+    // client's bill and the export to FAIRTECH. What was physically cut is kept
+    // beside it. Ungraced cuts have no orderedWidth and behave exactly as
+    // before: the cut IS the order.
+    const ordered = Number(cut.orderedWidth);
+    const graced = ordered > 0 && Number(cut.width) - ordered > 0.005;
+    const billWidth = graced ? ordered : cut.width;
+    const rollRate = rateForWidth(billWidth);
     const doc = await FinishedStock.create({
       pendingProductionId: card.pendingProductionId,
       material,
@@ -1990,7 +2051,8 @@ export async function produceSlittingRow(b, { createdBy }) {
       location,
       // The finished roll's own width -- the knife position it came off,
       // not the order's nominal size (they differ on a mixed layout).
-      paperSize: String(cut.width),
+      paperSize: String(billWidth),
+      cutWidth: graced ? round2(Number(cut.width)) : undefined,
       lotNo: reel.lotNo || card.lotNo || "",
       clientName: card.clientName || "",
       quantity: 1,

@@ -171,6 +171,14 @@ router.get("/raw-stock", async (req, res) => {
         reelMtrs: r.reelMtrs,
         rate: r.rate,
         invoiceNo: r.invoiceNo || "",
+        // What Assign Production's Auto Allot orders reels by -- oldest
+        // stock first. `inwardDate` is when the reel actually arrived (it is
+        // backdatable at inward, so it is the real age); `createdAt` is only
+        // when the row was typed in, and rides along purely as the fallback
+        // for a reel inwarded before that field was filled in. Both are sent
+        // rather than one resolved date so the picker can say which it used.
+        inwardDate: r.inwardDate || null,
+        createdAt: r.createdAt || null,
       })),
       // Only meaningful for the adhesive pool -- Facestock/Release Liner have
       // no binding concept, so they're always effectively "true" here.

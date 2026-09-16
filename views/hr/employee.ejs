@@ -213,14 +213,27 @@
     <div class="span-four">
       <label for="emp-loc">Location</label>
       <select id="emp-loc" name="empLoc" class="form-control select-tag" required>
-        <option value="" disabled selected hidden>Select</option>
-        <option value="OFFICE" <%= employee?.empLoc === 'OFFICE' ? 'selected' : '' %>>OFFICE</option>
-        <option value="UNIT 1" <%= employee?.empLoc === 'UNIT 1' ? 'selected' : '' %>>UNIT 1</option>
-        <option value="UNIT 2" <%= employee?.empLoc === 'UNIT 2' ? 'selected' : '' %>>UNIT 2</option>
-        <option value="Palghar" <%= employee?.empLoc === 'Palghar' ? 'selected' : '' %>>Palghar</option>
-        <option value="Vapi" <%= employee?.empLoc === 'Vapi' ? 'selected' : '' %>>Vapi</option>
-        <option value="Aurangabad" <%= employee?.empLoc === 'Aurangabad' ? 'selected' : '' %>>Aurangabad</option>
-        <option value="WFH" <%= employee?.empLoc === 'WFH' ? 'selected' : '' %>>WFH</option>
+        <%
+          // Comes from the Location master (/form/location), not a hardcoded
+          // list -- opening a unit is a master entry, not a code change.
+          // The master stores names uppercase while empLoc rows predating it
+          // may not ("Vapi"), and every consumer compares through
+          // normalizeLocationName, so match case-insensitively and let the
+          // master's spelling win.
+          const locKey = (v) => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
+          const currentLoc = employee?.empLoc || "";
+          const matchedLoc = (locationNames || []).find(n => locKey(n) === locKey(currentLoc));
+          // A location the master doesn't list (yet) has to stay selectable,
+          // or opening that employee would silently blank a required field.
+          const orphanLoc = currentLoc && !matchedLoc ? currentLoc : "";
+        %>
+        <option value="" disabled <%= currentLoc ? '' : 'selected' %> hidden>Select</option>
+        <% if (orphanLoc) { %>
+          <option value="<%= orphanLoc %>" selected><%= orphanLoc %></option>
+        <% } %>
+        <% (locationNames || []).forEach(name => { %>
+          <option value="<%= name %>" <%= matchedLoc === name ? 'selected' : '' %>><%= name %></option>
+        <% }) %>
       </select>
     </div>
     

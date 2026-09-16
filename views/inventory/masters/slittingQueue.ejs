@@ -38,6 +38,13 @@
     }
     .sq-act:hover { opacity: 0.88; color: #fff; }
     .sq-act.is-disabled { background: #e2e8f0; color: #94a3b8; pointer-events: none; }
+    /* Allocatable, but every Deckle in the group is still curing -- amber says
+       "you can book this now, it just can't run yet" rather than green's
+       "ready to cut". Still a live button. */
+    .sq-act.is-curing { background: #b45309; }
+    /* TEMP (ALLOW_SLIT_BEFORE_DECKLE): nothing laminated yet, but open for
+       testing. Deliberately drab -- it should not read as a job to work on. */
+    .sq-act.is-waiting { background: #64748b; }
 
     /* Group parent vs. Deckle child rows in the dataTree table -- same
        visual language as #deckle-set-table (views/inventory/orders/deckleSet.ejs). */
@@ -234,9 +241,20 @@
     return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
   };
 
+  // TEMP (testing): keeps the Slit button live even for a group with NO Deckle
+  // laminated yet, so the allocate flow can be walked through before any web
+  // exists. Set to false to restore the real gate. Mirrors CURING_HOURS = 0 in
+  // routes/system/slitting.js -- both are test switches, not behaviour, and
+  // both should go back together.
+  //
+  // Note the picker has nothing to tick in that state: the dialog opens on its
+  // "No Deckle produced yet" panel and Continue has nothing to carry. That is
+  // the honest end of the flow, not a bug.
+  const ALLOW_SLIT_BEFORE_DECKLE = true; // TEMP: restore to false
+
   // Where this job stands: nothing laminated yet, laminated but still inside
-  // the curing window, or a Deckle is out of curing and can be cut. Only
-  // "ready" opens the Slit dialog.
+  // the curing window, or a Deckle is out of curing and can be cut. Curing no
+  // longer closes the Slit dialog -- see the Actions formatter below.
   const groupStatus = (row) => {
     if (!row.deckleCount) return "waiting";
     return row.readyCount ? "ready" : "curing";
@@ -404,9 +422,9 @@
   // (routes/system/slitting.js `forThisLayout`). The rest are there to take if
   // the planner wants them; a job with no layout planned starts all ticked.
   function renderDeckleList(group) {
-    // Defensive only: a "waiting" group has no Deckles to tick and its Slit
-    // button is disabled, so this should not be reachable -- better an
-    // explanation than an empty box if it ever is.
+    // Reachable while ALLOW_SLIT_BEFORE_DECKLE is on (and defensive otherwise):
+    // a "waiting" group has no Deckles to tick, so the dialog opens on this
+    // panel and Continue has nothing to carry.
     if (!(group._children || []).length) {
       sqDeckleList.innerHTML = `<div class="sq-deckle-row is-disabled" style="cursor:default;">`
         + `<span class="sq-deckle-main"><span class="sq-deckle-top">No Deckle produced yet</span>`
@@ -705,16 +723,31 @@
         formatter: (cell) => {
           const row = cell.getRow().getData();
           if (!row.isGroup) return "";
-          // Only a group with a Deckle that is out of curing can be cut --
-          // .is-disabled also kills pointer events, so the dialog can't open.
+          // Only a group with no Deckle at all has nothing to allocate.
+          //
+          // Curing deliberately does NOT gate this. Allocation is a plan: the
+          // machine, the operator and the layout are fixed while the adhesive
+          // is still setting, so the allocator never has to sit and wait for a
+          // reel and the job is already on the machine queue the moment it is
+          // ready. The RUN is what curing blocks -- Start and Stop refuse an
+          // un-cured reel server-side, and the machine queue shows the
+          // countdown against the job (see the curing note in
+          // routes/system/slitting.js, which has always said the planner is
+          // not gated; this button was the one place that still gated it).
           const status = groupStatus(row);
-          const why = status === "waiting"
-            ? "No Deckle of this width has been produced yet"
-            : "Every Deckle here is still curing";
-          if (status !== "ready") {
-            return `<button class="sq-act is-disabled" disabled title="${why}"><i class="fa-solid fa-scissors"></i> Slit</button>`;
+          if (status === "waiting" && !ALLOW_SLIT_BEFORE_DECKLE) {
+            return `<button class="sq-act is-disabled" disabled title="No Deckle of this width has been produced yet"><i class="fa-solid fa-scissors"></i> Slit</button>`;
           }
-          return `<button onclick="openChooseDeckleDialog('${row._id}')" class="sq-act" title="Allocate one or more Deckles from this group"><i class="fa-solid fa-scissors"></i> Slit</button>`;
+          const waiting = status === "waiting";
+          const curing = status === "curing";
+          const title = waiting
+            ? "No Deckle laminated yet — open anyway (testing)"
+            : (curing
+                ? "Every Deckle here is still curing — allocate now anyway: the operator runs it once the adhesive is ready"
+                : "Allocate one or more Deckles from this group");
+          const cls = waiting ? " is-waiting" : (curing ? " is-curing" : "");
+          const icon = waiting ? "fa-hourglass-start" : (curing ? "fa-hourglass-half" : "fa-scissors");
+          return `<button onclick="openChooseDeckleDialog('${row._id}')" class="sq-act${cls}" title="${title}"><i class="fa-solid ${icon}"></i> Slit</button>`;
         },
       },
     ],

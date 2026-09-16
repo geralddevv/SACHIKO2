@@ -238,8 +238,11 @@
        whether that side is covered. */
     .rm-need-left .rm-part { color: #b45309; }
     .rm-need-left .rm-part.is-covered { color: #15803d; }
-    /* A reel narrower than the web this job runs -- it cannot be mounted on it
-       however many metres it holds. Still tickable; just never silently. */
+    /* A reel narrower than EVERY web this batch runs -- it cannot be mounted
+       for any of its deckles, however many metres it holds. A reel that fits
+       some of the webs but not the widest is NOT this: it is the right reel
+       for part of a mixed-web plan, and says so in its tooltip instead.
+       Still tickable; just never silently. */
     .raw-layer-table tbody tr.raw-layer-row-narrow td[data-col="size"],
     .raw-layer-table tbody tr.raw-layer-row-narrow td[data-col="mtrs"] { color: #b45309; font-weight: 700; }
     .rm-need-left .rm-part + .rm-part { margin-left: 12px; padding-left: 12px; border-left: 1px solid #dbe3ec; }
@@ -540,6 +543,119 @@
     .raw-layer-hidden-note {
       font-size: 11px; color: #b45309; margin: 4px 0 0; white-space: normal; line-height: 1.35;
     }
+    /* The width this column is listing, beside the layer's name. */
+    .raw-layer-web {
+      font-size: 11px; font-weight: 700; color: #0f766e; background: #ecfdf5;
+      border: 1px solid #a7f3d0; border-radius: 999px; padding: 1px 8px; white-space: nowrap;
+    }
+    .raw-layer-web.is-open { color: #b45309; background: #fff8e1; border-color: #f0c36d; }
+    .rl-web-toggle {
+      border: none; background: none; padding: 0 0 0 6px; margin: 0; cursor: pointer;
+      font-size: 11px; font-weight: 700; color: #7c8ba1; text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .rl-web-toggle:hover { color: #044a78; }
+    .raw-layer-web.is-open .rl-web-toggle { color: #b45309; }
+    /* Ticked reels are pinned to the top of their table (see sortedReelsFor),
+       so they read as one block rather than as scattered rows. */
+    .raw-layer-table tbody tr.raw-layer-row-picked { background: #f4f9ff; }
+    .raw-layer-table tbody tr.raw-layer-row-picked td { font-weight: 700; }
+
+    /* ---- Auto Allot (FIFO) ----
+       Same panel/chip/notes furniture as AI Deckle Set on the Deckle Set page
+       (views/inventory/orders/deckleSetForm.ejs's .dsa-* block) -- the two are
+       the same kind of thing (a read-only suggestion dropped into a form the
+       user still has to submit), so they look the same. ---- */
+    .rma-panel {
+      /* The .span-full wrapper this sits in is a flex column with
+         `align-items: flex-start` (common.css), which shrinks a child to its
+         own content width -- the panel came out as wide as its longest note
+         instead of as wide as the page. Same fix .dsa-panel carries on the
+         Deckle Set page. */
+      align-self: stretch; width: 100%;
+      background: #fff; border: 1.5px solid #cfe0f0; border-radius: 10px;
+      overflow: hidden; margin: 0 0 12px;
+    }
+    .rma-bar {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      padding: 11px 14px; background: linear-gradient(180deg, #f6fbff, #eef5fc);
+      border-bottom: 1px solid #dfeaf5;
+    }
+    .rma-spacer { flex: 1 1 auto; }
+    .rma-run {
+      display: inline-flex; align-items: center; gap: 8px; border: none;
+      background: #044a78; color: #fff; border-radius: 8px;
+      padding: 9px 18px; font-size: 13px; font-weight: 800; cursor: pointer;
+      letter-spacing: 0.02em; white-space: nowrap;
+    }
+    .rma-run:hover { background: #06639f; }
+    .rma-run:disabled { opacity: 0.5; cursor: not-allowed; }
+    .rma-clear {
+      display: inline-flex; align-items: center; gap: 7px; border: 1.5px solid #cbd5e1;
+      background: #fff; color: #1f2a44; border-radius: 8px;
+      padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    }
+    .rma-clear:hover { border-color: #044a78; color: #044a78; }
+    .rma-check {
+      display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+      margin: 0; padding: 5px 10px 5px 8px; border: 1.5px solid #cbd5e1;
+      border-radius: 8px; background: #fff; height: 34px;
+    }
+    .rma-check:hover { border-color: #044a78; }
+    .rma-check input { width: 16px; height: 16px; accent-color: #044a78; cursor: pointer; flex: none; margin: 0; }
+    .rma-check span.t { display: block; font-size: 12px; font-weight: 700; color: #1f2a44; white-space: nowrap; }
+    .rma-check:has(input:checked) { border-color: #044a78; background: #f4f9ff; }
+    .rma-body { padding: 0; }
+    .rma-body:empty { display: none; }
+    .rma-result { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid #eef1f6; }
+    .rma-stat {
+      flex: 1 1 auto; min-width: max-content; padding: 14px 20px;
+      border-right: 1px solid #eef1f6; display: flex; flex-direction: column; gap: 6px;
+    }
+    .rma-stat:last-child { border-right: none; }
+    .rma-stat .k {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: #7c8ba1; white-space: nowrap;
+    }
+    .rma-stat .v {
+      font-size: 19px; font-weight: 800; color: #1f2a44;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .rma-stat .v.good { color: #15803d; }
+    .rma-stat .v.warn { color: #b45309; }
+    .rma-stat .v.bad { color: #b91c1c; }
+    .rma-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .rma-table th, .rma-table td {
+      padding: 7px 14px; text-align: left; border-bottom: 1px solid #eef1f6; white-space: nowrap;
+    }
+    .rma-table th {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: #7c8ba1; background: #f8fafc;
+    }
+    .rma-table td.ta-r, .rma-table th.ta-r { text-align: right; font-variant-numeric: tabular-nums; }
+    .rma-table td.rma-reels { white-space: normal; color: #5b6b80; font-size: 11.5px; line-height: 1.5; }
+    .rma-table .rma-layer { font-weight: 800; color: #1f2a44; }
+    .rma-tag {
+      display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.04em;
+      border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+    }
+    .rma-tag.ok { color: #15803d; background: #ecfdf5; border: 1px solid #a7f3d0; }
+    .rma-tag.short { color: #b45309; background: #fff8e1; border: 1px solid #f0c36d; }
+    .rma-tag.none { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+    .rma-notes { padding: 9px 14px; font-size: 12px; line-height: 1.6; color: #5b6b80; }
+    .rma-notes ul { margin: 0; padding-left: 17px; }
+    .rma-notes li { margin: 3px 0; }
+    .rma-notes li.is-warn { color: #b45309; font-weight: 600; }
+    .rma-notes li.is-bad { color: #b91c1c; font-weight: 700; }
+    .rma-err {
+      padding: 10px 14px; background: #fef2f2; color: #991b1b;
+      font-size: 12.5px; font-weight: 700; line-height: 1.5;
+    }
+    /* Reels the run picked -- marked in the layer tables themselves so a pick
+       can be traced back to the row it came from, and so a reel ticked by hand
+       afterwards is visibly not part of the plan. */
+    .raw-layer-table tbody tr.raw-layer-row-auto { background: #f4f9ff; }
+    .raw-layer-table tbody tr.raw-layer-row-auto td:first-child { box-shadow: inset 3px 0 0 #044a78; }
   </style>
 
   <div class="indi-head ap-head" style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
@@ -856,6 +972,38 @@
     <div class="span-full form-subheading raw-produce-row" style="grid-column: 1 / -1; margin: 10px 0 0; display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 18px;">
       <h1>Raw Material Allotment</h1>
     </div>
+
+    <!-- Auto Allot -- ticks the reels this job needs, oldest stock first.
+         Read-only in the same sense AI Deckle Set is: it only ticks the
+         checkboxes below, which the planner reviews and then submits with
+         Assign & Continue like any hand-made pick. Nothing is reserved until
+         that submit, so a suggestion can always simply be re-done or cleared.
+
+         The rule it follows, and why, is spelled out in autoAllot() further
+         down -- in short: FIFO within whatever actually fits, and every layer
+         matched to the SHORTEST one rather than to the order, so a job that
+         can only half run doesn't lock up a full order's worth of the
+         materials that weren't short. -->
+    <div class="span-full" style="grid-column: 1 / -1; border: none !important; padding: 0; width: 100%;">
+      <div class="rma-panel">
+        <div class="rma-bar">
+          <div class="rma-spacer"></div>
+          <label class="rma-check" for="rmaBalance"
+                 title="On: every layer is allotted only as much as the shortest layer can actually run, so material that isn't short doesn't get locked to a job that cannot use it. Off: every layer is allotted the job's full requirement wherever the stock exists.">
+            <input type="checkbox" id="rmaBalance" checked />
+            <span class="t">Match layers to the shortest</span>
+          </label>
+          <button type="button" id="rmaClear" class="rma-clear">
+            <i class="fa-solid fa-eraser"></i> Clear picks
+          </button>
+          <button type="button" id="rmaRun" class="rma-run">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Auto Allot (FIFO)
+          </button>
+        </div>
+        <div class="rma-body" id="rmaBody"></div>
+      </div>
+    </div>
+
     <div id="rawLayersGrid"></div>
 
     <div class="btn-grp span-full">
@@ -890,6 +1038,36 @@
 <script id="item-data" type="application/json"><%- safeJson(item) %></script>
 <script id="allotted-layers-data" type="application/json"><%- safeJson(pp.allottedLayers || {}) %></script>
 <script id="order-id-data" type="application/json"><%- safeJson(String(pp._id)) %></script>
+<%# Every WEB this batch actually laminates -- width and how many deckles are
+    cut from it, widest first (the same list the Material Details card prints).
+    A mixed-web plan runs several, and which reels can physically be mounted
+    depends on all of them, not on the single headline `deckleSize`: a 635 mm
+    reel runs the 15 webs planned at 635 and the 3 at 510, and only the 8 at
+    660 are out of its reach. Judging every reel against the widest web alone
+    marked the batch's own main width unusable. %>
+<%
+  // Width -> how many deckles are cut from it and how many running metres
+  // those come to. Mirrors utils/rawMaterialNeed.js's webRunsFor (same
+  // per-layout length, same fallback for a batch with no layout rows) --
+  // except that it keeps the widths APART instead of budgeting them all at
+  // the widest, because which reels can be mounted depends on each one.
+  const webRuns = [];
+  (Array.isArray(pp.deckleLayout) ? pp.deckleLayout : []).forEach(function (L) {
+    const w = Number(L.deckleSize) > 0 ? Number(L.deckleSize) : Number(pp.deckleSize);
+    const len = Number(L.deckleRunningMeter) > 0 ? Number(L.deckleRunningMeter) : Number(pp.deckleRunningMeters);
+    const n = Math.max(1, Math.floor(Number(L.count) || 1));
+    if (!(w > 0) || !(len > 0)) return;
+    const row = webRuns.find(function (x) { return x.w === w; });
+    if (row) { row.webs += n; row.mtrs += len * n; }
+    else webRuns.push({ w: w, webs: n, mtrs: len * n });
+  });
+  if (!webRuns.length && Number(pp.deckleSize) > 0 && Number(pp.deckleRunningMeters) > 0) {
+    const n = Math.max(1, Math.floor(Number(pp.noOfRolls) || 1));
+    webRuns.push({ w: Number(pp.deckleSize), webs: n, mtrs: Number(pp.deckleRunningMeters) * n });
+  }
+  webRuns.sort(function (a, b) { return b.w - a.w; });
+%>
+<script id="web-widths-data" type="application/json"><%- safeJson(webRuns) %></script>
 <script src="/js/choices.min.js"></script>
 <script>
   document.addEventListener("DOMContentLoaded", () => {
@@ -981,6 +1159,11 @@
     // Irrelevant (stays true) for Facestock/Release Liner, which have no
     // binding concept.
     const layerHasBindingCache = {};
+    // "<layerKey>|<reel id>" for every reel the last Auto Allot run ticked --
+    // purely so those rows can be marked in the tables (renderLayerRows).
+    // Nothing downstream reads it: an auto pick and a hand pick submit
+    // identically, which is the point.
+    const AUTO_PICKED = new Set();
 
     // What this order already had picked per raw-material layer (see
     // models/inventory/pendingProduction.js's allottedLayers) -- so
@@ -1084,9 +1267,25 @@
     // reelDetail still has to say that no column of this pool shows. Adhesive
     // drums with no viscosity/cohesion/shear/density recorded have nothing
     // left over, so they get the bare Roll ID rather than "ROLL -- —".
+    // The reel's age rides in that tooltip too. It has no column of its own --
+    // there is no width left for one (see the <colgroup> notes above) -- but
+    // it is what Auto Allot orders the whole pick by, so it has to be visible
+    // somewhere the operator can check it. Being in the tooltip also makes it
+    // searchable: the Vendor filter box matches a row's tooltip as well as its
+    // text, so typing a date narrows to the reels inwarded then.
+    const fmtInward = (r) => {
+      const d = new Date(r.inwardDate || r.createdAt || "");
+      if (isNaN(d)) return "";
+      const on = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+      return r.inwardDate ? `in ${on}` : `entered ${on}`;   // no inward date recorded -- say which date this is
+    };
     const reelTitle = (r, k) => {
+      const bits = [String(r.rollId || "")];
       const detail = reelDetail(k, r);
-      return detail === "—" ? String(r.rollId || "") : `${r.rollId} -- ${detail}`;
+      if (detail !== "—") bits.push(detail);
+      const inward = fmtInward(r);
+      if (inward) bits.push(inward);
+      return bits.join(" -- ");
     };
     // ---- what a reel on the shelf gives: kg and running metres ---------------
     // Raw stock is held in kilograms (FacestockStock/AdhesiveStock/
@@ -1166,18 +1365,105 @@
     const kgCell = (r) => reelKg(r);
     const mtrsCell = (r, layerKey) => reelMtrs(r, layerKey);
 
-    // A web reel narrower than the web this job runs cannot be mounted on it,
-    // however many metres it holds -- and metres alone would happily read
-    // "covered" off a reel that physically will not fit. Flagged here rather
-    // than dropped from the tally: the Size column and its filter are still
-    // where the planner chooses, and a narrow reel can have legitimate uses.
+    // The width the REQUIREMENT is budgeted at -- the widest web in the plan
+    // (utils/rawMaterialNeed.js's webRunsFor). It is what an adhesive drum's
+    // weight is spread over to give a length, and nothing else: it is not the
+    // test of whether a reel fits, because on a mixed-web batch most of the
+    // webs are narrower than it.
     const jobWidthMm = () => numOr(document.querySelector(".rm-need-cell[data-jobwidth]")?.dataset.jobwidth);
+
+    // Every web this batch actually laminates -- [{ w, webs }], widest first.
+    // A mixed-web plan runs more than one (660 x 8 + 635 x 15 + 510 x 3), and
+    // a reel only has to fit ONE of them to be worth mounting.
+    const WEB_WIDTHS = (JSON.parse(document.getElementById("web-widths-data").textContent) || [])
+      .map((x) => ({ w: Number(x.w), webs: Number(x.webs) || 0, mtrs: Number(x.mtrs) || 0 }))
+      .filter((x) => x.w > 0);
+    const TOTAL_WEBS = WEB_WIDTHS.reduce((n, x) => n + x.webs, 0);
+    // The narrowest web in the plan: below this a reel cannot carry a single
+    // deckle of this batch, which is the only width test that is actually
+    // true. Falls back to the budget width for a batch with no layout rows.
+    const minWebMm = () => (WEB_WIDTHS.length ? Math.min(...WEB_WIDTHS.map((x) => x.w)) : jobWidthMm());
+    const widestWebMm = () => (WEB_WIDTHS.length ? Math.max(...WEB_WIDTHS.map((x) => x.w)) : jobWidthMm());
+    // How many of this batch's deckles a reel of this width could be run for.
+    const websCarried = (w) => (w == null ? TOTAL_WEBS
+      : WEB_WIDTHS.reduce((n, x) => n + (x.w <= w + 0.5 ? x.webs : 0), 0));
+
+    // A reel narrower than EVERY web this batch runs cannot be mounted on any
+    // of them, however many metres it holds -- and metres alone would happily
+    // read "covered" off a reel that physically will not fit. That, and only
+    // that, is what gets flagged: a 635 mm reel on a batch whose main run is
+    // 635 mm is the right reel, and marking it short of the 660 mm webs it was
+    // never going to be used for made the page contradict its own Size filter.
+    // Flagged rather than dropped -- the Size column and its filter are still
+    // where the planner chooses, and a narrow reel can have legitimate uses.
     const reelTooNarrow = (r, layerKey) => {
       if (isAdhesiveLayer(layerKey)) return false;        // a drum has no width to be short of
       const w = numOr(r.size);
-      const job = jobWidthMm();
-      return w != null && job != null && w < job;
+      const min = minWebMm();
+      return w != null && min != null && w < min - 0.5;
     };
+    // Usable, but not for the whole batch -- it fits some of the webs and not
+    // the widest. Not an error and not coloured; said in the row's tooltip, and
+    // counted in the Auto Allot summary so a pick of these is never silent.
+    const reelPartialWebs = (r, layerKey) => {
+      if (isAdhesiveLayer(layerKey) || reelTooNarrow(r, layerKey)) return null;
+      const w = numOr(r.size);
+      if (w == null || !WEB_WIDTHS.length) return null;
+      const n = websCarried(w);
+      return n > 0 && n < TOTAL_WEBS ? n : null;
+    };
+
+    // ---- only this batch's own web width is offered -------------------------
+    // The table lists reels of the width(s) this deckle is actually cut at and
+    // nothing else. A store holds every size the plant runs; scrolling past
+    // 510 mm and 1020 mm reels to find the 635s -- and being able to tick one
+    // by mistake -- is not a choice worth offering on a page whose whole job
+    // is one deckle size.
+    //
+    // A drum has no width, so the adhesive column is never narrowed. A reel
+    // with no Size recorded can't be shown to fit and is hidden with the rest;
+    // both it and the wrong-width reels are counted under the column heading,
+    // so nothing disappears silently -- and a wider reel that is genuinely
+    // wanted can still be ticked from Raw Material stock pages.
+    //
+    // With no widths recorded at all (a legacy batch with no layouts and no
+    // deckle size) there is nothing to narrow by, so everything shows, exactly
+    // as it did before.
+    const reelFitsBatchWeb = (r, layerKey) => {
+      if (isAdhesiveLayer(layerKey) || !WEB_WIDTHS.length) return true;
+      const w = numOr(r.size);
+      return w != null && WEB_WIDTHS.some((x) => Math.abs(x.w - w) < 0.5);
+    };
+
+    // ...with one way back. A store can simply run out of the right width
+    // while a wider reel that would physically run sits on the shelf, and a
+    // page that hides it outright leaves the job unassignable for no good
+    // reason. So the count of hidden reels under the column heading is a
+    // toggle: off by default (which is the whole point), one click to see the
+    // rest. Per layer, because it is per shelf.
+    const showOtherWidths = {};
+    const otherWidthsShown = (layerKey) => !!showOtherWidths[layerKey];
+
+    // What this layer currently has ticked, read off the live checkboxes.
+    const checkedIdsFor = (layerKey) => new Set(
+      Array.from(document.querySelectorAll(
+        `#rawLayersGrid input[type="checkbox"][name="rawLayers[${layerKey}]"]:checked`,
+      )).map((el) => el.value),
+    );
+
+    // The reels this layer's table shows -- and the only ones Auto Allot may
+    // pick, so the button can never tick a row the operator cannot see.
+    //
+    // A reel that is already TICKED is always shown, whatever its width. It is
+    // the only rule that can't be skipped here: the tick lives in the checkbox
+    // itself, so a reel filtered out of the table takes its tick with it, and
+    // hiding the other widths again after deliberately picking a 640 mm reel
+    // for a 635 mm web would quietly un-allot it.
+    const visibleReelsFor = (layerKey, keep) =>
+      (layerReelsCache[layerKey] || []).filter((r) =>
+        otherWidthsShown(layerKey) || reelFitsBatchWeb(r, layerKey) || (keep && keep.has(r._id)));
+
+    const batchWebsText = () => WEB_WIDTHS.map((x) => `${fmtNum(x.w)} mm`).join(" / ");
 
     const mtrsTitle = (r, layerKey) => {
       const kg = reelKg(r);
@@ -1190,10 +1476,15 @@
       if (isAdhesiveLayer(layerKey)) {
         return `${fmtNum(kg)} kg spread at ${fmtNum(gsm)} GSM wet over a ${fmtNum(width)} mm web`;
       }
-      const narrow = reelTooNarrow(r, layerKey)
-        ? ` — TOO NARROW for this job's ${fmtNum(jobWidthMm())} mm web`
-        : "";
-      return `${fmtNum(kg)} kg at ${fmtNum(gsm)} GSM, ${fmtNum(width)} mm wide${narrow}`;
+      // Which of this batch's deckles this reel can actually be run for --
+      // the figure that decides whether its metres are any use here.
+      const partial = reelPartialWebs(r, layerKey);
+      const fit = reelTooNarrow(r, layerKey)
+        ? ` — TOO NARROW for every web this batch runs (narrowest ${fmtNum(minWebMm())} mm)`
+        : partial != null
+          ? ` — runs ${partial} of this batch's ${TOTAL_WEBS} deckles`
+          : "";
+      return `${fmtNum(kg)} kg at ${fmtNum(gsm)} GSM, ${fmtNum(width)} mm wide${fit}`;
     };
 
     const POOL_COLUMNS = {
@@ -1260,6 +1551,11 @@
           <div class="raw-layer-head">
             <span class="raw-layer-title">${meta.label}</span>
             <span class="raw-layer-spec">${specSummary(ITEM[meta.specField], layerKey)}</span>
+            <!-- Which width this column is listing, and how many reels of
+                 other widths are at this location but not shown. The table
+                 only offers reels this deckle can be cut from, so the ones it
+                 leaves out are said out loud rather than just missing. -->
+            <span class="raw-layer-web" data-web-note="${layerKey}" hidden></span>
           </div>
           <!-- Header lives in its own, non-scrolling table -- entirely
                outside the scrollable body below, rather than "stuck" on top
@@ -1316,12 +1612,24 @@
 
     // Sorts a copy, never layerReelsCache itself, so the cache keeps the
     // server's own order intact underneath whatever the user is looking at.
-    function sortedReelsFor(layerKey, reels, columns) {
+    //
+    // Whatever is TICKED sits at the top, always, ahead of whichever column
+    // the table is sorted by. A layer can hold several reels and the list can
+    // run to fifty rows: with the picks scattered down it, checking what is
+    // actually allotted meant scrolling the whole column, and a reel ticked
+    // and then sorted out of view was easy to forget. The column sort still
+    // decides the order inside each half.
+    function sortedReelsFor(layerKey, reels, columns, checked) {
       const state = layerSort[layerKey];
-      if (!state) return reels;
-      const colDef = columns.find((c) => c.key === state.colKey);
-      if (!colDef) return reels;
-      return [...reels].sort(compareReels(colDef, layerKey, state.dir));
+      const colDef = state ? columns.find((c) => c.key === state.colKey) : null;
+      const byColumn = colDef ? compareReels(colDef, layerKey, state.dir) : null;
+      const isChecked = (r) => !!(checked && checked.has(r._id));
+      return [...reels].sort((a, b) => {
+        const ca = isChecked(a);
+        const cb = isChecked(b);
+        if (ca !== cb) return ca ? -1 : 1;
+        return byColumn ? byColumn(a, b) : 0;
+      });
     }
 
     // Renders (or re-renders) one layer column's rows from its cached reels.
@@ -1336,7 +1644,6 @@
     function renderLayerRows(layerKey) {
       const tbody = document.querySelector(`#rawLayersGrid tbody[data-body="${layerKey}"]`);
       if (!tbody) return;
-      const reels = layerReelsCache[layerKey];
       // Rebuilding the tbody below replaces every checkbox, which would
       // otherwise silently drop whatever was picked -- carry every
       // currently-checked id forward (a layer can hold more than one picked
@@ -1346,11 +1653,43 @@
       // -- reads both the current `stockIds` array shape and the legacy
       // single `stockId` shape orders assigned before this changed still
       // have saved (see utils/labelStockProduction.js's pickStockIds).
+      //
+      // Worked out BEFORE the width filter below, because it feeds it: a
+      // ticked reel stays listed whatever its width, so that hiding the other
+      // widths can never take an allotment with it.
       const checkedNow = Array.from(tbody.querySelectorAll("input[type='checkbox']:checked")).map((el) => el.value);
       const allotted = ALLOTTED_LAYERS[layerKey];
       const previouslyChecked = new Set(
         checkedNow.length ? checkedNow : allotted?.stockIds || (allotted?.stockId ? [allotted.stockId] : []),
       );
+
+      // Only the reels of this batch's own web width (see reelFitsBatchWeb),
+      // plus whatever is ticked. `null` still means "no location fetched yet",
+      // which is not the same as "nothing fits".
+      const allReels = layerReelsCache[layerKey];
+      const reels = allReels ? visibleReelsFor(layerKey, previouslyChecked) : allReels;
+      // Counted against the batch's web, not against what is on screen -- so
+      // the badge still says how many are off-width once they are revealed.
+      const offWidth = allReels ? allReels.filter((r) => !reelFitsBatchWeb(r, layerKey)).length : 0;
+
+      // Which width this column lists, and what it is therefore leaving out.
+      const webNote = document.querySelector(`[data-web-note="${layerKey}"]`);
+      if (webNote) {
+        const narrowed = !isAdhesiveLayer(layerKey) && WEB_WIDTHS.length > 0;
+        webNote.hidden = !narrowed;
+        if (narrowed) {
+          const shown = otherWidthsShown(layerKey);
+          webNote.classList.toggle("is-open", shown);
+          webNote.innerHTML = escAttr(batchWebsText())
+            + (offWidth
+              ? ` <button type="button" class="rl-web-toggle" data-show-others="${layerKey}">`
+                + `${shown ? "hide" : `${offWidth} in other width${offWidth === 1 ? "" : "s"}`}</button>`
+              : "");
+          webNote.title = shown
+            ? `Showing every width at this location. This deckle is cut at ${batchWebsText()}; anything else has to be trimmed to it.`
+            : `Only reels this deckle can be cut from are listed${offWidth ? `; ${offWidth} of another width are in stock here` : ""}.`;
+        }
+      }
 
       if (!reels) {
         tbody.innerHTML = `<tr><td colspan="${layerColCount(layerKey)}" style="color:#94a3b8; font-style:italic;">Select a machine first</td></tr>`;
@@ -1359,13 +1698,15 @@
       }
       if (!reels.length) {
         // The adhesive pool requires a binding (models/sachiko/labelStockAdhesiveBinding.js)
-        // -- an empty list here has two different real causes, and only one
-        // of them is "nothing in stock". Distinguish them so the operator
-        // isn't left guessing whether to look for stock or go configure a
-        // binding.
+        // -- an empty list here has three different real causes now, and only
+        // one of them is "nothing in stock". Distinguish them so the operator
+        // isn't left guessing whether to look for stock, go configure a
+        // binding, or buy paper of the right width.
         const message = layerKey.startsWith("adhesive") && layerHasBindingCache[layerKey] === false
           ? 'No binding configured for this Label Stock — set one at <a href="/app/form/label-stock-adhesive-binding" target="_blank" rel="noopener">Label Stock Adhesive Binding</a> before assigning.'
-          : "No reels in stock at this location";
+          : offWidth
+            ? `No ${escAttr(batchWebsText())} reels in stock at this location — ${offWidth} reel${offWidth === 1 ? " is" : "s are"} here in other widths. Use “${offWidth} in other widths” above to see them.`
+            : "No reels in stock at this location";
         // table-layout: fixed (see .raw-layer-table.roll-table above) means a
         // long, unbroken run of text -- the binding link's full sentence in
         // particular -- would otherwise push past this cell instead of
@@ -1378,7 +1719,7 @@
       }
 
       const columns = layerColumns(layerKey);
-      const orderedReels = sortedReelsFor(layerKey, reels, columns);
+      const orderedReels = sortedReelsFor(layerKey, reels, columns, previouslyChecked);
 
       // Checkboxes -- a layer can hold more than one picked reel at once,
       // so every row is independently selectable with no single-select
@@ -1401,9 +1742,31 @@
           return `<td data-col="${c.key}"${cls}${title}>${text}</td>`;
         }).join("");
         const narrow = !noInvoice && reelTooNarrow(r, layerKey);
-        const rowAttrs = noInvoice
-          ? ` class="raw-layer-row-no-invoice" title="No invoice"`
-          : (narrow ? ` class="raw-layer-row-narrow" title="${escAttr(r.size)} mm — narrower than this job's ${escAttr(jobWidthMm() ?? "")} mm web"` : "");
+        // Auto Allot's own picks are flagged as well as ticked (see
+        // AUTO_PICKED), so the rows a run chose can be told from ones ticked
+        // by hand afterwards -- the class rides through every re-render
+        // (sort/filter/refresh) because it is rebuilt from that set here.
+        const classes = [];
+        let rowTitle = "";
+        if (noInvoice) { classes.push("raw-layer-row-no-invoice"); rowTitle = "No invoice"; }
+        else if (narrow) {
+          classes.push("raw-layer-row-narrow");
+          rowTitle = `${escAttr(r.size)} mm — narrower than every web this batch runs`
+            + ` (${escAttr(WEB_WIDTHS.map((x) => `${x.w} × ${x.webs}`).join(", ") || jobWidthMm() || "")}),`
+            + ` so it cannot be mounted for any of them`;
+        } else {
+          // Fits some of the webs but not all -- legitimate, so no colour;
+          // said here so a pick is made knowing which deckles it can run.
+          const partial = reelPartialWebs(r, layerKey);
+          if (partial != null) {
+            rowTitle = `${escAttr(r.size)} mm — runs ${partial} of this batch's ${TOTAL_WEBS} deckles;`
+              + ` too narrow for the ${escAttr(widestWebMm())} mm ${TOTAL_WEBS - partial === 1 ? "web" : "webs"}`;
+          }
+        }
+        if (checked) classes.push("raw-layer-row-picked");
+        if (checked && AUTO_PICKED.has(`${layerKey}|${r._id}`)) classes.push("raw-layer-row-auto");
+        const rowAttrs = (classes.length ? ` class="${classes.join(" ")}"` : "")
+          + (rowTitle ? ` title="${rowTitle}"` : "");
         return `<tr${rowAttrs}>` +
           `<td class="roll-check-cell"><input type="checkbox" name="rawLayers[${layerKey}]" value="${r._id}"` +
             ` data-kg="${reelKg(r) ?? ""}" data-mtrs="${reelMtrs(r, layerKey) ?? ""}"` +
@@ -1672,28 +2035,457 @@
       return machine?.location?.locationName || "";
     }
 
+    // The reels of every layer, re-fetched for whatever machine is selected
+    // now. The promise is kept because Auto Allot has to wait on it -- pressing
+    // the button straight after picking a machine would otherwise plan against
+    // half-loaded (or still-empty) columns and quietly under-allot.
+    let layersReady = Promise.resolve();
     function refreshAllLayerOptions() {
       const location = currentMachineLocation();
-      requiredLayerKeys().forEach((key) => refreshLayerOptions(key, location));
+      layersReady = Promise.all(requiredLayerKeys().map((key) => refreshLayerOptions(key, location)));
+      return layersReady;
     }
+
+    // ---- Auto Allot (FIFO) --------------------------------------------------
+    // Ticks the reels this job needs, for every layer at once, instead of
+    // leaving a picker to read three tables and do the arithmetic by hand.
+    // It only ticks checkboxes -- exactly the ones a person could have ticked
+    // themselves -- so what gets submitted, validated and saved is unchanged
+    // (POST /labels/production/assign/:id neither knows nor cares that a pick
+    // came from here). Nothing is reserved until Assign & Continue.
+    //
+    // The rule, in order:
+    //
+    //   1. Only reels that can actually be mounted. A reel with no invoice is
+    //      unpickable on this page already (the row is disabled -- an inward
+    //      without an invoice is treated as provisional), and a web reel
+    //      NARROWER than the width this job is budgeted at physically cannot
+    //      carry it however many metres it holds. Both are skipped and both
+    //      are named in the summary rather than silently dropped.
+    //   2. Exact width before wider. A 1020 mm reel run for a 660 mm web
+    //      loses 360 mm to trim for the whole length of the job -- far more
+    //      material than any FIFO gain is worth. So reels that match the web
+    //      exactly go first, and wider ones are only reached once those run
+    //      out. (A drum has no width, so the adhesive pool is one tier.)
+    //   3. FIFO within a tier -- oldest Inward Date first, falling back to
+    //      when the record was created for a reel that has none. This is the
+    //      point of the button: paper ages, and the oldest reel of an
+    //      otherwise identical spec is the one that should move.
+    //   4. Stop as soon as the layer is covered on BOTH sides, kg and R.Mtrs
+    //      -- the same two-sided test the progress bars above run. Picking
+    //      past that would lock reels this job cannot use away from every
+    //      other order (the raw-stock picker hides a reel another open order
+    //      holds).
+    //   5. Every layer matched to the SHORTEST one. If the release liner at
+    //      this location only covers 23,000 of the 26,260 R.Mtrs the batch
+    //      needs, then 23,000 is all that can be laminated, whatever else is
+    //      in stock -- so the facestock and adhesive are allotted for 23,000
+    //      too, and the rest stays free for other orders. The summary says
+    //      which layer set the limit and by how much the job falls short;
+    //      untick "Match layers to the shortest" to allot every layer the
+    //      full requirement regardless.
+    //
+    // A layer with NOTHING pickable (no binding configured, nothing matching
+    // in stock) can't set a limit -- scaling every other layer to zero would
+    // just allot nothing at all -- so it is left out of the arithmetic and
+    // reported as a blocker instead: the job cannot run until it is sorted
+    // out, and the summary says so in as many words.
+    const rmaRun = document.getElementById("rmaRun");
+    const rmaClear = document.getElementById("rmaClear");
+    const rmaBalance = document.getElementById("rmaBalance");
+    const rmaBody = document.getElementById("rmaBody");
+
+    const rmaShowError = (msg) => { rmaBody.innerHTML = `<div class="rma-err">${escAttr(msg)}</div>`; };
+
+    // What this layer has to cover, straight off the Raw Material Required
+    // strip -- the same two figures its progress bar is measured against, so
+    // the button can never aim at a different number than the page shows.
+    function layerNeed(layerKey) {
+      const cell = needCellFor(layerKey);
+      if (!cell) return null;
+      const kg = Number(cell.dataset.needKg);
+      const mtrs = Number(cell.dataset.needMtrs);
+      return {
+        kg: Number.isFinite(kg) && kg > 0 ? kg : null,
+        mtrs: Number.isFinite(mtrs) && mtrs > 0 ? mtrs : null,
+        title: cell.querySelector(".rm-need-label")?.textContent || LAYER_META[layerKey].label,
+      };
+    }
+
+    // Oldest first. Inward Date is the real arrival (backdatable at inward --
+    // see the field's comment on models/inventory/facestockStock.js);
+    // createdAt is only when the row was typed in, so it is the fallback, not
+    // the key. A reel with neither sorts last rather than first: an unknown
+    // age is not evidence of being old.
+    function reelFifoTime(r) {
+      const t = Date.parse(r.inwardDate || "");
+      if (Number.isFinite(t)) return t;
+      const c = Date.parse(r.createdAt || "");
+      return Number.isFinite(c) ? c : Number.POSITIVE_INFINITY;
+    }
+
+    // Splits this layer's fetched reels into the ones Auto Allot may pick,
+    // in the order it will pick them, and the ones it won't -- each with the
+    // reason, which the summary prints. Nothing is dropped quietly.
+    function autoCandidates(layerKey) {
+      // The same list the table shows -- so the button can never tick a reel
+      // the operator cannot see, nor plan against one.
+      const reels = visibleReelsFor(layerKey, checkedIdsFor(layerKey));
+      const usable = [];
+      const skipped = [];
+      reels.forEach((r) => {
+        const kg = reelKg(r);
+        const mtrs = reelMtrs(r, layerKey);
+        if (!r.invoiceNo) { skipped.push({ r, why: "no invoice recorded" }); return; }
+        if (reelTooNarrow(r, layerKey)) {
+          skipped.push({ r, why: `${fmtNum(numOr(r.size))} mm — narrower than every web this batch runs` });
+          return;
+        }
+        if (kg == null) { skipped.push({ r, why: "no kg recorded" }); return; }
+        // Length is half of what a layer is measured on, so a reel whose
+        // metres cannot be worked out cannot be allotted against a metre
+        // requirement without guessing. Tick it by hand if you know better.
+        if (mtrs == null) { skipped.push({ r, why: "no GSM/width to work a length from" }); return; }
+        usable.push({ r, kg, mtrs, width: isAdhesiveLayer(layerKey) ? null : numOr(r.size), t: reelFifoTime(r) });
+      });
+      // Left unsorted: which reel comes first depends on the WEB it is being
+      // considered for (an exact fit for that width goes before a wider one),
+      // and that is per demand -- planRawAllotment's orderFor() does it.
+      return { usable, skipped };
+    }
+
+    const rmaFmt = (n) => fmtNum(Math.round(n * 100) / 100);
+    const rmaPct = (f) => `${Math.round(f * 1000) / 10}%`;
+
+    function autoAllot() {
+      const layerKeys = requiredLayerKeys();
+      if (!currentMachineLocation()) {
+        rmaShowError("Select a machine first — the reel lists are scoped to its location.");
+        return;
+      }
+      if (!document.querySelector(".rm-need-cell[data-layer]")) {
+        rmaShowError("This batch has no deckle size or running metres yet, so there is nothing to allot against. Set the deckle on the Deckle Set page first.");
+        return;
+      }
+
+      if (typeof planRawAllotment !== "function") {
+        rmaShowError("Auto Allot's planner (/js/rawAutoAllot.js) didn't load. Reload the page, or tick the reels by hand.");
+        return;
+      }
+
+      // ---- 1. measure: what each layer needs, and what it can choose from ---
+      // Everything measured here (a reel's weight, the length that gives, how
+      // much of the requirement belongs to each web) is this page's business;
+      // the choosing is planRawAllotment's. See public/js/rawAutoAllot.js.
+      //
+      // The requirement is split ACROSS THE WEBS the batch actually runs,
+      // because a reel can only be mounted for a web it is wide enough for.
+      // The split is by share, so the parts still add up to exactly the
+      // figures on the Raw Material Required strip above and the bars and this
+      // panel can never disagree:
+      //   metres -- by each width's share of the running metres;
+      //   kg     -- by each width's share of the area (a wider web eats more
+      //             paper per metre, so it is area, not length, that carries
+      //             the weight).
+      const totalWebMtrs = WEB_WIDTHS.reduce((a, x) => a + (x.mtrs || 0), 0);
+      const totalWebArea = WEB_WIDTHS.reduce((a, x) => a + (x.w / 1000) * (x.mtrs || 0), 0);
+      const demandsFor = (need, layerKey) => {
+        // A drum has no width and coats whatever web is running, so the
+        // adhesive states ONE demand for the whole job. Splitting it per web
+        // would round a part-drum up once per width and lock drums the job
+        // never needed.
+        if (isAdhesiveLayer(layerKey) || !WEB_WIDTHS.length || !(totalWebMtrs > 0)) {
+          return [{
+            width: isAdhesiveLayer(layerKey) ? null : jobWidthMm(),
+            webs: TOTAL_WEBS, kg: need?.kg ?? null, mtrs: need?.mtrs ?? null,
+          }];
+        }
+        return WEB_WIDTHS.map((x) => ({
+          width: x.w,
+          webs: x.webs,
+          kg: need?.kg != null && totalWebArea > 0
+            ? Math.round(need.kg * (((x.w / 1000) * (x.mtrs || 0)) / totalWebArea) * 100) / 100 : null,
+          mtrs: need?.mtrs != null
+            ? Math.round(need.mtrs * ((x.mtrs || 0) / totalWebMtrs) * 100) / 100 : null,
+        }));
+      };
+
+      const input = layerKeys.map((key) => {
+        const need = layerNeed(key);
+        const { usable, skipped } = autoCandidates(key);
+        return {
+          key,
+          pool: LAYER_META[key].pool,
+          label: need?.title || LAYER_META[key].label,
+          demands: demandsFor(need, key),
+          reels: usable.map((c) => ({
+            id: c.r._id, rollId: c.r.rollId || "", kg: c.kg, mtrs: c.mtrs, width: c.width, time: c.t,
+          })),
+          skipped: skipped.map((s) => ({ rollId: s.r.rollId || "—", why: s.why })),
+        };
+      });
+      if (input.every((L) => L.demands.every((d) => d.kg == null && d.mtrs == null))) {
+        rmaShowError("No layer has a requirement to allot against — the Raw Material Required strip is empty.");
+        return;
+      }
+
+      // ---- 2. plan -----------------------------------------------------------
+      const plan = planRawAllotment({ layers: input, balance: !!rmaBalance.checked });
+
+      // ---- 3. tick what it picked --------------------------------------------
+      let replaced = 0;
+      AUTO_PICKED.clear();
+      plan.layers.forEach((L) => {
+        const boxes = Array.from(document.querySelectorAll(
+          `#rawLayersGrid input[type="checkbox"][name="rawLayers[${L.key}]"]`,
+        ));
+        const want = new Set(L.picked.map((r) => r.id));
+        boxes.forEach((el) => {
+          if (el.checked && !want.has(el.value)) replaced += 1;
+          el.checked = want.has(el.value);
+        });
+        want.forEach((id) => AUTO_PICKED.add(`${L.key}|${id}`));
+        renderLayerRows(L.key);                 // re-render so the picked rows carry their flag
+      });
+      updateRawNeed();
+
+      plan.replaced = replaced;
+      renderAutoSummary(plan);
+    }
+
+    // What the run did and, just as importantly, what it could not do. Every
+    // figure here is read back off the reels actually ticked, not off the plan
+    // that chose them -- so it says what the form will submit.
+    function renderAutoSummary(plan) {
+      const { layers, balance, blockedLayers, shortLayers, jobNeedMtrs, runMtrs, totalReels } = plan;
+      const fullyCovered = !blockedLayers.length && !shortLayers.length;
+      const names = (list) => list.map((L) => L.label).join(", ");
+
+      const chip = (k, v, cls) =>
+        `<div class="rma-stat"><span class="k">${escAttr(k)}</span><span class="v${cls ? " " + cls : ""}">${v}</span></div>`;
+      const runCls = runMtrs <= 0 ? "bad" : runMtrs >= jobNeedMtrs - 0.01 ? "good" : "warn";
+
+      // The widths that could not be fully served, and what stopped each one
+      // -- "635 mm (Release Liner)". On a single-width batch this reads as it
+      // always did; on a mixed-web one it is the only honest answer, since a
+      // shortage at one width says nothing about the others.
+      const limitText = blockedLayers.length
+        ? names(blockedLayers)
+        : plan.limitWidths.length
+          ? plan.limitWidths.map((W) =>
+              `${W.width != null ? `${fmtNum(W.width)} mm` : "job"}${W.limitLabels.length ? ` (${W.limitLabels.join(", ")})` : ""}`).join(", ")
+          : "nothing";
+
+      const chips = [
+        chip("Job needs", `${rmaFmt(jobNeedMtrs)} R.Mtrs`),
+        chip("Can run", `${rmaFmt(runMtrs)} R.Mtrs`, runCls),
+        chip("Covered", rmaPct(jobNeedMtrs > 0 ? Math.min(1, runMtrs / jobNeedMtrs) : 1), runCls),
+        chip("Limited by", escAttr(limitText),
+          blockedLayers.length ? "bad" : plan.limitWidths.length ? "warn" : "good"),
+        chip("Reels ticked", `${totalReels}`),
+      ].join("");
+
+      const of = (v) => ` <span style="color:#94a3b8;font-weight:600;">of ${rmaFmt(v)}</span>`;
+      const rows = layers.map((L) => {
+        const tag = L.blocked
+          ? `<span class="rma-tag none">nothing to allot</span>`
+          : L.covered >= 0.9999
+            ? `<span class="rma-tag ok">covered</span>`
+            : `<span class="rma-tag short">${rmaPct(L.covered)}</span>`;
+        return `<tr>
+          <td class="rma-layer">${escAttr(L.label)}</td>
+          <td>${tag}</td>
+          <td class="ta-r">${L.picked.length}</td>
+          <td class="ta-r">${rmaFmt(L.got.kg)}${L.need.kg != null ? of(L.need.kg) : ""}</td>
+          <td class="ta-r">${rmaFmt(L.got.mtrs)}${L.need.mtrs != null ? of(L.need.mtrs) : ""}</td>
+          <td class="rma-reels">${
+            !L.picked.length ? "—"
+              : L.byWidth.length > 1
+                // Which reel is for which web -- on a mixed-web batch a flat
+                // list of Roll IDs hides the one thing that matters about it.
+                ? L.byWidth.filter((W) => W.picked.length).map((W) =>
+                    `<b>${W.width != null ? fmtNum(W.width) + " mm" : "any"}</b> (${W.webs}): `
+                    + W.picked.map((r) => escAttr(r.rollId || "—")).join(", ")).join("<br>")
+                : L.picked.map((r) => escAttr(r.rollId || "—")).join(", ")
+          }</td>
+        </tr>`;
+      }).join("");
+
+      // ---- the notes: every reason this run went the way it did ------------
+      // `text` is escaped on the way out; `html` is for the one note that
+      // needs a link (the adhesive binding page it tells you to go and set).
+      const notes = [];
+
+      blockedLayers.forEach((L) => {
+        const tail = ` This job cannot be laminated until it is, whatever the other layers hold.`;
+        if (L.key.startsWith("adhesive") && layerHasBindingCache[L.key] === false) {
+          notes.push({
+            cls: "is-bad",
+            html: `${escAttr(L.label)}: NOTHING could be allotted — no adhesive binding is configured for this Label Stock.`
+              + ` Set one at <a href="/app/form/label-stock-adhesive-binding" target="_blank" rel="noopener">Label Stock Adhesive Binding</a>, then run this again.`
+              + escAttr(tail),
+          });
+          return;
+        }
+        const why = L.reels.length
+          ? "its reels were all needed by another layer of the same material"
+          : L.skipped.length
+            ? "every reel matching it at this location was unusable (see below)"
+            : "nothing matching it is in stock at this location";
+        notes.push({ cls: "is-bad", text: `${L.label}: NOTHING could be allotted — ${why}.${tail}` });
+      });
+
+      // Short, and short AT WHICH WEB -- "enough for the 510 mm webs, 2 of the
+      // 15 at 635 mm" is what a planner can act on; a single percentage of the
+      // batch is not, and on a mixed-web job it is not even true.
+      shortLayers.forEach((L) => {
+        const perWeb = L.shortWidths.map((W) => {
+          const web = W.width != null ? `${fmtNum(W.width)} mm` : "this job";
+          const canRun = Math.floor(W.webs * W.covered);
+          return W.none
+            ? `nothing wide enough for the ${web} ${W.webs === 1 ? "web" : "webs"} (${W.webs})`
+            : `only ${canRun} of the ${W.webs} ${web} ${W.webs === 1 ? "web" : "webs"} (${rmaPct(W.covered)})`;
+        });
+        notes.push({
+          cls: "is-warn",
+          text: `${L.label} is short — ${perWeb.join("; ")}.`
+            + ` Ticked ${rmaFmt(L.got.mtrs)} of ${rmaFmt(L.need.mtrs || 0)} R.Mtrs`
+            + ` (${rmaFmt(L.got.kg)} of ${rmaFmt(L.need.kg || 0)} kg).`
+            + (L.leftOver <= 0
+              ? ` Every usable reel of it at this location is already ticked; the rest has to be bought in or found elsewhere.`
+              : ` ${L.leftOver} more usable ${L.leftOver === 1 ? "reel is" : "reels are"} on the shelf, but not of a width that closes this gap.`),
+        });
+      });
+
+      // Why the layers that WEREN'T short got less than the order calls for --
+      // the one thing about this run that looks like a bug until it is said out
+      // loud (facestock reading "80%" with a shelf full of it). Stated in reels
+      // actually held back, not as a percentage: whole reels mean a layer often
+      // comes out at the same pick either way, and claiming a layer was cut
+      // back when it wasn't is how a button like this loses trust.
+      if (balance && plan.heldBackLayers.length) {
+        notes.push({
+          cls: "",
+          text: `${plan.heldBackLayers.map((L) => `${L.label} (${L.heldBackReels} ${L.heldBackReels === 1 ? "reel" : "reels"}, ${rmaFmt(L.heldBackMtrs)} R.Mtrs)`).join(", ")}`
+            + ` held back: only ${rmaFmt(runMtrs)} of ${rmaFmt(jobNeedMtrs)} R.Mtrs can be laminated — as much as`
+            + ` ${limitText} allows — so the rest stays free for other orders`
+            + ` instead of being locked to a job that cannot use it.`
+            + ` Untick “Match layers to the shortest” to allot the full requirement anyway.`,
+        });
+      }
+
+      if (!balance) {
+        notes.push({ cls: "", text: `Matching to the shortest layer is off — every layer was allotted the batch's full requirement wherever the stock was there to do it.` });
+      }
+
+      // Deliberately NOT listed here: which reels were skipped and why, how
+      // many were left on the shelf, and a restatement of the rule the button
+      // follows. They were noise -- true, but nothing anyone acts on, and they
+      // buried the two lines that matter (what is short, and what was held
+      // back). A skipped reel's reason is still on its own row's tooltip, and
+      // the count of reels not shown at all is under the column heading.
+
+      if (plan.replaced) {
+        notes.push({ cls: "", text: `${plan.replaced} ${plan.replaced === 1 ? "reel that was" : "reels that were"} ticked before this run ${plan.replaced === 1 ? "is" : "are"} no longer ticked. Nothing is saved until Assign & Continue.` });
+      }
+
+      if (WEB_WIDTHS.length > 1) {
+        notes.push({
+          cls: "",
+          text: `This batch runs ${WEB_WIDTHS.map((x) => `${fmtNum(x.w)} mm × ${x.webs}`).join(" + ")}.`
+            + ` A reel can only be mounted for a web it is at least as wide as, so the requirement was split`
+            + ` across those widths and each was allotted its own reels — widest web first, since those have`
+            + ` the least to choose from.`,
+        });
+      }
+
+      rmaBody.innerHTML =
+        `<div class="rma-result">${chips}</div>`
+        + `<table class="rma-table"><thead><tr>`
+        + `<th>Layer</th><th>Status</th><th class="ta-r">Reels</th><th class="ta-r">Kg</th><th class="ta-r">R.Mtrs</th><th>Ticked</th>`
+        + `</tr></thead><tbody>${rows}</tbody></table>`
+        + `<div class="rma-notes"><ul>${notes
+            .map((n) => `<li${n.cls ? ` class="${n.cls}"` : ""}>${n.html || escAttr(n.text)}</li>`)
+            .join("")}</ul></div>`;
+
+      if (typeof showToast === "function") {
+        showToast(
+          blockedLayers.length
+            ? `Auto Allot: ${totalReels} reel(s) ticked, but ${names(blockedLayers)} could not be allotted at all — read the summary.`
+            : fullyCovered
+              ? `Auto Allot: ${totalReels} reel(s) ticked — every layer covered for the full ${rmaFmt(jobNeedMtrs)} R.Mtrs.`
+              : `Auto Allot: ${totalReels} reel(s) ticked — only ${rmaFmt(runMtrs)} of ${rmaFmt(jobNeedMtrs)} R.Mtrs can be run. Read the summary.`,
+          blockedLayers.length || !fullyCovered ? "error" : "success",
+        );
+      }
+    }
+
+    rmaRun.addEventListener("click", async () => {
+      rmaRun.disabled = true;
+      const label = rmaRun.innerHTML;
+      rmaRun.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Allotting…`;
+      try {
+        await layersReady;                     // the columns must be loaded before they can be planned against
+        autoAllot();
+      } catch (err) {
+        rmaShowError("Auto Allot could not read the reel lists. Tick the reels by hand, or re-select the machine and try again.");
+      } finally {
+        rmaRun.disabled = false;
+        rmaRun.innerHTML = label;
+      }
+    });
+
+    // Un-ticks every layer -- the way back from a run that picked the wrong
+    // thing, without reloading the page and losing the machine/operator.
+    rmaClear.addEventListener("click", () => {
+      AUTO_PICKED.clear();
+      requiredLayerKeys().forEach((key) => {
+        document.querySelectorAll(`#rawLayersGrid input[type="checkbox"][name="rawLayers[${key}]"]`)
+          .forEach((el) => { el.checked = false; });
+        renderLayerRows(key);
+      });
+      updateRawNeed();
+      rmaBody.innerHTML = "";
+    });
 
     // Checkbox rows are click-to-select on the whole row, matching the Rolls
     // table above. Each layer can hold more than one reel checked at once --
     // there's no single-select enforcement -- so this just toggles whichever
     // row was clicked, same as clicking its checkbox directly.
+    // A tick re-renders that column, which is what lifts the reel to the top
+    // of its table (see sortedReelsFor). The row under the cursor moves, but a
+    // pinned block of picks is worth more than a row staying put: this column
+    // can be fifty reels long, and a pick two thirds of the way down it was
+    // invisible from the top of the page.
+    const layerKeyOf = (el) => (el?.name || "").match(/^rawLayers\[(.+)\]$/)?.[1] || null;
+
     document.getElementById("rawLayersGrid").addEventListener("click", (e) => {
       if (e.target.closest("input[type='checkbox']")) return; // browser toggles it natively
+      if (e.target.closest("[data-show-others]")) return;     // the width badge, handled below
       const row = e.target.closest(".raw-layer-table tbody tr");
       const checkbox = row?.querySelector("input[type='checkbox']");
       if (checkbox && !checkbox.disabled) {
         checkbox.checked = !checkbox.checked;
         // Set in code, so no "change" event fires -- retally by hand.
-        updateRawNeed();
+        const key = layerKeyOf(checkbox);
+        if (key) renderLayerRows(key); else updateRawNeed();
       }
     });
 
     document.getElementById("rawLayersGrid").addEventListener("change", (e) => {
-      if (e.target.matches("input[type='checkbox']")) updateRawNeed();
+      if (!e.target.matches("input[type='checkbox']")) return;
+      const key = layerKeyOf(e.target);
+      if (key) renderLayerRows(key); else updateRawNeed();
+    });
+
+    // The "N in other widths" badge under a column heading -- reveals the
+    // reels this deckle's own web width filtered out, and hides them again.
+    document.getElementById("rawLayersGrid").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-show-others]");
+      if (!btn) return;
+      const key = btn.dataset.showOthers;
+      showOtherWidths[key] = !showOtherWidths[key];
+      renderLayerRows(key);
     });
 
     // Clicking a column heading sorts that table by it -- ascending on the
@@ -1733,7 +2525,14 @@
     document.getElementById("rawLayersGrid").innerHTML =
       requiredLayerKeys().map((key) => layerColumnHtml(key, LAYER_META[key])).join("");
 
-    machineSelectEl.addEventListener("change", refreshAllLayerOptions);
+    machineSelectEl.addEventListener("change", () => {
+      // A different machine is a different location, so the reels the last
+      // Auto Allot run reported are no longer the reels on offer -- drop the
+      // summary rather than leave one describing another store's stock.
+      AUTO_PICKED.clear();
+      rmaBody.innerHTML = "";
+      refreshAllLayerOptions();
+    });
     // Covers re-opening an order that already has a machine assigned --
     // Choices.js's setChoiceByValue() (used below to restore ASSIGNED.machineId)
     // isn't guaranteed to fire a "change" event the way a real user pick does,
@@ -1763,8 +2562,21 @@
     const deckleSizeError = document.getElementById("deckleSizeError");
     const deckleSizeConfirmBtn = document.getElementById("deckleSizeConfirmBtn");
 
-    function applyDeckleSize(value) {
-      document.getElementById("midDeckleSize").textContent = value;
+    // `echoOntoCard` is false when the card already says something better than
+    // this single number -- a mixed-web batch prints every width it runs, and
+    // overwriting that with the headline `deckleSize` hid two thirds of the
+    // plan behind one figure (and then the table flagged the reels for those
+    // hidden webs as "too narrow", which is how this came to light).
+    //
+    // `seedFilters` types the size into each column's Size filter box. That is
+    // only worth doing when the tables are NOT already narrowed to this
+    // batch's web (reelFitsBatchWeb) -- i.e. a legacy batch with no layouts
+    // and no recorded widths. Everywhere else every listed reel is already
+    // that size, and pre-filling the box just looked like a filter someone
+    // had left on.
+    function applyDeckleSize(value, { echoOntoCard = true, seedFilters = true } = {}) {
+      if (echoOntoCard) document.getElementById("midDeckleSize").textContent = value;
+      if (!seedFilters) return;
       requiredLayerKeys().forEach((key) => {
         const pool = LAYER_META[key].pool;
         if (pool !== "facestock" && pool !== "release") return;
@@ -1797,9 +2609,20 @@
     // (see pp.deckleSize) before it ever reached Assign Production, so just
     // apply it straight away -- no dialog. Only a legacy order that got here
     // without one (assigned before Deckle Set existed) still gets asked.
+    //
+    // A MIXED-WEB batch gets no size filter at all. Seeding one width there
+    // hides the reels for every other width the plan runs -- on a 660 x 8 +
+    // 635 x 15 + 510 x 3 batch it left only the 635 mm reels visible, and
+    // those are precisely the ones a single-width reading of the plan then
+    // called too narrow. All three widths are reels this job needs, so all
+    // three have to be pickable; the widths are on the card above and in
+    // every row's tooltip instead.
     const existingDeckleSize = <%- safeJson(pp.deckleSize ?? null) %>;
-    if (existingDeckleSize) {
-      applyDeckleSize(existingDeckleSize);
+    const MIXED_WEBS = <%- safeJson(!!mixedWebs) %>;
+    if (existingDeckleSize && !MIXED_WEBS) {
+      applyDeckleSize(existingDeckleSize, { seedFilters: !WEB_WIDTHS.length });
+    } else if (existingDeckleSize) {
+      // Mixed webs: leave both the card and the Size filters alone.
     } else {
       deckleSizeDialog.classList.add("show");
       deckleSizeDialog.setAttribute("aria-hidden", "false");

@@ -124,7 +124,21 @@ const pendingProductionSchema = new mongoose.Schema(
       type: [
         {
           _id: false,
-          cuts: [{ _id: false, slot: { type: String }, width: { type: Number } }],
+          // `width` is what the KNIFE is set to -- the width actually cut.
+          // `orderedWidth` is the sales-order width that knife position is
+          // filling, and is present only when the planner applied "grace" on
+          // the Set Deckle page: spare web that would have been scrapped as
+          // side trim is shared out over the rolls, so a 150 mm order is cut
+          // at, say, 168.33 mm. The client is still billed the width they
+          // ordered, so the two have to travel together all the way to the
+          // finished roll (see routes/system/slitting.js's Stop handler).
+          // Absent when no grace was applied -- then the cut IS the order.
+          cuts: [{
+            _id: false,
+            slot: { type: String },
+            width: { type: Number },
+            orderedWidth: { type: Number },
+          }],
           // The deckle WIDTH this one layout is cut from, in mm. Normally the
           // same as the batch's own `deckleSize` for every layout -- but the
           // Set Deckle page can plan a batch whose layouts come off different
