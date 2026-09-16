@@ -377,6 +377,41 @@ Batches created before this change are still mixed. There is no migration:
 dissolve one from the Deckle Queue and re-create it from Deckle Set, which is
 the documented way a batch's size is changed anyway.
 
+### Machine queue: how far the allotted material gets
+
+`buildQueueRows()` (`routes/system/machine.js`) reports, per order, **how many
+rolls the reels actually allotted to it will run** — shown under Required Rolls
+as "material for 4 of 15" and spelled out in the row's dialog.
+
+`materialStatus` has **three** states, not two:
+
+| state | meaning | row | can start |
+|---|---|---|---|
+| `match` | every layer allotted, and enough of it for the whole job | green | yes |
+| `partial` | every layer allotted, but it runs out part way | amber | **yes** |
+| `short` | at least one layer has no reel at all | red | no |
+
+`partial` exists because the old yes/no test only asked *is there a reel on
+every layer*, which says yes to a 27 kg remnant standing in for a 770 kg job —
+an order could sit green on the queue and stop three deckles in. A partial job
+still starts: every layer is on the machine, so it runs and stops when the
+material does, which is a normal way to work; the queue says how far it will get
+rather than barring it. The Facestock/Adhesive/Release badges fold the same fact
+in — "Partial" now means either *one of two layers of that pool* or *allotted
+but not enough*, and the tooltip says which.
+
+`computeAllotmentCoverage()` does the arithmetic with the same two figures
+Assign Production measures against (`utils/rawMaterialNeed.js`: kg and running
+metres per layer) and the same `kg x 1e6 / (gsm x width)` conversion — the
+reel's own GSM and width, or the recipe's wet GSM over the job's web for a drum.
+Coverage is the **worst layer** (a deckle is every layer at once), and rolls are
+rounded **down**: a deckle half fed is a deckle that stops mid-run. When *no*
+reel on a layer can be turned into a length (no GSM recorded), the metres side
+measures nothing, so the weight alone answers and the count of unmeasurable
+reels is reported instead — "0 of 15" with 800 kg on the machine is worse than
+saying nothing. A layer where only *some* reels are unmeasurable keeps both
+sides and so reads low, which is the safe direction.
+
 ### Auto Allot (`public/js/rawAutoAllot.js`)
 
 The **Auto Allot (FIFO)** button in Raw Material Allotment on

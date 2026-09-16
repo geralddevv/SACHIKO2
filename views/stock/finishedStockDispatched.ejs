@@ -21,7 +21,11 @@
       transition: background-color 0.2s ease;
     }
     .header-action-btn:hover { background-color: #e2e8f0; }
-  </style>
+      /* Grace column -- the accent blue the Slitting Queue and the Finished
+       Goods stock list use for the same fact. */
+    .fs-grace { font-weight: 800; color: var(--primary-color); white-space: nowrap; }
+    .fs-grace-none { color: #94a3b8; }
+</style>
 
   <div class="indi-head">
     <h1>Dispatched Finished Goods</h1>
@@ -53,7 +57,12 @@
       + ` ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}`;
   };
 
-  const table = new Tabulator("#dispatched-table", {
+    // Cell values reach innerHTML and title="..." below, so escape them here.
+  const cellEsc = (v) => String(v ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+const table = new Tabulator("#dispatched-table", {
     data: dispatchedData,
     height: "100%",
     responsiveLayout: false,
@@ -73,7 +82,36 @@
       { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140,
         formatter: (cell) => cell.getValue() || "—" },
       { title: "Paper Size", field: "paperSize", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110,
+        // The SEARCH matches the cut width too, even though the cell shows
+        // only the sold one -- a graced reel was measured at 215 on the floor
+        // and is looked up by that, while 214 is the number on the row. Same
+        // as the stock list.
+        headerFilterFunc: (term, value, data) => {
+          const t = String(term ?? "").toLowerCase().trim();
+          if (!t) return true;
+          return String(value ?? "").toLowerCase().includes(t)
+            || String(data.cutWidth ?? "").toLowerCase().includes(t);
+        },
         formatter: (cell) => cell.getValue() || "—" },
+      {
+        // How much wider than ordered this roll was cut -- spare web the
+        // deckle plan handed to it instead of scrapping it as side trim. The
+        // roll left on an invoice raised at the width ORDERED (Paper Size
+        // beside this), so what it was actually cut at is only readable here.
+        // Same column, same wording and same colour as the stock list it came
+        // off, so a roll reads the same before and after it is dispatched.
+        title: "Grace", field: "grace", minWidth: 100, hozAlign: "center",
+        headerFilter: "input", headerFilterPlaceholder: "Search",
+        headerTooltip: "How much wider than ordered the roll was cut — spare web the deckle plan handed to it instead of scrapping it as side trim. The client was billed the width ordered.",
+        formatter: (cell) => {
+          const g = Number(cell.getValue());
+          if (!(g > 0)) return '<span class="fs-grace-none">—</span>';
+          const row = cell.getRow().getData();
+          const t = `Cut ${g} mm wider than the ${row.paperSize} mm ordered (${row.cutWidth} mm on the reel).`
+            + ` Billed at ${row.paperSize} mm.`;
+          return `<span class="fs-grace" title="${cellEsc(t)}">+${cellEsc(g)} mm</span>`;
+        },
+      },
       { title: "Lot No", field: "lotNo", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120,
         formatter: (cell) => cell.getValue() || "—" },
       { title: "Client", field: "clientName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150,

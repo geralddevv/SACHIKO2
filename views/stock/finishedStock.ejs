@@ -294,6 +294,15 @@
       gap: 8px; padding: 7px 10px;
     }
   }
+    /* Paper Size cell: the width the roll is sold at, with the width the
+       knife actually cut under it where the deckle plan's grace made them
+       differ. Accent blue, as on the Slitting Queue's Grace column, so the
+       same fact reads the same in both places. */
+    /* Grace column -- same accent blue as the cut width beside it and as the
+       Slitting Queue's own Grace column, so one fact wears one colour the
+       whole way down the flow. */
+    .fs-grace { font-weight: 800; color: var(--primary-color); white-space: nowrap; }
+    .fs-grace-none { color: #94a3b8; }
 </style>
 
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
@@ -554,6 +563,13 @@
   }
 
   // ---- Table ----
+  // Cell values reach innerHTML and title="..." below, so escape them here.
+  // (The export dialog further down has its own `exEsc`; that one is declared
+  // after this table is constructed, and Tabulator renders on construction.)
+  const cellEsc = (v) => String(v ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
   const table = new Tabulator("#finished-stock-table", {
     data: stockData,
     height: "100%",
@@ -570,7 +586,40 @@
         formatter: (cell) => cell.getRow().getPosition(true) },
       { title: "Roll ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 170 },
       { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
-      { title: "Paper Size", field: "paperSize", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
+      {
+        // The width this roll is SOLD at -- one plain number. What the knife
+        // actually cut is the Grace column's business next door (ordered +
+        // grace = the reel's own width, and its tooltip says so outright), so
+        // this cell stays the figure everything commercial reads.
+        title: "Paper Size", field: "paperSize", minWidth: 120,
+        headerFilter: "input", headerFilterPlaceholder: "Search",
+        // The SEARCH still matches the cut width, even though the cell does
+        // not show it: a graced reel is measured on the floor at 215 and
+        // looked up by that, and 214 is the only number on the row.
+        headerFilterFunc: (term, value, data) => {
+          const t = String(term ?? "").toLowerCase().trim();
+          if (!t) return true;
+          return String(value ?? "").toLowerCase().includes(t)
+            || String(data.cutWidth ?? "").toLowerCase().includes(t);
+        },
+        formatter: (cell) => cell.getValue() || "—",
+      },
+      {
+        // How much wider than ordered this roll was cut. Its own column so the
+        // figure can be read down the page, sorted and searched -- and so the
+        // Paper Size cell beside it stays two plain widths.
+        title: "Grace", field: "grace", minWidth: 100, hozAlign: "center",
+        headerFilter: "input", headerFilterPlaceholder: "Search",
+        headerTooltip: "How much wider than ordered the roll was cut — spare web the deckle plan handed to it instead of scrapping it as side trim. The client is still billed the width ordered.",
+        formatter: (cell) => {
+          const g = Number(cell.getValue());
+          if (!(g > 0)) return '<span class="fs-grace-none">—</span>';
+          const row = cell.getRow().getData();
+          const t = `Cut ${g} mm wider than the ${row.paperSize} mm ordered (${row.cutWidth} mm on the reel).`
+            + ` Billed at ${row.paperSize} mm.`;
+          return `<span class="fs-grace" title="${cellEsc(t)}">+${cellEsc(g)} mm</span>`;
+        },
+      },
       { title: "Lot No", field: "lotNo", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 120, formatter: (cell) => cell.getValue() || "—" },
       { title: "Client", field: "clientName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },
       { title: "Deckle ID", field: "deckleRollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150, formatter: (cell) => cell.getValue() || "—" },

@@ -231,6 +231,19 @@ router.get("/", async (req, res) => {
       // page it is no longer stock rather than deleting the record.
       quantity: Number(s.quantity) || 0,
       paperSize: s.paperSize || "",
+      // What the knife actually cut, when the Set Deckle planner's grace made
+      // this roll wider than it was ordered. `paperSize` above is the width
+      // the roll is SOLD at (and priced, and exported at); this is the
+      // physical one. Null on an ungraced roll, where the two are the same --
+      // see the field comment on models/inventory/finishedStock.js.
+      cutWidth: s.cutWidth != null ? Number(s.cutWidth) : null,
+      // How much wider than ordered the knife ran, as its own figure so the
+      // page can sort and filter on it rather than deriving it per cell.
+      // Null (not 0) on an ungraced roll -- there is no grace to speak of,
+      // which is a different thing from a grace of nothing.
+      grace: s.cutWidth != null && Number(s.cutWidth) - Number(s.paperSize) > 0.005
+        ? Math.round((Number(s.cutWidth) - Number(s.paperSize)) * 100) / 100
+        : null,
       lotNo: s.lotNo || "",
       clientName: s.clientName || "",
       location: s.location,
@@ -263,6 +276,15 @@ router.get("/dispatched", async (req, res) => {
       rollId: s.rollId,
       productCode: s.material?.productCode || s.material?.skuCode || "",
       paperSize: s.paperSize || "",
+      // Same two as the stock list above: the width the knife actually cut
+      // when the deckle plan's grace made this roll wider than it was
+      // ordered, and that difference as its own figure. A dispatched roll is
+      // the same roll -- what it was cut at does not stop mattering once it
+      // has left, and the invoice beside it was raised at `paperSize`.
+      cutWidth: s.cutWidth != null ? Number(s.cutWidth) : null,
+      grace: s.cutWidth != null && Number(s.cutWidth) - Number(s.paperSize) > 0.005
+        ? Math.round((Number(s.cutWidth) - Number(s.paperSize)) * 100) / 100
+        : null,
       lotNo: s.lotNo || "",
       clientName: s.clientName || "",
       location: s.location,

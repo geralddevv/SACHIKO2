@@ -142,9 +142,24 @@ function pendingLayouts(pending) {
       return {
         width: Number.isFinite(width) && width > 0 ? widthKey(width) : "",
         sig: cutsSignature(L.cuts),
+        // `orderedWidth` rides along wherever the Set Deckle planner gave the
+        // roll some of the web's side trim: the knife is set to `width`, the
+        // client ordered -- and is billed -- `orderedWidth`. Dropping it here
+        // is what left the slitting side with no way to say how much grace a
+        // layout carries: the queue showed a 157.5 mm knife on a 150 mm order
+        // as if 157.5 were the order. Kept only when it is a real width BELOW
+        // the cut, the same test normCuts applies when it is stored
+        // (routes/fairdesk_route.js) and produceRollsFromCard when it bills.
         cuts: L.cuts
           .filter((c) => Number(c?.width) > 0)
-          .map((c) => ({ slot: trim(c.slot), width: round2(c.width) })),
+          .map((c) => {
+            const cut = round2(c.width);
+            const ordered = Number(c?.orderedWidth);
+            const graced = ordered > 0 && cut - ordered > 0.005;
+            return graced
+              ? { slot: trim(c.slot), width: cut, orderedWidth: round2(ordered) }
+              : { slot: trim(c.slot), width: cut };
+          }),
         count: Math.max(1, Math.floor(Number(L.count) || 1)),
         plannedRunningMeter: L.plannedRunningMeter ?? null,
         // Total edge trim (both edges) the planner fitted these cuts inside,
@@ -591,6 +606,11 @@ async function buildAvailableDeckleRows() {
         queueOrder[i].layoutSig = L.sig;
         queueOrder[i].layoutCuts = L.cuts;
         queueOrder[i].layoutTrim = L.trim;
+        // How many webs this layout still wants (its planned count, less any
+        // already slit). Carried on the row so the queue can say what the cut
+        // job is FOR even after the plan stops listing it -- see the
+        // `expected` backfill in the queue route.
+        queueOrder[i].layoutWants = need;
       }
     }
   }
@@ -841,6 +861,24 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     g.expected += p.expected;
     g.pendingId = g.pendingId || p.pendingId;
     keepOldest(g, p.createdAt);
+  }
+
+  // A layout that is FULLY laminated stops being "planned" (buildPlannedDeckle
+  // Groups drops it once made >= expected), so nothing above ever gave its
+  // group an `expected` -- it sat at 0, which reads as "this row has no plan
+  // of its own". That is wrong twice over: the Stock cell lost its "of N", and
+  // the Slit dialog, which ticks `expected` webs and falls back to the WHOLE
+  // POOL when it is 0, pre-ticked every free web of that width. A layout
+  // wanting one web arrived with three ticked.
+  //
+  // So a group with no planned entry of its own takes the count off its own
+  // rows (`layoutWants` -- the layout's planned webs less any already slit).
+  // Only where `expected` is still 0, so a partly-made layout keeps the
+  // planned figure and nothing is counted twice.
+  for (const g of groupMap.values()) {
+    if (g.expected > 0) continue;
+    const wants = g._children.reduce((n, c) => Math.max(n, Number(c.layoutWants) || 0), 0);
+    if (wants > 0) g.expected = wants;
   }
 
   // ---- the free webs of a Product Code at a width are ONE shared pool ------

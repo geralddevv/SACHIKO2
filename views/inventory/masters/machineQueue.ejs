@@ -54,6 +54,20 @@
     .ap-table tbody tr.mq-row-match:hover { background: #bbf7d0; }
     .ap-table tbody tr.mq-row-short { background: #fee2e2; }
     .ap-table tbody tr.mq-row-short:hover { background: #fecaca; }
+    /* Every layer is on the machine, but not enough of it to run the job out.
+       Amber: the job starts, it just will not finish -- which is neither the
+       green "ready" nor the red "cannot run". */
+    .ap-table tbody tr.mq-row-partial { background: #fff8e1; }
+    .ap-table tbody tr.mq-row-partial:hover { background: #fdf0c8; }
+    /* "15   material for 2 of 15" -- one line, the note beside the figure
+       rather than under it, so the row keeps a single-line height. The cell
+       is already nowrap (.ap-table td), and inline-block keeps the note from
+       being broken up if that ever changes. */
+    .mq-cover {
+      display: inline-block; margin-left: 7px; font-size: 11px; font-weight: 700;
+      color: #b45309; white-space: nowrap; vertical-align: baseline;
+    }
+    .mq-cover.is-none { color: #b91c1c; }
 
     .mq-rolls-cell {
       cursor: pointer; color: #044a78; text-decoration: underline; text-decoration-style: dotted;
@@ -89,6 +103,51 @@
     .rd-table th, .rd-table td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
     .rd-table th { color: #5a6586; font-weight: 600; white-space: nowrap; }
     .rd-table thead th { background: #f0f7ff; color: #03365a; font-weight: 700; font-size: 12px; }
+    /* The second figure in a cell -- running metres under the kilograms it was
+       worked out from, and the like. */
+    .rd-table .rd-sub { display: block; font-size: 11px; font-weight: 600; color: #7c8ba1; }
+    /* Every column but the reel IDs holds a short value and should keep it on
+       one line; the IDs are a list and are the one thing allowed to wrap, so a
+       job with six reels on a layer grows the row rather than the table. */
+    .rd-table td { white-space: nowrap; }
+    .rd-table td:last-child, .rd-table th:last-child { white-space: normal; min-width: 150px; }
+    /* The app's own table scrollbar, on the dialog's two scrollers.
+       Deliberately the `.ap-table-wrap` tokens from common.css -- 10px, not
+       the 6px `.custom-scrollbar` variant some views carry -- because the
+       queue table sitting right behind this dialog uses exactly these, and a
+       6px hairline beside a 10px bar reads as a bar that failed to render
+       rather than as a different one.
+       The Firefox pair is not optional: every ::-webkit- rule above is
+       ignored there, so without it the dialog falls back to the browser
+       default and the styling looks like it did nothing at all. */
+    .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f0f2f5; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+    /* .rd-scroll can show both bars at once -- the square where they meet is
+       the browser default grey unless it is painted too. */
+    .custom-scrollbar::-webkit-scrollbar-corner { background: #f0f2f5; }
+    .custom-scrollbar { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
+    /* A tall dialog on a short screen scrolls inside its body rather than
+       running off the bottom of the window. */
+    #rollDetailsBody { max-height: min(70vh, 720px); overflow-y: auto; }
+    /* ...and on a window too narrow for six columns it is the TABLE that
+       scrolls sideways, not the dialog that grows past the screen. The banner
+       and the spec pairs above it stay put where they can be read. */
+    .rd-scroll { overflow-x: auto; }
+    /* How far the allotted material gets, at the top of the dialog where it is
+       read before anything else. */
+    .mq-cover-banner {
+      border-radius: 10px; padding: 12px 14px; margin: 0 0 14px;
+      border: 1px solid transparent; line-height: 1.5;
+    }
+    .mq-cover-banner.is-short { background: #fff8e1; border-color: #f0c36d; }
+    .mq-cover-banner.is-ok { background: #ecfdf5; border-color: #a7f3d0; }
+    .mq-cover-head { font-size: 14.5px; font-weight: 800; color: #1f2a44; }
+    .mq-cover-banner.is-short .mq-cover-head { color: #92400e; }
+    .mq-cover-banner.is-ok .mq-cover-head { color: #166534; }
+    .mq-cover-head i { margin-right: 7px; }
+    .mq-cover-sub { margin-top: 5px; font-size: 12.5px; font-weight: 600; color: #5b6b80; }
     .rd-table td { color: #1f2a44; font-weight: 700; }
     .rd-table tbody tr:last-child th, .rd-table tbody tr:last-child td { border-bottom: none; }
 
@@ -161,11 +220,18 @@
     <% } else { %>
       <div class="ap-table-wrap">
         <table class="ap-table">
+          <%# The table runs table-layout: fixed with overflow:hidden cells, so
+              these widths are the last word -- anything that does not fit is
+              ellipsised rather than wrapping. Product Code gives 7% to
+              Required Rolls: a code is six or eight characters ("C001WB",
+              "C001WB-A") and had the widest column on the table, while
+              Required Rolls now carries the "material for 2 of 15" note on the
+              same line as its figure and was clipping it. Still sums to 100. %>
           <colgroup>
             <col style="width: 11%" />
-            <col style="width: 19%" />
+            <col style="width: 11%" />
             <col style="width: 9%" />
-            <col style="width: 9%" />
+            <col style="width: 17%" />
             <col style="width: 11%" />
             <col style="width: 11%" />
             <col style="width: 11%" />
@@ -203,11 +269,29 @@
               };
             %>
             <% rows.forEach((row) => { %>
-              <tr class="<%= row.materialStatus === 'match' ? 'mq-row-match' : row.materialStatus === 'short' ? 'mq-row-short' : '' %>">
+              <tr class="<%= row.materialStatus === 'match' ? 'mq-row-match' : row.materialStatus === 'short' ? 'mq-row-short' : row.materialStatus === 'partial' ? 'mq-row-partial' : '' %>">
                 <td data-label="Lot No" title="<%= row.lotNo %>"><%= row.lotNo %></td>
                 <td data-label="Product Code" title="<%= row.productCode %>"><%= row.productCode %></td>
                 <td data-label="Paper Size"><%= row.paperSize %></td>
-                <td data-label="Required Rolls"><%= row.rolls %></td>
+                <%
+                  // What the allotted reels will actually get through, under
+                  // the figure the job was assigned for. Only shown when the
+                  // two differ -- a fully covered job says nothing extra.
+                  const cov = row.coverage;
+                  const showCover = cov && cov.rolls != null && cov.target != null && cov.rolls < cov.target;
+                %>
+                <td data-label="Required Rolls">
+                  <%= row.rolls %>
+                  <% if (showCover) { %>
+                    <span class="mq-cover<%= cov.rolls === 0 ? ' is-none' : '' %>"
+                          title="<%= cov.rolls === 0
+                            ? 'The material allotted is not enough for even one roll' + (cov.worstLabel ? ' — ' + cov.worstLabel + ' is the short one' : '') + '.'
+                            : 'The allotted raw material runs out after ' + cov.rolls + ' of ' + cov.target + ' rolls' + (cov.worstLabel ? ' — ' + cov.worstLabel + ' is the short one' : '') + '. Re-open the assignment to top it up.' %>">
+                      <i class="fa-solid fa-triangle-exclamation"></i>
+                      material for <%= cov.rolls %> of <%= cov.target %>
+                    </span>
+                  <% } %>
+                </td>
                 <td class="mq-rolls-cell" data-label="Facestock" data-id="<%= row._id %>" onclick="openRollDetails(this.dataset.id)" title="View roll allotment details"><%- poolBadge(row.facestockStatus) %></td>
                 <td class="mq-rolls-cell" data-label="Adhesive" data-id="<%= row._id %>" onclick="openRollDetails(this.dataset.id)" title="View roll allotment details"><%- poolBadge(row.adhesiveStatus) %></td>
                 <td class="mq-rolls-cell" data-label="Release" data-id="<%= row._id %>" onclick="openRollDetails(this.dataset.id)" title="View roll allotment details"><%- poolBadge(row.releaseStatus) %></td>
@@ -316,13 +400,17 @@
 
 <!-- ============ ROLL ALLOTMENT DETAILS DIALOG ============ -->
 <div class="logout-modal" id="rollDetailsDialog" aria-hidden="true">
+  <!-- Wider than the 560px house dialog: the Material Allocation table below
+       carries six columns now (what is on the machine, what the job needs, how
+       many rolls that covers, and the reel IDs), and at 600px they wrapped
+       into unreadable stacks. `min()` still yields to a narrow window. -->
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="rollDetailsTitle"
-    style="width: min(600px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    style="width: min(1040px, 96vw); padding: 0; border-radius: 14px; border: none;">
     <div class="dialog-header">
       <h2 id="rollDetailsTitle">Item Allotment Details</h2>
       <button class="dialog-close-btn" type="button" onclick="closeModal('rollDetailsDialog')" aria-label="Close">×</button>
     </div>
-    <div class="dialog-body" id="rollDetailsBody"></div>
+    <div class="dialog-body custom-scrollbar" id="rollDetailsBody"></div>
   </div>
 </div>
 
@@ -351,12 +439,40 @@
     // colors the queue row. (Deckle Status/Deckle Rolls Produced used to
     // show here too, but the deckle itself isn't produced until after this
     // allotment step runs, so there's nothing meaningful to show yet.)
+    const cov = row.coverage;
     const materialStatusLabel = row.materialStatus === "match" ? "Fully allotted"
-      : row.materialStatus === "short" ? "Short allotted"
+      : row.materialStatus === "partial" ? "Partly allotted"
+      : row.materialStatus === "short" ? "Not allotted"
       : "—";
     const materialStatusColor = row.materialStatus === "match" ? "#16a34a"
+      : row.materialStatus === "partial" ? "#b45309"
       : row.materialStatus === "short" ? "#dc2626"
       : "#1f2a44";
+
+    // The one line the floor actually needs: how far this material gets. Said
+    // in ROLLS, because that is what the queue is counted in, with the layer
+    // that runs out first named -- so topping it up means pulling one more
+    // reel of that, not guessing.
+    const fmtN = (n) => Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+    let coverBanner = "";
+    if (cov && cov.rolls != null && cov.target != null) {
+      const short = cov.rolls < cov.target;
+      const pct = Math.round(Math.min(1, cov.covered) * 100);
+      coverBanner = short
+        ? `<div class="mq-cover-banner is-short">`
+          + `<div class="mq-cover-head"><i class="fa-solid fa-triangle-exclamation"></i> `
+          + `Material for <b>${cov.rolls}</b> of <b>${cov.target}</b> rolls`
+          + (cov.rolls === 0 ? ` — not enough for one` : ``) + `</div>`
+          + `<div class="mq-cover-sub">`
+          + (cov.worstLabel
+            ? `<b>${escapeHtml(cov.worstLabel)}</b> runs out first (${pct}% of what this job needs). `
+            : `${pct}% of what this job needs is on the machine. `)
+          + `The job can start and will stop when it runs out — top it up from the assignment to run the rest.`
+          + `</div></div>`
+        : `<div class="mq-cover-banner is-ok">`
+          + `<div class="mq-cover-head"><i class="fa-solid fa-circle-check"></i> `
+          + `Material for all <b>${cov.target}</b> rolls</div></div>`;
+    }
 
     const pairs = [
       ["Facestock Type", dash(ref.facestockType)],
@@ -377,29 +493,54 @@
     // of assuming exactly one. Anything not yet picked reads "Not Allotted"
     // instead of a blank cell, so a partial pick (e.g. Facestock done,
     // Adhesive still open) is unambiguous.
+    // Per layer: what is on the machine, what the job needs, and how far that
+    // gets -- the three figures together, because any one of them alone is
+    // what made "Allotted" mean a 27 kg remnant against a 770 kg job.
+    const covOf = (key) => (cov ? cov.layers.find((x) => x.key === key) : null);
     const layersHtml = layers.length
-      ? `<table class="rd-table">` +
-        `<thead><tr><th>Layer</th><th>Status</th><th>Qty</th><th>ID</th></tr></thead>` +
+      ? `<div class="rd-scroll custom-scrollbar"><table class="rd-table">` +
+        `<thead><tr><th>Layer</th><th>Status</th><th>On the machine</th><th>Needs</th><th>Covers</th><th>ID</th></tr></thead>` +
         `<tbody>` + layers.map((l) => {
-          const statusHtml = l.allocated
-            ? `<span style="color:#16a34a;">Allotted</span>`
-            : `<span style="color:#dc2626;">Not Allotted</span>`;
+          const c = covOf(l.key);
+          const under = !!c && c.covered < 0.9999;
+          const statusHtml = !l.allocated
+            ? `<span style="color:#dc2626;">Not Allotted</span>`
+            : under
+              ? `<span style="color:#b45309;">Part allotted</span>`
+              : `<span style="color:#16a34a;">Allotted</span>`;
           const totalMtrs = l.reels.reduce((sum, r) => sum + (r.reelMtrs || 0), 0);
           const qty = l.allocated
-            ? `${l.reels.length} ${escapeHtml(l.unit)}${l.reels.length === 1 ? "" : "s"} (${escapeHtml(totalMtrs)} kg)`
+            ? `${l.reels.length} ${escapeHtml(l.unit)}${l.reels.length === 1 ? "" : "s"} · ${fmtN(totalMtrs)} kg`
+              + (c && c.gotMtrs > 0 ? `<span class="rd-sub">${fmtN(c.gotMtrs)} R.Mtrs</span>` : "")
+            : "—";
+          const needs = c && c.needKg != null
+            ? `${fmtN(c.needKg)} kg` + (c.needMtrs != null ? `<span class="rd-sub">${fmtN(c.needMtrs)} R.Mtrs</span>` : "")
+            : "—";
+          // Rolls, not a bare percentage -- the same unit the queue counts in.
+          const rollsHere = c && cov && cov.target != null
+            ? Math.min(cov.target, Math.floor(cov.target * c.covered + 1e-9))
+            : null;
+          const covers = c
+            ? `<span style="color:${under ? "#b45309" : "#16a34a"}; font-weight:700;">`
+              + (rollsHere != null ? `${rollsHere} of ${cov.target} rolls` : `${Math.round(Math.min(1, c.covered) * 100)}%`)
+              + `</span>`
+              + (c.unmeasured ? `<span class="rd-sub">${c.unmeasured} reel(s) with no length</span>` : "")
             : "—";
           const ids = l.allocated ? l.reels.map((r) => escapeHtml(dash(r.rollId))).join(", ") : "—";
           return `<tr>` +
             `<td>${escapeHtml(l.label)}</td>` +
             `<td>${statusHtml}</td>` +
             `<td>${qty}</td>` +
+            `<td>${needs}</td>` +
+            `<td>${covers}</td>` +
             `<td>${ids}</td>` +
           `</tr>`;
-        }).join("") + `</tbody></table>`
+        }).join("") + `</tbody></table></div>`
       : `<div class="ap-notice"><i class="fa-solid fa-circle-info"></i> ` +
         `This SKU has no raw-material recipe to allocate.</div>`;
 
     document.getElementById("rollDetailsBody").innerHTML =
+      coverBanner +
       `<table class="rd-pairs"><tbody>${pairsHtml}</tbody></table>` +
       `<div class="rd-section">Material Allocation</div>` +
       layersHtml;

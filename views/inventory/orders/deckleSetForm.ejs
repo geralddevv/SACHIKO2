@@ -713,7 +713,6 @@
               <th style="width:126px;">Paper Size</th>
               <th style="width:138px;">Running Mtrs</th>
               <th style="width:104px;">Roll Qty</th>
-              <th style="width:110px;" title="Finished rolls of this order from one deckle web">Rolls / Web</th>
               <th style="width:112px;">Rolls Set</th>
               <th style="width:108px;">Balance</th>
             </tr>
@@ -726,7 +725,6 @@
                 <td><%= dash(m.paperSize) %></td>
                 <td><%= fmtN(m.runningMeters) %></td>
                 <td><%= fmtN(m.quantity) %></td>
-                <td class="dsf-o-rpw" style="font-weight:800; color:#044a78;">—</td>
                 <td class="dsf-o-set" style="font-weight:800;">0</td>
                 <td class="dsf-o-bal" style="font-weight:800;">—</td>
               </tr>
@@ -1236,18 +1234,42 @@
     return round2(cuttable - cut);
   }
 
-  // Share every last mm of the spare out over the rolls. Even split to 2 dp,
-  // with the rounding remainder put on the first roll so the total lands exact
-  // rather than leaving a sliver of trim behind.
+  // Share every last mm of the spare out over the rolls, in WHOLE
+  // millimetres.
+  //
+  // It used to divide to 2 dp, which handed every roll the same decimal: a
+  // 30 mm spare over 4 rolls made four 157.5 mm knives out of 150 mm orders.
+  // Nobody sets a knife to half a millimetre by choice, and it put a decimal
+  // through the cut widths, the web diagram, the job card and the slitting
+  // card behind it. The same 30 mm now goes out as 8, 8, 7, 7 -- whole
+  // numbers, never more than 1 mm apart, and the same 30 mm total.
+  //
+  // A spare that is not itself a whole number (a fractional edge trim or roll
+  // width) cannot come out whole on every roll. The sub-millimetre remainder
+  // then goes on ONE roll rather than being smeared across all of them, so
+  // exactly one knife carries a decimal instead of every knife. It is not
+  // dropped: the point of this button is that no width is left to be
+  // scrapped, and a sliver of side trim is still a sliver of paper.
   function graceSpreadEvenly(tr) {
     const rows = graceRows(tr);
     if (!rows.length) return;
     const spare = graceSpare(tr);
     if (!(spare > 0)) return;
     const g = graceOf(tr);
-    const base = Math.floor((spare / rows.length) * 100) / 100;
-    rows.forEach((x) => { g[x.slot] = round2(graceFor(tr, x.slot) + base); });
-    const left = round2(spare - round2(base * rows.length));
+    const n = rows.length;
+
+    // Whole millimetres each...
+    const base = Math.floor(spare / n);
+    if (base > 0) rows.forEach((x) => { g[x.slot] = round2(graceFor(tr, x.slot) + base); });
+
+    // ...then what is left over, a whole millimetre at a time, one roll each.
+    let left = round2(spare - base * n);
+    for (let i = 0; i < n && left >= 1; i += 1) {
+      g[rows[i].slot] = round2(graceFor(tr, rows[i].slot) + 1);
+      left = round2(left - 1);
+    }
+
+    // Under a millimetre: cannot be made whole, so it lands on one roll.
     if (left > 0) g[rows[0].slot] = round2(graceFor(tr, rows[0].slot) + left);
     recalcAll();
   }
@@ -1519,7 +1541,6 @@
     // Webs × Rolls-per-web), where Rolls-per-web = Deckle R.M. ÷ roll R. Meter.
     const setByWidth = new Map();
     // webs that carry each width -- Σ over layouts (layout has that width ? Webs : 0).
-    const websByWidth = new Map();
 
     rows.forEach((tr, i) => {
       // Row number, plus the web this row is cut from once the layouts can
@@ -1614,7 +1635,6 @@
       rmBtn.title = isLast ? "Clear this layout" : "Remove this layout";
       totalWebs += r.webs;
       r.cuts.forEach(([, w]) => setByWidth.set(w, (setByWidth.get(w) || 0) + r.webs * rpw));
-      new Set(r.cuts.map(([, w]) => w)).forEach((w) => websByWidth.set(w, (websByWidth.get(w) || 0) + r.webs));
       // What the knives actually take off the web -- ordered width plus grace.
       const cutSum = round2(r.graced.reduce((n, [, w]) => n + w, 0));
       const over = rSz > 0 && cutSum > cuttable;
@@ -1667,7 +1687,6 @@
     [...orderBody.querySelectorAll("tr")].forEach((otr) => {
       const picked = !!otr.querySelector('input[name="orderIds"]:checked');
       if (!picked) {
-        otr.querySelector(".dsf-o-rpw").textContent = "—";
         otr.querySelector(".dsf-o-set").textContent = "—";
         const skipEl = otr.querySelector(".dsf-o-bal");
         skipEl.textContent = "Not in this deckle";
@@ -1681,14 +1700,12 @@
     });
     ordersByWidth.forEach((trs, w) => {
       let pool = setByWidth.get(w) || 0;
-      const webs = websByWidth.get(w) || 0;
       trs.forEach((otr, idx) => {
         const qty = Number(otr.dataset.qty) || 0;
         const take = idx === trs.length - 1 ? pool : Math.min(pool, qty);
         pool = Math.max(0, pool - take);
         // Balance = rolls set − rolls ordered: negative = short, positive = extra made.
         const bal = round2(take - qty);
-        otr.querySelector(".dsf-o-rpw").textContent = webs > 0 ? fmt(round2(take / webs)) : "—";
         otr.querySelector(".dsf-o-set").textContent = fmtI(take);
         const balEl = otr.querySelector(".dsf-o-bal");
         balEl.textContent = (bal > 0 ? "+" : "") + fmtI(bal);

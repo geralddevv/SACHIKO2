@@ -16,6 +16,7 @@ import MaintenanceRequest from "../../models/system/maintenanceRequest.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { deckleTotalRunningMetres, deckleRunningMetersText } from "../../utils/deckleTotals.js";
+import { computeRawMaterialNeed } from "../../utils/rawMaterialNeed.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { normalizeLocationName } from "../../utils/locations.js";
 import { normalizeRollId, extractScannedRollId, findScannedReel, generateDeckleId } from "../../utils/rollId.js";
@@ -415,6 +416,92 @@ router.get("/operator/queue", requireRole(["operator"]), async (req, res) => {
 // job card form's prefill lookup. Takes a match filter rather than a single
 // id so the overview can build every machine's jobs in one pass instead of
 // one round of queries per machine.
+// How far the reels actually allotted to an order get it -- and so how many
+// deckles it can run before the machine stops for want of material.
+//
+// The queue used to answer only "is there a reel on every layer", which says
+// yes to a 27 kg remnant standing in for a 770 kg job. An order could sit
+// green on this page and stop three deckles in. This works out the same two
+// figures Assign Production measures against (utils/rawMaterialNeed.js's kg
+// and running metres per layer) and reports the WORST layer, because a deckle
+// is every layer at once.
+//
+// The conversion is the one the allotment page uses, kept in step with it:
+//
+//     metres = kg x 1e6 / (gsm x width)
+//
+// at the reel's own GSM and width where it has them, and at the recipe's wet
+// GSM over the job's web for an adhesive drum, which has neither.
+//
+// Returns null when the order isn't described well enough to measure (no
+// deckle size or web length yet) -- the caller then shows nothing rather than
+// a made-up number.
+function computeAllotmentCoverage(p, item, layerAllotments, deckleTarget) {
+  const need = computeRawMaterialNeed(p, item);
+  if (!need || !layerAllotments.length) return null;
+  const num = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
+
+  const layers = layerAllotments.map((l) => {
+    const row = need.rows.find((r) => r.key === l.key) || {};
+    const needKg = num(row.needKg);
+    const needMtrs = num(row.needMtrs);
+    const recipeGsm = num(row.mtrsGsm);
+    const drumWidth = num(row.mtrsWidthMm);          // set for the adhesive only
+    const isDrum = drumWidth != null;
+
+    let gotKg = 0;
+    let gotMtrs = 0;
+    let unmeasured = 0;
+    for (const reel of l.reels) {
+      const kg = num(reel.reelMtrs);
+      if (kg == null) { unmeasured += 1; continue; }
+      gotKg += kg;
+      const gsm = isDrum ? recipeGsm : (num(reel.gsm) ?? recipeGsm);
+      const width = isDrum ? drumWidth : num(reel.size);
+      if (gsm == null || width == null) { unmeasured += 1; continue; }
+      gotMtrs += (kg * 1e6) / (gsm * width);
+    }
+    gotKg = Math.round(gotKg * 100) / 100;
+    gotMtrs = Math.round(gotMtrs * 100) / 100;
+
+    // The lower of the two sides, same as the allotment page's progress bars:
+    // enough weight but not enough length (or the other way round) is short.
+    //
+    // With ONE exception: when not a single reel on the layer can be turned
+    // into a length (no GSM recorded, say), the metres side is not a measure
+    // of anything -- it is zero for want of an input. Reporting "0 of 15
+    // rolls" with 800 kg sitting on the machine is worse than saying nothing,
+    // so the weight alone answers and `unmeasured` says why. A layer where
+    // only SOME reels are unmeasurable keeps both sides and so reads low,
+    // which is the safe direction.
+    const allUnmeasured = l.reels.length > 0 && unmeasured === l.reels.length;
+    const parts = [];
+    if (needKg != null) parts.push(gotKg / needKg);
+    if (needMtrs != null && !allUnmeasured) parts.push(gotMtrs / needMtrs);
+    const covered = parts.length ? Math.min(...parts) : (l.allocated ? 1 : 0);
+    return { key: l.key, label: l.label, unit: l.unit, allocated: l.allocated,
+      needKg, needMtrs, gotKg, gotMtrs, unmeasured,
+      covered: Math.round(Math.max(0, covered) * 10000) / 10000 };
+  });
+
+  const covered = layers.reduce((m, l) => Math.min(m, l.covered), 1);
+  // Deckles, not a percentage: a part-covered job is run until the material
+  // runs out, so what the floor needs is how many webs it will get through.
+  // Rounded DOWN -- a deckle half fed is a deckle that stops mid-run.
+  const target = Number(deckleTarget) > 0 ? Number(deckleTarget) : null;
+  const rolls = target != null ? Math.min(target, Math.floor(target * covered + 1e-9)) : null;
+  // Which layer is the one holding it back, for the message.
+  const worst = layers.reduce((w, l) => (w == null || l.covered < w.covered ? l : w), null);
+  return {
+    covered: Math.round(covered * 10000) / 10000,
+    rolls,
+    target,
+    shortLabels: layers.filter((l) => l.covered < 0.9999).map((l) => l.label),
+    worstLabel: worst && worst.covered < 0.9999 ? worst.label : "",
+    layers,
+  };
+}
+
 export async function buildQueueRows(match) {
   const pending = await PendingProduction.find(match)
     .populate({
@@ -570,11 +657,22 @@ export async function buildQueueRows(match) {
     // very first run even though every layer feeding that run is fully
     // allocated -- material allocation, not roll count, is what says this
     // order is actually ready to run.
+    // How far the allotted reels actually get this job (null when the order
+    // has no deckle size/web length yet to measure against).
+    const coverage = computeAllotmentCoverage(p, item, layerAllotments, deckleTarget);
+
+    // THREE states, not two. "short" is a layer with no reel at all -- the
+    // job cannot be laminated. "partial" is every layer allotted but not
+    // enough of it: the job runs, and stops part way. Reading those two as
+    // one "allotted" is what let an order sit green on this page with a 27 kg
+    // remnant standing in for a 770 kg job.
     const materialStatus = layerAllotments.length === 0
       ? null
-      : layerAllotments.every((l) => l.allocated)
-      ? "match"
-      : "short";
+      : !layerAllotments.every((l) => l.allocated)
+      ? "short"
+      : coverage && coverage.covered < 0.9999
+      ? "partial"
+      : "match";
 
     // Same allotment facts as materialStatus above, split per raw-material
     // pool (Facestock/Adhesive/Release Liner) instead of collapsed into one
@@ -582,13 +680,23 @@ export async function buildQueueRows(match) {
     // out of the same pool (facestock+facestock2, or adhesive+adhesive2 /
     // releaseLiner+releaseLiner2), so "one of two allotted" needs its own
     // "partial" state distinct from "none" and "full".
+    // ...and "partial" now covers the other way a pool can be half-done: every
+    // layer of it allotted, but not enough material on them to run the job
+    // out. Both are the same thing to the floor -- this pool will stop the
+    // machine before the last deckle -- so they share the badge, and the
+    // tooltip says which it is.
+    const coverageOf = (key) => (coverage ? coverage.layers.find((l) => l.key === key) : null);
     const poolStatus = (pool) => {
       const layers = layerAllotments.filter((l) => LAYER_META[l.key].pool === pool);
       if (layers.length === 0) return null;
       const allocatedCount = layers.filter((l) => l.allocated).length;
       if (allocatedCount === 0) return "none";
-      if (allocatedCount === layers.length) return "full";
-      return "partial";
+      if (allocatedCount < layers.length) return "partial";
+      const under = layers.some((l) => {
+        const c = coverageOf(l.key);
+        return c && c.covered < 0.9999;
+      });
+      return under ? "partial" : "full";
     };
     const facestockStatus = poolStatus("facestock");
     const adhesiveStatus = poolStatus("adhesive");
@@ -651,13 +759,20 @@ export async function buildQueueRows(match) {
       producedRolls,
       rollsStatus,
       materialStatus,
+      // Everything the "material for N of M rolls" line and the dialog's
+      // per-layer table are drawn from. Null when the order isn't described
+      // well enough to measure.
+      coverage,
       facestockStatus,
       adhesiveStatus,
       releaseStatus,
       // Same rule as hasStartableAllotment(), but off the live-resolved
       // layerAllotments above -- so a pick whose reel doc has since been
-      // deleted stops counting here too.
-      canStart: materialStatus === "match" || allottedRollDetails.length > 0,
+      // deleted stops counting here too. A PARTIAL allotment still starts:
+      // every layer is on the machine, so the job runs and stops when the
+      // material does -- which is a normal way to work, and the queue says how
+      // far it will get rather than barring it.
+      canStart: materialStatus === "match" || materialStatus === "partial" || allottedRollDetails.length > 0,
       quantity: qty,
       balanceQuantity: balanceQty,
       clientName: p.userId?.clientName || p.userId?.userName || "—",

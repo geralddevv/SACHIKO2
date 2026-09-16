@@ -140,6 +140,30 @@
     .sq-deckle-row.is-off { opacity: 0.55; }
     .sq-deckle-row.is-disabled { opacity: 0.5; cursor: not-allowed; }
     .sq-deckle-row input[type="checkbox"] { flex: none; width: 17px; height: 17px; accent-color: #044a78; }
+    /* "2 of 2 needed" beside the picker heading -- green on the mark, amber
+       under it, red over it. */
+    .sq-deckle-count {
+      float: right; font-size: 11.5px; font-weight: 700; letter-spacing: 0;
+      text-transform: none; padding: 1px 9px; border-radius: 999px;
+      border: 1px solid #dbe3ec; background: #f8fafc; color: #5b6b80;
+    }
+    .sq-deckle-count.is-ok { color: #15803d; background: #ecfdf5; border-color: #a7f3d0; }
+    .sq-deckle-count.is-under { color: #b45309; background: #fff8e1; border-color: #f0c36d; }
+    .sq-deckle-count.is-over { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+    /* Grace column -- web handed to the rolls rather than scrapped. Teal,
+       matching the Grace column on the Set Deckle recap where it is given. */
+    .sq-grace-cell { display: inline-block; }
+    /* Same accent blue as the mark on the strip, so the figure and the knife
+       it refers to are plainly one thing. */
+    .sq-grace-total { font-size: 13px; font-weight: 800; color: var(--primary-color); white-space: nowrap; }
+    .sq-grace-none { color: #94a3b8; }
+    /* A knife position carrying grace, in the web strip. The app's own accent
+       blue (--primary-color, #044a78) -- the only blue on the strip, where the
+       roll segments are green, the edge trim orange and the leftover slack
+       red, so it reads as "this roll, but something extra" rather than as
+       another kind of trim. It is a dark blue on a mid green, so the mark is
+       3px rather than a hairline. */
+    .sq-web-seg.sq-web-graced { box-shadow: inset 0 -3px 0 var(--primary-color); }
     .sq-deckle-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .sq-deckle-top { font-weight: 700; color: #1f2a44; font-size: 13.5px; }
     .sq-deckle-sub { color: #64748b; font-size: 12px; }
@@ -199,7 +223,13 @@
 
     <form id="sq-dialog-form" novalidate>
       <div class="sq-dialog-body">
-        <div class="sq-section-label">Deckles to allocate — untick any you don't want to include</div>
+        <div class="sq-section-label">
+          Deckles to allocate — untick any you don't want to include
+          <%# How the pick stands against what the layout plans, live as boxes
+              are ticked. Sits on the section heading because that is where the
+              eye already is when ticking. %>
+          <span id="sq-deckle-count" class="sq-deckle-count"></span>
+        </div>
         <p id="sq-pool-note" style="margin:0 0 10px;font-size:12px;color:#64748b;"></p>
         <div id="sq-deckle-list" class="sq-deckle-list"></div>
         <div id="sq-deckle-error" class="sq-error-text"></div>
@@ -280,8 +310,52 @@
   // download, one for the tooltip, where the slot letters ride along.
   const layoutWidths = (cuts) => (Array.isArray(cuts) ? cuts : []).map((c) => fmtMtrs(c.width));
   const layoutLabelOf = (cuts) => (layoutWidths(cuts).length ? layoutWidths(cuts).join(" + ") : "—");
+
+  // ---- grace ---------------------------------------------------------------
+  // Where the Set Deckle planner handed a roll some of the web's side trim,
+  // the knife is set wider than the order: `width` is what is cut, and
+  // `orderedWidth` is what the client asked for and is billed
+  // (PendingProduction.deckleLayout[].cuts[].orderedWidth). Only the cut width
+  // reached this page, so a 157 mm knife on a 150 mm order looked like a
+  // 157 mm order and there was nowhere on the slitting side that said how much
+  // grace had been given. Both travel now.
+  const graceOfCut = (c) => {
+    const ordered = Number(c && c.orderedWidth);
+    const cut = Number(c && c.width);
+    return ordered > 0 && Number.isFinite(cut) && cut - ordered > 0.005
+      ? Math.round((cut - ordered) * 100) / 100
+      : 0;
+  };
+  const graceTotalOf = (cuts) => Math.round((Array.isArray(cuts) ? cuts : [])
+    .reduce((n, c) => n + graceOfCut(c), 0) * 100) / 100;
+  // The distinct per-roll grace amounts on a layout, largest first. One entry
+  // is the normal case (the planner spreads it evenly); empty means no roll
+  // was graced.
+  const graceAmounts = (cuts) => [...new Set((Array.isArray(cuts) ? cuts : [])
+    .map(graceOfCut).filter((g) => g > 0))].sort((a, b) => b - a);
+
+  // What the cell's tooltip says: the total this web gives away, then every
+  // knife that carries some of it.
+  const graceTitleOf = (cuts) => {
+    const total = graceTotalOf(cuts);
+    return `Each roll is cut this much wider than it was ordered, and is still billed`
+      + ` at the width ordered. ${fmtMtrs(total)} mm across the whole web.`
+      + `\n${layoutTitleOf(cuts)}`;
+  };
+
+  // Plain-text form of the Grace column -- what its search box matches and
+  // what the download writes. Mirrors the cell.
+  const graceTextOf = (cuts) => {
+    const each = graceAmounts(cuts);
+    if (!(Array.isArray(cuts) ? cuts : []).length) return "—";
+    return each.length ? `+${each.map((g) => fmtMtrs(g)).join(" / ")} mm` : "—";
+  };
   const layoutTitleOf = (cuts) => (Array.isArray(cuts) ? cuts : [])
-    .map((c) => `${c.slot || "?"} ${fmtMtrs(c.width)}`).join("  ·  ");
+    .map((c) => {
+      const g = graceOfCut(c);
+      return `${c.slot || "?"} ${fmtMtrs(c.width)}`
+        + (g ? ` (${fmtMtrs(c.orderedWidth)} ordered + ${fmtMtrs(g)} grace)` : "");
+    }).join("  ·  ");
 
   // The layout drawn to scale across its deckle web, exactly as the Set Deckle
   // planner and Slitting Allocation draw it: half the batch's total edge trim
@@ -309,8 +383,12 @@
     const hasWeb = Number.isFinite(web) && web > 0;
     const slack = hasWeb ? Math.round((web - totalTrim - cutSum) * 100) / 100 : null;
 
-    const segs = cuts.map((c) =>
-      seg("", Number(c.width) || 0, fmtMtrs(c.width), `${c.slot || "?"} — ${fmtMtrs(c.width)} mm`));
+    const segs = cuts.map((c) => {
+      const g = graceOfCut(c);
+      return seg(g ? "sq-web-graced" : "", Number(c.width) || 0, fmtMtrs(c.width),
+        `${c.slot || "?"} — ${fmtMtrs(c.width)} mm`
+        + (g ? ` (${fmtMtrs(c.orderedWidth)} mm ordered + ${fmtMtrs(g)} mm grace — billed at ${fmtMtrs(c.orderedWidth)})` : ""));
+    });
 
     // Cuts that don't fit their web -- or no web width to fit them in -- can't
     // be drawn against it, so show the cuts alone (flagged when they overflow)
@@ -350,6 +428,7 @@
     sizeText: g.size != null && g.size !== "" ? `${g.size} mm` : "—",
     rmText: g.runningMeters != null ? `${fmtMtrs(g.runningMeters)} mtrs` : "—",
     layoutLabel: layoutLabelOf(g.layoutCuts),
+    graceText: graceTextOf(g.layoutCuts),
     stockText: g.expected ? `${g.deckleCount} of ${g.expected}` : String(g.deckleCount),
     statusText: STATUS_TEXT[groupStatus(g)],
     dateText: fmtDate(g.createdAt),
@@ -361,6 +440,7 @@
     sizeText: "",
     rmText: "",
     layoutLabel: "",
+    graceText: "",
     stockText: `${fmtMtrs(r.mtrs)} mtrs`,
     statusText: r.hotMelt || !r.curing ? "Ready" : "Curing",
     dateText: fmtDate(r.createdAt),
@@ -454,8 +534,38 @@
       cb.addEventListener("change", () => {
         cb.closest(".sq-deckle-row").classList.toggle("is-off", !cb.checked);
         if (checkedDeckles().length) sqDeckleError.textContent = "";
+        renderDeckleCount();
       });
     });
+    renderDeckleCount();
+  }
+
+  // How many Deckles this cut job actually wants -- the layout's own planned
+  // web count (routes/system/slitting.js `expected`, the same figure the
+  // Stock column reads "2 of 3" against). 0 means the row has no plan of its
+  // own (plain stock no config claims), and then any number is legitimate.
+  const deckleseNeeded = () => Math.max(0, Number(currentGroup && currentGroup.expected) || 0);
+
+  // Says where the pick stands against that, live, and turns red the moment it
+  // goes over. Ticking more webs than the layout plans was silently allowed:
+  // the dialog pre-ticked the right number, but nothing stopped a third being
+  // added to a job that plans two, and the over-count only surfaced later on
+  // the Allocate page as "1 too many Deckles assigned across layouts".
+  function renderDeckleCount() {
+    const el = document.getElementById("sq-deckle-count");
+    if (!el) return;
+    const picked = checkedDeckles().length;
+    const need = deckleseNeeded();
+    if (!need) {
+      el.className = "sq-deckle-count";
+      el.textContent = `${picked} Deckle${picked === 1 ? "" : "s"} ticked`;
+      return;
+    }
+    const over = picked - need;
+    el.className = "sq-deckle-count" + (over > 0 ? " is-over" : picked === need ? " is-ok" : " is-under");
+    el.textContent = over > 0
+      ? `${picked} ticked · this layout needs ${need} — ${over} too many`
+      : `${picked} of ${need} needed`;
   }
 
   window.openChooseDeckleDialog = function (groupId) {
@@ -507,6 +617,18 @@
     }
     if (picked.some((d) => !(d.order && d.order._id))) {
       sqDeckleError.textContent = "One of the ticked Deckles isn't linked to any pending order.";
+      return;
+    }
+
+    // More webs than this layout plans. Allocating them would cut rolls
+    // nobody ordered off a web another job is waiting for -- and the Allocate
+    // page would refuse them anyway ("too many Deckles assigned across
+    // layouts"), one page later than the planner can act on it.
+    const need = deckleseNeeded();
+    if (need && picked.length > need) {
+      sqDeckleError.textContent =
+        `This layout plans ${need} Deckle${need === 1 ? "" : "s"} — ${picked.length} are ticked.`
+        + ` Untick ${picked.length - need} to continue, or plan more webs on Deckle Set first.`;
       return;
     }
 
@@ -658,6 +780,33 @@
             return '<span class="sq-cut-none" title="No deckle layout was planned for this stock">—</span>';
           }
           return layoutWebHtml(row);
+        },
+      },
+      {
+        // How much of this web is grace: side trim the Set Deckle planner
+        // handed to the rolls instead of scrapping, so the knives are set
+        // wider than the widths ordered. Its own column because the Layout
+        // cell beside it shows the CUT widths -- without this the row states
+        // widths nobody ordered and nothing says why. Per roll under the
+        // total, since that is the figure an operator setting knives needs.
+        title: "Grace", field: "graceText", hozAlign: "center", width: 110,
+        headerTooltip: "How much wider than ordered each roll is cut — spare web the Deckle Set planner handed to the rolls instead of scrapping it. The client is still billed the width ordered.",
+        headerSort: false, headerFilter: "input", headerFilterPlaceholder: "Search",
+        headerFilterFunc: numLikeFilter,
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isGroup) return "";
+          const cuts = row.layoutCuts || [];
+          if (!cuts.length) return '<span class="sq-cut-none">—</span>';
+          const each = graceAmounts(cuts);
+          if (!each.length) return '<span class="sq-grace-none" title="Every roll is cut at the width ordered">—</span>';
+          // One number: how much wider each roll is cut than it was ordered.
+          // Where the rolls were given different amounts, the distinct ones
+          // are listed -- that IS the fact, and there are rarely more than
+          // two. The web total and the knife-by-knife breakdown are on the
+          // tooltip, where they belong: nobody sets a knife to the total.
+          return `<span class="sq-grace-cell" title="${esc(graceTitleOf(cuts))}">`
+            + `<span class="sq-grace-total">+${esc(each.map((g) => fmtMtrs(g)).join(" / "))} mm</span></span>`;
         },
       },
       {
