@@ -413,10 +413,30 @@ export async function produceDeckle({ labelStock, location, reelMtrs, lotNo, siz
     if (reel.location !== location) {
       throw new Error(`${meta.label} reel "${reel.rollId}" is not at "${location}".`);
     }
-    if (!(Number(reel.reelMtrs) >= reelMtrs)) {
-      throw new Error(`${meta.label} reel "${reel.rollId}" only has ${reel.reelMtrs} mtrs left -- needs ${reelMtrs}.`);
-    }
     resolved.push({ layerKey, meta, Model, LogModel, reel });
+  }
+
+  // One drum can serve more than one layer -- a DOUBLE RELEASE job coats
+  // adhesive twice and both coats may come off the same drum (see the guard in
+  // POST /labels/production/assign/:id). It then has to give up BOTH draws:
+  // asked per layer, each check would pass on a drum holding only enough for
+  // one, and the two deductions below would each write `reelMtrs - draw`
+  // computed from the same starting figure, so the second would overwrite the
+  // first and half the adhesive would never leave stock. Grouped here so a
+  // shared reel is measured, and later deducted, once for the total.
+  const drawByReel = new Map();
+  for (const r of resolved) {
+    const key = String(r.reel._id);
+    const entry = drawByReel.get(key) || { reel: r.reel, Model: r.Model, layers: [], total: 0 };
+    entry.layers.push(r.meta.label);
+    entry.total = round2(entry.total + reelMtrs);
+    drawByReel.set(key, entry);
+  }
+  for (const { reel, layers, total } of drawByReel.values()) {
+    if (!(Number(reel.reelMtrs) >= total)) {
+      const forLayers = layers.length > 1 ? ` for ${layers.join(" + ")}` : "";
+      throw new Error(`${layers[0]} reel "${reel.rollId}" only has ${reel.reelMtrs} mtrs left -- needs ${total}${forLayers}.`);
+    }
   }
 
   // reelMatchesLayer above only enforces POOL_MATCH_FIELDS -- Vendor/Size/
@@ -435,9 +455,13 @@ export async function produceDeckle({ labelStock, location, reelMtrs, lotNo, siz
 
   const by = createdBy || "SYSTEM";
   const deckleId = await generateDeckleId(actualLabelStock.productCode, lotNo);
+  const deducted = new Set();
 
   for (const { meta, Model, LogModel, reel } of resolved) {
-    const remaining = round2(reel.reelMtrs - reelMtrs);
+    // What this reel gives up in total -- the sum of every layer mounted off
+    // it, not just this one's share (see drawByReel above).
+    const draw = drawByReel.get(String(reel._id))?.total ?? reelMtrs;
+    const remaining = round2(reel.reelMtrs - draw);
     const emptied = remaining <= 0;
 
     const bal = await Model.aggregate([
@@ -448,10 +472,16 @@ export async function produceDeckle({ labelStock, location, reelMtrs, lotNo, siz
     const rollsOut = emptied ? Number(reel.quantity) || 0 : 0;
     const closingStock = openingStock - rollsOut;
 
-    await Model.updateOne(
-      { _id: reel._id },
-      emptied ? { $set: { reelMtrs: 0, quantity: 0 } } : { $set: { reelMtrs: remaining } },
-    );
+    // Written once per REEL. A drum shared by two layers gets one deduction
+    // for the total; the second pass through this loop only writes its log
+    // line below, which is what says how much each layer took.
+    if (!deducted.has(String(reel._id))) {
+      deducted.add(String(reel._id));
+      await Model.updateOne(
+        { _id: reel._id },
+        emptied ? { $set: { reelMtrs: 0, quantity: 0 } } : { $set: { reelMtrs: remaining } },
+      );
+    }
 
     await LogModel.create({
       location: reel.location,

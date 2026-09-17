@@ -503,6 +503,35 @@ children, and carry `!important`.
 
 Only applies at create time — editing an existing row still uses the plain exact-duplicate `buildLabelStockSignature()` check and never renames a row into a new variant on its own.
 
+### DOUBLE RELEASE / DOUBLE FACESTOCK: one drum, two layers
+
+A DOUBLE RELEASE job is made in two passes — facestock + adhesive + release
+liner as normal, then a second adhesive and a second liner on top — so
+`LAYER_ORDER["DOUBLE RELEASE"]` is exactly that sequence
+(`utils/labelStockProduction.js`).
+
+The second pass coats adhesive again, and **both coats may come off the same
+drum**: it is a quantity of glue drawn twice, not two webs running at once.
+`POST /labels/production/assign/:id` therefore only refuses a repeated pick
+when the layer's `LAYER_META.unit` is a **Roll** — two liners are two webs and
+each needs its own reel. Refusing the shared drum made the job unassignable
+whenever the recipe left one drum on offer (the common case: the picker shows
+the bound adhesive, and there is usually one). The whole Assign & Continue
+bounced back to the form with a flash, allotting nothing and never reaching the
+machine queue, which reads as "selecting the material does nothing".
+
+`produceDeckle()` is what makes that safe. A reel serving several layers is
+grouped by reel id first (`drawByReel`), so it is:
+
+- **checked once, against the total** — a drum with 102 left is refused for two
+  100 m coats, where per-layer checks would each have passed;
+- **deducted once, for the total** — the loop used to compute
+  `reelMtrs - draw` per layer from the same starting figure and write both, so
+  the second write overwrote the first and half the adhesive never left stock.
+
+Each layer still writes its own OUTWARD log line, so the ledger says what each
+coat took.
+
 ### One deckle batch per deckle size
 
 `POST /labels/production/deckle-set` creates **one `PendingProduction` batch per
