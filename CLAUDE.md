@@ -36,6 +36,8 @@ node scripts/backfill-location-master-seed.js    # seed the Location master with
 node scripts/deckle-optimizer-bench.js [--verbose]  # bench + invariant check for utils/deckleOptimizer; no DB, exits non-zero on failure
 node scripts/raw-auto-allot-bench.js [--verbose]    # invariant check for public/js/rawAutoAllot.js (Assign Production's Auto Allot); no DB, exits non-zero on failure
 node scripts/reset-transactional-data.js         # empty orders/production/bindings, KEEP masters+stock+people (dry-run; --apply --db=<name>)
+node scripts/company-slug-history.js             # URL prefixes the company is served under (renames record themselves; this is the manual override)
+node scripts/rewrite-id-prefix.js --from SP --to GM  # move ids left behind by an older company code (dry-run; --apply)
 ```
 
 ## Environment
@@ -186,6 +188,105 @@ Use `data-*` attributes on buttons; read them in the handler via `this.dataset`.
 
 `common.js` automatically converts all `input[type="text"]` values to uppercase on input. This matches the Mongoose model convention of storing names in uppercase.
 
+### Renaming the company moves the URL prefix (and old links follow)
+
+The public prefix is the first word of the company name (`slugifyCompany`), so
+renaming **SACHIKO PACKAGING** to **RYT INFO** moves the whole app from
+`/sachiko/...` to `/ryt/...` the instant it is saved — no restart, because the
+brand cache is refreshed by the write (`routes/system/company.js` →
+`refreshBrand()`).
+
+That is also how a rename *looks broken*: the name is live everywhere (page
+titles, nav header, login screen), but every bookmark and open tab on the old
+prefix answers **404**, so it reads as "I renamed the company and nothing
+changed".
+
+`Company.slugHistory` closes that. The update route records the outgoing prefix
+whenever the name changes, and `middleware/brandPrefix.js` forwards any
+remembered prefix onto the current one:
+
+    /sachiko/labels/production/pending?tab=wip
+      -> 302 /ryt/labels/production/pending?tab=wip
+
+- **Temporary redirects, deliberately** — 302 for GET/HEAD, 307 for anything
+  else so a form post from a stale tab keeps its method and body. A 301 would
+  be cached by the browser and would then misroute if the company is ever
+  renamed back.
+- Five prefixes are kept, newest last, never the current one and never the
+  internal `/app` mount.
+- **A database that predates the field seeds itself.** On the first start
+  after this shipped, `seedSlugHistory()` reads every name the company has been
+  saved under out of the audit log (`Registered/Updated company "X"`, written
+  since the beginning), maps them through `slugifyCompany` and records them —
+  one line on the console, then never again (`undefined` means "never looked",
+  `[]` means "looked, nothing to forward"). So an old address starts working on
+  the next restart with nobody running anything.
+- `node scripts/company-slug-history.js` only exists for a prefix neither of
+  those can know — one used on an earlier installation, or from before the
+  audit log was kept. `--add <slug> --apply` records it.
+
+The database is **not** renamed: it is a fixed random id assigned at
+registration (`utils/companyDb.js`), so a rename touches nothing but the name,
+the prefix and — from then on — the id code.
+
+### The id code every generated id starts with
+
+`SP | FCS | 000001`, `SP | LS | 000047`, `SP | LOT | 0042` — the `SP` is the
+**company's own id code**, not a constant. It comes from the Company master
+(`idPrefix`, `models/system/company.js`) through `currentIdPrefix()` in
+`utils/companyBrand.js`, read live at mint time, so changing it needs no
+restart — the same live path the app name and the URL slug already take.
+
+- **Typed, with a suggestion.** The field is pre-filled from the name by
+  `suggestIdPrefix()` (initials of the words; first two letters of a one-word
+  name: SACHIKO PACKAGING → SP, ORBIT LABELS PVT LTD → OL, ZACTAC → ZA) and
+  left blank it keeps using that. It is typed because a company's short code
+  is a fact about the company, not something a rule can guess — Zactac go by
+  **ZC**, which no derivation from the letters produces. 2–4 letters or digits,
+  validated in the route and on the field.
+- **Changing the code moves the ids minted under it.** When the code changes
+  (typed, or because the name's initials did), `rewriteIdPrefix()`
+  (`utils/idPrefixRewrite.js`) moves every id carrying the **outgoing** code
+  onto the new one — `GM | LS | 000047` → `XY | LS | 000047` — and says how
+  many in the flash message and the audit entry. Ids from an *earlier* code are
+  deliberately left alone: they belong to a period that is over, and moving
+  them would make old stickers and paper records disagree with the screen a
+  second time. `scripts/rewrite-id-prefix.js --from SP --to GM` moves one of
+  those by hand (dry-run by default).
+- **It is a blind scan of every string field, not a list of id fields.** The
+  same id string is copied between documents — an order's Lot No is stamped
+  onto its Deckles and Job Cards, and those copies are how they are matched
+  back up — so a field missing from a list would quietly break a link. The
+  audit log and every `*logs` collection are skipped: they record what happened
+  under the code in force at the time, and are read as history, never as links.
+  An id that would collide with one already under the new code is left alone
+  and reported.
+- **Numbering continues across a change.** Every generator takes its next
+  number either from a `Counter` document or from the trailing 6 digits of the
+  highest existing id (`parseSkuSeq`), both of which ignore the prefix. After
+  switching to ZC, the master that follows `SP | FCS | 000025` is
+  `ZC | FCS | 000026`, not `ZC | FCS | 000001`. The `exists()` probe each
+  generator does is prefix-aware, so it can't collide either.
+
+Every mint site reads `currentIdPrefix()` — Facestock / Adhesive / Core /
+Release Master, Label Stock (id + SKU code, incl. `utils/labelStockVariant.js`),
+Machine, Machine Job Card, Slitting Job Card, Maintenance ticket and Lot No.
+Add a new one the same way; don't write the letters in.
+
+`scripts/serialize-labelstock-sku-codes.js` mints too, so it calls
+`refreshBrand()` after `connectDB()` and uses the same code — it used to
+hardcode `SP`, which meant one run quietly renumbered every Label Stock SKU
+back to SP on an installation that had set its own. Note that this script
+renumbers *existing* rows, so it does move them onto the current code; that is
+the one place existing ids change, and only when someone runs it with
+`--apply`.
+
+**Still hardcoded, deliberately:** the FAIRTECH-era `FS | CLIENT | 1`,
+`FS | Tape | 000001` and `FS | <mat> | <cat> | 000001` ids in
+`routes/fairdesk_route.js`. They are a different, older family whose prefix
+never matched the company code even for Sachiko, so switching them would change
+client and tape ids for an installation that has not renamed anything.
+
 ### Label Stock order rates follow the binding, not the product
 
 On `/sachiko/sales/order`, a Label Stock row's Rate is a property of the
@@ -320,6 +421,75 @@ Notes on the resolution rules:
 The upload is multipart, so csurf can't find its token in the body — the client
 sends it as an `x-csrf-token` header instead.
 
+### Reel labels: one sticker or a whole batch
+
+On **`/sachiko/facestockstock`**, **`/sachiko/adhesivestock`** and
+**`/sachiko/releaselinerstock`** alike — the three are the same page three
+times over, so a change to one belongs in all three.
+
+The inward sticker a reel (a drum, on Adhesive) gets stuck on it. Two ways in,
+one label:
+
+- a reel row's own **Print** button, for the one reel (`GET /label/:stockId`);
+- **clicking any master row**, which opens **Print Reel Labels**: that spec's
+  reels in stock, ticked off (or **Select all**) and printed in one pass
+  (`GET /labels?ids=...`), one sticker per page, so a whole inward batch is
+  labelled at the printer in a single run.
+
+`views/stock/facestockRollLabel.ejs` renders **both**. It takes `labels` as an
+array and nothing else changed for a single reel: with more than one, `<html>`
+gets `class="sheet"`, which turns on a page break before every label after the
+first (the `@page` IS one 101.5 x 75.1 mm sticker, so without it two would land
+on the same page) and lets the body grow past one label's height. Don't fork it
+into a second view — the SVG, the QR, the fit-to-box pass and the remembered
+180° flip would then have to be fixed twice.
+
+Notes on the dialog:
+
+- **The preview is the print target.** The frame holds the very document that
+  is printed (fetched and written in as `srcdoc`, for the same reason the
+  single-reel dialog does it — navigating a frame to the URL dies on the login
+  redirect's `X-Frame-Options` instead of saying the session has ended), and
+  Print is `labelApi.print()` on it. Ticking re-fetches on a 300 ms debounce;
+  Print re-fetches first if a debounce is still in flight, so it can never
+  print the previous selection.
+- **Only the ids travel.** Every value on every label is re-read from the
+  database by the route, exactly as the one-reel route reads it. A reel deleted
+  between opening the dialog and printing is dropped rather than failing the
+  sheet, and the page says so — a silently short stack is how a reel ends up
+  with no sticker on it.
+- Printing writes nothing, so an **allotted** or **part-used** reel is still
+  listed and still printable (it is a physical reel that needs a sticker like
+  any other); its state shows as a badge.
+- **Rotate 180°** is the same remembered per-PC setting the single-reel dialog
+  sets (`localStorage.facestockLabelFlip180`, read by the label page itself —
+  a `srcdoc` frame shares this origin's storage), because which way the stock
+  feeds is a property of the printer, not of the reel.
+- `MAX_LABELS_PER_SHEET` (200) caps one run.
+
+Per pool, only the names differ: the table id (`#facestock-` / `#adhesive-` /
+`#release-masters-table`), the mount the dialog fetches from, the flip key, the
+noun on screen (Adhesive prints **drums**), and the spec line the dialog's
+subtitle is built from — each page names its own master's fields (Adhesive has
+no family/size/micron; Release Liner adds Sensing and Colour). The **kg field
+is `reelMtrs` in every pool, drums included**; there is no `drumMtrs`.
+
+Semi-Finished has its own copy of the label view and its own stock page; this
+is not wired into it.
+
+While this went in, **Create PO was switched off** on all three pages: the
+button renders greyed and `disabled`, with `pointer-events: none` so the click
+falls through to the row underneath rather than dying on a dead button, and the
+reason on the cell's tooltip. Its dialog and `POST /purchase-order` are
+untouched — drop the two lines in the Purchase Order column's formatter to turn
+it back on.
+
+One trap in that column's neighbourhood: `tableDisp.css` sets
+`cursor: default !important` on `.tabulator .tabulator-row:hover`, so a plain
+`cursor: pointer` on the row is overridden for the whole time the cursor is
+actually over it. The rule has to name `:hover` and the `.tabulator-cell`
+children, and carry `!important`.
+
 ### Label Stock Product Code variants
 
 `SachikoLabelStock.productCode` (`models/sachiko/sachikoLabelStock.js`) is free text, not itself unique — only the full `labelStockSignature` (every user-editable field, Product Code included) is unique-indexed, so nothing used to stop the *same* Product Code being entered again for a genuinely different recipe (e.g. `C011` re-entered against a different vendor).
@@ -411,6 +581,56 @@ measures nothing, so the weight alone answers and the count of unmeasurable
 reels is reported instead — "0 of 15" with 800 kg on the machine is worse than
 saying nothing. A layer where only *some* reels are unmeasurable keeps both
 sides and so reads low, which is the safe direction.
+
+### WIP tab: only jobs that have started, and what "live" means
+
+`/sachiko/labels/production/pending?tab=wip` lists **jobs an operator has
+actually started** — not every order sitting on a machine queue. Being
+assigned is not being in progress: an order can wait days on a queue, and
+listing those buried the handful genuinely running.
+
+The membership test and the Live Status column are the same question, answered
+by `buildJobCardProgressMap()` (`routes/fairdesk_route.js`). A `MachineJobCard`
+is written **once, by Save Production Entry, at the end of the job**, so
+reading only cards left this column saying "Not started" for a job that had
+been running for hours with Deckles already in Semi Finished Stock. Three
+things the shop floor writes as it goes are folded in, all of them already
+there to be read:
+
+| signal | written by | shows as |
+|---|---|---|
+| `MaterialStock.producedFor` + `producedVia: "jobcard"` | each Stop punch (`POST /machine/jobcard/log/produce`) | the metres, tagged **LIVE** |
+| `PendingProduction.runningOn` | first Start (`POST /api/operator/jobcard/claim`), heartbeated | **Running** |
+| `PendingProduction.liveMaterialInUse` | each reel scanned (`POST /machine/jobcard/mark-in-use`) | **In Setting** |
+| `MachineJobCard` | Save Production Entry | the filed figures |
+
+Three rules hold it together:
+
+- **A Deckle is counted once.** A card's Production Log row carries the same
+  `rowToken` (and `deckleId`) the Deckle was minted with, so a Deckle a card
+  already accounts for is matched and skipped rather than added again.
+- **`producedVia: "assign"` never counts.** Those Deckles are the order's raw
+  material being laminated at Assign & Continue, not metres it has run —
+  counting them would show every freshly assigned order as part-produced.
+- **Started is persistent, running is not.** `runningOn` is cleared only when
+  the card saves, so its *presence* is "started"; `activeClaim()` (exported
+  from `routes/api/operatorApi.js`, one definition of the 15-minute freshness
+  rule) is what makes the badge say Running. A tablet that dies leaves the job
+  listed, reading "In Setting".
+
+Because rows now **join** when a job starts and **leave** when it is produced,
+`GET /labels/production/wip-progress` answers with the whole row set (same
+query, same `mapPendingProductionRow()`, same filter as the page render) and
+the poll reconciles: update, add, and delete what is no longer there. It used
+to send progress alone and call `wipTable.updateData()`, which rejects on any
+row the table doesn't have.
+
+"Send Back to Pending" is disabled on `canSendBack`, computed from the same
+facts `POST /labels/production/unassign/:id` refuses on (anything produced, or
+a reel reconciled mid-job) — *not* on "has this job started", which is the one
+case most worth sending back. Note this tab is the only UI path to that
+action, so an assigned-but-not-yet-started order can no longer be un-assigned
+from here (`scripts/send-back-to-pending.js <orderId>` still does it).
 
 ### Auto Allot (`public/js/rawAutoAllot.js`)
 
@@ -623,3 +843,82 @@ planner reviews the layouts it drops into the form and still presses Create
 Deckle Batch, which goes through the same POST and the same validation as a
 hand-drawn plan. That is what makes it safe on a production server: a wrong
 answer is discarded by not saving it.
+
+### Deckle Calculator (`/labels/production/deckle-calculator`)
+
+The Set Deckle planner with nothing behind it — a **Calculator** tab of its own
+in the sidebar. Same web strip, same layout dialog, same grace panel, same AI
+Deckle Set and the same figures as
+`/labels/production/deckle-set/plan/:itemId`, so a plan worked out here reads
+exactly as it will when the same plan is set for real. Two differences:
+
+- **The requirements are typed**, not read off loose orders — roll width,
+  running metres, roll quantity. It answers "what would this job cost me in
+  trim" before there is an order to plan.
+- **It ends nowhere.** No Create Deckle Batch, no POST that writes: the page
+  creates no batch, touches no order and stores nothing. A wrong answer is
+  discarded by closing the tab.
+
+Three files, plus one route each for the page and the optimizer:
+`views/utilities/deckleCalculator.ejs`, `public/js/deckleCalculator.js`,
+`public/css/deckleCalculator.css`. The ids and classes are the Set Deckle
+page's own (`dsf-`/`sl-`) and the stylesheet started as a copy of that page's
+inline `<style>` block — that page renders with `CSS: false`, so there is
+nothing to share yet. **Change one and look at the other**: they are two
+copies of the same rules, and a fix to a shared behaviour (the web strip, the
+grace panel, the recap) has to be made twice.
+
+Where the two deliberately differ, and why — keep these, they are not drift:
+
+- **Recap columns are narrower** (`min-width: 1240px`, diagram 46%/380px
+  against the original's 1520/560). Thirteen columns at the original widths put
+  Rolls, Deckle and the footer's own totals off the right edge of the card on a
+  laptop, so you scrolled sideways to read the figures the table exists to show.
+- **The per-column filter boxes carry a drawn magnifier, not the word
+  "Search"**, which clipped to "Sear" in the 74px Trim and Grace columns.
+- **Available Sizes are chips**, and a width the store does not hold is drawn
+  dashed and grey (`.dsf-size-item.is-added`) — on the Set Deckle page every
+  candidate comes from stock by construction, so there is nothing to
+  distinguish.
+- **Requirements** (the numbered card, its totals row, the short/spare/exact
+  states) exist only here; the Set Deckle page lists orders instead.
+- **One deckle width folds into the chip row** rather than taking a full-width
+  bar of its own; the bar is kept for the multi-width list, which is what it
+  was for.
+
+A rule left unclosed in a stylesheet swallows every declaration after it in
+silence — no error, the styles just stop applying. That happened once here,
+so **check the braces balance after editing either file**; there is a
+throwaway checker in the session notes, or `node -e` over the file counting
+`{`/`}` outside comments does it.
+
+What it reads, and what it does not:
+
+- **Available Sizes opens on the facestock widths in stock** (every width, with
+  its reel count and kg on the chip's tooltip), so a plan starts from reels
+  that exist. `suggestDeckleSize()` narrows the same roll-up to one recipe for
+  the Set Deckle page; there is no recipe here, so nothing is narrowed. It is a
+  starting point only — the pencil adds and removes, and nothing is tied back
+  to the store.
+- `POST /labels/production/deckle-calculator/auto` hands the typed requirements
+  to `planDeckleLayouts()` and returns the plan. Unlike its sister endpoint it
+  does **not** re-read anything from the database — there is nothing to re-read
+  (the requirements exist only on the page) and nothing to protect (the handler
+  owns no data and writes nothing), so a doctored request can only produce a
+  wrong answer in the asker's own browser. Same `DECKLE_AUTO_ENABLED` kill
+  switch: off, the page renders with no panel and the endpoint returns 503.
+
+**A requirement is a width AND a roll length, and rolls are matched on both.**
+20 rolls of 150 mm at 300 m are not met by 150 mm rolls wound to 1000 m, and
+"Rolls Set" says so ("no layout at this length") rather than reading as a plain
+shortfall. The Set Deckle page pools by width alone, which it can afford to —
+its orders come out of one Deckle Sorting group — but anything at all can be
+typed side by side here. Either side may leave the length unstated (a layout
+with no Deckle R.M./R. Meter, or a requirement with no Running Mtrs) and then
+it matches whatever the other side says; exact matches are served first.
+
+**Each layout picks its own deckle web**, and a layout that has not picked one
+is shown on the best fit **for its own knives** — not for the widest layout on
+the page. Measuring the whole plan against its widest layout is what would put
+a 600 mm run on the 1000 mm web its neighbour needs, and then report the trim
+of a job nobody would run.

@@ -7,6 +7,9 @@ import Type from "../../models/system/type.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
+// The code every generated id starts with -- the Company master's own
+// (utils/companyBrand.js), read live so a rename needs no restart.
+import { currentIdPrefix } from "../../utils/companyBrand.js";
 
 const router = express.Router();
 
@@ -86,7 +89,7 @@ const parseSkuSeq = (skuId) => {
   return match ? Number(match[1]) : 0;
 };
 
-// Generate a sequential id of the form `SP | ADH | 000001`.
+// Generate a sequential id of the form `<ID> | ADH | 000001`.
 async function generateId(key, code) {
   const [latest, counter] = await Promise.all([
     AdhesiveMaster.findOne().sort({ skuId: -1 }).select("skuId").lean(),
@@ -94,11 +97,11 @@ async function generateId(key, code) {
   ]);
   const maxSeq = Math.max(parseSkuSeq(latest?.skuId), Number(counter?.seq || 0));
   let nextSeq = maxSeq + 1;
-  while (await AdhesiveMaster.exists({ skuId: `SP | ${code} | ${String(nextSeq).padStart(6, "0")}` })) {
+  while (await AdhesiveMaster.exists({ skuId: `${currentIdPrefix()} | ${code} | ${String(nextSeq).padStart(6, "0")}` })) {
     nextSeq += 1;
   }
   await Counter.updateOne({ key }, { $set: { seq: nextSeq } }, { upsert: true });
-  return `SP | ${code} | ${String(nextSeq).padStart(6, "0")}`;
+  return `${currentIdPrefix()} | ${code} | ${String(nextSeq).padStart(6, "0")}`;
 }
 
 async function previewId(key, code) {
@@ -108,10 +111,10 @@ async function previewId(key, code) {
   ]);
   const maxSeq = Math.max(parseSkuSeq(latest?.skuId), Number(counter?.seq || 0));
   let nextSeq = maxSeq + 1;
-  while (await AdhesiveMaster.exists({ skuId: `SP | ${code} | ${String(nextSeq).padStart(6, "0")}` })) {
+  while (await AdhesiveMaster.exists({ skuId: `${currentIdPrefix()} | ${code} | ${String(nextSeq).padStart(6, "0")}` })) {
     nextSeq += 1;
   }
-  return `SP | ${code} | ${String(nextSeq).padStart(6, "0")}`;
+  return `${currentIdPrefix()} | ${code} | ${String(nextSeq).padStart(6, "0")}`;
 }
 
 const requireAdhesiveMaster = requireRole(["proprietor", "admin", "hod"]);

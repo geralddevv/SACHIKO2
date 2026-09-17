@@ -1,0 +1,850 @@
+/* ==========================================================================
+   Deckle Calculator (/labels/production/deckle-calculator)
+   ==========================================================================
+
+   The Set Deckle planner with nothing behind it: type the rolls you need and
+   the deckle sizes you have, draw the layouts by hand, read the trim off.
+   Nothing here is saved -- it creates no batch, touches no order and writes
+   nothing to the database.
+
+   The look is deliberately the Set Deckle page's own
+   (views/inventory/orders/deckleSetForm.ejs): the same web strip, the same
+   recap table, the same grace panel, the same figures. Somebody who plans a
+   real deckle should recognise this page on sight, and a figure worked out
+   here should read exactly as it will when the same plan is set for real.
+
+   That page keeps its styles inline (it renders with CSS: false); these are a
+   copy, minus the Create Deckle Batch button a calculator has no use for,
+   plus the Requirements table, which is this page's own (there are no orders
+   to list).
+   -------------------------------------------------------------------------- */
+
+.span-full { padding: 0 !important; }
+.span-full.form-heading, .span-full.form-subheading { padding: 10px !important; }
+.sl-panel { align-self: stretch; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+.sl-sec-head { display: flex; flex-direction: row; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.sl-sec-head h1 { margin: 0; }
+
+.sl-job-grid {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); grid-template-rows: 1fr;
+  overflow-x: auto;
+}
+.sl-job-cell {
+  background: #f8fafc; padding: 11px 10px; display: flex; flex-direction: column; gap: 5px; min-width: 0;
+  border-right: 1px solid #e2e8f0;
+}
+.sl-job-cell:last-child { border-right: none; }
+.sl-job-cell.is-input { background: #fff; }
+/* Available Sizes is a list, not a figure -- it gets the width to be one. */
+.sl-job-grid .sl-job-cell.dsf-avail { grid-column: span 3; }
+.sl-job-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #7c8ba1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sl-job-label .req { color: #dc2626; }
+/* Every recipe fact -- value text and the Edge Trim input -- at one big size. */
+.sl-job-value { font-size: 20px; font-weight: 800; color: #1f2a44; line-height: 1.3; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+.sl-job-value.sl-bad { color: #b91c1c; }
+.sl-job-cell.is-input input.form-control {
+  height: 40px !important; font-size: 20px !important; font-weight: 800 !important; color: #1f2a44;
+}
+/* Edge Trim: value text with a pencil pinned top-right; the input shows on click. */
+.dsf-trim-cell { position: relative; }
+.dsf-edit-ic {
+  position: absolute; top: 7px; right: 7px;
+  border: none; background: rgba(4,74,120,0.09); color: #044a78; cursor: pointer;
+  width: 24px; height: 24px; border-radius: 6px; font-size: 11px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.dsf-edit-ic:hover { background: rgba(4,74,120,0.18); }
+.dsf-edit-ic.is-on { background: #044a78; color: #fff; }
+
+/* Available Sizes: one "Available Sizes" heading, then the sizes in a single
+   horizontal row -- each separated by a divider, the edit pencil at the end
+   of the same row. Header + size font/weight unchanged (label + value styles). */
+.dsf-avail-cell { position: relative; }
+.dsf-size-line {
+  display: flex; align-items: center; gap: 14px;
+  border-top: 1px solid #e2e8f0; padding-top: 7px; margin-top: 2px;
+}
+.dsf-size-row { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* These are a list of widths, so they are drawn as a list of chips rather than
+   as one long run of big numbers with rules between them. The figure stays the
+   loudest thing in each chip -- it is what the planner is reading. */
+.dsf-size-row .dsf-size-item {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 15.5px; font-weight: 800; letter-spacing: 0.01em; color: #044a78;
+  background: #eef5ff; border: 1px solid #d7e5f5; border-radius: 999px;
+  padding: 5px 13px; white-space: nowrap;
+}
+/* A width somebody typed in that the store does not hold: still perfectly
+   usable, but it is not a reel anyone can fetch today, and the chip says so
+   without a second line of text. */
+.dsf-size-row .dsf-size-item.is-added {
+  color: #5b6b80; background: #f8fafc; border-style: dashed; border-color: #cbd5e1;
+}
+.dsf-size-row .dsf-size-item .x {
+  border: none; background: none; color: #b91c1c; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0 0 0 3px; margin-right: -3px; flex: none;
+  border-radius: 999px;
+}
+.dsf-size-row .dsf-size-item .x:hover { color: #7f1d1d; }
+/* The heading carries a "* " and a "from stock" tag, so it is the one label on
+   the row that must be allowed to run past its own width. */
+.dsf-avail-cell .sl-job-label { overflow: visible; white-space: normal; }
+.dsf-size-none { color: #94a3b8; font-size: 13px !important; font-weight: 700; }
+.dsf-edit-inline { position: static; flex: none; }
+.dsf-chip-add { display: flex; gap: 6px; margin-top: 8px; }
+.dsf-chip-add input {
+  width: 100px; height: 30px; text-align: center; font-weight: 700; font-size: 14px;
+  border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 2px 6px;
+}
+.dsf-chip-add input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+.dsf-mini-btn {
+  display: inline-flex; align-items: center; gap: 5px; border: 1.5px solid #044a78; background: #fff;
+  color: #044a78; border-radius: 6px; padding: 3px 11px; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.dsf-mini-btn:hover { background: #f0f7ff; }
+#dsfTrim {
+  height: 40px !important; font-size: 20px !important; font-weight: 800 !important; color: #1f2a44;
+  width: 100%; padding: 4px 8px; border-radius: 6px; border: 1px solid #044a78; background: #f4f9ff;
+}
+#dsfTrim:focus { outline: none; box-shadow: 0 0 0 3px rgba(4,74,120,0.14); }
+
+.sl-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; }
+.sl-table th {
+  background: #044a78; color: #fff; font-size: 11.5px; font-weight: 600; padding: 7px 5px;
+  text-align: center; letter-spacing: 0.02em; border-right: 1px solid rgba(255,255,255,0.22); white-space: nowrap;
+}
+.sl-table th:last-child { border-right: none; }
+.sl-table td {
+  padding: 5px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;
+  vertical-align: middle; text-align: center; background: #fff;
+}
+.sl-table td:last-child { border-right: none; }
+.sl-table input.form-control {
+  padding: 4px 6px !important; font-size: 12.5px !important; height: 30px !important;
+  min-width: 0; width: 100%; text-align: center; border-radius: 6px !important;
+  font-variant-numeric: tabular-nums; border: 1px solid #cbd5e1 !important; background-color: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+.sl-table input.form-control:focus {
+  outline: none; border-color: #044a78 !important; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.12);
+}
+.sl-table input[type="number"]::-webkit-outer-spin-button,
+.sl-table input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sl-table input[type="number"] { -moz-appearance: textfield; }
+.sl-table tbody tr:hover > td { background: #fbfdff; }
+.sl-table td.dsf-rownum { font-size: 12.5px; font-weight: 800; color: #1f2a44; background: #f8fafc; }
+
+.sl-scroll { align-self: stretch; overflow-x: auto; }
+.sl-scroll::-webkit-scrollbar { height: 9px; }
+.sl-scroll::-webkit-scrollbar-thumb { background: #044a78; border-radius: 8px; }
+
+.sl-width-input.is-set { border-color: #044a78 !important; background-color: #f4f9ff !important; font-weight: 700; }
+
+/* Validation states */
+.sl-table input.form-control.is-bad,
+#dsfTrim.is-bad,
+.dsf-chip-add input.is-bad {
+  border-color: #dc2626 !important; background-color: #fef2f2 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
+}
+.sl-table input.form-control:disabled {
+  background-color: #f1f5f9 !important; border-color: #e2e8f0 !important;
+  color: #cbd5e1; cursor: not-allowed;
+}
+#dsfIssuesBody.is-error { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+#dsfIssuesBody ul { margin: 4px 0 0; padding-left: 18px; }
+#dsfIssuesBody li { margin: 2px 0; }
+#dsfIssuesBody .dsf-issue-head { font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
+/* Same separator as the Slitting Queue dialog's footer (sq-dialog-footer),
+   just the top edge -- .span-full's own border is dropped so it doesn't
+   also draw the other three sides. */
+/* Stacks: the reel list across the full width, then the figures and Reset
+   together on the line under it. */
+.dsf-submit-footer {
+  margin-top: 10px !important; border: none !important; border-top: 1px solid #b6c0d1 !important;
+  border-radius: 0 !important; background: #fafbfd; padding: 20px 24px 16px !important;
+  display: flex !important; flex-direction: column !important; align-items: stretch; gap: 12px;
+}
+/* The figures and Reset share ONE card -- the button sits in the same white
+   box as the stats rather than floating beside it, divided off by the same
+   hairline that separates the figures from each other. */
+.dsf-footer-row {
+  display: flex; flex-direction: row; align-items: stretch; gap: 0; flex-wrap: wrap;
+  border: 1px solid #e6eaf2; border-radius: 10px; background: #fff; overflow: hidden;
+}
+.dsf-footer-row .sl-save-wrap {
+  flex: none; margin-left: auto; align-self: stretch;
+  display: flex; flex-direction: row; align-items: center; gap: 8px;
+  padding: 10px 14px; border-left: 1px solid #eef1f6;
+}
+/* Alone in the card (nothing drawn yet) there is nothing to divide it from. */
+#dsfStatChips:empty ~ .sl-save-wrap { border-left: none; }
+/* The Set Deckle page's stat-chip grid (.dsa-result/.dsa-stat), kept whole so
+   a figure read here reads the same there. */
+/* Line 1 -- the reels a real run would pull, with nothing beside it, so the
+   list runs the whole width instead of stopping where Reset starts. */
+.dsf-final-stats {
+  min-width: 0; border: 1px solid #e6eaf2; border-radius: 10px;
+  background: #fff; overflow: hidden;
+}
+.dsf-final-stats:empty { display: none; }
+/* "Deckle Webs Used" is a list of reels, not a single figure. Laid across
+   rather than stacked, which is what keeps it to one line, and it is alone on
+   its line so it grows to fill it. */
+.dsa-stat.dsf-stat-lead {
+  flex: 1 1 auto; flex-direction: row; align-items: baseline; gap: 14px;
+  padding: 12px 20px; border-right: none; border-bottom: none; min-width: 0;
+}
+.dsa-stat.dsf-stat-lead .v {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+/* Line 2 -- the figures. The card is .dsf-footer-row around them and the
+   button, so this carries no border of its own. */
+.dsf-stat-row {
+  flex: 1 1 auto; min-width: 0; border: none; background: transparent;
+}
+.dsf-stat-row:empty { display: none; }
+.dsf-chip-msg { font-size: 11.5px; font-weight: 700; color: #b91c1c; margin-top: 6px; }
+/* Nothing drawn yet. The figures card is still there -- Reset lives in it --
+   so it says what it is waiting for instead of standing empty. */
+.dsa-stat.dc-stat-empty .v { font-size: 13px; font-weight: 700; color: #94a3b8; white-space: normal; }
+
+/* ---- Web view: A..L drawn to scale across the reel's web ---- */
+.sl-web {
+  display: flex; align-items: stretch; height: 32px; width: 100%; max-width: 960px; margin: 0 auto;
+  border: 1px solid #cbd5e1; border-radius: 7px; overflow: hidden; background: #fff;
+}
+.sl-web.is-over { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15); }
+.sl-web-seg {
+  flex-basis: 0; min-width: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px;
+  border-right: 1px solid #fff; overflow: hidden; white-space: nowrap;
+  background: #16a34a; color: #fff;
+}
+.sl-web-seg:nth-child(even) { background: #15803d; }
+.sl-web-seg:last-child { border-right: none; }
+.sl-web-seg .sl-seg-slot { font-size: 9px; font-weight: 700; opacity: 0.8; letter-spacing: 0.06em; }
+.sl-web-seg .sl-seg-w { font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sl-web-seg.sl-web-edge { background: #111827; color: #fff; }
+.sl-web-seg.sl-web-trim { background: #dc2626; color: #fff; }
+.sl-web-empty {
+  display: flex; align-items: center; justify-content: center; width: 100%;
+  font-size: 11.5px; font-weight: 600; color: #94a3b8;
+  background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #f8fafc 6px, #f8fafc 12px);
+}
+.dsf-sub-cell { background: #f8fafc !important; padding: 10px !important; text-align: left !important; }
+.sl-table tbody tr:hover > td.dsf-sub-cell { background: #f8fafc !important; }
+
+/* Per-layout table: deckle size | siderun | diagram + caption | pick.
+   The table fills the available width; the diagram column keeps its own
+   capped width (below) so widening the table never stretches the strip. */
+.dsf-web-table { width: 100%; border-collapse: separate; border-spacing: 0;
+  background: #fff; border: 1.5px solid #e6eaf2; border-radius: 10px; overflow: hidden; }
+.dsf-web-table th {
+  background: #044a78; color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; padding: 6px 10px; text-align: left; white-space: nowrap;
+}
+.dsf-web-table td { padding: 8px 10px; border-top: 1px solid #eef1f6; vertical-align: middle; }
+.dsf-web-tr { cursor: pointer; }
+.dsf-web-tr:hover td { background: #f7fbff; }
+.dsf-web-tr.is-chosen td { background: #eef5ff; }
+/* Deckle Size, Siderun, Across and Deckle Count all share one big value font. */
+.dsf-web-size, .dsf-web-rem, .dsf-web-dc, .dsf-web-across .flag {
+  font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.dsf-web-dc { width: 96px; text-align: center; color: #1f2a44; }
+.dsf-web-size {
+  width: 120px; color: #1f2a44; white-space: nowrap; text-align: center;
+}
+.dsf-web-tr.is-chosen .dsf-web-size { color: #044a78; }
+.dsf-web-rem {
+  width: 104px; text-align: center; color: #dc2626; white-space: nowrap;
+}
+.dsf-web-rem.sl-bad { color: #b91c1c; }
+/* "Across" column -- the "N rolls" line. */
+.dsf-web-across { width: 130px; }
+.dsf-web-across .flag { color: #475569; }
+.dsf-web-across .flag.sl-bad { color: #b91c1c; }
+.dsf-web-across .flag.sl-ok { color: #15803d; }
+.dsf-web-across .dsf-tag {
+  display: inline-block; margin-top: 3px; font-size: 9.5px; font-weight: 800;
+  color: #fff; background: #059669; border-radius: 999px; padding: 2px 8px; letter-spacing: 0.3px;
+}
+/* Diagram column soaks up the extra table width; its contents stay centered
+   and the strip keeps its own capped width. */
+.dsf-web-diag { min-width: 0; text-align: center; }
+.dsf-web-diag .sl-web { margin: 0 auto; max-width: 880px; width: 100%; height: 36px; }
+/* Diagram segments show the width number only -- no A/B/C / EDGE / TRIM label. */
+.dsf-web-diag .sl-seg-slot { display: none; }
+.dsf-web-diag .sl-web-seg .sl-seg-w { font-size: 13px; }
+.dsf-web-pick { width: 48px; text-align: center; }
+.dsf-web-pick .dsf-radio {
+  display: inline-flex; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #cbd5e1;
+  align-items: center; justify-content: center; background: #fff;
+}
+.dsf-web-tr.is-chosen .dsf-web-pick .dsf-radio { border-color: #044a78; }
+.dsf-web-tr.is-chosen .dsf-web-pick .dsf-radio::after {
+  content: ""; width: 10px; height: 10px; border-radius: 50%; background: #044a78;
+}
+
+.sl-warn-note {
+  align-self: stretch; background: #fff8e1; border: 1px solid #f0c36d; color: #7a5b00;
+  border-radius: 8px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; line-height: 1.5;
+}
+.sl-save-wrap { display: flex; flex-direction: column; align-items: center; gap: 7px; flex: none; margin-left: auto; }
+
+/* ---- Deckle-Set-form-only ---- */
+.dsf-add-btn {
+  display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid #044a78; background: #fff;
+  color: #044a78; border-radius: 7px; padding: 7px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.dsf-add-btn:hover { background: #f0f7ff; }
+.dsf-add-btn:disabled { opacity: 0.45; cursor: not-allowed; background: #fff; }
+.dsf-row-btn {
+  width: 26px; height: 26px; padding: 0; border: 1px solid #e2e8f0; background: #fff;
+  color: #b91c1c; border-radius: 5px; font-size: 11.5px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.dsf-row-btn:hover { background: #fef2f2; border-color: #fecaca; }
+.dsf-row-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.dsf-add-btn:hover { background: #f0f7ff; }
+.dsf-add-btn:disabled { opacity: 0.45; cursor: not-allowed; background: #fff; }
+.dsf-row-btn {
+  width: 26px; height: 26px; padding: 0; border: 1px solid #e2e8f0; background: #fff;
+  color: #b91c1c; border-radius: 5px; font-size: 11.5px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.dsf-row-btn:hover { background: #fef2f2; border-color: #fecaca; }
+.dsf-row-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* "Show all sizes" toggle under a layout's size table -- only rendered while
+   the table is collapsed to the chosen size (after an AI Deckle Set run).
+   A white pill rather than an underlined link: it sits on the sub-row's grey,
+   where a bare text link reads as body copy instead of a control. The chevron
+   rides in its own badge; hovering moves the border colour and nothing else. */
+.dsf-sizes-toggle {
+  margin-top: 10px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 15px 6px 7px; border-radius: 999px;
+  border: 1px solid #dbe6f2; background: #fff; color: #044a78;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.01em;
+  box-shadow: 0 1px 2px rgba(16, 37, 60, 0.05);
+  transition: border-color 0.16s ease;
+}
+.dsf-sizes-toggle i {
+  flex: none; width: 20px; height: 20px; border-radius: 50%; font-size: 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #eef5ff; color: #044a78;
+}
+/* Hover moves the border and nothing else. */
+.dsf-sizes-toggle:hover { border-color: #044a78; }
+.dsf-layout-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; }
+/* Holds the first blocking error and nothing else -- empty when the layout is
+   sound, which leaves the toolbar to the Done button. */
+.dsf-layout-status { font-size: 12.5px; font-weight: 700; color: #b45309; }
+.dsf-order-check { width: 16px; height: 16px; accent-color: #044a78; cursor: pointer; }
+
+/* ---- "Deckle Set" recap -- the only view of the plan on the page ---- */
+/* align-self: .span-full is a column flex with align-items:flex-start, so a
+   child that doesn't ask for the full width gets only as much as its content
+   needs (which left the empty-state box as narrow as its own sentence). */
+.dsf-set-wrap { align-self: stretch; padding: 4px 14px 14px; }
+.dsf-set-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+/* Add Deckle Layout sits at the far end of the recap's header row -- with the
+   layout table now in a dialog, this is the only way to start a new one.
+   The whole row hides until something is drawn: with nothing in the recap
+   the sub-line is empty too, and the empty state carries its own button. */
+.dsf-set-head[hidden] { display: none; }
+.dsf-set-head #dsfAddLayout { margin-left: auto; }
+.dsf-set-sub { font-size: 12px; font-weight: 700; color: #7c8ba1; }
+
+/* One scrollbar for every surface this page scrolls -- the Deckle Set recap,
+   and inside the layout dialog both the body (vertical) and the layout table
+   (sideways). Same tokens as every Tabulator table in the app
+   (tableDisp.css's .tabulator-tableholder), restated because this page
+   loads its own stylesheet and inherits none of it.
+   .sl-scroll's own rule is webkit-only, so without the longhands at the end
+   Firefox draws the OS default on these. */
+#dsfSetBody::-webkit-scrollbar,
+.dsf-layout-modal .dialog-body::-webkit-scrollbar,
+.dsf-layout-modal .sl-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+#dsfSetBody::-webkit-scrollbar-track,
+.dsf-layout-modal .dialog-body::-webkit-scrollbar-track,
+.dsf-layout-modal .sl-scroll::-webkit-scrollbar-track { background: #f0f2f5; border-radius: 6px; }
+#dsfSetBody::-webkit-scrollbar-thumb,
+.dsf-layout-modal .dialog-body::-webkit-scrollbar-thumb,
+.dsf-layout-modal .sl-scroll::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+#dsfSetBody::-webkit-scrollbar-thumb:hover,
+.dsf-layout-modal .dialog-body::-webkit-scrollbar-thumb:hover,
+.dsf-layout-modal .sl-scroll::-webkit-scrollbar-thumb:hover { background: #06639f; }
+#dsfSetBody,
+.dsf-layout-modal .dialog-body,
+.dsf-layout-modal .sl-scroll { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
+
+/* Thirteen columns, one of which is a drawing. The Set Deckle page gives the
+   diagram 560px and asks for 1520px of table, which on a laptop puts Rolls,
+   Deckle and the footer's own totals off the right edge of the card -- you
+   scroll sideways to read the figures the table exists to show. The columns
+   below are the same columns, sized to fit the width there actually is; the
+   strip is still by far the widest thing in the row. */
+.dsf-set-table {
+  width: 100%; min-width: 1240px; border-collapse: separate; border-spacing: 0; background: #fff;
+  border: 1.5px solid #e6eaf2; border-radius: 10px; overflow: hidden;
+}
+.dsf-set-table th {
+  background: #eef3f9; color: #44566e; font-size: 10.5px; font-weight: 800; letter-spacing: 0.05em;
+  text-transform: uppercase; padding: 7px 7px; text-align: center; white-space: nowrap;
+}
+.dsf-set-table td {
+  padding: 8px 7px; border-top: 1px solid #eef1f6; text-align: center; vertical-align: middle;
+  font-size: 13px; font-weight: 700; color: #1f2a44; font-variant-numeric: tabular-nums;
+}
+.dsf-set-table tbody tr:hover td { background: #f7fbff; }
+/* The whole row opens its layout, not just the pencil -- so only the rows
+   that carry a layout take the pointer (never the no-match row). */
+.dsf-set-table tbody tr[data-edit-lid] { cursor: pointer; }
+.dsf-set-table .dsf-set-no { width: 40px; color: #7c8ba1; }
+
+/* Sortable headers + a search box under each one, the same interaction as the
+   Tabulator tables elsewhere in the app -- restated here because this page
+   loads its own stylesheet and inherits none of tableDisp.css. */
+.dsf-set-table th.dsf-set-th { cursor: pointer; user-select: none; }
+.dsf-set-table th.dsf-set-th:hover { background: #e2ebf5; }
+.dsf-set-table th.dsf-set-th:focus-visible { outline: 2px solid #044a78; outline-offset: -2px; }
+.dsf-set-table th.dsf-set-th.is-sorted { background: #dbe7f4; color: #044a78; }
+.dsf-th-in { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.dsf-th-arrow { font-size: 9px; opacity: 0.3; }
+.dsf-set-table th.dsf-set-th.is-sorted .dsf-th-arrow { opacity: 1; }
+.dsf-set-table .dsf-set-filters th {
+  background: #f6f9fc; padding: 5px 6px; border-top: 1px solid #dfe8f1; text-transform: none;
+}
+/* The magnifier is drawn in the box rather than written in it: "Search" does
+   not fit a 74 mm-wide Trim column, and a placeholder that clips to "Sear"
+   looks like a bug. */
+.dsf-set-filter {
+  width: 100%; min-width: 0; height: 26px; padding: 2px 5px 2px 21px; text-align: left;
+  border: 1px solid #d5dfea; border-radius: 5px; background-color: #fff;
+  font-size: 11.5px; font-weight: 600; color: #1f2a44; font-variant-numeric: tabular-nums;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23a3b1c2' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='6.8' cy='6.8' r='4.6'/%3E%3Cpath d='M10.3 10.3 14 14'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 5px 50%;
+  background-size: 11px 11px;
+}
+.dsf-set-filter:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 2px rgba(4, 74, 120, 0.14); }
+.dsf-set-filter.is-on { border-color: #044a78; background-color: #f4f9ff; }
+/* Filters hide rows but never change the footer -- what the batch makes does
+   not depend on a search box -- so the count that is being held back is
+   spelled out rather than left to be inferred from a shorter table. */
+.dsf-set-hid { font-weight: 700; color: #b45309; text-transform: none; letter-spacing: 0; }
+.dsf-set-clear {
+  border: none; background: none; padding: 0 2px; cursor: pointer;
+  font: inherit; font-weight: 800; color: #044a78; text-decoration: underline;
+}
+.dsf-set-clear:hover { color: #06639f; }
+.dsf-set-table .dsf-set-nomatch td {
+  padding: 18px 10px; color: #7c8ba1; font-weight: 700; background: #fcfdfe;
+}
+.dsf-set-table .dsf-set-size { width: 96px; color: #044a78; font-weight: 800; font-size: 17px; }
+.dsf-set-table .dsf-set-cuts {
+  text-align: left; font-weight: 600; color: #44566e; width: 148px; min-width: 148px; line-height: 1.5;
+}
+/* The web strip is the point of this table -- give it the bulk of the width
+   and let the strip itself fill the cell rather than sitting capped in the
+   middle of it. */
+.dsf-set-table .dsf-web-diag { width: 46%; min-width: 380px; padding-left: 10px; padding-right: 10px; }
+.dsf-set-table .dsf-web-diag .sl-web { max-width: none; height: 40px; }
+/* Each segment carries its roll width -- big enough to read off the screen. */
+.dsf-set-table .dsf-web-diag .sl-web-seg .sl-seg-w { font-size: 15px; }
+.dsf-set-table .dsf-set-cuts b { color: #1f2a44; font-weight: 800; }
+.dsf-set-table .dsf-set-trim { width: 104px; min-width: 104px; color: #b45309; }
+.dsf-set-table .dsf-set-rem { width: 82px; color: #15803d; }
+/* A constant part of the sum -- kept neutral so Total stays the
+   figure the eye lands on. */
+.dsf-set-table .dsf-set-edge { width: 74px; color: #44566e; }
+/* Grace is width the rolls keep, not width thrown away -- teal, so it does
+   not read as another scrap column beside the Siderun and Trim it sits
+   with. */
+.dsf-set-table .dsf-set-grace { width: 78px; color: #0f766e; }
+.dsf-set-table .dsf-set-rem.sl-bad { color: #b91c1c; }
+.dsf-set-table .dsf-set-rolls { color: #15803d; font-weight: 800; }
+.dsf-set-table tfoot td {
+  background: #f4f8fc; border-top: 1.5px solid #d8e3ef; font-weight: 800; color: #044a78;
+}
+/* Message and button on one line, centred together. Wraps rather than
+   squeezes on a narrow viewport. */
+.dsf-set-empty {
+  display: flex; flex-direction: row; flex-wrap: wrap;
+  align-items: center; justify-content: center; gap: 16px;
+  font-size: 13px; font-weight: 700; color: #7c8ba1; background: #fff;
+  border: 1.5px dashed #dbe3ec; border-radius: 10px; padding: 18px 14px; text-align: center;
+}
+/* The only way into the first layout, so it reads as the page's next step
+   rather than as a link in a sentence. */
+.dsf-set-empty-btn {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  border: 1.5px solid #044a78; background: #044a78; color: #fff;
+  border-radius: 9px; padding: 11px 26px; font-size: 14.5px; font-weight: 800;
+}
+.dsf-set-empty-btn:hover { background: #06639f; border-color: #06639f; }
+/* Pencil at the end of every recap line -- opens that layout in the dialog. */
+.dsf-set-table .dsf-set-edit-cell { width: 46px; }
+.dsf-set-edit {
+  width: 28px; height: 28px; padding: 0; border: 1px solid #cfe0f0; background: #f4f9ff;
+  color: #044a78; border-radius: 6px; font-size: 11.5px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.dsf-set-edit:hover { background: #044a78; color: #fff; border-color: #044a78; }
+/* A layout with no roll widths yet. It has to be listed: it keeps Add Deckle
+   Layout locked, and the recap is the only route back into the layout it
+   belongs to. */
+.dsf-set-table .dsf-set-pending td {
+  background: #fcfdfe; color: #7c8ba1; font-weight: 700; font-style: italic;
+}
+.dsf-set-table tbody tr.dsf-set-pending:hover td { background: #f7fbff; }
+
+/* ---- Deckle Layout dialog ---- */
+.dialog-header {
+  background: #044a78; padding: 14px 20px; border-radius: 14px 14px 0 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.dialog-header h2 { margin: 0; font-size: 1.02rem; font-weight: 700; color: #fff; }
+.dialog-close-btn {
+  background: none; border: none; color: #fff; font-size: 26px; cursor: pointer; line-height: 1;
+  width: 36px; height: 36px; border-radius: 8px; opacity: 0.85;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.dialog-close-btn:hover { opacity: 1; background: rgba(255, 255, 255, 0.18); }
+.dialog-body {
+  padding: 16px; background: #fff; border-radius: 0 0 14px 14px;
+  max-height: calc(100vh - 170px); overflow-y: auto;
+}
+/* The layout table is scoped to the one layout being edited. Every other row
+   stays in the DOM -- the totals, the validation and the submit payload are
+   all computed off them -- it is only hidden while the dialog is open. */
+#dsfLayoutTable.is-solo > tbody > tr:not(.is-editing) { display: none; }
+.dsf-done-btn { border-color: #044a78; background: #044a78; color: #fff; }
+.dsf-done-btn:hover { background: #06639f; border-color: #06639f; color: #fff; }
+.dsf-toolbar-btns { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+/* Open reads as pressed -- a light fill, not the solid blue Done wears, so
+   the two never look like rival primary actions. */
+#dsfGraceBtn.is-on { background: #eef5ff; border-color: #044a78; color: #044a78; }
+/* How much grace this layout is carrying, right on the button, so it is
+   legible without opening the panel at all. */
+.dsf-btn-badge {
+  margin-left: 2px; font-size: 10px; font-weight: 800; letter-spacing: 0.03em;
+  color: #fff; background: #0f766e; border-radius: 999px; padding: 2px 7px; white-space: nowrap;
+}
+.dsf-grace-x {
+  border: none; background: none; color: #7c8ba1; cursor: pointer; font-size: 22px; line-height: 1;
+  width: 28px; height: 28px; border-radius: 7px; margin-left: -4px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.dsf-grace-x:hover { background: rgba(4, 74, 120, 0.1); color: #044a78; }
+
+/* ---- Grace panel ---- */
+.dsf-grace {
+  margin-top: 12px; border: 1.5px solid #cfe0f0; border-radius: 10px;
+  background: #f8fbff; overflow: hidden;
+}
+.dsf-grace[hidden] { display: none; }
+.dsf-grace-head {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; background: linear-gradient(180deg, #f2f8fd, #e9f2fa);
+  border-bottom: 1px solid #dfeaf5;
+}
+.dsf-grace-head h3 {
+  margin: 0; font-size: 12px; font-weight: 800; color: #1f2a44;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.dsf-grace-note { font-size: 11.5px; font-weight: 600; color: #5b6b80; }
+.dsf-grace-acts { display: flex; gap: 8px; margin-left: auto; }
+.dsf-grace-body { padding: 12px 14px; }
+.dsf-grace-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff;
+  border: 1px solid #e6eaf2; border-radius: 8px; overflow: hidden; }
+.dsf-grace-table th {
+  background: #eef3f9; color: #44566e; font-size: 10px; font-weight: 800; letter-spacing: 0.05em;
+  text-transform: uppercase; padding: 6px 10px; text-align: center; white-space: nowrap;
+}
+.dsf-grace-table td {
+  padding: 6px 10px; border-top: 1px solid #eef1f6; text-align: center;
+  font-size: 13px; font-weight: 700; color: #1f2a44; font-variant-numeric: tabular-nums;
+}
+.dsf-grace-table .dsf-g-slot { width: 44px; color: #7c8ba1; }
+.dsf-grace-table .dsf-g-cut { color: #044a78; font-weight: 800; }
+.dsf-grace-input {
+  width: 92px; height: 28px; padding: 2px 8px; text-align: center;
+  border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
+  font-size: 12.5px; font-weight: 700; color: #1f2a44; font-variant-numeric: tabular-nums;
+}
+.dsf-grace-input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+.dsf-grace-input.is-bad { border-color: #dc2626 !important; background: #fef2f2; }
+.dsf-grace-sums { display: flex; flex-wrap: wrap; gap: 0; margin-top: 10px;
+  border: 1px solid #e6eaf2; border-radius: 8px; background: #fff; overflow: hidden; }
+.dsf-grace-sum { flex: 1 1 auto; min-width: max-content; padding: 8px 14px; border-right: 1px solid #eef1f6;
+  display: flex; flex-direction: column; gap: 3px; }
+.dsf-grace-sum:last-child { border-right: none; }
+.dsf-grace-sum .k { font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #7c8ba1; white-space: nowrap; }
+.dsf-grace-sum .v { font-size: 16px; font-weight: 800; color: #1f2a44;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dsf-grace-sum .v.good { color: #15803d; }
+.dsf-grace-sum .v.warn { color: #b45309; }
+.dsf-grace-sum .v.bad { color: #b91c1c; }
+.dsf-grace-msg { margin-top: 9px; font-size: 11.5px; font-weight: 700; color: #b91c1c; }
+.dsf-grace-msg:empty { display: none; }
+/* A graced layout is flagged in the recap, where the widths shown are the
+   ordered ones but the diagram beside them is what is actually cut. */
+.dsf-grace-tag {
+  display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 800; letter-spacing: 0.04em;
+  color: #fff; background: #0f766e; border-radius: 999px; padding: 2px 7px; white-space: nowrap;
+}
+
+/* ---- AI Deckle Set (utils/deckleOptimizer) ---- */
+.dsa-panel { align-self: stretch; background: #fff; border: 1.5px solid #cfe0f0; border-radius: 10px; overflow: hidden; }
+.dsa-bar {
+  display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+  padding: 11px 14px; background: linear-gradient(180deg, #f6fbff, #eef5fc);
+  border-bottom: 1px solid #dfeaf5;
+}
+.dsa-field { display: flex; flex-direction: column; gap: 4px; }
+.dsa-field label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #7c8ba1; white-space: nowrap;
+}
+.dsa-field input {
+  width: 104px; height: 34px; padding: 4px 8px; text-align: center;
+  font-size: 15px; font-weight: 800; color: #1f2a44;
+  border: 1.5px solid #cbd5e1; border-radius: 7px; background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.dsa-field input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+.dsa-field input.is-bad { border-color: #dc2626 !important; background: #fef2f2; }
+.dsa-field.dsa-narrow input { width: 74px; }
+.dsa-spacer { flex: 1 1 auto; }
+.dsa-run {
+  display: inline-flex; align-items: center; gap: 8px; border: none;
+  background: #044a78; color: #fff; border-radius: 8px;
+  padding: 9px 18px; font-size: 13px; font-weight: 800; cursor: pointer;
+  letter-spacing: 0.02em; white-space: nowrap;
+}
+.dsa-run:hover { background: #06639f; }
+.dsa-run:disabled { opacity: 0.5; cursor: not-allowed; }
+.dsa-body { padding: 0; }
+.dsa-body:empty { display: none; }
+/* ---- Stat chips ---- */
+.dsa-result { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid #eef1f6; }
+/* A chip is never narrower than its own contents (min-width: max-content) and
+   its figure never wraps. Those two go together: on a fixed 130px basis a
+   long figure like "0.71 % | 116 mm" broke onto a second line while "10" did
+   not, so the chips ended up different heights and the row stopped reading
+   across. Spare width is shared out between them instead. */
+.dsa-stat {
+  flex: 1 1 auto; min-width: max-content; padding: 14px 20px;
+  border-right: 1px solid #eef1f6; display: flex; flex-direction: column; gap: 6px;
+}
+/* Total is the figure the whole page is working towards, and in a row of
+   eight identical chips it read as just another one. A tint and a rule down
+   its leading edge is enough -- it is still the same chip. */
+.dsa-stat.dsa-stat-wide {
+  flex-grow: 1.4; background: linear-gradient(180deg, #f8fbff, #f1f6fc);
+  border-left: 3px solid #044a78;
+}
+.dsa-stat.dsa-stat-wide .v { font-size: 21px; }
+.dsa-stat.dsa-stat-narrow { flex-grow: 0.6; padding: 14px 18px; }
+/* The one deckle width the job runs on, when there is only one. It leads the
+   row, so it is drawn a shade heavier than the counts beside it. */
+.dsa-stat.dsa-stat-size .v { color: #044a78; }
+.dsa-stat:last-child { border-right: none; }
+.dsa-stat .k {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #7c8ba1; white-space: nowrap;
+}
+.dsa-stat .v {
+  font-size: 19px; font-weight: 800; color: #1f2a44;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.dsa-stat .v.good { color: #15803d; }
+.dsa-stat .v.warn { color: #b45309; }
+.dsa-notes { padding: 9px 14px; font-size: 12px; line-height: 1.55; color: #5b6b80; }
+.dsa-notes ul { margin: 0; padding-left: 17px; }
+.dsa-notes li { margin: 2px 0; }
+.dsa-err {
+  padding: 10px 14px; background: #fef2f2; color: #991b1b;
+  font-size: 12.5px; font-weight: 700; line-height: 1.5;
+}
+/* Each layout picks its own web, so say which width the row is cut from
+   right in the layout table. */
+.dsf-row-web {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.04em; color: #044a78;
+  background: #eef5ff; border-radius: 999px; padding: 2px 7px; white-space: nowrap;
+}
+
+/* ---- Requirements -- this page's stand-in for "Orders In This Deckle" ----
+   On the Set Deckle page those rows are the loose orders of one Product Code,
+   read out of the database and only tickable. Here they are typed: roll width,
+   the length wound on each roll, and how many are wanted. Everything else on
+   the page -- Rolls Set, Balance, Extra Rolls -- is measured against them. */
+
+/* Header bar, table and totals in one card, sized to the table it holds, so
+   the bar lines up with the columns beneath it. */
+.dc-req-card { align-self: flex-start; display: inline-block; width: auto; max-width: 100%; vertical-align: top; }
+.dc-req-head {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 9px 12px; background: linear-gradient(180deg, #f8fbff, #eef3f9);
+  border-bottom: 1px solid #e2e8f0;
+}
+.dc-req-head .dc-req-note {
+  font-size: 11.5px; font-weight: 700; color: #7c8ba1; white-space: nowrap;
+}
+.dc-req-head .dsf-add-btn { margin-left: auto; }
+.dc-req-table { width: auto; min-width: 100%; }
+/* Line number: present but quiet -- it is there so "Requirement #3" in the
+   issues panel points at something, not to be read down the page. */
+.dc-req-table td.dc-req-no {
+  width: 40px; font-size: 12px; font-weight: 800; color: #94a3b8; background: #f8fafc;
+}
+.dc-req-table tbody tr:nth-child(even) > td { background: #fcfdfe; }
+.dc-req-table tbody tr:nth-child(even) > td.dc-req-no { background: #f5f8fb; }
+.dc-req-table tbody tr:hover > td { background: #f7fbff; }
+.dc-req-table td.dc-req-set,
+.dc-req-table td.dc-req-bal {
+  font-size: 14px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums;
+}
+/* Short / spare / exact are the three answers this column gives, so each one
+   is a state the stylesheet owns rather than a colour written onto the cell. */
+.dc-req-table td.dc-req-bal.is-short { color: #b45309; }
+.dc-req-table td.dc-req-bal.is-spare { color: #15803d; }
+.dc-req-table td.dc-req-bal.is-exact { color: #15803d; }
+.dc-req-table td.is-muted { color: #b3bdcb; font-weight: 700; font-size: 11.5px; }
+/* A line left out on purpose reads as switched off, not as broken. */
+.dc-req-table tr.is-off > td { opacity: 0.5; }
+.dc-req-table tr.is-off input.form-control { background: #f8fafc; }
+/* A requirement that no layout can produce -- right width, wrong roll length.
+   Worth saying plainly: the Balance alone reads like a shortfall. */
+.dc-req-table td.dc-req-bal .dc-bal-note {
+  display: block; margin-top: 1px; font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.01em; color: #94a3b8; white-space: nowrap;
+}
+/* The bottom line. Same weight as the recap table's own footer, so the two
+   totals rows on this page read as the same kind of thing. */
+.dc-req-table tfoot td {
+  background: #f4f8fc; border-top: 1.5px solid #d8e3ef; border-bottom: none;
+  font-size: 14px; font-weight: 800; color: #044a78; font-variant-numeric: tabular-nums;
+}
+.dc-req-table tfoot td.dc-req-foot-label {
+  text-align: right; padding-right: 12px; font-size: 10.5px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #7c8ba1;
+}
+.dc-req-table tfoot td.is-short { color: #b45309; }
+.dc-req-table tfoot td.is-spare,
+.dc-req-table tfoot td.is-exact { color: #15803d; }
+.dc-req-table tfoot td.is-muted { color: #b3bdcb; font-weight: 700; }
+
+/* Reset sits where Create Deckle Batch sits on the Set Deckle page -- the end
+   of the figures card. It is not a primary action, so it is drawn as an
+   outline button rather than in the filled blue that page gives Create. */
+.dc-reset-btn {
+  border: 1.5px solid #cbd5e1; border-radius: 9px; padding: 10px 20px;
+  font-size: 13.5px; font-weight: 700; color: #44566e; background: #fff;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  transition: border-color 0.16s ease, color 0.16s ease;
+}
+.dc-reset-btn:hover { border-color: #b91c1c; color: #b91c1c; }
+/* Pressed once: it is now asking, so it says so and looks like it means it. */
+.dc-reset-btn.is-armed { border-color: #b91c1c; background: #fef2f2; color: #b91c1c; }
+
+/* Available Sizes opens on what the store actually holds, which is worth
+   saying beside the heading -- the list is editable, so without it a width
+   that came from stock looks no different from one somebody typed. */
+.dc-from-stock {
+  margin-left: 7px; font-size: 9px; font-weight: 800; letter-spacing: 0.06em;
+  color: #0f766e; background: #ccfbf1; border-radius: 999px; padding: 2px 7px; white-space: nowrap;
+}
+
+/* ---- Page header ----
+   The blue bar every page in the app wears, with the one thing that is
+   special about this one stated on the right of it. .form-heading centres its
+   contents, which is right for a lone title and wrong for a title with
+   something beside it. */
+.span-full.form-heading.dc-head {
+  display: flex; flex-direction: row; align-items: center; gap: 12px;
+  flex-wrap: wrap; justify-content: flex-start;
+}
+.dc-head h1 { margin-right: auto; }
+.dc-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;
+  color: #fff; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px; padding: 5px 13px; white-space: nowrap;
+}
+.dc-badge i { font-size: 10px; opacity: 0.9; }
+
+/* The "what do I do here" line. Attached under the heading rather than boxed
+   on its own: it is a caption, and a caption in a card of its own reads like a
+   warning the page keeps repeating. */
+.dc-lede-wrap { padding: 0 !important; margin-top: -4px; }
+.dc-lede {
+  align-self: stretch; margin: 0; padding: 0 4px;
+  font-size: 12.5px; font-weight: 600; color: #6b7a90; line-height: 1.55;
+}
+.dc-lede b { color: #1f2a44; font-weight: 800; }
+
+/* ---- Keyboard focus ----
+   Every control on this page is reachable by tab, and several of them are
+   icon-only (the pencils, the row ×, the chip ×) -- without a ring of their
+   own the browser default lands on a transparent background and disappears.
+   :focus-visible, so a mouse click never leaves a ring behind. */
+.dsf-edit-ic:focus-visible,
+.dsf-row-btn:focus-visible,
+.dsf-add-btn:focus-visible,
+.dsf-mini-btn:focus-visible,
+.dsf-set-edit:focus-visible,
+.dsf-grace-x:focus-visible,
+.dsf-set-empty-btn:focus-visible,
+.dsf-size-row .dsf-size-item .x:focus-visible,
+.dsf-sizes-toggle:focus-visible,
+.dc-reset-btn:focus-visible,
+.dsa-run:focus-visible,
+.dsf-order-check:focus-visible {
+  outline: 2px solid #044a78;
+  outline-offset: 2px;
+}
+/* The size table's rows are the radio buttons for "which web does this layout
+   run on", so they take a ring like any other control. */
+.dsf-web-tr:focus-visible { outline: 2px solid #044a78; outline-offset: -2px; }
+
+/* ---- Narrow screens ----
+   The page is a set of wide tables and will always scroll sideways on a
+   phone; what it must not do is squeeze the controls above them into
+   unreadable slivers, which is what a column-flow grid does when there is no
+   room left. Below this width the setup cells stack and the AI bar's button
+   takes its own line. */
+@media (max-width: 860px) {
+  .sl-job-grid { grid-auto-flow: row; grid-auto-columns: auto; }
+  .sl-job-grid .sl-job-cell.dsf-avail { grid-column: auto; }
+  .sl-job-cell { border-right: none; border-bottom: 1px solid #e2e8f0; }
+  .sl-job-cell:last-child { border-bottom: none; }
+  .dsa-spacer { display: none; }
+  .dsa-run { width: 100%; justify-content: center; }
+  .dsf-submit-footer { padding: 14px 12px 12px !important; }
+  .dsf-footer-row .sl-save-wrap {
+    margin-left: 0; border-left: none; border-top: 1px solid #eef1f6; width: 100%;
+  }
+  .dc-reset-btn { width: 100%; justify-content: center; }
+  .span-full.form-heading.dc-head h1 { margin-right: 0; }
+}
+
+/* ---- Print ----
+   A deckle worked out here gets carried to the machine. Print the figures and
+   the plan; leave out the controls, which are no use on paper. */
+@media print {
+  .side-nav, .nav-opt-wrap, .dsa-bar, .dc-req-head, .dsf-set-head,
+  .dsf-layout-modal, .sl-save-wrap, .dsf-edit-ic, .dsf-set-edit-cell,
+  .dsf-set-filters, .dsf-sizes-toggle, .dc-badge { display: none !important; }
+  .dc-page { padding: 0 !important; }
+  .sl-panel, .dsf-set-table, .dsf-web-table, .dc-req-card { border-color: #94a3b8; }
+  .dsf-set-table { min-width: 0; }
+  .dsa-result, .dsf-final-stats { break-inside: avoid; }
+}

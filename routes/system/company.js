@@ -2,7 +2,8 @@ import express from "express";
 import Company from "../../models/system/company.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
-import { refreshBrand, refreshBrandAfterSwitch, currentBrand } from "../../utils/companyBrand.js";
+import { refreshBrand, refreshBrandAfterSwitch, currentBrand, currentIdPrefix, isIdPrefix, suggestIdPrefix, slugifyCompany, INTERNAL_PREFIX } from "../../utils/companyBrand.js";
+import { rewriteIdPrefix, describeRewrite } from "../../utils/idPrefixRewrite.js";
 import { renameCompanyDb, currentDbName, makeCompanyDbId, isCompanyDbName } from "../../utils/companyDb.js";
 import { mediaUpload, storeUploads, removeAssets, removeTempFiles } from "../../utils/media.js";
 
@@ -31,6 +32,9 @@ function readPayload(body) {
   const bank = body.bankDetails && typeof body.bankDetails === "object" ? body.bankDetails : {};
   return {
     companyName: text(body.companyName).toUpperCase(),
+    // Blank is allowed and means "use the name's own initials" -- see
+    // suggestIdPrefix. Stored as typed so it can be read back into the field.
+    idPrefix: text(body.idPrefix).toUpperCase(),
     address: text(body.address).toUpperCase(),
     state: text(body.state).toUpperCase(),
     country: text(body.country).toUpperCase(),
@@ -77,6 +81,9 @@ function validate(payload) {
   if (payload.bankDetails.ifsc && !IFSC_REGEX.test(payload.bankDetails.ifsc)) {
     return "Invalid IFSC code format.";
   }
+  if (payload.idPrefix && !isIdPrefix(payload.idPrefix)) {
+    return "The ID code must be 2-4 letters or digits (e.g. SP, ZC).";
+  }
   return null;
 }
 
@@ -87,6 +94,9 @@ router.get("/form/company", requireCompanyMaster, async (req, res) => {
     CSS: "tableDisp.css",
     title: "Company Registration",
     company,
+    // What the ID code would be if it is left blank -- shown as the field's
+    // placeholder, and what the form suggests as the name is typed.
+    suggestedIdPrefix: suggestIdPrefix(company?.companyName),
     notification: req.flash("notification"),
   });
 });
@@ -138,6 +148,24 @@ router.put("/api/company/:id", requireAuth, requireCompanyMaster, updateLimiter,
     const problem = validate(payload);
     if (problem) return res.status(400).json({ success: false, message: problem });
 
+    // The URL prefix is the first word of the name, so a rename moves the
+    // whole app to a new one. Keep the old prefix on the record: without it,
+    // every bookmark and open tab on it dies with a 404 the moment the name is
+    // saved (see brandPrefix.js, which redirects a remembered prefix onto the
+    // current one).
+    const before = await Company.findById(req.params.id).select("companyName slugHistory idPrefix").lean();
+    // What ids are being minted with right now -- read before the save, since
+    // that is what the ids already in the database carry.
+    const beforePrefix = currentIdPrefix();
+    const oldSlug = slugifyCompany(before?.companyName);
+    const newSlug = slugifyCompany(payload.companyName);
+    const history = Array.isArray(before?.slugHistory) ? before.slugHistory : [];
+    if (oldSlug && oldSlug !== newSlug && oldSlug !== INTERNAL_PREFIX) {
+      // Newest last, deduped, and never the prefix now in use -- five is well
+      // past anyone's bookmark memory and keeps the record small.
+      payload.slugHistory = [...history.filter((x) => x !== oldSlug && x !== newSlug), oldSlug].slice(-5);
+    }
+
     const updated = await Company.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,
@@ -148,8 +176,27 @@ router.put("/api/company/:id", requireAuth, requireCompanyMaster, updateLimiter,
     // a fixed random id (assigned at registration) and is never touched here --
     // so a rename is instant, the session stays valid, and nothing is copied.
     await refreshBrand();
-    res.locals.auditDescription = `Updated company "${updated.companyName}"`;
-    req.flash("notification", "Company details updated successfully!");
+
+    // The id code follows the company (typed, or the name's initials). When it
+    // changes, every id already minted under the OUTGOING code is moved onto
+    // the new one, so the system doesn't end up reading half in one code and
+    // half in the other. Ids from an earlier code are left alone -- they
+    // belong to a period that is over (see utils/idPrefixRewrite.js).
+    let idMove = null;
+    if (beforePrefix && beforePrefix !== currentIdPrefix()) {
+      try {
+        idMove = await rewriteIdPrefix({ from: beforePrefix, to: currentIdPrefix(), apply: true });
+        console.log(`Company id code ${beforePrefix} -> ${currentIdPrefix()}: ${describeRewrite(idMove)}`);
+      } catch (moveErr) {
+        // The company itself is saved; say so rather than reporting a failure.
+        console.error("COMPANY ID PREFIX REWRITE ERROR:", moveErr);
+      }
+    }
+
+    res.locals.auditDescription = `Updated company "${updated.companyName}"`
+      + (idMove?.changed ? ` (${describeRewrite(idMove)})` : "");
+    req.flash("notification", "Company details updated successfully!"
+      + (idMove?.changed ? ` ${describeRewrite(idMove)}` : ""));
     res.json({ success: true, redirect: `/${currentBrand().slug}/form/company` });
   } catch (err) {
     console.error("COMPANY REGISTRATION UPDATE ERROR:", err);

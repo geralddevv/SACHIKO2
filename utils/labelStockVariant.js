@@ -4,6 +4,9 @@ import SachikoLabelStock from "../models/sachiko/sachikoLabelStock.js";
 import FacestockMaster from "../models/inventory/facestockMaster.js";
 import AdhesiveMaster from "../models/inventory/adhesiveMaster.js";
 import ReleaseMaster from "../models/inventory/releaseMaster.js";
+// The code every generated id starts with -- the Company master's own
+// (utils/companyBrand.js), read live so a rename needs no restart.
+import { currentIdPrefix } from "./companyBrand.js";
 
 // ---------------------------------------------------------------------------
 // Label Stock Product Code variants ("C011" -> "C011-A", "C011-B", ...).
@@ -324,7 +327,7 @@ export async function generateLabelStockId() {
     { $inc: { seq: 1 } },
     { new: true, upsert: true, setDefaultsOnInsert: true },
   ).lean();
-  return `SP | LS | ${String(counter.seq).padStart(6, "0")}`;
+  return `${currentIdPrefix()} | LS | ${String(counter.seq).padStart(6, "0")}`;
 }
 
 const parseSkuSeq = (skuCode) => {
@@ -344,7 +347,7 @@ export async function generateLabelStockSkuCode() {
 
   const maxAttempts = 10000;
   for (let i = 0; i < maxAttempts; i++) {
-    const candidate = `SP | LS | ${String(nextSeq).padStart(6, "0")}`;
+    const candidate = `${currentIdPrefix()} | LS | ${String(nextSeq).padStart(6, "0")}`;
     if (!(await SachikoLabelStock.exists({ skuCode: candidate }))) return candidate;
     nextSeq += 1;
   }

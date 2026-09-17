@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".env") });
 import connectDB from "../config/db.js";
 import SachikoLabelStock from "../models/sachiko/sachikoLabelStock.js";
+import { refreshBrand, currentIdPrefix } from "../utils/companyBrand.js";
 
 // ---------------------------------------------------------------------------
 // Reserializes SachikoLabelStock `skuCode` so:
@@ -39,7 +40,13 @@ import SachikoLabelStock from "../models/sachiko/sachikoLabelStock.js";
 //   node scripts/serialize-labelstock-sku-codes.js --apply   # commit
 // ---------------------------------------------------------------------------
 
-const formatSkuCode = (n) => `SP | LS | ${String(n).padStart(6, "0")}`;
+// The company's own id code (Company master -> utils/companyBrand.js), the
+// same one the app mints new SKUs with. Hardcoding "SP" here meant that on any
+// installation that had set its own code, one run of this script quietly
+// renumbered every Label Stock SKU back to SP.
+// Read lazily, never at module load: the company can only be looked up once
+// connectDB() below has run.
+const formatSkuCode = (n) => `${currentIdPrefix()} | LS | ${String(n).padStart(6, "0")}`;
 // Same single-letter-only suffix resolveLabelStockProductCode/
 // variantFamilyRoot (utils/labelStockVariant.js) ever mints.
 const VARIANT_RE = /^(.*[^-])-([A-Z])$/;
@@ -47,6 +54,9 @@ const VARIANT_RE = /^(.*[^-])-([A-Z])$/;
 const APPLY = process.argv.includes("--apply");
 
 await connectDB();
+// Now that there is a connection, load the company's id code (above).
+await refreshBrand();
+console.log(`Id code: ${currentIdPrefix()} (from the Company master)\n`);
 
 const docs = await SachikoLabelStock.find().sort({ createdAt: 1 }).select("skuCode productCode labelStockId createdAt").lean();
 console.log(`Found ${docs.length} Label Stock records.`);

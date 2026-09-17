@@ -23,6 +23,9 @@ import { normalizeRollId, extractScannedRollId, findScannedReel, generateDeckleI
 import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds, getEligibleRawMaterials } from "../../utils/labelStockProduction.js";
 import { resolveActualLabelStock, resolveLabelStockCombinations } from "../../utils/labelStockVariant.js";
 import { buildSlittingQueueRows } from "./slitting.js";
+// The code every generated id starts with -- the Company master's own
+// (utils/companyBrand.js), read live so a rename needs no restart.
+import { currentIdPrefix } from "../../utils/companyBrand.js";
 
 const router = express.Router();
 
@@ -41,7 +44,7 @@ export function hasStartableAllotment({ rollType, allottedLayers, allottedRollId
   return required.length > 0 && required.every((key) => pickStockIds(allottedLayers?.[key]).length > 0);
 }
 
-// Generate a sequential id of the form `SP | <CODE> | 000001`, matching the
+// Generate a sequential id of the form `<ID> | <CODE> | 000001`, matching the
 // convention already used for Label Stock/Job Card ids in
 // routes/sachiko/sachiko_route.js's generateId/previewId.
 async function generateId(key, code) {
@@ -50,13 +53,13 @@ async function generateId(key, code) {
     { $inc: { seq: 1 } },
     { new: true, upsert: true, setDefaultsOnInsert: true },
   ).lean();
-  return `SP | ${code} | ${String(counter.seq).padStart(6, "0")}`;
+  return `${currentIdPrefix()} | ${code} | ${String(counter.seq).padStart(6, "0")}`;
 }
 
 export async function previewId(key, code) {
   const counter = await Counter.findOne({ key }).select("seq").lean();
   const nextSeq = Number(counter?.seq || 0) + 1;
-  return `SP | ${code} | ${String(nextSeq).padStart(6, "0")}`;
+  return `${currentIdPrefix()} | ${code} | ${String(nextSeq).padStart(6, "0")}`;
 }
 
 const numOrUndef = (value) => {

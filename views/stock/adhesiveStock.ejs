@@ -41,6 +41,16 @@
     .po-action-btn:hover {
       background: #03365a;
     }
+    /* Create PO is switched off for now (see the Purchase Order column).
+       pointer-events: none so the click goes through to the row underneath
+       rather than dying on a dead button -- the whole row opens the label
+       dialog, and this cell shouldn't be the one hole in it. The reason is
+       on the cell's own tooltip, which still works through it. */
+    .po-action-btn:disabled {
+      background: #e2e8f0;
+      color: #94a3b8;
+      pointer-events: none;
+    }
     .add-stock-btn {
       padding: 4px 12px;
       border: none;
@@ -375,6 +385,201 @@
       font-weight: 600;
       color: #64748b;
     }
+    /* ---- Print Drum Labels (whole-row click -> tick drums -> print) ---- */
+    /* Every master row opens its own label dialog, so the row itself has to
+       read as clickable -- drum rows don't (they carry their own buttons).
+       The :hover state and the !important are both load-bearing: tableDisp.css
+       sets `cursor: default !important` on ".tabulator .tabulator-row:hover",
+       which beat a plain rule for the whole time the cursor was actually over
+       the row -- the one moment the cursor is worth anything. The cells are
+       named too, since the pointer is over a cell, not the row's own box. */
+    #adhesive-masters-table .tabulator-row:not(.roll-detail-row),
+    #adhesive-masters-table .tabulator-row:not(.roll-detail-row):hover,
+    #adhesive-masters-table .tabulator-row:not(.roll-detail-row) .tabulator-cell,
+    #adhesive-masters-table .tabulator-row:not(.roll-detail-row):hover .tabulator-cell {
+      cursor: pointer !important;
+    }
+    /* Where the click leads: the drum count is drawn as a tag rather than a
+       bare number, and lights up with the row, so the row's one clickable
+       meaning is visible before it is clicked rather than only discoverable
+       by trying it. */
+    .rolls-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      background: #eef2f7;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .rolls-chip i { font-size: 10.5px; color: #64748b; }
+    #adhesive-masters-table .tabulator-row:hover .rolls-chip {
+      background: #044a78;
+      color: #fff;
+    }
+    #adhesive-masters-table .tabulator-row:hover .rolls-chip i { color: #fff; }
+
+    .pl-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 18px;
+      border-bottom: 1px solid #e6eaf2;
+      background: #f8fafc;
+    }
+    /* Sized off .premium-input (boilerplate.ejs) so the tick box and the
+       search field sit on one line rather than one being half the other. */
+    .pl-selectall {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0;
+      padding: 12px 14px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      background: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      color: #1f2a44;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .pl-selectall:hover { border-color: #044a78; color: #044a78; }
+    .pl-selectall input { width: 16px; height: 16px; accent-color: #044a78; cursor: pointer; margin: 0; flex: none; }
+    /* Padding, radius and focus ring all come from .premium-input -- the
+       app's own input style, which is also what every other field in these
+       dialogs uses. Only the sizing and the white fill (so the box doesn't
+       disappear into the toolbar it sits on) are this page's. */
+    .pl-search {
+      flex: 1 1 200px;
+      min-width: 150px;
+      margin: 0 2px;
+      background-color: #fff !important;
+    }
+    .pl-search::placeholder { color: #94a3b8; }
+
+    .pl-count {
+      font-size: 12px;
+      font-weight: 700;
+      color: #475569;
+      white-space: nowrap;
+      margin-left: auto;
+    }
+    .pl-panes {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 14px 18px;
+    }
+    .pl-panes > * { height: min(52vh, 520px); }
+    /* List and preview share one height: left to the content, a spec with
+       two drums would shrink the row to 100px and leave the preview too
+       short to show a single label. */
+    .pl-list {
+      flex: 1 1 320px;
+      min-width: 260px;
+      height: min(52vh, 520px);
+      overflow-y: auto;
+      border: 1px solid #e6eaf2;
+      border-radius: 10px;
+      background: #fff;
+    }
+    /* Whole row is the <label>, so the tick target is the row, not a 15px
+       box -- these are read and ticked in a hurry at the inward bench. */
+    .pl-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      padding: 8px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .pl-row:last-child { border-bottom: none; }
+    .pl-row:hover { background: #f8fafc; }
+    .pl-row input { width: 15px; height: 15px; accent-color: #044a78; cursor: pointer; margin: 0; flex: none; }
+    /* Same marker a picked drum gets in Assign Production's layer tables --
+       ticks stay findable when the list is scrolled. */
+    .pl-row:has(input:checked) {
+      background: #f4f9ff;
+      box-shadow: inset 3px 0 0 #044a78;
+    }
+    .pl-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+    .pl-roll { font-size: 13px; font-weight: 800; color: #1f2a44; }
+    .pl-meta { font-size: 11.5px; color: #64748b; }
+    .pl-meta .pl-no-invoice { color: #dc2626; font-weight: 700; }
+    .pl-badge {
+      flex: none;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .pl-badge.allotted { background: #fef3c7; color: #92400e; }
+    .pl-badge.inuse { background: #ccfbf1; color: #0f766e; }
+    .pl-badge.used { background: #ede9fe; color: #6d28d9; }
+    .pl-empty { padding: 26px 18px; text-align: center; font-size: 13px; color: #64748b; font-weight: 600; }
+    /* The preview IS the print target (the same document the Print button
+       hands to the browser), so what is on screen here is what comes off the
+       printer -- sized to the real sticker, one per page, scrolled. */
+    /* The sticker's own width, plus the frame's border and room for the
+       scrollbar a stack of labels needs -- at exactly 101.5mm the label was
+       two pixels wider than the box it sits in and the preview scrolled
+       sideways. */
+    .pl-preview {
+      flex: 0 0 auto;
+      width: calc(<%= labelSizeMm.width %>mm + 22px);
+      max-width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pl-preview-frame {
+      flex: 1 1 auto;
+      min-height: 0;
+      border: 1px solid #e6eaf2;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #eef2f7;
+      position: relative;
+    }
+    #plFrame { display: block; width: 100%; height: 100%; border: 0; }
+    .pl-preview-msg {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+      background: #eef2f7;
+    }
+    .pl-preview-msg:empty { display: none; }
+    .pl-preview-caption { font-size: 11px; font-weight: 700; color: #94a3b8; text-align: center; }
+    .pl-footer {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 18px;
+      border-top: 1px solid #e6eaf2;
+      background: #f8fafc;
+      border-radius: 0 0 14px 14px;
+    }
+    .pl-footer .pl-hint { font-size: 11.5px; color: #64748b; font-weight: 600; }
+    .pl-footer .pl-actions { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
   </style>
 
   <!-- Adhesive Master rows are the only table here: current stock (total
@@ -640,6 +845,67 @@
   </div>
 </div>
 
+<!-- ============ PRINT DRUM LABELS DIALOG ============ -->
+<!-- Opened by clicking any master row. Same sticker and the same print path
+     as the single-drum dialog above -- the difference is that the iframe is
+     pointed at /labels?ids=..., which renders one sticker per page for every
+     drum ticked, so a whole inward batch is labelled in one pass. The frame
+     is the print target as well as the preview, so what is scrolled through
+     here is exactly what the printer is handed. -->
+<div class="logout-modal" id="printLabelsDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="printLabelsTitle"
+    style="width: min(1000px, 96vw); padding: 0; border-radius: 14px; display: flex; flex-direction: column; max-height: 92vh;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0; flex: 0 0 auto;">
+      <div style="min-width: 0;">
+        <h2 id="printLabelsTitle">Print Drum Labels</h2>
+        <div id="printLabelsSpec" style="font-size: 12px; color: rgba(255,255,255,0.85); font-weight: 600; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
+      </div>
+      <button class="dialog-close-btn" type="button" onclick="closePrintLabelsDialog()" aria-label="Close">&times;</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0;">
+      <div class="pl-toolbar">
+        <label class="pl-selectall" for="plSelectAll" title="Ticks every drum shown below">
+          <input type="checkbox" id="plSelectAll" /> <span>Select all</span>
+        </label>
+        <input type="search" id="plSearch" class="form-control premium-input pl-search"
+          aria-label="Search this spec's drums"
+          placeholder="Search roll ID, invoice, location&hellip;" autocomplete="off" />
+        <span class="pl-count" id="plCount"></span>
+      </div>
+
+      <div class="pl-panes ap-table-wrap">
+        <!-- `ap-table-wrap` is only carrying the app's scrollbar tokens here
+             (common.css defines nothing else on it); the sizing is .pl-list's
+             own, the same way every other page that scrolls inside a card
+             does it. -->
+        <div class="pl-list ap-table-wrap" id="plList"></div>
+        <div class="pl-preview">
+          <div class="pl-preview-frame">
+            <iframe id="plFrame" title="Labels to be printed"></iframe>
+            <div class="pl-preview-msg" id="plPreviewMsg"></div>
+          </div>
+          <div class="pl-preview-caption" id="plPreviewCaption"></div>
+        </div>
+      </div>
+
+      <div id="plError" class="dialog-error" style="margin: 0 18px;"></div>
+
+      <div class="pl-footer">
+        <span class="pl-hint">
+          <%= labelSizeMm.width %> &times; <%= labelSizeMm.height %> mm &middot; one label per page.
+          Set <b>Scale 100%</b> and <b>Margins: None</b> in the print dialog.
+        </span>
+        <div class="pl-actions">
+          <button class="logout-btn" type="button" id="plRotateBtn" onclick="togglePrintLabelsRotation()">Rotate 180&deg;</button>
+          <button class="logout-btn" type="button" onclick="closePrintLabelsDialog()">Cancel</button>
+          <button class="logout-btn primary" type="button" id="plPrintBtn" onclick="printSelectedLabels()">Print</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <!-- ============ REMOVE ADHESIVE DRUM DIALOG ============ -->
 <div class="logout-modal" id="removeRollDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="removeRollDialogTitle"
@@ -859,6 +1125,9 @@
   document.getElementById("labelDialog").addEventListener("click", function (e) {
     if (e.target === this) closeLabelDialog();
   });
+  document.getElementById("printLabelsDialog").addEventListener("click", function (e) {
+    if (e.target === this) closePrintLabelsDialog();
+  });
 
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
@@ -868,6 +1137,7 @@
     // Routed through its own closer rather than the list above, so the
     // iframe is unloaded on Escape too and not left holding the last drum.
     if (document.getElementById("labelDialog").classList.contains("show")) closeLabelDialog();
+    if (document.getElementById("printLabelsDialog").classList.contains("show")) closePrintLabelsDialog();
   });
 
   function escapeHtml(value) {
@@ -1041,7 +1311,13 @@
         headerFilterPlaceholder: "Search",
         hozAlign: "center",
         minWidth: 110,
-        formatter: (cell) => (cell.getRow().getData().isParent ? (cell.getValue() || 0) : ""),
+        headerTooltip: "Drums of this spec in stock. Click a row to tick them off and print their labels.",
+        formatter: (cell) => {
+          if (!cell.getRow().getData().isParent) return "";
+          const count = cell.getValue() || 0;
+          if (!count) return `<span style="color:#94a3b8;">0</span>`;
+          return `<span class="rolls-chip" title="Click this row to print labels for these drums"><i class="fa-solid fa-tag"></i>${count}</span>`;
+        },
       },
       {
         title: "Allotted (Kg)",
@@ -1116,6 +1392,13 @@
           btn.className = "po-action-btn";
           btn.textContent = "Create PO";
           btn.addEventListener("click", () => openPoDialog(row));
+          // Raising purchase orders from here is switched off for now. Shown
+          // greyed rather than taken away, so the column still says what this
+          // row is for and an existing PO still reads "PO Pending". To turn it
+          // back on, drop these two lines -- the dialog and POST /purchase-order
+          // behind it are untouched and still work.
+          btn.disabled = true;
+          cell.getElement().title = "Creating purchase orders is switched off for now.";
           return btn;
         },
       },
@@ -1137,6 +1420,20 @@
       if (cell) cell.textContent = i + 1;
     });
   });
+
+  // A master row is a spec, and the one thing wanted of a whole spec at once
+  // is its drums' labels -- so the row opens the Print Drum Labels dialog.
+  // Everything on the row that already means something else keeps meaning it:
+  // the Add / Create PO buttons, and the tree control that drops the drums
+  // down under it.
+  mastersTable.on("rowClick", (e, row) => {
+    const data = row.getData();
+    if (!data.isParent) return;                                  // drum rows carry their own buttons
+    if (e.target.closest("button")) return;                      // Add / Create PO
+    if (e.target.closest(".tabulator-data-tree-control")) return; // the drums dropdown
+    openPrintLabelsDialog(data);
+  });
+
 
   // ---- Create Purchase Order dialog ----
   let poLocationChoices = null;
@@ -1507,6 +1804,315 @@
     win.labelApi.toggleFlip();
     syncLabelRotateBtn();
   }
+  // ---- Print Drum Labels dialog (a whole spec's drums in one print run) ----
+  // Opened by clicking any master row. The drum a sticker belongs to is
+  // decided here by ticking it; the sticker itself is still built entirely by
+  // the server (/labels?ids=...) and previewed in the very iframe that gets
+  // printed, so this file never draws a label of its own.
+  //
+  // Nothing here writes: printing a label changes no stock. An allotted or
+  // part-used drum is therefore still listed and still printable -- it is a
+  // physical drum on the floor that needs a sticker on it like any other --
+  // with its state shown as a badge rather than as a bar.
+  const LABEL_FLIP_KEY = "adhesiveLabelFlip180";   // same key the label page reads (srcdoc shares this origin's storage)
+  let plDrums = [];
+  const plSelected = new Set();
+  let plPreviewKey = null;      // the id list the frame is currently showing
+  let plPreviewTimer = null;
+  let plPreviewSeq = 0;         // guards a slow response from landing on a newer selection
+
+  // Ticked drums in the order the list shows them, so the stack coming off
+  // the printer runs the same way as the rows on the screen.
+  function plSelectedIds() {
+    return plDrums.filter((r) => plSelected.has(String(r._id))).map((r) => String(r._id));
+  }
+
+  function plSearchText(drum) {
+    return [drum.rollId, drum.vendorRollId, drum.invoiceNo, drum.location, drum.remarks]
+      .filter(Boolean).join(" ").toLowerCase();
+  }
+
+  function plVisibleDrums() {
+    const q = document.getElementById("plSearch").value.trim().toLowerCase();
+    return q ? plDrums.filter((r) => plSearchText(r).includes(q)) : plDrums.slice();
+  }
+
+  function plRowHtml(drum) {
+    const id = String(drum._id);
+    const badge = drum.allottedTo
+      ? `<span class="pl-badge allotted" title="Reserved for this order -- printing its label changes nothing.">ALLOTTED</span>`
+      : drum.usedBy
+        ? (drum.usedBy.live
+            ? `<span class="pl-badge inuse" title="Scanned and running on a job card right now.">IN USE</span>`
+            : `<span class="pl-badge used" title="${fmtKg(drum.usedBy.totalKg)} kg already drawn off this drum.">PART USED</span>`)
+        : "";
+    const meta = [
+      `${fmtKg(drum.reelMtrs)} kg`,   // reelMtrs is the kg field in every pool, drums included
+      drum.location ? escapeHtml(drum.location) : "",
+      drum.invoiceNo ? `Invoice ${escapeHtml(drum.invoiceNo)}` : `<span class="pl-no-invoice">No Invoice</span>`,
+      formatRollDate(drum.inwardDate || drum.createdAt),
+    ].filter(Boolean).join(" &middot; ");
+    return `<label class="pl-row">
+      <input type="checkbox" value="${escapeHtml(id)}" ${plSelected.has(id) ? "checked" : ""} />
+      <span class="pl-main">
+        <span class="pl-roll">${escapeHtml(drum.rollId || "—")}</span>
+        <span class="pl-meta">${meta}</span>
+      </span>
+      ${badge}
+    </label>`;
+  }
+
+  function renderPlRows() {
+    const list = document.getElementById("plList");
+    if (!plDrums.length) {
+      list.innerHTML = `<div class="pl-empty">No drums in stock for this spec.<br />Key an inward in with <b>Add</b>, and its labels can be printed from here.</div>`;
+      return;
+    }
+    const rows = plVisibleDrums();
+    list.innerHTML = rows.length
+      ? rows.map(plRowHtml).join("")
+      : `<div class="pl-empty">No drum here matches that search.</div>`;
+  }
+
+  // The count, the Select all box and the Print button all say the same thing
+  // three ways, so they are set from one place and can't disagree.
+  function updatePlState() {
+    const visible = plVisibleDrums();
+    const picked = plSelectedIds().length;
+    const searching = document.getElementById("plSearch").value.trim() !== "";
+    document.getElementById("plCount").textContent = plDrums.length
+      ? `${picked} of ${plDrums.length} selected${searching ? ` · ${visible.length} shown` : ""}`
+      : "";
+
+    const visiblePicked = visible.filter((r) => plSelected.has(String(r._id))).length;
+    const selectAll = document.getElementById("plSelectAll");
+    selectAll.disabled = !visible.length;
+    selectAll.checked = visible.length > 0 && visiblePicked === visible.length;
+    selectAll.indeterminate = visiblePicked > 0 && visiblePicked < visible.length;
+
+    const printBtn = document.getElementById("plPrintBtn");
+    printBtn.disabled = picked === 0;
+    printBtn.style.opacity = picked === 0 ? "0.6" : "";
+    printBtn.style.cursor = picked === 0 ? "not-allowed" : "";
+    printBtn.textContent = picked ? `Print ${picked} label${picked === 1 ? "" : "s"}` : "Print";
+
+    document.getElementById("plPreviewCaption").textContent = picked
+      ? `${picked} label${picked === 1 ? "" : "s"} · one per page`
+      : "";
+  }
+
+  function setPlPreviewMsg(text) {
+    document.getElementById("plPreviewMsg").textContent = text || "";
+  }
+
+  function plFrameWindow() {
+    // try/catch rather than a null check, for the same reason as
+    // labelWindow() above: reading .labelApi on a frame the browser treats
+    // as another origin throws instead of returning undefined.
+    try {
+      const frame = document.getElementById("plFrame");
+      return frame.contentWindow && frame.contentWindow.labelApi ? frame.contentWindow : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Loads the ticked drums' labels into the frame. Fetched and written in as
+  // srcdoc for the same reason the single-drum dialog does it (see
+  // openLabelDialog): navigating a frame to the URL dies on the login
+  // redirect's X-Frame-Options rather than saying the session has ended.
+  async function loadPlPreview() {
+    const ids = plSelectedIds();
+    const key = ids.join(",");
+    const frame = document.getElementById("plFrame");
+    const seq = ++plPreviewSeq;
+    plPreviewKey = null;
+
+    if (!ids.length) {
+      frame.removeAttribute("srcdoc");
+      setPlPreviewMsg("Tick a drum to see the label that will print.");
+      return false;
+    }
+
+    setPlPreviewMsg(`Building ${ids.length} label${ids.length === 1 ? "" : "s"}…`);
+    let res;
+    try {
+      res = await fetch(`/app/adhesivestock/labels?ids=${encodeURIComponent(key)}`, { credentials: "same-origin" });
+    } catch (e) {
+      if (seq === plPreviewSeq) setPlPreviewMsg("Couldn't reach the server to build these labels.");
+      return false;
+    }
+    if (seq !== plPreviewSeq) return false;              // a newer selection is already on its way
+
+    if (res.redirected) {
+      setPlPreviewMsg("Your session has ended. Reload this page and sign in again to print.");
+      return false;
+    }
+    if (!res.ok) {
+      // The route answers failures as a small HTML document (it normally
+      // renders into this frame), so strip the markup to get the sentence.
+      const detail = (await res.text()).replace(/<[^>]*>/g, " ").trim();
+      setPlPreviewMsg(`Couldn't build the labels (${res.status}). ${detail}`);
+      return false;
+    }
+
+    const html = await res.text();
+    if (seq !== plPreviewSeq) return false;
+
+    await new Promise((resolve) => {
+      frame.onload = resolve;
+      frame.srcdoc = html;
+    });
+    if (seq !== plPreviewSeq) return false;
+
+    if (!plFrameWindow()) {
+      setPlPreviewMsg("The labels loaded but couldn't be read.");
+      return false;
+    }
+    plPreviewKey = key;
+    setPlPreviewMsg("");
+    syncPlRotateBtn();
+    return true;
+  }
+
+  // Ticking runs through a whole batch a row at a time, so the preview waits
+  // for the ticking to stop rather than re-rendering every label on every
+  // click.
+  function schedulePlPreview() {
+    clearTimeout(plPreviewTimer);
+    const ids = plSelectedIds();
+    if (!ids.length) {
+      plPreviewSeq++;
+      plPreviewKey = null;
+      document.getElementById("plFrame").removeAttribute("srcdoc");
+      setPlPreviewMsg("Tick a drum to see the label that will print.");
+      return;
+    }
+    setPlPreviewMsg(`${ids.length} label${ids.length === 1 ? "" : "s"} selected…`);
+    plPreviewTimer = setTimeout(loadPlPreview, 300);
+  }
+
+  function openPrintLabelsDialog(master) {
+    plDrums = Array.isArray(master.rolls) ? master.rolls.slice() : [];
+    plSelected.clear();
+    plPreviewKey = null;
+    plPreviewSeq++;
+    clearTimeout(plPreviewTimer);
+
+    // What identifies a spec in THIS pool -- the Adhesive master's own
+    // fields, which are the columns this page shows (no family, size or
+    // micron here; those belong to Facestock).
+    const specBits = [
+      master.type, master.make, master.vendorName, master.vendorSkuCode,
+      master.gsm != null ? `${master.gsm} GSM` : null,
+    ].filter(Boolean);
+    document.getElementById("printLabelsTitle").textContent = `Print Drum Labels — ${master.skuId || ""}`;
+    const specLine = document.getElementById("printLabelsSpec");
+    specLine.textContent = specBits.join(" · ") || "—";
+    specLine.title = specLine.textContent;   // the line is ellipsised; the whole spec is still readable
+
+    document.getElementById("plSearch").value = "";
+    document.getElementById("plFrame").removeAttribute("srcdoc");
+    hideError("plError");
+    renderPlRows();
+    updatePlState();
+    setPlPreviewMsg(plDrums.length ? "Tick a drum to see the label that will print." : "Nothing to print for this spec yet.");
+    syncPlRotateBtn();
+    openModal("printLabelsDialog");
+  }
+
+  function closePrintLabelsDialog() {
+    clearTimeout(plPreviewTimer);
+    plPreviewSeq++;
+    const frame = document.getElementById("plFrame");
+    frame.onload = null;
+    // Dropped so the next open can't flash the previous spec's labels.
+    frame.removeAttribute("srcdoc");
+    plPreviewKey = null;
+    plDrums = [];
+    plSelected.clear();
+    closeModal("printLabelsDialog");
+  }
+
+  document.getElementById("plList").addEventListener("change", (e) => {
+    if (!e.target.matches("input[type='checkbox']")) return;
+    const id = e.target.value;
+    if (e.target.checked) plSelected.add(id); else plSelected.delete(id);
+    updatePlState();
+    schedulePlPreview();
+  });
+
+  // Ticks or clears every drum the list is CURRENTLY showing -- with a search
+  // typed in, "Select all" means the drums in front of you, not the ones the
+  // search is hiding.
+  document.getElementById("plSelectAll").addEventListener("change", (e) => {
+    const visible = plVisibleDrums();
+    visible.forEach((r) => {
+      if (e.target.checked) plSelected.add(String(r._id)); else plSelected.delete(String(r._id));
+    });
+    renderPlRows();
+    updatePlState();
+    schedulePlPreview();
+  });
+
+  document.getElementById("plSearch").addEventListener("input", () => {
+    renderPlRows();
+    updatePlState();
+  });
+
+  function syncPlRotateBtn() {
+    const win = plFrameWindow();
+    let flipped = false;
+    if (win) {
+      flipped = Boolean(win.labelApi.isFlipped());
+    } else {
+      // No labels loaded yet -- read the remembered setting straight off this
+      // origin's storage, which is the same storage the framed label writes
+      // to (srcdoc inherits this page's origin).
+      try { flipped = localStorage.getItem(LABEL_FLIP_KEY) === "1"; } catch (e) { flipped = false; }
+    }
+    document.getElementById("plRotateBtn").textContent = flipped ? "Rotated 180°" : "Rotate 180°";
+  }
+
+  // Which way the stock feeds is a property of the printer, not of the drum,
+  // so this is the one setting that is remembered on this PC -- and it is the
+  // same setting the single-drum dialog sets.
+  function togglePrintLabelsRotation() {
+    const win = plFrameWindow();
+    if (win) {
+      win.labelApi.toggleFlip();
+    } else {
+      try {
+        localStorage.setItem(LABEL_FLIP_KEY, localStorage.getItem(LABEL_FLIP_KEY) === "1" ? "0" : "1");
+      } catch (e) { /* private mode -- the label still prints, just unremembered */ }
+    }
+    syncPlRotateBtn();
+  }
+
+  async function printSelectedLabels() {
+    const ids = plSelectedIds();
+    if (!ids.length) return;
+    hideError("plError");
+
+    // The frame is the print target, so it has to be showing exactly this
+    // selection before it is handed to the printer -- a debounce still in
+    // flight would otherwise print the previous set.
+    if (plPreviewKey !== ids.join(",")) {
+      clearTimeout(plPreviewTimer);
+      const btn = document.getElementById("plPrintBtn");
+      btn.textContent = "Preparing…";
+      setLoading("plPrintBtn", true);
+      const ready = await loadPlPreview();
+      setLoading("plPrintBtn", false);
+      updatePlState();                       // puts "Print N labels" back
+      if (!ready) return showError("plError", "The labels couldn't be prepared — see the preview panel.");
+    }
+
+    const win = plFrameWindow();
+    if (!win) return showError("plError", "The labels loaded but couldn't be read. Close this and try again.");
+    win.labelApi.print();
+  }
+
 
   let editLocationChoices = null;
   let editingRollId = null;

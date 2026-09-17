@@ -25,6 +25,10 @@ import {
 const router = express.Router();
 const ROLL_ID_PREFIX = "ADHESIVE";
 const MAX_DRUMS_PER_BATCH = 100;
+// Ceiling on one print run from the Print Drum Labels dialog. Well past any
+// real inward batch, and there so a hand-written `ids` list can't ask the
+// server to render QRs all day.
+const MAX_LABELS_PER_SHEET = 200;
 
 const numOrUndef = (value) => {
   if (value === undefined || value === null || String(value).trim() === "") return undefined;
@@ -574,43 +578,98 @@ function sendLabelError(res, status, message) {
 // utils/materialRollLabel.js), which derives it from the very coordinates
 // SOFT.prn uses, so the browser-printed label and the thermal-printed one
 // land identically. This route only looks the drum up and renders the QR.
+// The fields a drum is printed from, and its QR. Both the one-drum route and
+// the many-drum sheet below go through this, so a label printed off a row's
+// own Print button and the same drum printed as part of a batch are built
+// from one place and cannot drift apart.
+const LABEL_REEL_FIELDS = "rollId vendorName vendorSkuCode invoiceNo reelMtrs type gsm inwardDate";
+
+async function buildLabelFor(reel) {
+  const labelInput = {
+    vendorName: reel.vendorName,
+    vendorSkuCode: reel.vendorSkuCode,
+    invoiceNo: reel.invoiceNo,
+    reelMtrs: reel.reelMtrs,
+    type: reel.type,
+    gsm: reel.gsm,
+    inwardDate: reel.inwardDate,
+    rollId: reel.rollId,
+  };
+  // The QR still carries the full pre-printed-grid payload, so anything that
+  // scans it is unaffected by the label's visual redesign.
+  return {
+    rollId: reel.rollId,
+    fields: buildInwardLabelFields(labelInput),
+    qrDataUrl: await rollLabelQrDataUrl(buildQrPayload(labelInput)),
+  };
+}
+
+// Named `mm`, not `layout` -- `layout` is ejs-mate's own helper and a local
+// of that name breaks rendering. The current design draws itself from an SVG
+// scaled to these dimensions, so only the sticker size is needed here now,
+// not the pre-printed SOFT.prn slot geometry.
+const LABEL_MM = { labelWidth: LABEL_WIDTH_MM, labelHeight: LABEL_HEIGHT_MM };
+
 router.get("/label/:stockId", requireAuth, async (req, res) => {
   try {
     const { stockId } = req.params;
     if (!mongoose.isValidObjectId(stockId)) return sendLabelError(res, 404, "Drum not found.");
 
-    const reel = await AdhesiveStock.findById(stockId)
-      .select("rollId vendorName vendorSkuCode invoiceNo reelMtrs type gsm inwardDate")
-      .lean();
+    const reel = await AdhesiveStock.findById(stockId).select(LABEL_REEL_FIELDS).lean();
     if (!reel) return sendLabelError(res, 404, "Drum not found.");
 
-    const labelInput = {
-      vendorName: reel.vendorName,
-      vendorSkuCode: reel.vendorSkuCode,
-      invoiceNo: reel.invoiceNo,
-      reelMtrs: reel.reelMtrs,
-      type: reel.type,
-      gsm: reel.gsm,
-      inwardDate: reel.inwardDate,
-      rollId: reel.rollId,
-    };
-    // The QR still carries the full pre-printed-grid payload, so anything that
-    // scans it is unaffected by the label's visual redesign.
-    const qrPayload = buildQrPayload(labelInput);
-
     res.render("stock/adhesiveRollLabel.ejs", {
-      rollId: reel.rollId,
-      fields: buildInwardLabelFields(labelInput),
-      // Named `mm`, not `layout` -- `layout` is ejs-mate's own helper and a
-      // local of that name breaks rendering. The current design draws itself
-      // from an SVG scaled to these dimensions, so only the sticker size is
-      // needed here now, not the pre-printed SOFT.prn slot geometry.
-      mm: { labelWidth: LABEL_WIDTH_MM, labelHeight: LABEL_HEIGHT_MM },
-      qrDataUrl: await rollLabelQrDataUrl(qrPayload),
+      labels: [await buildLabelFor(reel)],
+      mm: LABEL_MM,
     });
   } catch (err) {
     console.error("ADHESIVE ROLL LABEL ERROR:", err);
     sendLabelError(res, 500, "Failed to build the label.");
+  }
+});
+
+// The same sticker, one per page, for however many drums were ticked in the
+// stock page's Print Drum Labels dialog -- so a whole inward batch is stuck
+// in one pass at the printer instead of a drum at a time.
+//
+// Only the ids travel: every value on every label is re-read here, exactly
+// as the one-drum route reads it, so a doctored request can ask for labels
+// for drums it shouldn't see (the same drums this page already lists) but
+// can never put wrong figures ON a label.
+router.get("/labels", requireAuth, async (req, res) => {
+  try {
+    const ids = String(req.query.ids || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    if (!ids.length) return sendLabelError(res, 400, "No drums were selected.");
+    if (ids.length > MAX_LABELS_PER_SHEET) {
+      return sendLabelError(res, 400, `Too many drums at once — ${MAX_LABELS_PER_SHEET} labels is the most one print can hold.`);
+    }
+    if (!ids.every((id) => mongoose.isValidObjectId(id))) return sendLabelError(res, 400, "One of the selected drums is not a valid drum.");
+
+    const reels = await AdhesiveStock.find({ _id: { $in: ids } }).select(LABEL_REEL_FIELDS).lean();
+    if (!reels.length) return sendLabelError(res, 404, "None of the selected drums could be found.");
+
+    // Printed in the order they were ticked, which is the order the dialog
+    // lists them in -- so the stack coming off the printer runs the same way
+    // as the drums on the screen, and can be matched off one by one.
+    const byId = new Map(reels.map((reel) => [String(reel._id), reel]));
+    const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
+
+    res.render("stock/adhesiveRollLabel.ejs", {
+      labels: await Promise.all(ordered.map(buildLabelFor)),
+      mm: LABEL_MM,
+      // A drum that has been deleted between opening the dialog and printing
+      // is dropped rather than failing the whole sheet, but it is said out
+      // loud on the page: a silently short stack is how a drum ends up with
+      // no sticker on it.
+      missingCount: ids.length - ordered.length,
+    });
+  } catch (err) {
+    console.error("ADHESIVE ROLL LABEL SHEET ERROR:", err);
+    sendLabelError(res, 500, "Failed to build the labels.");
   }
 });
 

@@ -199,22 +199,40 @@
           <td>${liveStatusValue(row.startTime)}</td><td>${liveStatusValue(row.stopTime)}</td>
           <td><span style="font-weight:700; color:${row.completed ? "#16a34a" : "#a16207"};">${row.completed ? "Completed" : "In progress"}</span></td></tr>`).join("")
       : `<tr><td colspan="7" style="color:#64748b; text-align:center;">No Job Setting entry recorded.</td></tr>`;
+    // A row the operator has produced but not yet saved onto a Job Card comes
+    // from the Deckle itself (MaterialStock.producedFor), so it has metres and
+    // a Deckle id but no times -- marked LIVE rather than shown as a card row
+    // with blanks in it.
+    const liveTag = `<span style="font-size:9.5px; font-weight:800; letter-spacing:0.04em; color:#15803d; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:999px; padding:1px 5px; margin-left:6px;">LIVE</span>`;
     const productionRows = production.length
       ? production.map((row) => `
-          <tr><td>${row.index}</td><td>${liveStatusValue(row.deckleId)}</td><td>${liveStatusValue(row.rollId)}</td>
+          <tr><td>${row.index}</td><td>${liveStatusValue(row.deckleId)}${row.live ? liveTag : ""}</td><td>${liveStatusValue(row.rollId)}</td>
           <td style="font-weight:700;">${liveStatusMtrs(row.meters)} mtrs</td>
-          <td>${liveStatusValue(row.startTime)}</td><td>${liveStatusValue(row.endTime)}</td>
+          <td>${row.live && row.producedAt ? new Date(row.producedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : liveStatusValue(row.startTime)}</td><td>${liveStatusValue(row.endTime)}</td>
           <td>${liveStatusValue(row.faceJoint)}${row.faceMtrs != null ? ` · ${liveStatusMtrs(row.faceMtrs)} mtrs` : ""}</td>
           <td>${liveStatusValue(row.releaseJoint)}${row.releaseMtrs != null ? ` · ${liveStatusMtrs(row.releaseMtrs)} mtrs` : ""}</td></tr>`).join("")
-      : `<tr><td colspan="8" style="color:#64748b; text-align:center;">No completed Production Log row yet.</td></tr>`;
+      : `<tr><td colspan="8" style="color:#64748b; text-align:center;">Nothing produced yet on this job.</td></tr>`;
+
+    // What is true of the job right this second, above the two logs.
+    const runningBits = [];
+    if (progress.running) {
+      runningBits.push(`<span style="color:#15803d; font-weight:700;">Running now${progress.runningOn?.deviceLabel ? ` on ${liveStatusEscape(progress.runningOn.deviceLabel)}` : ""}</span>`);
+    } else if (progress.runningOn) {
+      runningBits.push(`<span style="color:#a16207; font-weight:700;">Started${progress.runningOn.lastSeenAt ? `, last seen ${new Date(progress.runningOn.lastSeenAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : ""}</span>`);
+    }
+    if (progress.mounted) runningBits.push(`${progress.mounted} reel${progress.mounted === 1 ? "" : "s"} mounted`);
+    if (progress.live) runningBits.push(`<span style="color:#15803d;">produced metres are in stock; the Job Card isn't saved yet</span>`);
+    const runningLine = runningBits.length
+      ? `<div style="margin:0 0 16px; padding:8px 12px; background:#f8fafc; border:1px solid #e6eaf2; border-radius:8px; font-size:12.5px; color:#475569;">${runningBits.join(" &middot; ")}</div>`
+      : "";
 
     document.getElementById("live-status-dialog-body").innerHTML = `
       <div class="tape-details-card"><div class="details-scroll-area">
         <div class="tape-details-header"><div class="header-copy"><h1>Live Production Status</h1>
-          <div class="header-subtitle">${liveStatusEscape(order.productCode || "Label Stock")} · Job Card ${liveStatusValue(progress.jobCardId)}</div></div>
+          <div class="header-subtitle">${liveStatusEscape(order.productCode || "Label Stock")} · ${progress.jobCardId ? `Job Card ${liveStatusEscape(progress.jobCardId)}` : "Job Card not saved yet"}</div></div>
           <div class="header-actions"><span class="header-action-link" style="pointer-events:none;"><i class="fa-solid fa-ruler-horizontal"></i> Total: ${liveStatusMtrs(progress.totalMeters)} mtrs</span>
           <button type="button" onclick="closeLiveStatusDialog()" class="header-action-link" style="border:none; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button></div></div>
-        <div class="tape-details-body"><h3 class="section-title">Job Setting</h3>
+        <div class="tape-details-body">${runningLine}<h3 class="section-title">Job Setting</h3>
           <div style="overflow-x:auto; margin-bottom:22px;"><table class="diff-table"><thead><tr><th>#</th><th>Roll ID</th><th>Start Meter</th><th>Stop Meter</th><th>Start Time</th><th>Stop Time</th><th>Status</th></tr></thead><tbody>${settingRows}</tbody></table></div>
           <h3 class="section-title">Production Log</h3>
           <div style="overflow-x:auto;"><table class="diff-table"><thead><tr><th>#</th><th>Deckle ID</th><th>Roll ID</th><th>Made</th><th>Start Time</th><th>End Time</th><th>Face</th><th>Release</th></tr></thead><tbody>${productionRows}</tbody></table></div>
@@ -347,7 +365,9 @@
   wipTable = new Tabulator("#wip-table", {
     data: wipData,
     index: "_id",
-    placeholder: "No label stock currently in production",
+    // This tab lists jobs an operator has actually started, so an empty table
+    // means nothing is running -- not that nothing is assigned.
+    placeholder: "No job is running right now — an assigned job appears here once its operator starts it",
     initialSort: [{ column: "assignedAt", dir: "desc" }],
     columns: [
       // getPosition(true) is the row's rank among currently sorted/filtered
@@ -364,9 +384,12 @@
           const queueBtn = row.assignedMachineId?._id
             ? `<button onclick="window.open('/app/machine/${row.assignedMachineId._id}/queue', '_blank')" class="btn-action" style="background:#044A78;" title="View Machine Queue"><i class="fa-solid fa-list-check"></i></button>`
             : "";
-          const unassignBtn = row.liveUpdate
-            ? `<button class="btn-action" disabled style="background:#9ca3af;cursor:not-allowed;" title="Job Card already filed — can't send back to Pending"><i class="fa-solid fa-rotate-left"></i></button>`
-            : `<button onclick="requestUnassign('${row._id}')" class="btn-action" style="background:#b45309;" title="Send Back to Pending"><i class="fa-solid fa-rotate-left"></i></button>`;
+          // Disabled on what the server itself refuses (row.canSendBack), not
+          // on "has this job started": a job started by mistake with nothing
+          // produced can still be sent back, and the server allows it.
+          const unassignBtn = row.canSendBack
+            ? `<button onclick="requestUnassign('${row._id}')" class="btn-action" style="background:#b45309;" title="Send Back to Pending"><i class="fa-solid fa-rotate-left"></i></button>`
+            : `<button class="btn-action" disabled style="background:#9ca3af;cursor:not-allowed;" title="Already produced on this job — it can't be sent back to Pending"><i class="fa-solid fa-rotate-left"></i></button>`;
           return `
             <div style="display:flex; gap:6px; justify-content:center; align-items:center;">
               <button onclick="viewProduction('${row._id}')" class="btn-action" style="background:#111827;" title="View Details"><i class="fa-solid fa-eye"></i></button>
@@ -415,6 +438,11 @@
         title: "Live Status",
         field: "liveUpdate",
         headerSort: false,
+        // Every row on this tab is a started job (see the WIP filter in
+        // routes/fairdesk_route.js), so this column says HOW FAR ALONG it is,
+        // not whether it began. The figures are live: metres come from the
+        // Deckles each Stop punch inwards, long before the Job Card is saved,
+        // and `live` marks progress that is not on a filed card yet.
         formatter: (cell) => {
           const orderId = cell.getRow().getData()._id;
           const val = cell.getValue();
@@ -423,17 +451,29 @@
           const settings = Array.isArray(val.settings) ? val.settings : [];
           const production = Array.isArray(val.production) ? val.production : [];
           const when = val.updatedAt ? new Date(val.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "";
-          if (!production.length && settings.length) {
-            return `<button type="button" onclick="openLiveStatus('${orderId}')" title="View Job Setting log" style="display:inline-flex; align-items:center; gap:6px; padding:0; border:none; background:transparent; color:#a16207; font-weight:700; cursor:pointer;"><span style="width:7px; height:7px; border-radius:50%; background:#eab308; display:inline-block;"></span>In Setting</button>`;
+          const dot = (color, pulse) => `<span style="width:7px; height:7px; border-radius:50%; background:${color}; display:inline-block; flex-shrink:0;${pulse ? " box-shadow:0 0 0 3px rgba(22,163,74,0.18);" : ""}"></span>`;
+          const btn = (title, inner) => `<button type="button" onclick="openLiveStatus('${orderId}')" title="${title}" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap; padding:0; border:none; background:transparent; cursor:pointer;">${inner}</button>`;
+          const mountedTip = val.mounted ? ` · ${val.mounted} reel${val.mounted === 1 ? "" : "s"} mounted` : "";
+
+          if (production.length) {
+            // "live" = made and inwarded, but the Job Card has not been saved
+            // yet, so these metres are not on a card anyone can look up.
+            const liveChip = val.live
+              ? `<span title="Produced and in Semi Finished Stock — the Job Card hasn't been saved yet" style="font-size:10px; font-weight:800; letter-spacing:0.04em; color:#15803d; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:999px; padding:1px 6px;">LIVE</span>`
+              : "";
+            return btn(`View production log${mountedTip}`,
+              `${dot("#16a34a", val.running)}<span style="font-weight:700; color:#1f2a44; text-decoration:underline;">${fmtMtrs(val.totalMeters)} mtrs</span>${liveChip}`
+              + (when ? `<span style="color:#9ca3af; font-size:11px;">@ ${when}</span>` : ""));
           }
-          if (!production.length) return `<span style="color:#9ca3af;">Not started</span>`;
-          return `
-            <button type="button" onclick="openLiveStatus('${orderId}')" title="View production log" style="display:inline-flex; align-items:center; gap:6px; white-space:nowrap; padding:0; border:none; background:transparent; cursor:pointer;">
-              <span style="width:7px; height:7px; border-radius:50%; background:#16a34a; display:inline-block; flex-shrink:0;"></span>
-              <span style="font-weight:700; color:#1f2a44; text-decoration:underline;">${fmtMtrs(val.totalMeters)} mtrs</span>
-              ${when ? `<span style="color:#9ca3af; font-size:11px;">@ ${when}</span>` : ""}
-            </button>
-          `;
+          if (val.running) {
+            return btn(`An operator is on this job now${val.runningOn?.deviceLabel ? ` (${val.runningOn.deviceLabel})` : ""}${mountedTip} — nothing produced yet`,
+              `${dot("#16a34a", true)}<span style="font-weight:700; color:#15803d;">Running</span>`);
+          }
+          if (settings.length || val.mounted || val.runningOn) {
+            return btn(`Started, nothing produced yet${mountedTip}`,
+              `${dot("#eab308")}<span style="font-weight:700; color:#a16207;">In Setting</span>`);
+          }
+          return `<span style="color:#9ca3af;">Not started</span>`;
         },
       },
       { title: "Remarks", field: "remarks", headerFilter: "input", headerFilterPlaceholder: "Filter remarks..." },
@@ -454,15 +494,26 @@
     });
   });
 
-  // Job Cards are filed once from the shop floor, not streamed -- poll so a
-  // freshly filed card's Setting and Production Log rows show up here
-  // without the operator having to reload the page.
+  // This tab lists jobs that are actually running, so the poll reconciles the
+  // whole list, not just the figures in it: a job JOINS when its operator
+  // starts it and LEAVES when it is produced. The endpoint answers with the
+  // full set (same query, mapper and filter as the page render), so whatever
+  // is missing from that answer is no longer running and its row goes.
   setInterval(async () => {
     try {
       const res = await fetch("/app/labels/production/wip-progress");
       if (!res.ok) return;
-      const updates = await res.json();
-      if (Array.isArray(updates) && updates.length) wipTable.updateData(updates);
+      const rows = await res.json();
+      if (!Array.isArray(rows)) return;
+      const live = new Set(rows.map((row) => String(row._id)));
+      // Collected before deleting: deleting while walking getRows() would
+      // skip rows as the list shifts under the loop.
+      const gone = wipTable.getRows().filter((row) => !live.has(String(row.getData()._id)));
+      // Tabulator's updateOrAddData never settles on an empty array -- and
+      // an empty answer means everything has finished, which the deletes
+      // below handle on their own.
+      if (rows.length) await wipTable.updateOrAddData(rows);
+      gone.forEach((row) => row.delete());
     } catch (err) {
       console.error("WIP live update poll failed:", err);
     }

@@ -23,6 +23,32 @@ const companySchema = new mongoose.Schema(
       uppercase: true,
     },
 
+    // The code every id this installation generates starts with:
+    // "SP | FCS | 000001", "SP | LOT | 0042". Suggested from the company name
+    // (suggestIdPrefix in utils/companyBrand.js) but typed, because a
+    // company's short code is a fact about the company, not something a rule
+    // can guess -- Zactac call themselves ZC, which no derivation produces.
+    // Blank falls back to that suggestion, so an installation that never
+    // touches this field behaves exactly as it always did.
+    // Changing it never rewrites an id already in the database; ids are
+    // opaque strings here and nothing parses one back apart.
+    // Every URL prefix this company has been served under, oldest first. The
+    // prefix is the first word of the name (slugifyCompany), so renaming the
+    // company moves the whole app to a new one -- and every bookmark, open tab
+    // and pasted link on the old prefix would 404. brandPrefix.js redirects
+    // those here instead. Capped and deduped in routes/system/company.js.
+    slugHistory: {
+      type: [String],
+      default: [],
+    },
+    idPrefix: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
+      match: [/^([A-Z0-9]{2,4})?$/, "The ID code must be 2-4 letters or digits."],
+    },
+
     // Optional company logo (utils/media.js pipeline, bucket "company"). When
     // absent the app falls back to the first letter of companyName -- see
     // /company/favicon in server.js and the logo box in companyMaster.ejs.

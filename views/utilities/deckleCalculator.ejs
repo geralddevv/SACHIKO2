@@ -1,0 +1,259 @@
+<% layout('/layout/boilerplate') %>
+
+<%#
+  Deckle Calculator -- the Set Deckle planner with nothing behind it.
+
+  Same job as /labels/production/deckle-set/plan/:itemId
+  (views/inventory/orders/deckleSetForm.ejs): pick a web, draw the knives
+  across it, read the trim off. The difference is where the numbers come from
+  and what happens at the end -- here the requirements are TYPED rather than
+  read off loose orders, and there is no end: the page creates no batch,
+  touches no order and writes nothing. It is a scratchpad for "what would this
+  job cost me in trim", usable before an order exists at all.
+
+  The ids and classes below are that page's own (the dsf- and sl- prefixes), and
+  public/css/deckleCalculator.css is a copy of its <style> block, so a figure
+  worked out here is drawn, measured and reported exactly as it will be when
+  the same plan is set for real. The only new markup is the Requirements table
+  (dc-*), which stands in for "Orders In This Deckle".
+
+  Two things do come off the database: Available Sizes opens on the facestock
+  widths actually in stock (so a plan starts from reels that exist -- the
+  pencil edits the list from there), and AI Deckle Set is the same panel and
+  the same utils/deckleOptimizer behind it, over typed requirements instead of
+  orders. Neither writes anything.
+%>
+
+<%
+  const subColspan = cutSlots.length + 5;
+  // Default total edge trim (mm). Same starting figure as the Set Deckle page;
+  // editable via the pencil.
+  const trimDefault = 5;
+%>
+
+<div class="main-content dc-page" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
+  <!-- One header block: the blue bar every page in the app wears, with the
+       standing warning about this one on the right of it, and the "what do I
+       do here" line attached underneath rather than floating in a box of its
+       own. -->
+  <div class="span-full form-heading dc-head">
+    <h1>Deckle Calculator</h1>
+    <span class="dc-badge" title="This page creates no batch, touches no order and stores nothing. Closing the tab throws the working away.">
+      <i class="fa-solid fa-flask"></i> Scratchpad — nothing is saved
+    </span>
+  </div>
+
+  <div class="span-full dc-lede-wrap" style="border:none !important;">
+    <p class="dc-lede">
+      Type what you need and the deckle sizes you can get it on, then draw the layouts by hand — or let
+      <b>AI Deckle Set</b> draw them — and read the trim off. Available Sizes starts from the facestock in stock.
+      To set a deckle for real, use <b>Deckle Sorting</b>.
+    </p>
+  </div>
+
+  <!-- Machine setup: the two figures that apply to the whole calculation. -->
+  <div class="span-full" style="border:none !important;">
+    <div class="sl-panel">
+      <div class="sl-job-grid">
+        <div class="sl-job-cell dsf-trim-cell">
+          <button type="button" id="dsfTrimEdit" class="dsf-edit-ic" title="Edit edge trim" aria-label="Edit edge trim">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          <span class="sl-job-label">Edge Trim (total mm)</span>
+          <span class="sl-job-value" id="dsfTrimText"><%= trimDefault %> mm</span>
+          <input type="number" step="any" min="0" id="dsfTrim" value="<%= trimDefault %>"
+                 class="form-control" title="Total edge trim across both edges, netted out of every web width." hidden />
+        </div>
+        <div class="sl-job-cell is-input">
+          <span class="sl-job-label">Deckle R.M. (default)</span>
+          <input type="number" step="any" min="0" id="dcDrmDefault" inputmode="decimal"
+                 value="<%= defaultRunningMeters %>" class="form-control"
+                 title="Length of one deckle web, in metres. Only a starting value — every new layout opens with it, and each layout can then be changed on its own." />
+        </div>
+        <div class="sl-job-cell dsf-avail dsf-avail-cell">
+          <span class="sl-job-label">Available Sizes<span class="req"> *</span>
+            <% if (stockSizes.length) { %><span class="dc-from-stock" title="Seeded from the facestock widths currently in stock. Add or remove with the pencil — nothing here is tied to the store.">from stock</span><% } %>
+          </span>
+          <div class="dsf-size-line">
+            <div id="dsfSizeChips" class="dsf-size-row"></div>
+            <button type="button" id="dsfSizeEdit" class="dsf-edit-ic dsf-edit-inline" title="Edit deckle sizes" aria-label="Edit deckle sizes">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+          </div>
+          <div id="dsfSizeAdd" hidden>
+            <div class="dsf-chip-add">
+              <input type="number" step="any" min="0" id="dsfSizeInput" placeholder="mm" inputmode="decimal" />
+              <button type="button" id="dsfSizeAddBtn" class="dsf-mini-btn"><i class="fa-solid fa-plus"></i> Add</button>
+            </div>
+            <div id="dsfSizeMsg" class="dsf-chip-msg" hidden></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Requirements -- this page's stand-in for "Orders In This Deckle". Rows
+       are built by the script so each one wires its own inputs; the tbody
+       starts empty on purpose. -->
+  <div class="span-full form-subheading sl-sec-head"><h1>Requirements</h1></div>
+  <div class="span-full" style="border:none !important;">
+    <!-- Header bar, table and totals in ONE card, sized to the table: the bar
+         then lines up with the columns under it instead of running off across
+         a page the table does not fill. -->
+    <div class="sl-panel dc-req-card">
+      <div class="dc-req-head">
+        <span class="dc-req-note">Untick a line to leave it out</span>
+        <button type="button" id="dcAddReq" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Requirement</button>
+      </div>
+      <div class="sl-scroll">
+        <table class="sl-table dc-req-table">
+          <thead>
+            <tr>
+              <th style="width:40px;" title="The number the messages under Deckle Set name this line by.">#</th>
+              <th style="width:42px;" title="Include this line in the calculation."><i class="fa-solid fa-check"></i></th>
+              <th style="width:132px;">Roll Width (mm)</th>
+              <th style="width:146px;" title="Length wound on each finished roll. Leave blank to count rolls of any length.">Running Mtrs</th>
+              <th style="width:110px;">Roll Qty</th>
+              <th style="width:118px;" title="Rolls of this width and length the layouts below actually produce.">Rolls Set</th>
+              <th style="width:140px;" title="Rolls Set minus Roll Qty — negative is short, positive is spare.">Balance</th>
+              <th style="width:44px;"></th>
+            </tr>
+          </thead>
+          <tbody id="dcReqBody"></tbody>
+          <!-- The bottom line: what was asked for, what the layouts make of it,
+               and the difference. Filled by recalcAll(). -->
+          <tfoot>
+            <tr>
+              <td colspan="4" class="dc-req-foot-label">Total</td>
+              <td class="dc-req-foot-qty">—</td>
+              <td class="dc-req-foot-set">—</td>
+              <td class="dc-req-foot-bal">—</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Deckle Set -- utils/deckleOptimizer works out the least-waste layouts
+       for the requirements above and drops them into the Deckle Set recap
+       below. Exactly the same panel, the same endpoint shape and the same
+       read-only contract as the Set Deckle page's: it plans, it never saves,
+       and what it drops in is edited by hand from there like any other plan.
+       Hidden entirely when DECKLE_AUTO_ENABLED=false. -->
+  <% if (autoDeckle && autoDeckle.enabled) { %>
+    <div class="span-full form-subheading sl-sec-head"><h1>AI Deckle Set</h1></div>
+    <div class="span-full" style="border:none !important;">
+      <div class="dsa-panel">
+        <div class="dsa-bar">
+          <div class="dsa-field">
+            <label for="dsaDrm">Deckle R.M.</label>
+            <input type="number" step="any" min="1" id="dsaDrm" inputmode="decimal"
+                   value="<%= autoDeckle.defaultRunningMeters %>"
+                   title="Length of one deckle web, in metres. Every layout is planned against this." />
+          </div>
+          <div class="dsa-field dsa-narrow">
+            <label for="dsaOvPct">Max Overrun %</label>
+            <input type="number" step="any" min="0" id="dsaOvPct" inputmode="decimal"
+                   value="<%= Math.round(autoDeckle.overrun.pct * 100) %>"
+                   title="Spare rolls allowed, as a % of what was asked for. 10% on a 30-roll line allows 3 spares. Extra rolls come off web width that would otherwise be trimmed away and scrapped. Set 0 for no spares at all." />
+          </div>
+          <div class="dsa-field dsa-narrow">
+            <label for="dsaOvRolls">Max Extra Rolls</label>
+            <input type="number" step="1" min="0" id="dsaOvRolls" inputmode="numeric"
+                   value="<%= autoDeckle.overrun.maxExtraRolls %>"
+                   title="Hard ceiling on spare rolls of any one width, whatever the percentage works out to. Whichever of the two limits is tighter applies. Set 0 for no spares at all." />
+          </div>
+          <div class="dsa-spacer"></div>
+          <button type="button" id="dsaRun" class="dsa-run">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> AI Deckle Set
+          </button>
+        </div>
+        <div class="dsa-body" id="dsaBody"></div>
+      </div>
+    </div>
+  <% } %>
+
+  <!-- Deckle Set: the deckle as it currently stands, one line per layout. The
+       knives themselves are drawn in the dialog behind each row's pencil
+       (#dsfLayoutModal, below), so this shows the result rather than the
+       working. Redrawn by recalcAll(); nothing here is an input. -->
+  <div class="span-full form-subheading sl-sec-head"><h1>Deckle Set</h1></div>
+  <div class="span-full" style="border:none !important;">
+    <div class="dsf-set-wrap">
+      <div class="dsf-set-head" id="dsfSetHead">
+        <span id="dsfSetSub" class="dsf-set-sub"></span>
+        <button type="button" id="dsfAddLayout" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Deckle Layout</button>
+      </div>
+      <div class="sl-scroll" id="dsfSetBody"></div>
+    </div>
+  </div>
+
+  <!-- Issues, refreshed on every edit. Nothing is submitted from this page, so
+       these never block anything -- they say what is wrong with the plan. -->
+  <div class="span-full" id="dsfIssues" hidden style="border:none !important;">
+    <div class="sl-warn-note" id="dsfIssuesBody"></div>
+  </div>
+
+  <div class="span-full dsf-submit-footer">
+    <div class="dsa-result dsf-final-stats" id="dsfFinalStats"></div>
+    <div class="dsf-footer-row">
+      <div class="dsa-result dsf-stat-row" id="dsfStatChips"></div>
+      <div class="sl-save-wrap">
+        <button type="button" id="dcReset" class="dc-reset-btn"
+                title="Clear the requirements and the layouts. Edge Trim and Available Sizes are kept — they describe the plant, not the job.">
+          <i class="fa-solid fa-rotate-left"></i> <span id="dcResetLabel">Reset</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DECKLE LAYOUT DIALOG ============ -->
+<!-- The layout table lives here rather than on the page, but it is still the
+     source of truth: readRow() and recalcAll() read these rows, open or
+     closed. The dialog only scopes the table to the one layout being edited --
+     the others keep their DOM (and so their values) and are hidden by
+     #dsfLayoutTable.is-solo, never detached. -->
+<div class="logout-modal dsf-layout-modal" id="dsfLayoutModal" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="dsfLayoutModalTitle"
+       style="width: min(1080px, 96vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="dsfLayoutModalTitle">Deckle Layout</h2>
+      <button class="dialog-close-btn" type="button" id="dsfLayoutModalClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="dialog-body">
+      <div class="sl-panel sl-scroll">
+        <table class="sl-table" id="dsfLayoutTable" style="min-width: 980px;">
+          <thead>
+            <tr>
+              <th style="width:38px;">#</th>
+              <% cutSlots.forEach((s) => { %><th style="width:46px;"><%= s %></th><% }) %>
+              <th style="width:104px;">Deckle R.M.</th>
+              <th style="width:88px;">R. Meter</th>
+              <th style="width:96px;">Deckle Count</th>
+              <th style="width:38px;"></th>
+            </tr>
+          </thead>
+          <tbody id="dsfLayoutBody"></tbody>
+        </table>
+      </div>
+      <!-- Grace: hand the web's leftover side trim to the rolls instead of
+           scrapping it. Cuts wider, bills at the ordered width. -->
+      <div id="dsfGracePanel" class="dsf-grace" hidden></div>
+      <div class="dsf-layout-toolbar">
+        <span id="dsfLayoutStatus" class="dsf-layout-status"></span>
+        <div class="dsf-toolbar-btns">
+          <button type="button" class="dsf-add-btn" id="dsfGraceBtn"
+                  aria-expanded="false" aria-controls="dsfGracePanel"></button>
+          <button type="button" class="dsf-add-btn dsf-done-btn" id="dsfLayoutModalDone">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="dc-slots" type="application/json"><%- safeJson(cutSlots) %></script>
+<script id="dc-sizes" type="application/json"><%- safeJson(stockSizes) %></script>
+<script id="dc-cfg" type="application/json"><%- safeJson({ edge: edgeTrimPerSide, trimDefault, subColspan, defaultRunningMeters }) %></script>

@@ -706,6 +706,23 @@
     .rma-stat .v.good { color: #15803d; }
     .rma-stat .v.warn { color: #b45309; }
     .rma-stat .v.bad { color: #b91c1c; }
+    /* The per-layer table, folded away -- see renderAutoSummary. */
+    .rma-detail { border-bottom: 1px solid #eef1f6; }
+    .rma-detail > summary {
+      display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;
+      padding: 8px 14px; background: #f8fafc; list-style: none;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: #7c8ba1;
+    }
+    .rma-detail > summary::-webkit-details-marker { display: none; }
+    .rma-detail > summary:hover { color: #044a78; }
+    .rma-caret { font-size: 9px; transition: transform 0.15s ease; }
+    .rma-detail[open] > summary .rma-caret { transform: rotate(90deg); }
+    .rma-detail-sub {
+      text-transform: none; letter-spacing: 0; font-weight: 600; color: #94a3b8;
+    }
+    .rma-detail .rma-table { border-top: 1px solid #eef1f6; }
+    .rma-detail .rma-table tr:last-child td { border-bottom: none; }
     .rma-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
     .rma-table th, .rma-table td {
       padding: 7px 14px; text-align: left; border-bottom: 1px solid #eef1f6; white-space: nowrap;
@@ -2491,11 +2508,22 @@
         });
       }
 
+      // The per-layer table is the detail behind the chips, not the headline --
+      // three rows of Roll IDs that are worth reading once a run looks wrong,
+      // so it is folded away and opened on demand. Nothing that has to be seen
+      // lives only in here: the chips above carry what can be run and what
+      // limited it, and every problem is spelled out in the notes below.
+      const layerWord = layers.length === 1 ? "layer" : "layers";
+      const reelWord = totalReels === 1 ? "reel" : "reels";
       rmaBody.innerHTML =
         `<div class="rma-result">${chips}</div>`
+        + `<details class="rma-detail"><summary>`
+        + `<i class="fa-solid fa-chevron-right rma-caret"></i>Per-layer detail`
+        + `<span class="rma-detail-sub">${layers.length} ${layerWord} · ${totalReels} ${reelWord} ticked</span>`
+        + `</summary>`
         + `<table class="rma-table"><thead><tr>`
         + `<th>Layer</th><th>Status</th><th class="ta-r">Reels</th><th class="ta-r">Kg</th><th class="ta-r">R.Mtrs</th><th>Ticked</th>`
-        + `</tr></thead><tbody>${rows}</tbody></table>`
+        + `</tr></thead><tbody>${rows}</tbody></table></details>`
         + `<div class="rma-notes"><ul>${notes
             .map((n) => `<li${n.cls ? ` class="${n.cls}"` : ""}>${n.html || escAttr(n.text)}</li>`)
             .join("")}</ul></div>`;

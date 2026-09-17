@@ -128,9 +128,11 @@
     }
     .fg-4 { grid-column: span 4; }
     .fg-6 { grid-column: span 6; }
+    /* Company Name (8) + ID Code (4) share one row. */
+    .fg-8 { grid-column: span 8; }
     .fg-12 { grid-column: span 12; }
     @media (max-width: 760px) {
-      .fg-4, .fg-6 { grid-column: span 12; }
+      .fg-4, .fg-6, .fg-8 { grid-column: span 12; }
     }
 
     .field-label {
@@ -326,10 +328,22 @@
               </p>
             </div>
 
-            <div class="fg-12">
+            <div class="fg-8">
               <label class="field-label" for="companyName">Company Name<span class="req">*</span></label>
               <input type="text" id="companyName" autocomplete="off" maxlength="150"
                 placeholder="Enter company name" value="<%= company ? company.companyName : '' %>" />
+            </div>
+
+            <!-- The code every generated id starts with: "SP | FCS | 000001".
+                 Suggested from the name, but typed -- a company's own short
+                 code is theirs to decide (Zactac go by ZC, not ZA). Leaving it
+                 blank keeps the suggestion. Changing it only affects ids made
+                 from then on; everything already in the system keeps its own. -->
+            <div class="fg-4">
+              <label class="field-label" for="idPrefix">ID Code</label>
+              <input type="text" id="idPrefix" autocomplete="off" maxlength="4" style="text-transform: uppercase;"
+                placeholder="<%= suggestedIdPrefix %>" value="<%= company && company.idPrefix ? company.idPrefix : '' %>" />
+              <p class="field-hint" id="idPrefixHint" style="margin:6px 0 0; font-size:12px; color:#64748b;"></p>
             </div>
 
             <div class="fg-12">
@@ -497,7 +511,7 @@
   const company = companyRaw && companyRaw._id ? companyRaw : null;
 
   const FIELDS = [
-    "companyName", "address", "state", "country", "pincode",
+    "companyName", "idPrefix", "address", "state", "country", "pincode",
     "telephone", "mobile", "email", "website",
     "gst", "msme", "gumasta", "pan",
   ];
@@ -558,6 +572,37 @@
 
   // Keep the placeholder letter in sync while typing the name (registration).
   el("companyName").addEventListener("input", () => { if (!hasLogo) paintLogo(); });
+
+  // The ID code shows what it will actually do -- the next Facestock Master id
+  // and a Lot No, spelled out -- because the field is two characters and its
+  // effect is on every id the company ever generates.
+  const SUGGESTED = <%- JSON.stringify(suggestedIdPrefix) %>;
+  // Same rule as suggestIdPrefix() in utils/companyBrand.js: initials of the
+  // words, or the first two letters of a one-word name.
+  function suggestFromName(name) {
+    const words = String(name || "").toUpperCase().replace(/[^A-Z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+    if (!words.length) return SUGGESTED;
+    const code = words.length > 1 ? words.slice(0, 2).map((w) => w[0]).join("") : words[0].slice(0, 2);
+    return /^[A-Z0-9]{2,4}$/.test(code) ? code : SUGGESTED;
+  }
+  function paintIdPrefix() {
+    const typed = el("idPrefix").value.trim().toUpperCase();
+    const suggestion = suggestFromName(el("companyName").value);
+    el("idPrefix").placeholder = suggestion;
+    const code = typed || suggestion;
+    const hint = el("idPrefixHint");
+    if (typed && !/^[A-Z0-9]{2,4}$/.test(typed)) {
+      hint.textContent = "2-4 letters or digits.";
+      hint.style.color = "#dc2626";
+      return;
+    }
+    hint.style.color = "#64748b";
+    hint.textContent = `New ids: ${code} | FCS | 000001 · ${code} | LOT | 0001`
+      + (typed ? "" : " (from the name)");
+  }
+  el("idPrefix").addEventListener("input", paintIdPrefix);
+  el("companyName").addEventListener("input", paintIdPrefix);
+  paintIdPrefix();
 
   function bustFavicon() {
     document.querySelectorAll('link[rel~="icon"]').forEach((lnk) => {

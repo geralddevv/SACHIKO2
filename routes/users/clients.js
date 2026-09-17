@@ -9,7 +9,6 @@ import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 
 const router = express.Router();
-const TEMP_CLIENT_VIEW_ONLY_NAME = "FAIRTECH SYSTEMS";
 
 function normalizeClientPart(value) {
   if (value === undefined || value === null) return "";
@@ -86,8 +85,15 @@ function purchaseCountPipeline() {
 router.get("/view", async (req, res) => {
   try {
     const [clients, userCounts, tapeCounts] = await Promise.all([
+      // Every client. This listing was temporarily pinned to one name
+      // ("FAIRTECH SYSTEMS") while the other clients were archived out of the
+      // app by scripts/move-non-fairtech-clients-temp.js. That archive is
+      // restored (temp_hidden_clients is empty) but the filter was left
+      // behind, so a client created afterwards was saved correctly and then
+      // never appeared here. Use the script's --restore/--apply if the
+      // archive is ever needed again; don't re-pin the view.
       Client.find(
-        { clientName: new RegExp(`^${escapeRegex(TEMP_CLIENT_VIEW_ONLY_NAME)}$`, "i") },
+        {},
         {
           clientId: 1,
           clientName: 1,

@@ -17,6 +17,9 @@ import SachikoSalesOrder from "../../models/sachiko/sachikoSalesOrder.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { buildLabelStockSignature, buildMaterialSignature, generateFamilyProductCode, findLabelStockSpecMatch, resolveLabelStockSkuCode } from "../../utils/labelStockVariant.js";
+// The code every generated id starts with -- the Company master's own
+// (utils/companyBrand.js), read live so a rename needs no restart.
+import { currentIdPrefix } from "../../utils/companyBrand.js";
 
 const router = express.Router();
 
@@ -72,21 +75,21 @@ const labelStockFile = (req, field) => req.files?.[field]?.[0];
 const allLabelStockFiles = (req) => Object.values(req.files || {}).flat();
 
 /* ================= HELPERS ================= */
-// Generate a sequential id of the form `SP | <CODE> | 000001`.
+// Generate a sequential id of the form `<ID> | <CODE> | 000001`.
 async function generateId(key, code) {
   const counter = await Counter.findOneAndUpdate(
     { key },
     { $inc: { seq: 1 } },
     { new: true, upsert: true, setDefaultsOnInsert: true },
   ).lean();
-  return `SP | ${code} | ${String(counter.seq).padStart(6, "0")}`;
+  return `${currentIdPrefix()} | ${code} | ${String(counter.seq).padStart(6, "0")}`;
 }
 
 // Preview the next id without consuming a sequence number.
 async function previewId(key, code) {
   const counter = await Counter.findOne({ key }).select("seq").lean();
   const nextSeq = Number(counter?.seq || 0) + 1;
-  return `SP | ${code} | ${String(nextSeq).padStart(6, "0")}`;
+  return `${currentIdPrefix()} | ${code} | ${String(nextSeq).padStart(6, "0")}`;
 }
 
 const numOrUndef = (value) => {
@@ -115,11 +118,11 @@ const toArray = (value) => {
 };
 
 // SKU code format mirrors the Tape master's Product ID (routes/fairdesk_route.js
-// formatTapeId): `SP | LS | 000001`. Scanned/incremented directly against the
+// formatTapeId): `<ID> | LS | 000001`. Scanned/incremented directly against the
 // highest existing skuCode, same as Tape, rather than the shared Counter used
 // by labelStockId/jobCardId/lotNo above -- this is a separate, human-facing
 // SKU, not the row's own generated identifier.
-const formatSkuCode = (n) => `SP | LS | ${String(n).padStart(6, "0")}`;
+const formatSkuCode = (n) => `${currentIdPrefix()} | LS | ${String(n).padStart(6, "0")}`;
 const parseSkuSeq = (skuCode) => {
   const match = String(skuCode || "").match(/(\d{6})(?:-[A-Z]+)?$/);
   return match ? Number(match[1]) : 0;

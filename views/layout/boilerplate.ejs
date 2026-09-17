@@ -983,6 +983,24 @@
           </div>
         </div>
 
+        <!-- Calculator: scratchpads, not production. Nothing in this group
+             writes anything -- a page here works a figure out and is thrown
+             away, which is exactly why it sits apart from Production rather
+             than beside the pages that do create batches. -->
+        <div class="nav-opt-wrap">
+          <div title="Calculator" class="calculator-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
+            <i class="fa-solid fa-calculator" style="color: #ffffff"></i>
+            <p class="nav-items-para">Calculator</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          <div class="nav-labels-opt">
+            <a href="/app/labels/production/deckle-calculator" title="Deckle Calculator" class="<%= title === 'Deckle Calculator' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+              <i class="fa-solid fa-ruler-combined" style="color: #ffffff"></i>
+              <p class="nav-items-para">Deckle Calculator</p>
+            </a>
+          </div>
+        </div>
+
         <!-- Slitting: the step after lamination -- Deckles cut into finished
              rolls (routes/system/slitting.js). Its own group. -->
         <div class="nav-opt-wrap">

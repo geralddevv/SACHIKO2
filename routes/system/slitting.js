@@ -14,6 +14,9 @@ import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter } from "../../utils/limiters.js";
 import { findScannedReel } from "../../utils/rollId.js";
+// The code every generated id starts with -- the Company master's own
+// (utils/companyBrand.js), read live so a rename needs no restart.
+import { currentIdPrefix } from "../../utils/companyBrand.js";
 
 const router = express.Router();
 
@@ -229,19 +232,19 @@ function curingBlockedMessage(rollId, curedAt) {
 }
 // <----------------------------------Deckle curing --------------------------
 
-// Same `SP | <CODE> | 000001` scheme as the machine job card's own ids.
+// Same `<ID> | <CODE> | 000001` scheme as the machine job card's own ids.
 async function generateSlittingId() {
   const counter = await Counter.findOneAndUpdate(
     { key: "slittingJobCardId" },
     { $inc: { seq: 1 } },
     { new: true, upsert: true, setDefaultsOnInsert: true },
   ).lean();
-  return `SP | SJC | ${String(counter.seq).padStart(6, "0")}`;
+  return `${currentIdPrefix()} | SJC | ${String(counter.seq).padStart(6, "0")}`;
 }
 
 async function previewSlittingId() {
   const counter = await Counter.findOne({ key: "slittingJobCardId" }).select("seq").lean();
-  return `SP | SJC | ${String(Number(counter?.seq || 0) + 1).padStart(6, "0")}`;
+  return `${currentIdPrefix()} | SJC | ${String(Number(counter?.seq || 0) + 1).padStart(6, "0")}`;
 }
 
 const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

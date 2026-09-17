@@ -88,7 +88,10 @@ const deviceIdOf = (req) => String(req.get("x-device-id") || "").trim().slice(0,
 const deviceLabelOf = (req) => String(req.get("x-device-label") || "").trim().slice(0, 64);
 
 // The claim on a doc, or null when there is none / it has gone stale.
-const activeClaim = (runningOn, now = Date.now()) => {
+// Exported because the WIP tab's Live Status asks the same question of the
+// same field (buildJobCardProgressMap in routes/fairdesk_route.js) -- "is an
+// operator running this right now" has to mean one thing, not two.
+export const activeClaim = (runningOn, now = Date.now()) => {
   if (!runningOn || !runningOn.deviceId) return null;
   const seen = runningOn.lastSeenAt || runningOn.claimedAt;
   if (!seen) return null;

@@ -1,4 +1,4 @@
-import { currentBrand, ensureFreshBrand, INTERNAL_PREFIX } from "../utils/companyBrand.js";
+import { currentBrand, ensureFreshBrand, pastSlugs, INTERNAL_PREFIX } from "../utils/companyBrand.js";
 
 // Every route in this app is registered under a constant internal prefix
 // ("/app", INTERNAL_PREFIX). The prefix the user actually sees in the address
@@ -49,6 +49,23 @@ export function brandPrefix(req, res, next) {
     // Raw internal URL opened in a browser -> bounce to the pretty one. Non-HTML
     // hits on /app/* are left alone so client fetches / bookmarks keep working.
     return res.redirect(301, pub + url.slice(INT.length));
+  } else {
+    // A prefix this company USED to be served under (Company.slugHistory).
+    // Renaming the company moves the whole app to a new prefix, and without
+    // this every bookmark, open tab and pasted link on the old one answers 404
+    // -- which reads as "I renamed the company and the app broke", not as "the
+    // address changed". Forwarded, not 404'd, and kept TEMPORARY (302/307):
+    // a 301 would be cached by the browser and would then misroute if the
+    // company is ever renamed back.
+    for (const old of pastSlugs()) {
+      const from = `/${old}`;
+      if (url === from || url.startsWith(`${from}/`) || url.startsWith(`${from}?`)) {
+        const target = pub + url.slice(from.length);
+        // 307 keeps the method and body for a form post from a stale tab;
+        // 302 is what a browser expects for a plain navigation.
+        return res.redirect(req.method === "GET" || req.method === "HEAD" ? 302 : 307, target);
+      }
+    }
   }
 
   const toPublic = (s) =>

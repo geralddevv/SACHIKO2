@@ -6,13 +6,20 @@
 
      Note the layout data is named `mm`, not `layout` -- `layout` is
      ejs-mate's own helper function and shadowing it breaks rendering. */
+
+  /* One reel or a whole batch: `labels` is always an array, and the page is
+     the same document either way -- one sticker per page. A single-label
+     render is byte-for-byte the page it always was; `sheet` only turns on
+     the page-break and stacking rules below. See routes/stock/
+     facestockStock.js's /label/:stockId (one) and /labels?ids= (many). */
+  const isSheet = labels.length > 1;
 %>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"<%- isSheet ? ' class="sheet"' : "" %>>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Label — <%= rollId %></title>
+  <title><%= isSheet ? labels.length + " Labels" : "Label — " + labels[0].rollId %></title>
   <script>
     /* This page serves two callers: the Print dialog on the stock page,
        which embeds it in an iframe and drives it through window.labelApi
@@ -62,6 +69,16 @@
     .label-frame {
       box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18);
       outline: 1px dashed #94a3b8;
+    }
+
+    /* ---- many labels in one print ---- */
+    /* The @page above IS one sticker, so a page break before every label
+       after the first is what keeps two of them off the same sheet. The
+       break goes BEFORE each label rather than after, so the last one
+       doesn't feed a blank label out of the printer. */
+    .sheet .label + .label {
+      page-break-before: always;
+      break-before: page;
     }
 
     /* A safe margin inside the sheet: the design is drawn in the area left
@@ -191,6 +208,41 @@
       box-shadow: none;
       outline: none;
     }
+    /* Embedded as a batch, the frame is a preview of the whole run rather
+       than of one sticker, so the labels stack and the dialog scrolls them.
+       Each keeps its dashed edge here -- with several in a column, where one
+       label ends and the next begins is the thing the preview has to show. */
+    .embedded.sheet body {
+      /* Width comes from the frame rather than being pinned to one sticker:
+         a stack needs a scrollbar, and pinning the body to 101.5 mm pushed
+         the labels under it. They centre in whatever room is left. */
+      width: auto;
+      height: auto;
+      overflow: visible;
+      background: #eef2f7;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+    }
+    .embedded.sheet .label-frame { outline: 1px dashed #94a3b8; }
+    /* The app's own scrollbar (common.css's .ap-table-wrap tokens), since a
+       stack of labels scrolls inside the dialog's preview and the browser
+       default reads as a foreign element there. This document doesn't load
+       the app's stylesheets -- it is a print target -- so the tokens are
+       repeated rather than shared. Screen only: scrollbars never print.
+
+       On the ROOT element, not on body: what scrolls here is the document
+       itself, and a viewport scrollbar is taken from the root -- `body`
+       rules are simply ignored for it, which is why this looked untouched
+       and stayed the browser's own 15px grey. Both classes sit on <html>,
+       so `.embedded.sheet` IS the root. */
+    .embedded.sheet::-webkit-scrollbar { width: 10px; height: 10px; }
+    .embedded.sheet::-webkit-scrollbar-track { background: #f0f2f5; }
+    .embedded.sheet::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+    .embedded.sheet::-webkit-scrollbar-corner { background: #f0f2f5; }
+    .embedded.sheet { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
 
     @media print {
       /* Collapse the page down to nothing but the sticker. */
@@ -202,6 +254,10 @@
         width: <%= mm.labelWidth %>mm;
         height: <%= mm.labelHeight %>mm;
       }
+      /* A batch is as many pages as it has labels, so the sheet's height is
+         whatever they add up to -- only a single label can pin the body to
+         exactly one sticker. */
+      .sheet body { height: auto; }
       .screen-only { display: none !important; }
       .label-frame {
         box-shadow: none;
@@ -220,7 +276,7 @@
 
   <div class="toolbar screen-only">
     <h1>
-      Roll Label — <%= rollId %>
+      <%= isSheet ? "Roll Labels — " + labels.length + " reels" : "Roll Label — " + labels[0].rollId %>
       <small>Pick the label printer in the print dialog. Set <b>Scale: 100%</b> (or Default) and <b>Margins: None</b>.</small>
     </h1>
     <button type="button" class="tb-btn primary" id="printBtn">Print</button>
@@ -228,24 +284,42 @@
     <button type="button" class="tb-btn ghost" id="closeBtn">Close</button>
   </div>
 
+  <% labels.forEach(function (label) { %>
   <div class="label label-frame">
-    <div class="label-inner" id="labelInner">
+    <div class="label-inner">
       <svg class="label-svg" viewBox="0 0 277.38 202.54" preserveAspectRatio="none"
            xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
         <rect class="ln" x="0.5" y="0.5" width="117.83" height="201.54" />
         <rect class="ln" x="118.33" y="0.5" width="158.55" height="201.54" />
         <image x="7.92" y="34" width="103" height="103" preserveAspectRatio="none"
-               href="<%= qrDataUrl %>" xlink:href="<%= qrDataUrl %>" />
-        <text class="t-fam fit" text-anchor="middle" dominant-baseline="central" data-maxw="107" x="59.42" y="166"><%= fields.family %></text>
-        <text class="t-big t-id fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="46"><%= fields.id %></text>
-        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="83"><%= fields.width %></text>
-        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="120"><%= fields.weight %></text>
-        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="157"><%= fields.date %></text>
+               href="<%= label.qrDataUrl %>" xlink:href="<%= label.qrDataUrl %>" />
+        <text class="t-fam fit" text-anchor="middle" dominant-baseline="central" data-maxw="107" x="59.42" y="166"><%= label.fields.family %></text>
+        <text class="t-big t-id fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="46"><%= label.fields.id %></text>
+        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="83"><%= label.fields.width %></text>
+        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="120"><%= label.fields.weight %></text>
+        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="157"><%= label.fields.date %></text>
       </svg>
     </div>
   </div>
+  <% }); %>
 
-  <span class="caption screen-only">Actual size — <%= mm.labelWidth %> × <%= mm.labelHeight %> mm</span>
+  <span class="caption screen-only">
+    <%= isSheet ? labels.length + " labels · one per page · actual size — " : "Actual size — " %><%= mm.labelWidth %> × <%= mm.labelHeight %> mm
+  </span>
+
+  <%
+    /* `locals.missingCount` would never fire: ejs-mate replaces `locals`
+       with its own object (blocks/layout/partial), so the render data is
+       only reachable by name -- hence the typeof guard, which is what the
+       rest of the views use for an optional value. */
+  %>
+  <% if (typeof missingCount !== "undefined" && missingCount > 0) { %>
+  <div class="hint screen-only" style="background:#fef2f2; border-color:#fecaca; color:#991b1b;">
+    <b><%= missingCount %></b> of the reels picked <%= missingCount === 1 ? "is" : "are" %> no longer in stock and
+    <%= missingCount === 1 ? "has" : "have" %> been left out — <%= labels.length %>
+    <%= labels.length === 1 ? "label" : "labels" %> will print.
+  </div>
+  <% } %>
 
   <div class="hint screen-only">
     The dashed outline and this text are on screen only and never print. The whole label —
@@ -268,15 +342,18 @@
     // cross-apply between pools.
     var FLIP_KEY = "facestockLabelFlip180";
     var embedded = document.documentElement.classList.contains("embedded");
-    var inner = document.getElementById("labelInner");
+    // Every label on the page, since one print run can hold a whole batch of
+    // them -- the feed direction is a property of the printer, so it applies
+    // to all of them at once or to none.
+    var inners = document.querySelectorAll(".label-inner");
     var rotateBtn = document.getElementById("rotateBtn");
 
     function isFlipped() {
-      return inner.classList.contains("flipped");
+      return inners.length > 0 && inners[0].classList.contains("flipped");
     }
 
     function applyFlip(flipped) {
-      inner.classList.toggle("flipped", flipped);
+      Array.prototype.forEach.call(inners, function (el) { el.classList.toggle("flipped", flipped); });
       // The toolbar only exists when this page stands alone; embedded, the
       // dialog owns the button and reads the state back through labelApi.
       if (rotateBtn) {

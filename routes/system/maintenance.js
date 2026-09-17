@@ -17,6 +17,9 @@ import {
   formatBytes,
   formatDuration,
 } from "../../utils/media.js";
+// The code every generated id starts with -- the Company master's own
+// (utils/companyBrand.js), read live so a rename needs no restart.
+import { currentIdPrefix } from "../../utils/companyBrand.js";
 
 const router = express.Router();
 
@@ -55,7 +58,7 @@ export { uploadMedia as maintenanceUpload };
 
 /* ================= HELPERS ================= */
 
-// Sequential ticket number, same `SP | <CODE> | 000001` shape used elsewhere
+// Sequential ticket number, same `<ID> | <CODE> | 000001` shape used elsewhere
 // in this app (see generateId in routes/system/machine.js).
 async function generateTicketNo() {
   const counter = await Counter.findOneAndUpdate(
@@ -63,7 +66,7 @@ async function generateTicketNo() {
     { $inc: { seq: 1 } },
     { new: true, upsert: true, setDefaultsOnInsert: true },
   ).lean();
-  return `SP | MNT | ${String(counter.seq).padStart(6, "0")}`;
+  return `${currentIdPrefix()} | MNT | ${String(counter.seq).padStart(6, "0")}`;
 }
 
 // An operator's empProfileCode is the name of the machine they run (the same

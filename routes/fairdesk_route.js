@@ -53,6 +53,9 @@ import {
   syncLabelBindingIdentity,
 } from "../utils/reconcileBindingLocations.js";
 import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
+// "Is an operator running this right now" -- the same freshness rule the
+// operator app itself applies to PendingProduction.runningOn.
+import { activeClaim } from "./api/operatorApi.js";
 import { produceDeckle, dissolveDeckle, requiredLayersFor, trackAllottedCombinations, suggestDeckleSize, DECKLE_EDGE_TRIM_MM, LAYER_META, POOL_MODELS, pickStockIds } from "../utils/labelStockProduction.js";
 import { CUT_SLOTS } from "./system/slitting.js";
 import {
@@ -65,6 +68,9 @@ import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 import { computeRawMaterialNeed } from "../utils/rawMaterialNeed.js";
 import { deckleTotalRunningMetres, deckleRunningMetersText } from "../utils/deckleTotals.js";
+// The code every generated id starts with -- the Company master's own
+// (utils/companyBrand.js), read live so a rename needs no restart.
+import { currentIdPrefix } from "../utils/companyBrand.js";
 
 const router = express.Router();
 
@@ -922,8 +928,6 @@ router.post("/form/client", requireAuth, createLimiter, async (req, res) => {
     const clientMsme = String(req.body.clientMsme || "").trim();
     const clientGumasta = String(req.body.clientGumasta || "").trim();
     const clientPan = String(req.body.clientPan || "").trim().toUpperCase();
-    const vendorCode = String(req.body.vendorCode || "").trim();
-    const verticals = String(req.body.verticals || "").trim();
 
     // GST and PAN Validation
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
@@ -980,8 +984,6 @@ router.post("/form/client", requireAuth, createLimiter, async (req, res) => {
       clientMsme,
       clientGumasta,
       clientPan,
-      vendorCode,
-      verticals,
       clientSignature,
     };
 
@@ -4839,27 +4841,85 @@ router.get("/prodcalc/details/:id", async (req, res) => {
 // CLAUDE.md's "Production pipeline" section for the full order -> assign ->
 // job card lifecycle.
 
-// Every JobCard is write-once, so "live" here means the WIP page polls for
-// a newly filed card and then shows its actual Setting and Production Log
-// progress -- see GET /labels/production/wip-progress.
+// What the WIP tab's "Live Status" is drawn from -- see GET
+// /labels/production/wip-progress, which polls it.
+//
+// A MachineJobCard is written ONCE, by Save Production Entry, at the END of
+// the job. Reading only cards is what made this column wrong for the whole
+// time it matters: a job could be hours in, with reels mounted and Deckles
+// already inwarded to Semi Finished Stock, and still read "Not started"
+// until the operator finally saved. Three things the shop floor writes as it
+// goes fill that in, all of them already there to be read
+// (routes/system/machine.js, routes/api/operatorApi.js):
+//
+//   - a Deckle per Production Log row the moment its Stop is punched
+//     (MaterialStock.producedFor + producedVia "jobcard") -- real metres;
+//   - PendingProduction.runningOn, claimed at the first Job Setting Start and
+//     heartbeated by that device -- an operator is on it right now;
+//   - PendingProduction.liveMaterialInUse, the reels scanned onto the machine.
+//
+// A Deckle that a filed card already accounts for is counted ONCE: the card's
+// own Production Log row carries the same rowToken (and deckleId) the Deckle
+// was minted with, so it is matched and skipped rather than added again.
 async function buildJobCardProgressMap(pendingIds) {
   if (!pendingIds.length) return new Map();
   // Oldest first, so an order run across more than one Job Card (a mid-order
   // job switch -- see routes/system/machine.js's producedRolls accumulation)
   // has its rows concatenated in the order they were produced.
-  const cards = await MachineJobCard.find({ pendingProductionId: { $in: pendingIds } })
-    .select("pendingProductionId jobCardId jobSetting productionLog updatedAt")
-    .sort({ updatedAt: 1 })
-    .lean();
+  const [cards, liveDeckles, liveOrders] = await Promise.all([
+    MachineJobCard.find({ pendingProductionId: { $in: pendingIds } })
+      .select("pendingProductionId jobCardId jobSetting productionLog updatedAt")
+      .sort({ updatedAt: 1 })
+      .lean(),
+    // producedVia "jobcard" only: a Deckle laminated at Assign & Continue
+    // ("assign") is the order's raw material being made ready, not a metre it
+    // has run -- counting those would show every freshly assigned order as
+    // part-produced before anyone touched the machine.
+    MaterialStock.find({ producedFor: { $in: pendingIds }, producedVia: "jobcard" })
+      .select("producedFor rollId reelMtrs productionRowToken createdAt")
+      .sort({ createdAt: 1 })
+      .lean(),
+    PendingProduction.find({ _id: { $in: pendingIds } })
+      .select("runningOn liveMaterialInUse")
+      .lean(),
+  ]);
   const numberOrNull = (value) => (
     value !== undefined && value !== null && value !== "" && Number.isFinite(Number(value))
       ? Number(value)
       : null
   );
   const map = new Map();
+  // Only orders with something to say get an entry -- an order nobody has
+  // touched must stay absent, so the column still reads "Not started".
+  const blank = () => ({
+    jobCardId: "", settings: [], production: [], totalMeters: 0, updatedAt: null,
+    // set below: whether any figure here is still un-filed, whether a device
+    // is on the job now, and how many reels are mounted.
+    // `started`: an operator has begun this job -- a Start punched, reels
+    // scanned, a Deckle made, or a card filed. It is what the WIP tab lists
+    // on, so a row there is always a job that is actually running.
+    started: true, live: false, running: false, runningOn: null, mounted: 0,
+  });
+  // Deckles a filed card already accounts for, per order -- by rowToken (the
+  // idempotency key both the card row and the Deckle carry) and by Deckle id.
+  const claimedDeckles = new Map();
+  const deckleKeys = (key) => {
+    let set = claimedDeckles.get(key);
+    if (!set) { set = new Set(); claimedDeckles.set(key, set); }
+    return set;
+  };
+  const normDeckleId = (value) => String(value ?? "").trim().toUpperCase();
+
   cards.forEach((card) => {
     const key = String(card.pendingProductionId);
-    const acc = map.get(key) || { jobCardId: "", settings: [], production: [], totalMeters: 0, updatedAt: null };
+    const acc = map.get(key) || blank();
+    // Every row of the card, not just the ones that survive the filter below:
+    // a row saved with no metres still names the Deckle it made, and that
+    // Deckle must not then be added a second time as "live".
+    (card.productionLog || []).forEach((row) => {
+      if (row?.rowToken) deckleKeys(key).add(`t:${String(row.rowToken).trim()}`);
+      if (row?.deckleId) deckleKeys(key).add(`d:${normDeckleId(row.deckleId)}`);
+    });
 
     (card.jobSetting || [])
       .filter((row) => row?.rollId || row?.mtrs1 != null || row?.mtrs2 != null || row?.startTime || row?.stopTime)
@@ -4898,6 +4958,73 @@ async function buildJobCardProgressMap(pendingIds) {
     acc.updatedAt = card.updatedAt;
     map.set(key, acc);
   });
+
+  // ---- Deckles made since (or without) a card: the metres actually run ----
+  const laterOf = (a, b) => (!a ? b : !b ? a : new Date(a) > new Date(b) ? a : b);
+  liveDeckles.forEach((deckle) => {
+    const key = String(deckle.producedFor);
+    const seen = deckleKeys(key);
+    const token = deckle.productionRowToken ? `t:${String(deckle.productionRowToken).trim()}` : null;
+    const rollKey = deckle.rollId ? `d:${normDeckleId(deckle.rollId)}` : null;
+    if ((token && seen.has(token)) || (rollKey && seen.has(rollKey))) return;   // already on a card
+    if (token) seen.add(token);
+    if (rollKey) seen.add(rollKey);
+
+    const acc = map.get(key) || blank();
+    acc.production.push({
+      index: acc.production.length + 1,
+      rollId: "",
+      deckleId: deckle.rollId || "",
+      meters: Number(deckle.reelMtrs) || 0,
+      // The Job Card holds the times; this Deckle was inwarded straight off
+      // the Stop punch, so all it knows is when that was.
+      startTime: "",
+      endTime: "",
+      faceJoint: "",
+      faceMtrs: null,
+      releaseJoint: "",
+      releaseMtrs: null,
+      producedAt: deckle.createdAt || null,
+      live: true,
+    });
+    acc.totalMeters = acc.production.reduce((sum, row) => sum + row.meters, 0);
+    acc.updatedAt = laterOf(acc.updatedAt, deckle.createdAt);
+    acc.live = true;
+    map.set(key, acc);
+  });
+
+  // ---- and who is on the job right now, with nothing produced yet ----
+  // `runningOn` is claimed at the first Job Setting Start and cleared only
+  // when the card saves, so its mere PRESENCE is "this job has been started".
+  // Its freshness is a different question -- a tablet that dies stops
+  // heartbeating, and the job is still started, just not being punched at
+  // this moment. Membership uses the first, the "Running" badge the second.
+  liveOrders.forEach((order) => {
+    const key = String(order._id);
+    const claimed = Boolean(order.runningOn?.deviceId);
+    const held = activeClaim(order.runningOn);
+    const mounted = Object.values(order.liveMaterialInUse || {})
+      .reduce((n, reels) => n + (Array.isArray(reels) ? reels.filter(Boolean).length : 0), 0);
+    if (!claimed && !mounted) return;
+
+    const acc = map.get(key) || blank();
+    acc.started = true;
+    acc.running = Boolean(held);
+    acc.runningOn = claimed
+      ? {
+          deviceLabel: order.runningOn.deviceLabel || "",
+          claimedAt: order.runningOn.claimedAt || null,
+          lastSeenAt: order.runningOn.lastSeenAt || null,
+          stale: !held,
+        }
+      : null;
+    acc.mounted = mounted;
+    // A live job with nothing on a card yet still has a "when": the last
+    // heartbeat is the most recent thing known about it.
+    acc.updatedAt = laterOf(acc.updatedAt, order.runningOn?.lastSeenAt || null);
+    map.set(key, acc);
+  });
+
   return map;
 }
 
@@ -4963,6 +5090,130 @@ async function buildLooseDeckleRow(item, members) {
       .sort((a, b) => new Date(a.estimatedDate || 0) - new Date(b.estimatedDate || 0)),
   };
 }
+
+// Every facestock width actually on the shelf, with what is behind it.
+// suggestDeckleSize() does the same roll-up for the Set Deckle page but
+// narrows it to the reels matching that order's recipe -- the calculator has
+// no recipe to narrow by, so it offers every width the store holds and says
+// how many reels and how much weight sit behind each, which is the bit that
+// decides whether a width is really an option.
+async function facestockSizesInStock() {
+  const reels = await POOL_MODELS.facestock.Model.find({ quantity: { $gt: 0 }, reelMtrs: { $gt: 0 } })
+    .select("size reelMtrs")
+    .lean();
+  const bySize = new Map();
+  for (const r of reels) {
+    const size = Number(r.size);
+    if (!Number.isFinite(size) || size <= 0) continue;
+    const e = bySize.get(size) || { size, reelCount: 0, totalKg: 0 };
+    e.reelCount += 1;
+    // FacestockStock.reelMtrs is Kg despite its name -- see the note in
+    // suggestDeckleSize() (utils/labelStockProduction.js).
+    e.totalKg = Math.round((e.totalKg + (Number(r.reelMtrs) || 0)) * 100) / 100;
+    bySize.set(size, e);
+  }
+  return [...bySize.values()].sort((a, b) => a.size - b.size);
+}
+
+// Deckle Calculator -- the Set Deckle planner with nothing behind it. Same
+// web view, same layout dialog, same grace panel, same AI Deckle Set and the
+// same figures as /labels/production/deckle-set/plan/:itemId, but the
+// requirements are typed rather than read off loose orders, and there is no
+// end to it: the page creates no batch, touches no order and writes nothing.
+// It is for answering "what would this job cost me in trim" before there is an
+// order to plan.
+//
+// The one thing it does read is the store: Available Sizes opens on the
+// facestock widths actually in stock, so a plan starts from reels that exist
+// rather than from a blank list. They are only a starting point -- the pencil
+// adds and removes sizes exactly as it does on the Set Deckle page.
+router.get("/labels/production/deckle-calculator", async (req, res) => {
+  res.render("utilities/deckleCalculator.ejs", {
+    title: "Deckle Calculator",
+    CSS: "deckleCalculator.css",
+    JS: "deckleCalculator.js",
+    cutSlots: CUT_SLOTS,
+    edgeTrimPerSide: DECKLE_EDGE_TRIM_MM,
+    defaultRunningMeters: DEFAULT_DECKLE_RUNNING_METERS,
+    stockSizes: await facestockSizesInStock(),
+    // Same kill switch as the Set Deckle page's own panel -- with
+    // DECKLE_AUTO_ENABLED=false the calculator renders with no AI Deckle Set
+    // panel and no client code for it, and the endpoint below returns 503.
+    autoDeckle: isDeckleAutoEnabled()
+      ? {
+          enabled: true,
+          defaultRunningMeters: DEFAULT_DECKLE_RUNNING_METERS,
+          overrun: OVERRUN_DEFAULTS,
+        }
+      : { enabled: false },
+    notification: req.flash("notification"),
+  });
+});
+
+// AI Deckle Set for the calculator -- the same utils/deckleOptimizer the Set
+// Deckle page uses, over requirements that were typed rather than ordered.
+//
+// The sister endpoint (/deckle-set/plan/:itemId/auto) re-reads its orders from
+// the database on purpose: there the client picks WHICH orders to plan, never
+// what they say. Here there is nothing to re-read -- the requirements only
+// exist on the page -- and nothing to protect either: this handler owns no
+// data, looks nothing up and writes nothing, so a doctored request can only
+// produce a wrong answer in the asker's own browser. planDeckleLayouts()
+// range-checks every figure it is given and runs under its own node and time
+// budgets, which is what keeps a silly request from being an expensive one.
+router.post(
+  "/labels/production/deckle-calculator/auto",
+  requireAuth,
+  updateLimiter,
+  async (req, res) => {
+    if (!isDeckleAutoEnabled()) {
+      return res.status(503).json({
+        ok: false,
+        disabled: true,
+        error: "AI Deckle Set is switched off on this server.",
+      });
+    }
+
+    // A ceiling on how much can be asked for in one go. The optimizer is
+    // bounded in time, but pattern enumeration grows with the number of
+    // DISTINCT widths, and a page a person typed will never come near this.
+    const MAX_LINES = 100;
+    const lines = (Array.isArray(req.body?.orders) ? req.body.orders : []).slice(0, MAX_LINES);
+    if (!lines.length) {
+      return res.status(400).json({ ok: false, error: "Enter at least one requirement to plan." });
+    }
+
+    const result = planDeckleLayouts({
+      orders: lines.map((o, i) => ({
+        id: String(i),
+        width: Number(o?.width),
+        qty: Number(o?.qty),
+        rm: Number(o?.rm),
+      })),
+      sizes: Array.isArray(req.body?.sizes) ? req.body.sizes.slice(0, 40) : [],
+      edgeTrimTotal: req.body?.trim,
+      deckleRunningMeters: req.body?.drm,
+      // How many knives a layout uses is decided BY the layout; the only
+      // ceiling is how many positions the system can record -- CUT_SLOTS
+      // (A..L), the same twelve columns every deckle in this app carries.
+      maxSlots: CUT_SLOTS.length,
+      // Each layout comes off whatever width suits it, which is how this page
+      // works throughout: a layout's web is picked in that layout's own table.
+      mixedSizes: true,
+      // Two ceilings on spare rolls; the tighter binds (see OVERRUN_DEFAULTS).
+      overrun: {
+        pct: Number(req.body?.overrunPct),
+        maxExtraRolls: Number(req.body?.overrunRolls),
+      },
+    });
+
+    if (lines.length < (Array.isArray(req.body?.orders) ? req.body.orders.length : 0)) {
+      result.notes.push(`Only the first ${MAX_LINES} requirements were planned.`);
+    }
+
+    return res.status(result.ok ? 200 : 422).json(result);
+  },
+);
 
 // Deckle Set -- deckle setting is per-SKU + paper size, not per order. Every
 // still-loose PendingProduction order (unassigned, no deckle size, not yet in
@@ -5722,6 +5973,110 @@ router.get("/labels/production/deckle-queue", async (req, res) => {
   });
 });
 
+// One PendingProduction row as this page shows it. Module scope, and taken
+// by BOTH the page render and the WIP poll below: the poll now decides which
+// rows exist (a job appears the moment it is started and leaves when it is
+// produced), so a second copy of this shaping is how the polled row and the
+// rendered row would drift apart.
+function mapPendingProductionRow(r, jobCardProgress) {
+  const item = r.itemId || {};
+  // Same rollsStatus classification as routes/system/machine.js's
+  // buildQueueRows -- lets the WIP tab flag an order that was assigned to
+  // a machine without (or without enough) raw material allocated, since
+  // Assign Production no longer blocks on short stock.
+  const rollsRequired = r.noOfRolls != null ? Number(r.noOfRolls) : null;
+  const rollsAllotted = r.allottedRolls != null ? Number(r.allottedRolls) : null;
+  const rollsStatus =
+    rollsAllotted == null || rollsRequired == null
+      ? null
+      : rollsAllotted === rollsRequired
+      ? "match"
+      : rollsAllotted < rollsRequired
+      ? "short"
+      : "over";
+
+  // "Not allocated" should mean the raw materials (Facestock/Adhesive/
+  // Release Liner, ...) aren't allotted -- not "fewer Deckle reels have
+  // been laminated than rolls were ordered" (rollsStatus above). A single
+  // Assign & Continue only ever produces one Deckle, so an order needing
+  // 2+ rolls reads "short" on rollsStatus right after its very first,
+  // fully-allocated run -- material allocation is the real ready/not-ready
+  // signal (see routes/system/machine.js's buildQueueRows for the same
+  // split, used by the machine queue this WIP tab links out to).
+  const requiredLayers = requiredLayersFor(item.rollType);
+  const materialStatus = requiredLayers.length === 0
+    ? null
+    : requiredLayers.every((key) => !!r.allottedLayers?.[key])
+    ? "match"
+    : "short";
+
+  // Same allotment facts as materialStatus above, split per raw-material
+  // pool (Facestock/Adhesive/Release Liner) instead of collapsed into one
+  // yes/no -- DOUBLE FACESTOCK/DOUBLE RELEASE rollTypes call for 2 layers
+  // out of the same pool (facestock+facestock2, or adhesive+adhesive2 /
+  // releaseLiner+releaseLiner2), so "one of two allotted" needs its own
+  // "partial" state distinct from "none" and "full".
+  const poolStatus = (pool) => {
+    const keys = requiredLayers.filter((key) => LAYER_META[key].pool === pool);
+    if (keys.length === 0) return null;
+    const allottedCount = keys.filter((key) => !!r.allottedLayers?.[key]).length;
+    if (allottedCount === 0) return "none";
+    if (allottedCount === keys.length) return "full";
+    return "partial";
+  };
+  const facestockStatus = poolStatus("facestock");
+  const adhesiveStatus = poolStatus("adhesive");
+  const releaseStatus = poolStatus("release");
+
+  const progress = jobCardProgress.get(String(r._id)) || null;
+  return {
+    _id: String(r._id),
+    productCode: item.productCode || item.skuCode || "—",
+    clientName: r.userId?.clientName || r.userId?.userName || "—",
+    userName: r.userId?.userName || "—",
+    clientType: r.userId?.clientType || "",
+    paperSize: r.paperSize || "—",
+    deckleSize: r.deckleSize ?? null,
+    runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
+    noOfRolls: r.noOfRolls ?? "—",
+    allottedRolls: rollsAllotted,
+    rollsStatus,
+    materialStatus,
+    facestockStatus,
+    adhesiveStatus,
+    releaseStatus,
+    quantity: r.quantity,
+    balance: Math.max((Number(r.quantity) || 0) - (Number(r.dispatchedQuantity) || 0), 0),
+    machineName: r.assignedMachineId?.machineName || "",
+    assignedMachineId: r.assignedMachineId ? { _id: String(r.assignedMachineId._id) } : null,
+    operatorName: r.operatorId?.empName || "",
+    helperName: r.helperId?.empName || "",
+    poNumber: r.poNumber || "—",
+    estimatedDate: r.estimatedDate,
+    remarks: r.remarks || "",
+    producedAt: r.producedAt || null,
+    createdAt: r.createdAt,
+    assignedAt: r.assignedAt || null,
+    liveUpdate: progress,
+    // Whether "Send Back to Pending" can work, decided by the same facts the
+    // POST refuses on (see /labels/production/unassign/:id): anything already
+    // produced, or a reel reconciled mid-job, can't be reversed from here.
+    // Being merely STARTED doesn't block it -- a job punched Start by mistake,
+    // with nothing made yet, is exactly the one worth sending back, and the
+    // server allows it. The button used to go dead on any Job Card activity
+    // at all, which disagreed with what the server would actually do.
+    canSendBack: !(
+      r.producedAt
+      || Number(r.producedRolls) > 0
+      || (progress?.production?.length || 0) > 0
+      || (r.materialSwapLog || []).length > 0
+    ),
+    isDeckleBatch: !!r.isDeckleBatch,
+    batchOrderCount: (r.batchOrderIds || []).length,
+    deckleBatchId: r.deckleBatchId ? String(r.deckleBatchId) : null,
+  };
+}
+
 router.get("/labels/production/pending", async (req, res) => {
   const initialTab = req.query.tab === "wip" ? "wip" : "pending";
 
@@ -5753,91 +6108,7 @@ router.get("/labels/production/pending", async (req, res) => {
     jobCardProgress = await buildJobCardProgressMap(wipIds);
   }
 
-  const mapped = all.map((r) => {
-    const item = r.itemId || {};
-    // Same rollsStatus classification as routes/system/machine.js's
-    // buildQueueRows -- lets the WIP tab flag an order that was assigned to
-    // a machine without (or without enough) raw material allocated, since
-    // Assign Production no longer blocks on short stock.
-    const rollsRequired = r.noOfRolls != null ? Number(r.noOfRolls) : null;
-    const rollsAllotted = r.allottedRolls != null ? Number(r.allottedRolls) : null;
-    const rollsStatus =
-      rollsAllotted == null || rollsRequired == null
-        ? null
-        : rollsAllotted === rollsRequired
-        ? "match"
-        : rollsAllotted < rollsRequired
-        ? "short"
-        : "over";
-
-    // "Not allocated" should mean the raw materials (Facestock/Adhesive/
-    // Release Liner, ...) aren't allotted -- not "fewer Deckle reels have
-    // been laminated than rolls were ordered" (rollsStatus above). A single
-    // Assign & Continue only ever produces one Deckle, so an order needing
-    // 2+ rolls reads "short" on rollsStatus right after its very first,
-    // fully-allocated run -- material allocation is the real ready/not-ready
-    // signal (see routes/system/machine.js's buildQueueRows for the same
-    // split, used by the machine queue this WIP tab links out to).
-    const requiredLayers = requiredLayersFor(item.rollType);
-    const materialStatus = requiredLayers.length === 0
-      ? null
-      : requiredLayers.every((key) => !!r.allottedLayers?.[key])
-      ? "match"
-      : "short";
-
-    // Same allotment facts as materialStatus above, split per raw-material
-    // pool (Facestock/Adhesive/Release Liner) instead of collapsed into one
-    // yes/no -- DOUBLE FACESTOCK/DOUBLE RELEASE rollTypes call for 2 layers
-    // out of the same pool (facestock+facestock2, or adhesive+adhesive2 /
-    // releaseLiner+releaseLiner2), so "one of two allotted" needs its own
-    // "partial" state distinct from "none" and "full".
-    const poolStatus = (pool) => {
-      const keys = requiredLayers.filter((key) => LAYER_META[key].pool === pool);
-      if (keys.length === 0) return null;
-      const allottedCount = keys.filter((key) => !!r.allottedLayers?.[key]).length;
-      if (allottedCount === 0) return "none";
-      if (allottedCount === keys.length) return "full";
-      return "partial";
-    };
-    const facestockStatus = poolStatus("facestock");
-    const adhesiveStatus = poolStatus("adhesive");
-    const releaseStatus = poolStatus("release");
-
-    const progress = jobCardProgress.get(String(r._id)) || null;
-    return {
-      _id: String(r._id),
-      productCode: item.productCode || item.skuCode || "—",
-      clientName: r.userId?.clientName || r.userId?.userName || "—",
-      userName: r.userId?.userName || "—",
-      clientType: r.userId?.clientType || "",
-      paperSize: r.paperSize || "—",
-      deckleSize: r.deckleSize ?? null,
-      runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
-      noOfRolls: r.noOfRolls ?? "—",
-      allottedRolls: rollsAllotted,
-      rollsStatus,
-      materialStatus,
-      facestockStatus,
-      adhesiveStatus,
-      releaseStatus,
-      quantity: r.quantity,
-      balance: Math.max((Number(r.quantity) || 0) - (Number(r.dispatchedQuantity) || 0), 0),
-      machineName: r.assignedMachineId?.machineName || "",
-      assignedMachineId: r.assignedMachineId ? { _id: String(r.assignedMachineId._id) } : null,
-      operatorName: r.operatorId?.empName || "",
-      helperName: r.helperId?.empName || "",
-      poNumber: r.poNumber || "—",
-      estimatedDate: r.estimatedDate,
-      remarks: r.remarks || "",
-      producedAt: r.producedAt || null,
-      createdAt: r.createdAt,
-      assignedAt: r.assignedAt || null,
-      liveUpdate: progress,
-      isDeckleBatch: !!r.isDeckleBatch,
-      batchOrderCount: (r.batchOrderIds || []).length,
-      deckleBatchId: r.deckleBatchId ? String(r.deckleBatchId) : null,
-    };
-  });
+  const mapped = all.map((r) => mapPendingProductionRow(r, jobCardProgress));
 
   // A row only reaches this "Pending" tab once it's been through Deckle Set
   // (deckleSize set) -- an order still awaiting that shows on the Deckle Set
@@ -5851,8 +6122,15 @@ router.get("/labels/production/pending", async (req, res) => {
   // Same producedAt condition as jobCardProgress above -- a fully produced
   // order is no longer "in the machine", just waiting on Sales to
   // confirm/dispatch it off this queue entirely.
+  // WIP is work IN PROGRESS: only jobs an operator has actually started.
+  // Being assigned to a machine is not started -- an order can sit on a
+  // machine queue for days before anyone picks it up, and listing those here
+  // buried the handful of jobs genuinely running. `liveUpdate` is exactly
+  // that test (see buildJobCardProgressMap): a Start punched, reels scanned,
+  // a Deckle made, or a card filed. An assigned-but-untouched order is on its
+  // machine's queue, which every row here links straight out to.
   const wipOrders = mapped
-    .filter((r) => r.assignedMachineId && !r.producedAt)
+    .filter((r) => r.assignedMachineId && !r.producedAt && r.liveUpdate)
     .sort((a, b) => new Date(b.estimatedDate || 0) - new Date(a.estimatedDate || 0));
 
   res.render("inventory/orders/pendingProduction.ejs", {
@@ -5866,23 +6144,36 @@ router.get("/labels/production/pending", async (req, res) => {
   });
 });
 
-// Polled by the WIP table to refresh the "Live Update" column without a
-// full reload.
+// Polled by the WIP table. It answers with the whole list, not just the
+// progress figures: a job now JOINS this tab when its operator starts it and
+// LEAVES when it is produced, so the poll has to be able to add and drop rows
+// as well as update them. Same query, same mapper and same filter as the page
+// render above -- the two must not be able to disagree about what is running.
+async function loadWipRows() {
+  const assigned = await PendingProduction.find({ assignedMachineId: { $ne: null }, producedAt: null })
+    .populate("userId", "clientName userName clientType")
+    .populate("itemId", "productCode skuCode rollType")
+    .populate("assignedMachineId", "machineName machineType")
+    .populate("operatorId", "empName")
+    .populate("helperId", "empName")
+    .lean();
+  const progress = await buildJobCardProgressMap(assigned.map((r) => r._id));
+  return assigned
+    .map((r) => mapPendingProductionRow(r, progress))
+    .filter((r) => r.liveUpdate)
+    .sort((a, b) => new Date(b.estimatedDate || 0) - new Date(a.estimatedDate || 0));
+}
+
 router.get("/labels/production/wip-progress", async (req, res) => {
   try {
-    const wipIds = await PendingProduction.find({ assignedMachineId: { $ne: null } }).distinct("_id");
-    const progress = await buildJobCardProgressMap(wipIds);
-    res.json(wipIds.map((id) => {
-      const liveUpdate = progress.get(String(id)) || null;
-      return { _id: String(id), liveUpdate };
-    }));
+    res.json(await loadWipRows());
   } catch (err) {
     console.error("WIP PROGRESS ERROR:", err);
     res.status(500).json([]);
   }
 });
 
-const formatLotNo = (seq) => `SP | LOT | ${String(seq).padStart(4, "0")}`;
+const formatLotNo = (seq) => `${currentIdPrefix()} | LOT | ${String(seq).padStart(4, "0")}`;
 
 // Read-only preview of the next lot no -- the number isn't consumed until an
 // order is actually assigned.
