@@ -619,6 +619,43 @@ reels is reported instead — "0 of 15" with 800 kg on the machine is worse than
 saying nothing. A layer where only *some* reels are unmeasurable keeps both
 sides and so reads low, which is the safe direction.
 
+### Undoing an assignment (taking a job back off a machine)
+
+"Undo" is `POST /labels/production/unassign/:id` — the order goes back to
+Pending, the machine/operator/helper are cleared, every reel and drum allotted
+to it is released, any Deckle laminated at **Assign & Continue**
+(`producedVia: "assign"`) is un-made and its material returned to the reels it
+came off, and the **Lot No is kept** so a re-assignment reuses it.
+`liveMaterialInUse` **and** `runningOn` are cleared with it: a job that had
+Start punched carries a device claim that only the job card's save would
+otherwise clear, and left behind it follows the order back to Pending and
+blocks the next device for 15 minutes.
+
+It is offered on the **machine queue row** (the natural place — that is where
+the job is looked at) and on the WIP tab. `buildQueueRows` decides it as
+`canUndo` / `undoBlockedReason`, from the same facts the POST refuses on, so a
+greyed button is never a surprise and an offered one never bounces. Operators
+don't see it (same `canEditOrder` gate as the Edit button).
+
+| state of the job | undo? |
+|---|---|
+| assigned, untouched | yes |
+| Start punched, reels scanned, nothing made | yes — the scanned reels are released |
+| a Stop punched (a Deckle inwarded off the log) | **no** — save the Job Card to close it out |
+| a reel reconciled mid-job (`materialSwapLog`) | **no** — same |
+| already produced (`producedAt`) | **no** |
+
+Once material has moved there is no clean reversal from here: the raw a
+job-card Deckle consumed is only settled when the whole card is saved, and
+`dissolveDeckle` has no lamination ledger to reverse for it. The way out is to
+open the Job Card and **Save Production Entry** (or cancel the order). To undo
+a produced Deckle deliberately, `node scripts/dissolve-deckle.js <deckleId>`
+first, then undo.
+
+An undo pressed on a queue returns to that queue (`from`, validated against
+this app's own queue paths); from anywhere else it lands on Deckle Set, where
+the job now is.
+
 ### WIP tab: only jobs that have started, and what "live" means
 
 `/sachiko/labels/production/pending?tab=wip` lists **jobs an operator has

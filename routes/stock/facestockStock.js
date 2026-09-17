@@ -526,6 +526,27 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: `Vendor Roll ID is required for roll ${missingVendorRollIdIndex + 1}.` });
     }
 
+    // The rolls must add up to the Total Kg keyed off the invoice. Too much
+    // and a roll has been entered twice or a weight is wrong; too little and
+    // one is missing -- both put stock on the shelf that isn't what arrived,
+    // and neither is recoverable later from the rows alone. The dialog says
+    // the same thing while it is being typed; this is the half that a
+    // hand-made request can't skip.
+    const totalKg = Number(req.body.totalKg);
+    if (!Number.isFinite(totalKg) || totalKg <= 0) {
+      return res.status(400).json({ success: false, message: "Total Kg is required." });
+    }
+    const rollsKg = roundKg(rolls.reduce((sum, r) => sum + (Number(r.reelMtrs) || 0), 0));
+    const diff = roundKg(rollsKg - totalKg);
+    if (Math.abs(diff) > 0.01) {
+      const over = diff > 0;
+      return res.status(400).json({
+        success: false,
+        message: `The ${rolls.length} roll${rolls.length === 1 ? "" : "s"} add up to ${rollsKg} kg, which is `
+          + `${roundKg(Math.abs(diff))} kg ${over ? "MORE" : "LESS"} than the Total Kg of ${roundKg(totalKg)}.`,
+      });
+    }
+
     const locationExists = await Location.exists({ locationName: header.location });
     if (!locationExists) {
       return res.status(400).json({ success: false, message: "Invalid location." });

@@ -662,6 +662,19 @@ export async function buildQueueRows(match) {
     );
     const balanceRolls =
       rolls == null ? null : Math.max(rolls - producedRolls, 0);
+
+    // Why this job could NOT be sent back to Pending, in the same order the
+    // unassign route checks (routes/fairdesk_route.js) -- so the queue's own
+    // button is never offered for something the POST would refuse, and says
+    // what to do instead when it is greyed.
+    const jobcardDeckles = deckleCountByPending.get(String(p._id)) || 0;
+    const undoBlockedReason = p.producedAt
+      ? "This order is already produced."
+      : Number(p.producedRolls) > 0 || jobcardDeckles > 0
+        ? "A Deckle has already been produced on this job — open the Job Card and Save Production Entry to close it out."
+        : (p.materialSwapLog || []).length
+          ? "A reel was already reconciled mid-job — open the Job Card and Save Production Entry to close it out."
+          : "";
     const rollsStatus =
       allottedRolls == null || rolls == null
         ? null
@@ -845,6 +858,16 @@ export async function buildQueueRows(match) {
       // material does -- which is a normal way to work, and the queue says how
       // far it will get rather than barring it.
       canStart: materialStatus === "match" || materialStatus === "partial" || allottedRollDetails.length > 0,
+      // Whether this job can still be taken off the machine ("undo"), and if
+      // not, why. Decided by the same facts POST /labels/production/unassign
+      // refuses on, so the button on the queue and the route behind it can't
+      // disagree: once the job card has MOVED something -- a Deckle inwarded
+      // off a Stop punch, a reel reconciled mid-job, rolls booked as produced
+      // -- there is no clean reversal, and the job has to be closed out by
+      // saving its Job Card instead. Merely being started (Start punched,
+      // reels scanned) is still undoable: nothing has left stock yet.
+      canUndo: !undoBlockedReason,
+      undoBlockedReason,
       quantity: qty,
       balanceQuantity: balanceQty,
       clientName: p.userId?.clientName || p.userId?.userName || "—",

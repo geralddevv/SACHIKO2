@@ -43,6 +43,17 @@
     }
     .mq-start-btn:hover { opacity: 0.85; }
     .mq-start-btn.mq-start-disabled { background: #9ca3af; cursor: not-allowed; pointer-events: none; }
+    /* Undo sits beside Edit -- outlined, not filled, so the one action that
+       takes a job off a machine can't be hit by muscle memory. */
+    .mq-undo-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 8px 10px; border-radius: 8px; cursor: pointer;
+      border: 1px solid #fca5a5; background: #fff; color: #b91c1c;
+    }
+    .mq-undo-btn:hover:not(:disabled) { background: #dc2626; border-color: #dc2626; color: #fff; }
+    .mq-undo-btn.mq-undo-disabled, .mq-undo-btn:disabled {
+      border-color: #e2e8f0; color: #94a3b8; cursor: not-allowed; background: #f8fafc;
+    }
     .mq-edit-btn {
       display: inline-flex; align-items: center; justify-content: center; background: #fff; color: #044a78;
       border: 1px solid #044a78; border-radius: 6px; padding: 6px 9px; font-size: 12.5px; font-weight: 600;
@@ -324,6 +335,27 @@
                       <a href="/app/labels/production/assign/<%= row._id %>" class="mq-edit-btn" title="Edit this assignment" aria-label="Edit this assignment">
                         <i class="fa-solid fa-pen"></i>
                       </a>
+                      <%
+                        // Undo = take the job back off the machine (POST
+                        // /labels/production/unassign). Offered here because
+                        // this is where the job is looked at; row.canUndo is
+                        // decided server-side by the same facts that POST
+                        // refuses on, so a greyed button is never a surprise
+                        // and an offered one never bounces.
+                      %>
+                      <% if (row.canUndo) { %>
+                        <button type="button" class="mq-undo-btn"
+                          data-id="<%= row._id %>" data-lot="<%= row.lotNo %>" data-product="<%= row.productCode %>"
+                          onclick="requestUndo(this.dataset.id, this.dataset.lot, this.dataset.product)"
+                          title="Send this job back to Pending — it comes off this machine" aria-label="Undo this assignment">
+                          <i class="fa-solid fa-rotate-left"></i>
+                        </button>
+                      <% } else { %>
+                        <button type="button" class="mq-undo-btn mq-undo-disabled" disabled
+                          title="<%= row.undoBlockedReason %>" aria-label="Can't undo this assignment">
+                          <i class="fa-solid fa-rotate-left"></i>
+                        </button>
+                      <% } %>
                     <% } %>
                   </div>
                 </td>
@@ -411,6 +443,36 @@
       <button class="dialog-close-btn" type="button" onclick="closeModal('rollDetailsDialog')" aria-label="Close">×</button>
     </div>
     <div class="dialog-body custom-scrollbar" id="rollDetailsBody"></div>
+  </div>
+</div>
+
+<!-- ============ UNDO (SEND BACK TO PENDING) DIALOG ============ -->
+<!-- Taking a job off a machine is not a click-and-see action: it releases the
+     reels and un-makes any Deckle laminated at Assign & Continue, so it is
+     spelled out before it happens. -->
+<div class="logout-modal" id="undoDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="undoTitle"
+    style="width: min(480px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="undoTitle">Send this job back to Pending?</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeModal('undoDialog')" aria-label="Close">&times;</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div id="undoSummary" style="margin-bottom: 14px; padding: 10px 12px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; font-size: 13px; font-weight: 700; color: #9a3412;"></div>
+      <p style="font-size: 13px; color: #4b5563; margin: 0 0 6px;">It comes off this machine and goes back to Pending Production:</p>
+      <ul style="font-size: 13px; color: #4b5563; margin: 0 0 10px; padding-left: 18px; line-height: 1.7;">
+        <li>the machine, operator and helper are cleared</li>
+        <li>every reel and drum allotted to it is released for other jobs</li>
+        <li>any Deckle laminated at Assign &amp; Continue is un-made, and that material goes back onto the reels it came off</li>
+        <li>its Lot No is kept, so re-assigning it keeps the same number</li>
+      </ul>
+      <div id="undoError" class="dialog-error" style="color:#ef4444; font-size:12px; display:none;"></div>
+      <div class="dialog-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button class="logout-btn" type="button" onclick="closeModal('undoDialog')">Cancel</button>
+        <button class="logout-btn" type="button" id="undoConfirmBtn"
+          style="background:#dc2626; color:#fff; border-color:#dc2626;">Yes, send it back</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -549,5 +611,35 @@
 
   document.getElementById("rollDetailsDialog").addEventListener("click", (e) => {
     if (e.target.id === "rollDetailsDialog") closeModal("rollDetailsDialog");
+  });
+
+  /* ----- Undo: send this job back to Pending -----
+     A plain POST form, not fetch: the route answers with a redirect and a
+     flash, the same way the WIP tab's own Send Back button has always driven
+     it. `from` brings us back to this queue instead of the Deckle Set page --
+     undoing one job of several shouldn't move you off the machine you are
+     looking at. */
+  window.requestUndo = function (orderId, lotNo, productCode) {
+    document.getElementById("undoSummary").textContent = `${lotNo || "This job"} · ${productCode || ""}`.trim();
+    document.getElementById("undoError").style.display = "none";
+    document.getElementById("undoConfirmBtn").onclick = () => {
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = `/app/labels/production/unassign/${orderId}`;
+      const add = (name, value) => {
+        const input = document.createElement("input");
+        input.type = "hidden"; input.name = name; input.value = value;
+        form.appendChild(input);
+      };
+      add("_csrf", "<%= csrfToken %>");
+      add("from", location.pathname + location.search);
+      document.body.appendChild(form);
+      form.submit();
+    };
+    openModal("undoDialog");
+  };
+
+  document.getElementById("undoDialog").addEventListener("click", (e) => {
+    if (e.target.id === "undoDialog") closeModal("undoDialog");
   });
 </script>

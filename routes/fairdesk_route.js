@@ -6582,22 +6582,33 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
   }
 });
 
+// Where an undo returns to. The WIP tab has always been the default; pressed
+// from a machine queue it comes back to that queue instead -- taking one job
+// off a machine shouldn't move you off the machine you were reading. Only this
+// app's own queue paths are honoured, never an arbitrary URL from the form.
+function unassignReturnTo(req) {
+  const from = String(req.body?.from || "");
+  return /^\/(app|[a-z0-9]+)\/machine\/[a-f0-9]{24}\/queue(\?|$)/.test(from)
+    ? from
+    : "/app/labels/production/pending?tab=wip";
+}
+
 router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) {
       req.flash("notification", "Invalid order id.");
-      return res.redirect("/app/labels/production/pending?tab=wip");
+      return res.redirect(unassignReturnTo(req));
     }
 
     const pendingProduction = await PendingProduction.findById(id).lean();
     if (!pendingProduction) {
       req.flash("notification", "Order not found.");
-      return res.redirect("/app/labels/production/pending?tab=wip");
+      return res.redirect(unassignReturnTo(req));
     }
     if (!pendingProduction.assignedMachineId) {
       req.flash("notification", "This order isn't assigned to a machine.");
-      return res.redirect("/app/labels/production/pending?tab=wip");
+      return res.redirect(unassignReturnTo(req));
     }
     // The Deckle's own mtrs only leave when a Job Card is filed, so a filed
     // card can't be undone from here -- including a partial one (producedAt
@@ -6605,7 +6616,7 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     // into stock).
     if (pendingProduction.producedAt || Number(pendingProduction.producedRolls) > 0) {
       req.flash("notification", "A Job Card has already been filed for this order — it can't be sent back to Pending. Cancel it instead if it needs to stop.");
-      return res.redirect("/app/labels/production/pending?tab=wip");
+      return res.redirect(unassignReturnTo(req));
     }
 
     // A machine Job Card that's mid-entry: its operator has already punched
@@ -6620,7 +6631,7 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     const jobCardDeckle = await MaterialStock.exists({ producedFor: id, producedVia: "jobcard" });
     if (jobCardDeckle || (pendingProduction.materialSwapLog || []).length) {
       req.flash("notification", "This order's Job Card has already moved stock (a Deckle produced, or a reel reconciled) — it can't be sent back to Pending. Open the Job Card and Save Production Entry to close it out.");
-      return res.redirect("/app/labels/production/pending?tab=wip");
+      return res.redirect(unassignReturnTo(req));
     }
 
     // Raw material, though, left stock the moment Assign & Continue laminated
@@ -6655,9 +6666,14 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     // must not follow the order back to Pending and keep those reels locked
     // against every other job. producedRolls is forced back to 0 for the same
     // reason -- defensive, it is already 0 to reach here.
+    // `runningOn` goes with it, for the same reason liveMaterialInUse does: a
+    // job that had Start punched carries a device claim, and it is cleared
+    // only by the job card's own save. Left behind, it follows the order back
+    // to Pending and then blocks the next device to pick the job up until it
+    // goes stale (JOB_CLAIM_STALE_MS, 15 minutes).
     await PendingProduction.findByIdAndUpdate(id, {
       $set: { assignedMachineId: null, operatorId: null, helperId: null, allottedRollIds: [], producedRolls: 0 },
-      $unset: { allottedRolls: "", assignedAt: "", allottedLayers: "", liveMaterialInUse: "" },
+      $unset: { allottedRolls: "", assignedAt: "", allottedLayers: "", liveMaterialInUse: "", runningOn: "" },
     });
 
     res.locals.auditDescription = `Sent production order ${id} back to Pending`;
@@ -6670,7 +6686,14 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     }
     if (kept.length) message += ` Note: could not return ${kept.join("; ")}.`;
     req.flash("notification", message);
-    res.redirect("/app/labels/production/deckle-set");
+    // Undo pressed on a machine queue comes back to that queue -- taking one
+    // job off a machine shouldn't move you off the machine you were reading.
+    // Only our own paths are honoured, never an arbitrary URL from the form.
+    // Deckle Set is where a job goes when it is sent back, so that is the
+    // default landing; an undo pressed on a queue returns to that queue.
+    const from = String(req.body.from || "");
+    const backToQueue = /^\/(app|[a-z0-9]+)\/machine\/[a-f0-9]{24}\/queue(\?|$)/.test(from);
+    res.redirect(backToQueue ? from : "/app/labels/production/deckle-set");
   } catch (err) {
     console.error("UNASSIGN PRODUCTION ERROR:", err);
     req.flash("notification", "Failed to send order back to Pending.");
