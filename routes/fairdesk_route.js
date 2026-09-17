@@ -6418,24 +6418,23 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
       // just lets the user know afterwards, via variantNote-style messaging.
       const validIds = candidateIds.filter((sid) => existingIds.has(String(sid)) && !liveByKey.has(`${meta.pool}|${sid}`));
       droppedInUseCount += candidateIds.filter((sid) => existingIds.has(String(sid)) && liveByKey.has(`${meta.pool}|${sid}`)).length;
-      // Two layers of the same pool can share ONE drum, but never one reel.
+      // One reel or drum MAY serve more than one layer.
       //
-      // A reel is a web: DOUBLE RELEASE runs two liners at once, and one reel
-      // cannot unwind onto both sides of the same deckle -- picking it twice
-      // would be allotting material that isn't there. A drum is a quantity of
-      // adhesive, and a job that coats twice can draw both coats from the same
-      // drum; refusing that made the job unassignable whenever the recipe's
-      // adhesive binding leaves only one drum on offer, which is the common
-      // case. The picker offered that one drum for both layers and the whole
-      // Assign & Continue then bounced back to this page, allotting nothing.
-      // (utils/labelStockProduction.js's produceDeckle draws the shared drum
-      // once for the sum of the layers on it -- see the per-reel grouping
-      // there, which is what keeps stock honest.)
-      const sharable = meta.unit === "Drum";
-      if (!sharable && validIds.some((sid) => pickedForThisOrder.has(`${meta.pool}|${sid}`))) {
-        req.flash("notification", `The same ${meta.unit.toLowerCase()} cannot be allotted to more than one layer — ${meta.label} needs its own.`);
-        return res.redirect(`/app/labels/production/assign/${id}`);
-      }
+      // DOUBLE RELEASE is made in two passes -- facestock + adhesive + liner
+      // as normal, then a second adhesive and a second liner on top -- so both
+      // coats can come off one drum and both liners off one reel: the second
+      // pass unwinds it again, it does not need a second physical reel running
+      // beside the first. Refusing that is what made these jobs unassignable:
+      // the picker offers one bound drum (and often the one liner of that
+      // spec), the operator ticks it on both layers because there is nothing
+      // else to tick, and Assign & Continue bounced back here having allotted
+      // nothing at all.
+      //
+      // What keeps the stock honest is not this check but the arithmetic in
+      // utils/labelStockProduction.js's produceDeckle: a reel serving several
+      // layers is measured ONCE against the sum of what those layers draw, and
+      // deducted once for that sum. Checking per layer would pass a reel that
+      // holds enough for one pass and not for two.
       validIds.forEach((sid) => {
         pickedForThisOrder.add(`${meta.pool}|${sid}`);
         const claim = claimedByKey.get(`${meta.pool}|${sid}`);

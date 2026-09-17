@@ -444,6 +444,42 @@ function computeAllotmentCoverage(p, item, layerAllotments, deckleTarget) {
   if (!need || !layerAllotments.length) return null;
   const num = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
 
+  // One reel can be allotted to more than one layer -- a DOUBLE RELEASE job
+  // runs its two passes off one liner reel, and both adhesive coats off one
+  // drum (see POST /labels/production/assign/:id). Its stock is then SHARED:
+  // counting the whole reel on each layer would say the material goes twice as
+  // far as it does, and the queue would show a job as fully covered that stops
+  // half way.
+  //
+  // Shared out in proportion to what each layer NEEDS, not evenly. The two
+  // passes are rarely equal -- a second liner over a coated web needs more than
+  // the first -- and an even split hands the hungrier layer too little,
+  // inventing a shortfall on a reel that in fact covers both (85 kg split
+  // 42.5/42.5 reads short against needs of 35.3 and 43.0, though 78.3 is all
+  // the job asks for).
+  const needKgOf = (key) => {
+    const v = Number(need.rows.find((r) => r.key === key)?.needKg);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  };
+  const shareOfReel = new Map();   // "<reelId>|<layerKey>" -> fraction of that reel
+  const layersByReel = new Map();
+  for (const l of layerAllotments) {
+    for (const reel of l.reels) {
+      if (!layersByReel.has(reel._id)) layersByReel.set(reel._id, []);
+      layersByReel.get(reel._id).push(l.key);
+    }
+  }
+  for (const [reelId, keys] of layersByReel) {
+    if (keys.length === 1) { shareOfReel.set(`${reelId}|${keys[0]}`, 1); continue; }
+    const needs = keys.map((k) => needKgOf(k));
+    const total = needs.reduce((sum, n) => sum + (n || 0), 0);
+    keys.forEach((k, i) => {
+      // No usable needs to weigh by -- fall back to an even split.
+      const fraction = total > 0 && needs[i] != null ? needs[i] / total : 1 / keys.length;
+      shareOfReel.set(`${reelId}|${k}`, fraction);
+    });
+  }
+
   const layers = layerAllotments.map((l) => {
     const row = need.rows.find((r) => r.key === l.key) || {};
     const needKg = num(row.needKg);
@@ -456,8 +492,10 @@ function computeAllotmentCoverage(p, item, layerAllotments, deckleTarget) {
     let gotMtrs = 0;
     let unmeasured = 0;
     for (const reel of l.reels) {
-      const kg = num(reel.reelMtrs);
-      if (kg == null) { unmeasured += 1; continue; }
+      const whole = num(reel.reelMtrs);
+      if (whole == null) { unmeasured += 1; continue; }
+      // Its share, where the same reel feeds more than one layer of this job.
+      const kg = whole * (shareOfReel.get(`${reel._id}|${l.key}`) ?? 1);
       gotKg += kg;
       const gsm = isDrum ? recipeGsm : (num(reel.gsm) ?? recipeGsm);
       const width = isDrum ? drumWidth : num(reel.size);
@@ -478,14 +516,45 @@ function computeAllotmentCoverage(p, item, layerAllotments, deckleTarget) {
     // only SOME reels are unmeasurable keeps both sides and so reads low,
     // which is the safe direction.
     const allUnmeasured = l.reels.length > 0 && unmeasured === l.reels.length;
-    const parts = [];
-    if (needKg != null) parts.push(gotKg / needKg);
-    if (needMtrs != null && !allUnmeasured) parts.push(gotMtrs / needMtrs);
-    const covered = parts.length ? Math.min(...parts) : (l.allocated ? 1 : 0);
     return { key: l.key, label: l.label, unit: l.unit, allocated: l.allocated,
-      needKg, needMtrs, gotKg, gotMtrs, unmeasured,
-      covered: Math.round(Math.max(0, covered) * 10000) / 10000 };
+      needKg, needMtrs, gotKg, gotMtrs, unmeasured, allUnmeasured };
   });
+
+  // How far each layer's material goes. Layers that SHARE a reel are answered
+  // together: the reel is one lump of stock serving both passes, so the honest
+  // question is whether it covers what the two of them add up to -- not
+  // whether some invented split of it covers each. Apportioning first is what
+  // reports a shortfall on a reel that in fact feeds both (85 kg against needs
+  // of 35.3 + 43.0 is enough; no split of it makes both sides land).
+  const groupOf = new Map();                 // layerKey -> group id
+  const reelSeenIn = new Map();              // reelId -> group id
+  layerAllotments.forEach((l, i) => {
+    let g = null;
+    for (const reel of l.reels) if (reelSeenIn.has(reel._id)) { g = reelSeenIn.get(reel._id); break; }
+    if (g == null) g = `g${i}`;
+    groupOf.set(l.key, g);
+    for (const reel of l.reels) reelSeenIn.set(reel._id, g);
+  });
+  const groupTotals = new Map();             // group id -> { needKg, needMtrs, gotKg, gotMtrs, allUnmeasured }
+  for (const layer of layers) {
+    const g = groupOf.get(layer.key);
+    const t = groupTotals.get(g) || { needKg: 0, needMtrs: 0, gotKg: 0, gotMtrs: 0, haveKg: false, haveMtrs: false, allUnmeasured: true };
+    if (layer.needKg != null) { t.needKg += layer.needKg; t.haveKg = true; }
+    if (layer.needMtrs != null) { t.needMtrs += layer.needMtrs; t.haveMtrs = true; }
+    t.gotKg += layer.gotKg;
+    t.gotMtrs += layer.gotMtrs;
+    if (!layer.allUnmeasured) t.allUnmeasured = false;
+    groupTotals.set(g, t);
+  }
+  for (const layer of layers) {
+    const t = groupTotals.get(groupOf.get(layer.key));
+    const parts = [];
+    if (t.haveKg && t.needKg > 0) parts.push(t.gotKg / t.needKg);
+    if (t.haveMtrs && t.needMtrs > 0 && !t.allUnmeasured) parts.push(t.gotMtrs / t.needMtrs);
+    const covered = parts.length ? Math.min(...parts) : (layer.allocated ? 1 : 0);
+    layer.covered = Math.round(Math.max(0, covered) * 10000) / 10000;
+    delete layer.allUnmeasured;
+  }
 
   const covered = layers.reduce((m, l) => Math.min(m, l.covered), 1);
   // Deckles, not a percentage: a part-covered job is run until the material

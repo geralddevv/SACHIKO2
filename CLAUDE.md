@@ -503,22 +503,22 @@ children, and carry `!important`.
 
 Only applies at create time — editing an existing row still uses the plain exact-duplicate `buildLabelStockSignature()` check and never renames a row into a new variant on its own.
 
-### DOUBLE RELEASE / DOUBLE FACESTOCK: one drum, two layers
+### DOUBLE RELEASE / DOUBLE FACESTOCK: one reel may serve two layers
 
 A DOUBLE RELEASE job is made in two passes — facestock + adhesive + release
 liner as normal, then a second adhesive and a second liner on top — so
 `LAYER_ORDER["DOUBLE RELEASE"]` is exactly that sequence
 (`utils/labelStockProduction.js`).
 
-The second pass coats adhesive again, and **both coats may come off the same
-drum**: it is a quantity of glue drawn twice, not two webs running at once.
-`POST /labels/production/assign/:id` therefore only refuses a repeated pick
-when the layer's `LAYER_META.unit` is a **Roll** — two liners are two webs and
-each needs its own reel. Refusing the shared drum made the job unassignable
-whenever the recipe left one drum on offer (the common case: the picker shows
-the bound adhesive, and there is usually one). The whole Assign & Continue
-bounced back to the form with a flash, allotting nothing and never reaching the
-machine queue, which reads as "selecting the material does nothing".
+Because the passes are **sequential**, one reel or drum may be allotted to more
+than one layer: the second pass unwinds the same liner again and draws the same
+glue again. `POST /labels/production/assign/:id` therefore does not refuse a
+repeated pick at all. It used to, and that made these jobs unassignable: the
+picker offers the one bound drum (and often the one liner of that spec), the
+operator ticks it on both layers because there is nothing else to tick, and the
+whole Assign & Continue bounced back to the form with a flash — allotting
+nothing and never reaching the machine queue, which reads as "selecting the
+material does nothing".
 
 `produceDeckle()` is what makes that safe. A reel serving several layers is
 grouped by reel id first (`drawByReel`), so it is:
@@ -531,6 +531,14 @@ grouped by reel id first (`drawByReel`), so it is:
 
 Each layer still writes its own OUTWARD log line, so the ledger says what each
 coat took.
+
+The machine queue has to answer the same way. `computeAllotmentCoverage()`
+(`routes/system/machine.js`) **pools the layers that share a reel** and asks
+whether that reel covers what they add up to, rather than counting it in full
+on each (which would say the material goes twice as far as it does) or
+splitting it (which invents a shortfall: 85 kg against needs of 35.3 + 43.0 is
+enough, but no apportionment of it makes both sides land). Layers that share
+nothing are measured on their own exactly as before.
 
 ### One deckle batch per deckle size
 
