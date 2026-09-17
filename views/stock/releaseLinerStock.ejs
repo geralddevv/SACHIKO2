@@ -681,6 +681,7 @@
         <div style="display: flex; align-items: center; gap: 16px; font-size: 13px; color: rgba(255, 255, 255, 0.8);">
           <span>Rolls: <strong id="summaryRollCount" style="color: #fff; font-size: 15px;">1</strong></span>
           <span>Total Kg: <strong id="summaryTotalMtrs" style="color: #fff; font-size: 15px;">0</strong></span>
+          <span id="summaryKgCheck" style="font-weight: 700;"></span>
         </div>
       </div>
       <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
@@ -1542,15 +1543,56 @@
 
   // Live roll count / total mtrs shown in the dialog header as rows are
   // added/removed and Mtrs values are typed.
+  // What the rolls add up to, against what the invoice says (Total Kg).
+  // Two figures that must agree: keying 5 of an 8-roll delivery, or a
+  // fat-fingered 1500 where 150 was meant, is the mistake this catches -- and
+  // only here, while the person still has the invoice in front of them. The
+  // header shows the difference as they type; submitAdd() refuses on the same
+  // test, over OR under.
+  const KG_TOLERANCE = 0.01;   // the kg figures are carried to 2 decimals
+  function unitsTotal() {
+    return Array.from(document.querySelectorAll("#addRollsContainer .roll-row"))
+      .reduce((sum, row) => sum + (Number(row.querySelector(".roll-mtrs").value) || 0), 0);
+  }
+  const fmtKgNum = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0$/, "").replace(/\.$/, ""));
+
+  // null when the two agree (or there is nothing to compare yet); otherwise
+  // the difference and which way it is out.
+  function kgMismatch() {
+    const total = Number(document.getElementById("addTotalKgInput").value);
+    if (!Number.isFinite(total) || total <= 0) return null;
+    const rows = document.querySelectorAll("#addRollsContainer .roll-row");
+    if (!rows.length) return null;
+    const sum = unitsTotal();
+    const diff = Math.round((sum - total) * 100) / 100;
+    return Math.abs(diff) <= KG_TOLERANCE ? null : { diff, over: diff > 0, sum, total };
+  }
+
   function updateBatchSummary() {
     const rows = document.querySelectorAll("#addRollsContainer .roll-row");
-    const totalMtrs = Array.from(rows).reduce((sum, row) => sum + (Number(row.querySelector(".roll-mtrs").value) || 0), 0);
+    const sum = unitsTotal();
     document.getElementById("summaryRollCount").textContent = rows.length;
-    document.getElementById("summaryTotalMtrs").textContent = Number.isInteger(totalMtrs) ? totalMtrs : totalMtrs.toFixed(1);
+    document.getElementById("summaryTotalMtrs").textContent = fmtKgNum(sum);
+
+    const note = document.getElementById("summaryKgCheck");
+    const total = Number(document.getElementById("addTotalKgInput").value);
+    const bad = kgMismatch();
+    if (!Number.isFinite(total) || total <= 0) {
+      note.textContent = "";
+    } else if (bad) {
+      note.textContent = `${bad.over ? "+" : "−"}${fmtKgNum(Math.abs(bad.diff))} kg ${bad.over ? "more" : "less"} than Total Kg (${fmtKgNum(total)})`;
+      note.style.color = bad.over ? "#fca5a5" : "#fde68a";
+    } else {
+      note.textContent = `matches Total Kg (${fmtKgNum(total)})`;
+      note.style.color = "#86efac";
+    }
   }
   document.getElementById("addRollsContainer").addEventListener("input", (e) => {
     if (e.target.classList.contains("roll-mtrs")) updateBatchSummary();
   });
+  // The other half of the same comparison -- typing the invoice total has to
+  // re-check it just as typing a roll does.
+  document.getElementById("addTotalKgInput").addEventListener("input", updateBatchSummary);
 
   async function refreshRollIdPreviews() {
     const rows = document.querySelectorAll("#addRollsContainer .roll-row");
@@ -1660,6 +1702,17 @@
     const emptyVendorRollIdIndex = rolls.findIndex((r) => !r.vendorRollId);
     if (emptyVendorRollIdIndex !== -1) return showError("addReleaseError", `Vendor Roll ID is required for roll ${emptyVendorRollIdIndex + 1}.`);
 
+    // The roll have to add up to what the invoice says -- too much and one
+    // has been keyed twice or a figure is wrong; too little and one is
+    // missing. Both are wrong on the shelf, so both stop here.
+    const mismatch = kgMismatch();
+    if (mismatch) {
+      return showError("addReleaseError",
+        `The ${rolls.length} roll${rolls.length === 1 ? "" : "s"} add up to ${fmtKgNum(mismatch.sum)} kg,`
+        + ` which is ${fmtKgNum(Math.abs(mismatch.diff))} kg ${mismatch.over ? "MORE" : "LESS"} than the Total Kg of ${fmtKgNum(mismatch.total)}.`
+        + ` ${mismatch.over ? "Check the roll weights, or raise the Total Kg." : "Check for a missing roll, or lower the Total Kg."}`);
+    }
+
     hideError("addReleaseError");
     setLoading("addSubmitBtn", true);
     try {
@@ -1680,6 +1733,8 @@
           inwardDate,
           invoiceNo: document.getElementById("addInvoiceNoInput").value,
           remarks: document.getElementById("addRemarksInput").value,
+          // Checked again server-side against the rows (POST /create).
+          totalKg,
           rolls,
         }),
       });

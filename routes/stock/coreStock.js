@@ -322,6 +322,27 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: `Pieces is required for lot ${invalidIndex + 1}.` });
     }
 
+    // The lots must add up to the Total Pcs keyed off the invoice. Too
+    // much and one has been entered twice or a figure is wrong; too little and
+    // one is missing -- both put stock on the shelf that isn't what arrived,
+    // and neither is recoverable later from the rows alone. The dialog says the
+    // same thing while it is being typed; this is the half a hand-made request
+    // can't skip.
+    const totalPcs = Number(req.body.totalPcs);
+    if (!Number.isFinite(totalPcs) || totalPcs <= 0) {
+      return res.status(400).json({ success: false, message: "Total Pcs is required." });
+    }
+    const lotsPcs = Math.round(lots.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0));
+    const diff = Math.round(lotsPcs - totalPcs);
+    if (diff !== 0) {
+      const over = diff > 0;
+      return res.status(400).json({
+        success: false,
+        message: `The ${lots.length} lot${lots.length === 1 ? "" : "s"} add up to ${lotsPcs} pcs, which is `
+          + `${Math.round(Math.abs(diff))} pcs ${over ? "MORE" : "LESS"} than the Total Pcs of ${Math.round(totalPcs)}.`,
+      });
+    }
+
     const locationExists = await Location.exists({ locationName: header.location });
     if (!locationExists) {
       return res.status(400).json({ success: false, message: "Invalid location." });

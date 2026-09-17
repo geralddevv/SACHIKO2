@@ -385,6 +385,7 @@
         <div style="display: flex; align-items: center; gap: 16px; font-size: 13px; color: rgba(255, 255, 255, 0.8);">
           <span>Lots: <strong id="summaryLotCount" style="color: #fff; font-size: 15px;">1</strong></span>
           <span>Total Pcs: <strong id="summaryTotalPcs" style="color: #fff; font-size: 15px;">0</strong></span>
+          <span id="summaryPcsCheck" style="font-weight: 700;"></span>
         </div>
       </div>
       <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
@@ -431,6 +432,10 @@
             <div>
               <label class="dialog-field-label" for="addRateInput">Rate</label>
               <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
+            </div>
+            <div>
+              <label class="dialog-field-label" for="addTotalPcsInput">Total Pcs</label>
+              <input type="number" id="addTotalPcsInput" class="form-control premium-input" placeholder="Total pieces" min="0" step="1" />
             </div>
             <div>
               <label class="dialog-field-label" for="addLotCountInput">No of Lots</label>
@@ -954,15 +959,54 @@
 
   // Live lot count / total pieces shown in the dialog header as rows are
   // added/removed and Pieces values are typed.
+  // What the lots add up to, against what the invoice says (Total Pcs).
+  // Same check the other inward pages do on Kg -- keying 5 lots of an 8-lot
+  // delivery, or a fat-fingered 1500 where 150 was meant, is only catchable
+  // here, while the person still has the invoice in front of them. Cores are
+  // COUNTED, so these are whole pieces: no tolerance, they either match or
+  // they don't.
+  function lotsPcsTotal() {
+    return Array.from(document.querySelectorAll("#addLotsContainer .roll-row"))
+      .reduce((sum, row) => sum + (Number(row.querySelector(".roll-mtrs").value) || 0), 0);
+  }
+
+  // null when the two agree (or there is nothing to compare yet); otherwise
+  // the difference and which way it is out.
+  function pcsMismatch() {
+    const total = Number(document.getElementById("addTotalPcsInput").value);
+    if (!Number.isFinite(total) || total <= 0) return null;
+    const rows = document.querySelectorAll("#addLotsContainer .roll-row");
+    if (!rows.length) return null;
+    const sum = lotsPcsTotal();
+    const diff = sum - total;
+    return diff === 0 ? null : { diff, over: diff > 0, sum, total };
+  }
+
   function updateBatchSummary() {
     const rows = document.querySelectorAll("#addLotsContainer .roll-row");
-    const totalPcs = Array.from(rows).reduce((sum, row) => sum + (Number(row.querySelector(".roll-mtrs").value) || 0), 0);
+    const totalPcs = lotsPcsTotal();
     document.getElementById("summaryLotCount").textContent = rows.length;
     document.getElementById("summaryTotalPcs").textContent = totalPcs;
+
+    const note = document.getElementById("summaryPcsCheck");
+    const total = Number(document.getElementById("addTotalPcsInput").value);
+    const bad = pcsMismatch();
+    if (!Number.isFinite(total) || total <= 0) {
+      note.textContent = "";
+    } else if (bad) {
+      note.textContent = `${bad.over ? "+" : "−"}${Math.abs(bad.diff)} pcs ${bad.over ? "more" : "less"} than Total Pcs (${total})`;
+      note.style.color = bad.over ? "#fca5a5" : "#fde68a";
+    } else {
+      note.textContent = `matches Total Pcs (${total})`;
+      note.style.color = "#86efac";
+    }
   }
   document.getElementById("addLotsContainer").addEventListener("input", (e) => {
     if (e.target.classList.contains("roll-mtrs")) updateBatchSummary();
   });
+  // The other half of the same comparison -- typing the invoice total has to
+  // re-check it just as typing a lot does.
+  document.getElementById("addTotalPcsInput").addEventListener("input", updateBatchSummary);
 
   async function refreshRollIdPreviews() {
     const rows = document.querySelectorAll("#addLotsContainer .roll-row");
@@ -1057,6 +1101,20 @@
     const emptyIndex = rolls.findIndex((r) => !r.quantity || Number(r.quantity) <= 0);
     if (emptyIndex !== -1) return showError("addCoreError", `Pieces is required for lot ${emptyIndex + 1}.`);
 
+    const totalPcs = document.getElementById("addTotalPcsInput").value;
+    if (!totalPcs || Number(totalPcs) <= 0) return showError("addCoreError", "Total Pcs is required.");
+
+    // The lots have to add up to what the invoice says -- too many and a lot
+    // has been keyed twice or a figure is wrong; too few and one is missing.
+    // Both are wrong on the shelf, so both stop here.
+    const mismatch = pcsMismatch();
+    if (mismatch) {
+      return showError("addCoreError",
+        `The ${rolls.length} lot${rolls.length === 1 ? "" : "s"} add up to ${mismatch.sum} pcs,`
+        + ` which is ${Math.abs(mismatch.diff)} pcs ${mismatch.over ? "MORE" : "LESS"} than the Total Pcs of ${mismatch.total}.`
+        + ` ${mismatch.over ? "Check the lot quantities, or raise the Total Pcs." : "Check for a missing lot, or lower the Total Pcs."}`);
+    }
+
     hideError("addCoreError");
     setLoading("addSubmitBtn", true);
     try {
@@ -1074,6 +1132,8 @@
           rate: document.getElementById("addRateInput").value,
           location,
           invoiceNo: document.getElementById("addInvoiceNoInput").value,
+          // Checked again server-side against the lots (POST /create).
+          totalPcs,
           remarks: document.getElementById("addRemarksInput").value,
           rolls,
         }),

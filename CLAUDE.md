@@ -421,6 +421,36 @@ Notes on the resolution rules:
 The upload is multipart, so csurf can't find its token in the body — the client
 sends it as an `x-csrf-token` header instead.
 
+### Inward: the rows must add up to the invoice total
+
+Every Add Stock dialog — **Facestock**, **Adhesive**, **Release Liner** and
+**Core** — checks what the rows add up to against the total keyed off the
+invoice, and refuses to save when they disagree in **either** direction. Too
+much means a row has been keyed twice or a weight is wrong; too little means a
+row is missing. Both put stock on the shelf that isn't what arrived, and
+neither is recoverable from the rows alone afterwards — this is the one moment
+someone has the invoice in front of them.
+
+| page | rows | total |
+|---|---|---|
+| Facestock | reels, Kg | Total Kg |
+| Adhesive | drums, Kg | Total Kg |
+| Release Liner | reels, Kg | Total Kg |
+| Core | lots, **Pieces** | **Total Pcs** |
+
+Core counts pieces rather than weighing, so it got the field it never had
+(`addTotalPcsInput`) and is compared as whole numbers — no tolerance, they
+either match or they don't. The kg pages compare to 2 decimals with a 0.01
+tolerance, so `100.005 + 99.995 + 100` against `300` passes rather than
+tripping on floating point.
+
+It is checked in three places, and all three have to stay in step: the dialog
+header says the difference as it is typed (`summaryKgCheck` /
+`summaryPcsCheck`), the submit refuses with the figures spelled out, and
+`POST /create` runs the same test server-side — the total is sent with the
+batch for exactly that reason. Before this, the total was a client-only field
+that nothing compared and that never even reached the server.
+
 ### Reel labels: one sticker or a whole batch
 
 On **`/sachiko/facestockstock`**, **`/sachiko/adhesivestock`** and
