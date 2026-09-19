@@ -38,6 +38,8 @@ const storage = multer.diskStorage({
       cb(null, "images/aadhaar");
     } else if (file.fieldname === "empPanImg") {
       cb(null, "images/pan");
+    } else if (file.fieldname === "empBiodata") {
+      cb(null, "images/biodata");
     } else {
       cb(new Error("Invalid upload field"));
     }
@@ -48,17 +50,30 @@ const storage = multer.diskStorage({
   },
 });
 
+// Every attachment is image-only except Biodata (a CV/resume, normally a
+// PDF) -- it alone also accepts application/pdf.
 const fileFilter = (req, file, cb) => {
-  // 1. Check MIME type
-  if (!file.mimetype.startsWith("image/")) {
-    return cb(new Error("Only image files allowed"), false);
+  const isBiodata = file.fieldname === "empBiodata";
+  const isImageMime = file.mimetype.startsWith("image/");
+  const isPdfMime = file.mimetype === "application/pdf";
+
+  if (!isImageMime && !(isBiodata && isPdfMime)) {
+    return cb(new Error(isBiodata ? "Only image or PDF files allowed" : "Only image files allowed"), false);
   }
 
-  // 2. Check file extension
-  const allowedExts = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+  const allowedExts = isBiodata
+    ? [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"]
+    : [".jpg", ".jpeg", ".png", ".gif", ".webp"];
   const ext = path.extname(file.originalname).toLowerCase();
   if (!allowedExts.includes(ext)) {
-    return cb(new Error("Invalid file extension. Use JPG, PNG, GIF, or WebP."), false);
+    return cb(
+      new Error(
+        isBiodata
+          ? "Invalid file extension. Use JPG, PNG, GIF, WebP, or PDF."
+          : "Invalid file extension. Use JPG, PNG, GIF, or WebP.",
+      ),
+      false,
+    );
   }
 
   cb(null, true);
@@ -75,6 +90,7 @@ const uploadMiddleware = upload.fields([
   { name: "empPhoto", maxCount: 1 },
   { name: "empAadhaarImg", maxCount: 1 },
   { name: "empPanImg", maxCount: 1 },
+  { name: "empBiodata", maxCount: 1 },
 ]);
 
 const normalizeProfileCode = (value) => String(value || "").trim().toUpperCase();
@@ -122,6 +138,7 @@ const deleteUploadedEmployeeFiles = (files = {}) => {
     empPhoto: "empimg",
     empAadhaarImg: "aadhaar",
     empPanImg: "pan",
+    empBiodata: "biodata",
   };
 
   Object.entries(folderByField).forEach(([field, folder]) => {
@@ -214,10 +231,17 @@ router.get("/create", async (req, res) => {
 
 /* ================= EMPLOYEE LIST ================= */
 router.get("/view", async (req, res) => {
-  const [employees, loans, advances] = await Promise.all([
+  const [employees, loans, advances, managerEmployees, existingProfileCodes, machineNames, locationNames] = await Promise.all([
     Employee.find().lean(),
     Loan.find({}, "employee currentBalance").lean(),
     Advance.find({}, "employee currentBalance").lean(),
+    Employee.find({}, "empName")
+      .collation({ locale: "en", strength: 2 })
+      .sort({ empName: 1 })
+      .lean(),
+    getExistingProfileCodes(),
+    Machine.distinct("machineName").then((names) => names.sort()),
+    getLocationNames(),
   ]);
 
   const loanMap = Object.fromEntries(loans.map(l => [l.employee.toString(), l.currentBalance]));
@@ -235,6 +259,13 @@ router.get("/view", async (req, res) => {
     CSS: "tableDisp.css",
     JS: false,
     notification: req.flash("notification"),
+    // For the Add Employee dialog -- same data GET /create renders the
+    // standalone form with, so the dialog needs no round trip of its own.
+    employeeCount: employees.length + 1,
+    managerEmployees,
+    existingProfileCodes,
+    machineNames,
+    locationNames,
   });
 });
 
@@ -259,6 +290,7 @@ router.post("/form", requireAuth, createLimiter, handleUpload, async (req, res) 
       empPhoto: req.files?.empPhoto?.[0]?.filename || null,
       empAadhaarImg: req.files?.empAadhaarImg?.[0]?.filename || null,
       empPanImg: req.files?.empPanImg?.[0]?.filename || null,
+      empBiodata: req.files?.empBiodata?.[0]?.filename || null,
     };
 
     // No password field on the create form — set the default explicitly
@@ -372,6 +404,7 @@ router.post("/edit/:id", requireAuth, updateLimiter, handleUpload, async (req, r
     replaceFile("empPhoto", "empimg", "removeEmpPhoto");
     replaceFile("empAadhaarImg", "aadhaar", "removeEmpAadhaarImg");
     replaceFile("empPanImg", "pan", "removeEmpPanImg");
+    replaceFile("empBiodata", "biodata", "removeEmpBiodata");
 
     Object.assign(emp, req.body);
     emp.isActive = req.body.status !== "inactive";

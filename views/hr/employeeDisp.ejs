@@ -28,28 +28,30 @@
     <div class="indi-head">
       <h1>Employees</h1>
       <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
-        <a
-          href="/app/employee/create"
+        <button
+          type="button"
           class="header-action-btn"
+          onclick="openAddEmployeeDialog()"
           style="
             height: 30px;
             padding: 0 14px;
             background: #f0f0f0;
             color: #044a78;
+            border: none;
             border-radius: 6px;
-            text-decoration: none;
             font-size: 14px;
             font-weight: 500;
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            cursor: pointer;
             transition: all 0.2s;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
           "
         >
           <i class="fa-solid fa-plus"></i>
           <span>Add Employee</span>
-        </a>
+        </button>
 
         <div class="download-selector" id="downloadSelector">
           <button class="download-selector__trigger" style="height: 30px; display: flex; align-items: center; padding: 0 12px; border: 1.5px solid #e2e8f0; border-radius: 6px; background: #fff; font-size: 14px; font-weight: 500; cursor: pointer;">
@@ -410,5 +412,1259 @@
     function closeImgModal() {
       document.getElementById("imgModal").style.display = "none";
     }
+  </script>
+
+  <!-- ================= ADD EMPLOYEE DIALOG ================= -->
+  <style>
+    /* A fixed `height` (not just max-height) keeps the dialog box the same
+       size on every tab -- otherwise a step with fewer fields (Banking) has
+       less content than one with more (Employment), and with no explicit
+       height the box would shrink/grow to fit whichever step is showing. */
+    #addEmployeeDialog .ae-dialog {
+      width: min(1400px, 98vw);
+      height: min(920px, 92vh);
+      max-height: 92vh;
+      padding: 0;
+      border-radius: 18px;
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+    }
+    /* Scrollbars inside this dialog: the app's own thin navy bar, the same
+       one .custom-scrollbar draws on the stock and production pages, instead
+       of the OS default.
+       Scoped to the dialog rather than hung on a class, because it has more
+       than one scroller and they are not all ours to put a class on: the
+       body (.ae-body), the stepper strip when a narrow window makes it
+       overflow sideways, and the Choices.js dropdown lists, which Choices
+       builds itself. `scrollbar-width`/`scrollbar-color` are what Firefox
+       reads; the ::-webkit- rules are for Chrome, where this runs. Keep the
+       6px and #044A78 in step with the copies on the other pages -- there is
+       no shared definition in common.css to change instead. */
+    #addEmployeeDialog, #addEmployeeDialog * {
+      scrollbar-width: thin;
+      scrollbar-color: #044A78 #f1f5f9;
+    }
+    #addEmployeeDialog::-webkit-scrollbar,
+    #addEmployeeDialog ::-webkit-scrollbar { width: 6px; height: 6px; }
+    #addEmployeeDialog::-webkit-scrollbar-track,
+    #addEmployeeDialog ::-webkit-scrollbar-track { background: #f1f5f9; }
+    #addEmployeeDialog::-webkit-scrollbar-thumb,
+    #addEmployeeDialog ::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+    #addEmployeeDialog::-webkit-scrollbar-thumb:hover,
+    #addEmployeeDialog ::-webkit-scrollbar-thumb:hover { background: #03365a; }
+
+    /* Brand blue with white type, the same bar every other dialog and card
+       on the app wears (.dialog-header in the layout, .ap-card-title on the
+       production pages): #044A78 behind, #fff in front. Everything else in
+       this bar -- subtitle, the icon tile, the close button -- was coloured
+       for a white background and is re-tinted off white here rather than left
+       slate-on-navy, which is unreadable. No bottom hairline: the colour
+       change against the white stepper below is the separation now. */
+    #addEmployeeDialog .ae-header {
+      background: #044A78;
+      padding: 20px 26px;
+      border-radius: 18px 18px 0 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    #addEmployeeDialog .ae-header-title { display: flex; align-items: center; gap: 14px; }
+    #addEmployeeDialog .ae-header-icon {
+      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+      background: rgba(255,255,255,0.14); color: #fff;
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    #addEmployeeDialog .ae-header h2 {
+      margin: 0 0 2px;
+      color: #fff;
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    #addEmployeeDialog .ae-subtitle { margin: 0; color: rgba(255,255,255,0.78); font-size: 0.86rem; }
+    #addEmployeeDialog .ae-close-btn {
+      background: rgba(255,255,255,0.14);
+      border: none; color: #fff; width: 36px; height: 36px; border-radius: 10px;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 15px; transition: background .15s; flex-shrink: 0;
+    }
+    #addEmployeeDialog .ae-close-btn:hover { background: rgba(255,255,255,0.28); color: #fff; }
+
+    /* Sits between the header and the scrollable .ae-body as its own flex row
+       (flex-shrink: 0), so it can never get carried away by the body's own
+       scroll -- the stepper always stays pinned above the fields. The shadow
+       is just to make that separation read clearly once the body scrolls.
+       common.css has a global bare `.active { background-color: #03365a; }`
+       rule -- every element here that carries "active"/"completed" pins its
+       own background explicitly so it can never inherit that by accident. */
+    #addEmployeeDialog .ae-tabs {
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 20px 26px 16px; background: #fff;
+      border-bottom: 1px solid #e2e8f0; overflow-x: auto; flex-shrink: 0;
+      position: relative; z-index: 2; box-shadow: 0 4px 10px -6px rgba(15, 23, 42, 0.1);
+    }
+    #addEmployeeDialog .ae-step {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      flex: 0 0 auto; background: transparent; border: none; padding: 0 2px;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    #addEmployeeDialog .ae-step-circle {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; color: #94a3b8;
+      background: #fff; border: 2px solid #cbd5e1; transition: all .18s ease;
+    }
+    #addEmployeeDialog .ae-step-circle .ae-step-check { display: none; font-size: 12px; }
+    #addEmployeeDialog .ae-step-label {
+      font-size: 11.5px; font-weight: 600; color: #94a3b8; text-align: center;
+      white-space: nowrap; transition: color .18s ease;
+    }
+    #addEmployeeDialog .ae-step:hover .ae-step-circle { border-color: #044A78; color: #044A78; }
+    #addEmployeeDialog .ae-step:hover .ae-step-label { color: #044A78; }
+    #addEmployeeDialog .ae-step.active { background: transparent; }
+    #addEmployeeDialog .ae-step.active .ae-step-circle {
+      background: #044A78; border-color: #044A78; color: #fff;
+      box-shadow: 0 0 0 4px rgba(4,74,120,0.14);
+    }
+    #addEmployeeDialog .ae-step.active .ae-step-label { color: #044A78; }
+    #addEmployeeDialog .ae-step.completed { background: transparent; }
+    #addEmployeeDialog .ae-step.completed .ae-step-circle { background: #044A78; border-color: #044A78; color: #fff; }
+    #addEmployeeDialog .ae-step.completed .ae-step-circle .ae-step-num { display: none; }
+    #addEmployeeDialog .ae-step.completed .ae-step-circle .ae-step-check { display: inline-flex; }
+    #addEmployeeDialog .ae-step.completed .ae-step-label { color: #475569; }
+
+    #addEmployeeDialog .ae-step-line {
+      flex: 0 1 60px; min-width: 20px; height: 2px; background: #e2e8f0;
+      margin-top: 15px; transition: background .18s ease;
+    }
+    #addEmployeeDialog .ae-step-line.completed { background: #044A78; }
+
+    /* common.css sets a global `form { display: grid; grid-template-columns:
+       repeat(32, 1fr); border: 2px solid ...; }` for the old span-N form
+       layout -- #addEmployeeForm IS a <form>, so every one of those has to be
+       explicitly undone here or the dialog's panels get auto-placed into a
+       single ~1/32-width grid column instead of filling the dialog. */
+    #addEmployeeDialog .ae-body {
+      display: block;
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 24px 26px;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      gap: 0;
+    }
+    /* common.css has a global bare `.active { background-color: #03365a; }`
+       rule (for the nav's active state) -- since the tab panels are also
+       toggled with a class named "active", every visible panel silently
+       inherited that dark navy fill with nothing here to contest it. */
+    #addEmployeeDialog .ae-panel { display: none; background: transparent; }
+    #addEmployeeDialog .ae-panel.active { display: block; background: transparent; animation: aeFadeIn .18s ease; }
+    @keyframes aeFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* auto-fit, not auto-fill -- a row that falls short of a full set of
+       columns (Banking's 4 fields, Payroll's 7, etc.) stretches to fill the
+       row instead of sitting at minmax width with empty track space after it. */
+    #addEmployeeDialog .ae-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 20px; }
+    /* auto-fit (not auto-fill) collapses empty tracks and stretches the
+       actual fields to fill the row -- with auto-fill the 3 textareas kept
+       their minmax width and left the rest of a wide row empty. */
+    #addEmployeeDialog .ae-grid-1 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 18px; }
+    /* Exactly 7 equal columns, always one row -- Deductions and Payroll
+       Details each have exactly 7 fields and read as one set at a glance. */
+    #addEmployeeDialog .ae-grid-7 { grid-template-columns: repeat(7, 1fr); }
+    @media (max-width: 900px) {
+      #addEmployeeDialog .ae-grid-7 { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+    }
+    #addEmployeeDialog .ae-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    #addEmployeeDialog .ae-field-wide { grid-column: 1 / -1; }
+    #addEmployeeDialog .ae-field label { font-size: 12.5px; font-weight: 600; color: #475569; letter-spacing: .01em; }
+    #addEmployeeDialog .ae-mandatory-star { color: #ef4444; font-weight: 700; }
+
+    /* tableDisp.css (loaded on this page for the table filters) sets a
+       global `input { height: 20px; background-color: #f8f9fa !important;
+       flex-grow: 1; ... }` -- with our 10px vertical padding that crushes
+       every text/date/number/file input into a broken 20px box, and the
+       !important beats a plain background declaration here. Every property
+       that rule sets has to be pinned back explicitly (height as a real
+       value, background with !important of our own) or the dialog's inputs
+       render mangled. */
+    #addEmployeeDialog .ae-input, #addEmployeeDialog .ae-select {
+      width: 100%; height: auto; padding: 10px 13px; border-radius: 10px; border: 1.5px solid #e2e8f0;
+      background: #f8fafc !important; font-size: 13.5px; color: #0f172a; transition: all .15s ease;
+      font-family: inherit; flex-grow: 0; outline: none;
+    }
+    #addEmployeeDialog .ae-input:focus, #addEmployeeDialog .ae-select:focus {
+      outline: none; border-color: #044A78; background: #fff !important; box-shadow: 0 0 0 4px rgba(4,74,120,0.1);
+    }
+    #addEmployeeDialog .ae-input-readonly, #addEmployeeDialog .ae-input-readonly:focus {
+      background: #eef1f5 !important; color: #64748b; cursor: not-allowed;
+    }
+    #addEmployeeDialog .ae-textarea { height: auto; resize: none; font-family: inherit; }
+    #addEmployeeDialog .ae-select {
+      /* common.css's global `select { height: 2.3rem; ... }` rule isn't beaten
+         by specificity for a property this block never sets itself -- pin it
+         explicitly or selects sit shorter than the text inputs next to them. */
+      height: auto;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23044a78' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 13px center; padding-right: 32px;
+    }
+
+    #addEmployeeDialog .field-error { border-color: #dc3545 !important; background-color: #fdf2f3 !important; }
+    #addEmployeeDialog .choices.field-error .choices__inner { border-color: #dc3545 !important; background-color: #fdf2f3 !important; }
+
+    #addEmployeeDialog .ae-assets-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+
+    #addEmployeeDialog .choices__inner {
+      padding: 9px 13px !important; border-radius: 10px !important; border: 1.5px solid #e2e8f0 !important;
+      background-color: #f8fafc !important; font-size: 13.5px !important; min-height: 0 !important;
+    }
+    #addEmployeeDialog .choices__list--single { padding: 0 !important; }
+    #addEmployeeDialog .choices.is-focused .choices__inner,
+    #addEmployeeDialog .choices.is-open .choices__inner {
+      border-color: #044A78 !important; background-color: #fff !important; box-shadow: 0 0 0 4px rgba(4,74,120,0.1) !important;
+    }
+    #addEmployeeDialog .choices__list--dropdown { z-index: 99999 !important; border-radius: 10px !important; border: 1.5px solid #e2e8f0 !important; }
+
+    /* ---- Identification -------------------------------------------------
+       Employee Photo reads as a profile-picture uploader: a circular avatar
+       you click directly (native <label for>), with a small camera badge
+       and a floating remove (x). Aadhaar/PAN are click-or-drag dropzones
+       sitting right under their own number field, so each document is one
+       self-contained block instead of a bare <input type=file> (whose
+       unstyled "No file chosen" text never matched the rest of the dialog)
+       floating next to an unrelated text field. */
+    #addEmployeeDialog .ae-photo-row {
+      display: flex; align-items: center; gap: 20px; margin-bottom: 24px;
+      padding-bottom: 22px; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap;
+    }
+    /* A plain line, not another boxed card, separates Photo from Biodata --
+       same "if any separation, do it with a line" rule used everywhere else. */
+    #addEmployeeDialog .ae-photo-row-divider { align-self: stretch; width: 1px; background: #e2e8f0; flex-shrink: 0; }
+    #addEmployeeDialog .ae-avatar-upload { position: relative; flex-shrink: 0; width: 92px; height: 92px; }
+    #addEmployeeDialog .ae-biodata-tile { flex-shrink: 0; }
+    #addEmployeeDialog .ae-dropzone-sm { width: 110px; height: 92px; }
+    #addEmployeeDialog .ae-dropzone-sm .ae-upload-placeholder { font-size: 18px; }
+    #addEmployeeDialog .ae-dropzone-sm .ae-upload-file-chip i { font-size: 20px; }
+    #addEmployeeDialog .ae-dropzone-sm .ae-upload-file-chip .ae-file-chip-name { max-width: 96px; font-size: 10px; }
+    #addEmployeeDialog .ae-avatar-circle {
+      position: relative; display: block; width: 92px; height: 92px; border-radius: 50%;
+      overflow: hidden; background: #eef1f5; border: 2px solid #e2e8f0; cursor: pointer; transition: border-color .15s;
+    }
+    #addEmployeeDialog .ae-avatar-circle:hover { border-color: #044A78; }
+    #addEmployeeDialog .ae-avatar-circle .ae-upload-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 30px; }
+    #addEmployeeDialog .ae-avatar-circle .ae-upload-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+    #addEmployeeDialog .ae-avatar-edit-icon {
+      position: absolute; right: -2px; bottom: -2px; width: 30px; height: 30px; border-radius: 50%;
+      background: #044A78; color: #fff; border: 3px solid #fff; display: flex; align-items: center; justify-content: center;
+      font-size: 11px; cursor: pointer; z-index: 1; transition: background .15s;
+    }
+    #addEmployeeDialog .ae-avatar-edit-icon:hover { background: #0a6cad; }
+    #addEmployeeDialog .ae-avatar-remove-btn {
+      position: absolute; top: -4px; right: -4px; width: 22px; height: 22px; border-radius: 50%;
+      background: #dc3545; color: #fff; border: 2px solid #fff; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 10px; z-index: 2;
+    }
+    #addEmployeeDialog .ae-avatar-remove-btn:hover { background: #b91c2c; }
+    #addEmployeeDialog .ae-avatar-info { display: flex; flex-direction: column; gap: 4px; }
+    #addEmployeeDialog .ae-avatar-info .ae-doc-title { font-size: 13.5px; }
+
+    /* A plain line divides Aadhaar from PAN instead of boxing each one in
+       its own bordered/filled card -- separation without adding weight. */
+    #addEmployeeDialog .ae-doc-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 32px;
+    }
+    #addEmployeeDialog .ae-doc-card {
+      display: flex; flex-direction: column; gap: 10px; padding: 0;
+      border: none; background: transparent;
+    }
+    #addEmployeeDialog .ae-doc-card + .ae-doc-card { border-left: 1px solid #e2e8f0; padding-left: 32px; }
+    #addEmployeeDialog .ae-doc-title { font-size: 12.5px; font-weight: 700; color: #0f172a; }
+
+    @media (max-width: 720px) {
+      #addEmployeeDialog .ae-doc-card + .ae-doc-card {
+        border-left: none; border-top: 1px solid #e2e8f0; padding-left: 0; padding-top: 18px;
+      }
+    }
+
+    #addEmployeeDialog .ae-dropzone-wrap { position: relative; }
+    #addEmployeeDialog .ae-dropzone {
+      position: relative; height: 110px; border-radius: 12px; border: 1.5px dashed #cbd5e1;
+      background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden;
+      cursor: pointer; transition: border-color .15s, background .15s;
+    }
+    #addEmployeeDialog .ae-dropzone:hover, #addEmployeeDialog .ae-dropzone:focus-visible {
+      border-color: #044A78; background: #f0f6fb; outline: none;
+    }
+    #addEmployeeDialog .ae-dropzone.is-dragover { border-color: #044A78; background: #e6f0f8; }
+    #addEmployeeDialog .ae-dropzone .ae-upload-placeholder {
+      position: static; display: flex; flex-direction: column; align-items: center; gap: 6px;
+      color: #94a3b8; font-size: 20px; pointer-events: none;
+    }
+    #addEmployeeDialog .ae-dropzone .ae-upload-placeholder span { font-size: 11px; font-weight: 600; }
+    #addEmployeeDialog .ae-dropzone .ae-upload-preview {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none;
+    }
+    /* Non-image files (a Biodata PDF) can't get a thumbnail -- this chip
+       (icon + filename) stands in for the preview instead. */
+    #addEmployeeDialog .ae-upload-file-chip {
+      display: none; flex-direction: column; align-items: center; gap: 6px;
+      color: #044A78; padding: 0 12px; pointer-events: none;
+    }
+    #addEmployeeDialog .ae-upload-file-chip i { font-size: 24px; }
+    #addEmployeeDialog .ae-upload-file-chip .ae-file-chip-name {
+      font-size: 11px; font-weight: 600; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    #addEmployeeDialog .ae-dropzone-remove {
+      position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 8px; border: none;
+      background: rgba(15,23,42,0.65); color: #fff; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 11px; transition: background .15s; z-index: 2;
+    }
+    #addEmployeeDialog .ae-dropzone-remove:hover { background: #dc3545; }
+
+    /* Visually hidden but still focusable/keyboard-operable -- the avatar
+       circle / dropzone above is what actually looks clickable. */
+    #addEmployeeDialog .ae-file-input-hidden {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+    #addEmployeeDialog .ae-upload-hint { font-size: 11px; color: #94a3b8; }
+
+    #addEmployeeDialog .ae-section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #044A78;
+      margin: 22px 0 12px; padding-bottom: 8px; border-bottom: 1.5px solid #e2e8f0;
+    }
+    #addEmployeeDialog .ae-panel .ae-section-label:first-child { margin-top: 0; }
+
+    #addEmployeeDialog .ae-dependents-header {
+      display: none; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;
+      padding: 0 12px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .04em; color: #64748b;
+    }
+    #addEmployeeDialog .ae-dependents-list { display: flex; flex-direction: column; gap: 10px; }
+    #addEmployeeDialog .ae-dependent-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;
+      padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 12px; background: #f8fafc;
+    }
+
+    #addEmployeeDialog .ae-footer {
+      flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+      padding: 16px 26px; border-top: 1px solid #e2e8f0; border-radius: 0 0 18px 18px; background: #fff;
+    }
+    #addEmployeeDialog .ae-btn {
+      display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 10px;
+      font-size: 13.5px; font-weight: 600; cursor: pointer; border: 1.5px solid transparent; transition: all .15s ease;
+    }
+    #addEmployeeDialog .ae-btn-ghost { background: #fff; color: #475569; border-color: #e2e8f0; }
+    #addEmployeeDialog .ae-btn-ghost:hover { background: #f1f5f9; }
+    /* Back on step 1 and Next on the last step are disabled, not hidden (see
+       the footer markup), so they need a spent-looking state of their own --
+       the :disabled rule below only covers .ae-btn-primary. The :hover above
+       is undone too, or a dead button still lights up under the pointer and
+       reads as clickable. */
+    #addEmployeeDialog .ae-btn-ghost:disabled,
+    #addEmployeeDialog .ae-btn-ghost:disabled:hover {
+      background: #fff; color: #cbd5e1; border-color: #eef2f6;
+      cursor: not-allowed; opacity: 1;
+    }
+    /* Flat, no hover lift/glow -- matches the plain .btn-grp submit buttons
+       used everywhere else in the app (common.css), not a one-off style. */
+    #addEmployeeDialog .ae-btn-primary { background: #044A78; color: #fff; transition: none; }
+    #addEmployeeDialog .ae-btn-primary:disabled { opacity: .7; cursor: not-allowed; }
+    /* Save Employee is hidden with the `hidden` property until the last step
+       (see aeSwitchTab). The browser's own `[hidden] { display: none }` is a
+       bare type-less rule, so .ae-btn's `display: inline-flex` above -- an id
+       plus two classes -- outranks it and the button would stay on screen.
+       This rule puts it back, and has to keep beating .ae-btn to do it. */
+    #addEmployeeDialog .ae-btn[hidden] { display: none; }
+
+    @media (max-width: 720px) {
+      #addEmployeeDialog .ae-dialog { height: 95vh; max-height: 95vh; }
+      #addEmployeeDialog .ae-header { padding: 16px 18px; }
+      #addEmployeeDialog .ae-body { padding: 18px; }
+      #addEmployeeDialog .ae-footer { padding: 14px 18px; flex-wrap: wrap; }
+    }
+
+    #aeInactiveModal.show { z-index: 10050; }
+    /* .dialog-header/.dialog-body/.dialog-field-label/.dialog-actions aren't
+       global classes -- other pages (e.g. coreMaster.ejs) define their own
+       copies locally, so this dialog needs its own too or it renders bare. */
+    #aeInactiveModal .logout-dialog { padding: 0; }
+    #aeInactiveModal .dialog-header {
+      background: #044A78; padding: 18px 22px;
+    }
+    #aeInactiveModal .dialog-header h2 { margin: 0; color: #fff; }
+    #aeInactiveModal .dialog-body { padding: 22px; }
+    #aeInactiveModal .dialog-field-label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 8px; }
+    #aeInactiveModal .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    #aeInactiveModal .ae-asset-checkboxes { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 6px 2px; }
+    #aeInactiveModal .ae-asset-checkboxes label { display: flex; align-items: center; gap: 6px; font-size: .92rem; cursor: pointer; }
+    #aeInactiveModal .ae-no-assets { color: #5b6b7a; font-style: italic; font-size: .9rem; }
+  </style>
+
+  <div class="logout-modal" id="addEmployeeDialog" aria-hidden="true">
+    <div class="logout-dialog ae-dialog" role="dialog" aria-modal="true" aria-labelledby="addEmployeeDialogTitle">
+      <div class="ae-header">
+        <div class="ae-header-title">
+          <div class="ae-header-icon"><i class="fa-solid fa-user-plus"></i></div>
+          <div>
+            <h2 id="addEmployeeDialogTitle">Add Employee</h2>
+            <p class="ae-subtitle">Onboard a new team member — fill in the sections below.</p>
+          </div>
+        </div>
+        <button type="button" class="ae-close-btn" onclick="closeAddEmployeeDialog()" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="ae-tabs" id="aeTabs">
+        <button type="button" class="ae-step active" data-tab="employment">
+          <span class="ae-step-circle"><span class="ae-step-num">1</span><i class="fa-solid fa-check ae-step-check"></i></span>
+          <span class="ae-step-label">Employment</span>
+        </button>
+        <div class="ae-step-line" data-line="1"></div>
+        <button type="button" class="ae-step" data-tab="personal">
+          <span class="ae-step-circle"><span class="ae-step-num">2</span><i class="fa-solid fa-check ae-step-check"></i></span>
+          <span class="ae-step-label">Personal</span>
+        </button>
+        <div class="ae-step-line" data-line="2"></div>
+        <button type="button" class="ae-step" data-tab="identification">
+          <span class="ae-step-circle"><span class="ae-step-num">3</span><i class="fa-solid fa-check ae-step-check"></i></span>
+          <span class="ae-step-label">Identification</span>
+        </button>
+        <div class="ae-step-line" data-line="3"></div>
+        <button type="button" class="ae-step" data-tab="banking">
+          <span class="ae-step-circle"><span class="ae-step-num">4</span><i class="fa-solid fa-check ae-step-check"></i></span>
+          <span class="ae-step-label">Banking</span>
+        </button>
+        <div class="ae-step-line" data-line="4"></div>
+        <button type="button" class="ae-step" data-tab="payroll">
+          <span class="ae-step-circle"><span class="ae-step-num">5</span><i class="fa-solid fa-check ae-step-check"></i></span>
+          <span class="ae-step-label">Deductions &amp; Payroll</span>
+        </button>
+        <div class="ae-step-line" data-line="5"></div>
+        <button type="button" class="ae-step" data-tab="dependents">
+          <span class="ae-step-circle"><span class="ae-step-num">6</span><i class="fa-solid fa-check ae-step-check"></i></span>
+          <span class="ae-step-label">Dependents</span>
+        </button>
+      </div>
+
+      <form id="addEmployeeForm" class="ae-body" method="post" enctype="multipart/form-data" action="/app/employee/form" novalidate>
+
+        <!-- ===== EMPLOYMENT ===== -->
+        <div class="ae-panel active" data-panel="employment">
+          <div class="ae-grid">
+            <div class="ae-field">
+              <label for="ae-emp-id">Employee ID</label>
+              <input type="text" id="ae-emp-id" class="ae-input ae-input-readonly" name="empId"
+                value="<%= `FS | EMPLOYEE | ${employeeCount.toString().padStart(3,'0')}` %>" readonly tabindex="-1">
+            </div>
+            <div class="ae-field">
+              <label for="ae-date-of-joining">Date of Joining</label>
+              <input type="date" id="ae-date-of-joining" class="ae-input" name="empDateOfJoining" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-type">Employee Type</label>
+              <select id="ae-emp-type" class="ae-input ae-select" name="empType">
+                <option value="" disabled selected hidden>Select</option>
+                <option value="SKILLED">SKILLED</option>
+                <option value="UNSKILLED">UNSKILLED</option>
+              </select>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-under">Under</label>
+              <select id="ae-emp-under" class="ae-input ae-select" name="empUnder" required>
+                <option value="" disabled selected hidden>Select</option>
+                <option value="TECH">TECH</option>
+                <option value="TAGS">TAGS</option>
+                <option value="SACHIKO">SACHIKO</option>
+                <option value="CONTRACT">CONTRACT</option>
+                <option value="ZACTAC">ZACTAC</option>
+              </select>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-loc">Location</label>
+              <select id="ae-emp-loc" class="ae-input ae-select" name="empLoc" required>
+                <option value="" disabled selected hidden>Select</option>
+                <% (locationNames || []).forEach(name => { %>
+                  <option value="<%= name %>"><%= name %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-status">Status</label>
+              <select id="ae-emp-status" class="ae-input ae-select" name="status">
+                <option value="active" selected>Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+              <input type="hidden" name="empInactiveReason" id="aeEmpInactiveReason" value="">
+              <input type="hidden" name="empAssetsSurrenderedJson" id="aeEmpAssetsSurrenderedJson" value="[]">
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-dept">Department</label>
+              <input type="text" id="ae-emp-dept" class="ae-input" name="empDept" placeholder="Enter Department" autocomplete="off" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-reporting-manager">Reporting Manager</label>
+              <%
+                const AE_TOP_OF_HIERARCHY = "PROPRIETOR / DIRECTOR";
+                const aeManagerNames = (managerEmployees || []).map(e => e?.empName).filter(Boolean);
+                const aeTopSelected = !aeManagerNames.length;
+              %>
+              <select id="ae-emp-reporting-manager" class="ae-input ae-select" name="empReportingManager" required>
+                <option value="" disabled <%= aeTopSelected ? '' : 'selected' %> hidden>Select</option>
+                <option value="<%= AE_TOP_OF_HIERARCHY %>" <%= aeTopSelected ? 'selected' : '' %>><%= AE_TOP_OF_HIERARCHY %></option>
+                <% aeManagerNames.forEach(name => { %>
+                  <option value="<%= name %>"><%= name %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-profile">Profile</label>
+              <input type="text" id="ae-emp-profile" class="ae-input" name="empProfile" placeholder="Enter Profile" autocomplete="off" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-profile-code">Profile Code</label>
+              <input type="text" id="ae-emp-profile-code" class="ae-input" name="empProfileCode" placeholder="Enter Profile Code" autocomplete="off">
+              <select id="ae-emp-profile-code-select" class="ae-input ae-select" name="empProfileCode" style="display:none;" disabled>
+                <option value="" disabled selected hidden>Select Machine</option>
+                <% (machineNames || []).forEach(name => { %>
+                  <option value="<%= name %>"><%= name %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-office-mob">Office Mobile No</label>
+              <input type="text" inputmode="numeric" id="ae-emp-office-mob" class="ae-input" name="empOfficeMob" placeholder="Enter Office Mobile No" autocomplete="off">
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-office-email">Office Email ID</label>
+              <input type="email" id="ae-emp-office-email" class="ae-input" name="empOfficeEmailId" placeholder="Enter Office Email ID" autocomplete="off">
+            </div>
+            <div class="ae-field ae-field-wide">
+              <label>Assets</label>
+              <div class="ae-assets-row">
+                <input type="text" name="empAssets1" placeholder="Asset 1" class="ae-input">
+                <input type="text" name="empAssets2" placeholder="Asset 2" class="ae-input">
+                <input type="text" name="empAssets3" placeholder="Asset 3" class="ae-input">
+                <input type="text" name="empAssets4" placeholder="Asset 4" class="ae-input">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== PERSONAL ===== -->
+        <div class="ae-panel" data-panel="personal">
+          <div class="ae-grid">
+            <div class="ae-field">
+              <label for="ae-emp-name">Name</label>
+              <input type="text" id="ae-emp-name" class="ae-input" name="empName" placeholder="Enter Name" autocomplete="off" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-nick-name">Nick Name</label>
+              <input type="text" id="ae-emp-nick-name" class="ae-input" name="empNickName" placeholder="Enter Nick Name" autocomplete="off" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-dob">D.O.B</label>
+              <input type="date" id="ae-emp-dob" class="ae-input" name="empDob" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-gender">Gender</label>
+              <select id="ae-emp-gender" class="ae-input ae-select" name="empGender" required>
+                <option value="" disabled selected hidden>Select</option>
+                <option value="MALE">MALE</option>
+                <option value="FEMALE">FEMALE</option>
+              </select>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-mobile1">Mobile No 1</label>
+              <input type="text" inputmode="numeric" id="ae-emp-mobile1" class="ae-input" name="empMobile1" placeholder="Enter Mobile No 1" autocomplete="off" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-mobile2">Mobile No 2</label>
+              <input type="text" inputmode="numeric" id="ae-emp-mobile2" class="ae-input" name="empMobile2" placeholder="Enter Mobile No 2" autocomplete="off">
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-emergency-no1">Emergency No 1</label>
+              <input type="text" inputmode="numeric" id="ae-emp-emergency-no1" class="ae-input" name="empEmergencyNo1" placeholder="Enter Emergency No" autocomplete="off" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-emergency-no2">Emergency No 2</label>
+              <input type="text" inputmode="numeric" id="ae-emp-emergency-no2" class="ae-input" name="empEmergencyNo2" placeholder="Enter Emergency No" autocomplete="off">
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-email">Email</label>
+              <input type="text" id="ae-emp-email" class="ae-input" name="empEmail" placeholder="Enter Email or NA" autocomplete="off">
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-martial-status">Marital Status</label>
+              <select id="ae-emp-martial-status" class="ae-input ae-select" name="empMartialStatus" required>
+                <option value="" disabled selected hidden>Select</option>
+                <option value="SINGLE">SINGLE</option>
+                <option value="MARRIED">MARRIED</option>
+              </select>
+            </div>
+            <div class="ae-field" id="aeMarriageAnnivField" style="display:none;">
+              <label for="ae-emp-marriage-anniversary">Marriage Anniversary</label>
+              <input type="date" id="ae-emp-marriage-anniversary" class="ae-input" name="empMarriageAnniversary">
+            </div>
+          </div>
+          <div class="ae-grid ae-grid-1">
+            <div class="ae-field">
+              <label for="ae-emp-present-address">Present Address</label>
+              <textarea id="ae-emp-present-address" class="ae-input ae-textarea" name="empPresentAddress" rows="3" placeholder="Enter Employee Present Address" autocomplete="off" oninput="this.value = this.value.toUpperCase()"></textarea>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-permanent-address">Permanent Address</label>
+              <textarea id="ae-emp-permanent-address" class="ae-input ae-textarea" name="empPermanentAddress" rows="3" placeholder="Enter Employee Permanent Address" autocomplete="off" oninput="this.value = this.value.toUpperCase()"></textarea>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-hobbies">Hobbies &amp; Interests</label>
+              <textarea id="ae-emp-hobbies" class="ae-input ae-textarea" name="empHobbies" rows="3" placeholder="Enter Employee Hobbies &amp; Interests" autocomplete="off" oninput="this.value = this.value.toUpperCase()"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== IDENTIFICATION ===== -->
+        <div class="ae-panel" data-panel="identification">
+          <div class="ae-photo-row">
+            <div class="ae-avatar-upload">
+              <label class="ae-avatar-circle" for="ae-emp-photo">
+                <div class="ae-upload-placeholder"><i class="fa-solid fa-user"></i></div>
+                <img id="aeEmpPhotoPreview" class="ae-upload-preview" alt="Employee Photo Preview">
+              </label>
+              <!-- A sibling of .ae-avatar-circle, not nested inside it --
+                   the circle clips to round with overflow:hidden (for the
+                   photo preview), which was clipping this badge's own
+                   negative offset right along with it. -->
+              <label class="ae-avatar-edit-icon" for="ae-emp-photo"><i class="fa-solid fa-camera"></i></label>
+              <button type="button" id="aeRemoveEmpPhotoBtn" class="ae-avatar-remove-btn" style="display:none;" title="Remove photo"><i class="fa-solid fa-xmark"></i></button>
+              <input type="file" id="ae-emp-photo" class="ae-file-input-hidden" name="empPhoto" accept="image/*" aria-label="Upload employee photo">
+              <input type="hidden" name="removeEmpPhoto" id="aeRemoveEmpPhoto" value="false">
+            </div>
+            <div class="ae-avatar-info">
+              <span class="ae-doc-title">Employee Photo</span>
+              <span class="ae-upload-hint">Click the circle to upload — JPG, PNG, GIF or WebP, up to 2MB</span>
+            </div>
+
+            <div class="ae-photo-row-divider"></div>
+
+            <div class="ae-dropzone-wrap ae-biodata-tile">
+              <div class="ae-dropzone ae-dropzone-sm" id="aeBiodataDropzone" tabindex="0" role="button" aria-label="Upload employee biodata">
+                <div class="ae-upload-placeholder"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                <img id="aeEmpBiodataPreview" class="ae-upload-preview" alt="Biodata Preview">
+                <div class="ae-upload-file-chip" id="aeEmpBiodataChip">
+                  <i class="fa-solid fa-file-pdf"></i>
+                  <span class="ae-file-chip-name"></span>
+                </div>
+              </div>
+              <button type="button" id="aeRemoveEmpBiodataBtn" class="ae-dropzone-remove" style="display:none;" title="Remove biodata file"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <input type="file" id="ae-emp-biodata" class="ae-file-input-hidden" name="empBiodata" accept="image/*,application/pdf" aria-label="Upload employee biodata">
+            <input type="hidden" name="removeEmpBiodata" id="aeRemoveEmpBiodata" value="false">
+            <div class="ae-avatar-info">
+              <span class="ae-doc-title">Employee Biodata</span>
+              <span class="ae-upload-hint">Click or drag to upload — PDF, JPG, PNG, GIF or WebP, up to 2MB</span>
+            </div>
+          </div>
+
+          <div class="ae-doc-grid">
+            <div class="ae-doc-card">
+              <label for="ae-emp-aadhaar" class="ae-doc-title">Aadhaar</label>
+              <input type="text" inputmode="numeric" id="ae-emp-aadhaar" class="ae-input" name="empAadhaar" placeholder="Enter Aadhaar Number" autocomplete="off">
+              <div class="ae-dropzone-wrap">
+                <div class="ae-dropzone" id="aeAadhaarDropzone" tabindex="0" role="button" aria-label="Upload Aadhaar image">
+                  <div class="ae-upload-placeholder"><i class="fa-solid fa-cloud-arrow-up"></i><span>Click or drag to upload</span></div>
+                  <img id="aeEmpAadhaarPreview" class="ae-upload-preview" alt="Aadhaar Preview">
+                </div>
+                <button type="button" id="aeRemoveEmpAadhaarImgBtn" class="ae-dropzone-remove" style="display:none;" title="Remove Aadhaar image"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <input type="file" id="ae-emp-aadhaar-img" class="ae-file-input-hidden" name="empAadhaarImg" accept="image/*" aria-label="Upload Aadhaar image">
+              <span class="ae-upload-hint">JPG, PNG, GIF or WebP — up to 2MB</span>
+              <input type="hidden" name="removeEmpAadhaarImg" id="aeRemoveEmpAadhaarImg" value="false">
+            </div>
+
+            <div class="ae-doc-card">
+              <label for="ae-emp-pan" class="ae-doc-title">PAN <span class="ae-mandatory-star">*</span></label>
+              <input type="text" id="ae-emp-pan" class="ae-input" maxlength="10" name="empPan" placeholder="Enter PAN Number" autocomplete="off" required>
+              <div class="ae-dropzone-wrap">
+                <div class="ae-dropzone" id="aePanDropzone" tabindex="0" role="button" aria-label="Upload PAN image">
+                  <div class="ae-upload-placeholder"><i class="fa-solid fa-cloud-arrow-up"></i><span>Click or drag to upload</span></div>
+                  <img id="aeEmpPanPreview" class="ae-upload-preview" alt="PAN Preview">
+                </div>
+                <button type="button" id="aeRemoveEmpPanImgBtn" class="ae-dropzone-remove" style="display:none;" title="Remove PAN image"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <input type="file" id="ae-emp-pan-img" class="ae-file-input-hidden" name="empPanImg" accept="image/*" aria-label="Upload PAN image">
+              <span class="ae-upload-hint">JPG, PNG, GIF or WebP — up to 2MB</span>
+              <input type="hidden" name="removeEmpPanImg" id="aeRemoveEmpPanImg" value="false">
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ===== BANKING ===== -->
+        <div class="ae-panel" data-panel="banking">
+          <div class="ae-grid">
+            <div class="ae-field">
+              <label for="ae-emp-bank-name">Bank Name</label>
+              <input type="text" id="ae-emp-bank-name" class="ae-input" name="empBankName" placeholder="Enter Bank Name" autocomplete="off" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-account-holder-name">Account Holder Name</label>
+              <input type="text" id="ae-emp-account-holder-name" class="ae-input" name="empAccountHolderName" placeholder="Enter Account Holder Name" autocomplete="off" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-acc-no">Account No</label>
+              <input type="text" id="ae-emp-acc-no" class="ae-input" name="empAccNo" placeholder="Enter Account No" autocomplete="off" required>
+            </div>
+            <div class="ae-field">
+              <label for="ae-emp-ifsc-code">IFSC Code</label>
+              <input type="text" id="ae-emp-ifsc-code" class="ae-input" name="empIfscCode" placeholder="Enter IFSC Code" maxlength="11" autocomplete="off" required>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== DEDUCTIONS & PAYROLL ===== -->
+        <div class="ae-panel" data-panel="payroll">
+          <div class="ae-section-label">Deductions</div>
+          <div class="ae-grid ae-grid-7">
+            <div class="ae-field"><label for="ae-emp-pt">PT</label><input type="number" step="any" id="ae-emp-pt" class="ae-input" name="empPT" value="0" required></div>
+            <div class="ae-field"><label for="ae-emp-tds">TDS</label><input type="number" step="any" id="ae-emp-tds" class="ae-input" name="empTDS" value="0" required></div>
+            <div class="ae-field"><label for="ae-emp-lic">LIC</label><input type="number" step="any" id="ae-emp-lic" class="ae-input" name="empLIC" value="0" required></div>
+            <div class="ae-field"><label for="ae-emp-medical">Medical</label><input type="number" step="any" id="ae-emp-medical" class="ae-input" name="empMedical" value="0" required></div>
+            <div class="ae-field"><label for="ae-emp-nsic">NSC</label><input type="number" step="any" id="ae-emp-nsic" class="ae-input" name="empNSIC" value="0" required></div>
+            <div class="ae-field"><label for="ae-emp-esic">ESIC</label><input type="number" step="any" id="ae-emp-esic" class="ae-input" name="empESIC" value="0" required></div>
+            <div class="ae-field"><label for="ae-emp-pf">PF</label><input type="number" step="any" id="ae-emp-pf" class="ae-input" name="empPF" value="0" required></div>
+          </div>
+          <div class="ae-section-label">Payroll Details</div>
+          <div class="ae-grid ae-grid-7">
+            <div class="ae-field"><label for="ae-basic-salary">Basic Salary</label><input type="number" step="any" id="ae-basic-salary" class="ae-input" name="basicSalary" value="0"></div>
+            <div class="ae-field"><label for="ae-railway-pass">Railway Pass</label><input type="number" step="any" id="ae-railway-pass" class="ae-input" name="railwayPass" value="0"></div>
+            <div class="ae-field"><label for="ae-travelling">Travelling</label><input type="number" step="any" id="ae-travelling" class="ae-input" name="travelling" value="0"></div>
+            <div class="ae-field"><label for="ae-house-rent">House Rent</label><input type="number" step="any" id="ae-house-rent" class="ae-input" name="houseRent" value="0"></div>
+            <div class="ae-field"><label for="ae-staff-quarters">Staff Quarters</label><input type="number" step="any" id="ae-staff-quarters" class="ae-input" name="staffQuarters" value="0"></div>
+            <div class="ae-field"><label for="ae-ot-rate">OT Per Hour</label><input type="number" step="any" id="ae-ot-rate" class="ae-input" name="otRatePerHour" value="0"></div>
+            <div class="ae-field"><label for="ae-bonus">Bonus %</label><input type="number" step="any" id="ae-bonus" class="ae-input" name="bonus" value="0"></div>
+          </div>
+        </div>
+
+        <!-- ===== DEPENDENTS ===== -->
+        <div class="ae-panel" data-panel="dependents">
+          <div class="ae-field" style="max-width:220px; margin-bottom:18px;">
+            <label for="ae-dependents-count">Number of Dependents</label>
+            <input type="text" id="ae-dependents-count" class="ae-input" maxlength="2" name="dependentsCount" placeholder="e.g. 2" autocomplete="off">
+          </div>
+          <div class="ae-dependents-header" id="aeDependentsHeader"><span>Name</span><span>DOB</span><span>Relation</span></div>
+          <div id="aeDependentsList" class="ae-dependents-list"></div>
+        </div>
+      </form>
+
+      <!-- Back/Next walk the same six steps the stepper at the top does, and
+           are wired through the same aeSwitchTab() -- they are a second way
+           to move, not a second idea of where you are. Both are DISABLED at
+           their end of the run (Back on step 1, Next on the last step)
+           rather than hidden, so the footer never reflows underneath the
+           pointer as you step through.
+
+           Save Employee appears only on the last step -- it is the end of the
+           walk, not an option alongside it. Hiding it genuinely withholds the
+           save rather than just the button: it is type="button" and sits
+           OUTSIDE </form>, and the form carries no submit button of its own,
+           so there is no implicit Enter-key submission to leak past it.
+
+           Next is navigation only: it validates nothing, because the
+           stepper's own numbered buttons don't either, and a Next that
+           refused to move while the step beside it moved freely would be two
+           rules for one journey. Validation still runs on Save, and bounces
+           you to the panel holding the first bad field. -->
+      <div class="ae-footer">
+        <button type="button" class="ae-btn ae-btn-ghost" onclick="closeAddEmployeeDialog()">Cancel</button>
+        <button type="button" class="ae-btn ae-btn-ghost" id="aeBackBtn" onclick="aeGoStep(-1)">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <button type="button" class="ae-btn ae-btn-ghost" id="aeNextBtn" onclick="aeGoStep(1)">
+          Next <i class="fa-solid fa-arrow-right"></i>
+        </button>
+        <button type="button" class="ae-btn ae-btn-primary" id="aeSaveBtn" onclick="submitAddEmployee()">
+          <i class="fa-solid fa-floppy-disk"></i> Save Employee
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MARK INACTIVE (nested, create-time) ============ -->
+  <div class="logout-modal" id="aeInactiveModal" aria-hidden="true">
+    <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="aeInactiveModalTitle"
+      style="width:min(460px,92vw); padding:0; border-radius:14px;">
+      <div class="dialog-header" style="border-radius:14px 14px 0 0;">
+        <h2 id="aeInactiveModalTitle" style="font-size:1.05rem;">Mark Employee Inactive</h2>
+      </div>
+      <div class="dialog-body" style="border-radius:0 0 14px 14px;">
+        <label class="dialog-field-label" for="aeInactiveReasonInput">Reason for marking inactive <span class="ae-mandatory-star">*</span></label>
+        <textarea id="aeInactiveReasonInput" rows="3" class="ae-input ae-textarea" placeholder="Why is this employee being marked inactive?" style="margin-bottom:4px;"></textarea>
+        <p id="aeInactiveReasonError" style="color:#dc3545; font-size:0.82rem; margin:4px 0 0; display:none;">Please enter a reason.</p>
+        <p class="dialog-field-label" style="margin-top:14px;">Assets surrendered</p>
+        <div id="aeAssetCheckboxes" class="ae-asset-checkboxes"></div>
+        <div class="dialog-actions">
+          <button type="button" class="ae-btn ae-btn-ghost" id="aeInactiveCancelBtn">Cancel</button>
+          <button type="button" class="ae-btn ae-btn-primary" id="aeInactiveConfirmBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const aeExistingProfileCodes = new Set(<%- safeJson(existingProfileCodes || []) %>);
+    let aeReportingManagerChoices = null;
+
+    function aeNormalizeLocationName(value) {
+      return String(value || "").trim().toUpperCase().replace(/\s+/g, " ").replace(/^[.,]+|[.,]+$/g, "");
+    }
+
+    // ---- Open / close ----
+    function openAddEmployeeDialog() {
+      const dialog = document.getElementById("addEmployeeDialog");
+      const form = document.getElementById("addEmployeeForm");
+      form.reset();
+      form.classList.remove("was-validated");
+      aeClearFieldErrors();
+      aeSwitchTab("employment");
+
+      ["aeEmpPhotoPreview", "aeEmpAadhaarPreview", "aeEmpPanPreview", "aeEmpBiodataPreview"].forEach((id) => {
+        const img = document.getElementById(id);
+        if (img) { img.src = ""; img.style.display = "none"; }
+      });
+      ["aeRemoveEmpPhotoBtn", "aeRemoveEmpAadhaarImgBtn", "aeRemoveEmpPanImgBtn", "aeRemoveEmpBiodataBtn"].forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.style.display = "none";
+      });
+      ["aeRemoveEmpPhoto", "aeRemoveEmpAadhaarImg", "aeRemoveEmpPanImg", "aeRemoveEmpBiodata"].forEach((id) => {
+        const field = document.getElementById(id);
+        if (field) field.value = "false";
+      });
+      const aeBiodataChip = document.getElementById("aeEmpBiodataChip");
+      if (aeBiodataChip) aeBiodataChip.style.display = "none";
+      document.querySelectorAll("#aeAadhaarDropzone, #aePanDropzone, #aeBiodataDropzone").forEach((dz) => dz.classList.remove("is-dragover"));
+
+      document.getElementById("aeDependentsList").innerHTML = "";
+      document.getElementById("aeDependentsHeader").style.display = "none";
+      document.getElementById("aeMarriageAnnivField").style.display = "none";
+      document.getElementById("aeEmpInactiveReason").value = "";
+      document.getElementById("aeEmpAssetsSurrenderedJson").value = "[]";
+
+      aeSyncProfileCodeField();
+
+      if (aeReportingManagerChoices) { aeReportingManagerChoices.destroy(); aeReportingManagerChoices = null; }
+      const mgrSelect = document.getElementById("ae-emp-reporting-manager");
+      aeReportingManagerChoices = new Choices(mgrSelect, { searchEnabled: true, itemSelectText: "", shouldSort: false });
+
+      dialog.classList.add("show");
+      dialog.setAttribute("aria-hidden", "false");
+    }
+
+    function closeAddEmployeeDialog() {
+      const dialog = document.getElementById("addEmployeeDialog");
+      dialog.classList.remove("show");
+      dialog.setAttribute("aria-hidden", "true");
+    }
+
+    // ---- Stepper ----
+    const AE_STEP_ORDER = ["employment", "personal", "identification", "banking", "payroll", "dependents"];
+    function aeSwitchTab(tabName) {
+      const activeIndex = AE_STEP_ORDER.indexOf(tabName);
+      const steps = [...document.querySelectorAll("#aeTabs .ae-step")];
+      steps.forEach((btn) => {
+        const stepIndex = AE_STEP_ORDER.indexOf(btn.dataset.tab);
+        btn.classList.toggle("active", stepIndex === activeIndex);
+        btn.classList.toggle("completed", activeIndex >= 0 && stepIndex < activeIndex);
+      });
+      document.querySelectorAll("#aeTabs .ae-step-line").forEach((line) => {
+        const lineIndex = Number(line.dataset.line); // line N sits after step N (1-based)
+        line.classList.toggle("completed", activeIndex >= 0 && lineIndex <= activeIndex);
+      });
+      document.querySelectorAll("#addEmployeeForm .ae-panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.dataset.panel === tabName);
+      });
+      const form = document.getElementById("addEmployeeForm");
+      if (form) form.scrollTop = 0;
+
+      // The footer's Back/Next know where they are from here and nowhere
+      // else, so they can't disagree with the stepper: every way of changing
+      // step -- opening the dialog, clicking a numbered step, pressing Back
+      // or Next -- ends up in this one function. An unrecognised tab name
+      // (activeIndex -1, the same case the lines above already guard) leaves
+      // both disabled rather than stepping off the ends of the array.
+      const isLastStep = activeIndex === AE_STEP_ORDER.length - 1;
+      const backBtn = document.getElementById("aeBackBtn");
+      const nextBtn = document.getElementById("aeNextBtn");
+      const saveBtn = document.getElementById("aeSaveBtn");
+      if (backBtn) backBtn.disabled = activeIndex <= 0;
+      if (nextBtn) nextBtn.disabled = activeIndex < 0 || isLastStep;
+      // Save only on the last step. Hidden, not disabled: a greyed Save on
+      // every step reads as "something is wrong with the form", when in fact
+      // nothing is -- there are simply steps still to walk.
+      if (saveBtn) saveBtn.hidden = !isLastStep;
+    }
+    // Back/Next. Moves one step from wherever the stepper currently is, and
+    // is clamped rather than wrapped: off either end it simply does nothing,
+    // which matches the disabled buttons above and means a stray call can
+    // never land on an undefined step.
+    function aeGoStep(delta) {
+      const current = document.querySelector("#aeTabs .ae-step.active");
+      const index = AE_STEP_ORDER.indexOf(current?.dataset.tab);
+      if (index < 0) return;
+      const next = index + delta;
+      if (next < 0 || next >= AE_STEP_ORDER.length) return;
+      aeSwitchTab(AE_STEP_ORDER[next]);
+    }
+    document.getElementById("aeTabs").addEventListener("click", (e) => {
+      const btn = e.target.closest(".ae-step");
+      if (btn) aeSwitchTab(btn.dataset.tab);
+    });
+
+    // ---- Operator profile code toggle ----
+    function aeSyncProfileCodeField() {
+      const profileInput = document.getElementById("ae-emp-profile");
+      const codeInput = document.getElementById("ae-emp-profile-code");
+      const codeSelect = document.getElementById("ae-emp-profile-code-select");
+      if (!profileInput || !codeInput || !codeSelect) return;
+      const isOperator = profileInput.value.trim().toUpperCase() === "OPERATOR";
+      codeInput.style.display = isOperator ? "none" : "";
+      codeInput.disabled = isOperator;
+      codeSelect.style.display = isOperator ? "" : "none";
+      codeSelect.disabled = !isOperator;
+    }
+    document.getElementById("ae-emp-profile")?.addEventListener("input", aeSyncProfileCodeField);
+
+    // ---- Nick name auto-fill ----
+    (function () {
+      const nameInput = document.getElementById("ae-emp-name");
+      const nickInput = document.getElementById("ae-emp-nick-name");
+      if (!nameInput || !nickInput) return;
+      const firstWord = (v) => String(v || "").trim().split(/\s+/)[0] || "";
+      let autoFill = true;
+      nickInput.addEventListener("input", () => { autoFill = false; });
+      nameInput.addEventListener("input", () => { if (autoFill) nickInput.value = firstWord(nameInput.value); });
+    })();
+
+    // ---- Marital status toggle ----
+    document.getElementById("ae-emp-martial-status")?.addEventListener("change", (e) => {
+      const isMarried = e.target.value === "MARRIED";
+      document.getElementById("aeMarriageAnnivField").style.display = isMarried ? "" : "none";
+      if (!isMarried) document.getElementById("ae-emp-marriage-anniversary").value = "";
+    });
+
+    // ---- Mobile number formatting ----
+    function aeFormatMobile(input) {
+      let value = input.value.replace(/\D/g, "").substring(0, 10);
+      if (value.length > 5) value = value.substring(0, 5) + " " + value.substring(5);
+      input.value = value;
+    }
+    ["ae-emp-office-mob", "ae-emp-mobile1", "ae-emp-mobile2", "ae-emp-emergency-no1", "ae-emp-emergency-no2"].forEach((id) => {
+      const input = document.getElementById(id);
+      if (input) input.addEventListener("input", () => aeFormatMobile(input));
+    });
+
+    // ---- Image previews (avatar circle / dropzone) ----
+    // Clicking a preview once it's set re-opens the file picker (to replace
+    // it) rather than zooming -- one click, one meaning, no fighting between
+    // a click-to-zoom listener on the <img> and the dropzone's own
+    // click-to-upload listener on its parent.
+    //
+    // chipId is Biodata's escape hatch: a PDF has no thumbnail, so it shows
+    // an icon + filename chip in the same dropzone instead of the <img>.
+    function aeSetupImagePreview({ inputId, previewId, removeBtnId, removeFieldId, dropzoneId, chipId }) {
+      const input = document.getElementById(inputId);
+      const preview = document.getElementById(previewId);
+      const removeBtn = document.getElementById(removeBtnId);
+      const removeField = document.getElementById(removeFieldId);
+      const dropzone = dropzoneId ? document.getElementById(dropzoneId) : null;
+      const chip = chipId ? document.getElementById(chipId) : null;
+      if (!input || !preview) return;
+
+      const showFile = (file) => {
+        if (!file) return;
+        const isImage = file.type.startsWith("image/");
+        const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+        if (!isImage && !(chip && isPdf)) return;
+
+        if (removeField) removeField.value = "false";
+        if (isImage) {
+          if (chip) chip.style.display = "none";
+          const reader = new FileReader();
+          reader.onload = () => {
+            preview.src = reader.result;
+            preview.style.display = "block";
+            if (removeBtn) removeBtn.style.display = "flex";
+          };
+          reader.readAsDataURL(file);
+        } else {
+          preview.src = "";
+          preview.style.display = "none";
+          chip.querySelector(".ae-file-chip-name").textContent = file.name;
+          chip.style.display = "flex";
+          if (removeBtn) removeBtn.style.display = "flex";
+        }
+      };
+
+      input.addEventListener("change", () => showFile(input.files[0]));
+
+      if (removeBtn) {
+        removeBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          preview.src = ""; preview.style.display = "none"; removeBtn.style.display = "none";
+          if (chip) chip.style.display = "none";
+          input.value = "";
+          if (removeField) removeField.value = "true";
+        });
+      }
+
+      if (dropzone) {
+        dropzone.addEventListener("click", () => input.click());
+        dropzone.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); }
+        });
+        dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("is-dragover"); });
+        dropzone.addEventListener("dragleave", () => dropzone.classList.remove("is-dragover"));
+        dropzone.addEventListener("drop", (e) => {
+          e.preventDefault();
+          dropzone.classList.remove("is-dragover");
+          const file = e.dataTransfer?.files?.[0];
+          if (!file) return;
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          input.files = dt.files; // so FormData(form) picks up the dropped file on submit
+          showFile(file);
+        });
+      }
+    }
+    aeSetupImagePreview({ inputId: "ae-emp-photo", previewId: "aeEmpPhotoPreview", removeBtnId: "aeRemoveEmpPhotoBtn", removeFieldId: "aeRemoveEmpPhoto" });
+    aeSetupImagePreview({ inputId: "ae-emp-aadhaar-img", previewId: "aeEmpAadhaarPreview", removeBtnId: "aeRemoveEmpAadhaarImgBtn", removeFieldId: "aeRemoveEmpAadhaarImg", dropzoneId: "aeAadhaarDropzone" });
+    aeSetupImagePreview({ inputId: "ae-emp-pan-img", previewId: "aeEmpPanPreview", removeBtnId: "aeRemoveEmpPanImgBtn", removeFieldId: "aeRemoveEmpPanImg", dropzoneId: "aePanDropzone" });
+    aeSetupImagePreview({ inputId: "ae-emp-biodata", previewId: "aeEmpBiodataPreview", removeBtnId: "aeRemoveEmpBiodataBtn", removeFieldId: "aeRemoveEmpBiodata", dropzoneId: "aeBiodataDropzone", chipId: "aeEmpBiodataChip" });
+
+    // ---- Dependents ----
+    function aeRenderDependents(count) {
+      const container = document.getElementById("aeDependentsList");
+      const header = document.getElementById("aeDependentsHeader");
+      container.innerHTML = "";
+      if (!count || count <= 0) { header.style.display = "none"; return; }
+      header.style.display = "grid";
+      for (let i = 0; i < count; i++) {
+        container.insertAdjacentHTML("beforeend", `
+          <div class="ae-dependent-row">
+            <input type="text" name="dependentsDetails[${i}][dependentsName]" class="ae-input" placeholder="Name" required>
+            <input type="date" name="dependentsDetails[${i}][dependentsDOB]" class="ae-input" required>
+            <input type="text" name="dependentsDetails[${i}][dependentsRelation]" class="ae-input" placeholder="Relation" required>
+          </div>
+        `);
+      }
+    }
+    document.getElementById("ae-dependents-count")?.addEventListener("input", (e) => {
+      aeRenderDependents(parseInt(e.target.value, 10));
+    });
+
+    // ---- Mark inactive mini-dialog ----
+    const aeAssetFields = ["empAssets1", "empAssets2", "empAssets3", "empAssets4"];
+    function aeCurrentAssets() {
+      return aeAssetFields
+        .map((n) => (document.querySelector(`#addEmployeeForm [name="${n}"]`)?.value || "").trim())
+        .filter(Boolean);
+    }
+    function aeEsc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    document.getElementById("ae-emp-status")?.addEventListener("change", (e) => {
+      if (e.target.value === "inactive") aeOpenInactiveModal();
+      else {
+        document.getElementById("aeEmpInactiveReason").value = "";
+        document.getElementById("aeEmpAssetsSurrenderedJson").value = "[]";
+      }
+    });
+
+    function aeOpenInactiveModal() {
+      const modal = document.getElementById("aeInactiveModal");
+      document.getElementById("aeInactiveReasonInput").value = "";
+      document.getElementById("aeInactiveReasonError").style.display = "none";
+      const assets = aeCurrentAssets();
+      const box = document.getElementById("aeAssetCheckboxes");
+      box.innerHTML = assets.length
+        ? assets.map((a) => `<label><input type="checkbox" value="${aeEsc(a)}"/> <span>${aeEsc(a)}</span></label>`).join("")
+        : `<span class="ae-no-assets">No assets recorded yet.</span>`;
+      modal.classList.add("show");
+      modal.setAttribute("aria-hidden", "false");
+      document.getElementById("aeInactiveReasonInput").focus();
+    }
+    function aeCloseInactiveModal(revert) {
+      const modal = document.getElementById("aeInactiveModal");
+      modal.classList.remove("show");
+      modal.setAttribute("aria-hidden", "true");
+      if (revert) {
+        document.getElementById("ae-emp-status").value = "active";
+        document.getElementById("aeEmpInactiveReason").value = "";
+        document.getElementById("aeEmpAssetsSurrenderedJson").value = "[]";
+      }
+    }
+    document.getElementById("aeInactiveCancelBtn")?.addEventListener("click", () => aeCloseInactiveModal(true));
+    document.getElementById("aeInactiveConfirmBtn")?.addEventListener("click", () => {
+      const reason = document.getElementById("aeInactiveReasonInput").value.trim();
+      if (!reason) {
+        document.getElementById("aeInactiveReasonError").style.display = "block";
+        document.getElementById("aeInactiveReasonInput").focus();
+        return;
+      }
+      document.getElementById("aeEmpInactiveReason").value = reason;
+      const checked = Array.from(document.getElementById("aeAssetCheckboxes").querySelectorAll('input[type="checkbox"]:checked')).map((cb) => cb.value);
+      document.getElementById("aeEmpAssetsSurrenderedJson").value = JSON.stringify(checked);
+      aeCloseInactiveModal(false);
+    });
+
+    // ---- Mandatory stars ----
+    (function () {
+      document.querySelectorAll("#addEmployeeForm [required]").forEach((input) => {
+        let label = null;
+        if (input.id) label = document.querySelector(`label[for='${input.id}']`);
+        if (!label && input.closest(".ae-field")) label = input.closest(".ae-field").querySelector("label");
+        if (label && !label.querySelector(".ae-mandatory-star")) {
+          label.insertAdjacentHTML("beforeend", ' <span class="ae-mandatory-star">*</span>');
+        }
+      });
+    })();
+
+    // ---- Validation ----
+    function aeFieldAnchor(field) { return field.closest(".choices") || field; }
+    function aeClearFieldErrors() {
+      document.querySelectorAll("#addEmployeeDialog .field-error").forEach((el) => el.classList.remove("field-error"));
+    }
+    function aeHumanizeFieldName(name) {
+      const parts = String(name || "").match(/[^[\]]+/g) || [];
+      if (!parts.length) return "";
+      const words = parts[parts.length - 1]
+        .replace(/^(emp|dependents)(?=[A-Z])/, "")
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .replace(/[_-]+/g, " ")
+        .trim()
+        .replace(/\b[a-z]/g, (c) => c.toUpperCase());
+      const rowIndex = parts.length > 2 && /^\d+$/.test(parts[1]) ? Number(parts[1]) + 1 : null;
+      return rowIndex ? `Dependent ${rowIndex} ${words}` : words;
+    }
+    function aeFieldLabelText(field) {
+      let label = null;
+      if (field.id) label = document.querySelector(`label[for='${field.id}']`);
+      if (!label && field.closest(".ae-field")) label = field.closest(".ae-field").querySelector("label");
+      const text = (label?.textContent || "").replace(/[*:\s]+$/, "").trim();
+      return text || aeHumanizeFieldName(field.name) || field.placeholder || "This field";
+    }
+    function aeReportInvalidFields() {
+      const form = document.getElementById("addEmployeeForm");
+      const invalid = [...form.querySelectorAll("input:invalid, select:invalid, textarea:invalid")];
+      if (!invalid.length) return false;
+
+      invalid.forEach((field) => aeFieldAnchor(field).classList.add("field-error"));
+
+      const missing = invalid.filter((f) => f.validity.valueMissing).map(aeFieldLabelText);
+      const malformed = invalid.filter((f) => !f.validity.valueMissing);
+
+      const list = (names) => {
+        const shown = names.slice(0, 4).join(", ");
+        return names.length > 4 ? `${shown} and ${names.length - 4} more` : shown;
+      };
+
+      const messages = [];
+      if (missing.length === 1) messages.push(`Please fill in ${missing[0]}.`);
+      else if (missing.length) messages.push(`${missing.length} required fields are missing: ${list(missing)}.`);
+      if (malformed.length === 1) {
+        messages.push(`${aeFieldLabelText(malformed[0])}: ${malformed[0].validationMessage}`);
+      } else if (malformed.length) {
+        messages.push(`Please check ${list(malformed.map(aeFieldLabelText))}.`);
+      }
+      showToast(messages.join(" "), true);
+
+      const firstInvalid = invalid[0];
+      const panel = firstInvalid.closest(".ae-panel");
+      if (panel) aeSwitchTab(panel.dataset.panel);
+      const anchor = aeFieldAnchor(firstInvalid);
+      setTimeout(() => {
+        anchor.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (anchor === firstInvalid) firstInvalid.focus({ preventScroll: true });
+      }, 50);
+      return true;
+    }
+
+    const addEmployeeForm = document.getElementById("addEmployeeForm");
+    if (addEmployeeForm) {
+      const aeClearOne = (e) => {
+        const field = e.target;
+        if (field?.matches?.("input, select, textarea")) aeFieldAnchor(field).classList.remove("field-error");
+      };
+      addEmployeeForm.addEventListener("input", aeClearOne, true);
+      addEmployeeForm.addEventListener("change", aeClearOne, true);
+    }
+
+    async function submitAddEmployee() {
+      const form = document.getElementById("addEmployeeForm");
+      const profileCodeInput = document.getElementById("ae-emp-profile-code");
+      const profileCodeSelect = document.getElementById("ae-emp-profile-code-select");
+      const activeProfileCodeField = profileCodeSelect && !profileCodeSelect.disabled ? profileCodeSelect : profileCodeInput;
+      const profileCode = (activeProfileCodeField?.value || "").trim().toUpperCase();
+      const empLocValue = document.getElementById("ae-emp-loc")?.value || "";
+      const profileCodeKey = `${profileCode}||${aeNormalizeLocationName(empLocValue)}`;
+
+      if (profileCode && aeExistingProfileCodes.has(profileCodeKey)) {
+        showToast("Profile Code already exists at this location. Please enter a different code.", true);
+        aeSwitchTab("employment");
+        if (activeProfileCodeField) { activeProfileCodeField.focus(); activeProfileCodeField.select?.(); }
+        return;
+      }
+
+      aeClearFieldErrors();
+      if (aeReportInvalidFields()) { form.classList.add("was-validated"); return; }
+      form.classList.add("was-validated");
+
+      const saveBtn = document.getElementById("aeSaveBtn");
+      const originalHtml = saveBtn.innerHTML;
+      saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+      saveBtn.disabled = true;
+
+      try {
+        const formData = new FormData(form);
+        const res = await fetch(form.getAttribute("action"), {
+          method: "POST",
+          headers: { "Accept": "application/json" },
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          showToast(data.message || "An error occurred during submission", true);
+        } else {
+          showToast(data.message || "Employee saved successfully!", false);
+          closeAddEmployeeDialog();
+          setTimeout(() => window.location.reload(), 900);
+        }
+      } catch (err) {
+        console.error(err);
+        showToast("Network error. Please check your connection and try again.", true);
+      } finally {
+        saveBtn.innerHTML = originalHtml;
+        saveBtn.disabled = false;
+      }
+    }
+
+    // Only Cancel / × / Esc close the dialog -- a stray backdrop click can't
+    // discard a part-filled form (same rule the other master dialogs use).
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      const inactiveModal = document.getElementById("aeInactiveModal");
+      if (inactiveModal.classList.contains("show")) { aeCloseInactiveModal(true); return; }
+      const dialog = document.getElementById("addEmployeeDialog");
+      if (dialog.classList.contains("show")) closeAddEmployeeDialog();
+    });
   </script>
 </body>

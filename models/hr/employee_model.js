@@ -61,6 +61,7 @@ const employeeSchema = new mongoose.Schema(
     empAadhaarImg: { type: String },   // images/aadhaar
     empPan: { type: String },
     empPanImg: { type: String },       // images/pan
+    empBiodata: { type: String },      // images/biodata -- resume/CV, image or PDF
 
     /* ================= BANKING ================= */
     empBankName: { type: String },

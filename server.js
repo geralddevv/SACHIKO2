@@ -378,13 +378,16 @@ app.get("/images/:folder/:filename", requireAuth, async (req, res) => {
   const { folder, filename } = req.params;
 
   // Validate folder
-  if (!["aadhaar", "pan", "empimg"].includes(folder)) {
+  if (!["aadhaar", "pan", "empimg", "biodata"].includes(folder)) {
     return res.status(400).send("Invalid folder");
   }
 
-  // Validate filename (prevent directory traversal and arbitrary uploads)
-  // Loosened to allow different naming conventions while still being safe
-  if (!/^[\w\-. ]+\.(jpg|jpeg|png|gif|webp)$/i.test(filename)) {
+  // Validate filename (prevent directory traversal and arbitrary uploads).
+  // Biodata is the one folder that can also hold a PDF -- everything else
+  // stays image-only, same as the upload-time fileFilter enforces.
+  const filenamePattern =
+    folder === "biodata" ? /^[\w\-. ]+\.(jpg|jpeg|png|gif|webp|pdf)$/i : /^[\w\-. ]+\.(jpg|jpeg|png|gif|webp)$/i;
+  if (!filenamePattern.test(filename)) {
     return res.status(400).send("Invalid filename");
   }
 
@@ -393,6 +396,7 @@ app.get("/images/:folder/:filename", requireAuth, async (req, res) => {
     empimg: "empPhoto",
     aadhaar: "empAadhaarImg",
     pan: "empPanImg",
+    biodata: "empBiodata",
   };
 
   let employee = await Employee.findOne({

@@ -983,24 +983,6 @@
           </div>
         </div>
 
-        <!-- Calculator: scratchpads, not production. Nothing in this group
-             writes anything -- a page here works a figure out and is thrown
-             away, which is exactly why it sits apart from Production rather
-             than beside the pages that do create batches. -->
-        <div class="nav-opt-wrap">
-          <div title="Calculator" class="calculator-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
-            <i class="fa-solid fa-calculator" style="color: #ffffff"></i>
-            <p class="nav-items-para">Calculator</p>
-            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
-          </div>
-          <div class="nav-labels-opt">
-            <a href="/app/labels/production/deckle-calculator" title="Deckle Calculator" class="<%= title === 'Deckle Calculator' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
-              <i class="fa-solid fa-ruler-combined" style="color: #ffffff"></i>
-              <p class="nav-items-para">Deckle Calculator</p>
-            </a>
-          </div>
-        </div>
-
         <!-- Slitting: the step after lamination -- Deckles cut into finished
              rolls (routes/system/slitting.js). Its own group. -->
         <div class="nav-opt-wrap">
@@ -1311,6 +1293,30 @@
             <a href="/app/slitting/jobcard/view" title="Slitting Logs" class="<%= title === 'Slitting Logs' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clipboard-check" style="color: #ffffff"></i>
               <p class="nav-items-para">Slitting Logs</p>
+            </a>
+          </div>
+        </div>
+
+        <!-- Calculator: scratchpads, not production. Nothing in this group
+             writes anything -- a page here works a figure out and is thrown
+             away, which is exactly why it sits apart from Production rather
+             than beside the pages that do create batches.
+             It sits after Prod Logs, at the foot of the nav, for the same
+             reason: everything above it is the day's work, and this is the
+             thing you open beside it. Moved here from between Production and
+             Slitting; it is inside this tab's own `isAdmin || isHod` guard,
+             which is the very guard it was under before, so the move changes
+             the order and nothing else about who sees it. -->
+        <div class="nav-opt-wrap">
+          <div title="Calculator" class="calculator-toggle nav-items" style="cursor: pointer; display: flex; align-items: center;">
+            <i class="fa-solid fa-calculator" style="color: #ffffff"></i>
+            <p class="nav-items-para">Calculator</p>
+            <i class="fa-solid fa-chevron-down" style="color: #ffffff; font-size: 12px; margin-left: auto; transition: transform 0.3s ease;"></i>
+          </div>
+          <div class="nav-labels-opt">
+            <a href="/app/labels/production/deckle-calculator" title="Deckle Calculator" class="<%= title === 'Deckle Calculator' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+              <i class="fa-solid fa-ruler-combined" style="color: #ffffff"></i>
+              <p class="nav-items-para">Deckle Calculator</p>
             </a>
           </div>
         </div>

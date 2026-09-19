@@ -482,11 +482,63 @@
        Adhesive/Release Liner); DOUBLE RELEASE and DOUBLE FACESTOCK need 5 --
        the grid is auto-fit rather than a fixed 3 columns so those extra
        columns just wrap onto a second row instead of needing their own
-       layout. ---- */
+       layout.
+
+       ---- knob: the 430px min track ----
+       This is what decides how many layer columns sit side by side, and it
+       has to be at least what one column's table needs, because the table
+       runs `table-layout: fixed` over a <colgroup>: the fixed columns
+       (checkbox/Size/GSM/Kg/R.Mtrs, ~270px on a facestock column) take their
+       declared widths first and the flexible text columns -- Vendor, Make,
+       Code -- divide whatever is LEFT. Squeeze the track and that leftover
+       goes to nothing, so the three columns a reel is actually recognised by
+       collapse to a few pixels of ellipsis and the table reads as empty.
+
+       At 230px it did exactly that: three columns were forced onto one row on
+       any normal laptop (~410px each, after the sidebar, page and form
+       padding), leaving ~37px apiece for Vendor/Make/Code.
+
+       430px means a laptop shows two layers per row and a wide monitor three,
+       each ~600px, which is room for every column to hold its value. Extra
+       columns wrap onto another row; nothing is hidden. `min(100%, ...)`
+       keeps a viewport narrower than one track from overflowing the page --
+       the column scrolls sideways inside itself instead
+       (.raw-layer-scroll). ---- */
     #rawLayersGrid {
-      grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px;
+      grid-column: 1 / -1; display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr));
+      gap: 14px;
     }
     .raw-layer-col { min-width: 0; }
+    /* Last-resort horizontal scroll for one column, holding BOTH of its
+       tables (the header table and the scrolling body) so they can never
+       drift out of line -- they slide together as one. It only bites when the
+       track is narrower than the min-width below, which the 430px min track
+       above is chosen to avoid on any real screen; it is here so a narrow
+       window degrades into "scroll to see the rest" rather than into the
+       collapsed, unreadable columns described above. */
+    .raw-layer-scroll { overflow-x: auto; }
+    .raw-layer-scroll > * { min-width: var(--rl-min, 500px); }
+    /* Per pool, because the pools don't carry the same columns: facestock has
+       Size/GSM on top of Vendor/Make/Code, release swaps Make/Code for
+       Sensing, adhesive has neither Size nor GSM (see POOL_COLUMNS). Each
+       figure is that pool's fixed <colgroup> widths plus a readable share for
+       its flexible text columns. Set on .raw-layer-col -- the grid item -- so
+       the value is in scope for the wrapper inside it. */
+    .raw-layer-col[data-pool="facestock"] { --rl-min: 500px; }
+    .raw-layer-col[data-pool="release"]   { --rl-min: 460px; }
+    .raw-layer-col[data-pool="adhesive"]  { --rl-min: 400px; }
+    /* The body table keeps its own vertical scroll, but must NOT open a
+       horizontal scroller of its own inside .raw-layer-scroll -- that is the
+       one that would scroll independently of the header sitting above it.
+       `hidden` rather than `visible`, because an element whose overflow-y is
+       `auto` computes an overflow-x of `visible` back to `auto` and the
+       second scrollbar would return. Nothing is lost to the clip: the wrap
+       carries the same min-width as the header table above it and the table
+       inside is width:100% of that, so there is no horizontal overflow here
+       to hide -- the sideways scrolling all happens one level up, where both
+       tables move together. */
+    .raw-layer-table-wrap.ap-table-wrap { overflow-x: hidden; }
     /* Layer heading -- the layer's name and the recipe it has to match sit
        on one line. They only drop onto a second line when the column is too
        narrow to hold both, so nothing is ever clipped or hidden behind a
@@ -498,7 +550,11 @@
     .raw-layer-spec { font-size: 13px; font-weight: 600; color: #1f2a44; }
     .raw-layer-table td, .raw-layer-table th { white-space: normal; }
     /* ================= LAYER TABLE COLUMN WIDTHS -- THE knob =================
-       Change the three px values below; that is the whole control.
+       Change the px values below (each paired with the side padding that
+       goes with it); that is the whole control over one table's columns.
+       How many of these tables sit side by side is the other knob, the min
+       track on #rawLayersGrid above -- the two together decide whether
+       Vendor/Make/Code have room, so read that note as well.
 
        Why it has to work this way: these tables inherit `.roll-table`'s
        `table-layout: auto` plus `.roll-table td:not(.roll-fill) {width: 1%}`
@@ -524,11 +580,26 @@
        the most: a 516 kg reel is 12,647 metres, four or five digits, and the
        header word is longer than the numbers under it. */
     .raw-layer-table col.rl-col-check { width: 34px; }  /* 20px checkbox + 7px each side */
-    .raw-layer-table col.rl-col-size  { width: 62px; }  /* facestock columns only */
-    .raw-layer-table col.rl-col-gsm   { width: 58px; }  /* facestock columns only */
-    .raw-layer-table col.rl-col-kg    { width: 66px; }
-    .raw-layer-table col.rl-col-sqm   { width: 78px; }
-    .raw-layer-table col.rl-col-sensing { width: 92px; }  /* release column only */
+    .raw-layer-table col.rl-col-size  { width: 54px; }  /* facestock columns only */
+    .raw-layer-table col.rl-col-gsm   { width: 50px; }  /* facestock columns only */
+    .raw-layer-table col.rl-col-kg    { width: 58px; }
+    .raw-layer-table col.rl-col-sqm   { width: 70px; }
+    .raw-layer-table col.rl-col-sensing { width: 84px; }  /* release column only */
+    /* ...and those six widths are 8px narrower than they look, because the
+       fixed columns take 8px of side padding instead of the 12px above. The
+       two were cut together, so every one of these columns has exactly the
+       room for its value that it had before -- the 8px each saves goes to
+       Vendor/Make/Code, which are the columns that actually run out of width
+       and ellipsise. Move a width and its padding together, or the header
+       word ("R.Mtrs" is wider than the figures under it) starts to clip.
+       The search row underneath sets its own, tighter padding. */
+    .raw-layer-table th[data-sort="size"], .raw-layer-table td[data-col="size"],
+    .raw-layer-table th[data-sort="gsm"], .raw-layer-table td[data-col="gsm"],
+    .raw-layer-table th[data-sort="kg"], .raw-layer-table td[data-col="kg"],
+    .raw-layer-table th[data-sort="mtrs"], .raw-layer-table td[data-col="mtrs"],
+    .raw-layer-table th[data-sort="sensing"], .raw-layer-table td[data-col="sensing"] {
+      padding-left: 8px; padding-right: 8px;
+    }
     /* Checkbox cell keeps a tighter padding than the rest -- the two have to
        be kept in step with the col width above: 20px box + these two
        paddings. The checkbox itself is 20px square, set in
@@ -1656,7 +1727,7 @@
         + ` placeholder="${label}" title="Filter by ${label}" autocomplete="off" />`;
       const note = `<div class="raw-layer-hidden-note" data-hidden-note="${layerKey}" hidden></div>`;
       return `
-        <div class="raw-layer-col" data-layer="${layerKey}">
+        <div class="raw-layer-col" data-layer="${layerKey}" data-pool="${meta.pool}">
           <div class="raw-layer-head">
             <span class="raw-layer-title">${meta.label}</span>
             <span class="raw-layer-spec">${specSummary(ITEM[meta.specField], layerKey)}</span>
@@ -1672,7 +1743,14 @@
                scrolling table fights the table's own layout/paint and drifted
                visibly on scroll; two stacked tables that share the same
                <colgroup> column widths just can't drift, because the header
-               was never part of the thing that scrolls in the first place. -->
+               was never part of the thing that scrolls in the first place.
+
+               Both tables sit inside ONE .raw-layer-scroll, so that where the
+               column is too narrow for them (see the min track note in the
+               stylesheet) they slide sideways together and stay aligned.
+               Wrapping only the body would put the header back in exactly the
+               drifting-apart position this arrangement exists to avoid. -->
+          <div class="raw-layer-scroll custom-scrollbar">
           <table class="ap-table roll-table raw-layer-table raw-layer-table-head">
             <colgroup><col class="rl-col-check" />${cols}</colgroup>
             <thead>
@@ -1690,6 +1768,7 @@
             <colgroup><col class="rl-col-check" />${cols}</colgroup>
             <tbody data-body="${layerKey}"><tr><td colspan="${layerColCount(layerKey)}" style="color:#94a3b8; font-style:italic;">Select a machine first</td></tr></tbody>
           </table></div>
+          </div>
         </div>`;
     }
 
