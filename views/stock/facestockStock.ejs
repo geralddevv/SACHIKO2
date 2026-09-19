@@ -581,6 +581,96 @@
     }
     .pl-footer .pl-hint { font-size: 11.5px; color: #64748b; font-weight: 600; }
     .pl-footer .pl-actions { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* ---- Find a reel by its own number (the box on the header bar) ----
+       Every column header filter on this table matches MASTER rows only
+       (dataTreeFilter: false), and a reel's own number lives on a child
+       row inside a dropdown that starts collapsed -- so without this the
+       only way to find one reel is to open every spec in turn.
+
+       Drawn as a light chip on the dark .indi-head bar, like the value
+       chips beside it, NOT as a translucent one: tableDisp.css line 13
+       styles every `input` on the page with
+       `background-color: #f8f9fa !important`, so a transparent field with
+       white text is not possible here -- it renders as white-on-white. The
+       bar is painted that same #f8f9fa so the field it wraps has no seam,
+       and the text is the page blue. The rest of that global rule (20px
+       height, 12px text, grey border, 6px radius) is plain enough to
+       override from these class selectors; only the background needs
+       !important to answer !important. */
+    .stock-find-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 0 1 auto;
+      min-width: 0;
+    }
+    .stock-find-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 1 300px;
+      min-width: 190px;
+      background: #f8f9fa;
+      border: 1px solid #dbe4ee;
+      border-radius: 8px;
+      padding: 5px 10px;
+    }
+    .stock-find-bar:focus-within {
+      border-color: #fff;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
+    }
+    .stock-find-icon {
+      color: #044a78;
+      font-size: 12.5px;
+      flex: 0 0 auto;
+    }
+    .stock-find-input {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: auto;
+      border: none;
+      border-radius: 0;
+      padding: 2px 0;
+      outline: none;
+      background-color: #f8f9fa !important;
+      font-size: 13px;
+      font-weight: 700;
+      color: #044a78;
+    }
+    .stock-find-input::placeholder {
+      color: #94a3b8;
+      font-weight: 500;
+    }
+    .stock-find-clear {
+      flex: 0 0 auto;
+      border: none;
+      background: #dbe4ee;
+      color: #044a78;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      font-size: 13px;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+    }
+    .stock-find-clear:hover {
+      background: #c3d3e4;
+    }
+    /* Pale enough to read on the dark bar, and out of the way entirely
+       until there is something to say. */
+    .stock-find-status {
+      flex: 0 0 auto;
+      font-size: 12px;
+      font-weight: 700;
+      color: #bbf7d0;
+      white-space: nowrap;
+    }
+    .stock-find-status.is-empty {
+      color: #fecaca;
+    }
+
   </style>
 
   <!-- Facestock Master rows are the only table here: current stock (total
@@ -595,9 +685,6 @@
         <i class="fa-solid fa-layer-group" style="font-size: 1.1rem; opacity: 0.9;"></i>
         <h1 style="margin: 0; letter-spacing: 0.02em;">Facestock Stock</h1>
       </div>
-      <a class="header-action-btn" href="/app/stock/wip" style="text-decoration: none;">
-        <i class="fa-solid fa-industry" style="margin-right: 6px;"></i> WIP Stock
-      </a>
       <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
         Total Value: <span style="color: #15803d; font-size: 15px;">₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
@@ -612,6 +699,18 @@
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
         Release Liner Value: <span style="color: #15803d;">₹<%= Number(releaseValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
+      </div>
+    </div>
+    <!-- Find a reel: the column header filters search the spec rows, this
+         searches the reels underneath them (see .stock-find-bar above). -->
+    <div class="stock-find-wrap">
+      <span id="stockFindStatus" class="stock-find-status"></span>
+      <div class="stock-find-bar">
+        <i class="fa-solid fa-magnifying-glass stock-find-icon"></i>
+        <input type="text" id="stockFindInput" class="stock-find-input" autocomplete="off"
+          placeholder="Search reel no."
+          title="Searches every reel on this page by Roll ID, Vendor Roll ID or Invoice No, including the ones inside dropdowns that are still closed." />
+        <button type="button" id="stockFindClear" class="stock-find-clear" title="Clear (Esc)" aria-label="Clear search" hidden>&times;</button>
       </div>
     </div>
   </div>
@@ -1464,6 +1563,117 @@
     if (e.target.closest("button")) return;                      // Add / Create PO
     if (e.target.closest(".tabulator-data-tree-control")) return; // the reels dropdown
     openPrintLabelsDialog(data);
+  });
+
+  // ---- Find a reel by its own number -------------------------------------
+  // A reel's number (Roll ID / Vendor Roll ID / Invoice No) sits on a child
+  // row inside a master's dropdown, and the column header filters match
+  // master rows only (dataTreeFilter: false), so neither of them can find
+  // one reel -- you had to open each spec in turn and read down it. This
+  // searches every reel behind every master at once and re-seats the table
+  // on just the specs holding a hit, each already open, showing only the
+  // reels that matched.
+  //
+  // mastersData itself is never touched and the rows handed to Tabulator are
+  // copies, so a master row still carries ALL of that spec's reels in
+  // `rolls` and the Print Reel Labels dialog a row opens still offers
+  // the lot of them. Clearing the box puts the full table back.
+  const STOCK_FIND_FIELDS = ["rollId", "vendorRollId", "invoiceNo"];
+
+  // "SP | FCS | 000123" read off a sticker gets typed as "fcs 000123",
+  // "000123" or just "123" -- compare letters and digits alone, from both
+  // sides, so the separators and the spacing never decide a match.
+  const stockFindKey = (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const stockFindInput = document.getElementById("stockFindInput");
+  const stockFindStatus = document.getElementById("stockFindStatus");
+  const stockFindClearBtn = document.getElementById("stockFindClear");
+  let stockFindNeedle = "";
+  let stockFindTimer = null;
+
+  function runStockFind() {
+    const needle = stockFindKey(stockFindInput.value);
+    stockFindClearBtn.hidden = !stockFindInput.value;
+    if (needle === stockFindNeedle) return;
+    stockFindNeedle = needle;
+
+    if (!needle) {
+      stockFindStatus.textContent = "";
+      stockFindStatus.title = "";
+      stockFindStatus.classList.remove("is-empty");
+      mastersTable.setData(buildMastersTreeData(mastersData));
+      return;
+    }
+
+    let hits = 0;
+    const rows = [];
+    mastersData.forEach((m) => {
+      const matched = (m.rolls || []).filter((r) =>
+        STOCK_FIND_FIELDS.some((f) => {
+          const key = stockFindKey(r[f]);
+          return key && key.includes(needle);
+        })
+      );
+      if (!matched.length) return;
+      hits += matched.length;
+      rows.push({ ...m, isParent: true, _children: matched.map((r) => ({ ...r, isParent: false })) });
+    });
+
+    stockFindStatus.textContent = hits
+      ? `${hits} reel${hits === 1 ? "" : "s"} · ${rows.length} spec${rows.length === 1 ? "" : "s"}`
+      : "No match";
+    stockFindStatus.title = hits
+      ? `Only the reels that matched are listed under each spec — clear the box to see every reel again.`
+      : "No reel on this page carries that number.";
+    stockFindStatus.classList.toggle("is-empty", hits === 0);
+
+    // Opened after the data has landed rather than through
+    // dataTreeStartExpanded -- that is a constructor option, so setting it
+    // here would be read by nothing.
+    mastersTable.setData(rows).then(() => {
+      mastersTable.getRows().forEach((row) => {
+        if (row.getData()._children) row.treeExpand();
+      });
+    });
+  }
+
+  function clearStockFind() {
+    clearTimeout(stockFindTimer);
+    stockFindInput.value = "";
+    runStockFind();
+    stockFindInput.focus();
+  }
+
+  stockFindInput.addEventListener("input", () => {
+    clearTimeout(stockFindTimer);
+    stockFindTimer = setTimeout(runStockFind, 180);
+  });
+  stockFindInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      clearTimeout(stockFindTimer);
+      runStockFind();
+    }
+    // Escape empties the box instead of reaching the page's own Escape
+    // handler, which is there to close dialogs.
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      clearStockFind();
+    }
+  });
+  stockFindClearBtn.addEventListener("click", clearStockFind);
+
+  // Tabulator's placeholder is fixed at construction, and "No facestock masters added yet."
+  // is the wrong answer to a search that found nothing -- so it is
+  // rewritten on each redraw instead. The element only exists while the
+  // table is empty, so there is nothing to change until there is.
+  const STOCK_FIND_PLACEHOLDER = "No facestock masters added yet.";
+  mastersTable.on("renderComplete", () => {
+    const ph = document.querySelector("#facestock-masters-table .tabulator-placeholder-contents");
+    if (!ph) return;
+    ph.textContent = stockFindNeedle
+      ? `Nothing matching "${stockFindInput.value.trim()}" -- clear the box to see every spec again.`
+      : STOCK_FIND_PLACEHOLDER;
   });
 
   // ---- Create Purchase Order dialog ----

@@ -27,10 +27,10 @@
      which ships on there too). Picking a size inside a layout's own size
      table sets that layout's web; the headline figure is whichever width
      carries the most webs.
-   - Available Sizes opens on the facestock widths actually in stock, so a
-     plan starts from reels that exist. They are a starting point only: the
-     pencil adds and removes exactly as it does on the Set Deckle page, and
-     nothing here is tied back to the store.
+   - Deckle Size is typed, every one of it -- the list starts empty. The
+     facestock in stock is read only to annotate a width once it is in: a
+     chip says how many reels of that width are on the shelf, or is drawn
+     dashed when there are none. Nothing here is tied back to the store.
 
    AI Deckle Set is the same panel and the same optimizer as the Set Deckle
    page's, over typed requirements instead of orders. It plans and never
@@ -74,7 +74,6 @@
 
   // ---- elements ----------------------------------------------------------
   const dsfTrim = document.getElementById("dsfTrim");
-  const dsfTrimText = document.getElementById("dsfTrimText");
   const drmDefaultEl = document.getElementById("dcDrmDefault");
   const layoutBody = document.getElementById("dsfLayoutBody");
   const layoutStatus = document.getElementById("dsfLayoutStatus");
@@ -89,7 +88,6 @@
   const dsfStatChips = document.getElementById("dsfStatChips");
   const reqBody = document.getElementById("dcReqBody");
   const sizeChipsEl = document.getElementById("dsfSizeChips");
-  const sizeAddEl = document.getElementById("dsfSizeAdd");
   const sizeInputEl = document.getElementById("dsfSizeInput");
   const sizeMsgEl = document.getElementById("dsfSizeMsg");
   const dsfIssues = document.getElementById("dsfIssues");
@@ -109,19 +107,13 @@
     const t = Number(dsfTrim && dsfTrim.value);
     EDGE = (Number.isFinite(t) && t >= 0 ? t : DEFAULT_TRIM) / 2;
   }
-  // Edge Trim shows as text; the pencil (top-right) swaps in the input.
-  function showTrimText() {
+  // Edge Trim is an open field on the control strip -- there is no longer a
+  // pencil to swap text for an input. All that is left of that pair is the
+  // guard it carried: a blank or negative entry goes back to the default
+  // when the field loses focus, so EDGE is never read off nonsense.
+  function normaliseTrim() {
     const t = Number(dsfTrim.value);
     if (!(Number.isFinite(t) && t >= 0)) dsfTrim.value = DEFAULT_TRIM;
-    dsfTrimText.textContent = round2(Number(dsfTrim.value)).toLocaleString("en-IN") + " mm";
-    dsfTrim.hidden = true;
-    dsfTrimText.hidden = false;
-  }
-  function editTrim() {
-    dsfTrimText.hidden = true;
-    dsfTrim.hidden = false;
-    dsfTrim.focus();
-    dsfTrim.select();
   }
 
   // ---- available deckle sizes --------------------------------------------
@@ -129,12 +121,17 @@
   // seeds from the stock matching its recipe. With nothing in the store the
   // list starts empty and the editor opens itself -- a size is the one thing
   // the page cannot work without.
-  let SIZE_LIST = STOCK_SIZES.map((s) => Number(s.size)).filter((n) => Number.isFinite(n) && n > 0);
-  // What is behind each width, for the chip's tooltip. A width with two reels
-  // on the shelf and one with forty are not the same choice, and the figure is
+  // Empty. Every width on this page is typed: it used to open pre-filled
+  // with the whole facestock store, which answers "what is on the shelf"
+  // when the question being asked is "what can this job be cut on" -- and
+  // five chips had to be read and mostly removed before the first one that
+  // mattered could go in.
+  let SIZE_LIST = [];
+  // Stock is still read, but only to annotate a width somebody has typed:
+  // whether there are reels of it, and how many. A width with two reels on
+  // the shelf and one with forty are not the same choice, and this figure is
   // the only thing that says so.
   const STOCK_BY_SIZE = new Map(STOCK_SIZES.map((s) => [round2(Number(s.size)), s]));
-  let sizesEditing = false;
 
   function normSizeList() {
     SIZE_LIST = [
@@ -144,29 +141,37 @@
   // The seed comes out of the database, so it goes through the same rounding,
   // de-duping and sorting as anything typed into the box.
   normSizeList();
-  // Nothing in the store to start from: open the editor, since a deckle size
-  // is the one thing this page cannot work without.
-  if (!SIZE_LIST.length) sizesEditing = true;
 
+  // The add box is always open and every chip always carries its x -- there
+  // is no edit mode to be in. A deckle size is the one thing this page
+  // cannot work without, so asking for a click before one can be typed only
+  // ever stood between the page and being usable.
   function renderSizeChips() {
-    document.getElementById("dsfSizeEdit").classList.toggle("is-on", sizesEditing);
-    sizeAddEl.hidden = !sizesEditing;
+    // Nothing listed draws nothing -- the empty row is not worth a line of
+    // prose. The box beside it says "mm" and the label says Deckle Size, so
+    // there is nothing left for a placeholder to explain, and the field is
+    // flagged properly by the Issues panel the moment a plan needs a width.
+    // (.dc-sizes-line keeps its min-height, so the bar does not jump as the
+    // first chip goes in.)
     sizeChipsEl.innerHTML = SIZE_LIST.length
       ? SIZE_LIST.map((sz, i) => {
           const st = STOCK_BY_SIZE.get(round2(sz));
           const tip = st
             ? `${fmtI(st.reelCount)} reel${st.reelCount === 1 ? "" : "s"} in stock · ${fmt(st.totalKg)} kg`
-            : "Not a width currently in stock — added by hand";
+            : "No facestock of this width in stock — it still plans, nobody can fetch the reel today";
           // A width the store does not hold is drawn differently (see
           // .dsf-size-item.is-added): it plans perfectly well, but nobody can
           // fetch that reel today, and that is worth seeing without hovering.
+          // Every chip is typed now, so this is the one thing separating
+          // them -- solid means there is stock of that width, dashed means
+          // there is not.
           return (
             `<span class="sl-job-value dsf-size-item${st ? "" : " is-added"}" title="${esc(tip)}">` +
             `<span>${esc(fmt(sz))} mm</span>` +
-            `${sizesEditing ? `<button type="button" class="x" data-i="${i}" title="Remove">&times;</button>` : ""}</span>`
+            `<button type="button" class="x" data-i="${i}" title="Remove">&times;</button></span>`
           );
         }).join("")
-      : `<span class="sl-job-value dsf-size-none">${sizesEditing ? "add a size below" : "none — click the pencil to add"}</span>`;
+      : "";
     sizeChipsEl.querySelectorAll(".x").forEach((b) =>
       b.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1093,7 +1098,7 @@
             : ONLY_CHOSEN && SIZE_LIST.length > 1
               ? `<button type="button" class="dsf-sizes-toggle" data-hide="1" title="Show only the deckle size this layout uses"><i class="fa-solid fa-chevron-up"></i>Show only the selected size</button>`
               : "")
-        : `<div style="font-size:12px;font-weight:700;color:#7c8ba1;padding:6px 2px;">Add a deckle size above (pencil next to “Available Sizes”).</div>`;
+        : `<div style="font-size:12px;font-weight:700;color:#7c8ba1;padding:6px 2px;">Add a deckle size above, under “Deckle Size”.</div>`;
       stack.querySelectorAll(".dsf-web-tr").forEach((el) => {
         el.addEventListener("click", () => selectSize(el.dataset.size, tr));
         el.addEventListener("keydown", (ev) => {
@@ -1194,7 +1199,7 @@
 
     // ---- whole-page checks ----
     if (!SIZE_LIST.length) {
-      errors.push("Add at least one deckle size — click the pencil next to “Available Sizes”.");
+      errors.push("Add at least one deckle size — the “Deckle Size” box on the strip above.");
     }
     const trimRaw = trimmedVal(dsfTrim);
     const trimNum = Number(trimRaw);
@@ -1897,10 +1902,6 @@
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && layoutModal.classList.contains("show")) closeLayoutDialog();
   });
-  document.getElementById("dsfSizeEdit").addEventListener("click", () => {
-    sizesEditing = !sizesEditing;
-    renderSizeChips();
-  });
   document.getElementById("dsfSizeAddBtn").addEventListener("click", addSize);
   sizeInputEl.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") {
@@ -1909,47 +1910,29 @@
     }
   });
   dsfTrim.addEventListener("input", recalcAll);
-  dsfTrim.addEventListener("blur", showTrimText);
+  dsfTrim.addEventListener("blur", () => {
+    normaliseTrim();
+    recalcAll();
+  });
   dsfTrim.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" || ev.key === "Escape") {
       ev.preventDefault();
       dsfTrim.blur();
     }
   });
-  document.getElementById("dsfTrimEdit").addEventListener("click", editTrim);
-  // Only a starting value for layouts added from here on -- changing it never
-  // reaches back into a layout already drawn, which would silently re-plan a
-  // job somebody has finished.
+  // The one Deckle R.M. on the page. It is a starting value for layouts added
+  // from here on -- changing it never reaches back into a layout already
+  // drawn, which would silently re-plan a job somebody has finished -- and it
+  // is the length AI Deckle Set plans against.
   //
-  // It does reach the AI Deckle Set panel's own Deckle R.M., because that is
-  // not a second setting -- it is the same physical quantity, the length of
-  // one deckle web, and the server seeds both from the one
-  // DEFAULT_DECKLE_RUNNING_METERS. Left unlinked they agreed only until the
-  // first keystroke: you set the strip to the length this job actually runs,
-  // pressed AI Deckle Set, and it planned against the figure you had just
-  // replaced -- then wrote that figure into every layout it drew, so the
-  // whole plan came back at the wrong web length with nothing on screen
-  // saying why.
-  //
-  // The panel is absent entirely when DECKLE_AUTO_ENABLED=false (the view
-  // renders no markup for it), hence the null guard rather than a const
-  // captured up here.
-  //
-  // Mirrored raw, blanks included, so the two fields always read the same;
-  // the panel still refuses to run on a blank or 0 when the button is
-  // pressed. The AI field stays typeable -- this is one-way. Type there and
-  // the panel plans at that length, until the strip is touched again and
-  // takes it back.
+  // There used to be a second box for the latter, in the AI panel, kept in
+  // step by copying this field into it on every keystroke. It was never a
+  // second setting: one physical quantity, the length of one deckle web,
+  // seeded on both sides from the one DEFAULT_DECKLE_RUNNING_METERS. Asking
+  // twice only created the chance of them disagreeing.
   drmDefaultEl.addEventListener("input", () => {
     const v = Number(drmDefaultEl.value);
     drmDefaultEl.classList.toggle("is-bad", trimmedVal(drmDefaultEl) !== "" && !(Number.isFinite(v) && v > 0));
-
-    const dsaDrmEl = document.getElementById("dsaDrm");
-    if (!dsaDrmEl) return;
-    dsaDrmEl.value = drmDefaultEl.value;
-    // Clear a red left over from an earlier run once the mirrored figure is
-    // usable again, so the panel never sits flagged over a value that is fine.
-    if (Number.isFinite(v) && v > 0) dsaDrmEl.classList.remove("is-bad");
   });
 
   // Reset asks once, in the button itself -- a confirm dialog for something
@@ -1992,7 +1975,6 @@
   // exactly as it does for a hand-drawn plan -- and, this being a calculator,
   // there was never anything for it to save in the first place.
   if (dsaRun) {
-    const dsaDrm = document.getElementById("dsaDrm");
     const dsaOvPct = document.getElementById("dsaOvPct");
     const dsaOvRolls = document.getElementById("dsaOvRolls");
 
@@ -2048,11 +2030,14 @@
         return;
       }
       if (!SIZE_LIST.length) {
-        dsaShowError("Add at least one deckle size first — the pencil next to “Available Sizes”.");
+        dsaShowError("Add at least one deckle size first — the “Deckle Size” box on the strip above.");
         return;
       }
-      const drm = Number(dsaDrm.value);
-      dsaDrm.classList.toggle("is-bad", !(Number.isFinite(drm) && drm > 0));
+      // Deckle R.M. lives on the control strip -- the same field every new
+      // layout opens with, so a plan can never come back at a length the
+      // page was not showing.
+      const drm = Number(drmDefaultEl.value);
+      drmDefaultEl.classList.toggle("is-bad", !(Number.isFinite(drm) && drm > 0));
       if (!(Number.isFinite(drm) && drm > 0)) {
         dsaShowError("Deckle R.M. must be a length greater than 0.");
         return;
@@ -2125,7 +2110,7 @@
   }
 
   // ---- init --------------------------------------------------------------
-  showTrimText();
+  normaliseTrim();
   renderSizeChips();
   for (let i = 0; i < 3; i += 1) addReqRow();
   // addLayoutRow() ends in recalcAll(), which draws everything else.

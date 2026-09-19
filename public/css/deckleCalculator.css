@@ -105,10 +105,14 @@
   color: #044a78; border-radius: 6px; padding: 3px 11px; font-size: 12px; font-weight: 700; cursor: pointer;
 }
 .dsf-mini-btn:hover { background: #f0f7ff; }
-#dsfTrim {
-  height: 40px !important; font-size: 20px !important; font-weight: 800 !important; color: #1f2a44;
-  width: 100%; padding: 4px 8px; border-radius: 6px; border: 1px solid #044a78; background: #f4f9ff;
-}
+/* Edge Trim moved onto the control strip, so .dsa-field input sizes it like
+   every other field there and this rule keeps only what is its own: the blue
+   outline marking it as a plant-wide figure rather than a job one.
+   It used to carry `height: 40px !important; font-size: 20px !important;
+   width: 100%` for the tall .sl-job-cell it lived in. Left in place on the
+   bar that was an ID rule beating .dsa-field/.dsa-narrow outright, and Edge
+   Trim came out 286px wide in 20px type next to 34px neighbours. */
+#dsfTrim { border-color: #044a78; background: #f4f9ff; }
 #dsfTrim:focus { outline: none; box-shadow: 0 0 0 3px rgba(4,74,120,0.14); }
 
 .sl-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; }
@@ -633,6 +637,64 @@
 .dsa-run:disabled { opacity: 0.5; cursor: not-allowed; }
 .dsa-body { padding: 0; }
 .dsa-body:empty { display: none; }
+
+/* ---- The one control strip (.dc-bar) ----
+   Edge Trim, Deckle R.M. and Deckle Size, then a rule, then the two overrun
+   limits and the button. Built on .dsa-bar rather than the .sl-job-grid the
+   setup card used, because that grid draws each figure as a 20px headline in
+   a full-height cell -- three of those plus a second card for the AI panel is
+   what made this page look like a form to fill in rather than a bar to set.
+   Deliberately NOT mirrored into views/inventory/orders/deckleSetForm.ejs's
+   style block: there the same figures come off the order, not off the strip.
+   The .sl-job-grid / .dsf-trim-cell / .dsf-avail / .dsf-size-line rules above
+   are now unused HERE and kept only so this file stays a readable copy of
+   that one. */
+/* The bar itself owns no padding any more -- each group does, so the rule
+   between them (the AI group's border-left) runs the full height of the
+   card rather than stopping inside a gutter. align-items: stretch is what
+   makes both groups that height in the first place. */
+.dc-bar { align-items: stretch; gap: 0; padding: 0 !important; flex-wrap: nowrap; }
+.dc-bar-group {
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; row-gap: 10px;
+  padding: 11px 14px; min-width: 0;
+}
+/* The bar does not wrap; the LEFT group does, inside itself. That is what
+   keeps the rule full height: two groups side by side are one flex line, so
+   both stretch to the card, where a wrapped bar would give the rule the
+   height of its own line and no more. Run out of room and the chips fold
+   onto a second row within this group rather than the group folding under
+   its neighbour. */
+.dc-bar-group:first-child { flex: 1 1 auto; }
+/* The one full-height rule on the bar: left of it is how the web is cut,
+   right of it is how many spares that may run to. Drawn as this group's
+   border so it can never come up short -- and the group is pushed right by
+   its own auto margin, which is also what keeps its three controls together
+   on one line instead of the button dropping off alone. */
+.dc-bar-group-ai { border-left: 1px solid #b9d2e8; margin-left: auto; flex: 0 0 auto; }
+/* The light mark between two fields inside one group. Bottom-aligned to the
+   inputs rather than stretched: it separates two boxes, it is not a border
+   of the bar, and a full rule at every gap would read as six sections
+   instead of two. */
+.dc-bar-sep { align-self: flex-end; flex: 0 0 auto; width: 1px; height: 30px; background: #c2d5e8; margin: 0 0 2px; }
+/* Below this there is no width left to fold chips into, and holding the two
+   groups on one line would push the AI half out through .dsa-panel's
+   overflow: hidden. It wraps instead -- the rule goes with the AI group and
+   fences it on its own row, which still reads, where a clipped button does
+   not. */
+@media (max-width: 900px) {
+  .dc-bar { flex-wrap: wrap; }
+  .dc-bar-group:first-child { flex: 1 1 100%; }
+}
+.dc-bar-sizes { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* This label carries a "*", so unlike the other labels on the bar it has to
+   be allowed to run past its own width rather than ellipsise. */
+.dc-bar-sizes .sl-job-label { overflow: visible; }
+.dc-sizes-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 34px; }
+/* The add box is inline on the bar now, not stacked under a chip row. */
+.dc-sizes-line .dsf-chip-add { margin-top: 0; }
+.dc-sizes-line .dsf-chip-add input { height: 34px; width: 84px; }
+.dc-sizes-line .dsf-size-row { gap: 6px; }
+.dc-bar-sizes .dsf-chip-msg { margin-top: 0; }
 /* ---- Stat chips ---- */
 .dsa-result { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid #eef1f6; }
 /* A chip is never narrower than its own contents (min-width: max-content) and
@@ -755,14 +817,6 @@
 /* Pressed once: it is now asking, so it says so and looks like it means it. */
 .dc-reset-btn.is-armed { border-color: #b91c1c; background: #fef2f2; color: #b91c1c; }
 
-/* Available Sizes opens on what the store actually holds, which is worth
-   saying beside the heading -- the list is editable, so without it a width
-   that came from stock looks no different from one somebody typed. */
-.dc-from-stock {
-  margin-left: 7px; font-size: 9px; font-weight: 800; letter-spacing: 0.06em;
-  color: #0f766e; background: #ccfbf1; border-radius: 999px; padding: 2px 7px; white-space: nowrap;
-}
-
 /* ---- Page header ----
    The blue bar every page in the app wears, with the one thing that is
    special about this one stated on the right of it. .form-heading centres its
@@ -780,16 +834,6 @@
   border-radius: 999px; padding: 5px 13px; white-space: nowrap;
 }
 .dc-badge i { font-size: 10px; opacity: 0.9; }
-
-/* The "what do I do here" line. Attached under the heading rather than boxed
-   on its own: it is a caption, and a caption in a card of its own reads like a
-   warning the page keeps repeating. */
-.dc-lede-wrap { padding: 0 !important; margin-top: -4px; }
-.dc-lede {
-  align-self: stretch; margin: 0; padding: 0 4px;
-  font-size: 12.5px; font-weight: 600; color: #6b7a90; line-height: 1.55;
-}
-.dc-lede b { color: #1f2a44; font-weight: 800; }
 
 /* ---- Keyboard focus ----
    Every control on this page is reachable by tab, and several of them are
