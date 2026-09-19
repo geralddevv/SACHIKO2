@@ -87,8 +87,7 @@
   const dsfFinalStats = document.getElementById("dsfFinalStats");
   const dsfStatChips = document.getElementById("dsfStatChips");
   const reqBody = document.getElementById("dcReqBody");
-  const sizeChipsEl = document.getElementById("dsfSizeChips");
-  const sizeInputEl = document.getElementById("dsfSizeInput");
+  const sizeFieldsEl = document.getElementById("dsfSizeFields");
   const sizeMsgEl = document.getElementById("dsfSizeMsg");
   const dsfIssues = document.getElementById("dsfIssues");
   const dsfIssuesBody = document.getElementById("dsfIssuesBody");
@@ -142,89 +141,140 @@
   // de-duping and sorting as anything typed into the box.
   normSizeList();
 
-  // The add box is always open and every chip always carries its x -- there
-  // is no edit mode to be in. A deckle size is the one thing this page
-  // cannot work without, so asking for a click before one can be typed only
-  // ever stood between the page and being usable.
-  function renderSizeChips() {
-    // Nothing listed draws nothing -- the empty row is not worth a line of
-    // prose. The box beside it says "mm" and the label says Deckle Size, so
-    // there is nothing left for a placeholder to explain, and the field is
-    // flagged properly by the Issues panel the moment a plan needs a width.
-    // (.dc-sizes-line keeps its min-height, so the bar does not jump as the
-    // first chip goes in.)
-    sizeChipsEl.innerHTML = SIZE_LIST.length
-      ? SIZE_LIST.map((sz, i) => {
-          const st = STOCK_BY_SIZE.get(round2(sz));
-          const tip = st
-            ? `${fmtI(st.reelCount)} reel${st.reelCount === 1 ? "" : "s"} in stock · ${fmt(st.totalKg)} kg`
-            : "No facestock of this width in stock — it still plans, nobody can fetch the reel today";
-          // A width the store does not hold is drawn differently (see
-          // .dsf-size-item.is-added): it plans perfectly well, but nobody can
-          // fetch that reel today, and that is worth seeing without hovering.
-          // Every chip is typed now, so this is the one thing separating
-          // them -- solid means there is stock of that width, dashed means
-          // there is not.
-          return (
-            `<span class="sl-job-value dsf-size-item${st ? "" : " is-added"}" title="${esc(tip)}">` +
-            `<span>${esc(fmt(sz))} mm</span>` +
-            `<button type="button" class="x" data-i="${i}" title="Remove">&times;</button></span>`
-          );
-        }).join("")
-      : "";
-    sizeChipsEl.querySelectorAll(".x").forEach((b) =>
-      b.addEventListener("click", (e) => {
-        e.stopPropagation();
-        SIZE_LIST.splice(Number(b.dataset.i), 1);
-        renderSizeChips();
-        recalcAll();
-      }),
-    );
+  // ---- the Deckle Size fields --------------------------------------------
+  // One input per width, and the row grows itself: fill the last box and an
+  // empty one appears beside it. It was a single box with an Add button
+  // beside it that turned what you typed into a chip, which meant three
+  // actions per width (type, reach for Add, come back) and a list you could
+  // no longer edit -- a mistyped 653 had to be deleted and retyped rather
+  // than corrected in place. Here every width stays a field: click into it
+  // and fix the digit.
+  //
+  // The DOM is the source of truth and SIZE_LIST is derived from it, so the
+  // boxes keep the order they were typed in while SIZE_LIST stays sorted and
+  // de-duped for the planner. Nothing re-renders on a keystroke -- rebuilding
+  // the row under the caret would throw focus out of the box being typed in
+  // -- so growing, validating and syncing all work on the existing nodes.
+  let SIZE_FIELD_SEQ = 0;
+
+  function sizeInputs() {
+    return [...sizeFieldsEl.querySelectorAll(".dc-size-input")];
+  }
+
+  function addSizeField(value) {
+    const id = `dcSize${(SIZE_FIELD_SEQ += 1)}`;
+    const wrap = document.createElement("span");
+    wrap.className = "dc-size-field";
+    wrap.innerHTML =
+      `<input type="number" step="any" min="0" inputmode="decimal" class="dc-size-input" ` +
+      `id="${id}" placeholder="mm" aria-label="Deckle size in mm" />` +
+      `<button type="button" class="dc-size-x" tabindex="-1" title="Remove this size" ` +
+      `aria-label="Remove this size">&times;</button>`;
+    const input = wrap.querySelector(".dc-size-input");
+    if (value != null) input.value = value;
+
+    input.addEventListener("input", () => {
+      growSizeFields();
+      syncSizes();
+    });
+    // Enter moves along the row the way it does in the Requirements table,
+    // and lands in the empty box growSizeFields() has just opened.
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter") return;
+      ev.preventDefault();
+      const all = sizeInputs();
+      const next = all[all.indexOf(input) + 1];
+      if (next) next.focus();
+    });
+    wrap.querySelector(".dc-size-x").addEventListener("click", () => {
+      // Never leave the row with nothing in it: the last field is emptied
+      // rather than removed, so there is always somewhere to type.
+      if (sizeInputs().length <= 1) {
+        input.value = "";
+        input.focus();
+      } else {
+        wrap.remove();
+      }
+      growSizeFields();
+      syncSizes();
+    });
+
+    sizeFieldsEl.appendChild(wrap);
+    return input;
+  }
+
+  // Exactly one empty box at the end, always. That trailing box is the "add
+  // another" -- there is no button to press.
+  function growSizeFields() {
+    const all = sizeInputs();
+    if (!all.length) {
+      addSizeField();
+      return;
+    }
+    const last = all[all.length - 1];
+    if (String(last.value).trim() !== "") addSizeField();
+  }
+
+  // Reads the boxes, flags the bad ones, rebuilds SIZE_LIST and recalculates.
+  // Every box is judged on its own and wears its own red, so with three
+  // widths typed it is obvious WHICH one the message is about.
+  function syncSizes() {
+    const trim = Number(dsfTrim && dsfTrim.value);
+    const seen = new Set();
+    const values = [];
+    let msg = "";
+
+    sizeInputs().forEach((input) => {
+      const wrap = input.closest(".dc-size-field");
+      const raw = String(input.value).trim();
+      let bad = "";
+      let v = null;
+
+      if (raw === "") {
+        // An empty box is the next one waiting to be filled, not a mistake.
+      } else {
+        v = round2(Number(raw));
+        if (!Number.isFinite(v)) bad = "Enter a number in mm.";
+        else if (v <= 0) bad = "Deckle size must be greater than 0.";
+        else if (v < MIN_DECKLE_MM || v > MAX_DECKLE_MM)
+          bad = `Deckle size looks wrong — expected ${MIN_DECKLE_MM}–${MAX_DECKLE_MM} mm.`;
+        else if (Number.isFinite(trim) && trim >= 0 && v <= trim)
+          bad = `Deckle size must be more than the ${round2(trim)} mm edge trim.`;
+        else if (seen.has(v)) bad = `${fmt(v)} mm is listed twice.`;
+      }
+
+      input.classList.toggle("is-bad", Boolean(bad));
+      if (bad) {
+        if (!msg) msg = bad;
+      } else if (v != null) {
+        seen.add(v);
+        values.push(v);
+      }
+
+      // A width the store does not hold still plans perfectly well, but
+      // nobody can fetch that reel today -- worth seeing without hovering,
+      // and the count is worth having on the tooltip (two reels on the shelf
+      // and forty are not the same choice).
+      const st = v == null || bad ? null : STOCK_BY_SIZE.get(v);
+      wrap.classList.toggle("in-stock", Boolean(st));
+      wrap.classList.toggle("off-stock", Boolean(v != null && !bad && !st));
+      input.title = st
+        ? `${fmtI(st.reelCount)} reel${st.reelCount === 1 ? "" : "s"} in stock · ${fmt(st.totalKg)} kg`
+        : v != null && !bad
+          ? "No facestock of this width in stock — it still plans, nobody can fetch the reel today"
+          : "";
+    });
+
+    showSizeMsg(msg);
+    SIZE_LIST = values;
+    normSizeList();
+    recalcAll();
   }
 
   function showSizeMsg(text) {
     if (!sizeMsgEl) return;
     sizeMsgEl.textContent = text || "";
     sizeMsgEl.hidden = !text;
-    sizeInputEl.classList.toggle("is-bad", !!text);
-  }
-
-  function addSize() {
-    const raw = String(sizeInputEl.value).trim();
-    const v = round2(Number(raw));
-    const trim = Number(dsfTrim && dsfTrim.value);
-    if (raw === "" || !Number.isFinite(v)) {
-      showSizeMsg("Enter a number in mm.");
-      sizeInputEl.focus();
-      return;
-    }
-    if (v <= 0) {
-      showSizeMsg("Deckle size must be greater than 0.");
-      sizeInputEl.focus();
-      return;
-    }
-    if (v < MIN_DECKLE_MM || v > MAX_DECKLE_MM) {
-      showSizeMsg(`Deckle size looks wrong — expected ${MIN_DECKLE_MM}–${MAX_DECKLE_MM} mm.`);
-      sizeInputEl.focus();
-      return;
-    }
-    if (Number.isFinite(trim) && trim >= 0 && v <= trim) {
-      showSizeMsg(`Deckle size must be more than the ${round2(trim)} mm edge trim.`);
-      sizeInputEl.focus();
-      return;
-    }
-    if (SIZE_LIST.some((s) => round2(s) === v)) {
-      showSizeMsg(`${fmt(v)} mm is already listed.`);
-      sizeInputEl.focus();
-      return;
-    }
-    SIZE_LIST.push(v);
-    normSizeList();
-    sizeInputEl.value = "";
-    showSizeMsg("");
-    sizeInputEl.focus();
-    renderSizeChips();
-    recalcAll();
   }
 
   // ---- web-view segment builders -----------------------------------------
@@ -1902,17 +1952,13 @@
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && layoutModal.classList.contains("show")) closeLayoutDialog();
   });
-  document.getElementById("dsfSizeAddBtn").addEventListener("click", addSize);
-  sizeInputEl.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") {
-      ev.preventDefault();
-      addSize();
-    }
-  });
-  dsfTrim.addEventListener("input", recalcAll);
+  // Edge Trim is one of the bounds a deckle size is judged against ("must be
+  // more than the N mm edge trim"), so moving it re-judges every box rather
+  // than only redrawing the plan.
+  dsfTrim.addEventListener("input", syncSizes);
   dsfTrim.addEventListener("blur", () => {
     normaliseTrim();
-    recalcAll();
+    syncSizes();
   });
   dsfTrim.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" || ev.key === "Escape") {
@@ -2111,7 +2157,8 @@
 
   // ---- init --------------------------------------------------------------
   normaliseTrim();
-  renderSizeChips();
+  // One empty box to start; it grows from there as widths are typed.
+  growSizeFields();
   for (let i = 0; i < 3; i += 1) addReqRow();
   // addLayoutRow() ends in recalcAll(), which draws everything else.
   addLayoutRow();

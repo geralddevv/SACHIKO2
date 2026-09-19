@@ -89,13 +89,10 @@
                somebody has typed -- see the chip tooltips. -->
           <div class="dc-bar-sizes">
             <span class="sl-job-label">Deckle Size (manual)<span class="req"> *</span></span>
-            <div class="dc-sizes-line">
-              <div class="dsf-chip-add">
-                <input type="number" step="any" min="0" id="dsfSizeInput" placeholder="mm" inputmode="decimal" />
-                <button type="button" id="dsfSizeAddBtn" class="dsf-mini-btn"><i class="fa-solid fa-plus"></i> Add</button>
-              </div>
-              <div id="dsfSizeChips" class="dsf-size-row"></div>
-            </div>
+            <!-- One field per deckle size, built by the script: fill the last
+                 one and an empty one appears beside it, so adding a second
+                 width is typing rather than a trip to an Add button. -->
+            <div class="dc-sizes-line" id="dsfSizeFields"></div>
             <div id="dsfSizeMsg" class="dsf-chip-msg" hidden></div>
           </div>
         </div>

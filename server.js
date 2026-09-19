@@ -14,6 +14,7 @@ import familyMasterRoutes from "./routes/system/familyMaster.js";
 import companyRoutes from "./routes/system/company.js";
 import typeMasterRoutes from "./routes/system/typeMaster.js";
 import coreMasterRoutes from "./routes/system/coreMaster.js";
+import boardPaperMasterRoutes from "./routes/system/boardPaperMaster.js";
 import adhesiveMasterRoutes from "./routes/system/adhesiveMaster.js";
 import releaseMasterRoutes from "./routes/system/releaseMaster.js";
 import payrollRoute from "./routes/acccounting/payroll.js";
@@ -927,6 +928,7 @@ app.use("/app", requireAuth, familyMasterRoutes);
 app.use("/app", requireAuth, companyRoutes);
 app.use("/app", requireAuth, typeMasterRoutes);
 app.use("/app", requireAuth, coreMasterRoutes);
+app.use("/app", requireAuth, boardPaperMasterRoutes);
 app.use("/app", requireAuth, adhesiveMasterRoutes);
 app.use("/app", requireAuth, releaseMasterRoutes);
 

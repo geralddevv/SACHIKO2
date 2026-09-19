@@ -142,8 +142,11 @@
 .sl-table td.dsf-rownum { font-size: 12.5px; font-weight: 800; color: #1f2a44; background: #f8fafc; }
 
 .sl-scroll { align-self: stretch; overflow-x: auto; }
-.sl-scroll::-webkit-scrollbar { height: 9px; }
-.sl-scroll::-webkit-scrollbar-thumb { background: #044a78; border-radius: 8px; }
+/* Its scrollbar is not here -- every scrolling surface on this page shares
+   one rule further down ("One scrollbar for every surface this page
+   scrolls"). This used to carry a webkit-only 9px bar with a thumb and no
+   track, which made the Requirements table the one strip on the page that
+   did not match, and left Firefox drawing the OS default on it. */
 
 .sl-width-input.is-set { border-color: #044a78 !important; background-color: #f4f9ff !important; font-weight: 700; }
 
@@ -364,28 +367,58 @@
 .dsf-set-head #dsfAddLayout { margin-left: auto; }
 .dsf-set-sub { font-size: 12px; font-weight: 700; color: #7c8ba1; }
 
-/* One scrollbar for every surface this page scrolls -- the Deckle Set recap,
-   and inside the layout dialog both the body (vertical) and the layout table
-   (sideways). Same tokens as every Tabulator table in the app
-   (tableDisp.css's .tabulator-tableholder), restated because this page
-   loads its own stylesheet and inherits none of it.
-   .sl-scroll's own rule is webkit-only, so without the longhands at the end
-   Firefox draws the OS default on these. */
-#dsfSetBody::-webkit-scrollbar,
-.dsf-layout-modal .dialog-body::-webkit-scrollbar,
-.dsf-layout-modal .sl-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
-#dsfSetBody::-webkit-scrollbar-track,
-.dsf-layout-modal .dialog-body::-webkit-scrollbar-track,
-.dsf-layout-modal .sl-scroll::-webkit-scrollbar-track { background: #f0f2f5; border-radius: 6px; }
-#dsfSetBody::-webkit-scrollbar-thumb,
-.dsf-layout-modal .dialog-body::-webkit-scrollbar-thumb,
-.dsf-layout-modal .sl-scroll::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
-#dsfSetBody::-webkit-scrollbar-thumb:hover,
-.dsf-layout-modal .dialog-body::-webkit-scrollbar-thumb:hover,
-.dsf-layout-modal .sl-scroll::-webkit-scrollbar-thumb:hover { background: #06639f; }
-#dsfSetBody,
-.dsf-layout-modal .dialog-body,
-.dsf-layout-modal .sl-scroll { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
+/* One scrollbar for every surface this page scrolls: EVERY .sl-scroll -- the
+   Requirements table, the Deckle Set recap (#dsfSetBody is one) and the
+   layout table inside the dialog -- plus the dialog body's vertical bar.
+   Matched on the class rather than named one by one, which is how the
+   Requirements card came to be the only strip on the page still wearing the
+   browser's own bar.
+   Same tokens as every Tabulator table in the app (tableDisp.css's
+   .tabulator-tableholder), restated because this page loads its own
+   stylesheet and inherits none of it. The last rule is the Firefox
+   longhand -- it ignores every ::-webkit- line above, and without it drew
+   the OS default at OS width.
+   The page's own scroll gets the same treatment, just below. */
+.sl-scroll::-webkit-scrollbar,
+.dsf-layout-modal .dialog-body::-webkit-scrollbar { width: 10px; height: 10px; }
+.sl-scroll::-webkit-scrollbar-track,
+.dsf-layout-modal .dialog-body::-webkit-scrollbar-track { background: #f0f2f5; border-radius: 6px; }
+.sl-scroll::-webkit-scrollbar-thumb,
+.dsf-layout-modal .dialog-body::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+.sl-scroll::-webkit-scrollbar-thumb:hover,
+.dsf-layout-modal .dialog-body::-webkit-scrollbar-thumb:hover { background: #06639f; }
+.sl-scroll::-webkit-scrollbar-corner,
+.dsf-layout-modal .dialog-body::-webkit-scrollbar-corner { background: #f0f2f5; }
+.sl-scroll,
+.dsf-layout-modal .dialog-body { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
+
+/* ...and the page's own scroll, in the same blue, so the bar down the side of
+   the window matches the ones inside the cards instead of being the one grey
+   thing left. common.css gives every .main-content a 4px near-black bar;
+   these selectors are page-scoped (this stylesheet loads on the calculator
+   and nowhere else), so no other page changes.
+
+   BOTH of them, because there are two nested .main-content divs here and
+   either can be the one that ends up with the bar: boilerplate.ejs wraps the
+   view in one, and this view's own root carries the class as well. The
+   wrapper is reached through :has(), which is the only way to name a parent
+   -- and it is written as `> .dc-page` so it matches this page's wrapper and
+   no one else's. Class-plus-class beats common.css's single class, so no
+   !important is needed; :has() takes the specificity of its argument, which
+   is what makes the second selector win too. */
+.main-content.dc-page::-webkit-scrollbar,
+.main-content:has(> .dc-page)::-webkit-scrollbar { width: 10px; height: 10px; }
+.main-content.dc-page::-webkit-scrollbar-track,
+.main-content:has(> .dc-page)::-webkit-scrollbar-track { background: #f0f2f5; border-radius: 6px; }
+.main-content.dc-page::-webkit-scrollbar-thumb,
+.main-content:has(> .dc-page)::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+.main-content.dc-page::-webkit-scrollbar-thumb:hover,
+.main-content:has(> .dc-page)::-webkit-scrollbar-thumb:hover { background: #06639f; }
+.main-content.dc-page::-webkit-scrollbar-corner,
+.main-content:has(> .dc-page)::-webkit-scrollbar-corner { background: #f0f2f5; }
+/* Firefox, which ignores every ::-webkit- line above. */
+.main-content.dc-page,
+.main-content:has(> .dc-page) { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
 
 /* Thirteen columns, one of which is a drawing. The Set Deckle page gives the
    diagram 560px and asks for 1520px of table, which on a laptop puts Rolls,
@@ -689,11 +722,46 @@
 /* This label carries a "*", so unlike the other labels on the bar it has to
    be allowed to run past its own width rather than ellipsise. */
 .dc-bar-sizes .sl-job-label { overflow: visible; }
-.dc-sizes-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 34px; }
-/* The add box is inline on the bar now, not stacked under a chip row. */
-.dc-sizes-line .dsf-chip-add { margin-top: 0; }
-.dc-sizes-line .dsf-chip-add input { height: 34px; width: 84px; }
-.dc-sizes-line .dsf-size-row { gap: 6px; }
+.dc-sizes-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 34px; }
+/* One box per deckle size. The row grows itself -- fill the last box and the
+   script opens another beside it -- so these are the Add button as well as
+   the list, and a width stays editable in place instead of becoming a chip
+   that can only be deleted and retyped. */
+.dc-size-field { position: relative; display: inline-flex; align-items: center; }
+.dc-size-input {
+  width: 84px; height: 34px; padding: 4px 16px 4px 8px; text-align: center;
+  font-size: 14px; font-weight: 700; color: #1f2a44;
+  border: 1.5px solid #cbd5e1; border-radius: 7px; background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.dc-size-input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
+.dc-size-input::placeholder { color: #94a3b8; font-weight: 500; }
+.dc-size-input.is-bad {
+  border-color: #dc2626 !important; background: #fef2f2 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+/* Stock is read only to annotate a width once it is typed: filled blue means
+   there are reels of it (the count is on the tooltip), dashed grey means
+   there are none -- it plans perfectly well, nobody can fetch that reel
+   today. An empty box is neither. */
+.dc-size-field.in-stock .dc-size-input { border-color: #b7d2ea; background: #f4f9ff; color: #044a78; }
+.dc-size-field.off-stock .dc-size-input { border-style: dashed; color: #5b6b80; }
+/* Inside the box, so a row of them stays a row of boxes. Hidden until there
+   is something to remove -- the trailing empty box is the "add another" and
+   an x on it would mean nothing. */
+.dc-size-x {
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+  display: none; border: none; background: none; color: #b91c1c; cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0 2px; border-radius: 4px;
+}
+.dc-size-field.in-stock .dc-size-x,
+.dc-size-field.off-stock .dc-size-x,
+.dc-size-input.is-bad ~ .dc-size-x { display: inline-flex; }
+.dc-size-x:hover { color: #7f1d1d; background: rgba(185, 28, 28, 0.1); }
+/* Chrome/Safari put spinners on number inputs; at 84px they eat the x. */
+.dc-size-input::-webkit-outer-spin-button,
+.dc-size-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.dc-size-input { -moz-appearance: textfield; }
 .dc-bar-sizes .dsf-chip-msg { margin-top: 0; }
 /* ---- Stat chips ---- */
 .dsa-result { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid #eef1f6; }
