@@ -245,21 +245,63 @@
     .embedded.sheet { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
 
     @media print {
-      /* Collapse the page down to nothing but the sticker. */
-      body {
+      /* ---- these have to BEAT the .embedded preview rules above ----
+         The document that goes to the printer IS the embedded one: the stock
+         page's Print dialog holds this page in an iframe and prints THAT
+         window (labelApi.print()), so `.embedded` -- and on a batch
+         `.embedded.sheet` -- are still on <html> while everything in here
+         applies.
+
+         A media query adds no specificity of its own, so a bare `body` here
+         is (0,0,1) and loses outright to `.embedded.sheet body` at (0,2,1).
+         The whole preview layout therefore went to the printer on a batch:
+         10px of body padding and a 10px gap between labels, on a page that is
+         exactly one label tall, laid out as a flex column instead of a block,
+         keeping the preview's dashed outline and grey backdrop -- and
+         `print-color-adjust: exact` below made sure the grey really printed.
+         The padding and the gaps pushed each label further off its own page
+         than the last, and what came out of the printer was part-labels and
+         empty dashed boxes at the top and the tail of the run.
+
+         A SINGLE label was never affected, because `.embedded body` happens
+         to set the very values this block wants -- which is exactly why one
+         sticker printed correctly while a batch did not.
+
+         So every rule here that has a counterpart in the preview above is
+         written against all three forms of the selector: equal specificity,
+         later in the file, so it wins. Add a rule to the preview and add it
+         here too, or the printer gets the preview's version of it. */
+      body,
+      .embedded body,
+      .embedded.sheet body {
         background: #fff;
         padding: 0;
         gap: 0;
         display: block;
         width: <%= mm.labelWidth %>mm;
         height: <%= mm.labelHeight %>mm;
+        overflow: hidden;
       }
       /* A batch is as many pages as it has labels, so the sheet's height is
          whatever they add up to -- only a single label can pin the body to
-         exactly one sticker. */
-      .sheet body { height: auto; }
+         exactly one sticker.
+
+         `overflow: visible` travels with it, and not by accident: an element
+         that scrolls is monolithic to the fragmenter, so a batch body left at
+         `hidden` would refuse to break across pages at all and the whole run
+         would be crushed onto the first one. A single label keeps `hidden`,
+         which is what absorbs the sub-pixel rounding of a box that is exactly
+         one page tall. */
+      .sheet body,
+      .embedded.sheet body { height: auto; overflow: visible; }
       .screen-only { display: none !important; }
-      .label-frame {
+      /* The dashed edge is a screen aid and must never reach the stock. The
+         preview puts it back on every label of a batch
+         (.embedded.sheet .label-frame -- three classes), so taking it off
+         again needs at least that much weight. */
+      .label-frame,
+      .embedded .label-frame,
+      .embedded.sheet .label-frame {
         box-shadow: none;
         outline: none;
       }

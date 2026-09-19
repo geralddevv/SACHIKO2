@@ -1920,9 +1920,36 @@
   // Only a starting value for layouts added from here on -- changing it never
   // reaches back into a layout already drawn, which would silently re-plan a
   // job somebody has finished.
+  //
+  // It does reach the AI Deckle Set panel's own Deckle R.M., because that is
+  // not a second setting -- it is the same physical quantity, the length of
+  // one deckle web, and the server seeds both from the one
+  // DEFAULT_DECKLE_RUNNING_METERS. Left unlinked they agreed only until the
+  // first keystroke: you set the strip to the length this job actually runs,
+  // pressed AI Deckle Set, and it planned against the figure you had just
+  // replaced -- then wrote that figure into every layout it drew, so the
+  // whole plan came back at the wrong web length with nothing on screen
+  // saying why.
+  //
+  // The panel is absent entirely when DECKLE_AUTO_ENABLED=false (the view
+  // renders no markup for it), hence the null guard rather than a const
+  // captured up here.
+  //
+  // Mirrored raw, blanks included, so the two fields always read the same;
+  // the panel still refuses to run on a blank or 0 when the button is
+  // pressed. The AI field stays typeable -- this is one-way. Type there and
+  // the panel plans at that length, until the strip is touched again and
+  // takes it back.
   drmDefaultEl.addEventListener("input", () => {
     const v = Number(drmDefaultEl.value);
     drmDefaultEl.classList.toggle("is-bad", trimmedVal(drmDefaultEl) !== "" && !(Number.isFinite(v) && v > 0));
+
+    const dsaDrmEl = document.getElementById("dsaDrm");
+    if (!dsaDrmEl) return;
+    dsaDrmEl.value = drmDefaultEl.value;
+    // Clear a red left over from an earlier run once the mirrored figure is
+    // usable again, so the panel never sits flagged over a value that is fine.
+    if (Number.isFinite(v) && v > 0) dsaDrmEl.classList.remove("is-bad");
   });
 
   // Reset asks once, in the button itself -- a confirm dialog for something
@@ -2066,11 +2093,18 @@
           return;
         }
         dsaApply(data.plan);
-        // The figures for the plan are in the summary bar at the foot of the
-        // page (driven off the layout rows dsaApply just filled), so the panel
-        // only carries what the optimizer had to SAY about the plan -- the
-        // forced overruns, the mixed webs, the searches it had to cut short.
-        dsaShowNotes(data.notes);
+        // A plan that worked prints nothing. The optimizer still returns
+        // `notes` and they are still shown when it FAILS (above), where they
+        // are the only account of why it could not plan. On success they were
+        // commentary on a plan the page already shows in full: the forced
+        // overrun, the mixed-web verdict and the spare rolls are all readable
+        // off the layout rows dsaApply just filled and the summary bar at the
+        // foot of the page.
+        //
+        // Deliberately NOT done on the Set Deckle page, which runs the same
+        // panel against the same endpoint: there the plan becomes real batches
+        // and a forced overrun is stock that will actually be made, so what
+        // the optimizer had to say about it is worth the line.
         if (typeof showToast === "function") {
           showToast(
             `AI Deckle Set: ${data.plan.layouts.length} layout(s), ${data.plan.webs} web(s), ${fmt(data.plan.waste.wastePct)}% waste.`,
