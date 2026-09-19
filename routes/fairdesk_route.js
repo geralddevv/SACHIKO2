@@ -2679,6 +2679,11 @@ router.post("/form/vendor-user", requireAuth, createLimiter, async (req, res) =>
 // Centralized Sales Order Form
 router.get("/sales/order", async (req, res) => {
   const { orderId } = req.query;
+  // ?embed=1 -- the same form with no nav and no side nav, for the New Sales
+  // Order dialog on /sales/pending (views/layout/embed.ejs). It is a render
+  // flag and nothing else: same query, same locals, same POST /sales/order on
+  // submit, so the dialog can never drift from the standalone page.
+  const embed = String(req.query.embed || "") === "1";
   const clientsPromise = Client.distinct("clientName");
   const locationsPromise = Location.distinct("locationName");
   // Full Label Stock master catalog (see /sachiko/label-stock/view) -- the
@@ -2727,7 +2732,8 @@ router.get("/sales/order", async (req, res) => {
     stockInfo,
     logs,
     submissionToken,
-    CSS: false,
+    embed,
+    CSS: "salesOrderForm.css?v=9",
     JS: false,
     title: orderToEdit ? "Edit Sales Order" : "Sales Order",
     notification: req.flash("notification"),
@@ -3959,7 +3965,7 @@ router.get("/sales/order/confirm", async (req, res) => {
       stockInfo, // Pass pre-calculated stock
       logs,
       confirmMode: true,
-      CSS: false,
+      CSS: "salesOrderForm.css?v=9",
       JS: false,
       title: "Confirm & Create Order",
       notification: req.flash("notification"),

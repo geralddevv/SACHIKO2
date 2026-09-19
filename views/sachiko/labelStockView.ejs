@@ -81,11 +81,41 @@
     }
     .header-action-btn:hover { background-color: #e4e4e4; }
 
-    /* Custom Scrollbar */
-    .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+    /* Custom Scrollbar -- the app's blue, on both dialogs (the View body and
+       the Create/Edit form) and on the Choices lists that open inside them.
+       Same tokens as every Tabulator table (tableDisp.css) and the Deckle
+       Calculator (deckleCalculator.css).
+
+       The `scrollbar-width`/`scrollbar-color` pair is not just the Firefox
+       fallback it usually is here -- it is what makes this work in Chrome at
+       all. `scrollbar-color` INHERITS, and common.css sets it on
+       `.main-content` (rgba(26,26,46,.75) on transparent), which these
+       dialogs sit inside. Chrome honours the standard properties now, and a
+       non-`auto` value on an element makes it ignore that element's
+       ::-webkit-scrollbar rules completely -- so the blue below was being
+       dropped and the inherited grey drawn in its place. Setting the standard
+       properties here overrides the inherited value rather than fighting it.
+       Anything else on this page that scrolls needs the same two lines. */
+    .custom-scrollbar,
+    #ls-create-modal .choices__list--dropdown .choices__list,
+    #ls-create-modal .choices__list[aria-expanded] .choices__list,
+    #ds-view-modal .choices__list--dropdown .choices__list {
+      scrollbar-width: thin;
+      scrollbar-color: #044a78 #f0f2f5;
+    }
+    .custom-scrollbar::-webkit-scrollbar,
+    #ls-create-modal .choices__list--dropdown .choices__list::-webkit-scrollbar,
+    #ds-view-modal .choices__list--dropdown .choices__list::-webkit-scrollbar { width: 10px; height: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-track,
+    #ls-create-modal .choices__list--dropdown .choices__list::-webkit-scrollbar-track,
+    #ds-view-modal .choices__list--dropdown .choices__list::-webkit-scrollbar-track { background: #f0f2f5; border-radius: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb,
+    #ls-create-modal .choices__list--dropdown .choices__list::-webkit-scrollbar-thumb,
+    #ds-view-modal .choices__list--dropdown .choices__list::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+    #ls-create-modal .choices__list--dropdown .choices__list::-webkit-scrollbar-thumb:hover,
+    #ds-view-modal .choices__list--dropdown .choices__list::-webkit-scrollbar-thumb:hover { background: #06639f; }
+    .custom-scrollbar::-webkit-scrollbar-corner { background: #f0f2f5; }
 
     /* ── Create Label Stock dialog ── */
     .dialog-field-label {
@@ -1232,17 +1262,39 @@
       group.rebuild(group.masters, group.els, lsInitChoices);
     };
 
-    // Roll/Sheet -> Printing Technology options: SHEET opens Digital/Offset,
-    // ROLL opens Flexographic/Gravure/Letter Press. Digital (Sheet-only) opens
-    // a further Laser/Ink field.
+    // Roll/Sheet -> Printing Technology options. SHEET opens Digital/Offset;
+    // ROLL opens two: the conventional presses as ONE choice, and Digital.
+    // The three conventional processes are not distinguished on a roll here
+    // -- that is the choice being recorded, not three choices collapsed by
+    // accident, so the stored value is the combined string itself.
+    //
+    // The follow-up Laser/Ink field stays SHEET+Digital only, deliberately:
+    // it is a property of sheet-fed digital presses, and a roll printed
+    // digitally is not asked for it (see lsUpdateDigitalPrintTypeVisibility,
+    // and the matching condition in buildLabelStockPayload / the create and
+    // edit validation in routes/sachiko/sachiko_route.js -- all four have to
+    // agree, or a ROLL + DIGITAL row is either asked for a value the server
+    // drops or refused for one the dialog never offered).
     const LS_PRINTING_TECH_OPTIONS = {
       SHEET: ["DIGITAL", "OFFSET"],
-      ROLL: ["FLEXOGRAPHIC", "GRAVURE", "LETTER PRESS"],
+      ROLL: ["FLEXOGRAPHIC / GRAVURE / LETTER PRESS", "DIGITAL"],
     };
 
     function lsRebuildPrintingTechnology(rollOrSheet, selectedValue) {
       const select = document.getElementById("lsPrintingTechnology");
-      const options = LS_PRINTING_TECH_OPTIONS[rollOrSheet] || [];
+      const options = [...(LS_PRINTING_TECH_OPTIONS[rollOrSheet] || [])];
+      // A row saved under a value this list no longer offers keeps it. Rows
+      // predate the list: every ROLL row in this database was saved as plain
+      // "FLEXOGRAPHIC", and dropping it here would blank a REQUIRED field the
+      // moment any of them is opened for an unrelated edit -- so the next save
+      // is either refused ("Printing Technology is required") or, once
+      // re-picked, quietly re-files the row under a technology nobody chose
+      // and changes its labelStockSignature with it. Only reached with a
+      // value already on the record; a fresh pick can only come from the list
+      // above, and switching Roll/Sheet clears it.
+      if (selectedValue && options.length && !options.includes(selectedValue)) {
+        options.push(selectedValue);
+      }
       select.innerHTML = options.length
         ? '<option value="" disabled hidden>Select printing technology</option>' +
           options.map((o) => `<option value="${o}" ${o === selectedValue ? "selected" : ""}>${o}</option>`).join("")

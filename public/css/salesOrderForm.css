@@ -1,0 +1,1479 @@
+/* ============================================================================
+   Sales Order — /sachiko/sales/order, /sachiko/sales/order/confirm
+   (views/inventory/orders/salesOrderForm.ejs)
+
+   Everything here is scoped under `.so-page` (the page's own .main-content),
+   so nothing leaks into the ~40 other forms that share common.css's global
+   `form { ... }` / `.span-*` rules.
+
+   The 32-column grid IS the contract with the page's JS: it sets
+   `style.gridColumn = "span N"` on the field wrappers (see
+   updateLabelStockFieldsVisibility / syncRemarksWidth / AI_HEADER_SPANS) and
+   every row is arithmetically built to total 32. So the grid is kept exactly
+   as it was and moved inside each section card's `.so-grid`; only the paint
+   changed. Don't flatten it.
+   ========================================================================= */
+
+/* On :root rather than .so-page because the dialogs render outside the page
+   wrapper and wear the same field paint. This stylesheet loads on the Sales
+   Order form and nowhere else, so :root is still this page. */
+:root {
+  --so-bg: #f4f6fa;
+  --so-surface: #ffffff;
+  --so-line: #e5eaf1;
+  --so-line-soft: #eef1f6;
+  --so-ink: #0f172a;
+  --so-ink-soft: #475569;
+  --so-muted: #64748b;
+  --so-faint: #94a3b8;
+  --so-brand: #044a78;
+  --so-brand-dark: #03365a;
+  --so-brand-soft: #eef4fa;
+  --so-ring: rgba(4, 74, 120, 0.13);
+  --so-danger: #e11d48;
+  --so-radius: 16px;
+  --so-radius-sm: 10px;
+  --so-field-h: 40px;
+  --so-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 26px -14px rgba(15, 23, 42, 0.16);
+
+  /* Fields carry their own weight rather than being hinted at. The form this
+     replaced drew every input in the brand blue (common.css: `.span-* input`
+     and `select`), so a hairline grey was a bigger change than the redesign
+     needed -- on a shopfloor monitor the boxes stopped being boxes. These
+     read as edges without going back to a page of blue rectangles. */
+  --so-field-border: #8fa1b8;
+  --so-field-border-hover: #6c819b;
+  --so-placeholder: #64748b;
+
+  /* Read-only stays plainly different from editable: no white ground, a
+     softer edge, and grey text. */
+  --so-field-ro-bg: #eaeff6;
+  --so-field-ro-border: #b4c1d1;
+  --so-field-ro-ink: #526175;
+}
+
+.so-page {
+  background: var(--so-bg);
+  padding: 18px 18px 0;
+  color: var(--so-ink);
+}
+
+/* Tabular figures everywhere a number is typed or shown, so columns of
+   quantities/rates line up instead of jittering per digit. */
+.so-page input,
+.so-page .ap-table td,
+.so-page .so-chip strong {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* ── Form shell ──────────────────────────────────────────────────────────
+   common.css gives every <form> a 2px brand border, 1rem padding and the
+   32-col grid. Here the form is just a stack of cards; the grid lives one
+   level down, inside each card. */
+.so-page .so-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  /* Fills the scroller even when the form is short, so the action bar below
+     lands on the bottom edge instead of floating half way down with empty
+     background under it -- which is what a two-card form looks like on a tall
+     screen, and what every form looks like inside the New Sales Order dialog.
+     It resolves against .so-page's content box, so it never adds a scrollbar
+     of its own. */
+  min-height: 100%;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  grid-template-columns: none;
+}
+
+/* ── Page header ─────────────────────────────────────────────────────── */
+.so-page .so-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 2px 2px 0;
+}
+
+.so-page .so-hero__eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--so-faint);
+}
+
+.so-page .so-hero h1 {
+  margin: 3px 0 0;
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--so-ink);
+}
+
+.so-page .so-hero__sub {
+  margin: 5px 0 0;
+  font-size: 13px;
+  font-weight: 450;
+  color: var(--so-muted);
+}
+
+.so-page .so-hero__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.so-page .so-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--so-surface);
+  border: 1px solid var(--so-line);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--so-muted);
+  white-space: nowrap;
+}
+
+.so-page .so-chip i {
+  font-size: 11px;
+  color: var(--so-faint);
+}
+
+.so-page .so-chip strong {
+  font-weight: 650;
+  color: var(--so-brand);
+}
+
+.so-page .so-chip--brand {
+  background: var(--so-brand-soft);
+  border-color: #d6e4f0;
+  color: var(--so-brand);
+}
+
+.so-page .so-chip--brand i {
+  color: var(--so-brand);
+}
+
+/* ── Section card ────────────────────────────────────────────────────── */
+.so-page .so-card {
+  background: var(--so-surface);
+  border: 1px solid var(--so-line);
+  border-radius: var(--so-radius);
+  box-shadow: var(--so-shadow);
+}
+
+.so-page .so-card__head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--so-line-soft);
+}
+
+.so-page .so-card__icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--so-brand-soft);
+  color: var(--so-brand);
+  font-size: 14px;
+}
+
+.so-page .so-card__titles {
+  min-width: 0;
+}
+
+.so-page .so-card__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--so-ink);
+}
+
+.so-page .so-card__aside {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A section with no heading (see .so-card--bare in the view) opens straight
+   on its fields, so it takes back the breathing space the heading's own top
+   padding was providing. */
+.so-page .so-card--bare > .so-grid {
+  padding-top: 20px;
+}
+
+/* ── The 32-column field grid (unchanged contract, new spacing) ───────── */
+.so-page .so-grid {
+  display: grid;
+  grid-template-columns: repeat(32, minmax(0, 1fr));
+  gap: 16px 14px;
+  padding: 18px 20px 20px;
+  align-items: start;
+}
+
+/* Strips common.css's per-field border/padding box: a field is a label and a
+   control, not a bordered card of its own. */
+.so-page .so-grid > [class*="span-"] {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 7px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--so-ink);
+}
+
+.so-page .so-grid > .so-full,
+.so-page .so-grid > .span-full {
+  grid-column: 1 / -1;
+}
+
+/* ── Labels ──────────────────────────────────────────────────────────── */
+.so-page .so-grid label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  line-height: 1.2;
+  color: var(--so-ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Red dot for a control that is actually required right now. `required` is a
+   reflected IDL attribute, so the marker follows the JS that toggles it
+   (item-select / quantity switch between modes) with no extra bookkeeping.
+   The second selector covers the selects Choices.js has re-parented into its
+   own wrapper, which are no longer siblings of their label. */
+.so-page .so-grid label:has(~ [required])::after,
+.so-page .so-grid label:has(~ .choices select[required])::after {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--so-danger);
+}
+
+.so-page #qty-unit-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--so-brand);
+  background: var(--so-brand-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+/* ── Controls ────────────────────────────────────────────────────────── */
+.so-page .so-grid .form-control {
+  width: 100%;
+  height: var(--so-field-h);
+  padding: 0 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: normal;
+  color: var(--so-ink);
+  background-color: var(--so-surface);
+  border: 1px solid var(--so-field-border);
+  border-radius: var(--so-radius-sm);
+  box-shadow: 0 1px 1.5px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.so-page .so-grid .form-control::placeholder {
+  color: var(--so-placeholder);
+  font-weight: 450;
+}
+
+.so-page .so-grid .form-control:hover:not(:focus):not([readonly]) {
+  border-color: var(--so-field-border-hover);
+}
+
+.so-page .so-grid .form-control:focus {
+  border-color: var(--so-brand);
+  background-color: var(--so-surface);
+  box-shadow: 0 0 0 3.5px var(--so-ring);
+  outline: none;
+}
+
+/* BTStrap.js tags every field .is-valid / .is-invalid on blur, and Bootstrap
+   answers that with a tick/cross background-image plus its own padding-right.
+   The tick lands on top of the value in a 40px field and the green border
+   marks every field anyone has merely tabbed through, so the icon and the
+   padding go and only a real error keeps a colour. */
+.so-page .so-grid .form-control.is-valid,
+.so-page .so-grid .form-control.is-invalid,
+.so-page .ai-table input.form-control.is-valid,
+.so-page .ai-table input.form-control.is-invalid {
+  background-image: none;
+  padding-right: 12px;
+}
+
+.so-page .so-grid .form-control.is-valid,
+.so-page .ai-table input.form-control.is-valid {
+  border-color: var(--so-field-border);
+}
+
+.so-page .so-grid .form-control.is-invalid,
+.so-page .ai-table input.form-control.is-invalid {
+  border-color: var(--so-danger);
+}
+
+.so-page .so-grid .form-control.is-valid:focus,
+.so-page .so-grid .form-control.is-invalid:focus,
+.so-page .ai-table input.form-control.is-valid:focus,
+.so-page .ai-table input.form-control.is-invalid:focus {
+  border-color: var(--so-brand);
+  box-shadow: 0 0 0 3.5px var(--so-ring);
+}
+
+.so-page .so-grid .form-control[readonly] {
+  background-color: var(--so-field-ro-bg);
+  color: var(--so-field-ro-ink);
+  border-color: var(--so-field-ro-border);
+  box-shadow: none;
+  cursor: default;
+}
+
+.so-page .so-grid input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.so-page .so-grid input[type="date"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 0.85;
+}
+
+/* The bare <select> is only ever the Choices.js source element here, but
+   style it anyway so a JS failure still leaves a usable control. */
+.so-page .so-grid select.form-control {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' stroke='%2364748b' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 11px 7px;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+/* ── Choices.js, matched to the plain inputs ─────────────────────────── */
+.so-page .choices {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.so-page .choices:last-child {
+  margin-bottom: 0;
+}
+
+.so-page .choices__inner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--so-field-h) !important;
+  height: var(--so-field-h);
+  padding: 0 32px 0 12px !important;
+  background: var(--so-surface) !important;
+  border: 1px solid var(--so-field-border) !important;
+  border-radius: var(--so-radius-sm) !important;
+  box-shadow: 0 1px 1.5px rgba(15, 23, 42, 0.03);
+  font-size: 13.5px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.so-page .choices:hover .choices__inner {
+  border-color: var(--so-field-border-hover) !important;
+}
+
+.so-page .choices.is-focused .choices__inner,
+.so-page .choices.choices--focused .choices__inner,
+.so-page .choices:focus-within .choices__inner,
+.so-page .choices.is-open .choices__inner {
+  border-color: var(--so-brand) !important;
+  box-shadow: 0 0 0 3.5px var(--so-ring) !important;
+}
+
+.so-page .choices.is-disabled .choices__inner {
+  background: var(--so-field-ro-bg) !important;
+  border-color: var(--so-field-ro-border) !important;
+  cursor: not-allowed;
+}
+
+.so-page .choices__list--single {
+  width: 100%;
+  padding: 0 !important;
+}
+
+.so-page .choices__list--single .choices__item {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--so-ink);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Only loadClients() marks its blank option `placeholder: true`, so without
+   this the other pickers show "Select User" / "Location" in full ink while
+   "Select Client" alone reads as a placeholder. Key off the empty value
+   instead, which every blank option here has. */
+.so-page .choices__list--single .choices__item[data-value=""],
+.so-page .so-grid select.form-control:required:invalid {
+  color: var(--so-placeholder);
+  font-weight: 450;
+}
+
+.so-page .choices__placeholder {
+  color: var(--so-placeholder) !important;
+  font-weight: 450;
+  opacity: 1 !important;
+}
+
+/* common.css kills the default arrow (`display:none !important`) — draw a
+   proper chevron back in, and flip it while the list is open. */
+.so-page .choices[data-type*="select-one"]::after {
+  display: block !important;
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 7px;
+  height: 7px;
+  margin: -5px 0 0;
+  border: none;
+  border-right: 1.7px solid var(--so-muted);
+  border-bottom: 1.7px solid var(--so-muted);
+  border-radius: 1px;
+  background: none;
+  transform: rotate(45deg);
+  pointer-events: none;
+  transition: transform 0.18s ease, margin-top 0.18s ease;
+}
+
+.so-page .choices[data-type*="select-one"].is-open::after {
+  margin-top: -2px;
+  transform: rotate(-135deg);
+  border-color: var(--so-brand);
+}
+
+.so-page .choices__list--dropdown,
+.so-page .choices__list[aria-expanded] {
+  margin-top: 6px;
+  padding: 5px;
+  background: var(--so-surface);
+  border: 1px solid var(--so-line);
+  border-radius: 12px;
+  box-shadow: 0 16px 38px -12px rgba(15, 23, 42, 0.26), 0 2px 6px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+
+.so-page .choices__list--dropdown .choices__list,
+.so-page .choices__list[aria-expanded] .choices__list {
+  max-height: 260px;
+}
+
+.so-page .choices__list--dropdown .choices__item,
+.so-page .choices__list[aria-expanded] .choices__item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--so-ink-soft);
+}
+
+.so-page .choices__list--dropdown .choices__item--selectable.is-highlighted,
+.so-page .choices__list[aria-expanded] .choices__item--selectable.is-highlighted {
+  background: var(--so-brand-soft);
+  color: var(--so-brand);
+}
+
+.so-page .choices__list--dropdown .choices__item--selectable[data-value=""],
+.so-page .choices__list[aria-expanded] .choices__item--selectable[data-value=""] {
+  color: var(--so-faint);
+}
+
+/* Client names run long; keep the list on one line per row. */
+.so-page #client-name-div .choices__list--dropdown .choices__item,
+.so-page #client-name-div .choices__list[aria-expanded] .choices__item,
+.so-page #client-name-div .choices__list--single .choices__item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Search box inside an open dropdown. */
+.so-page .choices__input {
+  width: 100%;
+  margin: 1px 0 5px;
+  padding: 8px 10px;
+  background: #f7f9fc;
+  border: 1px solid var(--so-line) !important;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--so-ink);
+}
+
+.so-page .choices__input:focus {
+  border-color: var(--so-brand) !important;
+  background: var(--so-surface);
+  outline: none;
+}
+
+/* ── Selected item / spec panel ──────────────────────────────────────── */
+/* renderOrderLabelStockLayerStack() paints its own #f8fafc panel, capped at
+   600px and centred — match it here so the two don't show a seam where the
+   centred panel ends. */
+.so-page #selected-item-details {
+  padding: 0;
+  background: #f8fafc;
+  border: 1px solid var(--so-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.so-page .ap-table-wrap {
+  overflow-x: auto;
+}
+
+.so-page .ap-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  table-layout: fixed;
+}
+
+.so-page .ap-table th,
+.so-page .ap-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--so-line-soft);
+  border-right: 1px solid var(--so-line-soft);
+  text-align: left;
+}
+
+.so-page .ap-table tr > *:last-child {
+  border-right: none;
+}
+
+.so-page .ap-table tr:last-child th,
+.so-page .ap-table tr:last-child td {
+  border-bottom: none;
+}
+
+.so-page .ap-table th {
+  width: 10%;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--so-faint);
+  white-space: nowrap;
+}
+
+.so-page .ap-table td {
+  font-weight: 600;
+  color: var(--so-ink);
+  word-break: break-word;
+}
+
+.so-page .ap-table th.ap-hl,
+.so-page .ap-table td.ap-hl {
+  background: var(--so-brand-soft);
+}
+
+.so-page .ap-table th.ap-hl,
+.so-page .ap-table td.ap-hl {
+  color: var(--so-brand);
+}
+
+/* ── Order Items table ───────────────────────────────────────────────── */
+/* Scrolls sideways only when the columns don't fit; while a Product Code
+   dropdown is open the JS adds .dropdown-open so the list isn't clipped. */
+.so-page .ai-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--so-line);
+  border-radius: 12px;
+  background: var(--so-surface);
+}
+
+.so-page .ai-table-wrap.dropdown-open {
+  overflow: visible;
+}
+
+.so-page .ai-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.so-page .ai-table th {
+  padding: 10px 12px;
+  background: #f7f9fc;
+  border-bottom: 1px solid var(--so-line);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--so-muted);
+  white-space: nowrap;
+  text-align: left;
+}
+
+.so-page .ai-table th:first-child {
+  border-top-left-radius: 11px;
+}
+
+.so-page .ai-table th:last-child {
+  border-top-right-radius: 11px;
+}
+
+.so-page .ai-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--so-line-soft);
+  vertical-align: middle;
+}
+
+.so-page .ai-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.so-page .ai-table tbody tr:hover {
+  background: #fbfcfe;
+}
+
+/* JS writes the plain number into this cell (aiRenumber) — paint it as a
+   counter chip rather than adding markup the JS would have to maintain. */
+.so-page .ai-table .ai-row-num {
+  padding-left: 10px;
+  padding-right: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--so-faint);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.so-page .ai-table input.form-control {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--so-ink);
+  background: var(--so-surface);
+  border: 1px solid var(--so-field-border);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.so-page .ai-table input.form-control::placeholder {
+  color: var(--so-placeholder);
+  font-weight: 450;
+}
+
+.so-page .ai-table input.form-control:focus {
+  border-color: var(--so-brand);
+  box-shadow: 0 0 0 3px var(--so-ring);
+  outline: none;
+}
+
+.so-page #additional-items-table .choices {
+  margin-bottom: 0;
+}
+
+.so-page #additional-items-table .choices__inner {
+  min-height: 36px !important;
+  height: 36px;
+  border-radius: 8px !important;
+}
+
+.so-page #additional-items-table .choices__list--dropdown {
+  z-index: 99999;
+}
+
+/* Auto-filled Rate / default RM awaiting acknowledgement — amber until the
+   figure has actually been looked at (see aiValidateRows). */
+.so-page .ai-table input.ai-rate-unack,
+.so-page .ai-table input.ai-rm-unack {
+  background: #fffbeb !important;
+  border-color: #fcd34d !important;
+  color: #92400e;
+}
+
+.so-page .ai-table input.ai-rate-unack:focus,
+.so-page .ai-table input.ai-rm-unack:focus {
+  background: var(--so-surface) !important;
+  border-color: var(--so-brand) !important;
+  color: var(--so-ink);
+}
+
+.so-page .ai-remove {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.so-page .ai-remove:hover {
+  background: #fef2f2;
+  color: var(--so-danger);
+}
+
+.so-page .ai-add-btn {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  background: var(--so-surface);
+  border: 1px dashed #c3cfdd;
+  border-radius: 10px;
+  color: var(--so-brand);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.so-page .ai-add-btn:hover {
+  background: var(--so-brand-soft);
+  border-color: var(--so-brand);
+  border-style: solid;
+}
+
+.so-page .ai-add-btn i {
+  font-size: 11px;
+}
+
+/* ── Alerts ──────────────────────────────────────────────────────────── */
+.so-page .so-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.so-page .so-alert i {
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+/* checkStockWarning() sets display:"block" on #stock-warning, so it renders
+   in block flow rather than as a flex row -- space the icon either way. */
+.so-page .so-alert > i {
+  margin-right: 8px;
+}
+
+.so-page .so-alert--warn {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+/* The dispatch-log panel stacks its head and rows instead of sitting on one
+   line, and its children need the full width (align-items on .so-alert is
+   flex-start, which would shrink them to their text). */
+.so-page .so-alert--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.so-page .so-alert--info {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+}
+
+/* ── Dispatch log list (confirm mode) ────────────────────────────────── */
+.so-page .so-logs__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #e0f2fe;
+  font-size: 13px;
+}
+
+.so-page .so-log-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px dashed #e0f2fe;
+  font-size: 12.5px;
+}
+
+.so-page .so-log-row:last-child {
+  border-bottom: none;
+}
+
+.so-page .so-log-row__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.so-page .so-log-date {
+  color: var(--so-muted);
+  font-size: 11.5px;
+}
+
+.so-page .so-log-invoice {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #e0f2fe;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+}
+
+.so-page .so-icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.so-page .so-icon-btn:hover {
+  background: #e0f2fe;
+  color: var(--so-brand);
+}
+
+.so-page .so-icon-btn--danger:hover {
+  background: #fee2e2;
+  color: var(--so-danger);
+}
+
+.so-page .logs-scroll {
+  max-height: 150px;
+  overflow-y: auto;
+  padding-right: 6px;
+  width: 100%;
+}
+
+/* ── In a dialog: one sheet, not three cards ─────────────────────────────
+   .is-embedded is set by the view when it renders with ?embed=1. A dialog is
+   already a raised white surface, so raising three more cards inside it reads
+   as boxes in a box. The sections keep their headings and go flat instead,
+   separated by a rule -- and the rule is put on every section that FOLLOWS
+   another one (`~`, not `+`), so it survives the stock warning appearing
+   between two of them. */
+.so-page.is-embedded {
+  background: #ffffff;
+}
+
+.so-page.is-embedded .so-form {
+  gap: 0;
+}
+
+.so-page.is-embedded .so-card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.so-page.is-embedded .so-card ~ .so-card {
+  border-top: 1px solid var(--so-line);
+}
+
+/* The heading and its own fields are one section now, so the line that used
+   to divide them would read as a second, weaker separator right under the
+   real one. */
+.so-page.is-embedded .so-card__head {
+  padding: 16px 20px 2px;
+  border-bottom: none;
+}
+
+.so-page.is-embedded .so-grid,
+.so-page.is-embedded .so-card__body {
+  padding: 14px 20px 20px;
+}
+
+/* The alerts are siblings of the sections, so they need the same side gutter
+   the sections have rather than sitting flush against the dialog edge. */
+.so-page.is-embedded .so-card--bare > .so-grid {
+  padding-top: 18px;
+}
+
+.so-page.is-embedded .so-alert {
+  margin: 0 20px 16px;
+}
+
+/* ── Scrollbars ──────────────────────────────────────────────────────── */
+/* One scrollbar for every surface this page scrolls, in the app's own blue:
+   the page itself, the Order Items strip, the selected-item spec table and
+   layer stack, the dispatch-log list, an open Choices dropdown and the
+   dialogs. Same tokens as every Tabulator table (tableDisp.css) and the
+   Deckle Calculator (deckleCalculator.css), restated because this page loads
+   its own stylesheet and inherits none of that. Matched on the class so a
+   surface added later is covered by being given one, rather than by being
+   remembered here.
+
+   The page scroll needs BOTH selectors: there are two nested .main-content
+   divs (boilerplate.ejs wraps the view in one, and this view's own root
+   carries the class too) and either can be the one that ends up with the
+   bar. The wrapper is reached through :has(), the only way to name a parent,
+   written as `> .so-page` so it matches this page's wrapper and no one
+   else's. Class-plus-class beats common.css's single-class 4px near-black
+   bar, so no !important is needed.
+
+   The last rule in each pair is the Firefox longhand -- it ignores every
+   ::-webkit- line above, and without it Firefox draws the OS default at OS
+   width. */
+.so-page .ai-table-wrap::-webkit-scrollbar,
+.so-page .ap-table-wrap::-webkit-scrollbar,
+.so-page .logs-scroll::-webkit-scrollbar,
+.so-page .custom-scrollbar::-webkit-scrollbar,
+.so-page .choices__list--dropdown .choices__list::-webkit-scrollbar,
+.so-page .choices__list[aria-expanded] .choices__list::-webkit-scrollbar,
+.so-dialog__body::-webkit-scrollbar,
+.so-dialog textarea::-webkit-scrollbar,
+.main-content.so-page::-webkit-scrollbar,
+.main-content:has(> .so-page)::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.so-page .ai-table-wrap::-webkit-scrollbar-track,
+.so-page .ap-table-wrap::-webkit-scrollbar-track,
+.so-page .logs-scroll::-webkit-scrollbar-track,
+.so-page .custom-scrollbar::-webkit-scrollbar-track,
+.so-page .choices__list--dropdown .choices__list::-webkit-scrollbar-track,
+.so-page .choices__list[aria-expanded] .choices__list::-webkit-scrollbar-track,
+.so-dialog__body::-webkit-scrollbar-track,
+.so-dialog textarea::-webkit-scrollbar-track,
+.main-content.so-page::-webkit-scrollbar-track,
+.main-content:has(> .so-page)::-webkit-scrollbar-track {
+  background: #f0f2f5;
+  border-radius: 6px;
+}
+
+.so-page .ai-table-wrap::-webkit-scrollbar-thumb,
+.so-page .ap-table-wrap::-webkit-scrollbar-thumb,
+.so-page .logs-scroll::-webkit-scrollbar-thumb,
+.so-page .custom-scrollbar::-webkit-scrollbar-thumb,
+.so-page .choices__list--dropdown .choices__list::-webkit-scrollbar-thumb,
+.so-page .choices__list[aria-expanded] .choices__list::-webkit-scrollbar-thumb,
+.so-dialog__body::-webkit-scrollbar-thumb,
+.so-dialog textarea::-webkit-scrollbar-thumb,
+.main-content.so-page::-webkit-scrollbar-thumb,
+.main-content:has(> .so-page)::-webkit-scrollbar-thumb {
+  background: #044a78;
+  border-radius: 6px;
+}
+
+.so-page .ai-table-wrap::-webkit-scrollbar-thumb:hover,
+.so-page .ap-table-wrap::-webkit-scrollbar-thumb:hover,
+.so-page .logs-scroll::-webkit-scrollbar-thumb:hover,
+.so-page .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.so-page .choices__list--dropdown .choices__list::-webkit-scrollbar-thumb:hover,
+.so-page .choices__list[aria-expanded] .choices__list::-webkit-scrollbar-thumb:hover,
+.so-dialog__body::-webkit-scrollbar-thumb:hover,
+.so-dialog textarea::-webkit-scrollbar-thumb:hover,
+.main-content.so-page::-webkit-scrollbar-thumb:hover,
+.main-content:has(> .so-page)::-webkit-scrollbar-thumb:hover {
+  background: #06639f;
+}
+
+.so-page .ai-table-wrap::-webkit-scrollbar-corner,
+.so-page .ap-table-wrap::-webkit-scrollbar-corner,
+.main-content.so-page::-webkit-scrollbar-corner,
+.main-content:has(> .so-page)::-webkit-scrollbar-corner {
+  background: #f0f2f5;
+}
+
+/* Firefox */
+.so-page .ai-table-wrap,
+.so-page .ap-table-wrap,
+.so-page .logs-scroll,
+.so-page .custom-scrollbar,
+.so-page .choices__list--dropdown .choices__list,
+.so-page .choices__list[aria-expanded] .choices__list,
+.so-dialog__body,
+.so-dialog textarea,
+.main-content.so-page,
+.main-content:has(> .so-page) {
+  scrollbar-width: thin;
+  scrollbar-color: #044a78 #f0f2f5;
+}
+
+/* ── Sticky action bar ───────────────────────────────────────────────── */
+.so-page .so-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  /* margin-top:auto is what actually pushes the bar down once .so-form is
+     taller than its content (above); the negative sides make it full-bleed. */
+  margin: auto -18px 0;
+  padding: 13px 18px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  border-top: 1px solid var(--so-line);
+  border-radius: 0;
+}
+
+.so-page .so-actions__hint {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 450;
+  color: var(--so-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.so-page .so-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--so-radius-sm);
+  border: 1px solid transparent;
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease,
+    transform 0.08s ease, color 0.15s ease;
+}
+
+.so-page .so-btn i {
+  font-size: 12px;
+}
+
+.so-page .so-btn:active {
+  transform: translateY(1px);
+}
+
+.so-page .so-btn--primary {
+  background: var(--so-brand);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(4, 74, 120, 0.3), 0 8px 18px -10px rgba(4, 74, 120, 0.7);
+}
+
+.so-page .so-btn--primary:hover {
+  background: var(--so-brand-dark);
+}
+
+.so-page .so-btn--primary:disabled {
+  background: #9fb3c4;
+  box-shadow: none;
+  cursor: progress;
+}
+
+.so-page .so-btn--ghost {
+  background: var(--so-surface);
+  border-color: var(--so-field-border);
+  color: var(--so-ink-soft);
+}
+
+.so-page .so-btn--ghost:hover {
+  background: #f7f9fc;
+  border-color: var(--so-field-border-hover);
+  color: var(--so-ink);
+}
+
+.so-page .so-btn--danger {
+  background: var(--so-danger);
+  color: #fff;
+}
+
+.so-page .so-btn--danger:hover {
+  background: #be123c;
+}
+
+/* ── Dialogs ─────────────────────────────────────────────────────────── */
+.so-dialog-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.so-dialog {
+  width: 440px;
+  max-width: 100%;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.45);
+  animation: soDialogIn 0.18s ease-out;
+  overflow: hidden;
+}
+
+.so-dialog--sm {
+  width: 400px;
+}
+
+@keyframes soDialogIn {
+  from {
+    transform: translateY(6px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.so-dialog__head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #eef1f6;
+}
+
+.so-dialog__icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef4fa;
+  color: #044a78;
+  font-size: 13px;
+}
+
+.so-dialog__icon--danger {
+  background: #fee2e2;
+  color: #e11d48;
+}
+
+.so-dialog__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.so-dialog__desc {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 450;
+  color: #94a3b8;
+}
+
+.so-dialog__body {
+  padding: 18px 20px;
+}
+
+.so-dialog__body p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.so-dialog__field + .so-dialog__field {
+  margin-top: 14px;
+}
+
+.so-dialog__field > label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.so-dialog__field .so-req {
+  color: #e11d48;
+}
+
+.so-dialog__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  background: #f8fafc;
+  border-top: 1px solid #eef1f6;
+}
+
+/* The dialogs live outside .so-page in confirm mode, so give them their own
+   copy of the button/field paint rather than relying on the page scope. */
+.so-dialog input,
+.so-dialog textarea {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #0f172a;
+  background: #fff;
+  border: 1px solid var(--so-field-border);
+  border-radius: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.so-dialog textarea {
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.45;
+  resize: none;
+  font-family: inherit;
+}
+
+.so-dialog input:focus,
+.so-dialog textarea:focus {
+  border-color: #044a78;
+  box-shadow: 0 0 0 3.5px rgba(4, 74, 120, 0.13);
+  outline: none;
+}
+
+.so-dialog .so-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.so-dialog .so-btn--primary {
+  background: #044a78;
+  color: #fff;
+}
+
+.so-dialog .so-btn--primary:hover {
+  background: #03365a;
+}
+
+.so-dialog .so-btn--ghost {
+  background: #fff;
+  border-color: var(--so-field-border);
+  color: #475569;
+}
+
+.so-dialog .so-btn--ghost:hover {
+  background: var(--so-field-ro-bg);
+}
+
+.so-dialog .so-btn--danger {
+  background: #e11d48;
+  color: #fff;
+}
+
+.so-dialog .so-btn--danger:hover {
+  background: #be123c;
+}
+
+/* ── Stock-status bar ────────────────────────────────────────────────── */
+/* Hidden from the top of this form — !important so it stays hidden even
+   though updateStockDisplay() still rebuilds and re-shows it
+   (stockDisplay.style.display = "block") as the client/item/location
+   selection changes. That JS is left running because it is also what keeps
+   the hidden #source-location input in sync, which POST /sales/order reads. */
+.so-page #stock-display {
+  display: none !important;
+}
+
+.so-page .location-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 5px;
+  padding: 5px 8px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.so-page .location-option:hover {
+  background: #f0f4f9;
+}
+
+.so-page .location-option.selected {
+  border-color: var(--so-brand);
+  background: var(--so-brand-soft);
+}
+
+.so-page .location-radio {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--so-brand);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.so-page .location-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--so-brand);
+  cursor: pointer;
+}
+
+.so-page .location-qty {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--so-brand);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+/* The page's JS writes inline `grid-column: span N`, which outranks any
+   stylesheet rule — hence !important here, or the 32-col row would survive
+   onto a phone as a line of 40px-wide fields. */
+/* Narrow screens drop the 32-column track entirely rather than just
+   re-spanning inside it: 32 columns carry 31 column gaps, so the grid can
+   never be narrower than ~434px however the children span, and the card
+   overflowed the viewport on a phone. Fewer, equal columns instead. */
+@media screen and (max-width: 1280px) {
+  .so-page .so-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .so-page .so-grid > [class*="span-"] {
+    grid-column: span 1 !important;
+  }
+
+  .so-page .so-grid > .so-full,
+  .so-page .so-grid > .span-full,
+  .so-page .so-grid > #logs-wrapper {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media screen and (max-width: 900px) {
+  .so-page .so-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* common.css sets `.contain { height: 100vh }` below 1024px while <nav> still
+   takes 38px above it, so the app box hangs 38px past the window and whatever
+   sits at the bottom of the scroller is clipped. That is harmless on a page
+   whose last row is just more form, but here it cuts the sticky action bar —
+   and the primary button with it. Corrected for this page only; :has() makes
+   an unsupported browser drop the rule rather than misapply it. */
+@media screen and (max-width: 1024px) {
+  .contain:has(.so-page) {
+    height: calc(100vh - 38px);
+  }
+}
+
+@media screen and (max-width: 1100px) {
+  .so-page .so-actions__hint {
+    display: none;
+  }
+}
+
+@media screen and (max-width: 620px) {
+  .so-page {
+    padding: 12px 12px 0;
+  }
+
+  .so-page .so-grid {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px 14px 16px;
+  }
+
+  .so-page .so-grid > [class*="span-"] {
+    grid-column: 1 / -1 !important;
+  }
+
+  .so-page .so-card__head {
+    padding: 13px 14px;
+  }
+
+  .so-page .so-hero h1 {
+    font-size: 21px;
+  }
+
+  .so-page .so-actions {
+    margin: auto -12px 0;
+    padding: 11px 12px;
+  }
+
+  .so-page .so-actions .so-btn {
+    flex: 1 1 auto;
+  }
+}

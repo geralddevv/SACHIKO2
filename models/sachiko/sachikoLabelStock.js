@@ -42,7 +42,10 @@ const sachikoLabelStockSchema = new mongoose.Schema(
     // to seed a TBD-style placeholder here the same way it does for the
     // other required String fields on this schema.
     rollOrSheet: { type: String, required: true, trim: true },
-    // SHEET -> DIGITAL, OFFSET. ROLL -> FLEXOGRAPHIC, GRAVURE, LETTER PRESS.
+    // SHEET -> DIGITAL, OFFSET. ROLL -> "FLEXOGRAPHIC / GRAVURE / LETTER PRESS"
+    // (one combined value, not three) or DIGITAL. Free text, no enum: rows
+    // saved before that list settled hold plain "FLEXOGRAPHIC", and the edit
+    // dialog keeps whatever a row was saved under rather than blanking it.
     printingTechnology: { type: String, required: true, trim: true },
     // Only set when printingTechnology is DIGITAL (SHEET only): LASER or INK.
     digitalPrintType: { type: String, trim: true },

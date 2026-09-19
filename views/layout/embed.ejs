@@ -1,0 +1,149 @@
+<%#
+  Bare layout for a view that is rendered INSIDE a dialog on another page
+  (see the New Sales Order dialog on /sales/pending): no nav, no side nav, no
+  .contain wrapper -- just the view, filling the frame it is dropped into.
+
+  It carries the same head, the same stylesheets and the same four scripts as
+  boilerplate.ejs, in the same order, because the views it hosts are written
+  against that set: common.js (the CSRF fetch wrapper, the uppercase-on-input
+  rule and the session watchdog all live there), Bootstrap, BTStrap.js and
+  Choices.js. A view must behave identically whichever layout renders it, so
+  when boilerplate's script list changes, change this one with it.
+
+  The toast is here too, with the same ids and the same showToast() signature:
+  a view calls showToast() without knowing which layout it got.
+-%>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="csrf-token" content="<%= csrfToken %>" />
+    <meta name="session-expires-at" content="<%= sessionExpiresAt || '' %>" />
+    <%# Where common.js sends this user when their session ends -- operators
+        sign in at their own portal, not the staff login. %>
+    <meta name="login-url" content="<%= (authUser && authUser.role === 'operator') ? '/app/operator/login' : '/app/login' %>" />
+    <title><%= title %></title>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <link rel="stylesheet" href="/bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="/css/choices.min.css" />
+    <link rel="stylesheet" href="/css/common.css?v=8" />
+    <% if (CSS) { %>
+    <link rel="stylesheet" href="/css/<%= CSS %>" />
+    <% } %>
+
+    <style>
+      /* The frame IS the viewport here, so the document fills it and the
+         view's own root does the scrolling -- which is what keeps a sticky
+         footer inside the view stuck to the bottom of the dialog. */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #f4f6fa;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      body > * {
+        min-height: 0;
+      }
+
+      /* Same toast as boilerplate.ejs, minus the sidebar offset. It shows
+         inside the dialog, which is where the eye already is. */
+      .toast-notification {
+        position: fixed;
+        bottom: 20px;
+        right: -300px;
+        background-color: #d1e7dd;
+        color: #0a3646;
+        padding: 12px 40px 12px 15px;
+        border-radius: 8px;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+        z-index: 100000;
+        font-size: 15px;
+        border-left: 4px solid #0a3646;
+        animation: slideIn 0.5s forwards;
+      }
+      .toast-close {
+        position: absolute;
+        right: 12px;
+        top: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 18px;
+        color: #0a3646;
+      }
+      .toast-success {
+        background-color: #d1e7dd;
+        color: #0a3646;
+        border-left: 4px solid #0a3646;
+      }
+      .toast-error {
+        background-color: #f8d7da;
+        color: #842029;
+        border-left: 4px solid #842029;
+      }
+      @keyframes slideIn {
+        from { right: -300px; opacity: 0; }
+        to { right: 20px; opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { right: 20px; opacity: 1; }
+        to { right: -300px; opacity: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Client-side Toast Container (Dynamic) -->
+    <div id="fd-toast" class="toast-notification toast-success" style="display: none; opacity: 0;">
+      <span id="fd-toast-msg"></span>
+      <span class="toast-close" onclick="hideFdToast()">×</span>
+    </div>
+
+    <script>
+      function showToast(message, type = 'success') {
+        const t = document.getElementById("fd-toast");
+        const m = document.getElementById("fd-toast-msg");
+        if (!t || !m) return;
+
+        let toastType = type;
+        if (type === true) toastType = 'error';
+        if (type === false) toastType = 'success';
+
+        const icon = toastType === 'success'
+          ? '<i class="fa-solid fa-circle-check" style="margin-right: 8px;"></i>'
+          : '<i class="fa-solid fa-triangle-exclamation" style="margin-right: 8px;"></i>';
+
+        m.innerHTML = icon + message;
+        t.className = `toast-notification toast-${toastType}`;
+        t.style.display = "block";
+        t.style.animation = "slideIn 0.5s forwards";
+
+        setTimeout(hideFdToast, 4000);
+      }
+
+      function hideFdToast() {
+        const t = document.getElementById("fd-toast");
+        if (!t) return;
+        t.style.animation = "slideOut 0.5s forwards";
+        setTimeout(() => { t.style.display = "none"; }, 500);
+      }
+    </script>
+
+    <%- body -%>
+
+    <script src="/js/common.js?v=nav-default-open" defer></script>
+    <script src="/bootstrap/js/bootstrap.bundle.min.js" defer></script>
+    <script src="/js/BTStrap.js" defer></script>
+    <script src="/js/choices.min.js" defer></script>
+    <% if (JS) { %>
+    <script src="/js/<%= JS %>" defer></script>
+    <% } %>
+  </body>
+</html>

@@ -1,26 +1,71 @@
-<% layout('/layout/boilerplate') -%>
+<%
+  // `embed` (GET /sales/order?embed=1) renders this same form with no nav and
+  // no side nav, so it can be dropped into the New Sales Order dialog on
+  // /sales/pending. Nothing about the form itself changes -- same fields,
+  // same JS, same POST -- only the frame around it and where "saved" goes.
+  const _embed = typeof embed !== 'undefined' && embed;
+%>
+<% layout(_embed ? '/layout/embed' : '/layout/boilerplate') -%>
 
-<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form id="sales-order-form" action="<%= typeof confirmMode !== 'undefined' && confirmMode ? '/app/sales/order/status' : '/app/sales/order' %>" method="post" class="needs-validation" autocomplete="off" novalidate>
+<%
+  // Page framing — the three modes this one view serves: create, edit and
+  // dispatch (confirmMode). Computed once here so the markup below reads as
+  // a page instead of a chain of inline ternaries.
+  const _isConfirm = typeof confirmMode !== 'undefined' && confirmMode;
+  const _editing = (typeof orderToEdit !== 'undefined' && orderToEdit) ? orderToEdit : null;
+  const _pageTitle = _isConfirm ? 'Dispatch Order' : (_editing ? 'Edit Sales Order' : 'New Sales Order');
+  const _pageSub = _isConfirm
+    ? 'Record what physically went out against this order and against which invoice.'
+    : (_editing
+        ? 'Change the client, item or quantities on an order already on the books.'
+        : 'Raise a client PO — pick the product, paper size and quantity, and the rate follows the binding.');
+  const _submitLabel = _isConfirm ? 'Dispatch Order' : (_editing ? 'Update Order' : 'Create Order');
+  const _submitIcon = _isConfirm ? 'fa-check-double' : 'fa-check';
+  const _heroDate = _editing ? (_editing.poDate || _editing.createdAt) : null;
+  const _heroDateStr = _heroDate
+    ? new Date(_heroDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: '2-digit' })
+    : null;
+%>
+
+<div class="main-content so-page<%= _embed ? " is-embedded" : "" %>">
+  <form id="sales-order-form" action="<%= _isConfirm ? '/app/sales/order/status' : '/app/sales/order' %>" method="post" class="needs-validation so-form" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-    <input type="hidden" name="orderId" value="<%= typeof orderToEdit !== 'undefined' && orderToEdit ? orderToEdit._id : '' %>" />
+    <input type="hidden" name="orderId" value="<%= _editing ? _editing._id : '' %>" />
     <input type="hidden" name="submissionToken" value="<%= typeof submissionToken !== 'undefined' && submissionToken ? submissionToken : '' %>" />
-    <% if (typeof confirmMode !== 'undefined' && confirmMode) { %>
+    <% if (_isConfirm) { %>
       <input type="hidden" name="status" value="CONFIRMED" />
     <% } %>
-    <div class="span-full form-heading">
-      <h1><%= typeof confirmMode !== 'undefined' && confirmMode ? 'Dispatch Order' : (typeof orderToEdit !== 'undefined' && orderToEdit ? 'Edit Sales Order' : 'Sales Order') %></h1>
-      <% if (typeof orderToEdit !== 'undefined' && orderToEdit) {
-           const _dispDate = orderToEdit.poDate || orderToEdit.createdAt;
-           const _dispDateStr = _dispDate ? new Date(_dispDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: '2-digit' }) : null;
-      %>
-        <% if (_dispDateStr) { %>
-          <span style="font-size:13px; font-weight:500; color:#6b7280; margin-left:10px;">
-            <%= orderToEdit.poDate ? 'PO Date:' : 'Created:' %> <strong style="color:#044a78;"><%= _dispDateStr %></strong>
+
+    <!-- ================= PAGE HEADER =================
+         Suppressed in the dialog: the dialog draws its own header, and two
+         titles one above the other reads as a mistake. -->
+    <% if (!_embed) { %>
+    <header class="so-hero">
+      <div class="so-hero__text">
+        <span class="so-hero__eyebrow">Sales</span>
+        <h1><%= _pageTitle %></h1>
+        <p class="so-hero__sub"><%= _pageSub %></p>
+      </div>
+      <div class="so-hero__meta">
+        <% if (_editing && _editing.poNumber) { %>
+          <span class="so-chip so-chip--brand" title="PO Number">
+            <i class="fa-solid fa-hashtag"></i><strong><%= _editing.poNumber %></strong>
           </span>
         <% } %>
-      <% } %>
-    </div>
+        <% if (_heroDateStr) { %>
+          <span class="so-chip">
+            <i class="fa-regular fa-calendar"></i><%= _editing.poDate ? 'PO Date' : 'Created' %>
+            <strong><%= _heroDateStr %></strong>
+          </span>
+        <% } %>
+        <% if (_editing && _editing.status) { %>
+          <span class="so-chip" title="Order status">
+            <i class="fa-regular fa-circle-dot"></i><strong><%= _editing.status %></strong>
+          </span>
+        <% } %>
+      </div>
+    </header>
+    <% } %>
 
     <%
       const initialLocations = Array.isArray(locations) ? locations : [];
@@ -46,8 +91,10 @@
       }).join("");
     %>
 
-    <!-- Stock Status Bar with Location Selection -->
-    <div id="stock-display" class="span-full" style="display: flex; padding: 10px 15px; background: #fff; border: 1px solid #044A78; border-radius: 0.5rem; transition: all 0.3s ease; overflow-x: auto; overflow-y: hidden;">
+    <!-- Stock status bar with location selection. Hidden by the stylesheet
+         (see #stock-display there) but still rebuilt by updateStockDisplay(),
+         which is what keeps #source-location in sync for POST /sales/order. -->
+    <div id="stock-display" style="display: flex; padding: 10px 15px; background: #fff; border: 1px solid #044A78; border-radius: 0.5rem; overflow-x: auto; overflow-y: hidden;">
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 22px; flex-wrap: nowrap; width: max-content; min-width: 100%;">
         <div style="display: flex; flex-wrap: nowrap; align-items: center; white-space: nowrap;">
           <label class="location-option selected" data-location="ALL" data-qty="<%= initialTotal %>" data-booked="<%= initialBooked %>" data-balance="<%= initialBalance %>">
@@ -72,171 +119,190 @@
     </div>
     <input type="hidden" name="sourceLocation" id="source-location" />
 
-    <!-- ================= ORDER TYPE ================= -->
-    <div class="span-full form-subheading">
-      <h1>Order Details</h1>
-    </div>
+    <!-- ================= ORDER DETAILS ================= -->
+    <section class="so-card">
+      <div class="so-card__head">
+        <span class="so-card__icon"><i class="fa-solid fa-layer-group"></i></span>
+        <div class="so-card__titles">
+          <h2 class="so-card__title">Order Details</h2>
+        </div>
+      </div>
 
-    <div class="span-four" id="deckle-option-div">
-      <label for="deckle-option">Deckle Option</label>
-      <select name="deckleOption" id="deckle-option" class="form-control select-tag" required>
-        <option value="" disabled selected hidden>Select Option</option>
-        <option value="DECKLE_FREE">Deckle Free</option>
-        <option value="DECKLE_SET">Deckle Set</option>
-      </select>
-    </div>
+      <div class="so-grid">
+        <div class="span-four" id="deckle-option-div">
+          <label for="deckle-option">Deckle Option</label>
+          <select name="deckleOption" id="deckle-option" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Select Option</option>
+            <option value="DECKLE_FREE">Deckle Free</option>
+            <option value="DECKLE_SET">Deckle Set</option>
+          </select>
+        </div>
 
-    <div class="span-four" id="item-type-div">
-      <label for="item-type">Item Type</label>
-      <select name="itemType" id="item-type" class="form-control select-tag" required>
-        <option value="" disabled selected hidden>Select Item Type</option>
-        <option value="ROLL">Roll</option>
-        <option value="SHEET">Sheet</option>
-      </select>
-    </div>
+        <div class="span-four" id="item-type-div">
+          <label for="item-type">Item Type</label>
+          <select name="itemType" id="item-type" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Select Item Type</option>
+            <option value="ROLL">Roll</option>
+            <option value="SHEET">Sheet</option>
+          </select>
+        </div>
 
-    <div class="span-six" id="client-name-div">
-      <label for="client-name">Client Name</label>
-      <select name="clientName" id="client-name" class="form-control select-tag" required>
-        <option value="" disabled selected hidden>Select Client</option>
-        <% clients?.forEach(client => { %>
-          <option value="<%= client %>"><%= client %></option>
-        <% }) %>
-      </select>
-    </div>
+        <div class="span-six" id="client-name-div">
+          <label for="client-name">Client Name</label>
+          <select name="clientName" id="client-name" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Select Client</option>
+            <% clients?.forEach(client => { %>
+              <option value="<%= client %>"><%= client %></option>
+            <% }) %>
+          </select>
+        </div>
 
-    <div class="span-six" id="user-name-div">
-      <label for="user-name">User Name</label>
-      <select name="userId" id="user-name" class="form-control select-tag" required>
-        <option value="" disabled selected hidden>Select User</option>
-      </select>
-      <input type="hidden" name="userName" id="user-name-hidden" />
-    </div>
+        <div class="span-six" id="user-name-div">
+          <label for="user-name">User Name</label>
+          <select name="userId" id="user-name" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Select User</option>
+          </select>
+          <input type="hidden" name="userName" id="user-name-hidden" />
+        </div>
 
-    <div class="span-five" id="user-location-div">
-      <label for="user-location">Location</label>
-      <select id="user-location" name="userLocation" class="form-control select-tag">
-        <option value="" disabled selected hidden>Location</option>
-      </select>
-    </div>
+        <div class="span-five" id="user-location-div">
+          <label for="user-location">Location</label>
+          <select id="user-location" name="userLocation" class="form-control select-tag">
+            <option value="" disabled selected hidden>Location</option>
+          </select>
+        </div>
 
-    <div class="span-seven" id="item-select-wrap">
-      <label for="item-select">Select Item</label>
-      <select name="itemId" id="item-select" class="form-control select-tag" required>
-        <option value="" disabled selected hidden>Select Item</option>
-      </select>
-    </div>
+        <div class="span-seven" id="item-select-wrap">
+          <label for="item-select">Select Item</label>
+          <select name="itemId" id="item-select" class="form-control select-tag" required>
+            <option value="" disabled selected hidden>Select Item</option>
+          </select>
+        </div>
 
-    <!-- Label Stock items can share the same product code across several
-         bindings that only differ by paper size / running meters, so a single
-         "Select Item" dropdown (labelled just by product code) can't tell
-         them apart. For LABEL_STOCK this select replaces it and resolves down
-         to a matching binding (the first one found, if more than one shares
-         the code), which then drives the same hidden #item-select (and
-         therefore all the existing rate/stock/details logic) exactly as a
-         direct pick would. -->
-    <div class="span-three" id="label-stock-product-div" style="display:none;">
-      <label for="label-stock-product-select">Product Code</label>
-      <select id="label-stock-product-select" class="form-control select-tag">
-        <option value="" disabled selected hidden>Select Product Code</option>
-      </select>
-      <!-- Set only when the picked product has no existing Label Stock
-           Binding for this client/user -- POST /sales/order auto-creates one
-           from this master id plus whatever's typed for Rate/Paper Size/RM,
-           instead of requiring the binding to already exist (itemId stays
-           empty in that case; see onLabelStockProductChange). -->
-      <input type="hidden" name="labelStockMasterId" id="label-stock-master-id" />
-    </div>
+        <!-- Label Stock items can share the same product code across several
+             bindings that only differ by paper size / running meters, so a single
+             "Select Item" dropdown (labelled just by product code) can't tell
+             them apart. For LABEL_STOCK this select replaces it and resolves down
+             to a matching binding (the first one found, if more than one shares
+             the code), which then drives the same hidden #item-select (and
+             therefore all the existing rate/stock/details logic) exactly as a
+             direct pick would. -->
+        <div class="span-three" id="label-stock-product-div" style="display:none;">
+          <label for="label-stock-product-select">Product Code</label>
+          <select id="label-stock-product-select" class="form-control select-tag">
+            <option value="" disabled selected hidden>Select Product Code</option>
+          </select>
+          <!-- Set only when the picked product has no existing Label Stock
+               Binding for this client/user -- POST /sales/order auto-creates one
+               from this master id plus whatever's typed for Rate/Paper Size/RM,
+               instead of requiring the binding to already exist (itemId stays
+               empty in that case; see onLabelStockProductChange). -->
+          <input type="hidden" name="labelStockMasterId" id="label-stock-master-id" />
+        </div>
 
-    <!-- Kept right next to Product Code (rather than down in Order Info with
-         the rest of Label Stock's extra fields) since they describe the item
-         being picked, not the order itself. -->
-    <div class="span-three" id="paper-size-div" style="display:none;">
-      <label for="paper-size">Paper Size</label>
-      <input type="text" id="paper-size" name="paperSize" class="form-control" placeholder="Enter paper size" />
-    </div>
+        <!-- Kept right next to Product Code (rather than down in Order Info with
+             the rest of Label Stock's extra fields) since they describe the item
+             being picked, not the order itself. -->
+        <div class="span-three" id="paper-size-div" style="display:none;">
+          <label for="paper-size">Paper Size</label>
+          <input type="text" id="paper-size" name="paperSize" class="form-control" placeholder="e.g. 635" />
+        </div>
 
-    <div class="span-two" id="running-meters-div" style="display:none;">
-      <label for="running-meters">RM</label>
-      <input type="text" inputmode="numeric" id="running-meters" name="runningMeters" class="form-control" placeholder="Enter RM" />
-    </div>
+        <div class="span-two" id="running-meters-div" style="display:none;">
+          <label for="running-meters">RM</label>
+          <input type="text" inputmode="numeric" id="running-meters" name="runningMeters" class="form-control" placeholder="e.g. 1000" />
+        </div>
 
-    <div id="selected-item-details" class="span-full" style="padding:0;background:#fff;border:1px solid #044A78;border-radius:4px;display:none;"></div>
+        <div id="selected-item-details" class="so-full" style="display:none;"></div>
+      </div>
+    </section>
 
-    <!-- ================= QUANTITY & DATE ================= -->
-    <div class="span-full form-subheading">
-      <h1>Order Info</h1>
-    </div>
+    <!-- ================= ORDER INFO =================
+         No heading: PO Date / PO Number / Est Delivery Date / Remarks say
+         what they are, and "Order Info" named nothing the fields did not.
+         .so-card--bare is what tells the stylesheet this section opens on its
+         fields rather than on a title. -->
+    <section class="so-card so-card--bare">
+      <div class="so-grid">
+        <div class="span-four">
+          <label for="po-date">PO Date</label>
+          <input type="date" id="po-date" name="poDate" class="form-control" value="<%= new Date().toISOString().split('T')[0] %>" />
+        </div>
 
-    <div class="span-four">
-      <label for="po-date">PO Date</label>
-      <input type="date" id="po-date" name="poDate" class="form-control" value="<%= new Date().toISOString().split('T')[0] %>" />
-    </div>
+        <div class="span-four">
+          <label for="po-number">PO Number</label>
+          <input type="text" id="po-number" name="poNumber" class="form-control" placeholder="Enter PO number" required />
+        </div>
 
-    <div class="span-four">
-      <label for="po-number">PO Number</label>
-      <input type="text" id="po-number" name="poNumber" class="form-control" placeholder="Enter PO number" required />
-    </div>
+        <div class="span-four" id="quantity-div">
+          <label for="quantity">Order Quantity <span id="qty-unit-badge" style="display:none;"></span></label>
+          <input type="text" inputmode="numeric" id="quantity" name="quantity" class="form-control" placeholder="Enter quantity" required />
+        </div>
 
-    <div class="span-four" id="quantity-div">
-      <label for="quantity">Order Quantity <span id="qty-unit-badge" style="display:none;font-size:11px;font-weight:600;color:#044A78;background:#eef0ff;padding:1px 8px;border-radius:20px;margin-left:4px;"></span></label>
-      <input type="text" inputmode="numeric" id="quantity" name="quantity" class="form-control" placeholder="Enter quantity" required />
-    </div>
+        <div class="span-three" id="no-of-rolls-div" style="display:none;">
+          <label for="no-of-rolls">No of Rolls</label>
+          <input type="text" inputmode="numeric" id="no-of-rolls" name="noOfRolls" class="form-control" placeholder="Rolls" />
+        </div>
 
-    <div class="span-three" id="no-of-rolls-div" style="display:none;">
-      <label for="no-of-rolls">No of Rolls</label>
-      <input type="text" inputmode="numeric" id="no-of-rolls" name="noOfRolls" class="form-control" placeholder="Enter no of rolls" />
-    </div>
+        <div class="span-three" id="item-rate-div">
+          <label for="item-rate">Rate</label>
+          <input type="text" id="item-rate" name="itemRate" class="form-control" placeholder="Rate" inputmode="decimal" readonly />
+        </div>
 
-    <div class="span-three" id="item-rate-div">
-      <label for="item-rate">Rate</label>
-      <input type="text" id="item-rate" name="itemRate" class="form-control" placeholder="Rate" inputmode="decimal" readonly />
-    </div>
+        <div class="span-three" id="order-rate-div">
+          <label for="order-rate">Curr Rate</label>
+          <input type="text" id="order-rate" name="orderRate" class="form-control" placeholder="Current rate" inputmode="decimal" />
+        </div>
 
-    <div class="span-three" id="order-rate-div">
-      <label for="order-rate">Curr Rate</label>
-      <input type="text" id="order-rate" name="orderRate" class="form-control" placeholder="Enter current rate" inputmode="decimal" />
-    </div>
+        <div class="span-five">
+          <label for="estimated-date">Est Delivery Date</label>
+          <input type="date" id="estimated-date" name="estimatedDate" class="form-control" required />
+        </div>
 
-    <div class="span-five">
-      <label for="estimated-date">Est Delivery Date</label>
-      <input type="date" id="estimated-date" name="estimatedDate" class="form-control" required />
-    </div>
-
-    <div class="span-half" id="remarks-wrap" style="grid-column: span 9;">
-      <label for="remarks">Remarks (Optional)</label>
-      <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Any special instructions..." />
-    </div>
+        <div class="span-half" id="remarks-wrap" style="grid-column: span 9;">
+          <label for="remarks">Remarks (Optional)</label>
+          <input type="text" id="remarks" name="remarks" class="form-control" placeholder="Any special instructions..." />
+        </div>
+      </div>
+    </section>
 
     <%
       // The line-items table is create-only: editing an existing order
       // (orderToEdit) and dispatch (confirmMode) stay strictly single-line.
-      const showAdditionalItems = !(typeof confirmMode !== 'undefined' && confirmMode)
-        && !(typeof orderToEdit !== 'undefined' && orderToEdit);
+      const showAdditionalItems = !_isConfirm && !_editing;
     %>
     <% if (showAdditionalItems) { %>
-    <div id="additional-items-wrap" class="span-full" style="display:none;">
-      <div class="form-subheading" style="margin-top:2px;"><h1>Order Items</h1></div>
-      <div class="ai-table-wrap">
-        <table class="ai-table" id="additional-items-table">
-          <thead>
-            <tr>
-              <th style="width:34px;">#</th>
-              <th style="min-width:190px;">Product Code</th>
-              <th style="min-width:120px;">Paper Size</th>
-              <th style="min-width:90px;">RM</th>
-              <th style="min-width:96px;">No of Rolls</th>
-              <th style="min-width:90px;">Rate</th>
-              <th style="width:42px;"></th>
-            </tr>
-          </thead>
-          <tbody id="additional-items-body"></tbody>
-        </table>
+    <!-- ================= ORDER ITEMS ================= -->
+    <section class="so-card" id="additional-items-wrap" style="display:none;">
+      <div class="so-card__head">
+        <span class="so-card__icon"><i class="fa-solid fa-list-check"></i></span>
+        <div class="so-card__titles">
+          <h2 class="so-card__title">Order Items</h2>
+        </div>
       </div>
-      <button type="button" id="add-line-btn" class="ai-add-btn">
-        <i class="fa-solid fa-plus"></i> Add Item
-      </button>
-    </div>
+
+      <div class="so-card__body" style="padding: 18px 20px 20px;">
+        <div class="ai-table-wrap">
+          <table class="ai-table" id="additional-items-table">
+            <thead>
+              <tr>
+                <th style="width:40px;">#</th>
+                <th style="min-width:190px;">Product Code</th>
+                <th style="min-width:120px;">Paper Size</th>
+                <th style="min-width:90px;">RM</th>
+                <th style="min-width:96px;">No of Rolls</th>
+                <th style="min-width:90px;">Rate</th>
+                <th style="width:46px;"></th>
+              </tr>
+            </thead>
+            <tbody id="additional-items-body"></tbody>
+          </table>
+        </div>
+        <button type="button" id="add-line-btn" class="ai-add-btn">
+          <i class="fa-solid fa-plus"></i> Add Item
+        </button>
+      </div>
+    </section>
 
     <template id="additional-item-row-tpl">
       <tr class="ai-row">
@@ -253,234 +319,190 @@
         <td><input type="text" inputmode="numeric" class="ai-rolls form-control" placeholder="Rolls" /></td>
         <td><input type="text" inputmode="decimal" class="ai-rate form-control" placeholder="Rate" /></td>
         <td style="text-align:center;">
-          <button type="button" class="ai-remove" title="Remove item" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px;">
+          <button type="button" class="ai-remove" title="Remove item">
             <i class="fa-solid fa-trash-can"></i>
           </button>
         </td>
       </tr>
     </template>
-
-    <style>
-      /* Scrolls horizontally only when the columns don't fit; while a Product
-         Code dropdown is open the JS adds .dropdown-open so the list isn't
-         clipped by this container. */
-      .ai-table-wrap { overflow-x: auto; }
-      .ai-table-wrap.dropdown-open { overflow: visible; }
-      .ai-table { width:100%; border-collapse:collapse; font-size:13px; }
-      .ai-table th, .ai-table td { padding:5px 8px; border-bottom:1px solid #e5e7eb; border-right:1px solid #e5e7eb; text-align:left; vertical-align:top; }
-      .ai-table tr > *:last-child { border-right:none; }
-      .ai-table th { color:#044a78; font-weight:700; white-space:nowrap; background:#f0f7ff; }
-      .ai-table .ai-row-num { color:#6b7280; font-weight:700; text-align:center; padding-top:12px; }
-      .ai-table input.form-control { padding:7px 9px !important; font-size:13px !important; height:auto !important; }
-      /* Auto-filled Rate awaiting confirmation -- subtle yellow until clicked. */
-      .ai-table input.ai-rate.ai-rate-unack { background:#fef9c3 !important; }
-      .ai-table input.ai-rate.ai-rate-unack:focus { background:#fff !important; }
-      /* Default RM (1000) awaiting confirmation -- subtle yellow until clicked. */
-      .ai-table input.ai-rm.ai-rm-unack { background:#fef9c3 !important; }
-      .ai-table input.ai-rm.ai-rm-unack:focus { background:#fff !important; }
-      .ai-add-btn { margin-top:10px; background:#044a78; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-weight:700; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; }
-      .ai-add-btn:hover { background:#03365a; }
-      #additional-items-table .choices { margin-bottom:0; }
-      #additional-items-table .choices__list--dropdown { z-index:99999; }
-    </style>
     <% } %>
 
     <!-- Stock Warning -->
-    <div id="stock-warning" class="span-full" style="display: none; padding: 8px 15px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 0.5rem; color: #92400e; font-size: 14px; font-weight: 500;">
-      <i class="fa-solid fa-triangle-exclamation" style="margin-right: 6px;"></i>
+    <div id="stock-warning" class="so-alert so-alert--warn" style="display: none;">
+      <i class="fa-solid fa-triangle-exclamation"></i>
       <span id="stock-warning-text"></span>
     </div>
 
     <!-- ================= CONFIRMATION DETAILS (only in confirm mode) ================= -->
-    <% if (typeof confirmMode !== 'undefined' && confirmMode) { %>
-    <div id="confirmation-section" class="span-full form-subheading">
-      <h1>Confirmation Details</h1>
-    </div>
+    <% if (_isConfirm) { %>
+    <section class="so-card" id="confirmation-section">
+      <div class="so-card__head">
+        <span class="so-card__icon"><i class="fa-solid fa-truck-fast"></i></span>
+        <div class="so-card__titles">
+          <h2 class="so-card__title">Confirmation Details</h2>
+        </div>
+      </div>
 
-    <div class="span-penta">
-      <label for="confirm-date">Date</label>
-      <input type="date" id="confirm-date" name="confirmDate" class="form-control" required />
-    </div>
-
-    <div class="span-hexa">
-      <label for="invoice-number">Invoice Number</label>
-      <input type="text" id="invoice-number" name="invoiceNumber" class="form-control" placeholder="Enter invoice number" required />
-    </div>
-
-    <div class="span-penta">
-      <label for="confirm-quantity">Quantity</label>
-      <input type="number" id="confirm-quantity" name="confirmQuantity" class="form-control" min="1" required />
-    </div>
-    
-    <div id="logs-wrapper" style="grid-column: 1 / -1;">
-    <% if (typeof logs !== 'undefined' && logs.length > 0) { %>
-      <div class="span-full" style="padding: 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 0.5rem; color: #0369a1; font-size: 14px; margin-top: 10px;">
-        <% 
-          let runningRemaining = orderToEdit.quantity - orderToEdit.dispatchedQuantity;
-        %>
-        
-        <div style="display: flex; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e0f2fe;">
-            <span><strong>Partial Dispatch:</strong> <%= orderToEdit.dispatchedQuantity %> sent / <%= orderToEdit.quantity - orderToEdit.dispatchedQuantity %> remaining</span>
+      <div class="so-grid">
+        <div class="span-penta">
+          <label for="confirm-date">Date</label>
+          <input type="date" id="confirm-date" name="confirmDate" class="form-control" required />
         </div>
 
-        <div class="logs-scroll" style="max-height: 120px; overflow-y: auto; padding-right: 5px; width: 100%;">
-            <% logs.forEach((log, index) => { %>
-            <div style="padding: 6px 0; border-bottom: 1px dashed #e0f2fe; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
-                <span>
-                    <span style="color: #64748b; font-size: 12px; margin-right: 5px;">
-                        <%= new Date(log.performedAt).toLocaleDateString('en-IN', { month: 'short', day: '2-digit', year: 'numeric' }) %>
-                    </span>
-                    <% if (log.invoiceNumber) { %>
-                    <span style="font-family: monospace; background: #e0f2fe; padding: 1px 6px; border-radius: 4px; font-size: 12px;">
-                        <%= log.invoiceNumber %>
-                    </span>
-                    <% } %>
-                <span style="margin-left: 6px;"><strong><%= log.quantity %></strong> sent</span>
-                <span style="color: #64748b;">(Remaining: <%= runningRemaining %>)</span>
-                </span>
-                <span style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
-                    <button type="button" data-log-id="<%= log._id %>" data-log-qty="<%= log.quantity %>" data-log-invoice="<%= log.invoiceNumber || '' %>" data-log-date="<%= new Date(log.performedAt).toISOString().split('T')[0] %>"
-                        onclick="openEditDialog(this.getAttribute('data-log-id'), parseInt(this.getAttribute('data-log-qty')), this.getAttribute('data-log-invoice'), this.getAttribute('data-log-date'))"
-                        style="background: none; border: none; color: #3b82f6; cursor: pointer; padding: 2px 4px; font-size: 13px; border-radius: 4px; transition: background 0.2s;"
-                        onmouseover="this.style.background='#e0f2fe'" onmouseout="this.style.background='none'"
-                        title="Edit Log">
-                        <i class="fa-solid fa-pencil"></i>
-                    </button>
-                    <button type="button" onclick="confirmDeleteLog('<%= log._id %>')"
-                        style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 2px 4px; font-size: 13px; border-radius: 4px; transition: background 0.2s;"
-                        onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'"
-                        title="Delete Log">
-                        <i class="fa-solid fa-trash-can"></i>
-                    </button>
-                </span>
-                
-                <% 
-                // For the next iteration (older log), the remaining amount was higher by this dispatched amount
-                runningRemaining += log.quantity; 
-                %>
+        <div class="span-hexa">
+          <label for="invoice-number">Invoice Number</label>
+          <input type="text" id="invoice-number" name="invoiceNumber" class="form-control" placeholder="Enter invoice number" required />
+        </div>
+
+        <div class="span-penta">
+          <label for="confirm-quantity">Quantity</label>
+          <input type="number" id="confirm-quantity" name="confirmQuantity" class="form-control" min="1" required />
+        </div>
+
+        <div id="logs-wrapper" style="grid-column: 1 / -1;">
+        <% if (typeof logs !== 'undefined' && logs.length > 0) { %>
+          <div class="so-alert so-alert--info so-alert--stack">
+            <%
+              let runningRemaining = orderToEdit.quantity - orderToEdit.dispatchedQuantity;
+            %>
+            <div class="so-logs__head">
+              <span><strong>Partial Dispatch</strong> &middot; <%= orderToEdit.dispatchedQuantity %> sent</span>
+              <span><%= orderToEdit.quantity - orderToEdit.dispatchedQuantity %> remaining</span>
             </div>
-            <% }) %>
+
+            <div class="logs-scroll">
+              <% logs.forEach((log, index) => { %>
+              <div class="so-log-row">
+                <span class="so-log-row__main">
+                  <span class="so-log-date">
+                    <%= new Date(log.performedAt).toLocaleDateString('en-IN', { month: 'short', day: '2-digit', year: 'numeric' }) %>
+                  </span>
+                  <% if (log.invoiceNumber) { %>
+                    <span class="so-log-invoice"><%= log.invoiceNumber %></span>
+                  <% } %>
+                  <span><strong><%= log.quantity %></strong> sent</span>
+                  <span class="so-log-date">(Remaining: <%= runningRemaining %>)</span>
+                </span>
+                <span style="display:flex; gap:4px; align-items:center; flex-shrink:0;">
+                  <button type="button" class="so-icon-btn" title="Edit Log"
+                    data-log-id="<%= log._id %>" data-log-qty="<%= log.quantity %>" data-log-invoice="<%= log.invoiceNumber || '' %>" data-log-date="<%= new Date(log.performedAt).toISOString().split('T')[0] %>"
+                    onclick="openEditDialog(this.getAttribute('data-log-id'), parseInt(this.getAttribute('data-log-qty')), this.getAttribute('data-log-invoice'), this.getAttribute('data-log-date'))">
+                    <i class="fa-solid fa-pencil"></i>
+                  </button>
+                  <button type="button" class="so-icon-btn so-icon-btn--danger" title="Delete Log"
+                    data-log-id="<%= log._id %>" onclick="confirmDeleteLog(this.getAttribute('data-log-id'))">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </span>
+                <%
+                // For the next iteration (older log), the remaining amount was higher by this dispatched amount
+                runningRemaining += log.quantity;
+                %>
+              </div>
+              <% }) %>
+            </div>
+          </div>
+        <% } else if (_editing && _editing.dispatchedQuantity > 0) { %>
+          <div class="so-alert so-alert--info">
+            <i class="fa-solid fa-circle-info"></i>
+            <span><strong>Partial Dispatch:</strong> <%= orderToEdit.dispatchedQuantity %> sent. Remaining: <%= orderToEdit.quantity - orderToEdit.dispatchedQuantity %></span>
+          </div>
+        <% } %>
         </div>
       </div>
-      
-      <style>
-        .logs-scroll::-webkit-scrollbar {
-          width: 4px;
-        }
-        .logs-scroll::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .logs-scroll::-webkit-scrollbar-thumb {
-          background-color: rgba(26, 26, 46, 0.5);
-          border-radius: 6px;
-        }
-        .logs-scroll::-webkit-scrollbar-thumb:hover {
-          background-color: rgba(26, 26, 46, 0.75);
-        }
-      </style>
-    <% } else if (typeof orderToEdit !== 'undefined' && orderToEdit && orderToEdit.dispatchedQuantity > 0) { %>
-      <div class="span-full" style="padding: 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 0.5rem; color: #0369a1; font-size: 14px; margin-top: 10px;">
-        <i class="fa-solid fa-circle-info" style="margin-right: 5px;"></i>
-        <strong>Partial Dispatch:</strong> <%= orderToEdit.dispatchedQuantity %> sent. Remaining: <%= orderToEdit.quantity - orderToEdit.dispatchedQuantity %>
-      </div>
-    <% } %>
-    </div>
+    </section>
     <% } %>
 
-<!-- ================= EDIT LOG DIALOG ================= -->
-<div id="edit-log-dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center; transition:opacity 0.3s;">
-  <div style="background:white; border-radius:8px; width:440px; max-width:90%; box-shadow:0 4px 15px rgba(0,0,0,0.2); overflow:hidden; animation:logDialogPopIn 0.2s ease-out;">
-    <div style="padding:20px 20px 0; border-bottom: 1px solid #e5e7eb;">
-      <h3 style="margin:0 0 15px; color:#044A78; font-size:17px;"><i class="fa-solid fa-pencil" style="margin-right:6px;"></i>Edit Dispatch Log</h3>
-    </div>
-    <div style="padding:20px;">
-      <input type="hidden" id="edit-log-id" />
-      <div style="margin-bottom:14px;">
-        <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Quantity <span style="color:#ef4444">*</span></label>
-        <input type="number" id="edit-log-qty" min="1" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; box-sizing:border-box; transition:border-color 0.2s;" />
-      </div>
-      <div style="margin-bottom:14px;">
-        <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Invoice Number</label>
-        <input type="text" id="edit-log-invoice" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; box-sizing:border-box; transition:border-color 0.2s;" />
-      </div>
-      <div style="margin-bottom:4px;">
-        <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:4px;">Date</label>
-        <input type="date" id="edit-log-date" style="width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; box-sizing:border-box; transition:border-color 0.2s;" />
-      </div>
-    </div>
-    <div style="padding:15px 20px; background:#f9fafb; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb;">
-      <button type="button" onclick="closeEditDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='white'">Cancel</button>
-      <button type="button" onclick="submitEditLog()" style="padding:8px 16px; border:none; background:#044A78; color:white; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Save Changes</button>
-    </div>
-  </div>
-</div>
-
-<!-- ================= DELETE LOG DIALOG ================= -->
-<div id="delete-log-dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center; transition:opacity 0.3s;">
-  <div style="background:white; border-radius:8px; width:400px; max-width:90%; box-shadow:0 4px 15px rgba(0,0,0,0.2); overflow:hidden; animation:logDialogPopIn 0.2s ease-out;">
-    <div style="padding:25px 20px; text-align:center;">
-      <i class="fa-solid fa-triangle-exclamation" style="font-size:28px; color:#ef4444; margin-bottom:12px;"></i>
-      <p style="margin:0; color:#333; font-size:16px; line-height:1.5;">Are you sure you want to <strong>delete</strong> this dispatch log? Stock will be reversed.</p>
-      <input type="hidden" id="delete-log-id" />
-    </div>
-    <div style="padding:15px 20px; background:#f9fafb; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e5e7eb;">
-      <button type="button" onclick="closeDeleteDialog()" style="padding:8px 16px; border:1px solid #d1d5db; background:white; color:#374151; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='white'">Go Back</button>
-      <button type="button" onclick="submitDeleteLog()" style="padding:8px 16px; border:none; background:#ef4444; color:white; border-radius:6px; cursor:pointer; font-weight:500; transition:all 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Yes, Delete</button>
-    </div>
-  </div>
-</div>
-
-<style>
-  @keyframes logDialogPopIn {
-    0% { transform: scale(0.9); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
-  }
-  #edit-log-qty:focus, #edit-log-invoice:focus, #edit-log-date:focus {
-    outline: none;
-    border-color: #044A78;
-    box-shadow: 0 0 0 2px rgba(26, 26, 46, 0.1);
-  }
-
-  #client-name-div .choices__list--dropdown .choices__item,
-  #client-name-div .choices__list--single .choices__item {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-</style>
-
-    <!-- ================= SUBMIT ================= -->
-    <div class="span-full btn-grp" style="flex-direction: row;">
-      <% if (typeof orderToEdit !== 'undefined' && orderToEdit && !(typeof confirmMode !== 'undefined' && confirmMode)) { %>
-        <button type="button" onclick="openCancelOrderDialog()" style="background:#044A78; color:#fff; border:none; border-radius:6px; padding:10px 20px; font-weight:700; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px;" onmouseover="this.style.background='#03365a'" onmouseout="this.style.background='#044A78'">
-          <i class="fa-solid fa-xmark"></i> Cancel Edit Order
+    <!-- ================= ACTIONS ================= -->
+    <div class="so-actions">
+      <span class="so-actions__hint">
+        <i class="fa-regular fa-circle-check"></i>
+        <%= _isConfirm ? 'Stock is deducted from the source location on dispatch.' : 'Rates follow the client binding for the product, paper size and RM.' %>
+      </span>
+      <% if (_editing && !_isConfirm) { %>
+        <button type="button" class="so-btn so-btn--ghost" onclick="openCancelOrderDialog()">
+          <i class="fa-solid fa-xmark"></i> Cancel Order
         </button>
       <% } %>
-      <button type="submit">
-        <% if (typeof confirmMode !== 'undefined' && confirmMode) { %>
-          <i class="fa-solid fa-check-double"></i> Dispatch Order
-        <% } else { %>
-          <i class="fa-solid fa-check"></i> <%= typeof orderToEdit !== 'undefined' && orderToEdit ? 'Update Order' : 'Create Order' %>
-        <% } %>
+      <button type="submit" class="so-btn so-btn--primary">
+        <i class="fa-solid <%= _submitIcon %>"></i> <%= _submitLabel %>
       </button>
     </div>
   </form>
 </div>
 
-<% if (typeof orderToEdit !== 'undefined' && orderToEdit && !(typeof confirmMode !== 'undefined' && confirmMode)) { %>
-<div id="cancel-order-dialog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
-  <div style="background:#fff; border-radius:10px; width:440px; max-width:90%; box-shadow:0 4px 20px rgba(0,0,0,0.22); overflow:hidden;">
-    <div style="padding:22px 22px 0;">
-      <p style="margin:0; color:#111827; font-size:16px; font-weight:600; line-height:1.5;"><i class="fa-solid fa-triangle-exclamation" style="color:#ef4444; margin-right:6px;"></i>Cancel this order?</p>
-      <p style="margin:8px 0 0; color:#6b7280; font-size:13px;">This cannot be undone.</p>
-      <div style="margin-top:14px;">
-        <label style="font-size:13px; font-weight:600; color:#374151; display:block; margin-bottom:5px;">Reason for Cancellation <span style="color:#ef4444">*</span></label>
-        <textarea id="cancel-order-reason" rows="3" placeholder="Enter reason..." style="width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; resize:none; font-family:inherit; box-sizing:border-box;"></textarea>
+<!-- ================= EDIT LOG DIALOG ================= -->
+<div id="edit-log-dialog" class="so-dialog-backdrop">
+  <div class="so-dialog">
+    <div class="so-dialog__head">
+      <span class="so-dialog__icon"><i class="fa-solid fa-pencil"></i></span>
+      <div>
+        <h3 class="so-dialog__title">Edit Dispatch Log</h3>
+        <p class="so-dialog__desc">Stock is adjusted by the difference.</p>
       </div>
     </div>
-    <div style="padding:14px 22px 18px; display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
-      <button type="button" onclick="closeCancelOrderDialog()" style="padding:9px 18px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:6px; cursor:pointer; font-weight:600; font-size:13px;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#fff'">Go Back</button>
-      <button type="button" onclick="submitCancelOrder()" style="padding:9px 18px; border:none; background:#ef4444; color:#fff; border-radius:6px; cursor:pointer; font-weight:700; font-size:13px;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Yes, Cancel Order</button>
+    <div class="so-dialog__body">
+      <input type="hidden" id="edit-log-id" />
+      <div class="so-dialog__field">
+        <label for="edit-log-qty">Quantity <span class="so-req">*</span></label>
+        <input type="number" id="edit-log-qty" min="1" />
+      </div>
+      <div class="so-dialog__field">
+        <label for="edit-log-invoice">Invoice Number</label>
+        <input type="text" id="edit-log-invoice" />
+      </div>
+      <div class="so-dialog__field">
+        <label for="edit-log-date">Date</label>
+        <input type="date" id="edit-log-date" />
+      </div>
+    </div>
+    <div class="so-dialog__foot">
+      <button type="button" class="so-btn so-btn--ghost" onclick="closeEditDialog()">Cancel</button>
+      <button type="button" class="so-btn so-btn--primary" onclick="submitEditLog()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= DELETE LOG DIALOG ================= -->
+<div id="delete-log-dialog" class="so-dialog-backdrop">
+  <div class="so-dialog so-dialog--sm">
+    <div class="so-dialog__head">
+      <span class="so-dialog__icon so-dialog__icon--danger"><i class="fa-solid fa-triangle-exclamation"></i></span>
+      <div>
+        <h3 class="so-dialog__title">Delete this dispatch log?</h3>
+        <p class="so-dialog__desc">Stock will be reversed. This cannot be undone.</p>
+      </div>
+    </div>
+    <div class="so-dialog__body">
+      <p>The quantity on this log goes back to the order's remaining balance, and the stock it took goes back to its source location.</p>
+      <input type="hidden" id="delete-log-id" />
+    </div>
+    <div class="so-dialog__foot">
+      <button type="button" class="so-btn so-btn--ghost" onclick="closeDeleteDialog()">Go Back</button>
+      <button type="button" class="so-btn so-btn--danger" onclick="submitDeleteLog()">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<% if (typeof orderToEdit !== 'undefined' && orderToEdit && !(typeof confirmMode !== 'undefined' && confirmMode)) { %>
+<div id="cancel-order-dialog" class="so-dialog-backdrop">
+  <div class="so-dialog">
+    <div class="so-dialog__head">
+      <span class="so-dialog__icon so-dialog__icon--danger"><i class="fa-solid fa-triangle-exclamation"></i></span>
+      <div>
+        <h3 class="so-dialog__title">Cancel this order?</h3>
+        <p class="so-dialog__desc">This cannot be undone.</p>
+      </div>
+    </div>
+    <div class="so-dialog__body">
+      <div class="so-dialog__field">
+        <label for="cancel-order-reason">Reason for Cancellation <span class="so-req">*</span></label>
+        <textarea id="cancel-order-reason" rows="3" placeholder="Why is this order being cancelled?"></textarea>
+      </div>
+    </div>
+    <div class="so-dialog__foot">
+      <button type="button" class="so-btn so-btn--ghost" onclick="closeCancelOrderDialog()">Go Back</button>
+      <button type="button" class="so-btn so-btn--danger" onclick="submitCancelOrder()">Yes, Cancel Order</button>
     </div>
   </div>
 </div>
@@ -488,7 +510,7 @@
 <script>
   function openCancelOrderDialog() {
     document.getElementById("cancel-order-reason").value = "";
-    document.getElementById("cancel-order-reason").style.borderColor = "#d1d5db";
+    document.getElementById("cancel-order-reason").style.borderColor = "";
     document.getElementById("cancel-order-dialog").style.display = "flex";
     setTimeout(() => document.getElementById("cancel-order-reason").focus(), 30);
   }
@@ -498,7 +520,7 @@
   function submitCancelOrder() {
     const reason = document.getElementById("cancel-order-reason").value.trim();
     if (!reason) {
-      document.getElementById("cancel-order-reason").style.borderColor = "#ef4444";
+      document.getElementById("cancel-order-reason").style.borderColor = "#e11d48";
       document.getElementById("cancel-order-reason").focus();
       return;
     }
@@ -519,79 +541,6 @@
   });
 </script>
 <% } %>
-
-<style>
-  /* Stock-status bar (location selector + Total/Booked/Balance) hidden from
-     the top of this form -- !important so it stays hidden even though the
-     JS below still rebuilds/re-shows it (stockDisplay.style.display =
-     "block") as the client/item/location selection changes; that JS is left
-     running since it's also what keeps the hidden #source-location input in
-     sync, which POST /sales/order still reads. */
-  #stock-display {
-    display: none !important;
-  }
-
-  .location-option {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-right: 5px;
-    cursor: pointer;
-    padding: 5px 8px;
-    border-radius: 0.4rem;
-    border: 2px solid transparent;
-    transition: all 0.2s ease;
-    user-select: none;
-  }
-
-  .location-option:hover {
-    background: #f0f0ff;
-  }
-
-  .location-option.selected {
-    border-color: #044A78;
-    background: #eef0ff;
-  }
-
-  .location-radio {
-    accent-color: #044A78;
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    border-radius: 999px;
-  }
-
-  .location-label {
-    color: #044A78;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-  }
-
-  .location-qty {
-    font-weight: 700;
-    color: #044A78;
-    font-size: 15px;
-  }
-
-  .ap-table-wrap { overflow-x: auto; }
-  .ap-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
-  .ap-table th, .ap-table td { padding: 5px 10px; border-bottom: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; text-align: left; }
-  .ap-table tr > *:last-child { border-right: none; }
-  .ap-table tr:last-child th, .ap-table tr:last-child td { border-bottom: none; }
-  .ap-table th { color: #044a78; font-weight: 700; white-space: nowrap; width: 10%; }
-  .ap-table td { color: #1f2a44; font-weight: 600; word-break: break-word; }
-  .ap-table th.ap-hl, .ap-table td.ap-hl { background: #dbeafe; }
-  .ap-table th.ap-hl { color: #044a78; }
-  .ap-table td.ap-hl { color: #044a78; font-weight: 700; }
-
-  .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-  .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-  .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
-</style>
-
-</script>
 
 <script type="application/json" id="order-to-edit-data">
   <%- typeof orderToEdit !== 'undefined' && orderToEdit ? JSON.stringify(orderToEdit) : 'null' %>
@@ -628,6 +577,27 @@
 
   const confirmModeStr = `<%= typeof confirmMode !== 'undefined' && confirmMode ? 'true' : 'false' %>`;
   const confirmMode = confirmModeStr === 'true';
+
+  // True when this form is rendered inside the New Sales Order dialog on
+  // /sales/pending (GET /sales/order?embed=1, layout/embed.ejs). The form is
+  // otherwise identical -- the only difference is that a save has nowhere to
+  // navigate to: the page the old flow redirected to is the one hosting the
+  // dialog, so the host is told instead and decides what to do.
+  const soEmbed = `<%= _embed ? 'true' : 'false' %>` === 'true';
+
+  // Same-origin (the host writes this document in as srcdoc), so a direct
+  // parent call would work -- postMessage is used anyway because it fails
+  // quietly rather than throwing if this page is ever opened on its own or
+  // from somewhere that isn't listening. The host checks event.source
+  // against its own frame, so the "*" target origin gives nothing away.
+  function notifyEmbedHost(message) {
+    if (!soEmbed) return;
+    try {
+      window.parent?.postMessage({ source: "sachiko-sales-order", ...message }, "*");
+    } catch (e) {
+      console.error("Could not notify the dialog host:", e);
+    }
+  }
 
   const clientSelect = document.getElementById("client-name");
   const userSelect = document.getElementById("user-name");
@@ -2121,6 +2091,14 @@
   // Form validation — prevent submit on invalid fields, disallow ALL location, and enforce min qty
   orderForm.addEventListener("submit", async function (e) {
     e.preventDefault();
+
+    // BTStrap.js binds its own submit handler to every .needs-validation form
+    // and this one is registered first, so in the dialog that handler would
+    // run after this one, POST the order a second time and then set
+    // window.location to the response's redirect -- which navigates the FRAME
+    // and shows Pending Orders inside the dialog. Stop the event here so this
+    // handler is the only one. (Standalone it is left exactly as it was.)
+    if (soEmbed) e.stopImmediatePropagation();
     e.stopImmediatePropagation();
     if (orderForm.dataset.submitting === "1") return false;
     setSubmittingState(true);
@@ -2340,6 +2318,16 @@
           showToast(data?.message || "Failed to submit order", "error");
           setSubmittingState(false);
           return false;
+        }
+
+        // In the dialog both of the branches below would act on the frame:
+        // the redirect target IS the host page, and a reload would re-run the
+        // srcdoc. Hand the outcome to the host, which closes the dialog and
+        // refreshes itself -- the same end state the redirect produced, and
+        // the server has already set the flash message it shows.
+        if (soEmbed) {
+          notifyEmbedHost({ type: "saved", duplicate: Boolean(data?.duplicate) });
+          return true;
         }
 
         if (data?.redirect) {

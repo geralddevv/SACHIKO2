@@ -23,12 +23,14 @@
     border-color: rgba(255, 255, 255, 0.65);
   }
 
-  /* ---- Import button (header bar) ----
+  /* ---- New Order / Import buttons (header bar) ----
      The bar itself is #044a78, so a #044a78 button on it is invisible -- this
      read as a bare icon + label, indistinguishable from the plain "View Logs"
-     link beside it. Solid white makes it the one action on this bar that
-     writes anything. Padding is kept tight: the bar already carries a title,
-     four value badges and two other controls, so there is no room to spend. */
+     link beside it. Solid white marks the actions on this bar that write
+     anything; both of these do, so both wear it. Padding is kept tight: the
+     bar already carries a title, four value badges and three other controls,
+     so there is no room to spend. */
+  #new-order-btn,
   #import-orders-btn {
     display: inline-flex;
     align-items: center;
@@ -45,9 +47,13 @@
     cursor: pointer;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.18);
   }
+  #new-order-btn i,
   #import-orders-btn i { font-size: 13px; opacity: 0.9; }
+  #new-order-btn:hover,
   #import-orders-btn:hover { background: #f4f8fc; }
+  #new-order-btn:active,
   #import-orders-btn:active { background: #e6eef7; }
+  #new-order-btn:focus-visible,
   #import-orders-btn:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
 
   /* ---- Paper re-order import dialog ----
@@ -264,6 +270,105 @@
   #importOrdersModal .logout-btn:hover:not(:disabled) { opacity: 0.88; }
   #importOrdersModal .logout-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+  /* ---- New Sales Order dialog ----
+     Hosts the real /sales/order form in a frame rather than a second copy of
+     it (see the JS below). The dialog is therefore mostly a window: a header
+     strip and an edge-to-edge frame, so what is inside is the form and
+     nothing else. Sized big enough that the form keeps its wide layout --
+     below 1280px of frame width it folds itself down to four columns, which
+     is what a smaller screen gets. */
+  #newOrderModal .logout-dialog {
+    width: min(1360px, 96vw);
+    height: min(900px, 90vh);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  /* Brand-blue header strip -- the same gradient the Pending Order Details
+     dialog on this page already wears (.tape-details-header below), so the
+     two dialogs read as the same thing. It doubles as the divider from the
+     frame under it, which is why there is no bottom border. */
+  #newOrderModal .new-order-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.16), transparent 34%),
+      linear-gradient(135deg, #044a78 0%, #03365a 100%);
+    color: #fff;
+    flex: none;
+  }
+  #newOrderModal .logout-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-size: 1.15rem;
+    color: #fff;
+  }
+  #newOrderModal .logout-title i {
+    font-size: 1rem;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #newOrderModal .new-order-close {
+    margin-left: auto;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 9px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  #newOrderModal .new-order-close:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+  #newOrderModal .new-order-close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  #newOrderModal .new-order-body {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    background: #f4f6fa;
+  }
+  #newOrderModal iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+  }
+  /* Covers the frame until it has something in it, and stays put to say why
+     when it has not -- a session that ended, or a server that did not
+     answer. Both are sentences, not a blank white rectangle. */
+  #newOrderModal .new-order-status {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+    background: #f4f6fa;
+    color: #64748b;
+    font-size: 14px;
+  }
+  #newOrderModal .new-order-status[hidden] { display: none; }
+  #newOrderModal .new-order-status i { font-size: 22px; color: #94a3b8; }
+
   @media (max-width: 640px) {
     #importOrdersModal .import-lines-head,
     #importOrdersModal .import-line {
@@ -308,6 +413,14 @@
       </a>
       <button
         type="button"
+        id="new-order-btn"
+        title="Raise a new sales order without leaving this page"
+      >
+        <i class="fa-solid fa-plus"></i>
+        <span>New Order</span>
+      </button>
+      <button
+        type="button"
         id="import-orders-btn"
         title="Upload a paper re-order file exported from FAIRTECH"
       >
@@ -339,6 +452,27 @@
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
   <div id="master-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<div class="logout-modal" id="newOrderModal" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="newOrderTitle">
+    <div class="new-order-head">
+      <h2 class="logout-title" id="newOrderTitle">
+        <i class="fa-solid fa-cart-plus"></i>
+        <span>New Sales Order</span>
+      </h2>
+      <button type="button" class="new-order-close" id="new-order-close" title="Close" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="new-order-body">
+      <iframe id="new-order-frame" title="New Sales Order"></iframe>
+      <div class="new-order-status" id="new-order-status">
+        <i class="fa-solid fa-circle-notch fa-spin"></i>
+        <span>Loading the order form…</span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="logout-modal" id="importOrdersModal" aria-hidden="true">
@@ -1160,6 +1294,111 @@
   document.getElementById("download-xlsx").addEventListener("click", () => {
     table.download("xlsx", "pending_orders.xlsx", { sheetName: "PendingOrders" });
     selector.classList.remove("download-selector--active");
+  });
+
+  /* ================= NEW SALES ORDER DIALOG ================= */
+  /* The real /sales/order form, rendered into a frame on this page rather
+     than copied into it. ?embed=1 gives the same view with no nav and no side
+     nav (views/layout/embed.ejs) -- same fields, same 2,500 lines of form
+     logic, same POST -- so the dialog cannot drift from the standalone page,
+     which stays reachable at Sales Order in the side nav.
+
+     Written in as srcdoc rather than pointed at with frame.src, for the same
+     reason the reel-label dialogs do it (views/stock/facestockStock.ejs):
+     navigating a frame follows whatever comes back, and an expired session
+     answers 302 -> the login page, which sends X-Frame-Options: DENY. The
+     frame then dies on the redirect TARGET with "refused to connect" -- a
+     session problem wearing the costume of a server outage, and not something
+     a header on /sales/order can fix. fetch carries the cookie the same way
+     but hands us the outcome instead of acting on it, and srcdoc renders the
+     HTML with no navigation at all, so X-Frame-Options never applies. The
+     frame is same-origin with this page, which is what lets the form talk
+     back below. */
+  const newOrderModal = document.getElementById("newOrderModal");
+  const newOrderFrame = document.getElementById("new-order-frame");
+  const newOrderStatus = document.getElementById("new-order-status");
+  // Bumped by every open and every close, so a fetch that is still in flight
+  // when the dialog is closed (or closed and reopened) knows its answer is no
+  // longer wanted and drops it, instead of writing the old document into a
+  // dialog that has moved on.
+  let newOrderOpenId = 0;
+
+  const setNewOrderStatus = (html) => {
+    if (html === null) {
+      newOrderStatus.hidden = true;
+      return;
+    }
+    newOrderStatus.innerHTML = html;
+    newOrderStatus.hidden = false;
+  };
+
+  const closeNewOrderDialog = () => {
+    newOrderOpenId++;
+    newOrderModal.classList.remove("show");
+    newOrderModal.setAttribute("aria-hidden", "true");
+    // Dropped so the next open starts on a blank form with a fresh
+    // submissionToken, rather than flashing the last one back up.
+    newOrderFrame.removeAttribute("srcdoc");
+    setNewOrderStatus('<i class="fa-solid fa-circle-notch fa-spin"></i><span>Loading the order form…</span>');
+  };
+
+  const openNewOrderDialog = async () => {
+    const openId = ++newOrderOpenId;
+    newOrderFrame.removeAttribute("srcdoc");
+    setNewOrderStatus('<i class="fa-solid fa-circle-notch fa-spin"></i><span>Loading the order form…</span>');
+    newOrderModal.classList.add("show");
+    newOrderModal.setAttribute("aria-hidden", "false");
+
+    try {
+      const res = await fetch("/app/sales/order?embed=1", { credentials: "same-origin" });
+      if (openId !== newOrderOpenId) return;
+      // A redirect here is the app bouncing us to the login page -- the
+      // request went out without a valid session.
+      if (res.redirected) {
+        setNewOrderStatus(
+          '<i class="fa-solid fa-triangle-exclamation"></i><span>Your session has ended. Reload this page and sign in again.</span>',
+        );
+        return;
+      }
+      if (!res.ok) {
+        setNewOrderStatus(
+          `<i class="fa-solid fa-triangle-exclamation"></i><span>Couldn't load the order form (${res.status}).</span>`,
+        );
+        return;
+      }
+      const html = await res.text();
+      if (openId !== newOrderOpenId) return;
+      newOrderFrame.onload = () => setNewOrderStatus(null);
+      newOrderFrame.srcdoc = html;
+    } catch (err) {
+      if (openId !== newOrderOpenId) return;
+      console.error("New Sales Order dialog failed to load:", err);
+      setNewOrderStatus(
+        '<i class="fa-solid fa-triangle-exclamation"></i><span>Couldn\'t reach the server to load the order form.</span>',
+      );
+    }
+  };
+
+  document.getElementById("new-order-btn").addEventListener("click", openNewOrderDialog);
+  document.getElementById("new-order-close").addEventListener("click", closeNewOrderDialog);
+
+  /* Deliberately NOT closed by a click on the backdrop or by Escape, unlike
+     the Import dialog beside it: this one holds a part-typed order with its
+     own line items, and a stray click outside would throw the lot away with
+     nothing to undo it. The X is the way out. */
+
+  // The embedded form reports a save home instead of navigating (see
+  // notifyEmbedHost in salesOrderForm.ejs): the page it used to redirect to
+  // is this one. Reloading lands on exactly the same state that redirect did
+  // -- the new order in the table, and the flash message the server already
+  // queued shown as a toast.
+  window.addEventListener("message", (event) => {
+    if (event.source !== newOrderFrame.contentWindow) return;
+    const msg = event.data;
+    if (!msg || msg.source !== "sachiko-sales-order") return;
+    if (msg.type !== "saved") return;
+    closeNewOrderDialog();
+    window.location.reload();
   });
 
   /* ================= IMPORT PAPER RE-ORDER (FAIRTECH export) ================= */
