@@ -215,7 +215,10 @@ async function loadStockRows({
     .filter(Boolean);
 }
 
+// Temporarily hidden (page + nav links) at the user's request -- remove this
+// guard to bring it back.
 router.get("/view", async (req, res) => {
+  return res.redirect("/fairtech");
   try {
     const groupedRows = await Promise.all([
       loadStockRows({

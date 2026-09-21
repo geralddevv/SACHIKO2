@@ -906,12 +906,12 @@
               <i class="fa-solid fa-cart-plus" style="color: #ffffff"></i>
               <p class="nav-items-para">Sales Order</p>
             </a>
-            <a href="/app/sales/pending" title="Pending Orders" class="<%= title === 'Pending Orders' ? 'nav-items active' : 'nav-items' %>" style="<%= isSales ? '' : 'border-bottom: 2px solid #ffffff9d;' %> text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/sales/pending" title="Pending Orders" class="<%= title === 'Pending Orders' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clock-rotate-left" style="color: #ffffff"></i>
               <p class="nav-items-para">Pending Orders</p>
             </a>
             <% if (isSales) { %>
-            <a href="/app/stocks/view" title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/stocks/view" title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Stock Summary</p>
             </a>
@@ -1024,11 +1024,11 @@
 
           <div class="nav-labels-opt">
             <% if ((isAdmin || isHod || permissions.inventory) && !isSales) { %>
-            <a href="/app/stocks/view" title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/stocks/view" title="Stock Summary" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Stock Summary</p>
             </a>
-            <a href="/app/facestockstock" title="Facestock Stock" class="<%= title === 'Facestock Stock' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/facestockstock" title="Facestock Stock" class="<%= title === 'Facestock Stock' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-layer-group" style="color: #ffffff"></i>
               <p class="nav-items-para">Facestock</p>
             </a>
@@ -1091,7 +1091,7 @@
               <i class="fa-solid fa-eye" style="color: #ffffff"></i>
               <p class="nav-items-para">Vendor Details</p>
             </a>
-            <a href="/app/stocks/view" title="Stock View" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <a href="/app/stocks/view" title="Stock View" class="<%= title === 'Stock View' ? 'nav-items active' : 'nav-items' %>" style="display: none; text-decoration: none; color: inherit;">
               <i class="fa-solid fa-table-list" style="color: #ffffff"></i>
               <p class="nav-items-para">Summary</p>
             </a>

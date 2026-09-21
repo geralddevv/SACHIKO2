@@ -54,7 +54,7 @@
         </button>
 
         <div class="download-selector" id="downloadSelector">
-          <button class="download-selector__trigger" style="height: 30px; display: flex; align-items: center; padding: 0 12px; border: 1.5px solid #e2e8f0; border-radius: 6px; background: #fff; font-size: 14px; font-weight: 500; cursor: pointer;">
+          <button class="download-selector__trigger" style="height: 30px; display: flex; align-items: center; padding: 0 12px; border: 1.5px solid #94a3b8; border-radius: 6px; background: #fff; font-size: 14px; font-weight: 500; cursor: pointer;">
             <span>
               <i class="fa-solid fa-file-arrow-down"></i>
               <span class="download-typo">Download</span>
@@ -502,7 +502,7 @@
     #addEmployeeDialog .ae-tabs {
       display: flex; align-items: flex-start; justify-content: center;
       padding: 20px 26px 16px; background: #fff;
-      border-bottom: 1px solid #e2e8f0; overflow-x: auto; flex-shrink: 0;
+      border-bottom: 1px solid #94a3b8; overflow-x: auto; flex-shrink: 0;
       position: relative; z-index: 2; box-shadow: 0 4px 10px -6px rgba(15, 23, 42, 0.1);
     }
     #addEmployeeDialog .ae-step {
@@ -514,7 +514,7 @@
       width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
       font-size: 13px; font-weight: 700; color: #94a3b8;
-      background: #fff; border: 2px solid #cbd5e1; transition: all .18s ease;
+      background: #fff; border: 2px solid #64748b; transition: all .18s ease;
     }
     #addEmployeeDialog .ae-step-circle .ae-step-check { display: none; font-size: 12px; }
     #addEmployeeDialog .ae-step-label {
@@ -536,7 +536,7 @@
     #addEmployeeDialog .ae-step.completed .ae-step-label { color: #475569; }
 
     #addEmployeeDialog .ae-step-line {
-      flex: 0 1 60px; min-width: 20px; height: 2px; background: #e2e8f0;
+      flex: 0 1 60px; min-width: 20px; height: 2px; background: #94a3b8;
       margin-top: 15px; transition: background .18s ease;
     }
     #addEmployeeDialog .ae-step-line.completed { background: #044A78; }
@@ -592,7 +592,7 @@
        value, background with !important of our own) or the dialog's inputs
        render mangled. */
     #addEmployeeDialog .ae-input, #addEmployeeDialog .ae-select {
-      width: 100%; height: auto; padding: 10px 13px; border-radius: 10px; border: 1.5px solid #e2e8f0;
+      width: 100%; height: auto; padding: 10px 13px; border-radius: 10px; border: 1.5px solid #94a3b8;
       background: #f8fafc !important; font-size: 13.5px; color: #0f172a; transition: all .15s ease;
       font-family: inherit; flex-grow: 0; outline: none;
     }
@@ -621,7 +621,7 @@
     #addEmployeeDialog .ae-assets-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
 
     #addEmployeeDialog .choices__inner {
-      padding: 9px 13px !important; border-radius: 10px !important; border: 1.5px solid #e2e8f0 !important;
+      padding: 9px 13px !important; border-radius: 10px !important; border: 1.5px solid #94a3b8 !important;
       background-color: #f8fafc !important; font-size: 13.5px !important; min-height: 0 !important;
     }
     #addEmployeeDialog .choices__list--single { padding: 0 !important; }
@@ -629,7 +629,7 @@
     #addEmployeeDialog .choices.is-open .choices__inner {
       border-color: #044A78 !important; background-color: #fff !important; box-shadow: 0 0 0 4px rgba(4,74,120,0.1) !important;
     }
-    #addEmployeeDialog .choices__list--dropdown { z-index: 99999 !important; border-radius: 10px !important; border: 1.5px solid #e2e8f0 !important; }
+    #addEmployeeDialog .choices__list--dropdown { z-index: 99999 !important; border-radius: 10px !important; border: 1.5px solid #94a3b8 !important; }
 
     /* ---- Identification -------------------------------------------------
        Employee Photo reads as a profile-picture uploader: a circular avatar
@@ -641,11 +641,11 @@
        floating next to an unrelated text field. */
     #addEmployeeDialog .ae-photo-row {
       display: flex; align-items: center; gap: 20px; margin-bottom: 24px;
-      padding-bottom: 22px; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap;
+      padding-bottom: 22px; border-bottom: 1px solid #94a3b8; flex-wrap: wrap;
     }
     /* A plain line, not another boxed card, separates Photo from Biodata --
        same "if any separation, do it with a line" rule used everywhere else. */
-    #addEmployeeDialog .ae-photo-row-divider { align-self: stretch; width: 1px; background: #e2e8f0; flex-shrink: 0; }
+    #addEmployeeDialog .ae-photo-row-divider { align-self: stretch; width: 1px; background: #94a3b8; flex-shrink: 0; }
     #addEmployeeDialog .ae-avatar-upload { position: relative; flex-shrink: 0; width: 92px; height: 92px; }
     #addEmployeeDialog .ae-biodata-tile { flex-shrink: 0; }
     #addEmployeeDialog .ae-dropzone-sm { width: 110px; height: 92px; }
@@ -654,7 +654,7 @@
     #addEmployeeDialog .ae-dropzone-sm .ae-upload-file-chip .ae-file-chip-name { max-width: 96px; font-size: 10px; }
     #addEmployeeDialog .ae-avatar-circle {
       position: relative; display: block; width: 92px; height: 92px; border-radius: 50%;
-      overflow: hidden; background: #eef1f5; border: 2px solid #e2e8f0; cursor: pointer; transition: border-color .15s;
+      overflow: hidden; background: #eef1f5; border: 2px solid #94a3b8; cursor: pointer; transition: border-color .15s;
     }
     #addEmployeeDialog .ae-avatar-circle:hover { border-color: #044A78; }
     #addEmployeeDialog .ae-avatar-circle .ae-upload-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 30px; }
@@ -683,18 +683,18 @@
       display: flex; flex-direction: column; gap: 10px; padding: 0;
       border: none; background: transparent;
     }
-    #addEmployeeDialog .ae-doc-card + .ae-doc-card { border-left: 1px solid #e2e8f0; padding-left: 32px; }
+    #addEmployeeDialog .ae-doc-card + .ae-doc-card { border-left: 1px solid #94a3b8; padding-left: 32px; }
     #addEmployeeDialog .ae-doc-title { font-size: 12.5px; font-weight: 700; color: #0f172a; }
 
     @media (max-width: 720px) {
       #addEmployeeDialog .ae-doc-card + .ae-doc-card {
-        border-left: none; border-top: 1px solid #e2e8f0; padding-left: 0; padding-top: 18px;
+        border-left: none; border-top: 1px solid #94a3b8; padding-left: 0; padding-top: 18px;
       }
     }
 
     #addEmployeeDialog .ae-dropzone-wrap { position: relative; }
     #addEmployeeDialog .ae-dropzone {
-      position: relative; height: 110px; border-radius: 12px; border: 1.5px dashed #cbd5e1;
+      position: relative; height: 110px; border-radius: 12px; border: 1.5px dashed #64748b;
       background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden;
       cursor: pointer; transition: border-color .15s, background .15s;
     }
@@ -737,7 +737,7 @@
 
     #addEmployeeDialog .ae-section-label {
       font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #044A78;
-      margin: 22px 0 12px; padding-bottom: 8px; border-bottom: 1.5px solid #e2e8f0;
+      margin: 22px 0 12px; padding-bottom: 8px; border-bottom: 1.5px solid #94a3b8;
     }
     #addEmployeeDialog .ae-panel .ae-section-label:first-child { margin-top: 0; }
 
@@ -749,18 +749,18 @@
     #addEmployeeDialog .ae-dependents-list { display: flex; flex-direction: column; gap: 10px; }
     #addEmployeeDialog .ae-dependent-row {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;
-      padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 12px; background: #f8fafc;
+      padding: 12px; border: 1.5px solid #94a3b8; border-radius: 12px; background: #f8fafc;
     }
 
     #addEmployeeDialog .ae-footer {
       flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 10px;
-      padding: 16px 26px; border-top: 1px solid #e2e8f0; border-radius: 0 0 18px 18px; background: #fff;
+      padding: 16px 26px; border-top: 1px solid #94a3b8; border-radius: 0 0 18px 18px; background: #fff;
     }
     #addEmployeeDialog .ae-btn {
       display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 10px;
       font-size: 13.5px; font-weight: 600; cursor: pointer; border: 1.5px solid transparent; transition: all .15s ease;
     }
-    #addEmployeeDialog .ae-btn-ghost { background: #fff; color: #475569; border-color: #e2e8f0; }
+    #addEmployeeDialog .ae-btn-ghost { background: #fff; color: #475569; border-color: #94a3b8; }
     #addEmployeeDialog .ae-btn-ghost:hover { background: #f1f5f9; }
     /* Back on step 1 and Next on the last step are disabled, not hidden (see
        the footer markup), so they need a spent-looking state of their own --

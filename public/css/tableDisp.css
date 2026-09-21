@@ -21,6 +21,17 @@ input {
   outline: none;
 }
 
+/* Rounded corners for every Tabulator table, not just the handful of pages
+   that happened to set this on their own #id (see the grouped selector at
+   the top of this file) -- same 8px radius already used there and for the
+   app's other card-like surfaces (.download-selector__trigger etc below).
+   overflow:hidden is what clips the header's square corners into the round,
+   the same way it already does on those #id tables. */
+.tabulator {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
 .tabulator .tabulator-tableholder {
   overflow-y: auto !important;
 }

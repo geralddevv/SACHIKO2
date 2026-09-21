@@ -2066,7 +2066,7 @@
     const jsMinus = document.getElementById("jsMinus");
 
     function jsRenumber() {
-      Array.from(jsBody.rows).forEach((row, i) => { row.cells[0].textContent = i + 1; });
+      Array.from(jsBody.rows).forEach((row, i) => { row.cells[0].textContent = i; });
       jsCount.value = jsBody.rows.length;
     }
 
@@ -2203,8 +2203,8 @@
 
     function renumber() {
       let n = 0;
-      Array.from(logDoneBody.rows).forEach((row) => { row.cells[0].textContent = ++n; });
-      Array.from(logBody.rows).forEach((row) => { row.cells[0].textContent = ++n; });
+      Array.from(logDoneBody.rows).forEach((row) => { row.cells[0].textContent = n++; });
+      Array.from(logBody.rows).forEach((row) => { row.cells[0].textContent = n++; });
     }
 
     // Fields a completed Deckle has locked for good -- editing the produced

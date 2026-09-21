@@ -14,11 +14,6 @@
   const _isConfirm = typeof confirmMode !== 'undefined' && confirmMode;
   const _editing = (typeof orderToEdit !== 'undefined' && orderToEdit) ? orderToEdit : null;
   const _pageTitle = _isConfirm ? 'Dispatch Order' : (_editing ? 'Edit Sales Order' : 'New Sales Order');
-  const _pageSub = _isConfirm
-    ? 'Record what physically went out against this order and against which invoice.'
-    : (_editing
-        ? 'Change the client, item or quantities on an order already on the books.'
-        : 'Raise a client PO — pick the product, paper size and quantity, and the rate follows the binding.');
   const _submitLabel = _isConfirm ? 'Dispatch Order' : (_editing ? 'Update Order' : 'Create Order');
   const _submitIcon = _isConfirm ? 'fa-check-double' : 'fa-check';
   const _heroDate = _editing ? (_editing.poDate || _editing.createdAt) : null;
@@ -36,15 +31,21 @@
       <input type="hidden" name="status" value="CONFIRMED" />
     <% } %>
 
+    <!-- One raised sheet holding the page header band and every section flat
+         inside it -- same shape as the New Sales Order dialog (a coloured
+         head, then flat sections with no boxes of their own), so the
+         standalone page and the dialog read as the same page. In embed mode
+         the dialog itself is already that raised surface (see
+         .so-page.is-embedded in salesOrderForm.css), so this is a plain
+         passthrough there. -->
+    <div class="so-sheet">
     <!-- ================= PAGE HEADER =================
          Suppressed in the dialog: the dialog draws its own header, and two
          titles one above the other reads as a mistake. -->
     <% if (!_embed) { %>
     <header class="so-hero">
       <div class="so-hero__text">
-        <span class="so-hero__eyebrow">Sales</span>
         <h1><%= _pageTitle %></h1>
-        <p class="so-hero__sub"><%= _pageSub %></p>
       </div>
       <div class="so-hero__meta">
         <% if (_editing && _editing.poNumber) { %>
@@ -281,7 +282,7 @@
         </div>
       </div>
 
-      <div class="so-card__body" style="padding: 18px 20px 20px;">
+      <div class="so-card__body">
         <div class="ai-table-wrap">
           <table class="ai-table" id="additional-items-table">
             <thead>
@@ -412,6 +413,7 @@
       </div>
     </section>
     <% } %>
+    </div>
 
     <!-- ================= ACTIONS ================= -->
     <div class="so-actions">

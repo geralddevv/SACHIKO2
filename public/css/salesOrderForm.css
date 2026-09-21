@@ -20,12 +20,12 @@
 :root {
   --so-bg: #f4f6fa;
   --so-surface: #ffffff;
-  --so-line: #e5eaf1;
-  --so-line-soft: #eef1f6;
+  --so-line: #969faf;
+  --so-line-soft: #a5acba;
   --so-ink: #0f172a;
   --so-ink-soft: #475569;
-  --so-muted: #64748b;
-  --so-faint: #94a3b8;
+  --so-muted: #2e3a4c;
+  --so-faint: #4e5b6f;
   --so-brand: #044a78;
   --so-brand-dark: #03365a;
   --so-brand-soft: #eef4fa;
@@ -41,15 +41,15 @@
      and `select`), so a hairline grey was a bigger change than the redesign
      needed -- on a shopfloor monitor the boxes stopped being boxes. These
      read as edges without going back to a page of blue rectangles. */
-  --so-field-border: #8fa1b8;
-  --so-field-border-hover: #6c819b;
-  --so-placeholder: #64748b;
+  --so-field-border: #445a73;
+  --so-field-border-hover: #30445c;
+  --so-placeholder: #2e3a4c;
 
   /* Read-only stays plainly different from editable: no white ground, a
      softer edge, and grey text. */
   --so-field-ro-bg: #eaeff6;
-  --so-field-ro-border: #b4c1d1;
-  --so-field-ro-ink: #526175;
+  --so-field-ro-border: #707d8f;
+  --so-field-ro-ink: #222d3d;
 }
 
 .so-page {
@@ -89,39 +89,38 @@
   grid-template-columns: none;
 }
 
-/* ── Page header ─────────────────────────────────────────────────────── */
+/* ── The sheet: no box of its own ──────────────────────────────────────
+   .so-sheet just groups the header + sections; the ground under them stays
+   the plain page background in both modes -- standalone sits on --so-bg,
+   embedded sits on the dialog's own white (.so-page.is-embedded below).
+   Sections are told apart by a rule, not a box (see .so-card below). */
+
+/* ── Page header: same brand gradient the New Sales Order dialog's head
+   wears, so the standalone page and the dialog read as the same page --
+   but free-standing on the plain ground, not the top of a box. Suppressed
+   in embed mode (the view doesn't render it there), where the dialog draws
+   its own head instead. */
 .so-page .so-hero {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  padding: 2px 2px 0;
-}
-
-.so-page .so-hero__eyebrow {
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--so-faint);
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.16), transparent 34%),
+    linear-gradient(135deg, var(--so-brand) 0%, var(--so-brand-dark) 100%);
+  border-radius: var(--so-radius);
 }
 
 .so-page .so-hero h1 {
-  margin: 3px 0 0;
+  margin: 0;
   font-size: 26px;
   line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--so-ink);
-}
-
-.so-page .so-hero__sub {
-  margin: 5px 0 0;
-  font-size: 13px;
-  font-weight: 450;
-  color: var(--so-muted);
+  color: #fff;
 }
 
 .so-page .so-hero__meta {
@@ -138,48 +137,54 @@
   height: 30px;
   padding: 0 12px;
   border-radius: 999px;
-  background: var(--so-surface);
-  border: 1px solid var(--so-line);
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   font-size: 12px;
   font-weight: 500;
-  color: var(--so-muted);
+  color: rgba(255, 255, 255, 0.85);
   white-space: nowrap;
 }
 
 .so-page .so-chip i {
   font-size: 11px;
-  color: var(--so-faint);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .so-page .so-chip strong {
   font-weight: 650;
-  color: var(--so-brand);
+  color: #fff;
 }
 
 .so-page .so-chip--brand {
-  background: var(--so-brand-soft);
-  border-color: #d6e4f0;
-  color: var(--so-brand);
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.32);
+  color: #fff;
 }
 
 .so-page .so-chip--brand i {
-  color: var(--so-brand);
+  color: #fff;
 }
 
-/* ── Section card ────────────────────────────────────────────────────── */
+/* ── Section card: flat, not a box of its own -- sits straight on the plain
+   ground (see .so-sheet above) instead of being raised off it. Sections that
+   follow another one get a rule instead of a gap, and it's `~` rather than
+   `+` so it survives the stock-warning alert landing between two of them. */
 .so-page .so-card {
-  background: var(--so-surface);
-  border: 1px solid var(--so-line);
-  border-radius: var(--so-radius);
-  box-shadow: var(--so-shadow);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.so-page .so-card ~ .so-card {
+  border-top: 1px solid var(--so-line);
 }
 
 .so-page .so-card__head {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 13px 20px;
-  border-bottom: 1px solid var(--so-line-soft);
+  padding: 16px 20px 2px;
 }
 
 .so-page .so-card__icon {
@@ -218,7 +223,7 @@
    on its fields, so it takes back the breathing space the heading's own top
    padding was providing. */
 .so-page .so-card--bare > .so-grid {
-  padding-top: 20px;
+  padding-top: 18px;
 }
 
 /* ── The 32-column field grid (unchanged contract, new spacing) ───────── */
@@ -226,7 +231,7 @@
   display: grid;
   grid-template-columns: repeat(32, minmax(0, 1fr));
   gap: 16px 14px;
-  padding: 18px 20px 20px;
+  padding: 14px 20px 20px;
   align-items: start;
 }
 
@@ -644,6 +649,7 @@
   padding: 10px 12px;
   background: #f7f9fc;
   border-bottom: 1px solid var(--so-line);
+  border-right: 1px solid var(--so-line);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -664,7 +670,19 @@
 .so-page .ai-table td {
   padding: 9px 12px;
   border-bottom: 1px solid var(--so-line-soft);
+  border-right: 1px solid var(--so-line-soft);
   vertical-align: middle;
+}
+
+/* The remove button fills its whole cell (no padding of its own to dodge),
+   so hovering/clicking anywhere in the cell -- not just the small icon --
+   reaches it. */
+.so-page .ai-table td:last-child {
+  padding: 0;
+}
+
+.so-page .ai-table tr > *:last-child {
+  border-right: none;
 }
 
 .so-page .ai-table tbody tr:last-child td {
@@ -742,16 +760,17 @@
 }
 
 .so-page .ai-remove {
-  width: 30px;
-  height: 30px;
+  width: 100%;
+  height: 100%;
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 17px;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -911,52 +930,27 @@
   width: 100%;
 }
 
-/* ── In a dialog: one sheet, not three cards ─────────────────────────────
-   .is-embedded is set by the view when it renders with ?embed=1. A dialog is
-   already a raised white surface, so raising three more cards inside it reads
-   as boxes in a box. The sections keep their headings and go flat instead,
-   separated by a rule -- and the rule is put on every section that FOLLOWS
-   another one (`~`, not `+`), so it survives the stock warning appearing
-   between two of them. */
+/* ── In a dialog: the sheet is a plain passthrough ───────────────────────
+   .is-embedded is set by the view when it renders with ?embed=1. The
+   standalone page and the dialog share the same flat-sections-in-one-sheet
+   look now (see .so-sheet / .so-card above); the only thing embed mode still
+   needs is a white backdrop, since the dialog is the raised surface there
+   instead of .so-sheet. */
 .so-page.is-embedded {
   background: #ffffff;
 }
 
-.so-page.is-embedded .so-form {
-  gap: 0;
-}
-
-.so-page.is-embedded .so-card {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.so-page.is-embedded .so-card ~ .so-card {
-  border-top: 1px solid var(--so-line);
-}
-
-/* The heading and its own fields are one section now, so the line that used
-   to divide them would read as a second, weaker separator right under the
-   real one. */
-.so-page.is-embedded .so-card__head {
-  padding: 16px 20px 2px;
-  border-bottom: none;
-}
-
-.so-page.is-embedded .so-grid,
-.so-page.is-embedded .so-card__body {
+.so-page .so-card__body {
   padding: 14px 20px 20px;
 }
 
-/* The alerts are siblings of the sections, so they need the same side gutter
-   the sections have rather than sitting flush against the dialog edge. */
-.so-page.is-embedded .so-card--bare > .so-grid {
-  padding-top: 18px;
-}
-
-.so-page.is-embedded .so-alert {
+/* The stock warning sits between sections, as a direct sibling of the .so-card
+   elements inside .so-sheet, so it needs the same side gutter the sections
+   have rather than sitting flush against the sheet's edge. The other
+   .so-alert uses (Confirmation Details' dispatch log) live inside a .so-grid
+   cell instead and already get their spacing from the grid, so this is
+   scoped to the one that doesn't. */
+.so-page #stock-warning.so-alert {
   margin: 0 20px 16px;
 }
 
@@ -1461,7 +1455,11 @@
   }
 
   .so-page .so-card__head {
-    padding: 13px 14px;
+    padding: 13px 14px 2px;
+  }
+
+  .so-page .so-hero {
+    padding: 16px 14px;
   }
 
   .so-page .so-hero h1 {
