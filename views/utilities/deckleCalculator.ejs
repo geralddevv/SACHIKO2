@@ -96,8 +96,14 @@
             <div id="dsfSizeMsg" class="dsf-chip-msg" hidden></div>
           </div>
         </div>
+        <!-- AI Deckle Set hidden on this page at user request (2026-09-21):
+             the calculator opens straight on the hand-drawn planner now. The
+             elements stay in the DOM, just invisible -- deckleCalculator.js
+             still looks them up by id (dsaRun/dsaBody/dsaOvPct/dsaOvRolls),
+             and removing them outright would throw on load. Delete this
+             `style` (and the one on #dsaBody below) to bring it back. -->
         <% if (autoDeckle && autoDeckle.enabled) { %>
-          <div class="dc-bar-group dc-bar-group-ai">
+          <div class="dc-bar-group dc-bar-group-ai" style="display:none;">
             <div class="dsa-field dsa-narrow">
               <label for="dsaOvPct">Max Overrun %</label>
               <input type="number" step="any" min="0" id="dsaOvPct" inputmode="decimal"
@@ -120,66 +126,115 @@
       </div>
       <!-- Where a failed plan reports itself. Empty on success (see dsaPlan)
            and `display:none` while empty, so the strip is just the strip. -->
-      <% if (autoDeckle && autoDeckle.enabled) { %><div class="dsa-body" id="dsaBody"></div><% } %>
+      <% if (autoDeckle && autoDeckle.enabled) { %><div class="dsa-body" id="dsaBody" style="display:none;"></div><% } %>
     </div>
   </div>
 
   <!-- Requirements -- this page's stand-in for "Orders In This Deckle". Rows
        are built by the script so each one wires its own inputs; the tbody
-       starts empty on purpose. -->
-  <div class="span-full form-subheading sl-sec-head"><h1>Requirements</h1></div>
-  <div class="span-full" style="border:none !important;">
-    <!-- Header bar, table and totals in ONE card, sized to the table: the bar
-         then lines up with the columns under it instead of running off across
-         a page the table does not fill. -->
-    <div class="sl-panel dc-req-card">
-      <div class="dc-req-head">
-        <span class="dc-req-note">Untick a line to leave it out</span>
-        <button type="button" id="dcAddReq" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Requirement</button>
-      </div>
-      <div class="sl-scroll">
-        <table class="sl-table dc-req-table">
-          <thead>
-            <tr>
-              <th style="width:40px;" title="The number the messages under Deckle Set name this line by.">#</th>
-              <th style="width:42px;" title="Include this line in the calculation."><i class="fa-solid fa-check"></i></th>
-              <th style="width:132px;">Roll Width (mm)</th>
-              <th style="width:146px;" title="Length wound on each finished roll. Leave blank to count rolls of any length.">Running Mtrs</th>
-              <th style="width:110px;">Roll Qty</th>
-              <th style="width:118px;" title="Rolls of this width and length the layouts below actually produce.">Rolls Set</th>
-              <th style="width:140px;" title="Rolls Set minus Roll Qty — negative is short, positive is spare.">Balance</th>
-              <th style="width:44px;"></th>
-            </tr>
-          </thead>
-          <tbody id="dcReqBody"></tbody>
-          <!-- The bottom line: what was asked for, what the layouts make of it,
-               and the difference. Filled by recalcAll(). -->
-          <tfoot>
-            <tr>
-              <td colspan="4" class="dc-req-foot-label">Total</td>
-              <td class="dc-req-foot-qty">—</td>
-              <td class="dc-req-foot-set">—</td>
-              <td class="dc-req-foot-bal">—</td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
+       starts empty on purpose.
+
+       Hidden on this page at user request (2026-09-21) -- the calculator
+       opens straight on the hand-drawn Deckle Set planner, with nothing to
+       match layouts against. The markup stays put (deckleCalculator.js looks
+       these ids up unconditionally), but with requirements off the page no
+       longer treats "no requirement claims this roll" as worth a word: see
+       REQUIREMENTS_ENABLED in deckleCalculator.js, read off this wrapper's
+       `id` + inline `style` so the blocking "enter at least one requirement"
+       error and the Extra Rolls chip (which only means something relative to
+       a requirement) both stand down while this is hidden. Remove the
+       `style` here to bring the section back — the flag flips itself. -->
+  <div id="dcRequirementsWrap" style="display:none;">
+    <div class="span-full form-subheading sl-sec-head"><h1>Requirements</h1></div>
+    <div class="span-full" style="border:none !important;">
+      <!-- Header bar, table and totals in ONE card, sized to the table: the bar
+           then lines up with the columns under it instead of running off across
+           a page the table does not fill. -->
+      <div class="sl-panel dc-req-card">
+        <div class="dc-req-head">
+          <span class="dc-req-note">Untick a line to leave it out</span>
+          <button type="button" id="dcAddReq" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Requirement</button>
+        </div>
+        <div class="sl-scroll">
+          <table class="sl-table dc-req-table">
+            <thead>
+              <tr>
+                <th style="width:40px;" title="The number the messages under Deckle Set name this line by.">#</th>
+                <th style="width:42px;" title="Include this line in the calculation."><i class="fa-solid fa-check"></i></th>
+                <th style="width:132px;">Roll Width (mm)</th>
+                <th style="width:146px;" title="Length wound on each finished roll. Leave blank to count rolls of any length.">Running Mtrs</th>
+                <th style="width:110px;">Roll Qty</th>
+                <th style="width:118px;" title="Rolls of this width and length the layouts below actually produce.">Rolls Set</th>
+                <th style="width:140px;" title="Rolls Set minus Roll Qty — negative is short, positive is spare.">Balance</th>
+                <th style="width:44px;"></th>
+              </tr>
+            </thead>
+            <tbody id="dcReqBody"></tbody>
+            <!-- The bottom line: what was asked for, what the layouts make of it,
+                 and the difference. Filled by recalcAll(). -->
+            <tfoot>
+              <tr>
+                <td colspan="4" class="dc-req-foot-label">Total</td>
+                <td class="dc-req-foot-qty">—</td>
+                <td class="dc-req-foot-set">—</td>
+                <td class="dc-req-foot-bal">—</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Deckle Set: the deckle as it currently stands, one line per layout. The
-       knives themselves are drawn in the dialog behind each row's pencil
-       (#dsfLayoutModal, below), so this shows the result rather than the
-       working. Redrawn by recalcAll(); nothing here is an input. -->
-  <div class="span-full form-subheading sl-sec-head"><h1>Deckle Set</h1></div>
+  <!-- Deckle Layout -- type each layout's knife widths directly here, no
+       dialog. Every row added stays on the page at once (the old popup
+       scoped the table down to one row at a time; that scoping, and the
+       table's only reason to float over a backdrop, are both gone). No
+       grace feature on this page either (removed at user request,
+       2026-09-21) -- the Set Deckle page still has its own. -->
+  <div class="span-full form-subheading sl-sec-head">
+    <h1>Deckle Layout</h1>
+    <button type="button" id="dsfAddLayout" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Deckle Layout</button>
+  </div>
   <div class="span-full" style="border:none !important;">
-    <div class="dsf-set-wrap">
-      <div class="dsf-set-head" id="dsfSetHead">
-        <span id="dsfSetSub" class="dsf-set-sub"></span>
-        <button type="button" id="dsfAddLayout" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Deckle Layout</button>
+    <div class="dsf-layout-panel">
+      <div class="sl-panel sl-scroll">
+        <table class="sl-table dsf-layout-table-full" id="dsfLayoutTable">
+          <thead>
+            <tr>
+              <th style="width:38px;">#</th>
+              <% cutSlots.forEach((s) => { %><th><%= s %></th><% }) %>
+              <th style="width:104px;">Deckle R.M.</th>
+              <th style="width:88px;">R. Meter</th>
+              <th style="width:96px;">Deckle Count</th>
+              <th style="width:38px;"></th>
+            </tr>
+          </thead>
+          <tbody id="dsfLayoutBody"></tbody>
+        </table>
       </div>
-      <div class="sl-scroll" id="dsfSetBody"></div>
+      <div class="dsf-layout-toolbar">
+        <span id="dsfLayoutStatus" class="dsf-layout-status"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Deckle Set -- the read-only recap table of what is typed into Deckle
+       Layout above. Hidden on this page at user request (2026-09-21); the
+       figures it feeds (Facestock Used, Side Run, Total, ...) still show in
+       the footer below, which is why renderSetSummary() still runs and
+       still builds this markup -- it just isn't shown. Remove the wrapping
+       `style` to bring it back. -->
+  <div style="display:none;">
+    <div class="span-full form-subheading sl-sec-head"><h1>Deckle Set</h1></div>
+    <div class="span-full" style="border:none !important;">
+      <div class="dsf-set-wrap">
+        <div class="dsf-set-head" id="dsfSetHead">
+          <span id="dsfSetSub" class="dsf-set-sub"></span>
+        </div>
+        <div class="sl-scroll" id="dsfSetBody"></div>
+      </div>
     </div>
   </div>
 
@@ -198,50 +253,6 @@
                 title="Clear the requirements and the layouts. Edge Trim, Deckle R.M. and Deckle Size are kept — they describe the plant, not the job.">
           <i class="fa-solid fa-rotate-left"></i> <span id="dcResetLabel">Reset</span>
         </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ============ DECKLE LAYOUT DIALOG ============ -->
-<!-- The layout table lives here rather than on the page, but it is still the
-     source of truth: readRow() and recalcAll() read these rows, open or
-     closed. The dialog only scopes the table to the one layout being edited --
-     the others keep their DOM (and so their values) and are hidden by
-     #dsfLayoutTable.is-solo, never detached. -->
-<div class="logout-modal dsf-layout-modal" id="dsfLayoutModal" aria-hidden="true">
-  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="dsfLayoutModalTitle"
-       style="width: min(1080px, 96vw); padding: 0; border-radius: 14px; border: none;">
-    <div class="dialog-header">
-      <h2 id="dsfLayoutModalTitle">Deckle Layout</h2>
-      <button class="dialog-close-btn" type="button" id="dsfLayoutModalClose" aria-label="Close">&times;</button>
-    </div>
-    <div class="dialog-body">
-      <div class="sl-panel sl-scroll">
-        <table class="sl-table" id="dsfLayoutTable" style="min-width: 980px;">
-          <thead>
-            <tr>
-              <th style="width:38px;">#</th>
-              <% cutSlots.forEach((s) => { %><th style="width:46px;"><%= s %></th><% }) %>
-              <th style="width:104px;">Deckle R.M.</th>
-              <th style="width:88px;">R. Meter</th>
-              <th style="width:96px;">Deckle Count</th>
-              <th style="width:38px;"></th>
-            </tr>
-          </thead>
-          <tbody id="dsfLayoutBody"></tbody>
-        </table>
-      </div>
-      <!-- Grace: hand the web's leftover side trim to the rolls instead of
-           scrapping it. Cuts wider, bills at the ordered width. -->
-      <div id="dsfGracePanel" class="dsf-grace" hidden></div>
-      <div class="dsf-layout-toolbar">
-        <span id="dsfLayoutStatus" class="dsf-layout-status"></span>
-        <div class="dsf-toolbar-btns">
-          <button type="button" class="dsf-add-btn" id="dsfGraceBtn"
-                  aria-expanded="false" aria-controls="dsfGracePanel"></button>
-          <button type="button" class="dsf-add-btn dsf-done-btn" id="dsfLayoutModalDone">Done</button>
-        </div>
       </div>
     </div>
   </div>

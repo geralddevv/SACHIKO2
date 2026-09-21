@@ -645,6 +645,43 @@
     font-size: 10px; font-weight: 800; letter-spacing: 0.04em; color: #044a78;
     background: #eef5ff; border-radius: 999px; padding: 2px 7px; white-space: nowrap;
   }
+
+  /* ---- Advance orders: typed in ahead of a real one (POST .../advance) --
+     a forecast, not a confirmed order, so it reads as visually distinct
+     everywhere loose orders are listed: a light cornflowerblue wash on its
+     row here (equal specificity to the plain hover rule above, so it has to
+     restate :hover to win it too), and the matching solid cornflowerblue on
+     its knife segment(s) in every drawn web (see .dsf-web-adv). No badge --
+     the colour alone is the signal. ---- */
+  .sl-table tbody tr.dsf-order-advance > td,
+  .sl-table tbody tr.dsf-order-advance:hover > td {
+    background: rgba(100, 149, 237, 0.16);
+    box-shadow: inset 3px 0 0 cornflowerblue;
+  }
+  /* A cut segment belongs to an advance-order width -- see ADVANCE_WIDTHS /
+     computeAdvanceWidths() below. Same specificity as the nth-child stripe
+     and the edge/trim overrides above it, so it has to come after all of them
+     in source order to win. */
+  .sl-web-seg.dsf-web-adv { background: cornflowerblue; }
+
+  /* ---- Advance dialog ---- */
+  .dsf-adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .dsf-adv-field { display: flex; flex-direction: column; gap: 5px; }
+  .dsf-adv-field.span-2 { grid-column: span 2; }
+  .dsf-adv-field label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #7c8ba1;
+  }
+  .dsf-adv-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .dsf-adv-cancel {
+    border: 1.5px solid #cbd5e1; background: #fff; color: #44566e; border-radius: 8px;
+    padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .dsf-adv-cancel:hover { background: #f4f6f9; }
+  .dsf-adv-submit {
+    border: 1.5px solid #044a78; background: #044a78; color: #fff; border-radius: 8px;
+    padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .dsf-adv-submit:hover { background: #06639f; border-color: #06639f; }
 </style>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
@@ -703,7 +740,12 @@
     </div>
 
     <!-- Orders in this deckle -->
-    <div class="span-full form-subheading sl-sec-head"><h1>Orders In This Deckle</h1></div>
+    <div class="span-full form-subheading sl-sec-head">
+      <h1>Orders In This Deckle</h1>
+      <button type="button" id="dsfAdvanceOpen" class="dsf-add-btn">
+        <i class="fa-solid fa-calendar-plus"></i> Advance
+      </button>
+    </div>
     <div class="span-full" style="border:none !important;">
       <div class="sl-panel sl-scroll" style="display:inline-block; width:auto; max-width:100%;">
         <table class="sl-table" style="width:auto; min-width:0;">
@@ -720,7 +762,8 @@
           <tbody id="dsfOrderBody">
             <% kids.forEach((m) => { %>
               <tr data-order-id="<%= m._id %>"
-                  data-size="<%= Number(m.paperSize) || 0 %>" data-qty="<%= Number(m.quantity) || 0 %>">
+                  data-size="<%= Number(m.paperSize) || 0 %>" data-qty="<%= Number(m.quantity) || 0 %>"
+                  <% if (m.isAdvance) { %>class="dsf-order-advance" title="Added in advance -- not a confirmed order yet"<% } %>>
                 <td><input type="checkbox" class="dsf-order-check" name="orderIds" value="<%= m._id %>" checked /></td>
                 <td><%= dash(m.paperSize) %></td>
                 <td><%= fmtN(m.runningMeters) %></td>
@@ -871,6 +914,54 @@
   </div>
 </div>
 
+<!-- ============ ADVANCE ORDER DIALOG ============ -->
+<!-- A real POST, not fetch/JS -- it mints a loose PendingProduction row
+     server-side (POST .../plan/:itemId/advance) and sends the planner back to
+     this same GET, which re-renders with the new row already in #dsfOrderBody
+     (checked, tagged, highlighted) -- so nothing here has to duplicate the
+     row-rendering or Rolls-Set/Balance logic above. Its own <form>, outside
+     #dsfForm, so it never collides with that form's submit. -->
+<div class="logout-modal" id="dsfAdvanceModal" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="dsfAdvanceModalTitle"
+       style="width: min(480px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header">
+      <h2 id="dsfAdvanceModalTitle">Advance Order</h2>
+      <button class="dialog-close-btn" type="button" id="dsfAdvanceModalClose" aria-label="Close">&times;</button>
+    </div>
+    <!-- The bare `form` selector in common.css turns every form into a
+         32-column grid with its own border/padding (see #dsfForm's own inline
+         override below the recipe facts) -- undo all of that here so a plain
+         one-column dialog form doesn't collapse its content into 1/32 of the
+         width. -->
+    <form id="dsfAdvanceForm" method="post"
+          action="/app/labels/production/deckle-set/plan/<%= group.itemId %>/advance"
+          autocomplete="off" novalidate
+          style="display:block; width:auto; border:none; padding:0; gap:0;">
+      <div class="dialog-body">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <div class="dsf-adv-grid">
+          <div class="dsf-adv-field">
+            <label for="dsfAdvSize">Paper Size (mm)</label>
+            <input type="number" step="any" min="0" required id="dsfAdvSize" name="paperSize" class="form-control" inputmode="decimal" />
+          </div>
+          <div class="dsf-adv-field">
+            <label for="dsfAdvRm">Running Mtrs</label>
+            <input type="number" step="any" min="0" required id="dsfAdvRm" name="runningMeters" class="form-control" inputmode="decimal" />
+          </div>
+          <div class="dsf-adv-field span-2">
+            <label for="dsfAdvQty">Roll Qty</label>
+            <input type="number" step="1" min="1" required id="dsfAdvQty" name="quantity" class="form-control" inputmode="numeric" />
+          </div>
+        </div>
+        <div class="dsf-adv-actions">
+          <button type="button" class="dsf-adv-cancel" id="dsfAdvanceModalCancel">Cancel</button>
+          <button type="submit" class="dsf-adv-submit">Add Advance Order</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script id="dsf-group" type="application/json"><%- safeJson(group) %></script>
 <script id="dsf-slots" type="application/json"><%- safeJson(cutSlots) %></script>
 <script id="dsf-cfg" type="application/json"><%- safeJson({ edge: edgeTrimPerSide, subColspan }) %></script>
@@ -940,6 +1031,24 @@
   const dsfFinalStats = document.getElementById("dsfFinalStats");
   const dsfStatChips = document.getElementById("dsfStatChips");
   const orderBody = document.getElementById("dsfOrderBody");
+  // Paper sizes currently covered by a TICKED advance order -- refreshed at
+  // the top of every recalcAll() so the web diagrams (webInnerHTML/cutSeg)
+  // can tint a knife segment cornflowerblue the same way its order row is
+  // tinted, without threading order identity through the cut-planning math
+  // itself. Width is the matching key throughout this page (setByWidth,
+  // ordersByWidth) -- orders sharing a width are already pooled as one
+  // fungible draw, so a width with any advance order in the mix reads as
+  // advance everywhere it is drawn.
+  let ADVANCE_WIDTHS = new Set();
+  function computeAdvanceWidths() {
+    const s = new Set();
+    orderBody.querySelectorAll("tr.dsf-order-advance").forEach((tr) => {
+      if (!tr.querySelector('input[name="orderIds"]:checked')) return;
+      const w = round2(Number(tr.dataset.size) || 0);
+      if (w > 0) s.add(w);
+    });
+    return s;
+  }
   const sizeChipsEl = document.getElementById("dsfSizeChips");
   const sizeAddEl = document.getElementById("dsfSizeAdd");
   const sizeInputEl = document.getElementById("dsfSizeInput");
@@ -1012,15 +1121,21 @@
     return `<div class="sl-web-seg sl-web-edge" style="flex-grow:${EDGE}" title="${side} edge trim — ${EDGE} mm">`
       + `<span class="sl-seg-slot">EDGE</span><span class="sl-seg-w">${EDGE}</span></div>`;
   }
-  function cutSeg(slot, w) {
-    return `<div class="sl-web-seg" style="flex-grow:${w}" title="${esc(slot)} — ${esc(fmt(w))} mm">`
+  function cutSeg(slot, w, isAdvance) {
+    return `<div class="sl-web-seg${isAdvance ? " dsf-web-adv" : ""}" style="flex-grow:${w}" title="${esc(slot)} — ${esc(fmt(w))} mm${isAdvance ? " — ADVANCE" : ""}">`
       + `<span class="sl-seg-slot">${esc(slot)}</span><span class="sl-seg-w">${esc(fmt(w))}</span></div>`;
   }
   function trimSeg(w) {
     return `<div class="sl-web-seg sl-web-trim" style="flex-grow:${w}" title="Trim (uncut slack) — ${esc(fmt(w))} mm">`
       + `<span class="sl-seg-slot">TRIM</span><span class="sl-seg-w">${esc(fmt(w))}</span></div>`;
   }
-  function webInnerHTML(cuts, webWidth) {
+  // `orderedCuts` is the same-length, same-order array of ORDERED widths
+  // (i.e. a row's `cuts`, not `graced`) a segment is matched against
+  // ADVANCE_WIDTHS with -- grace draws the knife wider than what was
+  // ordered, and it is the ordered width an advance order is keyed on
+  // (see setByWidth / ordersByWidth above). Falls back to `cuts` itself
+  // when omitted, i.e. no grace in play, so the two are the same widths.
+  function webInnerHTML(cuts, webWidth, orderedCuts) {
     const sum = round2(cuts.reduce((n, [, w]) => n + w, 0));
     const cuttable = round2(webWidth - 2 * EDGE);
     const over = webWidth > 0 && sum > cuttable;
@@ -1028,7 +1143,11 @@
     if (!cuts.length) {
       return `${edgeSeg("Left")}<div class="sl-web-empty" style="flex-grow:${Math.max(cuttable, 1)};flex-basis:0;min-width:0;width:auto;">${webWidth > 0 ? esc(fmt(cuttable)) + " mm — no roll widths yet" : "enter roll widths"}</div>${edgeSeg("Right")}`;
     }
-    const segs = cuts.map(([slot, w]) => cutSeg(slot, w));
+    const ordered = orderedCuts || cuts;
+    const segs = cuts.map(([slot, w], i) => {
+      const orderedW = round2((ordered[i] && ordered[i][1]) ?? w);
+      return cutSeg(slot, w, ADVANCE_WIDTHS.has(orderedW));
+    });
     if (!over && slack > 0) segs.push(trimSeg(slack));
     return `${edgeSeg("Left")}${segs.join("")}${edgeSeg("Right")}`;
   }
@@ -1499,7 +1618,7 @@
     `<thead><tr><th>Deckle Size</th><th>Siderun</th><th>Across</th><th>Deckle Count</th><th>Layout</th><th>Use</th></tr></thead>`;
 
   // One "deckle size | siderun | across | deckle count | diagram | pick" row.
-  function webRowHTML(cuts, sz, chosen, isBest, webs) {
+  function webRowHTML(cuts, sz, chosen, isBest, webs, orderedCuts) {
     const cutSum = round2(cuts.reduce((n, [, w]) => n + w, 0));
     const cuttable = round2(sz - 2 * EDGE);
     const remaining = round2(cuttable - cutSum);
@@ -1516,7 +1635,7 @@
         </td>
         <td class="dsf-web-dc">${esc(fmt(webs))}</td>
         <td class="dsf-web-diag">
-          <div class="sl-web${over ? " is-over" : ""}">${webInnerHTML(cuts, sz)}</div>
+          <div class="sl-web${over ? " is-over" : ""}">${webInnerHTML(cuts, sz, orderedCuts)}</div>
         </td>
         <td class="dsf-web-pick"><span class="dsf-radio"></span></td>
       </tr>`;
@@ -1526,6 +1645,7 @@
   // update totals.
   function recalcAll() {
     readTrim();
+    ADVANCE_WIDTHS = computeAdvanceWidths();
     const rows = layoutRows();
     const { best } = autoSize();
     let totalWebs = 0;
@@ -1648,7 +1768,7 @@
         && tr.dataset.showAll !== "1" && SIZE_LIST.includes(rSz);
       const sizesShown = collapsed ? [rSz] : SIZE_LIST;
       stack.innerHTML = SIZE_LIST.length
-        ? `<table class="dsf-web-table">${WEB_TABLE_HEAD}<tbody>${sizesShown.map((s) => webRowHTML(r.graced, s, s === rSz, s === best, r.webs)).join("")}</tbody></table>`
+        ? `<table class="dsf-web-table">${WEB_TABLE_HEAD}<tbody>${sizesShown.map((s) => webRowHTML(r.graced, s, s === rSz, s === best, r.webs, r.cuts)).join("")}</tbody></table>`
           + (collapsed
               ? `<button type="button" class="dsf-sizes-toggle" title="Show every available deckle size for this layout"><i class="fa-solid fa-chevron-down"></i>Show all ${SIZE_LIST.length} sizes</button>`
               : (ONLY_CHOSEN && SIZE_LIST.length > 1
@@ -1824,7 +1944,7 @@
       th: "The web drawn to scale, at the widths actually cut (grace included). Sorts on the total width cut from it.",
       sort: (L) => L.cutSum, text: (L) => cutsPlain(L.graced),
       cell: (L) => `<div class="sl-web${L.remaining != null && L.remaining < 0 ? " is-over" : ""}">`
-        + `${webInnerHTML(L.graced, L.size)}</div>`,
+        + `${webInnerHTML(L.graced, L.size, L.cuts)}</div>`,
     },
     // Siderun + Trim + Grace = Total, in that order across the row, so the
     // headline figure can be checked against its three parts by eye.
@@ -2395,6 +2515,28 @@
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && layoutModal.classList.contains("show")) closeLayoutDialog();
   });
+
+  // ---- Advance order dialog -- a plain form POST, so open/close is all
+  // this page's own JS has to do; the row itself comes back from the server
+  // on the next render. ----
+  const advanceModal = document.getElementById("dsfAdvanceModal");
+  function openAdvanceDialog() {
+    document.getElementById("dsfAdvanceForm").reset();
+    advanceModal.classList.add("show");
+    advanceModal.setAttribute("aria-hidden", "false");
+  }
+  function closeAdvanceDialog() {
+    advanceModal.classList.remove("show");
+    advanceModal.setAttribute("aria-hidden", "true");
+  }
+  document.getElementById("dsfAdvanceOpen").addEventListener("click", openAdvanceDialog);
+  document.getElementById("dsfAdvanceModalClose").addEventListener("click", closeAdvanceDialog);
+  document.getElementById("dsfAdvanceModalCancel").addEventListener("click", closeAdvanceDialog);
+  advanceModal.addEventListener("click", (ev) => { if (ev.target === advanceModal) closeAdvanceDialog(); });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && advanceModal.classList.contains("show")) closeAdvanceDialog();
+  });
+
   document.getElementById("dsfSizeEdit").addEventListener("click", () => { sizesEditing = !sizesEditing; renderSizeChips(); });
   document.getElementById("dsfSizeAddBtn").addEventListener("click", addSize);
   sizeInputEl.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); addSize(); } });

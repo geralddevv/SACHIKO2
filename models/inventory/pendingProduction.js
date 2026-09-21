@@ -20,10 +20,11 @@ const pendingProductionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Not required -- an Advance row (isAdvance below) is added before any
+    // client is attached to the need, so it has none.
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Username",
-      required: true,
       index: true,
     },
     quantity: {
@@ -40,6 +41,19 @@ const pendingProductionSchema = new mongoose.Schema(
     orderRate: { type: Number },
     estimatedDate: { type: Date },
     remarks: { type: String },
+
+    // Set by the "Advance" button on the Set Deckle plan page
+    // (POST /labels/production/deckle-set/plan/:itemId/advance) -- a loose
+    // row the planner typed in ahead of a real order, so material for it can
+    // be cut into today's deckle instead of waiting for the order to land.
+    // No TapeSalesOrder backs it (same reasoning as isDeckleBatch/
+    // parentOrderId below), so order-sync upserts never touch it. Shown with
+    // a cornflowerblue highlight + "ADVANCE" tag everywhere loose orders are
+    // listed (dsFmtChild in routes/fairdesk_route.js). Once it joins a batch
+    // it flows through Deckle Queue -> Assign Production -> Machine Queue
+    // exactly like any other member -- nothing downstream needs to know it
+    // started this way.
+    isAdvance: { type: Boolean, default: false },
 
     // Copied from the order at sync time -- replace FAIRTECH's die-derived
     // roll math, since Label Stock orders already collect these directly.

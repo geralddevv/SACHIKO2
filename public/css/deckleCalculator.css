@@ -369,7 +369,7 @@
 
 /* One scrollbar for every surface this page scrolls: EVERY .sl-scroll -- the
    Requirements table, the Deckle Set recap (#dsfSetBody is one) and the
-   layout table inside the dialog -- plus the dialog body's vertical bar.
+   Deckle Layout table.
    Matched on the class rather than named one by one, which is how the
    Requirements card came to be the only strip on the page still wearing the
    browser's own bar.
@@ -379,18 +379,12 @@
    longhand -- it ignores every ::-webkit- line above, and without it drew
    the OS default at OS width.
    The page's own scroll gets the same treatment, just below. */
-.sl-scroll::-webkit-scrollbar,
-.dsf-layout-modal .dialog-body::-webkit-scrollbar { width: 10px; height: 10px; }
-.sl-scroll::-webkit-scrollbar-track,
-.dsf-layout-modal .dialog-body::-webkit-scrollbar-track { background: #f0f2f5; border-radius: 6px; }
-.sl-scroll::-webkit-scrollbar-thumb,
-.dsf-layout-modal .dialog-body::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
-.sl-scroll::-webkit-scrollbar-thumb:hover,
-.dsf-layout-modal .dialog-body::-webkit-scrollbar-thumb:hover { background: #06639f; }
-.sl-scroll::-webkit-scrollbar-corner,
-.dsf-layout-modal .dialog-body::-webkit-scrollbar-corner { background: #f0f2f5; }
-.sl-scroll,
-.dsf-layout-modal .dialog-body { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
+.sl-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.sl-scroll::-webkit-scrollbar-track { background: #f0f2f5; border-radius: 6px; }
+.sl-scroll::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+.sl-scroll::-webkit-scrollbar-thumb:hover { background: #06639f; }
+.sl-scroll::-webkit-scrollbar-corner { background: #f0f2f5; }
+.sl-scroll { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
 
 /* ...and the page's own scroll, in the same blue, so the bar down the side of
    the window matches the ones inside the cards instead of being the one grey
@@ -500,10 +494,6 @@
 /* A constant part of the sum -- kept neutral so Total stays the
    figure the eye lands on. */
 .dsf-set-table .dsf-set-edge { width: 74px; color: #44566e; }
-/* Grace is width the rolls keep, not width thrown away -- teal, so it does
-   not read as another scrap column beside the Siderun and Trim it sits
-   with. */
-.dsf-set-table .dsf-set-grace { width: 78px; color: #0f766e; }
 .dsf-set-table .dsf-set-rem.sl-bad { color: #b91c1c; }
 .dsf-set-table .dsf-set-rolls { color: #15803d; font-weight: 800; }
 .dsf-set-table tfoot td {
@@ -541,102 +531,17 @@
 }
 .dsf-set-table tbody tr.dsf-set-pending:hover td { background: #f7fbff; }
 
-/* ---- Deckle Layout dialog ---- */
-.dialog-header {
-  background: #044a78; padding: 14px 20px; border-radius: 14px 14px 0 0;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.dialog-header h2 { margin: 0; font-size: 1.02rem; font-weight: 700; color: #fff; }
-.dialog-close-btn {
-  background: none; border: none; color: #fff; font-size: 26px; cursor: pointer; line-height: 1;
-  width: 36px; height: 36px; border-radius: 8px; opacity: 0.85;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.dialog-close-btn:hover { opacity: 1; background: rgba(255, 255, 255, 0.18); }
-.dialog-body {
-  padding: 16px; background: #fff; border-radius: 0 0 14px 14px;
-  max-height: calc(100vh - 170px); overflow-y: auto;
-}
-/* The layout table is scoped to the one layout being edited. Every other row
-   stays in the DOM -- the totals, the validation and the submit payload are
-   all computed off them -- it is only hidden while the dialog is open. */
-#dsfLayoutTable.is-solo > tbody > tr:not(.is-editing) { display: none; }
-.dsf-done-btn { border-color: #044a78; background: #044a78; color: #fff; }
-.dsf-done-btn:hover { background: #06639f; border-color: #06639f; color: #fff; }
-.dsf-toolbar-btns { display: flex; align-items: center; gap: 10px; margin-left: auto; }
-/* Open reads as pressed -- a light fill, not the solid blue Done wears, so
-   the two never look like rival primary actions. */
-#dsfGraceBtn.is-on { background: #eef5ff; border-color: #044a78; color: #044a78; }
-/* How much grace this layout is carrying, right on the button, so it is
-   legible without opening the panel at all. */
-.dsf-btn-badge {
-  margin-left: 2px; font-size: 10px; font-weight: 800; letter-spacing: 0.03em;
-  color: #fff; background: #0f766e; border-radius: 999px; padding: 2px 7px; white-space: nowrap;
-}
-.dsf-grace-x {
-  border: none; background: none; color: #7c8ba1; cursor: pointer; font-size: 22px; line-height: 1;
-  width: 28px; height: 28px; border-radius: 7px; margin-left: -4px;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.dsf-grace-x:hover { background: rgba(4, 74, 120, 0.1); color: #044a78; }
-
-/* ---- Grace panel ---- */
-.dsf-grace {
-  margin-top: 12px; border: 1.5px solid #cfe0f0; border-radius: 10px;
-  background: #f8fbff; overflow: hidden;
-}
-.dsf-grace[hidden] { display: none; }
-.dsf-grace-head {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 10px 14px; background: linear-gradient(180deg, #f2f8fd, #e9f2fa);
-  border-bottom: 1px solid #dfeaf5;
-}
-.dsf-grace-head h3 {
-  margin: 0; font-size: 12px; font-weight: 800; color: #1f2a44;
-  text-transform: uppercase; letter-spacing: 0.06em;
-}
-.dsf-grace-note { font-size: 11.5px; font-weight: 600; color: #5b6b80; }
-.dsf-grace-acts { display: flex; gap: 8px; margin-left: auto; }
-.dsf-grace-body { padding: 12px 14px; }
-.dsf-grace-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff;
-  border: 1px solid #e6eaf2; border-radius: 8px; overflow: hidden; }
-.dsf-grace-table th {
-  background: #eef3f9; color: #44566e; font-size: 10px; font-weight: 800; letter-spacing: 0.05em;
-  text-transform: uppercase; padding: 6px 10px; text-align: center; white-space: nowrap;
-}
-.dsf-grace-table td {
-  padding: 6px 10px; border-top: 1px solid #eef1f6; text-align: center;
-  font-size: 13px; font-weight: 700; color: #1f2a44; font-variant-numeric: tabular-nums;
-}
-.dsf-grace-table .dsf-g-slot { width: 44px; color: #7c8ba1; }
-.dsf-grace-table .dsf-g-cut { color: #044a78; font-weight: 800; }
-.dsf-grace-input {
-  width: 92px; height: 28px; padding: 2px 8px; text-align: center;
-  border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
-  font-size: 12.5px; font-weight: 700; color: #1f2a44; font-variant-numeric: tabular-nums;
-}
-.dsf-grace-input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,0.12); }
-.dsf-grace-input.is-bad { border-color: #dc2626 !important; background: #fef2f2; }
-.dsf-grace-sums { display: flex; flex-wrap: wrap; gap: 0; margin-top: 10px;
-  border: 1px solid #e6eaf2; border-radius: 8px; background: #fff; overflow: hidden; }
-.dsf-grace-sum { flex: 1 1 auto; min-width: max-content; padding: 8px 14px; border-right: 1px solid #eef1f6;
-  display: flex; flex-direction: column; gap: 3px; }
-.dsf-grace-sum:last-child { border-right: none; }
-.dsf-grace-sum .k { font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
-  text-transform: uppercase; color: #7c8ba1; white-space: nowrap; }
-.dsf-grace-sum .v { font-size: 16px; font-weight: 800; color: #1f2a44;
-  font-variant-numeric: tabular-nums; white-space: nowrap; }
-.dsf-grace-sum .v.good { color: #15803d; }
-.dsf-grace-sum .v.warn { color: #b45309; }
-.dsf-grace-sum .v.bad { color: #b91c1c; }
-.dsf-grace-msg { margin-top: 9px; font-size: 11.5px; font-weight: 700; color: #b91c1c; }
-.dsf-grace-msg:empty { display: none; }
-/* A graced layout is flagged in the recap, where the widths shown are the
-   ordered ones but the diagram beside them is what is actually cut. */
-.dsf-grace-tag {
-  display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 800; letter-spacing: 0.04em;
-  color: #fff; background: #0f766e; border-radius: 999px; padding: 2px 7px; white-space: nowrap;
-}
+/* ---- Deckle Layout: the knife-width table, inline on the page (no dialog,
+   no grace panel -- both removed at user request, 2026-09-21). Toolbar and
+   status styling further up (.dsf-layout-toolbar / .dsf-layout-status) are
+   unchanged and still apply -- the toolbar just holds the status line now,
+   nothing else. ---- */
+.dsf-layout-panel { align-self: stretch; }
+/* Full width: this is the primary, only-visible-thing-on-the-page editor now
+   (AI Deckle Set, Requirements and the Deckle Set recap are all hidden), so
+   it gets the whole card rather than the 980px it was drawn at for a table
+   that used to float over a fixed-width dialog. */
+.dsf-layout-table-full { width: 100%; min-width: 900px; table-layout: fixed; }
 
 /* ---- AI Deckle Set (utils/deckleOptimizer) ---- */
 .dsa-panel { align-self: stretch; background: #fff; border: 1.5px solid #cfe0f0; border-radius: 10px; overflow: hidden; }
@@ -913,7 +818,6 @@
 .dsf-add-btn:focus-visible,
 .dsf-mini-btn:focus-visible,
 .dsf-set-edit:focus-visible,
-.dsf-grace-x:focus-visible,
 .dsf-set-empty-btn:focus-visible,
 .dsf-size-row .dsf-size-item .x:focus-visible,
 .dsf-sizes-toggle:focus-visible,
@@ -953,7 +857,7 @@
    the plan; leave out the controls, which are no use on paper. */
 @media print {
   .side-nav, .nav-opt-wrap, .dsa-bar, .dc-req-head, .dsf-set-head,
-  .dsf-layout-modal, .sl-save-wrap, .dsf-edit-ic, .dsf-set-edit-cell,
+  .sl-save-wrap, .dsf-edit-ic, .dsf-set-edit-cell,
   .dsf-set-filters, .dsf-sizes-toggle, .dc-badge { display: none !important; }
   .dc-page { padding: 0 !important; }
   .sl-panel, .dsf-set-table, .dsf-web-table, .dc-req-card { border-color: #94a3b8; }

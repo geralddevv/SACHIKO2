@@ -2,40 +2,31 @@
    Deckle Calculator  --  /labels/production/deckle-calculator
    ==========================================================================
 
-   The Set Deckle planner with nothing behind it. Type the rolls you want and
-   the deckle sizes you can get them on, draw the layouts by hand, read the
-   trim off. It creates no batch, touches no order and writes nothing: there
-   is no submit on this page and no endpoint behind it.
+   The Set Deckle planner with nothing behind it. Type the deckle sizes you
+   can get, draw the layouts by hand, read the trim off. It creates no batch,
+   touches no order and writes nothing: there is no submit on this page and
+   no endpoint behind it.
 
    Everything that draws or measures a web is lifted straight from
    views/inventory/orders/deckleSetForm.ejs -- same segment builders, same
-   grace panel, same recap table, same figures -- so a plan worked out here
-   reads exactly as it will when the same plan is set for real. The ids and
-   classes are that page's too (the dsf- and sl- prefixes), which is what lets
+   recap table, same figures -- so a plan worked out here reads exactly as it
+   will when the same plan is set for real. The ids and classes are that
+   page's too (the dsf- and sl- prefixes), which is what lets
    public/css/deckleCalculator.css be a straight copy of its <style> block.
 
-   What is this page's own:
+   Requirements, AI Deckle Set and the Deckle Set recap table all still exist
+   in the markup and the JS below (harmless, hidden by an inline `style` in
+   the EJS -- see #dcRequirementsWrap, .dc-bar-group-ai, #dsaBody, #dsfSetHead
+   / #dsfSetBody), but nobody sees them at user request (2026-09-21): this
+   page opens straight on the hand-drawn "Deckle Layout" table, no dialog to
+   open it in, every row on the page at once. There is also no grace feature
+   here any more (the Set Deckle page still has its own) -- `readRow()` keeps
+   a `.graced` field on every row purely so the code below, which still
+   expects one, keeps working; it is now just an alias for `.cuts`.
 
-   - Requirements are TYPED, not read off loose orders (dc-* markup below).
-   - A requirement is a width AND a roll length, and rolls are matched on
-     both: 20 rolls of 150 mm at 300 m are not met by 150 mm rolls wound to
-     1000 m. The Set Deckle page pools by width alone, which it can afford to
-     -- its orders come out of one Deckle Sorting group -- but here anything
-     at all can be typed side by side. Either side may leave the length
-     unstated, and then it matches whatever the other side says.
-   - Each layout picks its own deckle web (the Set Deckle page's "mixed webs",
-     which ships on there too). Picking a size inside a layout's own size
-     table sets that layout's web; the headline figure is whichever width
-     carries the most webs.
-   - Deckle Size is typed, every one of it -- the list starts empty. The
-     facestock in stock is read only to annotate a width once it is in: a
-     chip says how many reels of that width are on the shelf, or is drawn
-     dashed when there are none. Nothing here is tied back to the store.
-
-   AI Deckle Set is the same panel and the same optimizer as the Set Deckle
-   page's, over typed requirements instead of orders. It plans and never
-   saves: what comes back is dropped into the layout rows, and from there it
-   is edited by hand like any other plan.
+   REQUIREMENTS_ENABLED (below) is what keeps the hidden Requirements section
+   from also blocking the page with a validation error nobody can act on, or
+   painting every roll drawn as an unclaimed "Extra Roll".
    -------------------------------------------------------------------------- */
 
 (() => {
@@ -77,9 +68,6 @@
   const drmDefaultEl = document.getElementById("dcDrmDefault");
   const layoutBody = document.getElementById("dsfLayoutBody");
   const layoutStatus = document.getElementById("dsfLayoutStatus");
-  const layoutTable = document.getElementById("dsfLayoutTable");
-  const layoutModal = document.getElementById("dsfLayoutModal");
-  const layoutModalTitle = document.getElementById("dsfLayoutModalTitle");
   const dsfAddLayout = document.getElementById("dsfAddLayout");
   const dsfSetBody = document.getElementById("dsfSetBody");
   const dsfSetSub = document.getElementById("dsfSetSub");
@@ -87,12 +75,18 @@
   const dsfFinalStats = document.getElementById("dsfFinalStats");
   const dsfStatChips = document.getElementById("dsfStatChips");
   const reqBody = document.getElementById("dcReqBody");
+  // Off whenever the Requirements section is hidden (inline `style` on
+  // #dcRequirementsWrap in the EJS) -- with nothing to match layouts against,
+  // "no requirement claims this roll" stops being worth a word: no blocking
+  // "enter at least one requirement" error, and the Extra Rolls chip (which
+  // only means something relative to a requirement) drops out rather than
+  // reading every roll made as a warning.
+  const reqWrap = document.getElementById("dcRequirementsWrap");
+  const REQUIREMENTS_ENABLED = !!reqWrap && reqWrap.style.display !== "none";
   const sizeFieldsEl = document.getElementById("dsfSizeFields");
   const sizeMsgEl = document.getElementById("dsfSizeMsg");
   const dsfIssues = document.getElementById("dsfIssues");
   const dsfIssuesBody = document.getElementById("dsfIssuesBody");
-  const gracePanel = document.getElementById("dsfGracePanel");
-  const graceBtn = document.getElementById("dsfGraceBtn");
   const resetBtn = document.getElementById("dcReset");
   const resetLabel = document.getElementById("dcResetLabel");
   // Null when DECKLE_AUTO_ENABLED=false -- the panel is not rendered at all.
@@ -312,41 +306,19 @@
     return `${edgeSeg("Left")}${segs.join("")}${edgeSeg("Right")}`;
   }
 
-  // ---- grace -------------------------------------------------------------
-  // Spare web that would be scrapped as side trim, shared out over a layout's
-  // rolls so it is cut instead. A 30 mm siderun across 3 rolls makes each one
-  // 10 mm wider: the knives are set to the WIDER figure, the client is still
-  // billed the width they ordered, so the two numbers are different things and
-  // both are kept. The A..L inputs go on holding the ORDERED widths -- the
-  // Requirements table matches on those, and matching on a graced width would
-  // find nothing at all. Grace is held beside them, per slot, on the row.
-  const graceOf = (tr) => (tr.__grace ||= {});
-  const graceFor = (tr, slot) => {
-    const g = Number(graceOf(tr)[slot]);
-    return Number.isFinite(g) && g > 0 ? round2(g) : 0;
-  };
-  // Grace on a slot with no roll width is meaningless -- drop it, so clearing a
-  // width can't leave width behind in the totals.
-  function pruneGrace(tr) {
-    const g = graceOf(tr);
-    SLOTS.forEach((s) => {
-      const el = tr.querySelector(`.sl-roll-width[data-slot="${s}"]`);
-      if (!(Number(el && el.value) > 0)) delete g[s];
-    });
-  }
-
   // ---- layout rows -------------------------------------------------------
-  // `cuts` are the ordered widths (what was asked for, and what the
-  // Requirements table reads); `graced` are the widths the knives are actually
-  // set to. They are the same list when no grace has been given, which is why
-  // everything that draws or measures the web reads `graced`.
+  // `cuts` are the roll widths as typed -- what was asked for, and what the
+  // Requirements table matches on. `graced` is kept as the same list (no
+  // grace feature on this page) purely so every reader below that expects a
+  // `.graced` field -- the web diagram, the recap, the best-fit sizing --
+  // keeps working unchanged; there is nothing left that can make the two
+  // differ.
   function readRow(tr) {
     const cuts = SLOTS.map((s) => [s, Number(tr.querySelector(`.sl-roll-width[data-slot="${s}"]`).value)]).filter(
       ([, w]) => Number.isFinite(w) && w > 0,
     );
-    const graced = cuts.map(([s, w]) => [s, round2(w + graceFor(tr, s))]);
     return {
-      graced,
+      graced: cuts,
       cuts,
       drm: Number(tr.querySelector(".dsf-drm").value) || null,
       rm: Number(tr.querySelector(".dsf-rm").value) || null,
@@ -455,12 +427,8 @@
     tr.querySelector(".dsf-remove").addEventListener("click", () => {
       AI_PLANNED = false;
       if (layoutBody.querySelectorAll(".dsf-layout-row").length > 1) {
-        const wasEditing = tr.classList.contains("is-editing");
         sub.remove();
         tr.remove();
-        // The dialog is scoped to this row -- with it gone there is nothing
-        // left to edit, so close rather than leave an empty solo table.
-        if (wasEditing) closeLayoutDialog();
         recalcAll();
         return;
       }
@@ -468,7 +436,6 @@
       tr.querySelectorAll(".sl-roll-width").forEach((el) => {
         el.value = "";
       });
-      tr.__grace = {};
       delete tr.dataset.size;
       tr.querySelector(".dsf-drm").value = tr.dataset.seedDrm || "";
       tr.querySelector(".dsf-rm").value = "";
@@ -486,227 +453,15 @@
     return [...layoutBody.querySelectorAll(".dsf-layout-row")];
   }
 
-  // ---- layout dialog -----------------------------------------------------
-  // Opens the layout table on one layout: that row and its size sub-row take
-  // .is-editing and the rest are hidden by CSS (#dsfLayoutTable.is-solo).
-  // Nothing is detached, so every other layout keeps counting towards the
-  // totals and the figures.
-  function openLayoutDialog(lid) {
-    const tr = layoutBody.querySelector(`.dsf-layout-row[data-lid="${lid}"]`);
+  // Scrolls a layout's row into view and focuses its first open width box.
+  // No dialog and no grace panel any more, so there is no "active row" state
+  // left to track -- every row is on the page at once; this just points the
+  // eye (and the caret) at the one Add Deckle Layout just added.
+  function focusLayoutRow(tr) {
     if (!tr) return;
-    layoutBody.querySelectorAll("tr.is-editing").forEach((el) => el.classList.remove("is-editing"));
-    tr.classList.add("is-editing");
-    if (tr.__sub) tr.__sub.classList.add("is-editing");
-    layoutTable.classList.add("is-solo");
-    // The number every "Layout #N: ..." message uses -- the recap's own #
-    // column is a row counter, so a layout is named here and on its pencil.
-    layoutModalTitle.textContent = `Deckle Layout #${layoutRows().indexOf(tr) + 1}`;
-    layoutModal.classList.add("show");
-    layoutModal.setAttribute("aria-hidden", "false");
-    renderGracePanel();
+    tr.scrollIntoView({ behavior: "smooth", block: "nearest" });
     const first = tr.querySelector(".sl-roll-width:not(:disabled)");
     if (first) first.focus();
-  }
-
-  function closeLayoutDialog() {
-    layoutModal.classList.remove("show");
-    layoutModal.setAttribute("aria-hidden", "true");
-    layoutTable.classList.remove("is-solo");
-    layoutBody.querySelectorAll("tr.is-editing").forEach((el) => el.classList.remove("is-editing"));
-    // The panel belongs to the layout that was open; it is not carried to the
-    // next one. Grace already given stays on the row either way.
-    graceOpen = false;
-    renderGracePanel();
-  }
-
-  // ---- grace panel -------------------------------------------------------
-  // Scoped to the layout the dialog currently has open. Editing here writes
-  // straight onto that row's grace and re-runs recalcAll(), so the web
-  // diagram, the Siderun, Grace and Total all move as the numbers are typed.
-  let graceOpen = false;
-
-  function graceRows(tr) {
-    return SLOTS.map((slot) => ({ slot, el: tr.querySelector(`.sl-roll-width[data-slot="${slot}"]`) }))
-      .map((x) => ({ ...x, ordered: Number(x.el && x.el.value) }))
-      .filter((x) => Number.isFinite(x.ordered) && x.ordered > 0);
-  }
-
-  // Spare usable web once the ordered widths and the grace already given are
-  // taken off. Negative means the layout overflows -- recalcAll() is already
-  // saying so, the panel just refuses to add more.
-  function graceSpare(tr) {
-    const size = rowSize(tr);
-    if (!(size > 0)) return null;
-    const cuttable = round2(size - 2 * EDGE);
-    const cut = round2(readRow(tr).graced.reduce((n, [, w]) => n + w, 0));
-    return round2(cuttable - cut);
-  }
-
-  // Share every last mm of the spare out over the rolls, in WHOLE
-  // millimetres. Nobody sets a knife to half a millimetre by choice, so a
-  // 30 mm spare over 4 rolls goes out as 8, 8, 7, 7 -- never more than 1 mm
-  // apart, and the same 30 mm in total. A spare that is not itself whole
-  // cannot come out whole on every roll; the sub-millimetre remainder lands on
-  // ONE roll rather than being smeared over all of them.
-  function graceSpreadEvenly(tr) {
-    const rows = graceRows(tr);
-    if (!rows.length) return;
-    const spare = graceSpare(tr);
-    if (!(spare > 0)) return;
-    const g = graceOf(tr);
-    const n = rows.length;
-
-    const base = Math.floor(spare / n);
-    if (base > 0)
-      rows.forEach((x) => {
-        g[x.slot] = round2(graceFor(tr, x.slot) + base);
-      });
-
-    let left = round2(spare - base * n);
-    for (let i = 0; i < n && left >= 1; i += 1) {
-      g[rows[i].slot] = round2(graceFor(tr, rows[i].slot) + 1);
-      left = round2(left - 1);
-    }
-
-    if (left > 0) g[rows[0].slot] = round2(graceFor(tr, rows[0].slot) + left);
-    recalcAll();
-  }
-
-  function graceClear(tr) {
-    tr.__grace = {};
-    recalcAll();
-  }
-
-  // The Grace button is the way in AND the way out, so it says which it
-  // currently is, and carries the mm this layout has already been given.
-  function renderGraceBtn() {
-    const tr = layoutBody.querySelector(".dsf-layout-row.is-editing");
-    const given = tr ? round2(SLOTS.reduce((n, sl) => n + graceFor(tr, sl), 0)) : 0;
-    const badge = given > 0 ? `<span class="dsf-btn-badge">${esc(fmt(given))} mm</span>` : "";
-    graceBtn.classList.toggle("is-on", graceOpen);
-    graceBtn.setAttribute("aria-expanded", graceOpen ? "true" : "false");
-    graceBtn.innerHTML = graceOpen
-      ? `<i class="fa-solid fa-chevron-up"></i> Hide Grace${badge}`
-      : `<i class="fa-solid fa-arrows-left-right-to-line"></i> Grace${badge}`;
-    graceBtn.title = graceOpen
-      ? "Hide the grace panel"
-      : given > 0
-        ? `${fmt(given)} mm of side trim shared out over this layout's rolls — click to adjust`
-        : "Share this layout's leftover side trim out over its rolls — cut wider, still billed at the ordered width";
-  }
-
-  function renderGracePanel() {
-    renderGraceBtn();
-    const tr = layoutBody.querySelector(".dsf-layout-row.is-editing");
-    if (!graceOpen || !tr) {
-      gracePanel.hidden = true;
-      gracePanel.innerHTML = "";
-      return;
-    }
-    gracePanel.hidden = false;
-
-    // recalcAll() redraws this panel on every keystroke, and innerHTML throws
-    // away the very box being typed in -- which costs it its focus, its caret
-    // and its tab position. Remember the box first and put it back after. Its
-    // RAW text is restored, not the rounded number: half-typed values like
-    // "18." parse to 18, and writing that back mid-entry turns the next
-    // keystroke into "183" instead of "18.3".
-    const act = document.activeElement;
-    const keep =
-      act && act.classList && act.classList.contains("dsf-grace-input")
-        ? { slot: act.dataset.graceSlot, raw: act.value, start: act.selectionStart, end: act.selectionEnd }
-        : null;
-
-    const rows = graceRows(tr);
-    const size = rowSize(tr);
-    const cuttable = size > 0 ? round2(size - 2 * EDGE) : null;
-    const orderedSum = round2(rows.reduce((n, x) => n + x.ordered, 0));
-    const graceSum = round2(rows.reduce((n, x) => n + graceFor(tr, x.slot), 0));
-    const cutSum = round2(orderedSum + graceSum);
-    const spare = cuttable == null ? null : round2(cuttable - cutSum);
-
-    const msg = !rows.length
-      ? "Enter this layout's roll widths first — grace shares out what is left over after them."
-      : cuttable == null
-        ? "Pick a deckle size for this layout first."
-        : "";
-    const over = spare != null && spare < 0;
-
-    const sum = (k, v, cls) =>
-      `<div class="dsf-grace-sum"><span class="k">${esc(k)}</span>` +
-      `<span class="v${cls ? " " + cls : ""}">${esc(v)}</span></div>`;
-
-    gracePanel.innerHTML = `
-      <div class="dsf-grace-head">
-        <h3>Grace</h3>
-        <button type="button" class="dsf-grace-x" data-grace-close="1"
-                aria-label="Hide grace" title="Hide grace">&times;</button>
-        <span class="dsf-grace-note">Cut wider than ordered so the side trim is used, not scrapped.
-          The client is still billed the width they ordered.</span>
-        <div class="dsf-grace-acts">
-          <button type="button" class="dsf-mini-btn" data-grace-spread="1"
-                  ${rows.length && spare > 0 ? "" : "disabled"}
-                  title="Share the whole spare out evenly across these rolls">
-            <i class="fa-solid fa-arrows-left-right"></i> Spread evenly
-          </button>
-          <button type="button" class="dsf-mini-btn" data-grace-clear="1"
-                  ${graceSum > 0 ? "" : "disabled"}>Clear</button>
-        </div>
-      </div>
-      <div class="dsf-grace-body">
-        ${
-          rows.length
-            ? `
-        <table class="dsf-grace-table">
-          <thead>
-            <tr>
-              <th>Roll</th>
-              <th title="The width asked for — what the client is billed">Ordered</th>
-              <th title="Extra width handed to this roll out of the side trim">Grace (mm)</th>
-              <th title="What the knife is actually set to">Cut width</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows
-              .map(
-                (x) => `
-              <tr>
-                <td class="dsf-g-slot">${esc(x.slot)}</td>
-                <td>${esc(fmt(x.ordered))} mm</td>
-                <td><input type="text" inputmode="decimal" autocomplete="off"
-                           class="dsf-grace-input" data-grace-slot="${esc(x.slot)}"
-                           value="${graceFor(tr, x.slot) > 0 ? esc(graceFor(tr, x.slot)) : ""}"
-                           placeholder="0" aria-label="Grace for roll ${esc(x.slot)}" /></td>
-                <td class="dsf-g-cut">${esc(fmt(round2(x.ordered + graceFor(tr, x.slot))))} mm</td>
-              </tr>`,
-              )
-              .join("")}
-          </tbody>
-        </table>`
-            : ""
-        }
-        <div class="dsf-grace-sums">
-          ${sum("Usable web", cuttable != null ? `${fmt(cuttable)} mm` : "—")}
-          ${sum("Ordered", `${fmt(orderedSum)} mm`)}
-          ${sum("Grace given", `${fmt(graceSum)} mm`, graceSum > 0 ? "good" : "")}
-          ${sum("Cut total", `${fmt(cutSum)} mm`, over ? "bad" : "")}
-          ${sum("Still scrapped", spare != null ? `${fmt(spare)} mm` : "—", over ? "bad" : spare === 0 ? "good" : "warn")}
-        </div>
-        <div class="dsf-grace-msg">${esc(
-          over ? `Over the web by ${fmt(-spare)} mm — take that much grace back off.` : msg,
-        )}</div>
-      </div>`;
-
-    if (!keep) return;
-    const el = gracePanel.querySelector(`.dsf-grace-input[data-grace-slot="${keep.slot}"]`);
-    if (!el) return;
-    el.value = keep.raw;
-    el.focus();
-    try {
-      el.setSelectionRange(keep.start, keep.end);
-    } catch {
-      /* nothing to place */
-    }
   }
 
   // ---- which web a layout is cut from ------------------------------------
@@ -1044,7 +799,6 @@
       const best = rowBestFit(tr);
       const cuttable = rSz > 0 ? round2(rSz - 2 * EDGE) : 0;
 
-      pruneGrace(tr);
       const slots = rowSlots(tr);
       const drmEl = tr.querySelector(".dsf-drm");
       const rmEl = tr.querySelector(".dsf-rm");
@@ -1070,16 +824,11 @@
         s.el.disabled = !(prevFilled || s.raw !== "");
         if (s.raw === "") prevFilled = false;
         const badNum = s.raw !== "" && (!Number.isFinite(s.num) || s.num < MIN_WIDTH_MM);
-        // It is the width the knife is SET to that has to fit the web, so this
-        // is checked after grace, not on the figure typed in the box.
-        const cutW = Number.isFinite(s.num) ? round2(s.num + graceFor(tr, s.slot)) : s.num;
-        const wide = rSz > 0 && Number.isFinite(cutW) && cutW > cuttable;
+        const wide = rSz > 0 && Number.isFinite(s.num) && s.num > cuttable;
         s.el.classList.toggle("is-bad", badNum || wide);
         if (wide) {
           errors.push(
-            `${L}roll ${s.slot} (${fmt(cutW)} mm` +
-              `${cutW !== s.num ? ` after grace, ordered ${fmt(s.num)} mm` : ""})` +
-              ` is wider than the ${fmt(cuttable)} mm usable web`,
+            `${L}roll ${s.slot} (${fmt(s.num)} mm) is wider than the ${fmt(cuttable)} mm usable web`,
           );
         }
       });
@@ -1126,7 +875,7 @@
       rmBtn.title = isLast ? "Clear this layout" : "Remove this layout";
       totalWebs += r.webs;
 
-      // What the knives actually take off the web -- ordered width plus grace.
+      // What the knives actually take off the web.
       const cutSum = round2(r.graced.reduce((n, [, w]) => n + w, 0));
       const over = rSz > 0 && cutSum > cuttable;
 
@@ -1262,7 +1011,8 @@
       );
     }
     if (dsfTrim) dsfTrim.classList.toggle("is-bad", trimInvalid || (SIZE_LIST.length && trimNum >= SIZE_LIST[0]));
-    if (!liveReqs) errors.push("Enter at least one requirement — what rolls do you want off this deckle?");
+    if (REQUIREMENTS_ENABLED && !liveReqs)
+      errors.push("Enter at least one requirement — what rolls do you want off this deckle?");
 
     ISSUES = { errors, notReady: blankRows > 0 };
     renderIssues();
@@ -1273,12 +1023,11 @@
         ? "Draw the layout you already have before adding another"
         : "";
 
-    // Errors only. The plan's recap is already on the page, so repeating it in
-    // the dialog says nothing new -- but the issues panel is behind the dialog
-    // while it is open, so this is the only place a broken layout is seen.
+    // Errors only, right under the layout table itself -- the issues panel
+    // further down repeats the full list, but this is the one a planner
+    // typing into a row actually has in view.
     layoutStatus.textContent = errors[0] || "";
 
-    renderGracePanel();
     renderSetSummary();
   }
 
@@ -1330,34 +1079,28 @@
       key: "across",
       label: "Rolls Across",
       cls: "dsf-set-cuts",
-      th: "The knives across the web — roll width × how many of it, at the width asked for. Sorts on how many knives.",
+      th: "The knives across the web — roll width × how many of it. Sorts on how many knives.",
       sort: (L) => L.cuts.length,
-      text: (L) => cutsPlain(L.cuts) + (L.grace > 0 ? ` +${fmt(L.grace)} grace` : ""),
-      cell: (L) =>
-        cutsHTML(L.cuts) +
-        (L.grace > 0
-          ? `<span class="dsf-grace-tag" title="${esc(
-              `${fmt(L.grace)} mm of side trim shared out over these rolls — they are cut wider, and billed at the widths shown here`,
-            )}">+${esc(fmt(L.grace))} GRACE</span>`
-          : ""),
+      text: (L) => cutsPlain(L.cuts),
+      cell: (L) => cutsHTML(L.cuts),
     },
     {
       key: "layout",
       label: "Layout",
       cls: "dsf-web-diag",
-      th: "The web drawn to scale, at the widths actually cut (grace included). Sorts on the total width cut from it.",
+      th: "The web drawn to scale, at the widths cut. Sorts on the total width cut from it.",
       sort: (L) => L.cutSum,
       text: (L) => cutsPlain(L.graced),
       cell: (L) =>
         `<div class="sl-web${L.remaining != null && L.remaining < 0 ? " is-over" : ""}">` +
         `${webInnerHTML(L.graced, L.size)}</div>`,
     },
-    // Siderun + Trim + Grace = Total, in that order across the row, so the
-    // headline figure can be checked against its three parts by eye.
+    // Siderun + Trim = Total, in that order across the row, so the headline
+    // figure can be checked against its two parts by eye.
     {
       key: "rem",
       label: "Siderun",
-      th: "Uncut web left over after the knives, edge trim and grace already netted out. The scrapped slack in Total.",
+      th: "Uncut web left over after the knives and edge trim. The scrapped slack in Total.",
       cls: (L) => "dsf-set-rem" + (L.remaining != null && L.remaining < 0 ? " sl-bad" : ""),
       sort: (L) => (L.remaining == null ? -Infinity : L.remaining),
       text: (L) => mmText(L.remaining),
@@ -1373,19 +1116,10 @@
       cell: (L) => (L.edge != null ? esc(fmt(L.edge)) + " mm" : "—"),
     },
     {
-      key: "grace",
-      label: "Grace",
-      cls: "dsf-set-grace",
-      th: "Side trim handed to the rolls instead of being scrapped — the knives are set this much wider in total, and the client is still billed the width ordered.",
-      sort: (L) => (L.size > 0 ? L.grace : -1),
-      text: (L) => (L.size > 0 ? mmText(L.grace) : "—"),
-      cell: (L) => (L.size > 0 ? esc(fmt(L.grace)) + " mm" : "—"),
-    },
-    {
       key: "total",
       label: "Total",
       cls: "dsf-set-trim",
-      th: "Everything this web gives up beyond the widths asked for — the Siderun, Trim and Grace beside it added together (i.e. deckle size minus the roll widths). The table starts ranked by this, most first.",
+      th: "Everything this web gives up beyond the widths asked for — the Siderun and Trim beside it added together (i.e. deckle size minus the roll widths). The table starts ranked by this, most first.",
       sort: (L) => (L.total == null ? -1 : L.total),
       text: (L) => mmText(L.total),
       cell: (L) => (L.total != null ? esc(fmt(L.total)) + " mm" : "—"),
@@ -1492,35 +1226,26 @@
         const size = rowSize(tr) || 0;
         const cutSum = round2(r.graced.reduce((n, [, w]) => n + w, 0));
         const rpw = rollsPerWeb(r);
-        // Width handed to the rolls rather than scrapped -- the difference
-        // between what the knives are set to and what was asked for. Already
-        // netted out of `remaining` below (the slack is what is left AFTER
-        // grace was shared out), so the three never double-count.
-        const graceMm = round2(
-          r.graced.reduce((n, [, w]) => n + w, 0) - r.cuts.reduce((n, [, w]) => n + w, 0),
-        );
         return {
           no,
           lid,
           size,
           cuts: r.cuts,
           graced: r.graced,
-          grace: graceMm,
           cutSum,
           // Usable web left over after the knives -- negative means the layout
           // overflows the web.
           remaining: size > 0 ? round2(size - 2 * EDGE - cutSum) : null,
           // Edge trim netted off this web -- both edges. The same on every row
           // (it comes off one field at the top of the page), but it earns a
-          // column of its own between Siderun and Grace so the four read
-          // straight across as the sum they are.
+          // column of its own beside Siderun so the three read straight
+          // across as the sum they are.
           edge: size > 0 ? round2(2 * EDGE) : null,
           // Everything one web gives up beyond the widths ASKED FOR: both edge
-          // trims and the uncut slack (scrapped), plus the grace (cut, and
-          // run, but handed to the rolls instead of billed). Exactly `size −
-          // the roll widths`, which is why the three parts beside it add up to
-          // it on every row.
-          total: size > 0 ? round2(2 * EDGE + Math.max(0, round2(size - 2 * EDGE - cutSum)) + graceMm) : null,
+          // trims and the uncut slack (scrapped). Exactly `size − the roll
+          // widths`, which is why the two parts beside it add up to it on
+          // every row.
+          total: size > 0 ? round2(2 * EDGE + Math.max(0, round2(size - 2 * EDGE - cutSum))) : null,
           drm: r.drm,
           rm: r.rm,
           rpw,
@@ -1723,14 +1448,14 @@
   }
 
   // ---- the figures -------------------------------------------------------
-  // Side Run, Grace and Total are whole-job totals, in mm as well as %, never
-  // a per-web average -- so they reconcile by eye, which is the quickest check
+  // Side Run and Total are whole-job totals, in mm as well as %, never a
+  // per-web average -- so they reconcile by eye, which is the quickest check
   // the figures are sane:
   //
-  //     Total = edge trim x webs + Side Run + Grace
+  //     Total = edge trim x webs + Side Run
   //
-  // in mm and in % alike, matching the Siderun / Trim / Grace / Total columns
-  // of the recap table above.
+  // in mm and in % alike, matching the Siderun / Trim / Total columns of the
+  // recap table above.
   function renderFinalStats(set, totWebs, sqm, byS, sizeLine) {
     // Side Run: the uncut slack left on each web after its knives (edge trims
     // netted out already) -- the trim a different layout could still recover.
@@ -1745,32 +1470,18 @@
     avoidableSqM = round2(avoidableSqM);
     const avoidPct = sqm > 0 ? round2((avoidableSqM / sqm) * 100) : 0;
 
-    // Grace: side trim handed to the rolls instead of being scrapped. Not
-    // waste -- the web is cut and wound -- but not asked for or billed either,
-    // so it is reported on its own and counted in Total below.
-    let graceMm = 0;
-    let graceSqM = 0;
-    set.forEach((L) => {
-      if (!(L.size > 0) || !(L.grace > 0)) return;
-      graceMm += L.grace * L.webs;
-      graceSqM += (L.grace / 1000) * (L.drm || 0) * L.webs;
-    });
-    graceMm = round2(graceMm);
-    graceSqM = round2(graceSqM);
-    const gracePct = sqm > 0 ? round2((graceSqM / sqm) * 100) : 0;
-
     // Total: everything the job gives up beyond the widths ASKED FOR -- edge
-    // trim + Side Run (both scrapped) + Grace (cut, but not billed). Equal to
-    // deckle size minus the roll widths, over every web. Extra Rolls are NOT
-    // in it: they are spare stock cut from width that would otherwise have
-    // been trimmed away, not a second helping of loss.
+    // trim + Side Run (both scrapped). Equal to deckle size minus the roll
+    // widths, over every web. Extra Rolls are NOT in it: they are spare
+    // stock cut from width that would otherwise have been trimmed away, not
+    // a second helping of loss.
     const edgeMm = round2(2 * EDGE * totWebs);
-    const wasteMm = round2(edgeMm + sideMm + graceMm);
+    const wasteMm = round2(edgeMm + sideMm);
     let edgeSqM = 0;
     set.forEach((L) => {
       if (L.size > 0) edgeSqM += ((2 * EDGE) / 1000) * (L.drm || 0) * L.webs;
     });
-    const wasteSqM = round2(edgeSqM + avoidableSqM + graceSqM);
+    const wasteSqM = round2(edgeSqM + avoidableSqM);
     const wastePct = sqm > 0 ? round2((wasteSqM / sqm) * 100) : 0;
 
     const { extraRolls, extraSqM, orphanRolls } = ALLOC;
@@ -1789,18 +1500,23 @@
       finalStat("Layouts", `${set.length}`, "", "dsa-stat-narrow"),
       finalStat("Deckle Count", `${fmtI(totWebs)}`, "", "dsa-stat-narrow"),
       finalStat("Facestock Used", `${fmt(sqm)} m²`),
-      finalStat(
-        "Extra Rolls",
-        extraRolls ? `${fmtI(extraRolls)} · ${fmt(extraSqM)} m²` : "0",
-        extraRolls ? "warn" : "good",
-        "",
-        extraRolls
-          ? `Rolls made beyond what the requirements ask for (${fmt(extraSqM)} m²).` +
-            (orphanRolls
-              ? ` ${fmtI(orphanRolls)} of them are a width or length no requirement asks for at all.`
-              : "")
-          : "Every roll made is a roll asked for.",
-      ),
+      // Only means something relative to a requirement -- with Requirements
+      // hidden every roll made would read as "extra" and paint the chip
+      // amber for no reason, so it drops out entirely rather than lie.
+      REQUIREMENTS_ENABLED
+        ? finalStat(
+            "Extra Rolls",
+            extraRolls ? `${fmtI(extraRolls)} · ${fmt(extraSqM)} m²` : "0",
+            extraRolls ? "warn" : "good",
+            "",
+            extraRolls
+              ? `Rolls made beyond what the requirements ask for (${fmt(extraSqM)} m²).` +
+                (orphanRolls
+                  ? ` ${fmtI(orphanRolls)} of them are a width or length no requirement asks for at all.`
+                  : "")
+              : "Every roll made is a roll asked for.",
+          )
+        : "",
       finalStat(
         "Side Run",
         `${fmt(avoidPct)} % | ${fmt(sideMm)} mm`,
@@ -1809,22 +1525,12 @@
         `Total uncut slack across all ${fmtI(totWebs)} webs (${fmt(avoidableSqM)} m²).`,
       ),
       finalStat(
-        "Grace",
-        `${fmt(gracePct)} % | ${fmt(graceMm)} mm`,
-        graceMm > 0 ? "good" : "",
-        "",
-        graceMm > 0
-          ? `Side trim shared out over the rolls across all ${fmtI(totWebs)} webs (${fmt(graceSqM)} m²) — cut and wound, but billed at the widths asked for.`
-          : "No grace given: every roll is cut at the width asked for.",
-      ),
-      finalStat(
         "Total",
         `${fmt(wastePct)} % | ${fmt(wasteMm)} mm`,
         wastePct <= 10 ? "good" : "warn",
         "dsa-stat-wide",
         `Everything beyond the widths asked for: Edge trim ${fmt(edgeMm)} mm + Side Run ${fmt(sideMm)} mm` +
-          ` + Grace ${fmt(graceMm)} mm = ${fmt(wasteSqM)} m². Of that, ${fmt(round2(wasteSqM - graceSqM))} m² is scrapped` +
-          ` and ${fmt(graceSqM)} m² goes out on the rolls. Spare rolls are not counted here.`,
+          ` = ${fmt(wasteSqM)} m², all of it scrapped. Spare rolls are not counted here.`,
       ),
     ].join("");
   }
@@ -1845,26 +1551,29 @@
   }
 
   // ---- wiring ------------------------------------------------------------
-  // A layout is added and drawn in one move -- there is no layout table on the
-  // page to type into, so the new row opens straight away.
+  // A layout is added and drawn in one move -- every row is on the page at
+  // once (no dialog to open it in any more), so the new one just gets
+  // scrolled to and focused.
   dsfAddLayout.addEventListener("click", () => {
     if (dsfAddLayout.disabled) return;
-    openLayoutDialog(addLayoutRow().dataset.lid);
+    focusLayoutRow(addLayoutRow());
   });
   document.getElementById("dcAddReq").addEventListener("click", () => {
     addReqRow().querySelector(".dc-req-width").focus();
     recalcAll();
   });
   // The recap is rebuilt on every keystroke, so its controls are delegated
-  // rather than re-bound each time.
+  // rather than re-bound each time. Hidden on this page (see #dsfSetHead's
+  // wrapping `style` in the EJS), but still built by recalcAll() underneath
+  // -- these keep working rather than throwing if it is ever shown again.
   dsfSetBody.addEventListener("click", (ev) => {
     const edit = ev.target.closest("[data-edit-lid]");
     if (edit) {
-      openLayoutDialog(edit.dataset.editLid);
+      focusLayoutRow(layoutBody.querySelector(`.dsf-layout-row[data-lid="${edit.dataset.editLid}"]`));
       return;
     }
     if (ev.target.closest("[data-add-layout]")) {
-      openLayoutDialog(addLayoutRow().dataset.lid);
+      focusLayoutRow(addLayoutRow());
       return;
     }
     if (ev.target.closest("[data-clear-filters]")) {
@@ -1898,59 +1607,6 @@
       ev.preventDefault();
       sortSetBy(th.dataset.sortCol);
     }
-  });
-  graceBtn.addEventListener("click", () => {
-    graceOpen = !graceOpen;
-    renderGracePanel();
-    if (graceOpen) gracePanel.scrollIntoView({ block: "nearest" });
-  });
-  // The panel is rebuilt on every recalc, so its controls are delegated.
-  gracePanel.addEventListener("click", (ev) => {
-    const tr = layoutBody.querySelector(".dsf-layout-row.is-editing");
-    if (!tr) return;
-    if (ev.target.closest("[data-grace-spread]")) {
-      graceSpreadEvenly(tr);
-      return;
-    }
-    if (ev.target.closest("[data-grace-clear]")) {
-      graceClear(tr);
-      return;
-    }
-    if (ev.target.closest("[data-grace-close]")) {
-      graceOpen = false;
-      renderGracePanel();
-      graceBtn.focus();
-    }
-  });
-  gracePanel.addEventListener("input", (ev) => {
-    const el = ev.target.closest("[data-grace-slot]");
-    if (!el) return;
-    const tr = layoutBody.querySelector(".dsf-layout-row.is-editing");
-    if (!tr) return;
-    const raw = String(el.value).trim();
-    // Plain decimal only -- a text box would otherwise accept "1e5" or "0x10",
-    // both of which Number() happily turns into a width. A lone "." or a
-    // trailing one is mid-entry, not an error: it reads as 0 for now and the
-    // box keeps the text so the next digit lands where it is expected.
-    const partial = raw === "" || raw === ".";
-    const bad = !partial && !/^\d*(\.\d*)?$/.test(raw);
-    el.classList.toggle("is-bad", bad);
-    if (bad) return;
-    const n = partial ? 0 : Number(raw);
-    if (!Number.isFinite(n) || n < 0) return;
-    // Zero and blank are the same thing -- no grace on that roll -- and
-    // neither is stored, so a row with nothing given stays plainly ungraced.
-    if (n === 0) delete graceOf(tr)[el.dataset.graceSlot];
-    else graceOf(tr)[el.dataset.graceSlot] = round2(n);
-    recalcAll();
-  });
-  document.getElementById("dsfLayoutModalClose").addEventListener("click", closeLayoutDialog);
-  document.getElementById("dsfLayoutModalDone").addEventListener("click", closeLayoutDialog);
-  layoutModal.addEventListener("click", (ev) => {
-    if (ev.target === layoutModal) closeLayoutDialog();
-  });
-  document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && layoutModal.classList.contains("show")) closeLayoutDialog();
   });
   // Edge Trim is one of the bounds a deckle size is judged against ("must be
   // more than the N mm edge trim"), so moving it re-judges every box rather
@@ -2001,7 +1657,6 @@
       return;
     }
     disarmReset();
-    closeLayoutDialog();
     reqBody.innerHTML = "";
     layoutBody.innerHTML = "";
     AI_PLANNED = false;
@@ -2035,9 +1690,6 @@
 
     // Replace every layout row with the planned ones.
     function dsaApply(plan) {
-      // Every layout row is about to be replaced -- close the dialog first so
-      // it can't be left scoped to a row that no longer exists.
-      closeLayoutDialog();
       layoutBody.innerHTML = "";
       // The optimizer has picked the web for every layout -- show just that
       // one diagram per layout instead of one per available size.

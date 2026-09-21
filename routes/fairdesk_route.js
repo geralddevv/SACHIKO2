@@ -5055,6 +5055,7 @@ const dsFmtChild = (r) => ({
   noOfRolls: r.noOfRolls ?? "—",
   estimatedDate: r.estimatedDate || null,
   remarks: r.remarks || "",
+  isAdvance: !!r.isAdvance,
 });
 
 // One Product-Code group of loose orders: the sums shown on the list row plus
@@ -5325,6 +5326,60 @@ router.get("/labels/production/deckle-set/plan/:itemId", async (req, res) => {
     notification: req.flash("notification"),
   });
 });
+
+// Advance -- lets the planner type in a loose order ahead of the real one, so
+// its material is cut into today's deckle instead of waiting for the order to
+// land. Creates a bare PendingProduction row (isAdvance: true, no userId, no
+// TapeSalesOrder behind it -- same "synthetic, order-sync never touches it"
+// pattern as isDeckleBatch/parentOrderId rows) and sends the planner straight
+// back to the same plan page, where it shows up as just another loose member
+// to tick -- highlighted and tagged so it reads as a forecast, not a real order.
+router.post(
+  "/labels/production/deckle-set/plan/:itemId/advance",
+  requireAuth,
+  createLimiter,
+  async (req, res) => {
+    const { itemId } = req.params;
+    const backTo = mongoose.isValidObjectId(itemId)
+      ? `/app/labels/production/deckle-set/plan/${itemId}`
+      : "/app/labels/production/deckle-set";
+    if (!mongoose.isValidObjectId(itemId)) {
+      req.flash("notification", "Invalid Product Code.");
+      return res.redirect(backTo);
+    }
+    if (!(await SachikoLabelStock.exists({ _id: itemId }))) {
+      req.flash("notification", "That Product Code no longer exists.");
+      return res.redirect(backTo);
+    }
+
+    const paperSize = Number(req.body.paperSize);
+    const runningMeters = Number(req.body.runningMeters);
+    const quantity = Math.floor(Number(req.body.quantity));
+    if (!Number.isFinite(paperSize) || paperSize <= 0 || paperSize > 20000) {
+      req.flash("notification", "Enter a valid Paper Size for the advance order.");
+      return res.redirect(backTo);
+    }
+    if (!Number.isFinite(runningMeters) || runningMeters <= 0) {
+      req.flash("notification", "Enter a valid Running Meters for the advance order.");
+      return res.redirect(backTo);
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      req.flash("notification", "Enter a valid Roll Qty for the advance order.");
+      return res.redirect(backTo);
+    }
+    await PendingProduction.create({
+      onModel: "SachikoLabelStock",
+      itemId,
+      isAdvance: true,
+      paperSize: String(paperSize),
+      runningMeters,
+      quantity,
+    });
+
+    req.flash("notification", "Advance order added — tick it in when you plan the deckle.");
+    return res.redirect(backTo);
+  },
+);
 
 // Auto Deckle -- hand the ticked orders to utils/deckleOptimizer and return the
 // layouts it works out, as JSON. Deliberately READ-ONLY: it creates nothing and
