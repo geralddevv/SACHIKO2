@@ -1265,6 +1265,26 @@
     return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
   };
 
+  // The running metres a Kg figure works out to at its own GSM and width --
+  // same conversion Assign Production's Auto Allot uses to say how far a
+  // reel's weight will run (views/inventory/orders/assignProduction.ejs's
+  // reelMtrs()):
+  //
+  //     metres = kg x 1e6 / (gsm x widthMm)
+  //
+  // null (not 0) when there's no GSM or width to convert with -- a
+  // micron-only spec has no weight-to-length relationship to give, and that
+  // has to read as "can't say" rather than a wrong number.
+  function kgToRm(kg, gsm, widthMm) {
+    const k = Number(kg);
+    const g = Number(gsm);
+    const w = Number(widthMm);
+    if (!(k > 0) || !(g > 0) || !(w > 0)) return null;
+    return Math.round(((k * 1e6) / (g * w)) * 100) / 100;
+  }
+
+  const fmtRm = (n) => (n === null || n === undefined ? "—" : fmtKg(n));
+
   // Looks a reel's own Release Master back up by scanning mastersData's own
   // rolls arrays, instead of Tabulator's row.getTreeParent() -- more direct
   // for finding the spec (type/vendor/etc) a reel's Edit dialog summary
@@ -1331,12 +1351,18 @@
             ? `<span style="background:#ccfbf1;color:#0f766e;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11.5px;white-space:nowrap;" title="Scanned and Start was just punched on a job card for this order -- Kg used isn't reported until Save Production Entry.">IN USE NOW · ${escapeHtml(data.usedBy.lots.join(", ") || "—")}</span>`
             : `<span style="background:#ede9fe;color:#6d28d9;font-weight:700;padding:2px 8px;border-radius:999px;font-size:11.5px;white-space:nowrap;" title="Kg drawn off this reel via a job card's Material Used dialog -- still in stock at the reduced Kg shown, not fully consumed.">PARTIALLY USED · ${escapeHtml(data.usedBy.lots.join(", ") || "—")} (${fmtKg(data.usedBy.totalKg)})</span>`)
         : "";
+      // Own reel's Kg at the master's GSM and width -- every reel under a
+      // master shares its spec exactly, so this is the same conversion the
+      // master row's Stock (RM) column applies.
+      const rollMaster = findMasterForRoll(data._id);
+      const reelRm = kgToRm(data.reelMtrs, rollMaster.gsm, rollMaster.size);
       const parts = [
         `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
         allottedBadge,
         usedBadge,
         data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
         `Kg ${fmtKg(data.reelMtrs)}`,
+        reelRm != null ? `RM ${fmtRm(reelRm)}` : "",
         data.location ? escapeHtml(data.location) : "",
         data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
         data.invoiceNo ? `Invoice ${escapeHtml(data.invoiceNo)}` : `<span style="color:#dc2626; font-weight:700;">No Invoice</span>`,
@@ -1412,6 +1438,29 @@
       { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Stock (Kg)", field: "currentStock", headerFilter: "input", headerFilterPlaceholder: "Search", hozAlign: "center", minWidth: 130,
         formatter: (cell) => (cell.getRow().getData().isParent ? fmtKg(cell.getValue()) : "") },
+      {
+        title: "Stock (RM)",
+        field: "currentStock",
+        headerFilter: false,
+        hozAlign: "center",
+        minWidth: 130,
+        headerTooltip: "Running metres this Kg works out to at this spec's own GSM and width -- kg x 1e6 / (GSM x width mm), the same conversion Assign Production's Auto Allot uses. Blank where this spec has no GSM (a micron-only spec can't convert weight to length).",
+        // Shares the "currentStock" field with the Stock (Kg) column, so
+        // sorting needs its own comparator over the computed metres -- the
+        // default would sort by raw Kg (the field's real value) instead.
+        sorter: (_a, _b, aRow, bRow) => {
+          const ra = aRow.getData();
+          const rb = bRow.getData();
+          const va = kgToRm(ra.currentStock, ra.gsm, ra.size);
+          const vb = kgToRm(rb.currentStock, rb.gsm, rb.size);
+          return (va ?? -Infinity) - (vb ?? -Infinity);
+        },
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isParent) return "";
+          return fmtRm(kgToRm(row.currentStock, row.gsm, row.size));
+        },
+      },
       {
         title: "Stock (Rolls)",
         field: "rollCount",

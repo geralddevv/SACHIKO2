@@ -55,11 +55,14 @@ export function buildQrPayload(reel) {
 // payload (buildQrPayload above), so nothing downstream that scans it changes.
 // $FAMILY here is the reel's own Family field (Facestock is the one pool that
 // has one); see utils/releaseLinerRollLabel.js / utils/adhesiveRollLabel.js
-// for the siblings, which fall back to Type.
-export function buildInwardLabelFields({ family, size, reelMtrs, rollId, inwardDate, printedOn }) {
+// for the siblings, which fall back to Type. $TYPE prints under $FAMILY, in a
+// smaller face -- Family alone doesn't always say enough to tell two reels
+// apart on the shelf, and Type is the next thing an operator reads for that.
+export function buildInwardLabelFields({ family, type, size, reelMtrs, rollId, inwardDate, printedOn }) {
   const weight = sanitizeField(reelMtrs);
   return {
     family: fieldOrDash(family),                     // $FAMILY <- the reel's Family
+    type: fieldOrDash(type),                          // $TYPE <- the reel's Type, under $FAMILY
     width: size ? `${fieldOrDash(size)} MM` : "-",   // $WIDTH MM <- the spec's size
     weight: weight ? `${weight} KG` : "-",           // $WEIGHT KG <- reelMtrs is kilos in this pool
     id: fieldOrDash(rollId),                         // $ID <- system Roll ID
