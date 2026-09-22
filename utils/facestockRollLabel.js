@@ -58,14 +58,19 @@ export function buildQrPayload(reel) {
 // for the siblings, which fall back to Type. $TYPE prints under $FAMILY, in a
 // smaller face -- Family alone doesn't always say enough to tell two reels
 // apart on the shelf, and Type is the next thing an operator reads for that.
-export function buildInwardLabelFields({ family, type, size, reelMtrs, rollId, inwardDate, printedOn }) {
+// $GSM prints above $DATE, at that same smaller face as $TYPE -- a reel's GSM
+// and micron are mutually exclusive on Facestock Master, so this is blank
+// ("-") for a micron-specified reel rather than a wrong number.
+export function buildInwardLabelFields({ family, type, size, gsm, reelMtrs, rollId, inwardDate, printedOn }) {
   const weight = sanitizeField(reelMtrs);
+  const gsmText = sanitizeField(gsm);
   return {
     family: fieldOrDash(family),                     // $FAMILY <- the reel's Family
     type: fieldOrDash(type),                          // $TYPE <- the reel's Type, under $FAMILY
     width: size ? `${fieldOrDash(size)} MM` : "-",   // $WIDTH MM <- the spec's size
     weight: weight ? `${weight} KG` : "-",           // $WEIGHT KG <- reelMtrs is kilos in this pool
     id: fieldOrDash(rollId),                         // $ID <- system Roll ID
+    gsm: gsmText ? `${gsmText} GSM` : "-",           // $GSM <- the reel's GSM, above $DATE
     date: formatShortLabelDate(inwardDate || printedOn), // $DATE <- the reel's inward date, dd/mm/yy
   };
 }
