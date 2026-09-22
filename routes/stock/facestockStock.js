@@ -596,7 +596,7 @@ function sendLabelError(res, status, message) {
 // the many-reel sheet below go through this, so a label printed off a row's
 // own Print button and the same reel printed as part of a batch are built
 // from one place and cannot drift apart.
-const LABEL_REEL_FIELDS = "rollId vendorName vendorSkuCode invoiceNo reelMtrs size family type gsm inwardDate";
+const LABEL_REEL_FIELDS = "rollId vendorName vendorSkuCode invoiceNo reelMtrs size family type gsm micron inwardDate";
 
 async function buildLabelFor(reel) {
   const labelInput = {
@@ -608,6 +608,7 @@ async function buildLabelFor(reel) {
     family: reel.family,
     type: reel.type,
     gsm: reel.gsm,
+    micron: reel.micron,
     inwardDate: reel.inwardDate,
     rollId: reel.rollId,
   };

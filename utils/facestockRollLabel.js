@@ -58,19 +58,20 @@ export function buildQrPayload(reel) {
 // for the siblings, which fall back to Type. $TYPE prints under $FAMILY, in a
 // smaller face -- Family alone doesn't always say enough to tell two reels
 // apart on the shelf, and Type is the next thing an operator reads for that.
-// $GSM prints above $DATE, at that same smaller face as $TYPE -- a reel's GSM
-// and micron are mutually exclusive on Facestock Master, so this is blank
-// ("-") for a micron-specified reel rather than a wrong number.
-export function buildInwardLabelFields({ family, type, size, gsm, reelMtrs, rollId, inwardDate, printedOn }) {
+// $GSM prints above $DATE, at its own (slightly larger than $TYPE) face --
+// GSM and micron are mutually exclusive on Facestock Master, so a
+// micron-specified reel prints its micron there instead rather than a blank.
+export function buildInwardLabelFields({ family, type, size, gsm, micron, reelMtrs, rollId, inwardDate, printedOn }) {
   const weight = sanitizeField(reelMtrs);
   const gsmText = sanitizeField(gsm);
+  const micronText = sanitizeField(micron);
   return {
     family: fieldOrDash(family),                     // $FAMILY <- the reel's Family
     type: fieldOrDash(type),                          // $TYPE <- the reel's Type, under $FAMILY
     width: size ? `${fieldOrDash(size)} MM` : "-",   // $WIDTH MM <- the spec's size
     weight: weight ? `${weight} KG` : "-",           // $WEIGHT KG <- reelMtrs is kilos in this pool
     id: fieldOrDash(rollId),                         // $ID <- system Roll ID
-    gsm: gsmText ? `${gsmText} GSM` : "-",           // $GSM <- the reel's GSM, above $DATE
+    gsm: gsmText ? `${gsmText} GSM` : (micronText ? `${micronText} MIC` : "-"), // $GSM <- GSM, or Micron when this reel has no GSM
     date: formatShortLabelDate(inwardDate || printedOn), // $DATE <- the reel's inward date, dd/mm/yy
   };
 }
