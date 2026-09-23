@@ -717,25 +717,12 @@
     <!-- Find a reel: the column header filters search the spec rows, this
          searches the reels underneath them (see .stock-find-bar above). -->
     <div class="stock-find-wrap">
-      <div class="download-selector" id="downloadSelector" style="display: none;">
-        <button class="download-selector__trigger" type="button">
-          <span>
-            <i class="fa-solid fa-file-arrow-down"></i>
-            <span class="download-typo">Download</span>
-          </span>
-          <i class="fas fa-chevron-down download-selector__trigger-icon"></i>
-        </button>
-        <div class="download-selector__menu" id="downloads">
-          <span class="download-selector__option" id="download-pdf">
-            <i class="fas fa-file-pdf download-selector__option-icon"></i>
-            <span>PDF</span>
-          </span>
-          <span class="download-selector__option" id="download-xlsx">
-            <i class="fas fa-file-excel download-selector__option-icon"></i>
-            <span>Excel</span>
-          </span>
-        </div>
-      </div>
+      <button type="button" id="download-xlsx" class="download-selector__trigger" style="width: auto;" title="Download this table as an Excel file, straight from the current Sachiko database">
+        <span>
+          <i class="fa-solid fa-file-excel"></i>
+          <span class="download-typo">Excel</span>
+        </span>
+      </button>
       <span id="stockFindStatus" class="stock-find-status"></span>
       <div class="stock-find-bar">
         <i class="fa-solid fa-magnifying-glass stock-find-icon"></i>
@@ -1075,8 +1062,6 @@
 
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
@@ -1649,22 +1634,8 @@
   // "active" -- whatever the header filters currently leave on screen -- so
   // this always exports exactly the filtered master rows the table shows,
   // never the full unfiltered set and never a blank row per reel.
-  const downloadSelector = document.getElementById("downloadSelector");
-  const downloadTrigger = downloadSelector.querySelector(".download-selector__trigger");
-  downloadTrigger.addEventListener("click", (e) => {
-    e.stopPropagation();
-    downloadSelector.classList.toggle("download-selector--active");
-  });
-  document.addEventListener("click", () => downloadSelector.classList.remove("download-selector--active"));
-  downloadSelector.querySelector(".download-selector__menu").addEventListener("click", (e) => e.stopPropagation());
-
-  document.getElementById("download-pdf").addEventListener("click", () => {
-    mastersTable.download("pdf", "facestock-stock.pdf", { orientation: "landscape", title: "Facestock Stock" });
-    downloadSelector.classList.remove("download-selector--active");
-  });
   document.getElementById("download-xlsx").addEventListener("click", () => {
     mastersTable.download("xlsx", "facestock-stock.xlsx", { sheetName: "Facestock Stock" });
-    downloadSelector.classList.remove("download-selector--active");
   });
 
   // "renderComplete" is a Tabulator EVENT, not a constructor option -- a
