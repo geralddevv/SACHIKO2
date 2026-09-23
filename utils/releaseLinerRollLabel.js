@@ -53,14 +53,18 @@ export function buildQrPayload(reel) {
 // targets. The QR still carries the full buildLabelFields payload (buildQrPayload
 // above), so nothing downstream that scans it changes. Facestock and Adhesive
 // Stock have their own buildInwardLabelFields over the same view; Release Liner
-// has no Family field, so $FAMILY here is the reel's Type.
-export function buildInwardLabelFields({ type, size, reelMtrs, rollId, inwardDate, printedOn }) {
+// has no Family field, so $FAMILY here is the reel's Type. $GSM prints above
+// $DATE -- unlike Facestock Master, Release Master carries no micron field, so
+// there is no fallback: no GSM prints as "-".
+export function buildInwardLabelFields({ type, size, gsm, reelMtrs, rollId, inwardDate, printedOn }) {
   const weight = sanitizeField(reelMtrs);
+  const gsmText = sanitizeField(gsm);
   return {
     family: fieldOrDash(type),                       // $FAMILY <- the reel's Type
     width: size ? `${fieldOrDash(size)} MM` : "-",   // $WIDTH MM <- the spec's size
     weight: weight ? `${weight} KG` : "-",           // $WEIGHT KG <- reelMtrs is kilos in this pool
     id: fieldOrDash(rollId),                         // $ID <- system Roll ID
+    gsm: gsmText ? `${gsmText} GSM` : "-",           // $GSM <- the reel's GSM, above $DATE
     date: formatShortLabelDate(inwardDate || printedOn), // $DATE <- the reel's inward date, dd/mm/yy
   };
 }

@@ -358,6 +358,20 @@ function totalStockValueOf(stock) {
   return stock.reduce((sum, s) => (s.quantity ? sum + (Number(s.reelMtrs) || 0) * (Number(s.rate) || 0) : sum), 0);
 }
 
+// Running metres a master's Stock (Kg) works out to at its own GSM and width
+// -- same conversion the "Stock (RM)" column applies client-side
+// (views/stock/releaseLinerStock.ejs's kgToRm) and the same helper
+// routes/stock/facestockStock.js's header total uses, mirrored here so the
+// header total and the column it's summing can never disagree. A master with
+// no GSM contributes nothing, same as the column.
+function kgToRunningMetres(kg, gsm, widthMm) {
+  const k = Number(kg);
+  const g = Number(gsm);
+  const w = Number(widthMm);
+  if (!(k > 0) || !(g > 0) || !(w > 0)) return 0;
+  return (k * 1e6) / (g * w);
+}
+
 router.get("/", async (req, res) => {
   const [locations, stock, facestockStock, adhesiveStock, specOptions, reelUsage] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
@@ -376,6 +390,7 @@ router.get("/", async (req, res) => {
   const releaseValue = totalStockValueOf(stock);
   const facestockValue = totalStockValueOf(facestockStock);
   const adhesiveValue = totalStockValueOf(adhesiveStock);
+  const totalRunningMeters = masters.reduce((sum, m) => sum + kgToRunningMetres(m.currentStock, m.gsm, m.size), 0);
   res.render("stock/releaseLinerStock.ejs", {
     JS: false,
     CSS: "tableDisp.css",
@@ -386,6 +401,7 @@ router.get("/", async (req, res) => {
     facestockValue,
     adhesiveValue,
     totalStockValue: releaseValue + facestockValue + adhesiveValue,
+    totalRunningMeters,
     // Sizes the Print dialog's preview frame to the real sticker. Passed
     // from utils/releaseLinerRollLabel.js rather than written into the view,
     // so the frame can't quietly disagree with the label inside it.
@@ -580,7 +596,7 @@ function sendLabelError(res, status, message) {
 // the many-reel sheet below go through this, so a label printed off a row's
 // own Print button and the same reel printed as part of a batch are built
 // from one place and cannot drift apart.
-const LABEL_REEL_FIELDS = "rollId vendorName vendorSkuCode invoiceNo reelMtrs size type inwardDate";
+const LABEL_REEL_FIELDS = "rollId vendorName vendorSkuCode invoiceNo reelMtrs size type gsm inwardDate";
 
 async function buildLabelFor(reel) {
   const labelInput = {
@@ -590,6 +606,7 @@ async function buildLabelFor(reel) {
     reelMtrs: reel.reelMtrs,
     size: reel.size,
     type: reel.type,
+    gsm: reel.gsm,
     inwardDate: reel.inwardDate,
     rollId: reel.rollId,
   };

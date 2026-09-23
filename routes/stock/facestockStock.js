@@ -383,6 +383,22 @@ function totalStockValueOf(stock) {
   return stock.reduce((sum, s) => (s.quantity ? sum + (Number(s.reelMtrs) || 0) * (Number(s.rate) || 0) : sum), 0);
 }
 
+// Running metres a master's Stock (Kg) works out to at its own GSM and width
+// -- same conversion the "Stock (RM)" column applies client-side
+// (views/stock/facestockStock.ejs's kgToRm), mirrored here so the header
+// total and the column it's summing can never disagree. Every reel under a
+// master shares its GSM/size exactly (they're part of the master's own key,
+// see facestockSpecKey above), so summing the already-aggregated
+// currentStock per master is the same total as summing every reel on its own.
+// A master with no GSM (micron-only) contributes nothing, same as the column.
+function kgToRunningMetres(kg, gsm, widthMm) {
+  const k = Number(kg);
+  const g = Number(gsm);
+  const w = Number(widthMm);
+  if (!(k > 0) || !(g > 0) || !(w > 0)) return 0;
+  return (k * 1e6) / (g * w);
+}
+
 router.get("/", async (req, res) => {
   const [locations, stock, releaseStock, adhesiveStock, specOptions, reelUsage] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
@@ -401,6 +417,7 @@ router.get("/", async (req, res) => {
   const facestockValue = totalStockValueOf(stock);
   const releaseValue = totalStockValueOf(releaseStock);
   const adhesiveValue = totalStockValueOf(adhesiveStock);
+  const totalRunningMeters = masters.reduce((sum, m) => sum + kgToRunningMetres(m.currentStock, m.gsm, m.size), 0);
   res.render("stock/facestockStock.ejs", {
     JS: false,
     CSS: "tableDisp.css",
@@ -411,6 +428,7 @@ router.get("/", async (req, res) => {
     releaseValue,
     adhesiveValue,
     totalStockValue: facestockValue + releaseValue + adhesiveValue,
+    totalRunningMeters,
     // Sizes the Print dialog's preview frame to the real sticker. Passed
     // from utils/facestockRollLabel.js rather than written into the view, so
     // the frame can't quietly disagree with the label inside it.

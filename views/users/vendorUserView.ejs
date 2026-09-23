@@ -75,6 +75,85 @@
       color: #044a78;
     }
 
+    /* Collapsed multi-commodity summary in the Commodities cell -- a vendor
+       with many commodities can otherwise blow the row out to several lines
+       or force the column wide; the full list is still on hover (title) and
+       always visible one-per-row once the tree toggle is expanded. */
+    .commodity-summary {
+      display: block;
+      max-width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      color: #64748b;
+    }
+
+    /* Commodities dropdown -- Tabulator's dataTree module, same pattern as
+       /sachiko/facestockstock's Rolls dropdown: a row supplying 2+
+       commodities expands via its own tree toggle into one child row per
+       commodity, instead of repeating the whole vendor/location row once
+       per commodity. */
+    .tabulator-data-tree-control {
+      width: 20px !important;
+      height: 20px !important;
+      border: none !important;
+      border-radius: 4px !important;
+      background: rgba(4, 74, 120, 0.1) !important;
+      box-shadow: none !important;
+      outline: none !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: pointer !important;
+      transition: background-color 0.15s ease !important;
+    }
+    .tabulator-data-tree-control:hover {
+      background: rgba(4, 74, 120, 0.18) !important;
+    }
+    .tabulator-data-tree-control:focus,
+    .tabulator-data-tree-control:focus-visible {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+    .tabulator-data-tree-control-expand,
+    .tabulator-data-tree-control-collapse {
+      width: auto !important;
+      height: auto !important;
+      background: none !important;
+      border: none !important;
+    }
+    .tabulator-data-tree-control-expand::before,
+    .tabulator-data-tree-control-collapse::before {
+      font-family: "Font Awesome 6 Free";
+      font-weight: 900;
+      content: "\f054"; /* chevron-right, one glyph for both states */
+      font-size: 11px;
+      line-height: 1;
+      color: #044a78;
+      display: inline-block;
+      transition: transform 0.2s ease;
+    }
+    .tabulator-data-tree-control-collapse::before {
+      transform: rotate(90deg);
+    }
+    .tabulator-data-tree-control-expand::after,
+    .tabulator-data-tree-control-collapse::after {
+      content: none !important;
+      display: none !important;
+    }
+    #master-table .tabulator-row.commodity-detail-row {
+      transition: background-color 0.15s ease;
+      background-color: #f8fafc;
+      border-top: 1px solid #e6eaf2;
+    }
+    #master-table .tabulator-row.commodity-detail-row:hover {
+      background-color: #eef2f7 !important;
+    }
+    #master-table .tabulator-row.commodity-detail-row > .tabulator-cell,
+    #master-table .tabulator-row.commodity-detail-row > .tabulator-col-resize-handle {
+      display: none !important;
+    }
+
     #master-table {
       width: 100%;
       flex: 1 1 auto;
@@ -208,30 +287,23 @@
   });
   tableData = byLocation;
 
-  const flattenedData = [];
-  tableData.forEach((row) => {
+  // One row stays one row even when a vendor supplies several commodities --
+  // this used to explode a row into a copy of itself per commodity, which
+  // repeated every vendor/location detail as many times as the vendor had
+  // commodities. The Commodities column now renders every commodity for the
+  // row itself (a dropdown once there's more than one), so there's nothing
+  // left to explode here.
+  tableData = tableData.map((row) => {
     const dispatchType = row.dispatchType || (row.SelfDispatch ? "Self Dispatch" : "Transport");
-    const commodities = Array.isArray(row.commodities) && row.commodities.length > 0 ? row.commodities : ["-"];
+    const rawCommodities = Array.isArray(row.commodities) && row.commodities.length > 0 ? row.commodities : ["-"];
 
-    commodities.forEach((commodity) => {
-      const dispatchType = row.dispatchType || (row.SelfDispatch ? "Self Dispatch" : "Transport");
-      let displayCommodity = commodity;
-      let filterCommodity = commodity;
+    const commodityEntries = rawCommodities.map((commodity) => ({
+      display: commodity,
+      filter: typeof commodity === "string" && commodity.startsWith("OTHERS - ") ? "OTHERS" : commodity,
+    }));
 
-      if (typeof commodity === "string" && commodity.startsWith("OTHERS - ")) {
-        displayCommodity = commodity;
-        filterCommodity = "OTHERS";
-      }
-
-      flattenedData.push({
-        ...row,
-        dispatchType,
-        displayCommodity: displayCommodity,
-        filterCommodity: filterCommodity,
-      });
-    });
+    return { ...row, dispatchType, commodityEntries };
   });
-  tableData = flattenedData;
 
   // Commodity -> vendor-scoped binding-view URL. Only TTR/Tape have a
   // binding-view route; other commodities (Face Paper, Adhesive, etc.) stay
@@ -262,9 +334,27 @@
     ...column,
   });
 
+  // Flattens each row into Tabulator's dataTree shape: one row per
+  // vendor/coordinator/location, with a _children row per extra commodity
+  // when the row supplies more than one -- same "Rolls" dropdown pattern as
+  // /sachiko/facestockstock. A row with 0 or 1 commodities gets no
+  // _children key at all (not even an empty array -- Tabulator still draws
+  // a toggle for that), so its leftmost column stays blank with nothing to
+  // open.
+  function buildVendorTreeData(rows) {
+    return rows.map((r) => {
+      const entries = r.commodityEntries && r.commodityEntries.length ? r.commodityEntries : [{ display: "-", filter: "-" }];
+      const row = { ...r, isParent: true };
+      if (entries.length > 1) {
+        row._children = entries.map((e) => ({ _id: r._id, commodityEntries: [e], isParent: false }));
+      }
+      return row;
+    });
+  }
+
   function initTable() {
     table = new Tabulator("#master-table", {
-      data: tableData,
+      data: buildVendorTreeData(tableData),
       height: "100%",
       // layout: "fitColumns",
       virtualDom: true,
@@ -272,34 +362,121 @@
       initialSort: [{ column: "vendorName", dir: "asc" }],
       movableColumns: true,
       placeholder: "No data to display",
+      dataTree: true,
+      dataTreeStartExpanded: false,
+      dataTreeChildField: "_children",
+      // Child (commodity) rows don't carry a parent's own vendor/location
+      // values -- scope header filtering to parent rows only, same as
+      // facestockStock.ejs, so a matching parent's commodities still all
+      // display under an active filter.
+      dataTreeFilter: false,
+      dataTreeElementColumn: "_toggle",
+      // Child rows carry only one thing worth showing (the commodity itself)
+      // -- hide every per-column cell on those rows and replace them with
+      // one spanning detail bar instead, same pattern as facestockStock.ejs's
+      // reel rows.
+      rowFormatter: (row) => {
+        const data = row.getData();
+        if (data.isParent) return;
+        const el = row.getElement();
+        if (el.querySelector(".commodity-detail-span")) return;
+        el.classList.add("commodity-detail-row");
+        const entry = (data.commodityEntries || [])[0] || { display: "-", filter: "-" };
+        const link = commodityLink(entry.filter, data._id);
+        const bar = document.createElement("div");
+        bar.className = "commodity-detail-span";
+        bar.style.cssText = "flex:1; display:flex; align-items:center; gap:8px; padding:6px 12px; color:#4b5563; font-size:13px;";
+        bar.append("↳ ");
+        const label = document.createElement("span");
+        label.textContent = entry.display;
+        if (link) {
+          label.className = "count-link";
+          label.addEventListener("click", () => window.location.href = link);
+        }
+        bar.appendChild(label);
+        el.appendChild(bar);
+      },
       columns: [
+        { title: "", field: "_toggle", width: 40, hozAlign: "center", headerSort: false },
         // getPosition(true) is the row's rank among currently sorted/filtered
         // rows, re-evaluated on every redraw -- stays correct after sorting or
-        // filtering instead of a static index frozen at load time.
+        // filtering instead of a static index frozen at load time. Commodity
+        // (child) rows don't get their own number, same as every other column
+        // here.
         { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
-          formatter: (cell) => cell.getRow().getPosition(true) },
-        withSelectFilter({
-          title: "Commodities",
-          field: "filterCommodity",
-          minWidth: 200,
-          headerSort: true,
-          sorter: "string",
-          formatter: (cell) => {
-            const data = cell.getRow().getData();
-            const link = commodityLink(data.filterCommodity, data._id);
-            return link ? `<span class="count-link">${data.displayCommodity}</span>` : data.displayCommodity;
-          },
-          cellClick: (e, cell) => {
-            const data = cell.getRow().getData();
-            const link = commodityLink(data.filterCommodity, data._id);
-            if (link) window.location.href = link;
-          },
-        }, (() => {
-          const distinct = Array.from(new Set(tableData.map(r => r.filterCommodity))).filter(c => c && c !== "-").sort();
-          const obj = {"": "All"};
-          distinct.forEach(c => { obj[c] = c; });
-          return obj;
-        })()),
+          formatter: (cell) => cell.getRow().getData().isParent ? cell.getRow().getPosition(true) : "" },
+        (() => {
+          const distinct = Array.from(
+            new Set(tableData.flatMap((r) => (r.commodityEntries || []).map((e) => e.filter)))
+          ).filter((c) => c && c !== "-").sort();
+          const filterValues = { "": "All" };
+          distinct.forEach((c) => { filterValues[c] = c; });
+
+          return {
+            title: "Commodities",
+            field: "commodityEntries",
+            // A fixed width, not minWidth -- minWidth still let the column's
+            // "fitData" sizing grow to fit a long comma-joined commodity
+            // list, which is exactly what the ellipsis below was meant to
+            // avoid. widthGrow: 0 stops it reclaiming any of that back too.
+            width: 220,
+            widthGrow: 0,
+            headerSort: true,
+            // Sorts on the first commodity's own text -- there's no single
+            // scalar to sort a multi-commodity row on.
+            sorter: (a, b, rowAData, rowBData) => {
+              const da = (rowAData.commodityEntries || [])[0]?.display || "";
+              const db = (rowBData.commodityEntries || [])[0]?.display || "";
+              return String(da).localeCompare(String(db));
+            },
+            headerFilter: "list",
+            headerFilterParams: { values: filterValues, clearable: true, autocomplete: true },
+            // Default "list" filter compares the header's pick against a
+            // single field value -- this row's field is an array, so the
+            // match has to check whether ANY of the row's commodities is it.
+            headerFilterFunc: (headerValue, rowValue, rowData) => {
+              if (!headerValue) return true;
+              return (rowData.commodityEntries || []).some((e) => e.filter === headerValue);
+            },
+            // Download (PDF/Excel) reads the plain field value, not the
+            // formatter's DOM node -- without this it prints "[object Object]".
+            accessorDownload: (value, data) => (data.commodityEntries || []).map((e) => e.display).join(", "),
+            // A single commodity (a parent row that supplies just one, or a
+            // commodity's own child row once expanded) renders exactly as
+            // before -- plain text, or a link for TTR/Tape. A parent row
+            // supplying 2+ just summarises them here; the tree toggle in the
+            // leftmost column expands it into one clickable row per
+            // commodity, instead of repeating the whole row once per
+            // commodity.
+            formatter: (cell) => {
+              const data = cell.getRow().getData();
+              const entries = data.commodityEntries && data.commodityEntries.length ? data.commodityEntries : [{ display: "-", filter: "-" }];
+
+              if (entries.length === 1) {
+                const entry = entries[0];
+                const link = commodityLink(entry.filter, data._id);
+                const span = document.createElement("span");
+                span.textContent = entry.display;
+                if (link) span.className = "count-link";
+                return span;
+              }
+
+              const summary = entries.map((e) => e.display).join(", ");
+              const span = document.createElement("span");
+              span.className = "commodity-summary";
+              span.textContent = summary;
+              span.title = summary; // full list on hover, since the text itself is truncated below
+              return span;
+            },
+            cellClick: (e, cell) => {
+              const data = cell.getRow().getData();
+              const entries = data.commodityEntries || [];
+              if (entries.length !== 1) return;
+              const link = commodityLink(entries[0].filter, data._id);
+              if (link) window.location.href = link;
+            },
+          };
+        })(),
         withTextFilter({
           title: "Vendor",
           field: "vendorName",
@@ -356,9 +533,11 @@
     // DOM rather than Tabulator's row APIs (getRow().getPosition()/
     // getRows("active") were both observed to go stale after a sort) --
     // whatever's actually on screen, top to bottom, is renumbered 1..n
-    // every time the table redraws.
+    // every time the table redraws. Commodity (child) rows are marked
+    // ".commodity-detail-row" by rowFormatter above and skipped, same as
+    // every other parent-only column.
     table.on("renderComplete", function () {
-      document.querySelectorAll("#master-table .tabulator-row").forEach((rowEl, i) => {
+      document.querySelectorAll("#master-table .tabulator-row:not(.commodity-detail-row)").forEach((rowEl, i) => {
         const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
         if (cell) cell.textContent = i + 1;
       });

@@ -117,6 +117,7 @@
     }
     .label-svg .t-big { font-size: 24px; }
     .label-svg .t-fam { font-size: 20px; }
+    .label-svg .t-gsm { font-size: 18px; }
     .label-svg .t-id { font-weight: 700; }
     .label-svg image {
       /* Keep the QR modules crisp rather than blurred together at print
@@ -339,7 +340,8 @@
         <text class="t-big t-id fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="46"><%= label.fields.id %></text>
         <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="83"><%= label.fields.width %></text>
         <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="120"><%= label.fields.weight %></text>
-        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="157"><%= label.fields.date %></text>
+        <text class="t-gsm fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="150"><%= label.fields.gsm %></text>
+        <text class="t-big fit" text-anchor="middle" dominant-baseline="central" data-maxw="150" x="197.6" y="178"><%= label.fields.date %></text>
       </svg>
     </div>
   </div>

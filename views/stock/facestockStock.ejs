@@ -598,19 +598,28 @@
        height, 12px text, grey border, 6px radius) is plain enough to
        override from these class selectors; only the background needs
        !important to answer !important. */
+    /* .indi-head itself is nowrap (tableDisp.css), so once the title +
+       value chips (which wrap internally) outgrow the row, the find bar
+       got squeezed onto the same line and started overlapping the chips
+       instead of dropping to its own line underneath them. */
+    .indi-head {
+      flex-wrap: wrap;
+      row-gap: 10px;
+    }
     .stock-find-wrap {
       display: flex;
       align-items: center;
       gap: 10px;
       flex: 0 1 auto;
       min-width: 0;
+      margin-left: auto;
     }
     .stock-find-bar {
       display: flex;
       align-items: center;
       gap: 8px;
-      flex: 0 1 300px;
-      min-width: 190px;
+      flex: 0 1 180px;
+      min-width: 130px;
       background: #f8f9fa;
       border: 1px solid #dbe4ee;
       border-radius: 8px;
@@ -689,6 +698,10 @@
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
         Total Value: <span style="color: #15803d; font-size: 15px;">₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
+      <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;"
+        title="Facestock's Stock (Kg) converted to running metres at each spec's own GSM and width -- specs with no GSM (micron-only) aren't included.">
+        Total RM: <span style="color: #15803d; font-size: 15px;"><%= Number(totalRunningMeters || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %> m</span>
+      </span>
       <span style="width: 1px; align-self: stretch; background: rgba(255, 255, 255, 0.4);"></span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px; box-shadow: 0 0 0 2px #044a78, 0 0 0 3.5px #fff;">
         Facestock Value: <span style="color: #15803d;">₹<%= Number(facestockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
@@ -704,7 +717,7 @@
     <!-- Find a reel: the column header filters search the spec rows, this
          searches the reels underneath them (see .stock-find-bar above). -->
     <div class="stock-find-wrap">
-      <div class="download-selector" id="downloadSelector">
+      <div class="download-selector" id="downloadSelector" style="display: none;">
         <button class="download-selector__trigger" type="button">
           <span>
             <i class="fa-solid fa-file-arrow-down"></i>
@@ -1476,13 +1489,19 @@
       { title: "GSM", field: "gsm", headerFilter: "input", headerFilterPlaceholder: "Search", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
       { title: "Micron", field: "micron", headerFilter: "input", headerFilterPlaceholder: "Search", hozAlign: "center", minWidth: 80, formatter: (cell) => cell.getValue() ?? "—" },
       {
-        title: "Stock (Kg)",
-        field: "currentStock",
+        title: "Stock (Rolls)",
+        field: "rollCount",
         headerFilter: "input",
         headerFilterPlaceholder: "Search",
         hozAlign: "center",
-        minWidth: 150,
-        formatter: (cell) => (cell.getRow().getData().isParent ? fmtKg(cell.getValue()) : ""),
+        minWidth: 130,
+        headerTooltip: "Reels of this spec in stock. Click a row to tick them off and print their labels.",
+        formatter: (cell) => {
+          if (!cell.getRow().getData().isParent) return "";
+          const count = cell.getValue() || 0;
+          if (!count) return `<span style="color:#94a3b8;">0</span>`;
+          return `<span class="rolls-chip" title="Click this row to print labels for these reels"><i class="fa-solid fa-tag"></i>${count}</span>`;
+        },
       },
       {
         title: "Stock (RM)",
@@ -1508,19 +1527,13 @@
         },
       },
       {
-        title: "Stock (Rolls)",
-        field: "rollCount",
+        title: "Stock (Kg)",
+        field: "currentStock",
         headerFilter: "input",
         headerFilterPlaceholder: "Search",
         hozAlign: "center",
-        minWidth: 130,
-        headerTooltip: "Reels of this spec in stock. Click a row to tick them off and print their labels.",
-        formatter: (cell) => {
-          if (!cell.getRow().getData().isParent) return "";
-          const count = cell.getValue() || 0;
-          if (!count) return `<span style="color:#94a3b8;">0</span>`;
-          return `<span class="rolls-chip" title="Click this row to print labels for these reels"><i class="fa-solid fa-tag"></i>${count}</span>`;
-        },
+        minWidth: 150,
+        formatter: (cell) => (cell.getRow().getData().isParent ? fmtKg(cell.getValue()) : ""),
       },
       {
         title: "Allotted (Kg)",
@@ -1570,6 +1583,28 @@
           const value = cell.getValue() || 0;
           const color = value < 0 ? "#dc2626" : "#15803d";
           return `<span style="font-weight:800; color:${color};">${fmtKg(value)}</span>`;
+        },
+      },
+      {
+        title: "Available (RM)",
+        field: "available",
+        headerFilter: false,
+        hozAlign: "center",
+        minWidth: 130,
+        headerTooltip: "Available (Kg) converted to running metres at this spec's own GSM and width, same conversion as Stock (RM). Blank where this spec has no GSM.",
+        // Shares the "available" field with Available (Kg) -- same reason
+        // Stock (RM) needs its own sorter over "currentStock" above.
+        sorter: (_a, _b, aRow, bRow) => {
+          const ra = aRow.getData();
+          const rb = bRow.getData();
+          const va = kgToRm(ra.available, ra.gsm, ra.size);
+          const vb = kgToRm(rb.available, rb.gsm, rb.size);
+          return (va ?? -Infinity) - (vb ?? -Infinity);
+        },
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          if (!row.isParent) return "";
+          return fmtRm(kgToRm(row.available, row.gsm, row.size));
         },
       },
       {
