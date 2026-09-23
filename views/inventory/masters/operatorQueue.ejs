@@ -227,9 +227,9 @@
             </thead>
             <tbody>
               <% group.jobs.forEach((row) => { %>
-                <tr class="<%= row.materialStatus === 'match' ? 'mq-row-match' : row.materialStatus === 'short' ? 'mq-row-short' : '' %>">
+                <tr class="<%= row.materialStatus === 'match' ? 'mq-row-match' : row.materialStatus === 'short' ? 'mq-row-short' : '' %><%= row.advance ? ' adv-tr' : '' %>">
                   <td data-label="Lot No" title="<%= row.lotNo %>"><%= row.lotNo %></td>
-                  <td data-label="Product Code" title="<%= row.productCode %>"><%= row.productCode %></td>
+                  <td data-label="Product Code" title="<%= row.productCode %>"><%= row.productCode %><% if (row.advance) { %> <span class="adv-tag" title="<%= row.advance.rolls %> roll(s) set in advance — no sales order yet">ADVANCE</span><% } %></td>
                   <td data-label="Paper Size"><%= row.paperSize %></td>
                   <td data-label="Required Rolls"><%= row.rolls %></td>
                   <td class="mq-rolls-cell" data-label="Allotted Rolls" data-id="<%= row._id %>" onclick="openRollDetails(this.dataset.id)" title="View roll allotment details"><%= row.allottedRolls %></td>

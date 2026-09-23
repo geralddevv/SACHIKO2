@@ -42,18 +42,24 @@ const pendingProductionSchema = new mongoose.Schema(
     estimatedDate: { type: Date },
     remarks: { type: String },
 
-    // Set by the "Advance" button on the Set Deckle plan page
-    // (POST /labels/production/deckle-set/plan/:itemId/advance) -- a loose
-    // row the planner typed in ahead of a real order, so material for it can
-    // be cut into today's deckle instead of waiting for the order to land.
-    // No TapeSalesOrder backs it (same reasoning as isDeckleBatch/
-    // parentOrderId below), so order-sync upserts never touch it. Shown with
-    // a cornflowerblue highlight + "ADVANCE" tag everywhere loose orders are
-    // listed (dsFmtChild in routes/fairdesk_route.js). Once it joins a batch
-    // it flows through Deckle Queue -> Assign Production -> Machine Queue
-    // exactly like any other member -- nothing downstream needs to know it
-    // started this way.
+    // An ADVANCE order -- a loose row the planner typed in ahead of a real
+    // order (Advance Order on Deckle Sorting, or Advance on a Product Code's
+    // Set Deckle page -- createAdvanceOrder in routes/fairdesk_route.js), so
+    // material for it can be cut into today's deckle instead of waiting for
+    // the order to land. No TapeSalesOrder backs it (same reasoning as
+    // isDeckleBatch/parentOrderId below), so order-sync upserts never touch
+    // it. Carried onto any clone/remainder row split off it at batching.
+    //
+    // It is flagged ADVANCE on every page it travels through -- Deckle
+    // Sorting, Deckle Queue, Assign Production, WIP, the machine/operator
+    // queues and the operator app -- the batch pages reading it live off the
+    // members (advanceShareByBatch in utils/pendingProduction.js). When the
+    // real sales order for the same Product Code + Paper Size + Running Mtrs
+    // is placed, it takes the advance row's place, batch and all, and the
+    // flag clears (absorbAdvanceOrders, same file).
     isAdvance: { type: Boolean, default: false },
+    // Who typed the advance order in -- there is no sales order to say.
+    advanceBy: { type: String },
 
     // Copied from the order at sync time -- replace FAIRTECH's die-derived
     // roll math, since Label Stock orders already collect these directly.

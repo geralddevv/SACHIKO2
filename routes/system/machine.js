@@ -23,6 +23,7 @@ import { normalizeRollId, extractScannedRollId, findScannedReel, generateDeckleI
 import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds, getEligibleRawMaterials } from "../../utils/labelStockProduction.js";
 import { resolveActualLabelStock, resolveLabelStockCombinations } from "../../utils/labelStockVariant.js";
 import { buildSlittingQueueRows } from "./slitting.js";
+import { advanceShareByBatch } from "../../utils/pendingProduction.js";
 // The code every generated id starts with -- the Company master's own
 // (utils/companyBrand.js), read live so a rename needs no restart.
 import { currentIdPrefix } from "../../utils/companyBrand.js";
@@ -262,6 +263,7 @@ router.get("/machine/queue", requireMachineFloor, async (req, res) => {
       producedRolls: job.producedRolls,
       rollIds: job.allottedRollDetails.map((r) => r.rollId).filter(Boolean),
       clientName: job.clientName,
+      advance: job.advance,
     });
   });
   // Every allocated (not yet fully run) Slitting Job Card, folded into the
@@ -612,6 +614,13 @@ export async function buildQueueRows(match) {
     jobcardDeckleCounts.map((d) => [String(d._id), d.n]),
   );
 
+  // Rolls in each batch that were set in advance of their sales order -- the
+  // queue, the job card and the operator app flag the job until the real
+  // order takes them over (see absorbAdvanceOrders).
+  const advanceByBatch = await advanceShareByBatch(
+    pending.filter((p) => p.isDeckleBatch).map((p) => p._id),
+  );
+
   // Raw-material layer picks (Facestock/Adhesive/Release Liner, ...) recorded
   // on the assign form -- kept as { pool, stockIds } on each order (see
   // models/inventory/pendingProduction.js's allottedLayers, one or more
@@ -814,6 +823,10 @@ export async function buildQueueRows(match) {
       _id: String(p._id),
       machineId: String(p.assignedMachineId || ""),
       lotNo: p.lotNo || "—",
+      // { rolls, orders } of this job still set in advance (no sales order
+      // yet), or null. Shipped to the operator app as-is.
+      advance: advanceByBatch.get(String(p._id))
+        || (p.isAdvance ? { rolls: Number(p.quantity) || 0, orders: 1 } : null),
       productCode: item.productCode || item.skuCode || "—",
       paperSize: p.paperSize || "—",
       rollType: item.rollType || "—",

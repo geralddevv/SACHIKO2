@@ -81,6 +81,8 @@
   const table = new Tabulator("#deckle-queue-table", {
     data: rowsData,
     placeholder: "No deckles waiting to be made",
+    // Advance rolls in the batch -- no sales order behind them yet.
+    rowFormatter: (row) => row.getElement().classList.toggle("adv-row", !!row.getData().advance),
     initialSort: [{ column: "createdAt", dir: "asc" }],
     columns: [
       { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
@@ -103,7 +105,13 @@
         },
       },
       { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter code...",
-        formatter: (cell) => `<span style="font-weight:700; color:#044A78;">${cell.getValue() || "N/A"}</span>` },
+        formatter: (cell) => {
+          const adv = cell.getRow().getData().advance;
+          const tag = adv
+            ? ` <span class="adv-tag" title="${adv.rolls} roll(s) of this deckle are set in advance — no sales order yet">ADVANCE ${adv.rolls}</span>`
+            : "";
+          return `<span style="font-weight:700; color:#044A78;">${cell.getValue() || "N/A"}</span>${tag}`;
+        } },
       {
         title: "Deckle Size",
         field: "deckleSize",

@@ -279,10 +279,19 @@
     form.submit();
   }
 
+  // Advance rolls (no sales order yet) -- the row is washed cornflowerblue
+  // and its Product Code tagged, the same flag every production page shows
+  // until the real order takes the rolls over.
+  const advRowFormatter = (row) => row.getElement().classList.toggle("adv-row", !!row.getData().advance);
+  const advTag = (row) => (row.advance
+    ? ` <span class="adv-tag" title="${row.advance.rolls} roll(s) set in advance — no sales order yet">ADVANCE${row.isDeckleBatch ? ` ${row.advance.rolls}` : ""}</span>`
+    : "");
+
   /* ----- Table ----- */
   let table = null;
   if (INITIAL_TAB !== "wip") {
   table = new Tabulator("#master-table", {
+    rowFormatter: advRowFormatter,
     data: orderData,
     placeholder: "No label stock pending production",
     initialSort: [{ column: "createdAt", dir: "asc" }],
@@ -325,7 +334,7 @@
         },
       },
       { title: "User", field: "userName", headerFilter: "input", headerFilterPlaceholder: "Filter user..." },
-      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter product...", formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>` },
+      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter product...", formatter: (cell) => `<span style="font-weight:600; color:#044A78;">${cell.getValue() || "N/A"}</span>${advTag(cell.getRow().getData())}` },
       { title: "Paper Size", field: "paperSize", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "Size" },
       { title: "No. of Rolls", field: "noOfRolls", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#" },
       { title: "Qty", field: "quantity", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "#" },
@@ -363,6 +372,7 @@
   let wipTable = null;
   if (INITIAL_TAB === "wip") {
   wipTable = new Tabulator("#wip-table", {
+    rowFormatter: advRowFormatter,
     data: wipData,
     index: "_id",
     // This tab lists jobs an operator has actually started, so an empty table
@@ -401,7 +411,7 @@
       },
       { title: "Machine", field: "machineName", headerFilter: "input", headerFilterPlaceholder: "Filter machine...", formatter: (cell) => cell.getValue() || "—" },
       { title: "Assigned", field: "assignedAt", headerFilter: "input", headerFilterPlaceholder: "Filter date...", formatter: (cell) => (cell.getValue() ? new Date(cell.getValue()).toLocaleDateString("en-IN") : "—") },
-      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter product...", formatter: (cell) => cell.getValue() || "—" },
+      { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter product...", formatter: (cell) => `${cell.getValue() || "—"}${advTag(cell.getRow().getData())}` },
       { title: "Paper Size", field: "paperSize", hozAlign: "center", headerFilter: "input", headerFilterPlaceholder: "Size", formatter: (cell) => cell.getValue() || "—" },
       { title: "Total Mtrs Required", field: "runningMeters", hozAlign: "right", headerFilter: "input", headerFilterPlaceholder: "Mtrs", formatter: (cell) => {
         const value = cell.getValue();

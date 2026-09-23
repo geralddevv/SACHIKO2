@@ -275,11 +275,15 @@
       dash(job.clientName) || "—",
     ].filter(Boolean);
 
+    // Rolls set ahead of their sales order -- flagged until it lands.
+    const adv = job.advance
+      ? ` <span class="adv-tag" title="${Number(job.advance.rolls) || 0} roll(s) set in advance — no sales order yet">ADVANCE</span>`
+      : "";
     return `
       <a class="mq-job" href="/app/machine/${encodeURIComponent(machineId)}/queue">
         ${parts
           .map(part => `<span${part.startsWith("(") ? ' class="mq-job-rolls"' : ""}>${escapeHtml(part)}</span>`)
-          .join('<i class="mq-job-sep">-</i>')}
+          .join('<i class="mq-job-sep">-</i>')}${adv}
       </a>`;
   }
 

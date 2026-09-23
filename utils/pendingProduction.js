@@ -43,11 +43,15 @@ export async function upsertPendingProduction(order) {
   };
 
   if (!remainders.length) {
+    // Only a brand-new order can take over an advance order -- an edit or a
+    // partial dispatch re-entering PENDING already has its row.
+    const isNew = !(await PendingProduction.exists({ _id: order._id }));
     await PendingProduction.findOneAndUpdate(
       { _id: order._id },
       { $set: { ...shared, quantity: order.quantity, noOfRolls: order.noOfRolls } },
       { upsert: true, setDefaultsOnInsert: true },
     );
+    if (isNew) return absorbAdvanceOrders(order, shared);
     return;
   }
 
@@ -139,4 +143,163 @@ export async function removePendingProduction(orderId) {
       );
     }
   }
+}
+
+// ---- Advance orders ---------------------------------------------------------
+// An advance order (PendingProduction.isAdvance) is a need the planner typed in
+// on Deckle Sorting before any sales order existed, so its rolls could be cut
+// into a deckle early. When the real order for it lands, the real order takes
+// its place -- otherwise the same rolls would sit on Deckle Sorting twice and be
+// made twice, and the batch would stay flagged ADVANCE for rolls a client has
+// in fact ordered.
+//
+// A match is the same Product Code + Paper Size + Running Mtrs (one roll's
+// length -- 1000 m rolls are not 500 m rolls). Advance rows already in a batch
+// are taken first (that is material already planned or made for this order),
+// then loose ones, oldest first within each.
+//
+//   - a BATCHED advance row hands its rolls to the order: the order's own row
+//     joins that batch for the first one (a clone, parentOrderId = the order,
+//     for any further batch -- the device the batch POST uses), and the
+//     advance row shrinks by as much, or goes;
+//   - a LOOSE advance row just shrinks (or goes): nothing was set for it, the
+//     real order's own loose row now stands for those rolls;
+//   - whatever the order wants beyond the advance stays loose as normal.
+//
+// Called by upsertPendingProduction only when the order's row was just made,
+// so an edit can never re-absorb. `shared` is the order's sync fields.
+// Returns { batchedRolls, looseRolls } for a caller that wants to say so.
+const sameNum = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.005;
+
+export async function absorbAdvanceOrders(order, shared) {
+  const size = Number(order.paperSize);
+  const qty = Number(order.quantity) || 0;
+  if (!(size > 0) || !(qty > 0)) return null;
+
+  const advances = (await PendingProduction.find({
+    isAdvance: true,
+    itemId: shared.itemId,
+    quantity: { $gt: 0 },
+  }).lean())
+    .filter((a) => sameNum(a.paperSize, size) && sameNum(a.runningMeters, order.runningMeters))
+    .sort((a, b) => (a.deckleBatchId ? 0 : 1) - (b.deckleBatchId ? 0 : 1)
+      || new Date(a.createdAt) - new Date(b.createdAt));
+  if (!advances.length) return null;
+
+  const scaleRolls = (part) => (Number(order.noOfRolls) > 0
+    ? Math.max(1, Math.round((Number(order.noOfRolls) * part) / qty))
+    : undefined);
+
+  let left = qty;
+  let looseRolls = 0;
+  const batchedTakes = [];
+  for (const a of advances) {
+    if (left <= 0) break;
+    const have = Number(a.quantity) || 0;
+    const take = Math.min(left, have);
+    if (take <= 0) continue;
+    left -= take;
+    if (a.deckleBatchId) batchedTakes.push({ a, take });
+    else looseRolls += take;
+
+    if (take >= have) {
+      await PendingProduction.deleteOne({ _id: a._id });
+      if (a.deckleBatchId) {
+        await PendingProduction.updateOne(
+          { _id: a.deckleBatchId },
+          { $pull: { batchOrderIds: a._id } },
+        );
+      }
+    } else {
+      const rolls = Number(a.noOfRolls) > 0
+        ? { noOfRolls: Math.max(1, Math.round((Number(a.noOfRolls) * (have - take)) / have)) }
+        : {};
+      await PendingProduction.updateOne(
+        { _id: a._id },
+        { $set: { quantity: have - take, ...rolls } },
+      );
+    }
+  }
+
+  if (!batchedTakes.length) return { batchedRolls: 0, looseRolls };
+
+  // The order's rolls that land in a batch come off its loose row; the rest
+  // (loose advance rolls it replaced + anything it wants beyond the advance)
+  // stay loose on a remainder row, exactly the shape a part-set order has.
+  const joinBatch = async (memberId, a) => {
+    const batch = await PendingProduction.findById(a.deckleBatchId)
+      .select("userId poNumber")
+      .lean();
+    await PendingProduction.updateOne(
+      { _id: a.deckleBatchId },
+      {
+        $addToSet: { batchOrderIds: memberId },
+        // A batch made only of advance rows has no client or PO of its own --
+        // the first real order to join it supplies them.
+        ...(!batch?.userId || !batch?.poNumber
+          ? {
+              $set: {
+                ...(!batch?.userId ? { userId: order.userId } : {}),
+                ...(!batch?.poNumber && order.poNumber ? { poNumber: order.poNumber } : {}),
+              },
+            }
+          : {}),
+      },
+    );
+  };
+
+  const [first, ...rest] = batchedTakes;
+  await PendingProduction.updateOne(
+    { _id: order._id },
+    {
+      $set: {
+        quantity: first.take,
+        ...(scaleRolls(first.take) != null ? { noOfRolls: scaleRolls(first.take) } : {}),
+        deckleBatchId: first.a.deckleBatchId,
+        deckleSize: first.a.deckleSize,
+      },
+    },
+  );
+  await joinBatch(order._id, first.a);
+
+  for (const { a, take } of rest) {
+    const clone = await PendingProduction.create({
+      ...shared,
+      parentOrderId: order._id,
+      quantity: take,
+      noOfRolls: scaleRolls(take),
+      deckleBatchId: a.deckleBatchId,
+      deckleSize: a.deckleSize,
+    });
+    await joinBatch(clone._id, a);
+  }
+
+  const batchedRolls = batchedTakes.reduce((n, t) => n + t.take, 0);
+  const stillLoose = Math.round((qty - batchedRolls) * 100) / 100;
+  if (stillLoose > 0) {
+    await PendingProduction.create({
+      ...shared,
+      parentOrderId: order._id,
+      quantity: stillLoose,
+      noOfRolls: scaleRolls(stillLoose),
+    });
+  }
+  return { batchedRolls, looseRolls };
+}
+
+// How much of each deckle batch is still advance (no sales order behind it
+// yet), so every page a batch travels through -- Deckle Queue, Assign
+// Production, WIP, the machine/operator queues and the operator app -- can
+// flag it until the real order takes it over. Read live off the member rows
+// rather than stored on the batch, so the flag clears by itself the moment
+// absorbAdvanceOrders() hands the rolls over.
+// Returns Map<batchId string, { rolls, orders }>.
+export async function advanceShareByBatch(batchIds) {
+  const ids = (batchIds || []).filter(Boolean);
+  if (!ids.length) return new Map();
+  const rows = await PendingProduction.aggregate([
+    { $match: { isAdvance: true, deckleBatchId: { $in: ids } } },
+    { $group: { _id: "$deckleBatchId", rolls: { $sum: "$quantity" }, orders: { $sum: 1 } } },
+  ]);
+  return new Map(rows.map((r) => [String(r._id), { rolls: r.rolls, orders: r.orders }]));
 }

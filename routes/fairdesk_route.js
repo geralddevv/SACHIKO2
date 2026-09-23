@@ -52,7 +52,7 @@ import {
   reconcileUserBindingLocations,
   syncLabelBindingIdentity,
 } from "../utils/reconcileBindingLocations.js";
-import { upsertPendingProduction, removePendingProduction } from "../utils/pendingProduction.js";
+import { upsertPendingProduction, removePendingProduction, advanceShareByBatch } from "../utils/pendingProduction.js";
 // "Is an operator running this right now" -- the same freshness rule the
 // operator app itself applies to PendingProduction.runningOn.
 import { activeClaim } from "./api/operatorApi.js";
@@ -5046,7 +5046,7 @@ const dsSqM = (width, lengthM, qty) =>
 const dsFmtChild = (r) => ({
   _id: String(r._id),
   isGroup: false,
-  clientName: r.userId?.clientName || r.userId?.userName || "—",
+  clientName: r.userId?.clientName || r.userId?.userName || (r.isAdvance ? "ADVANCE ORDER" : "—"),
   poNumber: r.poNumber || "—",
   paperSize: r.paperSize || "—",
   quantity: r.quantity ?? "—",
@@ -5082,6 +5082,7 @@ async function buildLooseDeckleRow(item, members) {
     paperSize: "",
     rollType: item.rollType || "—",
     orderCount: members.length,
+    advanceCount: members.filter((m) => m.isAdvance).length,
     sumQuantity: members.reduce((s, m) => s + dsNum(m.quantity), 0),
     sumRunningMeters: members.reduce((s, m) => s + dsNum(m.runningMeters), 0),
     sumSqMtr: Math.round(members.reduce((s, m) => s + dsSqM(m.paperSize, m.runningMeters, m.quantity), 0) * 100) / 100,
@@ -5311,6 +5312,8 @@ router.get("/labels/production/deckle-set/plan/:itemId", async (req, res) => {
     CSS: false,
     JS: false,
     group,
+    advanceMode: false,
+    labelStocks: [],
     cutSlots: CUT_SLOTS,
     edgeTrimPerSide: DECKLE_EDGE_TRIM_MM,
     // Auto Deckle (utils/deckleOptimizer) is a separate, newer module behind
@@ -5327,13 +5330,154 @@ router.get("/labels/production/deckle-set/plan/:itemId", async (req, res) => {
   });
 });
 
-// Advance -- lets the planner type in a loose order ahead of the real one, so
-// its material is cut into today's deckle instead of waiting for the order to
-// land. Creates a bare PendingProduction row (isAdvance: true, no userId, no
+// Advance orders -- a loose order the planner types in ahead of the real one,
+// so its rolls are cut into today's deckle instead of waiting for the sales
+// order to land. A bare PendingProduction row (isAdvance: true, no userId, no
 // TapeSalesOrder behind it -- same "synthetic, order-sync never touches it"
-// pattern as isDeckleBatch/parentOrderId rows) and sends the planner straight
-// back to the same plan page, where it shows up as just another loose member
-// to tick -- highlighted and tagged so it reads as a forecast, not a real order.
+// pattern as isDeckleBatch/parentOrderId rows). It is highlighted as ADVANCE on
+// every page it travels through, and when the real order for the same Product
+// Code + Paper Size + Running Mtrs is placed, that order takes its place --
+// batch and all -- and the flag clears (absorbAdvanceOrders in
+// utils/pendingProduction.js).
+//
+// Two ways in:
+//   - Advance Order on Deckle Sorting opens GET /labels/production/deckle-set/
+//     plan (no Product Code in the path) -- the Set Deckle page in "advance
+//     mode": pick the Product Code, type the order lines, plan and Create
+//     Deckle Batch. The lines only become rows when the batch is created
+//     (advanceJson on POST /labels/production/deckle-set), so a page walked
+//     away from leaves nothing behind.
+//   - Advance on a Product Code's own Set Deckle page, which saves the one
+//     line straight away (POST .../plan/:itemId/advance) and reloads.
+
+// One typed advance line, checked -- { line } or { error }. Shared by both
+// ways in, and by the AI planner, so all three accept exactly the same input.
+function parseAdvanceLine(body) {
+  const paperSize = Number(body?.paperSize);
+  const runningMeters = Number(body?.runningMeters);
+  const quantity = Number(body?.quantity);
+  if (!Number.isFinite(paperSize) || paperSize <= 0 || paperSize > 20000) {
+    return { error: "Enter a valid Paper Size for the advance order." };
+  }
+  if (!Number.isFinite(runningMeters) || runningMeters <= 0 || runningMeters > 1000000) {
+    return { error: "Enter a valid Running Meters for the advance order." };
+  }
+  if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 100000) {
+    return { error: "Enter a valid Roll Qty (a whole number) for the advance order." };
+  }
+  const remarks = String(body?.remarks || "").trim().slice(0, 200);
+  return { line: { paperSize, runningMeters, quantity, remarks } };
+}
+
+const advanceRowDoc = (itemId, line, performedBy) => ({
+  onModel: "SachikoLabelStock",
+  itemId,
+  isAdvance: true,
+  paperSize: String(line.paperSize),
+  runningMeters: line.runningMeters,
+  quantity: line.quantity,
+  remarks: line.remarks || undefined,
+  advanceBy: performedBy || undefined,
+});
+
+// Returns an error message, or null once created.
+async function createAdvanceOrder(itemId, body, performedBy) {
+  if (!mongoose.isValidObjectId(itemId)) return "Pick a Product Code for the advance order.";
+  if (!(await SachikoLabelStock.exists({ _id: itemId }))) return "That Product Code no longer exists.";
+  const { line, error } = parseAdvanceLine(body);
+  if (error) return error;
+  await PendingProduction.create(advanceRowDoc(itemId, line, performedBy));
+  return null;
+}
+
+// The typed lines posted by advance mode (advanceJson / advanceLines), checked.
+// Returns { lines } or { error }; an empty or missing list is { lines: [] }.
+const MAX_ADVANCE_LINES = 50;
+function parseAdvanceLines(raw) {
+  let list = raw;
+  if (typeof raw === "string") {
+    try { list = JSON.parse(raw || "[]"); } catch { return { error: "The advance order lines could not be read — reload and try again." }; }
+  }
+  if (list == null) return { lines: [] };
+  if (!Array.isArray(list)) return { error: "The advance order lines could not be read — reload and try again." };
+  if (list.length > MAX_ADVANCE_LINES) return { error: `At most ${MAX_ADVANCE_LINES} advance order lines per deckle.` };
+  const lines = [];
+  for (const [i, entry] of list.entries()) {
+    const { line, error } = parseAdvanceLine(entry);
+    if (error) return { error: `Advance line ${i + 1}: ${error}` };
+    lines.push(line);
+  }
+  return { lines };
+}
+
+// Set Deckle in ADVANCE MODE -- opened by Advance Order on Deckle Sorting.
+// Same page as /plan/:itemId (same layouts, grace, AI Deckle Set, figures and
+// the same Create Deckle Batch POST); the differences are that the Product Code
+// is picked here (?itemId=, a reload, because the recipe decides which deckle
+// sizes are offered), the orders are TYPED in as advance lines, and the
+// Product Code's loose real orders are listed unticked, so they can be cut on
+// the same deckle if wanted.
+router.get("/labels/production/deckle-set/plan", async (req, res) => {
+  const base = "/app/labels/production/deckle-set/plan";
+  const labelStocks = await SachikoLabelStock.find(
+    { productCode: { $not: /-[A-Z]+$/ } },
+    { productCode: 1, skuCode: 1 },
+  ).sort({ productCode: 1 }).lean();
+
+  // An empty group until a code is picked, so the page renders exactly as the
+  // Set Deckle page does -- only with nothing in it yet.
+  let group = {
+    itemId: "", productCode: "", rollType: "", candidateSizes: [], _children: [],
+  };
+  const itemId = String(req.query.itemId || "");
+  if (itemId) {
+    const item = mongoose.isValidObjectId(itemId)
+      ? await SachikoLabelStock.findById(itemId).select("productCode skuCode rollType facestock").lean()
+      : null;
+    if (!item) {
+      req.flash("notification", "That Product Code no longer exists — pick another.");
+      return res.redirect(base);
+    }
+    const members = await PendingProduction.find({
+      itemId,
+      assignedMachineId: null,
+      deckleSize: null,
+      deckleBatchId: null,
+      isDeckleBatch: { $ne: true },
+    })
+      .populate("userId", "clientName userName clientType")
+      .sort({ createdAt: 1 })
+      .lean();
+    group = await buildLooseDeckleRow(item, members);
+    // With nothing loose there is no width to size against, and
+    // suggestDeckleSize() then offers no sizes at all. The width only moves
+    // the (unused here) wastage figure -- which sizes are offered is the
+    // recipe's matching reels either way.
+    if (!group.candidateSizes.length) {
+      group.candidateSizes = (await suggestDeckleSize({ labelStock: item, paperSize: 1, noOfRolls: 1 })).sizes;
+    }
+  }
+
+  res.render("inventory/orders/deckleSetForm.ejs", {
+    title: "Advance Order — Set Deckle",
+    CSS: false,
+    JS: false,
+    group,
+    advanceMode: true,
+    labelStocks: labelStocks.map((l) => ({ _id: String(l._id), code: l.productCode || l.skuCode || "—" })),
+    cutSlots: CUT_SLOTS,
+    edgeTrimPerSide: DECKLE_EDGE_TRIM_MM,
+    autoDeckle: isDeckleAutoEnabled()
+      ? {
+          enabled: true,
+          defaultRunningMeters: DEFAULT_DECKLE_RUNNING_METERS,
+          overrun: OVERRUN_DEFAULTS,
+        }
+      : { enabled: false },
+    notification: req.flash("notification"),
+  });
+});
+
 router.post(
   "/labels/production/deckle-set/plan/:itemId/advance",
   requireAuth,
@@ -5343,43 +5487,44 @@ router.post(
     const backTo = mongoose.isValidObjectId(itemId)
       ? `/app/labels/production/deckle-set/plan/${itemId}`
       : "/app/labels/production/deckle-set";
-    if (!mongoose.isValidObjectId(itemId)) {
-      req.flash("notification", "Invalid Product Code.");
+    const err = await createAdvanceOrder(itemId, req.body, req.session?.authUser?.username);
+    if (err) {
+      req.flash("notification", err);
       return res.redirect(backTo);
     }
-    if (!(await SachikoLabelStock.exists({ _id: itemId }))) {
-      req.flash("notification", "That Product Code no longer exists.");
-      return res.redirect(backTo);
-    }
-
-    const paperSize = Number(req.body.paperSize);
-    const runningMeters = Number(req.body.runningMeters);
-    const quantity = Math.floor(Number(req.body.quantity));
-    if (!Number.isFinite(paperSize) || paperSize <= 0 || paperSize > 20000) {
-      req.flash("notification", "Enter a valid Paper Size for the advance order.");
-      return res.redirect(backTo);
-    }
-    if (!Number.isFinite(runningMeters) || runningMeters <= 0) {
-      req.flash("notification", "Enter a valid Running Meters for the advance order.");
-      return res.redirect(backTo);
-    }
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      req.flash("notification", "Enter a valid Roll Qty for the advance order.");
-      return res.redirect(backTo);
-    }
-    await PendingProduction.create({
-      onModel: "SachikoLabelStock",
-      itemId,
-      isAdvance: true,
-      paperSize: String(paperSize),
-      runningMeters,
-      quantity,
-    });
-
+    res.locals.auditDescription = `Added advance order: ${req.body.quantity} roll(s) of ${req.body.paperSize} mm`
+      + ` x ${req.body.runningMeters} m`;
     req.flash("notification", "Advance order added — tick it in when you plan the deckle.");
     return res.redirect(backTo);
   },
 );
+
+// Take back an advance order nobody has set a deckle for yet -- a forecast that
+// is not going to happen. Only a LOOSE advance row: one already in a batch is
+// part of a deckle being made, and comes back out through Dissolve first.
+router.post("/labels/production/deckle-set/advance/:id/delete", requireAuth, deleteLimiter, async (req, res) => {
+  const backTo = "/app/labels/production/deckle-set";
+  const { id } = req.params;
+  if (!mongoose.isValidObjectId(id)) {
+    req.flash("notification", "Invalid advance order.");
+    return res.redirect(backTo);
+  }
+  const gone = await PendingProduction.findOneAndDelete({
+    _id: id,
+    isAdvance: true,
+    deckleBatchId: null,
+    assignedMachineId: null,
+    isDeckleBatch: { $ne: true },
+  }).lean();
+  if (!gone) {
+    req.flash("notification", "That advance order is already in a deckle batch (or gone) — refresh Deckle Sorting.");
+    return res.redirect(backTo);
+  }
+  res.locals.auditDescription = `Removed advance order: ${gone.quantity} roll(s) of ${gone.paperSize} mm`
+    + ` x ${gone.runningMeters} m`;
+  req.flash("notification", "Advance order removed.");
+  return res.redirect(backTo);
+});
 
 // Auto Deckle -- hand the ticked orders to utils/deckleOptimizer and return the
 // layouts it works out, as JSON. Deliberately READ-ONLY: it creates nothing and
@@ -5422,24 +5567,31 @@ router.post(
           .map(String),
       ),
     ];
-    if (!wanted.length) {
+    // Advance lines typed on the page (advance mode) -- not rows yet, so they
+    // are planned as sent. Checked by the same rules the batch POST will
+    // apply when it creates them.
+    const advance = parseAdvanceLines(req.body?.advanceLines);
+    if (advance.error) return res.status(400).json({ ok: false, error: advance.error });
+    if (!wanted.length && !advance.lines.length) {
       return res.status(400).json({ ok: false, error: "Tick at least one order to plan." });
     }
 
     // Same gate as the batch POST: only orders still loose under this Product
     // Code can be planned, so a stale page cannot plan something already batched.
-    const members = await PendingProduction.find({
-      _id: { $in: wanted },
-      itemId,
-      assignedMachineId: null,
-      deckleSize: null,
-      deckleBatchId: null,
-      isDeckleBatch: { $ne: true },
-    })
-      .select("paperSize quantity runningMeters")
-      .lean();
+    const members = wanted.length
+      ? await PendingProduction.find({
+          _id: { $in: wanted },
+          itemId,
+          assignedMachineId: null,
+          deckleSize: null,
+          deckleBatchId: null,
+          isDeckleBatch: { $ne: true },
+        })
+          .select("paperSize quantity runningMeters")
+          .lean()
+      : [];
 
-    if (!members.length) {
+    if (!members.length && !advance.lines.length) {
       return res.status(409).json({
         ok: false,
         error: "Those orders are no longer available to plan — refresh the page.",
@@ -5447,12 +5599,20 @@ router.post(
     }
 
     const result = planDeckleLayouts({
-      orders: members.map((m) => ({
-        id: String(m._id),
-        width: Number(m.paperSize),
-        qty: Number(m.quantity),
-        rm: Number(m.runningMeters),
-      })),
+      orders: [
+        ...members.map((m) => ({
+          id: String(m._id),
+          width: Number(m.paperSize),
+          qty: Number(m.quantity),
+          rm: Number(m.runningMeters),
+        })),
+        ...advance.lines.map((l, i) => ({
+          id: `advance:${i}`,
+          width: l.paperSize,
+          qty: l.quantity,
+          rm: l.runningMeters,
+        })),
+      ],
       sizes: Array.isArray(req.body?.sizes) ? req.body.sizes : [],
       edgeTrimTotal: req.body?.trim,
       deckleRunningMeters: req.body?.drm,
@@ -5496,7 +5656,13 @@ router.post(
 // members). `runningMeters` and `noOfRolls` are no longer read: both belong to
 // a width, and are derived per batch.
 router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (req, res) => {
-  const backTo = "/app/labels/production/deckle-set";
+  // Advance mode (GET /labels/production/deckle-set/plan) posts here too, with
+  // its typed lines in advanceJson -- a failure goes back to that page.
+  const advanceMode = req.body.advanceMode === "1";
+  const postedItemId = mongoose.isValidObjectId(req.body.itemId) ? String(req.body.itemId) : "";
+  const backTo = advanceMode
+    ? `/app/labels/production/deckle-set/plan${postedItemId ? `?itemId=${postedItemId}` : ""}`
+    : "/app/labels/production/deckle-set";
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
   const deckleSize = Number(req.body.deckleSize);
@@ -5511,10 +5677,55 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
         .map(String),
     ),
   ];
-  if (orderIds.length === 0) {
+  const advance = parseAdvanceLines(req.body.advanceJson);
+  if (advance.error) {
+    req.flash("notification", advance.error);
+    return res.redirect(backTo);
+  }
+  if (advance.lines.length && !(postedItemId && (await SachikoLabelStock.exists({ _id: postedItemId })))) {
+    req.flash("notification", "Pick a Product Code for the advance order.");
+    return res.redirect(backTo);
+  }
+  if (orderIds.length === 0 && advance.lines.length === 0) {
     req.flash("notification", "Select at least one order for the deckle batch.");
     return res.redirect(backTo);
   }
+
+  // The typed advance lines become loose advance rows now, just before they
+  // are batched, so everything below treats them exactly like a ticked order.
+  // If anything below refuses the batch they are removed again -- a refused
+  // plan must not leave stray advance rows on Deckle Sorting.
+  let createdAdvanceIds = [];
+  if (advance.lines.length) {
+    const made = await PendingProduction.insertMany(
+      advance.lines.map((l) => advanceRowDoc(postedItemId, l, req.session?.authUser?.username)),
+    );
+    createdAdvanceIds = made.map((d) => d._id);
+    orderIds.push(...createdAdvanceIds.map(String));
+  }
+  const undoAdvance = async () => {
+    if (createdAdvanceIds.length) {
+      await PendingProduction.deleteMany({ _id: { $in: createdAdvanceIds }, deckleBatchId: null });
+      createdAdvanceIds = [];
+    }
+  };
+  try {
+    return await createDeckleBatches(req, res, { backTo, deckleSize, orderIds, num, undoAdvance });
+  } catch (err) {
+    await undoAdvance();
+    throw err;
+  }
+});
+
+// The body of POST /labels/production/deckle-set once the ticked orders (and
+// any typed advance lines, already saved as rows) are known. `undoAdvance`
+// removes those advance rows; every refusal below calls it via fail().
+async function createDeckleBatches(req, res, { backTo, deckleSize, orderIds, num, undoAdvance }) {
+  const fail = async (msg) => {
+    await undoAdvance();
+    req.flash("notification", msg);
+    return res.redirect(backTo);
+  };
 
   // Every ticked order must still be loose and share one Product Code (itemId)
   // -- paper size is NOT part of the batch key (mixed sizes slit off one web).
@@ -5526,12 +5737,10 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     isDeckleBatch: { $ne: true },
   }).lean();
   if (members.length !== orderIds.length) {
-    req.flash("notification", "Some selected orders are no longer available to batch — refresh and try again.");
-    return res.redirect(backTo);
+    return fail("Some selected orders are no longer available to batch — refresh and try again.");
   }
   if (new Set(members.map((m) => String(m.itemId))).size !== 1) {
-    req.flash("notification", "A deckle batch must be a single Product Code.");
-    return res.redirect(backTo);
+    return fail("A deckle batch must be a single Product Code.");
   }
 
   // Total Running Metres is NOT the member sum, and is not taken from the form
@@ -5744,8 +5953,7 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
   // loose on Deckle Sorting, exactly as if it had never been ticked.
   const batched = ordered.filter((m) => covered.get(String(m._id)) > 0);
   if (!batched.length) {
-    req.flash("notification", "These layouts don't cut any of the ticked orders' roll widths — nothing to batch.");
-    return res.redirect(backTo);
+    return fail("These layouts don't cut any of the ticked orders' roll widths — nothing to batch.");
   }
 
   const oldest = batched[0];
@@ -5783,7 +5991,8 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
       onModel: oldest.onModel || "SachikoLabelStock",
       isDeckleBatch: true,
       itemId: oldest.itemId,
-      userId: groupMembers[0].userId,
+      // An advance member has no client -- take the first real order's, if any.
+      userId: (groupMembers.find((m) => m.userId) || groupMembers[0]).userId,
       // Members can have different per-roll paper sizes -- this batch produces
       // one web at its own deckle width, so that's the size that characterises it.
       paperSize: String(g.size),
@@ -5825,6 +6034,9 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
           doc: {
             onModel: m.onModel || "SachikoLabelStock",
             parentOrderId: m._id,
+            // Part of an advance order is still advance -- it must stay
+            // flagged, and stay matchable when the real order lands.
+            isAdvance: !!m.isAdvance,
             itemId: m.itemId,
             userId: m.userId,
             quantity: take,
@@ -5870,6 +6082,7 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     remainders.push({
       onModel: m.onModel || "SachikoLabelStock",
       parentOrderId: m._id,
+      isAdvance: !!m.isAdvance,
       itemId: m.itemId,
       userId: m.userId,
       quantity: short,
@@ -5917,7 +6130,7 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
     + (leftBehind ? ` ${leftBehind.charAt(0).toUpperCase()}${leftBehind.slice(1)} stayed on Deckle Sorting.` : ""),
   );
   res.redirect("/app/labels/production/deckle-queue");
-});
+}
 
 // Un-bundle a batch that hasn't been assigned to a machine yet -- its member
 // orders drop back to loose on Deckle Set.
@@ -5996,12 +6209,15 @@ router.get("/labels/production/deckle-queue", async (req, res) => {
     .populate("itemId", "productCode skuCode")
     .sort({ createdAt: 1 })
     .lean();
+  // Advance rolls in each batch -- flagged until their real orders land.
+  const advance = await advanceShareByBatch(pending.filter((r) => r.isDeckleBatch).map((r) => r._id));
 
   const rows = pending.map((r) => {
     const item = r.itemId || {};
     return {
       _id: String(r._id),
       productCode: item.productCode || item.skuCode || "—",
+      advance: advance.get(String(r._id)) || null,
       isBatch: !!r.isDeckleBatch,
       orderCount: r.isDeckleBatch ? (r.batchOrderIds || []).length : 1,
       // Dissolve lives here now -- Deckle Sorting only lists orders that still
@@ -6039,7 +6255,7 @@ router.get("/labels/production/deckle-queue", async (req, res) => {
 // rows exist (a job appears the moment it is started and leaves when it is
 // produced), so a second copy of this shaping is how the polled row and the
 // rendered row would drift apart.
-function mapPendingProductionRow(r, jobCardProgress) {
+function mapPendingProductionRow(r, jobCardProgress, advance = new Map()) {
   const item = r.itemId || {};
   // Same rollsStatus classification as routes/system/machine.js's
   // buildQueueRows -- lets the WIP tab flag an order that was assigned to
@@ -6135,6 +6351,9 @@ function mapPendingProductionRow(r, jobCardProgress) {
     isDeckleBatch: !!r.isDeckleBatch,
     batchOrderCount: (r.batchOrderIds || []).length,
     deckleBatchId: r.deckleBatchId ? String(r.deckleBatchId) : null,
+    // Advance rolls in this batch (advanceShareByBatch) -- or the row IS an
+    // advance order. Flags it until the real order takes it over.
+    advance: advance.get(String(r._id)) || (r.isAdvance ? { rolls: Number(r.quantity) || 0, orders: 1 } : null),
   };
 }
 
@@ -6169,7 +6388,8 @@ router.get("/labels/production/pending", async (req, res) => {
     jobCardProgress = await buildJobCardProgressMap(wipIds);
   }
 
-  const mapped = all.map((r) => mapPendingProductionRow(r, jobCardProgress));
+  const advance = await advanceShareByBatch(all.filter((r) => r.isDeckleBatch).map((r) => r._id));
+  const mapped = all.map((r) => mapPendingProductionRow(r, jobCardProgress, advance));
 
   // A row only reaches this "Pending" tab once it's been through Deckle Set
   // (deckleSize set) -- an order still awaiting that shows on the Deckle Set
@@ -6219,8 +6439,9 @@ async function loadWipRows() {
     .populate("helperId", "empName")
     .lean();
   const progress = await buildJobCardProgressMap(assigned.map((r) => r._id));
+  const advance = await advanceShareByBatch(assigned.filter((r) => r.isDeckleBatch).map((r) => r._id));
   return assigned
-    .map((r) => mapPendingProductionRow(r, progress))
+    .map((r) => mapPendingProductionRow(r, progress, advance))
     .filter((r) => r.liveUpdate)
     .sort((a, b) => new Date(b.estimatedDate || 0) - new Date(a.estimatedDate || 0));
 }
@@ -6294,6 +6515,10 @@ router.get("/labels/production/assign/:id", async (req, res) => {
     ]);
 
     const previewLotNo = pendingProduction.lotNo || (await previewNextLotNo());
+    // Rolls in this batch set ahead of their sales order -- flagged here too.
+    const advance = pendingProduction.isDeckleBatch
+      ? (await advanceShareByBatch([pendingProduction._id])).get(String(pendingProduction._id)) || null
+      : null;
 
     // How much facestock/adhesive/release liner this deckle will eat -- the
     // formulas from "raw material formula.xlsx" (see utils/rawMaterialNeed.js).
@@ -6310,6 +6535,7 @@ router.get("/labels/production/assign/:id", async (req, res) => {
       // renders the result.
       JS: "rawAutoAllot.js",
       pp: pendingProduction,
+      advance,
       rawNeed,
       // One web's length x how many webs. Derived here rather than read off
       // pp.runningMeters, which on a batch is a sum of the member orders'

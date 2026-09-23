@@ -159,7 +159,7 @@ Use the `.logout-modal` / `.logout-dialog` CSS classes from `boilerplate.ejs` fo
 
 ### Choices.js
 
-Choices.js v11.1.0 is available globally (loaded via CDN in boilerplate). In dialogs, use the destroy/reinit pattern:
+Choices.js v11.1.0 is available globally — `boilerplate.ejs` loads it from `/js/choices.min.js` **with `defer`**, so it does not exist yet while a view's inline `<script>` runs. Never call `new Choices(...)` at the top level of an inline script: it throws `Choices is not defined` and takes the rest of that script with it. Create it on `DOMContentLoaded` (deferred scripts have run by then) or from a user action such as opening a dialog, and attach your `change` listener to the `<select>` first. In dialogs, use the destroy/reinit pattern:
 
 ```js
 let myChoices = null;
@@ -569,6 +569,45 @@ on each (which would say the material goes twice as far as it does) or
 splitting it (which invents a shortfall: 85 kg against needs of 35.3 + 43.0 is
 enough, but no apportionment of it makes both sides land). Layers that share
 nothing are measured on their own exactly as before.
+
+### Advance orders (a deckle set before the sales order exists)
+
+**Advance Order** on `/sachiko/labels/production/deckle-set` opens
+`/sachiko/labels/production/deckle-set/plan` — the Set Deckle page itself
+(`deckleSetForm.ejs`, `advanceMode: true`), not a copy of it. The Product Code is
+picked in its own box (a reload with `?itemId=`, because the recipe decides the
+deckle sizes offered), the orders are **typed in** as advance lines (Paper Size,
+Running Mtrs, Roll Qty, Remarks), and the code's real loose orders are listed
+unticked beside them. Layouts, grace and AI Deckle Set work as usual.
+
+The typed lines are **not saved until Create Deckle Batch**: the page posts
+them as `advanceJson` to the same `POST /labels/production/deckle-set`, which
+creates them as loose `isAdvance` rows just before batching and **deletes them
+again on any refusal** (so an abandoned or rejected plan leaves nothing on Deckle
+Sorting). AI Deckle Set sends them as `advanceLines`. One line check,
+`parseAdvanceLine()`, serves all three. The typed rows' checkboxes carry
+`advance:<n>` values, which the server drops as non-ObjectIds.
+
+**Advance** on a Product Code's own `/plan/:itemId` page still saves one line
+straight away (`POST .../plan/:itemId/advance`). A loose advance row can be
+removed from Deckle Sorting; a batched one comes back out through Dissolve.
+
+It is flagged (cornflowerblue, `.adv-tag` / `.adv-row` / `.adv-tr` /
+`.adv-banner` in `common.css`) on Deckle Sorting, Deckle Queue, Assign
+Production, WIP, the machine / operator queues, the web job card and the
+operator app's queue card + job card. Batch pages read it **live** off the
+members via `advanceShareByBatch()` (`utils/pendingProduction.js`), not from a
+stored flag, so it clears by itself. Clone and shortfall rows split off an
+advance member at batching carry `isAdvance` too.
+
+**The real order takes its place.** When a *new* Label Stock sales order syncs in
+(`upsertPendingProduction` → `absorbAdvanceOrders`), open advance rows with the
+same Product Code + Paper Size + Running Mtrs are consumed: batched ones first
+(the order's own row joins that batch, and a clone does the same for any further
+batch), then loose ones, oldest first. Whatever the order wants beyond the
+advance stays loose as a `parentOrderId` remainder; whatever the advance had
+beyond the order stays advance. A batch made only of advance rows takes the
+first real order's client and PO. An edit to an existing order never absorbs.
 
 ### One deckle batch per deckle size
 

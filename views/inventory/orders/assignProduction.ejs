@@ -838,6 +838,13 @@
     </div>
   </div>
 
+  <% if (advance) { %>
+    <div class="adv-banner">
+      <i class="fa-solid fa-calendar-plus"></i>
+      <span>ADVANCE — <%= advance.rolls %> of <%= pp.quantity %> roll(s) in this deckle were set before their sales order was placed. They stay flagged until the order comes in.</span>
+    </div>
+  <% } %>
+
   <div class="ap-card">
     <div class="ap-card-title"><span><i class="fa-solid fa-layer-group"></i> Material Details</span></div>
     <div style="padding: 14px;">

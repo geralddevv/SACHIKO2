@@ -69,6 +69,10 @@
     display: none !important;
   }
   #deckle-set-table .tabulator-row[data-ds-child="true"] .tabulator-cell:first-child { padding-left: 14px; }
+  /* A child row that is an advance order (see .adv-row in common.css) keeps its
+     wash over the plain child-row grey above. */
+  #deckle-set-table .tabulator-row.adv-row[data-ds-child="true"] .tabulator-cell { color: #1e3a8a; }
+
   .ds-count-badge {
     display: inline-block; font-size: 11px; font-weight: 800; color: #044a78;
     background: #e0ecf8; border-radius: 999px; padding: 1px 9px;
@@ -79,6 +83,16 @@
   <div class="indi-head">
     <h1>Deckle Sorting</h1>
     <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+      <%# Opens Set Deckle in advance mode: pick the Product Code, type the order
+          lines and set the deckle there (GET /labels/production/deckle-set/plan). %>
+      <a
+        href="/app/labels/production/deckle-set/plan"
+        style="padding: 6px 14px; background: cornflowerblue; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
+        title="Set a deckle for an order that hasn't been placed yet"
+        onmouseover="this.style.opacity = '0.85'" onmouseout="this.style.opacity = '1'"
+      >
+        <i class="fa-solid fa-calendar-plus"></i><span>Advance Order</span>
+      </a>
       <a
         href="/app/labels/production/deckle-queue"
         style="padding: 6px 14px; background: #044a78; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
@@ -99,6 +113,11 @@
   <div id="deckle-set-table" class="tabulator tabulator-modern"></div>
 </div>
 
+<!-- Remove a loose advance order (hidden form, submitted from its row). -->
+<form id="ds-adv-delete-form" method="post" action="" style="display:none;">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+</form>
+
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
@@ -110,6 +129,15 @@
   const fmtMtrs = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
   const fmtInt = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN") : "—");
   const fmtDate = (v) => (v ? new Date(v).toLocaleDateString("en-IN") : "—");
+  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // Remove a loose advance order -- a forecast that isn't going to happen.
+  window.deleteAdvance = function (id) {
+    if (!confirm("Remove this advance order?")) return;
+    const form = document.getElementById("ds-adv-delete-form");
+    form.action = `/app/labels/production/deckle-set/advance/${encodeURIComponent(id)}/delete`;
+    form.submit();
+  };
 
   /* ----- Table (SKU groups as parent rows, member orders as children) ----- */
   const table = new Tabulator("#deckle-set-table", {
@@ -123,6 +151,7 @@
     rowFormatter: (row) => {
       const d = row.getData();
       if (!d.isGroup) row.getElement().setAttribute("data-ds-child", "true");
+      row.getElement().classList.toggle("adv-row", !d.isGroup && !!d.isAdvance);
     },
     columns: [
       {
@@ -135,9 +164,16 @@
           // Every group here is loose -- a formed batch has moved to the
           // Deckle Queue, so there is no BATCHED state left to tag.
           if (row.isGroup) {
-            return `<span style="font-weight:800; color:#044A78;">${row.productCode || "—"}</span>`;
+            const adv = row.advanceCount
+              ? ` <span class="adv-tag" title="${row.advanceCount} advance order(s) — not placed yet">ADVANCE ${row.advanceCount}</span>`
+              : "";
+            return `<span style="font-weight:800; color:#044A78;">${esc(row.productCode || "—")}</span>${adv}`;
           }
-          return `<span style="padding-left:6px;">↳ ${row.clientName || "—"}</span>`;
+          if (row.isAdvance) {
+            const note = row.remarks ? ` <span style="color:#64748b;">· ${esc(row.remarks)}</span>` : "";
+            return `<span style="padding-left:6px;">↳ <span class="adv-tag" title="Added in advance — no sales order yet">ADVANCE</span>${note}</span>`;
+          }
+          return `<span style="padding-left:6px;">↳ ${esc(row.clientName || "—")}</span>`;
         },
       },
       { title: "PO Number", field: "poNumber", headerSort: false,
@@ -179,7 +215,11 @@
         width: 130,
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          if (!row.isGroup) return "";
+          if (!row.isGroup) {
+            return row.isAdvance
+              ? `<button type="button" class="btn-action" style="background:#b91c1c;" data-id="${esc(row._id)}" onclick="deleteAdvance(this.dataset.id)" title="Remove this advance order"><i class="fa-solid fa-trash"></i> Remove</button>`
+              : "";
+          }
           return `<a href="/app/labels/production/deckle-set/plan/${encodeURIComponent(row.itemId)}" class="btn-action" style="background:#10b981; text-decoration:none;" title="Set Deckle"><i class="fa-solid fa-ruler"></i> Set Deckle</a>`;
         },
       },

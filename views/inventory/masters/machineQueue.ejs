@@ -280,9 +280,9 @@
               };
             %>
             <% rows.forEach((row) => { %>
-              <tr class="<%= row.materialStatus === 'match' ? 'mq-row-match' : row.materialStatus === 'short' ? 'mq-row-short' : row.materialStatus === 'partial' ? 'mq-row-partial' : '' %>">
+              <tr class="<%= row.materialStatus === 'match' ? 'mq-row-match' : row.materialStatus === 'short' ? 'mq-row-short' : row.materialStatus === 'partial' ? 'mq-row-partial' : '' %><%= row.advance ? ' adv-tr' : '' %>">
                 <td data-label="Lot No" title="<%= row.lotNo %>"><%= row.lotNo %></td>
-                <td data-label="Product Code" title="<%= row.productCode %>"><%= row.productCode %></td>
+                <td data-label="Product Code" title="<%= row.productCode %>"><%= row.productCode %><% if (row.advance) { %> <span class="adv-tag" title="<%= row.advance.rolls %> roll(s) set in advance — no sales order yet">ADVANCE</span><% } %></td>
                 <td data-label="Paper Size"><%= row.paperSize %></td>
                 <%
                   // What the allotted reels will actually get through, under

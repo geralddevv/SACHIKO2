@@ -3,8 +3,14 @@
 <%
   const isEmpty = (v) => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
   const dash = (v) => (isEmpty(v) ? "—" : v);
-  const sizes = Array.isArray(group.candidateSizes) ? group.candidateSizes : [];
-  const kids = (Array.isArray(group._children) ? [...group._children] : [])
+  // Advance mode (GET /labels/production/deckle-set/plan): the orders are
+  // typed in as advance lines, and the Product Code is picked on the page. The
+  // route always sends a group -- an empty one until a code is picked -- so the
+  // page is the same Set Deckle page either way.
+  const adv = typeof advanceMode !== "undefined" && !!advanceMode;
+  const pickList = typeof labelStocks !== "undefined" && Array.isArray(labelStocks) ? labelStocks : [];
+  const sizes = group && Array.isArray(group.candidateSizes) ? group.candidateSizes : [];
+  const kids = (group && Array.isArray(group._children) ? [...group._children] : [])
     .sort((a, b) => (Number(a.paperSize) || 0) - (Number(b.paperSize) || 0));
   const fmtN = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
   const fmtD = (v) => (v ? new Date(v).toLocaleDateString("en-IN") : "—");
@@ -664,6 +670,37 @@
      in source order to win. */
   .sl-web-seg.dsf-web-adv { background: cornflowerblue; }
 
+  /* ---- Advance mode: typed advance lines + the Product Code picker ---- */
+  .dsf-pc-pick { min-width: 200px; }
+  .dsf-pc-pick .choices { margin-bottom: 0; }
+  .dsf-pc-pick .choices__inner { min-height: 34px; padding: 3px 8px 2px; font-size: 14px; font-weight: 800; color: #044a78; }
+  .dsf-pc-pick .choices__list--dropdown { z-index: 99999 !important; min-width: 240px; }
+  /* The Product Code dropdown hangs below its box, but this panel clips
+     (.sl-panel overflow: hidden) and so does the grid inside it (overflow-x:
+     auto also clips vertically) -- the option list was cut off at the box's
+     bottom edge. In advance mode both let it out; the end cells take the
+     panel's rounding instead, so the corners look the same. */
+  .sl-panel.dsf-facts-adv,
+  .dsf-facts-adv .sl-job-grid { overflow: visible; overflow-x: visible; overflow-y: visible; }
+  .dsf-facts-adv .sl-job-cell:first-child { border-radius: 10px 0 0 10px; }
+  .dsf-facts-adv .sl-job-cell:last-child { border-radius: 0 10px 10px 0; }
+  .dsf-adv-intro { margin: 0; font-size: 12.5px; color: #475569; line-height: 1.5; }
+  .dsf-adv-entry {
+    display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; padding: 12px 14px;
+    border-top: 1px solid #e2e8f0; background: rgba(100, 149, 237, 0.06);
+  }
+  .dsf-adv-entry .dsf-adv-field { width: 128px; }
+  .dsf-adv-entry .dsf-adv-field.is-wide { width: 220px; }
+  .dsf-adv-entry input { height: 34px; }
+  .dsf-adv-entry input.is-bad { border-color: #dc2626 !important; background: #fef2f2; }
+  .dsf-adv-entry .dsf-add-btn { height: 34px; border-color: cornflowerblue; color: #1e3a8a; }
+  .dsf-adv-entry .dsf-add-btn:hover { background: rgba(100, 149, 237, 0.12); }
+  .dsf-adv-empty { color: #94a3b8; font-style: italic; font-size: 12.5px; padding: 12px 14px; border-top: 1px solid #e2e8f0; }
+  .dsf-adv-remove {
+    border: none; background: none; color: #b91c1c; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 6px;
+  }
+  .dsf-adv-remove:hover { background: #fee2e2; }
+
   /* ---- Advance dialog ---- */
   .dsf-adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .dsf-adv-field { display: flex; flex-direction: column; gap: 5px; }
@@ -692,18 +729,26 @@
     <input type="hidden" name="deckleSize" id="dsfDeckleSize" />
     <input type="hidden" name="noOfRolls" id="dsfNoOfRolls" />
     <input type="hidden" name="layoutsJson" id="dsfLayoutsJson" />
+    <% if (adv) { %>
+      <input type="hidden" name="advanceMode" value="1" />
+      <input type="hidden" name="advanceJson" id="dsfAdvanceJson" />
+    <% } %>
 
     <div class="span-full form-heading" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-      <h1>Set Deckle</h1>
+      <h1><%= adv ? "Set Deckle — Advance Order" : "Set Deckle" %></h1>
     </div>
 
     <!-- Recipe facts -->
     <div class="span-full" style="border:none !important;">
-      <div class="sl-panel">
+      <div class="sl-panel<%= adv ? ' dsf-facts-adv' : '' %>">
         <div class="sl-job-grid">
-          <div class="sl-job-cell dsf-pc">
+          <div class="sl-job-cell dsf-pc<%= adv ? ' dsf-pc-pick' : '' %>">
             <span class="sl-job-label">Product Code</span>
-            <span class="sl-job-value"><%= dash(group.productCode) %></span>
+            <% if (adv) { %>
+              <select id="dsfPcPick" title="Changing it reloads the page for that recipe"></select>
+            <% } else { %>
+              <span class="sl-job-value"><%= dash(group.productCode) %></span>
+            <% } %>
           </div>
           <div class="sl-job-cell">
             <span class="sl-job-label">Roll Type</span>
@@ -742,7 +787,7 @@
     <!-- Orders in this deckle -->
     <div class="span-full form-subheading sl-sec-head">
       <h1>Orders In This Deckle</h1>
-      <button type="button" id="dsfAdvanceOpen" class="dsf-add-btn">
+      <button type="button" id="dsfAdvanceOpen" class="dsf-add-btn"<%= adv ? ' hidden' : '' %>>
         <i class="fa-solid fa-calendar-plus"></i> Advance
       </button>
     </div>
@@ -757,6 +802,7 @@
               <th style="width:104px;">Roll Qty</th>
               <th style="width:112px;">Rolls Set</th>
               <th style="width:108px;">Balance</th>
+              <% if (adv) { %><th style="width:44px;"></th><% } %>
             </tr>
           </thead>
           <tbody id="dsfOrderBody">
@@ -764,16 +810,46 @@
               <tr data-order-id="<%= m._id %>"
                   data-size="<%= Number(m.paperSize) || 0 %>" data-qty="<%= Number(m.quantity) || 0 %>"
                   <% if (m.isAdvance) { %>class="dsf-order-advance" title="Added in advance -- not a confirmed order yet"<% } %>>
-                <td><input type="checkbox" class="dsf-order-check" name="orderIds" value="<%= m._id %>" checked /></td>
+                <%# Advance mode lists the code's real loose orders unticked -- the
+                    deckle is being set for the typed lines; tick one to cut it too. %>
+                <td><input type="checkbox" class="dsf-order-check" name="orderIds" value="<%= m._id %>"<%= adv ? '' : ' checked' %> /></td>
                 <td><%= dash(m.paperSize) %></td>
                 <td><%= fmtN(m.runningMeters) %></td>
                 <td><%= fmtN(m.quantity) %></td>
                 <td class="dsf-o-set" style="font-weight:800;">0</td>
                 <td class="dsf-o-bal" style="font-weight:800;">—</td>
+                <% if (adv) { %><td></td><% } %>
               </tr>
             <% }) %>
           </tbody>
         </table>
+        <% if (adv) { %>
+          <%# Outside the table: every <tr> in #dsfOrderBody is read as an order. %>
+          <div class="dsf-adv-empty" id="dsfAdvEmpty">Type the advance order below — one line per paper size and roll length.</div>
+          <!-- Typed advance lines. Not a <form> (it sits inside #dsfForm) and
+               the inputs carry no name, so nothing here posts by itself: each
+               line becomes a ticked row above, and the rows are sent as
+               advanceJson when the batch is created. -->
+          <div class="dsf-adv-entry" id="dsfAdvEntry">
+            <div class="dsf-adv-field">
+              <label for="dsfLineSize">Paper Size (mm)</label>
+              <input type="number" step="any" min="0" id="dsfLineSize" class="form-control" inputmode="decimal" />
+            </div>
+            <div class="dsf-adv-field">
+              <label for="dsfLineRm">Running Mtrs</label>
+              <input type="number" step="any" min="0" id="dsfLineRm" class="form-control" inputmode="decimal" />
+            </div>
+            <div class="dsf-adv-field">
+              <label for="dsfLineQty">Roll Qty</label>
+              <input type="number" step="1" min="1" id="dsfLineQty" class="form-control" inputmode="numeric" />
+            </div>
+            <div class="dsf-adv-field is-wide">
+              <label for="dsfLineRemarks">Remarks</label>
+              <input type="text" id="dsfLineRemarks" maxlength="200" class="form-control" placeholder="Expected client, etc." />
+            </div>
+            <button type="button" id="dsfLineAdd" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Line</button>
+          </div>
+        <% } %>
       </div>
     </div>
 
@@ -963,6 +1039,7 @@
 </div>
 
 <script id="dsf-group" type="application/json"><%- safeJson(group) %></script>
+<script id="dsf-adv" type="application/json"><%- safeJson({ on: adv, list: adv ? pickList : [] }) %></script>
 <script id="dsf-slots" type="application/json"><%- safeJson(cutSlots) %></script>
 <script id="dsf-cfg" type="application/json"><%- safeJson({ edge: edgeTrimPerSide, subColspan }) %></script>
 
@@ -1840,6 +1917,11 @@
     });
 
     // ---- whole-form checks ----
+    // Advance mode with no Product Code picked yet (#dsfAdvanceJson only
+    // exists in advance mode).
+    if (document.getElementById("dsfAdvanceJson") && !GROUP.itemId) {
+      errors.push("Pick the Product Code for the advance order.");
+    }
     if (!SIZE_LIST.length) {
       errors.push("Add at least one deckle size — click the pencil next to “Available Sizes”.");
     }
@@ -2584,6 +2666,7 @@
       webs: r.webs,
     })));
     dsfNoOfRolls.value = String(rows.reduce((n, r) => n + r.webs, 0));
+    if (ADV.on) document.getElementById("dsfAdvanceJson").value = JSON.stringify(advanceLines());
 
     // Lock the button so a double-click can't create two batches.
     dsfSubmitting = true;
@@ -2651,8 +2734,12 @@
     }
 
     async function dsaPlan() {
-      const orderIds = checkedIds();
-      if (!orderIds.length) { dsaShowError("Tick at least one order to plan."); return; }
+      // Typed advance lines are not rows yet -- they go as advanceLines, and
+      // only real order ids as orderIds.
+      const orderIds = checkedIds().filter((id) => !id.startsWith("advance:"));
+      const lines = advanceLines();
+      if (!GROUP.itemId) { dsaShowError("Pick the Product Code first."); return; }
+      if (!orderIds.length && !lines.length) { dsaShowError("Tick at least one order to plan."); return; }
       if (!SIZE_LIST.length) {
         dsaShowError("Add at least one deckle size first — the pencil next to “Available Sizes”.");
         return;
@@ -2676,6 +2763,7 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               orderIds,
+              advanceLines: lines,
               sizes: SIZE_LIST,
               trim: Number(dsfTrim.value),
               drm,
@@ -2727,6 +2815,117 @@
     });
   }
   <% } %>
+
+  // ---- Advance mode: the Product Code picker and the typed lines ----------
+  const ADV = JSON.parse(document.getElementById("dsf-adv").textContent);
+  // The ticked typed lines, as POST /labels/production/deckle-set (advanceJson)
+  // and the AI planner (advanceLines) take them.
+  function advanceLines() {
+    if (!ADV.on) return [];
+    return [...orderBody.querySelectorAll("tr[data-advance-line]")]
+      .filter((tr) => tr.querySelector('input[name="orderIds"]:checked'))
+      .map((tr) => ({
+        paperSize: Number(tr.dataset.size),
+        runningMeters: Number(tr.dataset.rm),
+        quantity: Number(tr.dataset.qty),
+        remarks: tr.dataset.remarks || "",
+      }));
+  }
+  if (ADV.on) {
+    const pick = document.getElementById("dsfPcPick");
+    pick.innerHTML = (GROUP.itemId ? "" : `<option value="">Select Product Code</option>`) + ADV.list
+      .map((i) => `<option value="${esc(i._id)}"${i._id === GROUP.itemId ? " selected" : ""}>${esc(i.code)}</option>`)
+      .join("");
+    // choices.min.js is loaded with `defer` by the layout, so it does not
+    // exist yet while this inline script runs -- calling it here threw, and
+    // took the change handler below down with it (picking a code then did
+    // nothing). The handler goes on the plain <select> first; Choices wraps it
+    // once the deferred script has run, and re-fires `change` on it.
+    const initPick = () => {
+      if (typeof Choices === "function") {
+        new Choices(pick, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+      }
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initPick);
+    else initPick();
+    pick.addEventListener("change", () => {
+      if (!pick.value || pick.value === GROUP.itemId) return;
+      if (orderBody.querySelector("tr[data-advance-line]")
+          && !confirm("Change the Product Code? The lines typed here will be cleared.")) {
+        window.location.reload();
+        return;
+      }
+      window.location.href = `/app/labels/production/deckle-set/plan?itemId=${encodeURIComponent(pick.value)}`;
+    });
+
+    // No Product Code yet: the recipe decides which deckle sizes are offered,
+    // so lines typed now would be lost on the reload that picking one does.
+    if (!GROUP.itemId) {
+      document.querySelectorAll("#dsfAdvEntry input, #dsfLineAdd").forEach((el) => { el.disabled = true; });
+      document.getElementById("dsfAdvEmpty").textContent = "Pick the Product Code first — then type the advance order lines here.";
+    }
+    const lineSize = document.getElementById("dsfLineSize");
+    const lineRm = document.getElementById("dsfLineRm");
+    const lineQty = document.getElementById("dsfLineQty");
+    const lineRemarks = document.getElementById("dsfLineRemarks");
+    const emptyRow = document.getElementById("dsfAdvEmpty");
+    let lineSeq = 0;
+    const syncEmpty = () => { emptyRow.hidden = !!orderBody.querySelector("tr[data-advance-line]"); };
+
+    function addLine() {
+      const size = Number(lineSize.value);
+      const rm = Number(lineRm.value);
+      const qty = Number(lineQty.value);
+      const bad = !(size > 0 && size <= 20000) ? [lineSize, "Enter the Paper Size."]
+        : !(rm > 0) ? [lineRm, "Enter the Running Mtrs."]
+        : !(Number.isInteger(qty) && qty > 0) ? [lineQty, "Enter the Roll Qty (a whole number)."]
+        : null;
+      [lineSize, lineRm, lineQty].forEach((el) => el.classList.remove("is-bad"));
+      if (bad) { bad[0].classList.add("is-bad"); bad[0].focus(); showToast(bad[1], "error"); return; }
+
+      const remarks = lineRemarks.value.trim();
+      const tr = document.createElement("tr");
+      tr.className = "dsf-order-advance";
+      tr.title = "Advance order — created with the deckle batch";
+      tr.dataset.advanceLine = "1";
+      tr.dataset.size = String(size);
+      tr.dataset.qty = String(qty);
+      tr.dataset.rm = String(rm);
+      tr.dataset.remarks = remarks;
+      tr.innerHTML = `<td><input type="checkbox" class="dsf-order-check" name="orderIds" value="advance:${lineSeq++}" checked /></td>`
+        + `<td>${esc(fmt(size))} <span class="adv-tag">ADVANCE</span></td>`
+        + `<td>${esc(fmt(rm))}</td>`
+        + `<td>${esc(fmtI(qty))}${remarks ? `<div style="font-size:11px;color:#64748b;">${esc(remarks)}</div>` : ""}</td>`
+        + `<td class="dsf-o-set" style="font-weight:800;">0</td>`
+        + `<td class="dsf-o-bal" style="font-weight:800;">—</td>`
+        + `<td><button type="button" class="dsf-adv-remove" title="Remove this line" aria-label="Remove this line"><i class="fa-solid fa-xmark"></i></button></td>`;
+      tr.querySelector('input[name="orderIds"]').addEventListener("change", (ev) => {
+        tr.style.opacity = ev.target.checked ? "1" : "0.45";
+        recalcAll();
+      });
+      tr.querySelector(".dsf-adv-remove").addEventListener("click", () => {
+        tr.remove();
+        syncEmpty();
+        recalcAll();
+      });
+      orderBody.appendChild(tr);
+      syncEmpty();
+      lineSize.value = ""; lineRm.value = ""; lineQty.value = ""; lineRemarks.value = "";
+      lineSize.focus();
+      recalcAll();
+    }
+    document.getElementById("dsfLineAdd").addEventListener("click", addLine);
+    // Enter in a line field adds the line -- it must never submit #dsfForm.
+    document.getElementById("dsfAdvEntry").addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); addLine(); }
+    });
+    // The code's real loose orders start unticked here -- dim them to match.
+    orderBody.querySelectorAll("tr:not([data-advance-line])").forEach((tr) => {
+      const c = tr.querySelector('input[name="orderIds"]');
+      if (c && !c.checked) tr.style.opacity = "0.45";
+    });
+    syncEmpty();
+  }
 
   // ---- init ----
   renderSizeChips();

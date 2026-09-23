@@ -960,3 +960,47 @@ input::-webkit-inner-spin-button {
     font-size: 1rem;
   }
 }
+
+/* ---- Advance orders ---------------------------------------------------------
+   A deckle set for an order that has not been placed yet (PendingProduction
+   .isAdvance). Flagged the same way on every page it passes through -- Deckle
+   Sorting, Deckle Queue, Assign Production, WIP and the machine/operator
+   queues -- until the real sales order takes it over. Cornflowerblue, to match
+   the advance rows and knife segments on the Set Deckle page. */
+.adv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+  color: #fff;
+  background: cornflowerblue;
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.tabulator .tabulator-row.adv-row,
+.tabulator .tabulator-row.adv-row:hover {
+  background: rgba(100, 149, 237, 0.16) !important;
+  box-shadow: inset 3px 0 0 cornflowerblue;
+}
+.adv-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(100, 149, 237, 0.14);
+  border: 1px solid rgba(100, 149, 237, 0.55);
+  border-left: 4px solid cornflowerblue;
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 600;
+}
+.adv-banner i { color: cornflowerblue; font-size: 16px; }
+/* A queue row (plain <table>) whose job is advance: the row keeps its
+   material-status tint, the flag is a cornflowerblue edge + the tag. */
+tr.adv-tr > td:first-child { box-shadow: inset 4px 0 0 cornflowerblue; }

@@ -669,6 +669,13 @@
       <h1>Production Entry</h1>
     </div>
 
+    <% if (jc.advance) { %>
+      <!-- Rolls on this job were set ahead of their sales order. -->
+      <div class="span-full adv-banner" style="border-left-width:4px;">
+        <i class="fa-solid fa-calendar-plus"></i>
+        <span>ADVANCE — <%= jc.advance.rolls %> roll(s) on this job were set before their sales order was placed. Run it as normal; it is matched to the order when that comes in.</span>
+      </div>
+    <% } %>
     <div class="span-full jc-info-wrap">
       <div class="material-id-row">
         <div class="mid-item"><span class="mid-label">Label Stock Code</span><span class="mid-value"><%= dash(jc.productCode) %><span id="jcVariantCode" class="jc-variant-code" hidden></span></span></div>
