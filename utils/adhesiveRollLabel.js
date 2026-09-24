@@ -53,13 +53,13 @@ export function buildQrPayload(reel) {
 // buildLabelFields targets. The QR still carries the full buildLabelFields
 // payload (buildQrPayload above), so nothing downstream that scans it changes.
 // Adhesive Stock has no Family field ($FAMILY is the drum's Type) and no
-// size/width field, so the design's middle row shows GSM here instead of MM.
-export function buildInwardLabelFields({ type, gsm, reelMtrs, rollId, inwardDate, printedOn }) {
+// size/width field, so the design's middle row (above KG) shows the vendor's
+// SKU code for the drum instead of MM.
+export function buildInwardLabelFields({ type, vendorSkuCode, reelMtrs, rollId, inwardDate, printedOn }) {
   const weight = sanitizeField(reelMtrs);
-  const gsmValue = sanitizeField(gsm);
   return {
     family: fieldOrDash(type),                       // $FAMILY <- the drum's Type
-    width: gsmValue ? `${gsmValue} GSM` : "-",       // middle row <- GSM (Adhesive has no width)
+    width: fieldOrDash(vendorSkuCode),               // middle row <- Vendor SKU Code (Adhesive has no width)
     weight: weight ? `${weight} KG` : "-",           // $WEIGHT KG <- reelMtrs is kilos in this pool
     id: fieldOrDash(rollId),                         // $ID <- system Roll ID
     date: formatShortLabelDate(inwardDate || printedOn), // $DATE <- the drum's inward date, dd/mm/yy
