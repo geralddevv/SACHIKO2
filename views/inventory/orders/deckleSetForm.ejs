@@ -294,6 +294,8 @@
   }
   .dsf-add-btn:hover { background: #f0f7ff; }
   .dsf-add-btn:disabled { opacity: 0.45; cursor: not-allowed; background: #fff; }
+  /* Keep the advance action at the far right of the Orders In This Deckle bar. */
+  #dsfAdvanceOpen { margin-left: auto; }
   .dsf-row-btn {
     width: 26px; height: 26px; padding: 0; border: 1px solid #e2e8f0; background: #fff;
     color: #b91c1c; border-radius: 5px; font-size: 11.5px; cursor: pointer;
@@ -667,13 +669,25 @@
      everywhere loose orders are listed: a light cornflowerblue wash on its
      row here (equal specificity to the plain hover rule above, so it has to
      restate :hover to win it too), and the matching solid cornflowerblue on
-     its knife segment(s) in every drawn web (see .dsf-web-adv). No badge --
-     the colour alone is the signal. ---- */
+     its knife segment(s) in every drawn web (see .dsf-web-adv). ---- */
   .sl-table tbody tr.dsf-order-advance > td,
   .sl-table tbody tr.dsf-order-advance:hover > td {
     background: rgba(100, 149, 237, 0.16);
     box-shadow: inset 3px 0 0 cornflowerblue;
   }
+  /* Confirmed and advance orders are deliberately separate tables: advance
+     is a forecast, not merely a status on a confirmed order. */
+  .dsf-order-tables { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+  .dsf-order-table-title { padding: 9px 12px; border-bottom: 1px solid #e2e8f0; color: #1f2a44; font-size: 12px; font-weight: 800; }
+  .dsf-advance-table .dsf-order-table-title { color: #1e3a8a; background: rgba(100, 149, 237, 0.10); }
+  .dsf-advance-edit {
+    width: 100%; min-width: 0; height: 30px; padding: 3px 5px; text-align: center;
+    color: #1e3a8a; font: inherit; font-weight: 700; background: transparent;
+    border: 1px solid transparent; border-radius: 4px;
+  }
+  .dsf-advance-edit:hover { background: rgba(255, 255, 255, 0.72); border-color: #bfdbfe; }
+  .dsf-advance-edit:focus { outline: none; background: #fff; border-color: cornflowerblue; box-shadow: 0 0 0 2px rgba(100, 149, 237, 0.22); }
+  @media (max-width: 900px) { .dsf-order-tables { grid-template-columns: 1fr; } }
   /* A cut segment belongs to an advance-order width -- see ADVANCE_WIDTHS /
      computeAdvanceWidths() below. Same specificity as the nth-child stripe
      and the edge/trim overrides above it, so it has to come after all of them
@@ -739,10 +753,8 @@
     <input type="hidden" name="deckleSize" id="dsfDeckleSize" />
     <input type="hidden" name="noOfRolls" id="dsfNoOfRolls" />
     <input type="hidden" name="layoutsJson" id="dsfLayoutsJson" />
-    <% if (adv) { %>
-      <input type="hidden" name="advanceMode" value="1" />
-      <input type="hidden" name="advanceJson" id="dsfAdvanceJson" />
-    <% } %>
+    <% if (adv) { %><input type="hidden" name="advanceMode" value="1" /><% } %>
+    <input type="hidden" name="advanceJson" id="dsfAdvanceJson" />
 
     <div class="span-full form-heading" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
       <h1><%= adv ? "Set Deckle — Advance Order" : "Set Deckle" %></h1>
@@ -798,12 +810,44 @@
     <div class="span-full form-subheading sl-sec-head">
       <h1>Orders In This Deckle</h1>
       <button type="button" id="dsfAdvanceOpen" class="dsf-add-btn"<%= adv ? ' hidden' : '' %>>
-        <i class="fa-solid fa-calendar-plus"></i> Advance
+        <i class="fa-solid fa-calendar-plus"></i> Add Advance
       </button>
     </div>
     <div class="span-full" style="border:none !important;">
-      <div class="sl-panel sl-scroll" style="display:inline-block; width:auto; max-width:100%;">
-        <table class="sl-table" style="width:auto; min-width:0;">
+      <div class="dsf-order-tables">
+      <div class="sl-panel sl-scroll" style="max-width:100%;">
+        <div class="dsf-order-table-title">Confirmed Orders</div>
+        <table class="sl-table" style="width:100%; min-width:620px;">
+          <thead>
+            <tr>
+              <th style="width:44px;"></th>
+              <th style="width:126px;">Paper Size</th>
+              <th style="width:138px;">Running Mtrs</th>
+              <th style="width:104px;">Roll Qty</th>
+              <th style="width:112px;">Rolls Set</th>
+              <th style="width:108px;">Balance</th>
+            </tr>
+          </thead>
+          <tbody id="dsfOrderBody">
+            <% kids.filter((m) => !m.isAdvance).forEach((m) => { %>
+              <tr data-order-id="<%= m._id %>"
+                  data-size="<%= Number(m.paperSize) || 0 %>" data-qty="<%= Number(m.quantity) || 0 %>">
+                <%# Advance mode lists the code's real loose orders unticked -- the
+                    deckle is being set for the typed lines; tick one to cut it too. %>
+                <td><input type="checkbox" class="dsf-order-check" name="orderIds" value="<%= m._id %>"<%= adv ? '' : ' checked' %> /></td>
+                <td><%= dash(m.paperSize) %></td>
+                <td><%= fmtN(m.runningMeters) %></td>
+                <td><%= fmtN(m.quantity) %></td>
+                <td class="dsf-o-set" style="font-weight:800;">0</td>
+                <td class="dsf-o-bal" style="font-weight:800;">—</td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <div class="sl-panel sl-scroll dsf-advance-table" style="max-width:100%;">
+        <div class="dsf-order-table-title">Advance Orders</div>
+        <table class="sl-table" style="width:100%; min-width:620px;">
           <thead>
             <tr>
               <th style="width:44px;"></th>
@@ -815,17 +859,14 @@
               <% if (adv) { %><th style="width:44px;"></th><% } %>
             </tr>
           </thead>
-          <tbody id="dsfOrderBody">
-            <% kids.forEach((m) => { %>
-              <tr data-order-id="<%= m._id %>"
-                  data-size="<%= Number(m.paperSize) || 0 %>" data-qty="<%= Number(m.quantity) || 0 %>"
-                  <% if (m.isAdvance) { %>class="dsf-order-advance" title="Added in advance -- not a confirmed order yet"<% } %>>
-                <%# Advance mode lists the code's real loose orders unticked -- the
-                    deckle is being set for the typed lines; tick one to cut it too. %>
+          <tbody id="dsfAdvanceBody">
+            <% kids.filter((m) => m.isAdvance).forEach((m) => { %>
+              <tr data-order-id="<%= m._id %>" class="dsf-order-advance" title="Added in advance -- not a confirmed order yet"
+                  data-size="<%= Number(m.paperSize) || 0 %>" data-qty="<%= Number(m.quantity) || 0 %>">
                 <td><input type="checkbox" class="dsf-order-check" name="orderIds" value="<%= m._id %>"<%= adv ? '' : ' checked' %> /></td>
-                <td><%= dash(m.paperSize) %></td>
-                <td><%= fmtN(m.runningMeters) %></td>
-                <td><%= fmtN(m.quantity) %></td>
+                <td><input type="number" class="dsf-advance-edit" data-field="paperSize" step="any" min="0.01" value="<%= Number(m.paperSize) || '' %>" aria-label="Advance paper size" /></td>
+                <td><input type="number" class="dsf-advance-edit" data-field="runningMeters" step="any" min="0.01" value="<%= Number(m.runningMeters) || '' %>" aria-label="Advance running meters" /></td>
+                <td><input type="number" class="dsf-advance-edit" data-field="quantity" step="1" min="1" value="<%= Number(m.quantity) || '' %>" aria-label="Advance roll quantity" /></td>
                 <td class="dsf-o-set" style="font-weight:800;">0</td>
                 <td class="dsf-o-bal" style="font-weight:800;">—</td>
                 <% if (adv) { %><td></td><% } %>
@@ -834,7 +875,6 @@
           </tbody>
         </table>
         <% if (adv) { %>
-          <%# Outside the table: every <tr> in #dsfOrderBody is read as an order. %>
           <div class="dsf-adv-empty" id="dsfAdvEmpty">Type the advance order below — one line per paper size and roll length.</div>
           <!-- Typed advance lines. Not a <form> (it sits inside #dsfForm) and
                the inputs carry no name, so nothing here posts by itself: each
@@ -860,6 +900,7 @@
             <button type="button" id="dsfLineAdd" class="dsf-add-btn"><i class="fa-solid fa-plus"></i> Add Line</button>
           </div>
         <% } %>
+      </div>
       </div>
     </div>
 
@@ -1000,18 +1041,14 @@
   </div>
 </div>
 
-<!-- ============ ADVANCE ORDER DIALOG ============ -->
-<!-- A real POST, not fetch/JS -- it mints a loose PendingProduction row
-     server-side (POST .../plan/:itemId/advance) and sends the planner back to
-     this same GET, which re-renders with the new row already in #dsfOrderBody
-     (checked, tagged, highlighted) -- so nothing here has to duplicate the
-     row-rendering or Rolls-Set/Balance logic above. Its own <form>, outside
-     #dsfForm, so it never collides with that form's submit. -->
+<!-- ============ TEMPORARY ADVANCE LINE DIALOG ============ -->
+<!-- Lines stay in this plan only. They are persisted as advance members when
+     the deckle batch is created, so a refresh discards an unfinished line. -->
 <div class="logout-modal" id="dsfAdvanceModal" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="dsfAdvanceModalTitle"
        style="width: min(480px, 95vw); padding: 0; border-radius: 14px; border: none;">
     <div class="dialog-header">
-      <h2 id="dsfAdvanceModalTitle">Advance Order</h2>
+      <h2 id="dsfAdvanceModalTitle">Add Advance Line</h2>
       <button class="dialog-close-btn" type="button" id="dsfAdvanceModalClose" aria-label="Close">&times;</button>
     </div>
     <!-- The bare `form` selector in common.css turns every form into a
@@ -1019,8 +1056,7 @@
          override below the recipe facts) -- undo all of that here so a plain
          one-column dialog form doesn't collapse its content into 1/32 of the
          width. -->
-    <form id="dsfAdvanceForm" method="post"
-          action="/app/labels/production/deckle-set/plan/<%= group.itemId %>/advance"
+    <form id="dsfAdvanceForm" method="post" action="#"
           autocomplete="off" novalidate
           style="display:block; width:auto; border:none; padding:0; gap:0;">
       <div class="dialog-body">
@@ -1041,7 +1077,7 @@
         </div>
         <div class="dsf-adv-actions">
           <button type="button" class="dsf-adv-cancel" id="dsfAdvanceModalCancel">Cancel</button>
-          <button type="submit" class="dsf-adv-submit">Add Advance Order</button>
+          <button type="submit" class="dsf-adv-submit">Add Advance Line</button>
         </div>
       </div>
     </form>
@@ -1118,6 +1154,54 @@
   const dsfFinalStats = document.getElementById("dsfFinalStats");
   const dsfStatChips = document.getElementById("dsfStatChips");
   const orderBody = document.getElementById("dsfOrderBody");
+  const advanceBody = document.getElementById("dsfAdvanceBody");
+  const orderRows = () => [...document.querySelectorAll("#dsfOrderBody tr, #dsfAdvanceBody tr")];
+  function syncAdvanceRow(tr) {
+    const field = (name) => tr.querySelector(`.dsf-advance-edit[data-field="${name}"]`);
+    const paperSize = Number(field("paperSize")?.value);
+    const runningMeters = Number(field("runningMeters")?.value);
+    const quantity = Number(field("quantity")?.value);
+    tr.dataset.size = Number.isFinite(paperSize) ? String(paperSize) : "0";
+    tr.dataset.qty = Number.isFinite(quantity) ? String(quantity) : "0";
+    tr.dataset.rm = Number.isFinite(runningMeters) ? String(runningMeters) : "0";
+    return { paperSize, runningMeters, quantity };
+  }
+  async function saveAdvanceRow(tr) {
+    if (!tr.dataset.orderId || tr.dataset.advanceLine) return;
+    const line = syncAdvanceRow(tr);
+    if (!(line.paperSize > 0 && line.runningMeters > 0 && Number.isInteger(line.quantity) && line.quantity > 0)) {
+      showToast("Enter valid Paper Size, Running Mtrs and a whole Roll Qty before leaving the advance row.", "error");
+      return;
+    }
+    tr.dataset.saving = "1";
+    try {
+      const res = await fetch(`/app/labels/production/deckle-set/advance/${encodeURIComponent(tr.dataset.orderId)}/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": <%- JSON.stringify(csrfToken) %> },
+        body: JSON.stringify(line),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Could not save the advance order.");
+      const saved = data.order || line;
+      tr.querySelector('[data-field="paperSize"]').value = saved.paperSize;
+      tr.querySelector('[data-field="runningMeters"]').value = saved.runningMeters;
+      tr.querySelector('[data-field="quantity"]').value = saved.quantity;
+      syncAdvanceRow(tr);
+    } catch (err) {
+      showToast(err.message || "Could not save the advance order.", "error");
+    } finally {
+      delete tr.dataset.saving;
+      recalcAll();
+    }
+  }
+  advanceBody.addEventListener("input", (ev) => {
+    if (!ev.target.matches(".dsf-advance-edit")) return;
+    syncAdvanceRow(ev.target.closest("tr"));
+    recalcAll();
+  });
+  advanceBody.addEventListener("change", (ev) => {
+    if (ev.target.matches(".dsf-advance-edit")) saveAdvanceRow(ev.target.closest("tr"));
+  });
   // Paper sizes currently covered by a TICKED advance order -- refreshed at
   // the top of every recalcAll() so the web diagrams (webInnerHTML/cutSeg)
   // can tint a knife segment cornflowerblue the same way its order row is
@@ -1129,7 +1213,7 @@
   let ADVANCE_WIDTHS = new Set();
   function computeAdvanceWidths() {
     const s = new Set();
-    orderBody.querySelectorAll("tr.dsf-order-advance").forEach((tr) => {
+    advanceBody.querySelectorAll("tr.dsf-order-advance").forEach((tr) => {
       if (!tr.querySelector('input[name="orderIds"]:checked')) return;
       const w = round2(Number(tr.dataset.size) || 0);
       if (w > 0) s.add(w);
@@ -1891,7 +1975,7 @@
     // all -- it stays loose and goes back to the Deckle Sorting page -- so it
     // must not be handed any of the rolls these layouts produce either.
     const ordersByWidth = new Map();
-    [...orderBody.querySelectorAll("tr")].forEach((otr) => {
+    orderRows().forEach((otr) => {
       const picked = !!otr.querySelector('input[name="orderIds"]:checked');
       if (!picked) {
         otr.querySelector(".dsf-o-set").textContent = "—";
@@ -1927,8 +2011,7 @@
     });
 
     // ---- whole-form checks ----
-    // Advance mode with no Product Code picked yet (#dsfAdvanceJson only
-    // exists in advance mode).
+    // Advance mode with no Product Code picked yet.
     if (document.getElementById("dsfAdvanceJson") && !GROUP.itemId) {
       errors.push("Pick the Product Code for the advance order.");
     }
@@ -2395,7 +2478,7 @@
       });
     });
     const qtyByWidth = new Map();
-    [...orderBody.querySelectorAll("tr")].forEach((otr) => {
+    orderRows().forEach((otr) => {
       if (!otr.querySelector('input[name="orderIds"]:checked')) return;
       const w = Number(otr.dataset.size) || 0;
       qtyByWidth.set(w, (qtyByWidth.get(w) || 0) + (Number(otr.dataset.qty) || 0));
@@ -2513,7 +2596,7 @@
   }
 
   function checkedIds() {
-    return [...orderBody.querySelectorAll('input[name="orderIds"]:checked')].map((c) => c.value);
+    return [...document.querySelectorAll('#dsfOrderBody input[name="orderIds"]:checked, #dsfAdvanceBody input[name="orderIds"]:checked')].map((c) => c.value);
   }
 
   // ---- wiring ----
@@ -2641,7 +2724,7 @@
     document.getElementById("dsfTrimEdit").addEventListener("click", editTrim);
     showTrimText();
   }
-  orderBody.querySelectorAll('input[name="orderIds"]').forEach((c) => c.addEventListener("change", () => {
+  document.querySelectorAll('#dsfOrderBody input[name="orderIds"], #dsfAdvanceBody input[name="orderIds"]').forEach((c) => c.addEventListener("change", () => {
     const tr = c.closest("tr");
     if (tr) tr.style.opacity = c.checked ? "1" : "0.45";
     recalcAll();
@@ -2676,7 +2759,7 @@
       webs: r.webs,
     })));
     dsfNoOfRolls.value = String(rows.reduce((n, r) => n + r.webs, 0));
-    if (ADV.on) document.getElementById("dsfAdvanceJson").value = JSON.stringify(advanceLines());
+    document.getElementById("dsfAdvanceJson").value = JSON.stringify(advanceLines());
 
     // Lock the button so a double-click can't create two batches.
     dsfSubmitting = true;
@@ -2831,8 +2914,7 @@
   // The ticked typed lines, as POST /labels/production/deckle-set (advanceJson)
   // and the AI planner (advanceLines) take them.
   function advanceLines() {
-    if (!ADV.on) return [];
-    return [...orderBody.querySelectorAll("tr[data-advance-line]")]
+    return [...advanceBody.querySelectorAll("tr[data-advance-line]")]
       .filter((tr) => tr.querySelector('input[name="orderIds"]:checked'))
       .map((tr) => ({
         paperSize: Number(tr.dataset.size),
@@ -2841,6 +2923,48 @@
         remarks: tr.dataset.remarks || "",
       }));
   }
+  // On a normal Set Deckle page, Add Advance creates only a temporary row in
+  // this plan. The batch POST carries it in advanceJson; no refresh-persistent
+  // PendingProduction row is created while the planner is still editing.
+  let transientAdvanceSeq = 0;
+  function appendTransientAdvanceLine(size, rm, qty, remarks) {
+    const tr = document.createElement("tr");
+    tr.className = "dsf-order-advance";
+    tr.title = "Temporary advance line — saved only when the deckle is created";
+    tr.dataset.advanceLine = "1";
+    tr.dataset.size = String(size);
+    tr.dataset.qty = String(qty);
+    tr.dataset.rm = String(rm);
+    tr.dataset.remarks = remarks || "";
+    tr.innerHTML = `<td><input type="checkbox" class="dsf-order-check" name="orderIds" value="advance:temp-${transientAdvanceSeq++}" checked /></td>`
+      + `<td><input type="number" class="dsf-advance-edit" data-field="paperSize" step="any" min="0.01" value="${esc(String(size))}" aria-label="Advance paper size" /></td>`
+      + `<td><input type="number" class="dsf-advance-edit" data-field="runningMeters" step="any" min="0.01" value="${esc(String(rm))}" aria-label="Advance running meters" /></td>`
+      + `<td><input type="number" class="dsf-advance-edit" data-field="quantity" step="1" min="1" value="${esc(String(qty))}" aria-label="Advance roll quantity" />${remarks ? `<div style="font-size:11px;color:#64748b;">${esc(remarks)}</div>` : ""}</td>`
+      + `<td class="dsf-o-set" style="font-weight:800;">0</td><td class="dsf-o-bal" style="font-weight:800;">—</td>`
+      + `<td><button type="button" class="dsf-adv-remove" title="Remove this line" aria-label="Remove this line"><i class="fa-solid fa-xmark"></i></button></td>`;
+    tr.querySelector('input[name="orderIds"]').addEventListener("change", (ev) => {
+      tr.style.opacity = ev.target.checked ? "1" : "0.45";
+      recalcAll();
+    });
+    tr.querySelector(".dsf-adv-remove").addEventListener("click", () => { tr.remove(); recalcAll(); });
+    advanceBody.appendChild(tr);
+    recalcAll();
+  }
+  document.getElementById("dsfAdvanceForm").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const state = JSON.parse(document.getElementById("dsf-adv").textContent);
+    if (state.on) return;
+    const sizeEl = document.getElementById("dsfAdvSize");
+    const rmEl = document.getElementById("dsfAdvRm");
+    const qtyEl = document.getElementById("dsfAdvQty");
+    const size = Number(sizeEl.value), rm = Number(rmEl.value), qty = Number(qtyEl.value);
+    if (!(size > 0 && size <= 20000) || !(rm > 0 && rm <= 1000000) || !Number.isInteger(qty) || qty <= 0) {
+      showToast("Enter a valid Paper Size, Running Mtrs and whole Roll Qty.", "error");
+      return;
+    }
+    appendTransientAdvanceLine(size, rm, qty, "");
+    closeAdvanceDialog();
+  });
   if (ADV.on) {
     const pick = document.getElementById("dsfPcPick");
     pick.innerHTML = (GROUP.itemId ? "" : `<option value="">Select Product Code</option>`) + ADV.list
@@ -2860,7 +2984,7 @@
     else initPick();
     pick.addEventListener("change", () => {
       if (!pick.value || pick.value === GROUP.itemId) return;
-      if (orderBody.querySelector("tr[data-advance-line]")
+      if (advanceBody.querySelector("tr[data-advance-line]")
           && !confirm("Change the Product Code? The lines typed here will be cleared.")) {
         window.location.reload();
         return;
@@ -2880,7 +3004,7 @@
     const lineRemarks = document.getElementById("dsfLineRemarks");
     const emptyRow = document.getElementById("dsfAdvEmpty");
     let lineSeq = 0;
-    const syncEmpty = () => { emptyRow.hidden = !!orderBody.querySelector("tr[data-advance-line]"); };
+    const syncEmpty = () => { emptyRow.hidden = !!advanceBody.querySelector("tr[data-advance-line]"); };
 
     function addLine() {
       const size = Number(lineSize.value);
@@ -2903,9 +3027,9 @@
       tr.dataset.rm = String(rm);
       tr.dataset.remarks = remarks;
       tr.innerHTML = `<td><input type="checkbox" class="dsf-order-check" name="orderIds" value="advance:${lineSeq++}" checked /></td>`
-        + `<td>${esc(fmt(size))} <span class="adv-tag">ADVANCE</span></td>`
-        + `<td>${esc(fmt(rm))}</td>`
-        + `<td>${esc(fmtI(qty))}${remarks ? `<div style="font-size:11px;color:#64748b;">${esc(remarks)}</div>` : ""}</td>`
+        + `<td><input type="number" class="dsf-advance-edit" data-field="paperSize" step="any" min="0.01" value="${esc(String(size))}" aria-label="Advance paper size" /></td>`
+        + `<td><input type="number" class="dsf-advance-edit" data-field="runningMeters" step="any" min="0.01" value="${esc(String(rm))}" aria-label="Advance running meters" /></td>`
+        + `<td><input type="number" class="dsf-advance-edit" data-field="quantity" step="1" min="1" value="${esc(String(qty))}" aria-label="Advance roll quantity" />${remarks ? `<div style="font-size:11px;color:#64748b;">${esc(remarks)}</div>` : ""}</td>`
         + `<td class="dsf-o-set" style="font-weight:800;">0</td>`
         + `<td class="dsf-o-bal" style="font-weight:800;">—</td>`
         + `<td><button type="button" class="dsf-adv-remove" title="Remove this line" aria-label="Remove this line"><i class="fa-solid fa-xmark"></i></button></td>`;
@@ -2918,7 +3042,7 @@
         syncEmpty();
         recalcAll();
       });
-      orderBody.appendChild(tr);
+      advanceBody.appendChild(tr);
       syncEmpty();
       lineSize.value = ""; lineRm.value = ""; lineQty.value = ""; lineRemarks.value = "";
       lineSize.focus();
@@ -2930,7 +3054,7 @@
       if (ev.key === "Enter") { ev.preventDefault(); addLine(); }
     });
     // The code's real loose orders start unticked here -- dim them to match.
-    orderBody.querySelectorAll("tr:not([data-advance-line])").forEach((tr) => {
+    orderRows().filter((tr) => !tr.matches("[data-advance-line]")).forEach((tr) => {
       const c = tr.querySelector('input[name="orderIds"]');
       if (c && !c.checked) tr.style.opacity = "0.45";
     });

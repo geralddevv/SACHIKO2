@@ -5293,6 +5293,9 @@ router.get("/labels/production/deckle-set/plan/:itemId", async (req, res) => {
     assignedMachineId: null,
     deckleSize: null,
     deckleBatchId: null,
+    // Advance lines are transient planner input; they are created only when
+    // the deckle batch is submitted, so they must not reappear after refresh.
+    isAdvance: { $ne: true },
     isDeckleBatch: { $ne: true },
   })
     .populate("userId", "clientName userName clientType")
@@ -5347,8 +5350,8 @@ router.get("/labels/production/deckle-set/plan/:itemId", async (req, res) => {
 //     Deckle Batch. The lines only become rows when the batch is created
 //     (advanceJson on POST /labels/production/deckle-set), so a page walked
 //     away from leaves nothing behind.
-//   - Advance on a Product Code's own Set Deckle page, which saves the one
-//     line straight away (POST .../plan/:itemId/advance) and reloads.
+//   - Add Advance on a Product Code's own Set Deckle page, which keeps the
+//     line in the current plan and only saves it when the batch is created.
 
 // One typed advance line, checked -- { line } or { error }. Shared by both
 // ways in, and by the AI planner, so all three accept exactly the same input.
@@ -5443,6 +5446,7 @@ router.get("/labels/production/deckle-set/plan", async (req, res) => {
       assignedMachineId: null,
       deckleSize: null,
       deckleBatchId: null,
+      isAdvance: { $ne: true },
       isDeckleBatch: { $ne: true },
     })
       .populate("userId", "clientName userName clientType")
@@ -5496,6 +5500,49 @@ router.post(
       + ` x ${req.body.runningMeters} m`;
     req.flash("notification", "Advance order added — tick it in when you plan the deckle.");
     return res.redirect(backTo);
+  },
+);
+
+// Spreadsheet-style edits on the Advance Orders table.  These rows have no
+// source sales order, so only loose advance rows may be changed here; once one
+// has entered a deckle batch it is production data and must not be resized.
+router.post(
+  "/labels/production/deckle-set/advance/:id/update",
+  requireAuth,
+  updateLimiter,
+  async (req, res) => {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid advance order." });
+    }
+    const { line, error } = parseAdvanceLine(req.body);
+    if (error) return res.status(400).json({ message: error });
+
+    const row = await PendingProduction.findOneAndUpdate(
+      {
+        _id: id,
+        isAdvance: true,
+        deckleBatchId: null,
+        assignedMachineId: null,
+        isDeckleBatch: { $ne: true },
+      },
+      {
+        $set: {
+          paperSize: String(line.paperSize),
+          runningMeters: line.runningMeters,
+          quantity: line.quantity,
+        },
+      },
+      { new: true },
+    ).lean();
+    if (!row) {
+      return res.status(409).json({ message: "This advance order is already in production — refresh the page." });
+    }
+    res.locals.auditDescription = `Updated advance order: ${row.quantity} roll(s) of ${row.paperSize} mm x ${row.runningMeters} m`;
+    return res.json({
+      message: "Advance order updated.",
+      order: { paperSize: row.paperSize, runningMeters: row.runningMeters, quantity: row.quantity },
+    });
   },
 );
 
