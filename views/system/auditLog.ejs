@@ -3,6 +3,8 @@
 
 <!-- Tabulator CSS -->
 <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+<!-- Flatpickr CSS (date-picker header filter, forced dd/mm/yyyy regardless of browser locale) -->
+<link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet" />
 
 <body>
   <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
@@ -33,9 +35,20 @@
     </style>
 
     <div class="indi-head">
-      <h1>Audit Log</h1>
+      <h1>
+        Audit Log
+        <% if (typeof truncated !== "undefined" && truncated) { %>
+          <span style="font-size: 13px; font-weight: 500; color: #b45309;" title="The audit log has grown past what a single page load shows. Narrow the Date/Time filter to find older entries.">
+            — showing the most recent entries only
+          </span>
+        <% } %>
+      </h1>
 
       <div style="display: flex; gap: 10px; align-items: center">
+        <button class="header-action-btn" id="view-all-logs-btn" title="Clear the default 'today only' view and show every loaded log entry">
+          <i class="fa-solid fa-clock-rotate-left" style="margin-right: 4px"></i> View All Logs
+        </button>
+
         <div class="download-selector" id="downloadSelector">
           <button class="download-selector__trigger">
             <span>
@@ -68,6 +81,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
   <script>
     // ================= DOWNLOAD DROPDOWN UI =================
@@ -96,6 +110,17 @@
 
     // ================= TABULATOR DATA =================
 
+    // Local (not UTC) y-m-d, so "today" lines up with the viewer's calendar
+    // day rather than the server's/UTC's.
+    function localISODate(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+
+    const TODAY_ISO = localISODate(new Date());
+
     let tableData = [];
     try {
       tableData = <%- safeJson(jsonData || []) %>;
@@ -114,7 +139,15 @@
     const fmtDateTime = (v) => {
       if (!v) return "";
       const d = new Date(v);
-      return isNaN(d) ? "" : d.toLocaleString();
+      if (isNaN(d)) return "";
+      return d.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
     };
 
     // ================= TABULATOR INIT =================
@@ -127,6 +160,89 @@
       minWidth: 100,
       ...column,
     });
+
+    // Flatpickr as a Tabulator header filter, so the Date / Time column can be
+    // narrowed to one calendar day via a date picker. A native <input
+    // type="date"> displays in whatever format the browser/OS locale
+    // dictates (often mm/dd/yyyy); flatpickr is used instead so the field
+    // always reads dd/mm/yyyy regardless of the viewer's locale.
+    function dateHeaderFilterEditor(cell, onRendered, success) {
+      const wrap = document.createElement("div");
+      wrap.style.position = "relative";
+      wrap.style.width = "100%";
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "dd/mm/yyyy";
+      input.readOnly = true; // pick-only: no typing, just launches the calendar
+      input.style.width = "100%";
+      input.style.boxSizing = "border-box";
+      input.style.paddingRight = "20px";
+      input.style.cursor = "pointer";
+
+      // Small "x" to reset the filter, since a read-only field can't be
+      // cleared by backspacing.
+      const clearBtn = document.createElement("span");
+      clearBtn.textContent = "×";
+      clearBtn.title = "Clear date filter";
+      clearBtn.style.cssText =
+        "position:absolute; right:4px; top:50%; transform:translateY(-50%); cursor:pointer; font-size:14px; color:#888; line-height:1; display:none;";
+
+      wrap.appendChild(input);
+      wrap.appendChild(clearBtn);
+
+      onRendered(() => {
+        const fp = flatpickr(input, {
+          dateFormat: "d/m/Y",
+          allowInput: false,
+          clickOpens: true,
+          onChange: (selectedDates) => {
+            releaseDefaultTodayFilter();
+            if (!selectedDates.length) {
+              clearBtn.style.display = "none";
+              success("");
+              return;
+            }
+            clearBtn.style.display = "inline";
+            success(localISODate(selectedDates[0]));
+          },
+        });
+
+        clearBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          fp.clear();
+          clearBtn.style.display = "none";
+          success("");
+        });
+      });
+
+      return wrap;
+    }
+
+    // Matches on the row's local calendar date, not raw UTC — so it lines up
+    // with what fmtDateTime shows the user, regardless of stored timezone.
+    function dateHeaderFilterFunc(headerValue, rowValue) {
+      if (!headerValue) return true;
+      const d = new Date(rowValue);
+      if (isNaN(d)) return false;
+      return localISODate(d) === headerValue;
+    }
+
+    // Default view: today's entries only. This is a plain background row
+    // filter, entirely separate from the Date/Time header filter above — the
+    // picker itself starts blank/untouched, and the full loaded history is
+    // still there underneath for it to search any other day. The moment the
+    // user actually touches the date picker (pick a day, or clear it), this
+    // background filter is dropped for good so their choice is what governs.
+    function rowIsToday(data) {
+      return dateHeaderFilterFunc(TODAY_ISO, data.createdAt);
+    }
+    let defaultTodayFilterActive = false;
+    function releaseDefaultTodayFilter() {
+      if (!defaultTodayFilterActive) return;
+      defaultTodayFilterActive = false;
+      table.removeFilter(rowIsToday);
+    }
 
     function initTable() {
       table = new Tabulator("#audit-table", {
@@ -144,12 +260,15 @@
             formatter: (cell) => fmtDateTime(cell.getValue()),
             width: 170,
             headerSort: true,
+            headerFilter: dateHeaderFilterEditor,
+            headerFilterFunc: dateHeaderFilterFunc,
           }),
-          withTextFilter({ title: "Employee", field: "empName", widthGrow: 2 }),
+          withTextFilter({ title: "Employee", field: "empName", widthGrow: 2, headerSort: true }),
           withTextFilter({
             title: "Role",
             field: "role",
             width: 100,
+            headerSort: true,
             headerFilter: "select",
             headerFilterParams: {
               values: { "": "All", admin: "admin", hod: "hod", sales: "sales", hr: "hr", employee: "employee" },
@@ -160,13 +279,14 @@
             title: "Action",
             field: "action",
             width: 110,
+            headerSort: true,
             headerFilter: "select",
             headerFilterParams: {
               values: { "": "All", LOGIN: "LOGIN", LOGOUT: "LOGOUT", CREATE: "CREATE", UPDATE: "UPDATE", DELETE: "DELETE" },
               clearable: true,
             },
           }),
-          withTextFilter({ title: "Details", field: "description", widthGrow: 4 }),
+          withTextFilter({ title: "Details", field: "description", widthGrow: 4, headerSort: true }),
           // Only mobile-app LOGIN entries carry a position; every other row is
           // blank here. A real fix links out to the map, a failure reason
           // ("Location denied") is plain text with nothing to link to.
@@ -174,6 +294,7 @@
             title: "Location",
             field: "geoText",
             widthGrow: 2,
+            headerSort: true,
             formatter: (cell) => {
               const text = cell.getValue();
               if (!text) return "";
@@ -182,12 +303,25 @@
               return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`;
             },
           }),
-          withTextFilter({ title: "Path", field: "path", widthGrow: 2 }),
+          withTextFilter({ title: "Path", field: "path", widthGrow: 2, headerSort: true }),
         ],
+      });
+
+      table.on("tableBuilt", () => {
+        defaultTodayFilterActive = true;
+        table.addFilter(rowIsToday);
       });
     }
 
     window.addEventListener("load", initTable);
+
+    // ================= VIEW ALL LOGS =================
+    // The table already loads every log the server sent (see the safety-cap
+    // comment on GET /audit/view) -- "today only" is just a background filter
+    // applied on top, so viewing everything is just dropping that filter.
+    document.getElementById("view-all-logs-btn").addEventListener("click", () => {
+      releaseDefaultTodayFilter();
+    });
 
     // ================= DOWNLOAD ACTIONS =================
 

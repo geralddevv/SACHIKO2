@@ -1,0 +1,35 @@
+# ── MongoDB ──────────────────────────────────────────────────────────────────
+MONGO_URI=mongodb://localhost:27017/sachiko
+# Leave MONGO_USER and MONGO_PASS blank — db.js skips auth injection when empty
+MONGO_USER=
+MONGO_PASS=
+
+# ── Session ───────────────────────────────────────────────────────────────────
+SESSION_SECRET=change-this-to-a-long-random-string-in-real-use
+
+# ── Environment ───────────────────────────────────────────────────────────────
+NODE_ENV=development
+
+# ── Server ────────────────────────────────────────────────────────────────────
+# Port the app listens on (falls back to 3001 if unset)
+PORT=3001
+
+# ── Sibling app (Fairtech) cross-link for the login "switch brand" button ────
+# Only needed if Fairtech runs somewhere other than localhost:3000
+# FAIRTECH_URL=http://localhost:3000
+
+# ── System / backdoor logins (dev only — blocked automatically in production)─
+PROPRIETOR_USER=
+PROPRIETOR_PASS=
+
+ADMIN_USER=Gerald
+ADMIN_PASS=arise
+
+HR_USER=
+HR_PASS=
+
+HOD_USER=
+HOD_PASS=
+
+SALES_USER=
+SALES_PASS=

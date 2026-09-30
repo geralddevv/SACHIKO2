@@ -1,0 +1,759 @@
+<% layout('/layout/boilerplate') %>
+
+<div class="contain" style="flex-direction: column; padding: 10px; gap: 10px;">
+  <style>
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+    }
+    .header-action-btn:hover { background-color: #e2e8f0; }
+    .header-action-btn:disabled {
+      background-color: #e2e8f0;
+      color: #94a3b8;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    /* ---- Print Reel Labels dialog chrome -- boilerplate.ejs only defines
+       .logout-modal/.logout-dialog/.logout-btn globally, the dialog's own
+       header/body/preview are each page's own copy, same as the main stock
+       page's own <style> block. ---- */
+    .dialog-header {
+      background: #044A78;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .dialog-close-btn {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 2px;
+      opacity: 0.8;
+      transition: opacity 0.15s;
+    }
+    .dialog-close-btn:hover { opacity: 1; }
+    .dialog-body { padding: 18px; }
+    /* The preview IS the print target -- what's on screen here is what comes
+       off the printer, one label per page, scrolled -- same as the main
+       stock page's own Print Reel Labels dialog, just without its reel
+       picker list: the reels were already picked with checkboxes on this
+       page before Print was clicked. */
+    .pl-preview-frame {
+      height: min(60vh, 600px);
+      border: 1px solid #e6eaf2;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #eef2f7;
+      position: relative;
+    }
+    #plFrame { display: block; width: 100%; height: 100%; border: 0; }
+    .pl-preview-msg {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+      background: #eef2f7;
+    }
+    .pl-preview-msg:empty { display: none; }
+    .pl-footer {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 18px;
+      border-top: 1px solid #e6eaf2;
+      background: #f8fafc;
+      border-radius: 0 0 14px 14px;
+    }
+    .pl-hint { font-size: 11.5px; color: #64748b; font-weight: 600; }
+    .pl-actions { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* ---- Toolbar: search + status filter ---- */
+    .tl-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 18px;
+      border: 1px solid #e6eaf2;
+      border-radius: 10px;
+      background: #fff;
+      flex: 0 0 auto;
+    }
+    .tl-search {
+      flex: 1 1 260px;
+      min-width: 200px;
+    }
+    .tl-filter-pills {
+      display: flex;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .tl-filter-pill {
+      padding: 6px 14px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 999px;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tl-filter-pill:hover { border-color: #044a78; color: #044a78; }
+    .tl-filter-pill.active { background: #044a78; border-color: #044a78; color: #fff; }
+    .tl-count {
+      font-size: 12px;
+      font-weight: 700;
+      color: #64748b;
+      white-space: nowrap;
+      margin-left: auto;
+    }
+    .tl-print-warning {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #dc2626;
+      white-space: nowrap;
+    }
+
+    /* ---- The timeline itself: one scrolling pane, a day heading every time
+         the date changes, then a dotted vertical line down every reel
+         inwarded that day. ---- */
+    .tl-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      border: 1px solid #e6eaf2;
+      border-radius: 10px;
+      background: #fff;
+      padding: 22px 26px;
+    }
+    /* The sticky unit is the whole row (Select All + the pill), not the pill
+       alone, so the button stays reachable while its day is scrolled past --
+       the point of putting it "near" the heading is that it's still there
+       when you've scrolled a little way into that day's reels. */
+    .tl-day-header-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      margin-top: 22px;
+      padding: 5px 0;
+      background: #fff;
+    }
+    .tl-day-group:first-child .tl-day-header-row { margin-top: 0; }
+    .tl-day-header {
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+      background: #044a78;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 7px 14px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+    /* Ticks (or clears) every reel under this heading -- exactly like
+       .pl-selectall / .tl-filter-pill elsewhere on this pool's pages, just
+       scoped to one day instead of the whole list. */
+    .tl-day-select-btn {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 999px;
+      background: #fff;
+      color: #044a78;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tl-day-select-btn:hover { border-color: #044a78; background: #eef2f7; }
+    .tl-day-select-btn.all-selected { background: #044a78; border-color: #044a78; color: #fff; }
+    .tl-day-select-btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+    .tl-day-list { margin-top: 18px; padding-left: 4px; }
+
+    /* The whole row is a <label> (see itemHtml) wrapping its one checkbox --
+       same "tick target is the row, not a 15px box" pattern as the main
+       stock page's .pl-row, so clicking the roll id, the spec line, the
+       meta, anywhere, ticks the reel, not just the checkbox itself. */
+    .tl-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 4px 10px 20px 10px;
+      cursor: pointer;
+    }
+    .tl-item:last-child { padding-bottom: 4px; }
+    /* Same tick-on-the-row highlight as the main stock page's Print Reel
+       Labels list (.pl-row:has(input:checked)) -- a checked reel stays
+       findable once the list scrolls. The item's own left padding (above)
+       is what keeps the checkbox off this inset bar instead of touching it. */
+    .tl-item:has(.tl-reel-check:checked) {
+      background: #f4f9ff;
+      box-shadow: inset 3px 0 0 #044a78;
+      border-radius: 8px;
+    }
+    .tl-item-check {
+      display: flex;
+      align-items: center;
+      /* Centers this one flex item on the row's own height, overriding
+         .tl-item's align-items: flex-start (which is still what the marker's
+         dot needs, to line up with the first line of text) -- so the
+         checkbox sits in the vertical middle of the whole entry instead of
+         pinned to its top. */
+      align-self: center;
+      flex: 0 0 auto;
+    }
+    /* tableDisp.css's global `input` rule (height:20px, padding:6px,
+       flex-grow:1, a forced background) is written for text fields and
+       stretches/misshapes a bare checkbox -- flex: none here is what stops it
+       growing to fill the row, same fix the main stock page's own reel
+       checkboxes use (.pl-row input / .pl-selectall input). */
+    .tl-item-check input {
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border: none;
+      background: none !important; /* beats tableDisp.css's `input { background-color: ... !important }` */
+      accent-color: #044a78;
+      cursor: pointer;
+      margin: 0;
+      flex: none;
+    }
+    .tl-marker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 0 0 auto;
+    }
+    .tl-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #044a78;
+      border: 2px solid #dbeafe;
+      flex: 0 0 auto;
+      margin-top: 3px;
+    }
+    .tl-dot.used { background: #94a3b8; border-color: #e2e8f0; }
+    .tl-line {
+      flex: 1 1 auto;
+      width: 2px;
+      min-height: 20px;
+      background: #e2e8f0;
+      margin-top: 2px;
+    }
+    .tl-item:last-child .tl-line { display: none; }
+    .tl-content {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding-bottom: 2px;
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      column-gap: 10px;
+      row-gap: 4px;
+    }
+    .tl-roll { font-size: 14px; font-weight: 800; color: #1f2a44; }
+    .tl-vendor-roll { font-weight: 500; color: #64748b; font-size: 12px; }
+    .tl-spec { font-size: 12.5px; font-weight: 600; color: #044a78; }
+    .tl-meta { font-size: 12.5px; color: #475569; flex-basis: 100%; }
+    .tl-meta .tl-no-invoice { color: #dc2626; font-weight: 700; }
+    .tl-remarks { font-size: 11.5px; color: #94a3b8; font-style: italic; flex-basis: 100%; }
+    .tl-status-badge {
+      flex: 0 0 auto;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .tl-status-badge.in-stock { background: #dcfce7; color: #15803d; }
+    .tl-status-badge.used { background: #e2e8f0; color: #475569; }
+
+    .tl-empty {
+      padding: 40px 18px;
+      text-align: center;
+      font-size: 13.5px;
+      color: #64748b;
+      font-weight: 600;
+    }
+  </style>
+
+  <div class="indi-head">
+    <div style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; border-radius: 10px;">
+      <i class="fa-solid fa-clock-rotate-left" style="font-size: 1.1rem; opacity: 0.9;"></i>
+      <h1 style="margin: 0; letter-spacing: 0.02em;">Release Liner — Inward Timeline</h1>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center; margin-left: auto;">
+      <a href="/app/releaselinerstock" class="header-action-btn">
+        <i class="fa-solid fa-arrow-left"></i> Release Liner Stock
+      </a>
+    </div>
+  </div>
+
+  <div class="tl-toolbar">
+    <input type="search" id="tlSearch" class="form-control premium-input tl-search"
+      placeholder="Search Roll ID, Vendor Roll ID, SKU ID, Type, Vendor, Invoice No…" autocomplete="off" />
+    <div class="tl-filter-pills">
+      <button type="button" class="tl-filter-pill active" data-status="">All</button>
+      <button type="button" class="tl-filter-pill" data-status="in">In Stock</button>
+      <button type="button" class="tl-filter-pill" data-status="used">Used</button>
+    </div>
+    <span class="tl-count" id="tlCount"></span>
+    <span class="tl-print-warning" id="tlPrintWarning"></span>
+    <button type="button" id="tlPrintBtn" class="header-action-btn" disabled>
+      <i class="fa-solid fa-print"></i> Print Selected (<span id="tlPrintCount">0</span>)
+    </button>
+  </div>
+
+  <div class="tl-scroll" id="tlScroll"></div>
+</div>
+
+<!-- ============ PRINT REEL LABELS DIALOG ============ -->
+<!-- Same sticker, same print path as the main stock page's own Print Reel
+     Labels dialog (GET .../labels?ids=..., rendered into this frame as
+     srcdoc so it prints, one label per page) -- just without that dialog's
+     reel picker list, since the reels are already picked with checkboxes on
+     this page before Print Selected is clicked. -->
+<div class="logout-modal" id="printLabelsDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="printLabelsTitle"
+    style="width: min(560px, 95vw); padding: 0; border-radius: 14px; display: flex; flex-direction: column; max-height: 90vh;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0; flex: 0 0 auto;">
+      <div style="min-width: 0;">
+        <h2 id="printLabelsTitle">Print Reel Labels</h2>
+        <div id="printLabelsCount" style="font-size: 12px; color: rgba(255,255,255,0.85); font-weight: 600; margin-top: 3px;"></div>
+      </div>
+      <button class="dialog-close-btn" type="button" onclick="closePrintLabelsDialog()" aria-label="Close">&times;</button>
+    </div>
+    <div class="dialog-body" style="flex: 1 1 auto; min-height: 0;">
+      <div class="pl-preview-frame">
+        <iframe id="plFrame" title="Labels to be printed"></iframe>
+        <div class="pl-preview-msg" id="plPreviewMsg"></div>
+      </div>
+    </div>
+    <div class="pl-footer">
+      <span class="pl-hint">
+        <%= labelSizeMm.width %> &times; <%= labelSizeMm.height %> mm &middot; one label per page.
+        Set <b>Scale 100%</b> and <b>Margins: None</b> in the print dialog.
+      </span>
+      <div class="pl-actions">
+        <button class="logout-btn" type="button" id="plRotateBtn" onclick="togglePrintLabelsRotation()">Rotate 180&deg;</button>
+        <button class="logout-btn" type="button" onclick="closePrintLabelsDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="plPrintBtn" onclick="printSelectedLabels()">Print</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="timeline-data" type="application/json"><%- safeJson(rows) %></script>
+<script>
+  // Every reel Release Liner has ever taken in, across every spec, newest
+  // first (server already sorted by inwardDate) -- unlike a master row's own
+  // View button (which only knows about reels still in stock), this is the
+  // whole pool's history, a used-up reel included.
+  const timelineData = JSON.parse(document.getElementById("timeline-data").textContent);
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]);
+  }
+
+  const fmtKg = (n) => {
+    if (n === null || n === undefined) return "—";
+    const value = Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+    return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  };
+
+  // Grouping key: the calendar day alone (not a timestamp), so several reels
+  // inwarded the same day land under one heading instead of one each.
+  function dayKey(value) {
+    if (!value) return "UNDATED";
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? "UNDATED" : d.toISOString().slice(0, 10);
+  }
+  function dayLabel(key) {
+    if (key === "UNDATED") return "No Inward Date";
+    const d = new Date(`${key}T00:00:00`);
+    return d.toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+  }
+
+  function itemHtml(r) {
+    const specBits = [
+      r.type, r.make, r.vendorName, r.vendorSkuCode, r.sensing, r.color,
+      r.size ? `${r.size} mm` : null,
+      r.gsm != null ? `${r.gsm} GSM` : null,
+    ].filter(Boolean).join(" · ");
+    const invoicePart = r.invoiceNo
+      ? `Invoice ${escapeHtml(r.invoiceNo)}`
+      : `<span class="tl-no-invoice">No Invoice</span>`;
+    const meta = [
+      `${fmtKg(r.reelMtrs)} Kg`,
+      r.rate ? `₹${fmtKg(r.rate)}/Kg` : "",
+      r.location ? escapeHtml(r.location) : "",
+      invoicePart,
+    ].filter(Boolean).join(" &middot; ");
+
+    return `
+      <label class="tl-item" title="Select this reel" data-id="${escapeHtml(r._id)}" data-search="${escapeHtml([r.rollId, r.vendorRollId, r.skuId, r.type, r.vendorName, r.vendorSkuCode, r.invoiceNo, r.location].join(" ").toLowerCase())}" data-status="${r.inStock ? "in" : "used"}">
+        <span class="tl-item-check">
+          <input type="checkbox" class="tl-reel-check" value="${escapeHtml(r._id)}" />
+        </span>
+        <div class="tl-marker"><span class="tl-dot ${r.inStock ? "" : "used"}"></span><span class="tl-line"></span></div>
+        <div class="tl-content">
+          <span class="tl-roll">${escapeHtml(r.rollId || "—")}</span>
+          ${r.vendorRollId ? `<span class="tl-vendor-roll">(Vendor Roll ID: ${escapeHtml(r.vendorRollId)})</span>` : ""}
+          <span class="tl-status-badge ${r.inStock ? "in-stock" : "used"}">${r.inStock ? "In Stock" : "Used"}</span>
+          <span class="tl-spec">${escapeHtml(r.skuId || "—")}${specBits ? ` · ${escapeHtml(specBits)}` : ""}</span>
+          <div class="tl-meta">${meta}</div>
+          ${r.remarks ? `<div class="tl-remarks">${escapeHtml(r.remarks)}</div>` : ""}
+        </div>
+      </label>`;
+  }
+
+  function render() {
+    const scroll = document.getElementById("tlScroll");
+    if (!timelineData.length) {
+      scroll.innerHTML = `<div class="tl-empty">No Release Liner reels have been inwarded yet.</div>`;
+      document.getElementById("tlCount").textContent = "";
+      return;
+    }
+
+    // Data arrives already sorted newest-first; group consecutive rows that
+    // share a calendar day rather than re-sorting, so the grouping can never
+    // disagree with the order on screen.
+    const groups = [];
+    let current = null;
+    for (const r of timelineData) {
+      const key = dayKey(r.inwardDate);
+      if (!current || current.key !== key) {
+        current = { key, rows: [] };
+        groups.push(current);
+      }
+      current.rows.push(r);
+    }
+
+    scroll.innerHTML = groups.map((g) => `
+      <div class="tl-day-group">
+        <div class="tl-day-header-row">
+          <button type="button" class="tl-day-select-btn">
+            <i class="fa-solid fa-square"></i> <span class="tl-day-select-label">Select All</span>
+          </button>
+          <div class="tl-day-header">${dayLabel(g.key)} &middot; ${g.rows.length} reel${g.rows.length === 1 ? "" : "s"}</div>
+        </div>
+        <div class="tl-day-list">${g.rows.map(itemHtml).join("")}</div>
+      </div>`).join("");
+
+    document.getElementById("tlCount").textContent = `${timelineData.length} reel${timelineData.length === 1 ? "" : "s"}`;
+    refreshAllDayButtons();
+  }
+
+  render();
+
+  // ---- Search + status filter -- both act on the DOM directly (hide
+  // non-matching items, hide a day group left with nothing showing) rather
+  // than re-rendering, so the render() pass above stays the one place the
+  // markup is built. ----
+  let activeStatus = "";
+  function applyFilters() {
+    const term = document.getElementById("tlSearch").value.trim().toLowerCase();
+    let visibleTotal = 0;
+    document.querySelectorAll(".tl-day-group").forEach((group) => {
+      let visibleInGroup = 0;
+      group.querySelectorAll(".tl-item").forEach((item) => {
+        const matchesTerm = !term || item.dataset.search.includes(term);
+        const matchesStatus = !activeStatus || item.dataset.status === activeStatus;
+        const show = matchesTerm && matchesStatus;
+        item.style.display = show ? "" : "none";
+        if (show) visibleInGroup++;
+      });
+      group.style.display = visibleInGroup ? "" : "none";
+      visibleTotal += visibleInGroup;
+    });
+    document.getElementById("tlCount").textContent = term || activeStatus
+      ? `${visibleTotal} of ${timelineData.length} reel${timelineData.length === 1 ? "" : "s"}`
+      : `${timelineData.length} reel${timelineData.length === 1 ? "" : "s"}`;
+
+    // A search/filter change can take reels out of (or back into) view, which
+    // changes what "every reel under this heading" means for each day's
+    // Select All button -- so its checked/disabled state has to be
+    // reconsidered every time visibility changes, not just at page load.
+    refreshAllDayButtons();
+  }
+
+  document.getElementById("tlSearch").addEventListener("input", applyFilters);
+  document.querySelectorAll(".tl-filter-pill").forEach((pill) => {
+    pill.addEventListener("click", () => {
+      document.querySelectorAll(".tl-filter-pill").forEach((p) => p.classList.remove("active"));
+      pill.classList.add("active");
+      activeStatus = pill.dataset.status;
+      applyFilters();
+    });
+  });
+
+  // ---- Selection + Print -------------------------------------------------
+  // Reuses the main stock page's own label sheet route (GET .../labels?ids=)
+  // -- the same one behind its Print Reel Labels dialog -- and its own
+  // preview-in-an-iframe dialog pattern, just without that dialog's reel
+  // picker list: the reels here are already picked with checkboxes on the
+  // page before Print Selected is clicked.
+  const MAX_LABELS_PER_SHEET = 200; // mirrors routes/stock/releaseLinerStock.js
+  const selectedIds = new Set();
+
+  // Only the checkboxes for reels the current search/status filter is
+  // actually showing -- same "select all means what's in front of you, not
+  // what the search is hiding" rule the main page's own Select All uses.
+  function visibleCheckboxesIn(groupEl) {
+    return Array.from(groupEl.querySelectorAll(".tl-item"))
+      .filter((item) => item.style.display !== "none")
+      .map((item) => item.querySelector(".tl-reel-check"));
+  }
+
+  function refreshDayButton(groupEl) {
+    const btn = groupEl.querySelector(".tl-day-select-btn");
+    if (!btn) return;
+    const boxes = visibleCheckboxesIn(groupEl);
+    const allChecked = boxes.length > 0 && boxes.every((cb) => cb.checked);
+    btn.disabled = boxes.length === 0;
+    btn.classList.toggle("all-selected", allChecked);
+    btn.querySelector("i").className = allChecked ? "fa-solid fa-square-check" : "fa-solid fa-square";
+    btn.querySelector(".tl-day-select-label").textContent = allChecked ? "Deselect All" : "Select All";
+  }
+
+  function refreshAllDayButtons() {
+    document.querySelectorAll(".tl-day-group").forEach(refreshDayButton);
+  }
+
+  function updatePrintUi() {
+    const n = selectedIds.size;
+    document.getElementById("tlPrintCount").textContent = n;
+    document.getElementById("tlPrintBtn").disabled = n === 0 || n > MAX_LABELS_PER_SHEET;
+    document.getElementById("tlPrintWarning").textContent = n > MAX_LABELS_PER_SHEET
+      ? `Too many reels selected -- ${MAX_LABELS_PER_SHEET} labels is the most one print can hold.`
+      : "";
+  }
+
+  const tlScroll = document.getElementById("tlScroll");
+
+  // One reel ticked or cleared -- update the running selection, then this
+  // reel's own day button (its "every reel" answer may have just changed).
+  tlScroll.addEventListener("change", (e) => {
+    if (!e.target.matches(".tl-reel-check")) return;
+    if (e.target.checked) selectedIds.add(e.target.value); else selectedIds.delete(e.target.value);
+    const group = e.target.closest(".tl-day-group");
+    if (group) refreshDayButton(group);
+    updatePrintUi();
+  });
+
+  // The day's own Select All / Deselect All -- delegated, since every day
+  // group (and its button) is (re)built by render(), not present at load.
+  tlScroll.addEventListener("click", (e) => {
+    const btn = e.target.closest(".tl-day-select-btn");
+    if (!btn) return;
+    const group = btn.closest(".tl-day-group");
+    const boxes = visibleCheckboxesIn(group);
+    const allChecked = boxes.length > 0 && boxes.every((cb) => cb.checked);
+    boxes.forEach((cb) => {
+      cb.checked = !allChecked;
+      if (cb.checked) selectedIds.add(cb.value); else selectedIds.delete(cb.value);
+    });
+    refreshDayButton(group);
+    updatePrintUi();
+  });
+
+  document.getElementById("tlPrintBtn").addEventListener("click", () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length || ids.length > MAX_LABELS_PER_SHEET) return;
+    openPrintLabelsDialog(ids);
+  });
+
+  // ---- Print Reel Labels dialog -- preview + print for the ids already
+  // ticked on this page (see openPrintLabelsDialog below). Same srcdoc/
+  // labelApi mechanics as the main stock page's own dialog: fetched and
+  // written in as srcdoc rather than navigated to, so a session that has
+  // ended shows as a message here instead of the frame silently loading a
+  // login page; printed via window.labelApi.print() on the frame itself,
+  // since the frame IS the print target, not just a preview of one.
+  function openModal(id) {
+    const d = document.getElementById(id);
+    d.classList.add("show");
+    d.setAttribute("aria-hidden", "false");
+  }
+  function closeModal(id) {
+    const d = document.getElementById(id);
+    d.classList.remove("show");
+    d.setAttribute("aria-hidden", "true");
+  }
+
+  const LABEL_FLIP_KEY = "releaseLinerLabelFlip180"; // same key the main stock page's dialog uses (srcdoc shares this origin's storage)
+  let plIds = [];
+  let plPreviewSeq = 0; // guards a slow response from landing on a newer open
+
+  function setPlPreviewMsg(text) {
+    document.getElementById("plPreviewMsg").textContent = text || "";
+  }
+
+  function plFrameWindow() {
+    try {
+      const frame = document.getElementById("plFrame");
+      return frame.contentWindow && frame.contentWindow.labelApi ? frame.contentWindow : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function loadPlPreview() {
+    const ids = plIds;
+    const frame = document.getElementById("plFrame");
+    const seq = ++plPreviewSeq;
+
+    if (!ids.length) {
+      frame.removeAttribute("srcdoc");
+      setPlPreviewMsg("Nothing selected to print.");
+      return false;
+    }
+
+    setPlPreviewMsg(`Building ${ids.length} label${ids.length === 1 ? "" : "s"}…`);
+    let res;
+    try {
+      res = await fetch(`/app/releaselinerstock/labels?ids=${encodeURIComponent(ids.join(","))}`, { credentials: "same-origin" });
+    } catch (e) {
+      if (seq === plPreviewSeq) setPlPreviewMsg("Couldn't reach the server to build these labels.");
+      return false;
+    }
+    if (seq !== plPreviewSeq) return false;
+
+    if (res.redirected) {
+      setPlPreviewMsg("Your session has ended. Reload this page and sign in again to print.");
+      return false;
+    }
+    if (!res.ok) {
+      // The route answers failures as a small HTML document (it normally
+      // renders into this frame), so strip the markup to get the sentence.
+      const detail = (await res.text()).replace(/<[^>]*>/g, " ").trim();
+      setPlPreviewMsg(`Couldn't build the labels (${res.status}). ${detail}`);
+      return false;
+    }
+
+    const html = await res.text();
+    if (seq !== plPreviewSeq) return false;
+
+    await new Promise((resolve) => {
+      frame.onload = resolve;
+      frame.srcdoc = html;
+    });
+    if (seq !== plPreviewSeq) return false;
+
+    if (!plFrameWindow()) {
+      setPlPreviewMsg("The labels loaded but couldn't be read.");
+      return false;
+    }
+    setPlPreviewMsg("");
+    syncPlRotateBtn();
+    return true;
+  }
+
+  function syncPlRotateBtn() {
+    const win = plFrameWindow();
+    let flipped = false;
+    if (win) {
+      flipped = Boolean(win.labelApi.isFlipped());
+    } else {
+      try { flipped = localStorage.getItem(LABEL_FLIP_KEY) === "1"; } catch (e) { flipped = false; }
+    }
+    document.getElementById("plRotateBtn").textContent = flipped ? "Rotated 180°" : "Rotate 180°";
+  }
+
+  // Which way the stock feeds is a property of the printer, not of the
+  // reel, so this is the one setting that is remembered on this PC -- and
+  // it is the same setting the main stock page's dialogs set.
+  function togglePrintLabelsRotation() {
+    const win = plFrameWindow();
+    if (win) {
+      win.labelApi.toggleFlip();
+    } else {
+      try {
+        localStorage.setItem(LABEL_FLIP_KEY, localStorage.getItem(LABEL_FLIP_KEY) === "1" ? "0" : "1");
+      } catch (e) { /* private mode -- the label still prints, just unremembered */ }
+    }
+    syncPlRotateBtn();
+  }
+
+  async function openPrintLabelsDialog(ids) {
+    plIds = ids.slice();
+    document.getElementById("printLabelsCount").textContent = `${plIds.length} reel${plIds.length === 1 ? "" : "s"} selected`;
+    document.getElementById("plFrame").removeAttribute("srcdoc");
+    setPlPreviewMsg("");
+    openModal("printLabelsDialog");
+    setLoading("plPrintBtn", true);
+    await loadPlPreview();
+    setLoading("plPrintBtn", false);
+  }
+
+  function closePrintLabelsDialog() {
+    plPreviewSeq++;
+    const frame = document.getElementById("plFrame");
+    frame.onload = null;
+    // Dropped so the next open can't flash the previous selection's labels.
+    frame.removeAttribute("srcdoc");
+    plIds = [];
+    closeModal("printLabelsDialog");
+  }
+
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    btn.style.opacity = loading ? "0.7" : "";
+  }
+
+  async function printSelectedLabels() {
+    if (!plIds.length) return;
+    const win = plFrameWindow();
+    if (!win) return setPlPreviewMsg("The labels loaded but couldn't be read. Close this and try again.");
+    win.labelApi.print();
+  }
+
+  document.getElementById("printLabelsDialog").addEventListener("click", function (e) {
+    if (e.target === this) closePrintLabelsDialog();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (document.getElementById("printLabelsDialog").classList.contains("show")) closePrintLabelsDialog();
+  });
+</script>

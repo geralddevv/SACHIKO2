@@ -7065,7 +7065,14 @@ router.get("/audit/view", async (req, res) => {
     return res.redirect("/app/welcome");
   }
 
-  const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(5000).lean();
+  // No real limit -- AuditLog rows are small (a handful of short strings) and
+  // the table loads them all client-side (Tabulator virtualDom) same as every
+  // other list page in this app. AUDIT_LOG_SAFETY_CAP exists only so a single
+  // request can never try to pull an unbounded collection into memory; it is
+  // not meant to bind in normal use, so the view is told when it does, rather
+  // than silently dropping older history with no indication.
+  const AUDIT_LOG_SAFETY_CAP = 50000;
+  const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(AUDIT_LOG_SAFETY_CAP).lean();
 
   res.render("system/auditLog.ejs", {
     title: "Audit Log",
@@ -7076,6 +7083,7 @@ router.get("/audit/view", async (req, res) => {
     // filter searches it and the PDF/Excel downloads carry it -- both of which
     // work off the column's own value, not off its formatter.
     jsonData: logs.map((log) => ({ ...log, ...describeGeo(log.geo) })),
+    truncated: logs.length >= AUDIT_LOG_SAFETY_CAP,
     notification: req.flash("notification"),
   });
 });

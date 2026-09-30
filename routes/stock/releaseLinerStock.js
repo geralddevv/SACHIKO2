@@ -411,6 +411,65 @@ router.get("/", async (req, res) => {
   });
 });
 
+// Inward Timeline -- every Release Liner reel ever inwarded, across every
+// spec, newest first. Deliberately NOT loadMastersWithStock's `rolls` (which
+// only keeps quantity > 0, i.e. what's still on the shelf, and is grouped
+// under one master at a time) -- this is the fuller, whole-pool picture of
+// when stock arrived, a reel already used up included, so it reads as a real
+// history rather than "what's currently in stock, dated".
+router.get("/timeline", async (req, res) => {
+  const [stock, masters] = await Promise.all([
+    ReleaseLinerStock.find().lean(),
+    ReleaseMaster.find().select("skuId type color size gsm vendorId make vendorSkuCode").lean(),
+  ]);
+
+  // Same grouping key loadMastersWithStock uses to line a reel up with its
+  // master -- lets each row show the SKU ID it was inwarded against without
+  // storing a master reference on the stock schema itself.
+  const skuIdByKey = new Map(masters.map((m) => [releaseSpecKey(m), m.skuId]));
+
+  const rows = stock
+    .map((s) => ({
+      _id: String(s._id),
+      rollId: s.rollId,
+      vendorRollId: s.vendorRollId || "",
+      skuId: skuIdByKey.get(releaseSpecKey(s)) || "",
+      type: s.type || "",
+      vendorName: s.vendorName || "",
+      vendorSkuCode: s.vendorSkuCode || "",
+      make: s.make || "",
+      sensing: s.sensing || "",
+      color: s.color || "",
+      size: s.size || "",
+      gsm: s.gsm ?? null,
+      reelMtrs: s.reelMtrs,
+      rate: s.rate,
+      location: s.location,
+      invoiceNo: s.invoiceNo || "",
+      remarks: s.remarks || "",
+      // A reel drawn all the way to 0 is still part of the inward history --
+      // shown as USED rather than dropped, so the page stays a true record of
+      // everything that came in, not just what's left.
+      inStock: Boolean(s.quantity),
+      // inwardDate is the date the reel actually arrived and is what someone
+      // reading a timeline means by "when" -- createdAt (when the record was
+      // saved) only stands in for reels entered before that field existed.
+      inwardDate: s.inwardDate || s.createdAt,
+    }))
+    .sort((a, b) => new Date(b.inwardDate) - new Date(a.inwardDate));
+
+  res.render("stock/releaseLinerTimeline.ejs", {
+    JS: false,
+    CSS: "tableDisp.css",
+    title: "Release Liner — Inward Timeline",
+    rows,
+    // Sizes the Print dialog's preview frame to the real sticker -- same
+    // values the main stock page's own Print Reel Labels dialog uses.
+    labelSizeMm: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM },
+    notification: req.flash("notification"),
+  });
+});
+
 router.post("/purchase-order", requireAuth, createLimiter, async (req, res) => {
   try {
     const { masterId, quantity, poNumber, estimatedDate, userLocation, remarks } = req.body;
