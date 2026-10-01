@@ -25,7 +25,7 @@
       pointer-events: none;
     }
 
-    /* ---- Print Reel Labels dialog chrome -- boilerplate.ejs only defines
+    /* ---- Print Drum Labels dialog chrome -- boilerplate.ejs only defines
        .logout-modal/.logout-dialog/.logout-btn globally, the dialog's own
        header/body/preview are each page's own copy, same as the main stock
        page's own <style> block. ---- */
@@ -57,8 +57,8 @@
     .dialog-body { padding: 18px; }
     /* The preview IS the print target -- what's on screen here is what comes
        off the printer, one label per page, scrolled -- same as the main
-       stock page's own Print Reel Labels dialog, just without its reel
-       picker list: the reels were already picked with checkboxes on this
+       stock page's own Print Drum Labels dialog, just without its drum
+       picker list: the drums were already picked with checkboxes on this
        page before Print was clicked. */
     .pl-preview-frame {
       height: min(60vh, 600px);
@@ -145,7 +145,7 @@
     }
 
     /* ---- The timeline itself: one scrolling pane, a day heading every time
-         the date changes, then a dotted vertical line down every reel
+         the date changes, then a dotted vertical line down every drum
          inwarded that day. ---- */
     .tl-scroll {
       flex: 1 1 auto;
@@ -159,7 +159,7 @@
     /* The sticky unit is the whole row (Select All + the pill), not the pill
        alone, so the button stays reachable while its day is scrolled past --
        the point of putting it "near" the heading is that it's still there
-       when you've scrolled a little way into that day's reels. */
+       when you've scrolled a little way into that day's drums. */
     .tl-day-header-row {
       display: flex;
       align-items: center;
@@ -183,7 +183,7 @@
       border-radius: 999px;
       display: inline-block;
     }
-    /* Ticks (or clears) every reel under this heading -- exactly like
+    /* Ticks (or clears) every drum under this heading -- exactly like
        .pl-selectall / .tl-filter-pill elsewhere on this pool's pages, just
        scoped to one day instead of the whole list. */
     .tl-day-select-btn {
@@ -208,8 +208,8 @@
 
     /* The whole row is a <label> (see itemHtml) wrapping its one checkbox --
        same "tick target is the row, not a 15px box" pattern as the main
-       stock page's .pl-row, so clicking the roll id, the spec line, the
-       meta, anywhere, ticks the reel, not just the checkbox itself. */
+       stock page's .pl-row, so clicking the drum id, the spec line, the
+       meta, anywhere, ticks the drum, not just the checkbox itself. */
     .tl-item {
       display: flex;
       align-items: flex-start;
@@ -218,8 +218,8 @@
       cursor: pointer;
     }
     .tl-item:last-child { padding-bottom: 4px; }
-    /* Same tick-on-the-row highlight as the main stock page's Print Reel
-       Labels list (.pl-row:has(input:checked)) -- a checked reel stays
+    /* Same tick-on-the-row highlight as the main stock page's Print Drum
+       Labels list (.pl-row:has(input:checked)) -- a checked drum stays
        findable once the list scrolls. The item's own left padding (above)
        is what keeps the checkbox off this inset bar instead of touching it. */
     .tl-item:has(.tl-reel-check:checked) {
@@ -246,7 +246,7 @@
     /* tableDisp.css's global `input` rule (height:20px, padding:6px,
        flex-grow:1, a forced background) is written for text fields and
        stretches/misshapes a bare checkbox -- flex: none here is what stops it
-       growing to fill the row, same fix the main stock page's own reel
+       growing to fill the row, same fix the main stock page's own drum
        checkboxes use (.pl-row input / .pl-selectall input). */
     .tl-item-check input {
       width: 18px;
@@ -322,18 +322,18 @@
   <div class="indi-head">
     <div style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; border-radius: 10px;">
       <i class="fa-solid fa-clock-rotate-left" style="font-size: 1.1rem; opacity: 0.9;"></i>
-      <h1 style="margin: 0; letter-spacing: 0.02em;">Release Liner — Inward Timeline</h1>
+      <h1 style="margin: 0; letter-spacing: 0.02em;">Adhesive — Inward Timeline</h1>
     </div>
     <div style="display: flex; gap: 10px; align-items: center; margin-left: auto;">
-      <a href="/app/releaselinerstock" class="header-action-btn">
-        <i class="fa-solid fa-arrow-left"></i> Release Liner Stock
+      <a href="/app/adhesivestock" class="header-action-btn">
+        <i class="fa-solid fa-arrow-left"></i> Adhesive Stock
       </a>
     </div>
   </div>
 
   <div class="tl-toolbar">
     <input type="search" id="tlSearch" class="form-control premium-input tl-search"
-      placeholder="Search Roll ID, Vendor Roll ID, SKU ID, Type, Vendor, Invoice No…" autocomplete="off" />
+      placeholder="Search Drum ID, Vendor Drum ID, SKU ID, Type, Vendor, Invoice No…" autocomplete="off" />
     <div class="tl-filter-pills">
       <button type="button" class="tl-filter-pill active" data-status="">All</button>
       <button type="button" class="tl-filter-pill" data-status="in">In Stock</button>
@@ -349,18 +349,18 @@
   <div class="tl-scroll" id="tlScroll"></div>
 </div>
 
-<!-- ============ PRINT REEL LABELS DIALOG ============ -->
-<!-- Same sticker, same print path as the main stock page's own Print Reel
+<!-- ============ PRINT DRUM LABELS DIALOG ============ -->
+<!-- Same sticker, same print path as the main stock page's own Print Drum
      Labels dialog (GET .../labels?ids=..., rendered into this frame as
      srcdoc so it prints, one label per page) -- just without that dialog's
-     reel picker list, since the reels are already picked with checkboxes on
+     drum picker list, since the drums are already picked with checkboxes on
      this page before Print Selected is clicked. -->
 <div class="logout-modal" id="printLabelsDialog" aria-hidden="true">
   <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="printLabelsTitle"
     style="width: min(560px, 95vw); padding: 0; border-radius: 14px; display: flex; flex-direction: column; max-height: 90vh;">
     <div class="dialog-header" style="border-radius: 14px 14px 0 0; flex: 0 0 auto;">
       <div style="min-width: 0;">
-        <h2 id="printLabelsTitle">Print Reel Labels</h2>
+        <h2 id="printLabelsTitle">Print Drum Labels</h2>
         <div id="printLabelsCount" style="font-size: 12px; color: rgba(255,255,255,0.85); font-weight: 600; margin-top: 3px;"></div>
       </div>
       <button class="dialog-close-btn" type="button" onclick="closePrintLabelsDialog()" aria-label="Close">&times;</button>
@@ -387,10 +387,9 @@
 
 <script id="timeline-data" type="application/json"><%- safeJson(rows) %></script>
 <script>
-  // Every reel Release Liner has ever taken in, across every spec, newest
-  // first (server already sorted by inwardDate) -- unlike a master row's own
-  // View button (which only knows about reels still in stock), this is the
-  // whole pool's history, a used-up reel included.
+  // Every drum Adhesive has ever taken in, across every spec, newest first
+  // (server already sorted by inwardDate) -- the whole pool's history, a
+  // used-up drum included.
   const timelineData = JSON.parse(document.getElementById("timeline-data").textContent);
 
   function escapeHtml(value) {
@@ -405,7 +404,7 @@
     return value.toLocaleString("en-IN", { maximumFractionDigits: 2 });
   };
 
-  // Grouping key: the calendar day alone (not a timestamp), so several reels
+  // Grouping key: the calendar day alone (not a timestamp), so several drums
   // inwarded the same day land under one heading instead of one each.
   function dayKey(value) {
     if (!value) return "UNDATED";
@@ -420,8 +419,7 @@
 
   function itemHtml(r) {
     const specBits = [
-      r.type, r.make, r.vendorName, r.vendorSkuCode, r.sensing, r.color,
-      r.size ? `${r.size} mm` : null,
+      r.type, r.make, r.vendorName, r.vendorSkuCode,
       r.gsm != null ? `${r.gsm} GSM` : null,
     ].filter(Boolean).join(" · ");
     const invoicePart = r.invoiceNo
@@ -433,19 +431,27 @@
       r.location ? escapeHtml(r.location) : "",
       invoicePart,
     ].filter(Boolean).join(" &middot; ");
+    // Joint/Wrinkle are optional per-drum condition notes (see the main
+    // stock page's own reel row summary) -- shown as their own line only
+    // when at least one was recorded.
+    const condition = [
+      r.joint ? `Joint: ${escapeHtml(r.joint)}` : "",
+      r.wrinkle ? `Wrinkle: ${escapeHtml(r.wrinkle)}` : "",
+    ].filter(Boolean).join(" &middot; ");
 
     return `
-      <label class="tl-item" title="Select this reel" data-id="${escapeHtml(r._id)}" data-search="${escapeHtml([r.rollId, r.vendorRollId, r.skuId, r.type, r.vendorName, r.vendorSkuCode, r.invoiceNo, r.location].join(" ").toLowerCase())}" data-status="${r.inStock ? "in" : "used"}">
+      <label class="tl-item" title="Select this drum" data-id="${escapeHtml(r._id)}" data-search="${escapeHtml([r.rollId, r.vendorRollId, r.skuId, r.type, r.vendorName, r.vendorSkuCode, r.invoiceNo, r.location].join(" ").toLowerCase())}" data-status="${r.inStock ? "in" : "used"}">
         <span class="tl-item-check">
           <input type="checkbox" class="tl-reel-check" value="${escapeHtml(r._id)}" />
         </span>
         <div class="tl-marker"><span class="tl-dot ${r.inStock ? "" : "used"}"></span><span class="tl-line"></span></div>
         <div class="tl-content">
           <span class="tl-roll">${escapeHtml(r.rollId || "—")}</span>
-          ${r.vendorRollId ? `<span class="tl-vendor-roll">(Vendor Roll ID: ${escapeHtml(r.vendorRollId)})</span>` : ""}
+          ${r.vendorRollId ? `<span class="tl-vendor-roll">(Vendor Drum ID: ${escapeHtml(r.vendorRollId)})</span>` : ""}
           <span class="tl-status-badge ${r.inStock ? "in-stock" : "used"}">${r.inStock ? "In Stock" : "Used"}</span>
           <span class="tl-spec">${escapeHtml(r.skuId || "—")}${specBits ? ` · ${escapeHtml(specBits)}` : ""}</span>
           <div class="tl-meta">${meta}</div>
+          ${condition ? `<div class="tl-meta">${condition}</div>` : ""}
           ${r.remarks ? `<div class="tl-remarks">${escapeHtml(r.remarks)}</div>` : ""}
         </div>
       </label>`;
@@ -454,7 +460,7 @@
   function render() {
     const scroll = document.getElementById("tlScroll");
     if (!timelineData.length) {
-      scroll.innerHTML = `<div class="tl-empty">No Release Liner reels have been inwarded yet.</div>`;
+      scroll.innerHTML = `<div class="tl-empty">No Adhesive drums have been inwarded yet.</div>`;
       document.getElementById("tlCount").textContent = "";
       return;
     }
@@ -479,12 +485,12 @@
           <button type="button" class="tl-day-select-btn">
             <i class="fa-solid fa-square"></i> <span class="tl-day-select-label">Select All</span>
           </button>
-          <div class="tl-day-header">${dayLabel(g.key)} &middot; ${g.rows.length} reel${g.rows.length === 1 ? "" : "s"}</div>
+          <div class="tl-day-header">${dayLabel(g.key)} &middot; ${g.rows.length} drum${g.rows.length === 1 ? "" : "s"}</div>
         </div>
         <div class="tl-day-list">${g.rows.map(itemHtml).join("")}</div>
       </div>`).join("");
 
-    document.getElementById("tlCount").textContent = `${timelineData.length} reel${timelineData.length === 1 ? "" : "s"}`;
+    document.getElementById("tlCount").textContent = `${timelineData.length} drum${timelineData.length === 1 ? "" : "s"}`;
     refreshAllDayButtons();
   }
 
@@ -511,11 +517,11 @@
       visibleTotal += visibleInGroup;
     });
     document.getElementById("tlCount").textContent = term || activeStatus
-      ? `${visibleTotal} of ${timelineData.length} reel${timelineData.length === 1 ? "" : "s"}`
-      : `${timelineData.length} reel${timelineData.length === 1 ? "" : "s"}`;
+      ? `${visibleTotal} of ${timelineData.length} drum${timelineData.length === 1 ? "" : "s"}`
+      : `${timelineData.length} drum${timelineData.length === 1 ? "" : "s"}`;
 
-    // A search/filter change can take reels out of (or back into) view, which
-    // changes what "every reel under this heading" means for each day's
+    // A search/filter change can take drums out of (or back into) view, which
+    // changes what "every drum under this heading" means for each day's
     // Select All button -- so its checked/disabled state has to be
     // reconsidered every time visibility changes, not just at page load.
     refreshAllDayButtons();
@@ -533,14 +539,14 @@
 
   // ---- Selection + Print -------------------------------------------------
   // Reuses the main stock page's own label sheet route (GET .../labels?ids=)
-  // -- the same one behind its Print Reel Labels dialog -- and its own
-  // preview-in-an-iframe dialog pattern, just without that dialog's reel
-  // picker list: the reels here are already picked with checkboxes on the
+  // -- the same one behind its Print Drum Labels dialog -- and its own
+  // preview-in-an-iframe dialog pattern, just without that dialog's drum
+  // picker list: the drums here are already picked with checkboxes on the
   // page before Print Selected is clicked.
-  const MAX_LABELS_PER_SHEET = 200; // mirrors routes/stock/releaseLinerStock.js
+  const MAX_LABELS_PER_SHEET = 200; // mirrors routes/stock/adhesiveStock.js
   const selectedIds = new Set();
 
-  // Only the checkboxes for reels the current search/status filter is
+  // Only the checkboxes for drums the current search/status filter is
   // actually showing -- same "select all means what's in front of you, not
   // what the search is hiding" rule the main page's own Select All uses.
   function visibleCheckboxesIn(groupEl) {
@@ -569,14 +575,14 @@
     document.getElementById("tlPrintCount").textContent = n;
     document.getElementById("tlPrintBtn").disabled = n === 0 || n > MAX_LABELS_PER_SHEET;
     document.getElementById("tlPrintWarning").textContent = n > MAX_LABELS_PER_SHEET
-      ? `Too many reels selected -- ${MAX_LABELS_PER_SHEET} labels is the most one print can hold.`
+      ? `Too many drums selected -- ${MAX_LABELS_PER_SHEET} labels is the most one print can hold.`
       : "";
   }
 
   const tlScroll = document.getElementById("tlScroll");
 
-  // One reel ticked or cleared -- update the running selection, then this
-  // reel's own day button (its "every reel" answer may have just changed).
+  // One drum ticked or cleared -- update the running selection, then this
+  // drum's own day button (its "every drum" answer may have just changed).
   tlScroll.addEventListener("change", (e) => {
     if (!e.target.matches(".tl-reel-check")) return;
     if (e.target.checked) selectedIds.add(e.target.value); else selectedIds.delete(e.target.value);
@@ -607,7 +613,7 @@
     openPrintLabelsDialog(ids);
   });
 
-  // ---- Print Reel Labels dialog -- preview + print for the ids already
+  // ---- Print Drum Labels dialog -- preview + print for the ids already
   // ticked on this page (see openPrintLabelsDialog below). Same srcdoc/
   // labelApi mechanics as the main stock page's own dialog: fetched and
   // written in as srcdoc rather than navigated to, so a session that has
@@ -625,7 +631,7 @@
     d.setAttribute("aria-hidden", "true");
   }
 
-  const LABEL_FLIP_KEY = "releaseLinerLabelFlip180"; // same key the main stock page's dialog uses (srcdoc shares this origin's storage)
+  const LABEL_FLIP_KEY = "adhesiveLabelFlip180"; // same key the main stock page's dialog uses (srcdoc shares this origin's storage)
   let plIds = [];
   let plPreviewSeq = 0; // guards a slow response from landing on a newer open
 
@@ -656,7 +662,7 @@
     setPlPreviewMsg(`Building ${ids.length} label${ids.length === 1 ? "" : "s"}…`);
     let res;
     try {
-      res = await fetch(`/app/releaselinerstock/labels?ids=${encodeURIComponent(ids.join(","))}`, { credentials: "same-origin" });
+      res = await fetch(`/app/adhesivestock/labels?ids=${encodeURIComponent(ids.join(","))}`, { credentials: "same-origin" });
     } catch (e) {
       if (seq === plPreviewSeq) setPlPreviewMsg("Couldn't reach the server to build these labels.");
       return false;
@@ -705,7 +711,7 @@
   }
 
   // Which way the stock feeds is a property of the printer, not of the
-  // reel, so this is the one setting that is remembered on this PC -- and
+  // drum, so this is the one setting that is remembered on this PC -- and
   // it is the same setting the main stock page's dialogs set.
   function togglePrintLabelsRotation() {
     const win = plFrameWindow();
@@ -721,7 +727,7 @@
 
   async function openPrintLabelsDialog(ids) {
     plIds = ids.slice();
-    document.getElementById("printLabelsCount").textContent = `${plIds.length} reel${plIds.length === 1 ? "" : "s"} selected`;
+    document.getElementById("printLabelsCount").textContent = `${plIds.length} drum${plIds.length === 1 ? "" : "s"} selected`;
     document.getElementById("plFrame").removeAttribute("srcdoc");
     setPlPreviewMsg("");
     openModal("printLabelsDialog");

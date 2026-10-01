@@ -322,11 +322,11 @@
   <div class="indi-head">
     <div style="display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.3); padding: 8px 16px; border-radius: 10px;">
       <i class="fa-solid fa-clock-rotate-left" style="font-size: 1.1rem; opacity: 0.9;"></i>
-      <h1 style="margin: 0; letter-spacing: 0.02em;">Release Liner — Inward Timeline</h1>
+      <h1 style="margin: 0; letter-spacing: 0.02em;">Facestock — Inward Timeline</h1>
     </div>
     <div style="display: flex; gap: 10px; align-items: center; margin-left: auto;">
-      <a href="/app/releaselinerstock" class="header-action-btn">
-        <i class="fa-solid fa-arrow-left"></i> Release Liner Stock
+      <a href="/app/facestockstock" class="header-action-btn">
+        <i class="fa-solid fa-arrow-left"></i> Facestock Stock
       </a>
     </div>
   </div>
@@ -387,10 +387,9 @@
 
 <script id="timeline-data" type="application/json"><%- safeJson(rows) %></script>
 <script>
-  // Every reel Release Liner has ever taken in, across every spec, newest
-  // first (server already sorted by inwardDate) -- unlike a master row's own
-  // View button (which only knows about reels still in stock), this is the
-  // whole pool's history, a used-up reel included.
+  // Every reel Facestock has ever taken in, across every spec, newest first
+  // (server already sorted by inwardDate) -- the whole pool's history, a
+  // used-up reel included.
   const timelineData = JSON.parse(document.getElementById("timeline-data").textContent);
 
   function escapeHtml(value) {
@@ -420,9 +419,9 @@
 
   function itemHtml(r) {
     const specBits = [
-      r.type, r.make, r.vendorName, r.vendorSkuCode, r.sensing, r.color,
+      r.family, r.type, r.make, r.vendorName, r.vendorSkuCode,
       r.size ? `${r.size} mm` : null,
-      r.gsm != null ? `${r.gsm} GSM` : null,
+      r.gsm != null ? `${r.gsm} GSM` : (r.micron != null ? `${r.micron} MIC` : null),
     ].filter(Boolean).join(" · ");
     const invoicePart = r.invoiceNo
       ? `Invoice ${escapeHtml(r.invoiceNo)}`
@@ -435,7 +434,7 @@
     ].filter(Boolean).join(" &middot; ");
 
     return `
-      <label class="tl-item" title="Select this reel" data-id="${escapeHtml(r._id)}" data-search="${escapeHtml([r.rollId, r.vendorRollId, r.skuId, r.type, r.vendorName, r.vendorSkuCode, r.invoiceNo, r.location].join(" ").toLowerCase())}" data-status="${r.inStock ? "in" : "used"}">
+      <label class="tl-item" title="Select this reel" data-id="${escapeHtml(r._id)}" data-search="${escapeHtml([r.rollId, r.vendorRollId, r.skuId, r.type, r.family, r.vendorName, r.vendorSkuCode, r.invoiceNo, r.location].join(" ").toLowerCase())}" data-status="${r.inStock ? "in" : "used"}">
         <span class="tl-item-check">
           <input type="checkbox" class="tl-reel-check" value="${escapeHtml(r._id)}" />
         </span>
@@ -454,7 +453,7 @@
   function render() {
     const scroll = document.getElementById("tlScroll");
     if (!timelineData.length) {
-      scroll.innerHTML = `<div class="tl-empty">No Release Liner reels have been inwarded yet.</div>`;
+      scroll.innerHTML = `<div class="tl-empty">No Facestock reels have been inwarded yet.</div>`;
       document.getElementById("tlCount").textContent = "";
       return;
     }
@@ -537,7 +536,7 @@
   // preview-in-an-iframe dialog pattern, just without that dialog's reel
   // picker list: the reels here are already picked with checkboxes on the
   // page before Print Selected is clicked.
-  const MAX_LABELS_PER_SHEET = 200; // mirrors routes/stock/releaseLinerStock.js
+  const MAX_LABELS_PER_SHEET = 200; // mirrors routes/stock/facestockStock.js
   const selectedIds = new Set();
 
   // Only the checkboxes for reels the current search/status filter is
@@ -625,7 +624,7 @@
     d.setAttribute("aria-hidden", "true");
   }
 
-  const LABEL_FLIP_KEY = "releaseLinerLabelFlip180"; // same key the main stock page's dialog uses (srcdoc shares this origin's storage)
+  const LABEL_FLIP_KEY = "facestockLabelFlip180"; // same key the main stock page's dialog uses (srcdoc shares this origin's storage)
   let plIds = [];
   let plPreviewSeq = 0; // guards a slow response from landing on a newer open
 
@@ -656,7 +655,7 @@
     setPlPreviewMsg(`Building ${ids.length} label${ids.length === 1 ? "" : "s"}…`);
     let res;
     try {
-      res = await fetch(`/app/releaselinerstock/labels?ids=${encodeURIComponent(ids.join(","))}`, { credentials: "same-origin" });
+      res = await fetch(`/app/facestockstock/labels?ids=${encodeURIComponent(ids.join(","))}`, { credentials: "same-origin" });
     } catch (e) {
       if (seq === plPreviewSeq) setPlPreviewMsg("Couldn't reach the server to build these labels.");
       return false;
