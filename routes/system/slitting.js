@@ -643,6 +643,9 @@ async function buildPlannedDeckleGroups() {
     deckleSize: { $ne: null },
     // A batch stands for its member orders -- listing both would double it.
     deckleBatchId: null,
+    // A Deckle Only batch was set with no slitting plan, so there is nothing
+    // to wait for here; its webs join the queue as free Deckles once made.
+    deckleOnly: { $ne: true },
   })
     .populate({ path: "itemId", select: "productCode skuCode" })
     .sort({ createdAt: 1 })

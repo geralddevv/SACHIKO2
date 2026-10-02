@@ -5764,6 +5764,111 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
   }
 });
 
+// Deckle Only -- a deckle made for stock: the web alone, for one Product Code,
+// with NO orders and no slitting layout. Opened by its own button on Deckle
+// Sorting (beside Advance Order). Deckle Size, Deckle R.M., Deckle Count and
+// the edge trim are the whole plan.
+//
+// The batch it makes has no members (batchOrderIds: []) and no finished rolls
+// ordered (quantity: 0). It runs Deckle Queue -> Assign Production -> machine
+// like any batch, budgeted off size x R.M. x count, and its webs land in
+// Semi-Finished Stock. The Slitting Queue lists no plan for it
+// (buildPlannedDeckleGroups skips deckleOnly); the webs show there as free
+// Deckles, to be slit when an order needs them.
+router.get("/labels/production/deckle-set/deckle-only", async (req, res) => {
+  const base = "/app/labels/production/deckle-set/deckle-only";
+  // Same list the Advance Order picker offers: base codes, no "-A" variants.
+  const labelStocks = await SachikoLabelStock.find(
+    { productCode: { $not: /-[A-Z]+$/ } },
+    { productCode: 1, skuCode: 1 },
+  ).sort({ productCode: 1 }).lean();
+
+  let item = null;
+  const itemId = String(req.query.itemId || "");
+  if (itemId) {
+    item = mongoose.isValidObjectId(itemId)
+      ? await SachikoLabelStock.findById(itemId).select("productCode skuCode rollType").lean()
+      : null;
+    if (!item) {
+      req.flash("notification", "That Product Code no longer exists — pick another.");
+      return res.redirect(base);
+    }
+  }
+
+  res.render("inventory/orders/deckleOnlyForm.ejs", {
+    title: "Deckle Only",
+    CSS: false,
+    JS: false,
+    item: item
+      ? { _id: String(item._id), productCode: item.productCode || item.skuCode || "", rollType: item.rollType || "" }
+      : null,
+    labelStocks: labelStocks.map((l) => ({ _id: String(l._id), code: l.productCode || l.skuCode || "—" })),
+    notification: req.flash("notification"),
+  });
+});
+
+router.post("/labels/production/deckle-set/deckle-only", requireAuth, createLimiter, async (req, res) => {
+  const itemId = mongoose.isValidObjectId(req.body.itemId) ? String(req.body.itemId) : "";
+  const backTo = `/app/labels/production/deckle-set/deckle-only${itemId ? `?itemId=${itemId}` : ""}`;
+  const fail = (msg) => {
+    req.flash("notification", msg);
+    return res.redirect(backTo);
+  };
+
+  const item = itemId
+    ? await SachikoLabelStock.findById(itemId).select("productCode skuCode").lean()
+    : null;
+  if (!item) return fail("Pick the Product Code for the deckle.");
+
+  const deckleSize = Number(req.body.deckleSize);
+  if (!Number.isFinite(deckleSize) || deckleSize <= 0 || deckleSize > 20000) {
+    return fail("Enter a valid Deckle Size.");
+  }
+  const trim = Number(req.body.deckleTrim);
+  if (!Number.isFinite(trim) || trim < 0 || trim >= deckleSize) {
+    return fail("Enter an edge trim of 0 mm or more that leaves something of the deckle to cut.");
+  }
+  const drm = Number(req.body.deckleRunningMeters);
+  if (!Number.isFinite(drm) || drm <= 0 || drm > 1000000) {
+    return fail("Enter the Deckle R.M. — the length of one deckle web.");
+  }
+  const count = Number(req.body.deckleCount);
+  if (!Number.isInteger(count) || count < 1 || count > 10000) {
+    return fail("Enter the Deckle Count — how many webs to laminate (a whole number from 1 to 10,000).");
+  }
+
+  const totalRM = deckleTotalRunningMetres({ deckleRunningMeters: drm, noOfRolls: count });
+  const batch = await PendingProduction.create({
+    onModel: "SachikoLabelStock",
+    isDeckleBatch: true,
+    deckleOnly: true,
+    itemId: item._id,
+    // A batch is characterised by the web it lays down -- see createDeckleBatches.
+    paperSize: String(deckleSize),
+    quantity: 0,
+    // On a batch, noOfRolls is the Deckle Qty -- how many webs to laminate.
+    noOfRolls: count,
+    runningMeters: totalRM,
+    runningMetersText: deckleRunningMetersText({
+      deckleRunningMeters: drm, noOfRolls: count, runningMeters: totalRM,
+    }) || undefined,
+    deckleRunningMeters: drm,
+    deckleSize,
+    deckleTrim: trim,
+    batchOrderIds: [],
+  });
+
+  const code = item.productCode || item.skuCode || "";
+  res.locals.auditDescription = `Created deckle-only batch ${batch._id} for ${code}: `
+    + `${deckleSize} mm × ${count} web(s) of ${drm} m, no orders, no slitting layout`;
+  req.flash(
+    "notification",
+    `Deckle Only batch created — ${code} at ${deckleSize} mm × ${count} web(s) of ${drm} m, for stock (no orders). `
+      + "Now in the Deckle Queue.",
+  );
+  res.redirect("/app/labels/production/deckle-queue");
+});
+
 // The body of POST /labels/production/deckle-set once the ticked orders (and
 // any typed advance lines, already saved as rows) are known. `undoAdvance`
 // removes those advance rows; every refusal below calls it via fail().
@@ -6234,9 +6339,11 @@ router.post("/labels/production/deckle-batch/:id/dissolve", requireAuth, updateL
     remerged += spare.length;
   }
 
-  res.locals.auditDescription = `Dissolved deckle batch ${id}`
+  res.locals.auditDescription = `Dissolved ${batch.deckleOnly ? "deckle-only " : ""}deckle batch ${id}`
     + (remerged ? ` (folded ${remerged} remainder row(s) back into their orders)` : "");
-  req.flash("notification", "Deckle batch dissolved — its orders are back on Deckle Set.");
+  req.flash("notification", batch.deckleOnly
+    ? "Deckle Only batch removed — it carried no orders."
+    : "Deckle batch dissolved — its orders are back on Deckle Set.");
   res.redirect(backTo);
 });
 
@@ -6266,6 +6373,7 @@ router.get("/labels/production/deckle-queue", async (req, res) => {
       productCode: item.productCode || item.skuCode || "—",
       advance: advance.get(String(r._id)) || null,
       isBatch: !!r.isDeckleBatch,
+      deckleOnly: !!r.deckleOnly,
       orderCount: r.isDeckleBatch ? (r.batchOrderIds || []).length : 1,
       // Dissolve lives here now -- Deckle Sorting only lists orders that still
       // need a deckle set, so a formed batch is un-made from this page.

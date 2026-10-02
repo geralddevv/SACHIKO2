@@ -101,6 +101,12 @@ const pendingProductionSchema = new mongoose.Schema(
     // snapshot; editing a member's qty/rolls afterward does not resize it.
     isDeckleBatch: { type: Boolean, default: false },
     batchOrderIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "PendingProduction" }],
+    // A batch set with "Deckle Only" on the Set Deckle page: a deckle for
+    // stock -- just the web (size, Deckle R.M., how many webs) for one Product
+    // Code, with NO member orders (batchOrderIds empty, quantity 0) and no
+    // A..L slitting layout. The Slitting Queue lists no "waiting" plan for it;
+    // its webs show there as free Deckles once laminated.
+    deckleOnly: { type: Boolean, default: false },
     // Set on a REMAINDER row -> the order row it was carved out of. A deckle
     // rarely covers a member order exactly: when POST /labels/production/
     // deckle-set finds the layouts produce fewer rolls of a width than that

@@ -653,6 +653,35 @@ Batches created before this change are still mixed. There is no migration:
 dissolve one from the Deckle Queue and re-create it from Deckle Set, which is
 the documented way a batch's size is changed anyway.
 
+### Deckle Only (a deckle for stock — no orders, no slitting layout)
+
+**Deckle Only** is its own button on Deckle Sorting, beside Advance Order. It
+opens `GET /labels/production/deckle-set/deckle-only` (`deckleOnlyForm.ejs`):
+pick the Product Code (a reload with `?itemId=`, as on Advance Order — the
+inputs stay locked until one is picked), then one row of Edge Trim, Deckle
+Size (typed, 25–2,000 mm), Deckle R.M. and Deckle Count, and one footer row of
+the figures with Create Deckle Batch. It is a page of its own, not a mode of
+Set Deckle: the Set Deckle pages (`deckleSetForm.ejs`) know nothing about it.
+
+`POST /labels/production/deckle-set/deckle-only` makes one batch
+(`deckleOnly: true`, `batchOrderIds: []`, `quantity: 0`, `noOfRolls` = the
+count) and reads nothing but the Product Code and those four figures — no
+`orderIds`, no `advanceJson` — so it cannot touch an order. A refusal returns
+to the page with the code still picked.
+
+Downstream it is a batch with no layout and no client, both of which every
+page already handles (advance-only batches have no client either): Assign
+Production budgets it from `deckleSize × deckleRunningMeters × noOfRolls`, the
+machine queue's target is `noOfRolls`. The Slitting Queue's
+`buildPlannedDeckleGroups()` skips it (no "waiting" plan row); its webs appear
+there as free Deckles once laminated, and a roll slit against it gets no rate
+(no order to price it from — Finished Stock takes one by hand). The Deckle
+Queue tags it **DECKLE ONLY** with "Stock" in the Batch column; Dissolve just
+removes it.
+
+Note `safeJson()` turns a bare falsy value into `"{}"` — wrap a boolean in an
+object before embedding it (`safeJson({ picked })`), or it reads as true.
+
 ### Machine queue: how far the allotted material gets
 
 `buildQueueRows()` (`routes/system/machine.js`) reports, per order, **how many

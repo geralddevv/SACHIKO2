@@ -9,6 +9,10 @@
     font-size: 11px; transition: opacity 0.2s; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;
   }
   .btn-action:hover { opacity: 0.85; }
+  .dq-only-tag {
+    display: inline-block; margin-left: 4px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em;
+    color: #fff; background: #7c3aed; border-radius: 999px; padding: 2px 7px; white-space: nowrap; vertical-align: middle;
+  }
 </style>
 
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
@@ -71,8 +75,11 @@
 
   // Un-make a batch: its member orders drop back to loose on Deckle Sorting,
   // ready to be set again.
-  window.dissolveBatch = function (batchId) {
-    if (!confirm("Dissolve this deckle batch? Its orders go back to Deckle Sorting.")) return;
+  window.dissolveBatch = function (batchId, deckleOnly) {
+    const ask = deckleOnly === "1"
+      ? "Remove this Deckle Only batch? It carries no orders, so nothing goes back to Deckle Sorting."
+      : "Dissolve this deckle batch? Its orders go back to Deckle Sorting.";
+    if (!confirm(ask)) return;
     const form = document.getElementById("dq-dissolve-form");
     form.action = `/app/labels/production/deckle-batch/${batchId}/dissolve`;
     form.submit();
@@ -99,18 +106,22 @@
           // one only opens the assignment form, so it is named for that.
           const assign = `<button onclick="openAssignProduction('${row._id}')" class="btn-action" style="background:#10b981;" title="Assign Production — choose the machine, operator and raw material for this deckle"><i class="fa-solid fa-clipboard-list"></i> Assign</button>`;
           const dissolve = row.canDissolve
-            ? `<button onclick="dissolveBatch('${row._id}')" class="btn-action" style="background:#b91c1c;" title="Dissolve batch — its orders go back to Deckle Sorting"><i class="fa-solid fa-link-slash"></i> Dissolve</button>`
+            ? `<button data-id="${row._id}" data-only="${row.deckleOnly ? "1" : ""}" onclick="dissolveBatch(this.dataset.id, this.dataset.only)" class="btn-action" style="background:#b91c1c;" title="${row.deckleOnly ? "Remove this Deckle Only batch — it carries no orders" : "Dissolve batch — its orders go back to Deckle Sorting"}"><i class="fa-solid fa-link-slash"></i> Dissolve</button>`
             : "";
           return `<div style="display:inline-flex; gap:6px;">${assign}${dissolve}</div>`;
         },
       },
       { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Filter code...",
         formatter: (cell) => {
-          const adv = cell.getRow().getData().advance;
+          const data = cell.getRow().getData();
+          const adv = data.advance;
           const tag = adv
             ? ` <span class="adv-tag" title="${adv.rolls} roll(s) of this deckle are set in advance — no sales order yet">ADVANCE ${adv.rolls}</span>`
             : "";
-          return `<span style="font-weight:700; color:#044A78;">${cell.getValue() || "N/A"}</span>${tag}`;
+          const only = data.deckleOnly
+            ? ` <span class="dq-only-tag" title="Deckle Only — made for stock: no orders and no slitting layout">DECKLE ONLY</span>`
+            : "";
+          return `<span style="font-weight:700; color:#044A78;">${cell.getValue() || "N/A"}</span>${tag}${only}`;
         } },
       {
         title: "Deckle Size",
@@ -143,6 +154,7 @@
         headerTooltip: "Orders covered by this deckle batch",
         formatter: (cell) => {
           const row = cell.getRow().getData();
+          if (row.deckleOnly) return `<span style="color:#7c3aed; font-weight:700;" title="Deckle Only — made for stock, no orders">Stock</span>`;
           return row.isBatch
             ? `<span style="font-weight:700; color:#044A78;">${cell.getValue()}</span>`
             : `<span style="color:#9ca3af;">—</span>`;

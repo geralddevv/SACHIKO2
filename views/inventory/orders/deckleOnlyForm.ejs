@@ -1,0 +1,291 @@
+<% layout('/layout/boilerplate') %>
+
+<%
+  // GET /labels/production/deckle-set/deckle-only -- a deckle made for stock:
+  // pick the Product Code (a reload with ?itemId=, as on Advance Order), type
+  // the web, Create. No orders, no slitting layout. Styles follow the Set
+  // Deckle page (deckleSetForm.ejs) so the two read as one family.
+  const dash = (v) => (v === undefined || v === null || String(v).trim() === "" ? "—" : v);
+  const picked = !!(item && item._id);
+%>
+
+<style>
+  .span-full { padding: 0 !important; }
+  .span-full.form-heading { padding: 10px !important; }
+  .sl-panel { align-self: stretch; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
+
+  /* ---- The one row: Product Code, Roll Type, then the four inputs ---- */
+  /* overflow visible so the Product Code dropdown can hang below the row;
+     columns keep each cell's minimum (the picker is 200px) and share out the
+     rest, so nothing slides over its neighbour on a laptop. */
+  .sl-job-grid {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(min-content, 1fr); grid-template-rows: 1fr;
+  }
+  .sl-job-cell {
+    background: #f8fafc; padding: 11px 10px; display: flex; flex-direction: column; gap: 5px; min-width: 0;
+    border-right: 1px solid #e2e8f0;
+  }
+  .sl-job-cell:first-child { border-radius: 10px 0 0 10px; }
+  .sl-job-cell:last-child { border-right: none; border-radius: 0 10px 10px 0; }
+  .sl-job-cell.is-input { background: #fff; }
+  .sl-job-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; margin: 0;
+    text-transform: uppercase; color: #7c8ba1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sl-job-value { font-size: 20px; font-weight: 800; color: #1f2a44; line-height: 1.3; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+  .sl-job-cell.is-input input.form-control {
+    width: 100%; height: 40px !important; padding: 4px 8px; border-radius: 6px; border: 1px solid #044a78; background: #f4f9ff;
+    font-size: 20px !important; font-weight: 800 !important; color: #1f2a44; font-variant-numeric: tabular-nums;
+  }
+  .sl-job-cell.is-input input.form-control:focus { outline: none; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.14); }
+  .sl-job-cell.is-input input.form-control:disabled { border-color: #e2e8f0; background: #f1f5f9; cursor: not-allowed; }
+  .sl-job-cell.is-input input.form-control.is-bad {
+    border-color: #dc2626 !important; background: #fef2f2 !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
+  }
+  .dso-pc { min-width: 200px; }
+  .dso-pc .choices { margin-bottom: 0; }
+  .dso-pc .choices__inner { min-height: 34px; padding: 3px 8px 2px; font-size: 14px; font-weight: 800; color: #044a78; }
+  .dso-pc .choices__list--dropdown { z-index: 99999 !important; min-width: 240px; }
+
+  .dso-note { margin: 0; padding: 2px 4px; font-size: 12.5px; color: #475569; line-height: 1.5; }
+
+  /* ---- Blocking issues ---- */
+  .sl-warn-note {
+    align-self: stretch; border: 1px solid #fca5a5; background: #fef2f2; color: #991b1b;
+    border-radius: 8px; padding: 10px 14px; font-size: 12.5px; font-weight: 600; line-height: 1.5;
+  }
+  .sl-warn-note ul { margin: 4px 0 0; padding-left: 18px; }
+  .sl-warn-note .dso-issue-head { font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
+
+  /* ---- Footer: the figures and Create Deckle Batch in one row ---- */
+  .dso-footer {
+    margin-top: 10px !important; border: none !important; border-top: 1px solid #b6c0d1 !important;
+    border-radius: 0 !important; background: #fafbfd; padding: 20px 24px 16px !important;
+  }
+  .dso-footer-row {
+    display: flex; flex-direction: row; align-items: stretch; flex-wrap: wrap; align-self: stretch;
+    border: 1px solid #e6eaf2; border-radius: 10px; background: #fff; overflow: hidden;
+  }
+  .dso-stats { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; }
+  .dsa-stat {
+    flex: 1 1 auto; min-width: max-content; padding: 12px 14px;
+    border-right: 1px solid #eef1f6; display: flex; flex-direction: column; gap: 6px;
+  }
+  .dsa-stat .k { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #7c8ba1; white-space: nowrap; }
+  .dsa-stat .v { font-size: 19px; font-weight: 800; color: #1f2a44; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dso-save { flex: none; margin-left: auto; display: flex; align-items: center; padding: 10px 14px; border-left: 1px solid #eef1f6; }
+  .submit-btn {
+    border: none; border-radius: 9px; padding: 11px 24px; font-size: 15px; font-weight: 700;
+    color: #fff; background: linear-gradient(135deg, #044a78 0%, #03365a 100%);
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: opacity 0.18s ease;
+  }
+  .submit-btn:hover { opacity: 0.92; }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+
+<div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px">
+  <%# The bare `form` selector in common.css makes every form a 32-column grid;
+      laid out as a column instead, exactly as Set Deckle's form is. %>
+  <form id="dsoForm" method="post" action="/app/labels/production/deckle-set/deckle-only" autocomplete="off" novalidate
+        style="display:flex; flex-direction:column; gap:10px;">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="itemId" value="<%= picked ? item._id : '' %>" />
+
+    <div class="span-full form-heading">
+      <h1>Deckle Only</h1>
+    </div>
+
+    <div class="span-full" style="border:none !important;">
+      <div class="sl-panel">
+        <div class="sl-job-grid">
+          <div class="sl-job-cell dso-pc">
+            <span class="sl-job-label">Product Code</span>
+            <select id="dsoPick" title="Changing it reloads the page for that recipe">
+              <% if (!picked) { %><option value="">Select Product Code</option><% } %>
+              <% labelStocks.forEach((l) => { %>
+                <option value="<%= l._id %>"<%= picked && l._id === item._id ? ' selected' : '' %>><%= l.code %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="sl-job-cell">
+            <span class="sl-job-label">Roll Type</span>
+            <span class="sl-job-value"><%= picked ? dash(item.rollType) : "—" %></span>
+          </div>
+          <div class="sl-job-cell is-input">
+            <label class="sl-job-label" for="dsoTrim">Edge Trim (total mm)</label>
+            <input type="number" step="any" min="0" id="dsoTrim" name="deckleTrim" class="form-control" inputmode="decimal"
+                   value="5" title="Total edge trim across both edges, taken off the deckle width." />
+          </div>
+          <div class="sl-job-cell is-input">
+            <label class="sl-job-label" for="dsoSize">Deckle Size (mm)</label>
+            <input type="number" step="any" min="0" id="dsoSize" name="deckleSize" class="form-control" inputmode="decimal"
+                   placeholder="mm" title="Width of the deckle web, in mm." />
+          </div>
+          <div class="sl-job-cell is-input">
+            <label class="sl-job-label" for="dsoDrm">Deckle R.M.</label>
+            <input type="number" step="any" min="0" id="dsoDrm" name="deckleRunningMeters" class="form-control" inputmode="decimal"
+                   placeholder="Mtrs" title="Length of one deckle web, in metres." />
+          </div>
+          <div class="sl-job-cell is-input">
+            <label class="sl-job-label" for="dsoCount">Deckle Count</label>
+            <input type="number" step="1" min="1" id="dsoCount" name="deckleCount" class="form-control" inputmode="numeric"
+                   placeholder="Count" title="How many deckle webs (reels) to laminate." />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="dso-note" id="dsoNote">
+      <% if (picked) { %>
+        A deckle for stock — no orders and no slitting layout. The webs go to Semi-Finished Stock and show on the
+        Slitting Queue as free Deckles, to be slit when an order needs them.
+      <% } else { %>
+        Pick the Product Code first — then enter the deckle.
+      <% } %>
+    </p>
+
+    <div class="span-full" id="dsoIssues" hidden style="border:none !important;">
+      <div class="sl-warn-note" id="dsoIssuesBody"></div>
+    </div>
+
+    <div class="span-full dso-footer">
+      <div class="dso-footer-row">
+        <div class="dso-stats" id="dsoStats"></div>
+        <div class="dso-save">
+          <button type="submit" id="dsoSubmit" class="submit-btn" disabled>Create Deckle Batch</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<%# Wrapped in an object: safeJson() turns a bare `false` into "{}", which reads as true. %>
+<script id="dso-state" type="application/json"><%- safeJson({ picked }) %></script>
+
+<script>
+  (() => {
+    const PICKED = JSON.parse(document.getElementById("dso-state").textContent).picked === true;
+    const form = document.getElementById("dsoForm");
+    const pick = document.getElementById("dsoPick");
+    const trimEl = document.getElementById("dsoTrim");
+    const sizeEl = document.getElementById("dsoSize");
+    const drmEl = document.getElementById("dsoDrm");
+    const countEl = document.getElementById("dsoCount");
+    const submitEl = document.getElementById("dsoSubmit");
+    const issuesEl = document.getElementById("dsoIssues");
+    const issuesBody = document.getElementById("dsoIssuesBody");
+    const statsEl = document.getElementById("dsoStats");
+    const inputs = [trimEl, sizeEl, drmEl, countEl];
+
+    // Same sane bounds the Set Deckle page holds a typed deckle size to.
+    const MIN_DECKLE_MM = 25;
+    const MAX_DECKLE_MM = 2000;
+    const MAX_RM = 1000000;
+    const MAX_COUNT = 10000;
+
+    const round2 = (n) => Math.round(n * 100) / 100;
+    const fmt = (n) => (Number.isFinite(n) ? round2(n).toLocaleString("en-IN") : "—");
+    const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const raw = (el) => String(el.value).trim();
+    const stat = (k, v, title) =>
+      `<div class="dsa-stat"${title ? ` title="${esc(title)}"` : ""}><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`;
+
+    let ready = false;
+
+    function recalc() {
+      const errors = [];
+      let notReady = !PICKED;
+
+      const sizeRaw = raw(sizeEl);
+      const sizeNum = Number(sizeRaw);
+      const sizeBad = sizeRaw !== "" && (!Number.isFinite(sizeNum) || sizeNum < MIN_DECKLE_MM || sizeNum > MAX_DECKLE_MM);
+      const size = sizeRaw !== "" && !sizeBad ? round2(sizeNum) : null;
+      if (sizeRaw === "") notReady = true;
+      if (sizeBad) errors.push(`Deckle Size looks wrong — expected ${fmt(MIN_DECKLE_MM)}–${fmt(MAX_DECKLE_MM)} mm.`);
+      sizeEl.classList.toggle("is-bad", sizeBad);
+
+      const trimRaw = raw(trimEl);
+      const trim = Number(trimRaw);
+      const trimBad = trimRaw === "" || !Number.isFinite(trim) || trim < 0;
+      const trimTooBig = !trimBad && size != null && trim >= size;
+      if (trimBad) errors.push("Edge Trim must be 0 mm or more.");
+      if (trimTooBig) errors.push(`Edge Trim (${fmt(trim)} mm) leaves nothing to cut on the ${fmt(size)} mm deckle.`);
+      trimEl.classList.toggle("is-bad", trimBad || trimTooBig);
+
+      const drmRaw = raw(drmEl);
+      const drm = Number(drmRaw);
+      const drmBad = drmRaw !== "" && (!Number.isFinite(drm) || drm <= 0 || drm > MAX_RM);
+      const drmOk = drmRaw !== "" && !drmBad;
+      if (drmRaw === "") notReady = true;
+      if (drmBad) errors.push("Deckle R.M. must be a length greater than 0.");
+      drmEl.classList.toggle("is-bad", drmBad);
+
+      const countRaw = raw(countEl);
+      const count = Number(countRaw);
+      const countBad = countRaw !== "" && (!Number.isInteger(count) || count < 1 || count > MAX_COUNT);
+      const countOk = countRaw !== "" && !countBad;
+      if (countRaw === "") notReady = true;
+      if (countBad) errors.push(`Deckle Count must be a whole number from 1 to ${fmt(MAX_COUNT)}.`);
+      countEl.classList.toggle("is-bad", countBad);
+
+      // Errors only -- blank fields just keep Create switched off.
+      issuesEl.hidden = !errors.length;
+      issuesBody.innerHTML = errors.length
+        ? `<div class="dso-issue-head">Fix before saving</div><ul>${errors.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>`
+        : "";
+      ready = !errors.length && !notReady;
+      submitEl.disabled = !ready;
+
+      const usable = size != null && !trimBad && !trimTooBig ? round2(size - trim) : null;
+      const sqm = size != null && drmOk && countOk ? round2((size / 1000) * drm * count) : null;
+      statsEl.innerHTML = [
+        stat("Deckle Size", size != null ? `${fmt(size)} mm` : "—"),
+        stat("Deckle Count", countOk ? fmt(count) : "—"),
+        stat("Deckle R.M.", drmOk ? `${fmt(drm)} m` : "—"),
+        stat("Total Running", drmOk && countOk ? `${fmt(round2(drm * count))} m` : "—", "One web's length × how many webs."),
+        stat("Usable Web", usable != null ? `${fmt(usable)} mm` : "—", "Deckle size less the edge trim — the widest a roll slit from it can be."),
+        stat("Facestock Used", sqm != null ? `${fmt(sqm)} m²` : "—"),
+      ].join("");
+    }
+
+    inputs.forEach((el) => {
+      el.disabled = !PICKED;
+      el.addEventListener("input", recalc);
+      // Enter in a box must not create the batch.
+      el.addEventListener("keydown", (ev) => { if (ev.key === "Enter") ev.preventDefault(); });
+    });
+
+    let submitting = false;
+    form.addEventListener("submit", (ev) => {
+      recalc();
+      if (!ready || submitting) { ev.preventDefault(); return; }
+      submitting = true;
+      submitEl.disabled = true;
+      submitEl.textContent = "Creating…";
+    });
+
+    // A Product Code is picked by reloading the page for it -- nothing typed
+    // here is kept, so confirm before throwing it away.
+    pick.addEventListener("change", () => {
+      if (!pick.value) return;
+      const typed = [sizeEl, drmEl, countEl].some((el) => raw(el) !== "");
+      if (typed && !confirm("Change the Product Code? What is typed here will be cleared.")) {
+        window.location.reload();
+        return;
+      }
+      window.location.href = `/app/labels/production/deckle-set/deckle-only?itemId=${encodeURIComponent(pick.value)}`;
+    });
+    // choices.min.js is loaded with `defer` by the layout -- it only exists once
+    // the document has been parsed. The change handler above is on the plain
+    // <select>, which Choices keeps firing `change` on.
+    const initPick = () => {
+      if (typeof Choices === "function") new Choices(pick, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initPick);
+    else initPick();
+
+    recalc();
+  })();
+</script>
