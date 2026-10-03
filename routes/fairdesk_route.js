@@ -4881,7 +4881,7 @@ async function buildJobCardProgressMap(pendingIds) {
   // has its rows concatenated in the order they were produced.
   const [cards, liveDeckles, liveOrders] = await Promise.all([
     MachineJobCard.find({ pendingProductionId: { $in: pendingIds } })
-      .select("pendingProductionId jobCardId jobSetting productionLog createdAt updatedAt")
+      .select("pendingProductionId jobCardId date jobSetting productionLog createdAt updatedAt")
       .sort({ updatedAt: 1 })
       .lean(),
     // producedVia "jobcard" only: a Deckle laminated at Assign & Continue
@@ -4935,6 +4935,17 @@ async function buildJobCardProgressMap(pendingIds) {
     return set;
   };
   const normDeckleId = (value) => String(value ?? "").trim().toUpperCase();
+  // When each Deckle came off -- its createdAt is the Stop punch -- by the
+  // two keys a card row names it by, so a filed row can be dated exactly too
+  // (the dialog's Production Log Date column). A row whose Deckle was never
+  // made falls back to its card's own date.
+  const deckleMadeAt = new Map();
+  liveDeckles.forEach((deckle) => {
+    if (!deckle.createdAt) return;
+    const key = String(deckle.producedFor);
+    if (deckle.productionRowToken) deckleMadeAt.set(`${key}|t:${String(deckle.productionRowToken).trim()}`, deckle.createdAt);
+    if (deckle.rollId) deckleMadeAt.set(`${key}|d:${normDeckleId(deckle.rollId)}`, deckle.createdAt);
+  });
 
   cards.forEach((card) => {
     const key = String(card.pendingProductionId);
@@ -4974,6 +4985,10 @@ async function buildJobCardProgressMap(pendingIds) {
           faceMtrs: numberOrNull(row.face?.mtr),
           releaseJoint: row.release?.joint || "",
           releaseMtrs: numberOrNull(row.release?.mtr),
+          producedAt: (row.rowToken && deckleMadeAt.get(`${key}|t:${String(row.rowToken).trim()}`))
+            || (row.deckleId && deckleMadeAt.get(`${key}|d:${normDeckleId(row.deckleId)}`))
+            || null,
+          cardDate: card.date || null,
         });
       });
 

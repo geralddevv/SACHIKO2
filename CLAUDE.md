@@ -897,15 +897,38 @@ should be done at the laminator's **15 m/min** (`LAMINATOR_SPEED_MPM` in
   idle time before the running deckle (`gapBeforeMins`) or the idle time still
   running. The dialog's scroll areas use the app's brand-blue table scrollbar
   (the same rules as `.tabulator .tabulator-tableholder`).
-- **The dialog's two logs share one grid.** *Job Setting Log*: # · Mtrs ·
-  Start Time · End Time · Counter · Status (no Roll ID — a setting row has no
-  id of its own, so Mtrs takes the width of Deckle ID + Made). *Production
-  Log*: # · Deckle ID · Made · Start Time · End Time · **Facestock Joint /
-  Wrinkle** · **Release Joint / Wrinkle**. Start, End and the two right-hand
-  columns sit exactly over each other (`SETTING_COLGROUP` / `PROD_COLGROUP` —
-  keep the sums). A joint cell is the card's own record, "Joint at 120 mtrs" /
-  "Wrinkle at 85 mtrs", and an empty value anywhere in the logs reads
-  **None**, never a dash. No LIVE badge on unsaved rows.
+- **The dialog is Current Status, then the two logs** — no "Now Running"
+  panel, no footnote. The logs share one grid. *Job Setting Log*: # · Mtrs · Start Time
+  · End Time · Counter · Status (no Roll ID — a setting row has no id or date
+  of its own, so Mtrs takes the width of Date + Deckle ID + Made).
+  *Production Log*: # · **Date** · Deckle ID · Made · Start Time · End Time ·
+  **Facestock Joint / Wrinkle** · **Release Joint / Wrinkle**. Start, End and
+  the two right-hand columns sit exactly over each other (`SETTING_COLGROUP` /
+  `PROD_COLGROUP` — keep the sums). A joint cell is the card's own record,
+  "Joint at 120 mtrs" / "Wrinkle at 85 mtrs", and an empty value anywhere in
+  the logs reads **None**, never a dash. No LIVE badge on unsaved rows.
+- **Date** is the day the row's deckle was *started*: its Deckle's
+  `createdAt` (the Stop — card rows are matched to their Deckle by row token
+  / Deckle id in `buildJobCardProgressMap`, so filed rows are dated exactly
+  too), a day earlier when the punched Start is later in the day than the
+  punched End, in which case the End reads "next day". A row whose Deckle was
+  never made falls back to its card's `date`.
+- **Current Status is the dialog's first section**, above the Job Setting
+  Log: where the job is now, as one row (`.dlg-status-row`). A deckle on the
+  machine is a row in the Production Log's own columns, under the same
+  header (`PROD_HEAD`) — Date, a **Running** badge (red once past its ETA;
+  "extra deckle" beside it), "45% of 500 mtrs", its Start, "ETA ~2:39 PM"
+  (with how far over), joints "Not yet". Otherwise one line, no header, with
+  a **Job Setting / Idle / All made / Started** badge (a plain label). A
+  round dropdown arrow at the right end of the row (`.dlg-toggle`, in the last
+  cell — the grid is untouched) is the one control: it, or a click anywhere on
+  the row, opens the details underneath (`toggleLiveDetails`), and it turns
+  up while they're open: on the machine, started, idle before it,
+  to make, ETA, job started, Finished, Target, Status, Estimate. The heading
+  carries the operator app's chip on the right — "Operator app online · TAB-1"
+  while its claim is fresh (`activeClaim`), "last seen …" once it isn't — in
+  place of the old "Running now on …" bar. The Production Log below holds only
+  the deckles made.
 - **A live Deckle carries its joints per web** (`MaterialStock.productionJoints`,
   written at the Stop punch beside `productionTime`), because `joints` merges
   both webs into one label for the reel's sticker. An older live Deckle has
@@ -945,6 +968,14 @@ one of these cells opens. **Deckles** is `runPlan.done` / `target` with a bar;
   `targetDeckles`, worked out in `buildRunPlan()`): the run done nonstop at
   speed from its first punch — no setting, no idle time, no overrun. So setting time
   counts as delay; that is deliberate, it is time the job was not running.
+- **A job can't start after its own deckle came off.** A recorded start that
+  is missing, or later than this run's first unfiled Deckle's Stop (deckles
+  made before `liveStartedAt` existed, or by an app build that never sent a
+  Start, then a later punch stamping "now"), is worked back from that Stop by
+  one deckle's running time (`startInferred`; the dialog says "About … (not
+  recorded; worked back from the first deckle)"). Otherwise the Target would
+  time deckles made days ago as still to run. A recorded start before the
+  first Stop is always kept, however fast that deckle ran.
 - **The delay is counted from now**, so every setting, idle time and overrun so far
   is already in it — which is what makes Estimate "the time including the
   delay". It is the page's call (the browser's clock), like overrun; rows not

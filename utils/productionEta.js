@@ -137,7 +137,28 @@ export function buildRunPlan(pp, progress, speedMpm = LAMINATOR_SPEED_MPM) {
   // played afresh on its next card: the save clears liveStartedAt and files
   // what was made as producedRolls. So the run being timed starts at
   // jobStartedAt and owes only what was not filed before it.
-  const jobStartedAt = ms(progress?.jobStartedAt);
+  //
+  // The recorded start (liveStartedAt, else the app's running claim) can't be
+  // later than a deckle this run already made: a job can't start after its
+  // own deckle came off. That happens when the deckles predate the record --
+  // made before liveStartedAt existed, or by an app build that never sent a
+  // Start -- and a later punch then stamps "now" as the start, which would
+  // have the Target time deckles made days ago as if they were still to run.
+  // So a start that is missing, or later than this run's first deckle Stop,
+  // is worked back from that Stop by one deckle's running time (as if it ran
+  // at speed -- the Target's own assumption, so that deckle is neither early
+  // nor late). Only unfiled ("live") Deckles count: filed rows belong to an
+  // earlier card, i.e. an earlier run (see priorDone below).
+  const recordedStart = ms(progress?.jobStartedAt);
+  const firstStop = (Array.isArray(progress?.production) ? progress.production : [])
+    .filter((row) => row?.live)
+    .map((row) => ms(row.producedAt))
+    .filter((t) => t != null)
+    .reduce((min, t) => (min == null || t < min ? t : min), null);
+  const startInferred = firstStop != null && (recordedStart == null || firstStop < recordedStart);
+  const jobStartedAt = startInferred
+    ? Math.round(firstStop - (minsPerDeckle || 0) * MS_PER_MIN)
+    : recordedStart;
   const priorDone = Math.max(Number(pp?.producedRolls) || 0, 0);
   const targetDeckles = target != null ? Math.max(target - priorDone, 0) : null;
   const targetAt = jobStartedAt != null && targetDeckles != null && minsPerDeckle != null
@@ -158,6 +179,7 @@ export function buildRunPlan(pp, progress, speedMpm = LAMINATOR_SPEED_MPM) {
     phase,
     setting,
     jobStartedAt,
+    startInferred,
     lastDoneAt,
     gapSince,
     gapBeforeMins,

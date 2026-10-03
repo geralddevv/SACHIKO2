@@ -49,18 +49,87 @@
      (SETTING_COLGROUP / PROD_COLGROUP), so each Job Setting Log heading sits
      over its Production Log counterpart -- Start Time, End Time and the two
      right-hand columns line up exactly. Fixed layout is what makes the widths
-     hold; below 760px the tables scroll sideways rather than squash, and a
+     hold; below 860px the tables scroll sideways rather than squash, and a
      long id breaks inside its own cell instead of running into the next one.
      An empty value reads "None", never a dash. */
-  .dlg-log-table { table-layout: fixed; min-width: 760px; }
+  .dlg-log-table { table-layout: fixed; min-width: 860px; }
   .dlg-log-table td { overflow-wrap: anywhere; }
   .dlg-log-table .dlg-none { color: #94a3b8; font-weight: 500; }
   .dlg-log-table .dlg-flag { color: #b45309; font-weight: 700; }
-  /* Between two Production Log rows: the idle gap from one deckle's End to
-     the next one's Start. And the closing line for what is happening now. */
+  /* Between two Production Log rows: the idle time from one deckle's End to
+     the next one's Start. */
   .dlg-log-table tr.dlg-gap-row td { padding: 4px 12px; font-size: 11.5px; font-weight: 700; color: #c2410c; background: #fff7ed; }
-  .dlg-log-table tr.dlg-now-row td { padding: 7px 12px; font-size: 12px; font-weight: 700; color: #15803d; background: #f0fdf4; }
-  .dlg-log-table tr.dlg-now-row.is-setting td { color: #a16207; background: #fefce8; }
+  /* Current Status, the dialog's first section: where the job is now, as one
+     row in the Production Log's columns, tinted by its state. The whole row
+     opens the details underneath it (toggleLiveDetails). Its heading carries
+     the operator app's chip on the right. */
+  .dlg-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin: 0 0 14px; }
+  .dlg-section-head .section-title { margin: 0; }
+  .dlg-status-wrap { overflow-x: auto; margin-bottom: 26px; }
+  .dlg-device {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid; font-size: 12px; font-weight: 600; line-height: 1.4; white-space: nowrap;
+  }
+  .dlg-device::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+  .dlg-device.is-online { color: #15803d; background: #f0fdf4; border-color: #bbf7d0; }
+  .dlg-device.is-stale { color: #a16207; background: #fefce8; border-color: #fde68a; }
+  .dlg-log-table tr.dlg-status-row { cursor: pointer; }
+  .dlg-log-table tr.dlg-status-row td { background: #f8fafc; vertical-align: middle; }
+  .dlg-log-table tr.dlg-status-row.is-running td,
+  .dlg-log-table tr.dlg-status-row.is-made td { background: #f0fdf4; }
+  .dlg-log-table tr.dlg-status-row.is-overdue td { background: #fef2f2; }
+  .dlg-log-table tr.dlg-status-row.is-setting td { background: #fefce8; }
+  .dlg-log-table tr.dlg-status-row.is-idle td { background: #fff7ed; }
+  .dlg-log-table tr.dlg-status-row.is-started td { background: #eff6ff; }
+  .dlg-log-table tr.dlg-status-row:hover td { box-shadow: inset 0 0 0 999px rgba(15, 23, 42, 0.035); }
+  .dlg-log-table tr.dlg-status-row.is-open td { border-bottom-color: transparent; }
+  .dlg-status-text { font-weight: 600; color: #1f2a44; }
+  .dlg-late { color: #b91c1c; font-weight: 700; }
+  .dlg-sub { display: block; margin-top: 2px; font-size: 11.5px; }
+  .dlg-badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid currentColor; background: #fff; white-space: nowrap;
+    font-size: 12px; font-weight: 700; line-height: 1.4;
+  }
+  /* The row's last cell holds its value on the left and the dropdown arrow
+     on the right -- the one control that opens the details (the whole row
+     does too). A round button, so it reads as clickable; it turns over when
+     the details are open. */
+  .dlg-row-end { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .dlg-row-end > :first-child { min-width: 0; }
+  .dlg-toggle {
+    flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; padding: 0; border-radius: 50%;
+    border: 1px solid #cbd5e1; background: #fff; color: #475569; cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  }
+  .dlg-toggle i { font-size: 11px; transition: transform 0.2s ease; }
+  .dlg-toggle[aria-expanded="true"] i { transform: rotate(180deg); }
+  .dlg-status-row:hover .dlg-toggle,
+  .dlg-toggle[aria-expanded="true"] { border-color: #044a78; color: #044a78; background: #f0f7ff; }
+  .dlg-toggle:focus-visible { outline: 2px solid #044a78; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    .dlg-toggle i { transition: none; }
+  }
+  .dlg-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+  .dlg-badge.is-running, .dlg-badge.is-made { color: #15803d; }
+  .dlg-badge.is-overdue { color: #b91c1c; }
+  .dlg-badge.is-setting { color: #a16207; }
+  .dlg-badge.is-idle { color: #c2410c; }
+  .dlg-badge.is-started { color: #1d4ed8; }
+  /* A deckle on the machine: its badge's dot blinks, like the Live cell. */
+  @keyframes dlgDotBlink { 50% { opacity: 0.2; } }
+  .dlg-badge.is-running::before, .dlg-badge.is-overdue::before { animation: dlgDotBlink 1.2s step-end infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .dlg-badge.is-running::before, .dlg-badge.is-overdue::before { animation: none; }
+  }
+  /* The details the status row opens: label over value, as many across as
+     fit. */
+  .dlg-log-table tr.dlg-detail-row td { padding: 14px 16px; background: #fbfdff; }
+  .dlg-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 24px; margin: 0; }
+  .dlg-facts > div { min-width: 0; }
+  .dlg-facts dt { margin: 0 0 2px; font-size: 11.5px; font-weight: 600; color: #64748b; }
+  .dlg-facts dd { margin: 0; font-size: 12.5px; font-weight: 600; color: #1f2a44; line-height: 1.45; }
 
   .btn-action {
     height: 24px; padding: 2px 10px; color: white; border: none; border-radius: 4px; cursor: pointer;
@@ -495,13 +564,14 @@
     const settings = Array.isArray(progress.settings) ? progress.settings : [];
     const production = Array.isArray(progress.production) ? progress.production : [];
     // The two logs on one grid (see .dlg-log-table):
-    //   Job Setting Log  # | Mtrs                 | Start Time | End Time | Counter | Status
-    //   Production Log   # | Deckle ID | Made     | Start Time | End Time | Facestock J/W | Release J/W
-    // A setting row has no id of its own (the reel it ran off is not shown),
-    // so its Mtrs takes the width of Deckle ID + Made and everything to its
+    //   Job Setting Log  # | Mtrs                        | Start Time | End Time | Counter       | Status
+    //   Production Log   # | Date | Deckle ID | Made     | Start Time | End Time | Facestock J/W | Release J/W
+    // A setting row has no id or date of its own, so its Mtrs takes the width
+    // of Date + Deckle ID + Made (10 + 22 + 9 = 41) and everything to its
     // right lines up. The widths below must add to 100 and keep those sums.
-    const SETTING_COLGROUP = `<colgroup><col style="width:5%"><col style="width:35%"><col style="width:11%"><col style="width:11%"><col style="width:19%"><col style="width:19%"></colgroup>`;
-    const PROD_COLGROUP = `<colgroup><col style="width:5%"><col style="width:25%"><col style="width:10%"><col style="width:11%"><col style="width:11%"><col style="width:19%"><col style="width:19%"></colgroup>`;
+    const SETTING_COLGROUP = `<colgroup><col style="width:4%"><col style="width:41%"><col style="width:10%"><col style="width:11%"><col style="width:17%"><col style="width:17%"></colgroup>`;
+    const PROD_COLGROUP = `<colgroup><col style="width:4%"><col style="width:10%"><col style="width:22%"><col style="width:9%"><col style="width:10%"><col style="width:11%"><col style="width:17%"><col style="width:17%"></colgroup>`;
+    const PROD_COLS = 8;
     const none = `<span class="dlg-none">None</span>`;
     // A setting row is a run off the machine's counter, so its Mtrs is stop
     // reading - start reading (setup wastage -- nothing is "made"), shown only
@@ -571,55 +641,65 @@
       const d = b - a < -720 ? b - a + 1440 : b - a;
       return d >= 0 ? d : null;
     };
-    const gapRow = (text) => `<tr class="dlg-gap-row"><td colspan="7"><i class="fa-solid fa-pause"></i>&nbsp; ${text}</td></tr>`;
+    const gapRow = (text) => `<tr class="dlg-gap-row"><td colspan="${PROD_COLS}"><i class="fa-solid fa-pause"></i>&nbsp; ${text}</td></tr>`;
+    // A log date, in full: "17 Sept 2026".
+    const dlgDate = (value) => {
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    };
+    // The day a Production Log row ran on, and whether it ran past midnight.
+    // Its Deckle's Stop (producedAt -- the server's clock) dates the End; the
+    // Start is the day before when its punched Start is later in the day
+    // than its punched End (11:30 PM -> 12:37 AM). A row whose Deckle was
+    // never made has only its card's date to go on.
+    const rowDay = (row) => {
+      const start = punchMins(row.startTime);
+      const stop = row.producedAt ? new Date(row.producedAt) : null;
+      if (stop && !Number.isNaN(stop.getTime())) {
+        const end = punchMins(row.endTime || liveStatusClock(stop));
+        const overnight = start != null && end != null && start > end;
+        const date = new Date(stop);
+        if (overnight) date.setDate(date.getDate() - 1);
+        return { date, overnight };
+      }
+      const card = row.cardDate ? new Date(row.cardDate) : null;
+      if (!card || Number.isNaN(card.getTime())) return null;
+      const end = punchMins(row.endTime);
+      return { date: card, overnight: start != null && end != null && start > end };
+    };
+    const nextDay = ` <span class="dlg-none">next day</span>`;
     const productionRows = production.length
       ? production.map((row, i) => {
           const gap = i > 0 ? punchGap(production[i - 1].endTime, row.startTime) : null;
+          const day = rowDay(row);
           return `${gap >= 1 ? gapRow(`Idle time &middot; ${wipDuration(gap)}`) : ""}
-          <tr><td>${row.index}</td><td>${liveStatusValue(row.deckleId)}</td>
+          <tr><td>${row.index}</td><td>${day ? dlgDate(day.date) : none}</td><td>${liveStatusValue(row.deckleId)}</td>
           <td style="font-weight:700;">${liveStatusMtrs(row.meters)} mtrs</td>
           <td>${liveStatusValue(row.startTime)}</td>
-          <td>${liveStatusValue(row.endTime || (row.live && row.producedAt ? liveStatusClock(row.producedAt) : ""))}</td>
+          <td>${liveStatusValue(row.endTime || (row.live && row.producedAt ? liveStatusClock(row.producedAt) : ""))}${day?.overnight ? nextDay : ""}</td>
           ${jointCells(row)}</tr>`;
         }).join("")
       : "";
-    // ...and the log's last line: what is happening NOW, off the server's
-    // clock -- the deckle on the machine (with the gap before it), a setting
-    // under way, or the gap still running since the last deckle came off.
-    const nowPlan = order.runPlan || null;
-    let nowRows = "";
-    if (nowPlan?.current) {
-      const cur = nowPlan.current;
-      nowRows = `${production.length && nowPlan.gapBeforeMins >= 1 ? gapRow(`Idle time &middot; ${wipDuration(nowPlan.gapBeforeMins)}`) : ""}
-        <tr class="dlg-now-row"><td colspan="7"><i class="fa-solid fa-play"></i>&nbsp; Deckle ${cur.index} running since ${wipClock(cur.startedAt)}${cur.etaAt != null ? ` &middot; ETA ~${wipEta(cur.etaAt)}` : ""}</td></tr>`;
-    } else if (nowPlan?.phase === "setting") {
-      nowRows = `<tr class="dlg-now-row is-setting"><td colspan="7"><i class="fa-solid fa-sliders"></i>&nbsp; Job Setting since ${wipClock(nowPlan.setting.startedAt)} &middot; ${wipDuration((Date.now() - nowPlan.setting.startedAt) / 60000)} so far</td></tr>`;
-    } else if (nowPlan?.phase === "gap" && nowPlan.gapSince != null) {
-      nowRows = gapRow(`Idle for ${wipDuration((Date.now() - nowPlan.gapSince) / 60000)} &middot; deckle ${nowPlan.done + 1} not started yet`);
-    }
-    const productionBody = productionRows || nowRows
-      ? productionRows + nowRows
-      : `<tr><td colspan="7" style="color:#64748b; text-align:center;">Nothing produced yet on this job.</td></tr>`;
-
-    // Whether an operator's device is on the job right this second, above the
-    // two logs -- that and nothing else (reels mounted are already said by
-    // the Live column's tooltip, and every deckle made is in the log below).
-    let runningText = "";
+    // Whether the operator's app is on the job right this second -- a chip
+    // beside the Current Status heading, and nothing else (reels mounted are
+    // in the Live column's tooltip; every deckle made is in the log below).
+    let deviceChip = "";
     if (progress.running) {
-      runningText = `<span style="color:#15803d; font-weight:700;">Running now${progress.runningOn?.deviceLabel ? ` on ${liveStatusEscape(progress.runningOn.deviceLabel)}` : ""}</span>`;
+      deviceChip = `<span class="dlg-device is-online">Operator app online${progress.runningOn?.deviceLabel ? ` &middot; ${liveStatusEscape(progress.runningOn.deviceLabel)}` : ""}</span>`;
     } else if (progress.runningOn) {
-      runningText = `<span style="color:#a16207; font-weight:700;">Started${progress.runningOn.lastSeenAt ? `, last seen ${new Date(progress.runningOn.lastSeenAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : ""}</span>`;
+      deviceChip = `<span class="dlg-device is-stale">${progress.runningOn.lastSeenAt ? `Operator app last seen ${new Date(progress.runningOn.lastSeenAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}` : "Operator app offline"}</span>`;
     }
-    const runningLine = runningText
-      ? `<div style="margin:0 0 16px; padding:8px 12px; background:#f8fafc; border:1px solid #e6eaf2; border-radius:8px; font-size:12.5px; color:#475569;">${runningText}</div>`
-      : "";
 
-    // The deckle on the machine now, and where the job stands -- the Finished,
-    // Live, Target, Status and Estimate columns, spelled out. ETA is the Start
-    // punch plus the deckle's metres at the laminator's speed
-    // (utils/productionEta.js).
+    // Current Status, the dialog's first section: where the job is NOW, off
+    // the server's clock, as one row in the Production Log's own columns --
+    // the deckle on the machine (Running, or red once past its ETA), else one
+    // line for a setting under way, the machine idle, every deckle made, or a
+    // job started with none begun. Its badge (or anywhere on the row) opens
+    // the details underneath: the deckle on the machine, and where the job
+    // stands -- the Finished, Live, Target, Status and Estimate columns,
+    // spelled out.
     const plan = order.runPlan || null;
-    let runPanel = "";
+    let statusRows = "";
     if (plan) {
       const cur = plan.current;
       const of = plan.target ? ` of ${plan.target}` : "";
@@ -630,8 +710,8 @@
           facts.push(["Still to make", `${wipPlural(plan.toMake, "deckle")} &times; ${liveStatusMtrs(plan.deckleMtrs)} mtrs &middot; ${wipDuration(plan.remainingMins)} of running at ${plan.speedMpm} mtrs/min`]);
         }
       };
+      const over = cur ? wipOverMins(cur.etaAt) : null;
       if (cur) {
-        const over = wipOverMins(cur.etaAt);
         facts.push(["On the machine", wipDeckleLabel(plan, cur)]);
         facts.push(["Deckle started", `${wipClock(cur.startedAt)}${cur.startMtrs != null ? ` &middot; counter at ${liveStatusMtrs(cur.startMtrs)} mtrs` : ""}`]);
         if (plan.gapBeforeMins >= 1) {
@@ -639,10 +719,10 @@
         }
         facts.push(["To make", cur.mtrs
           ? `${liveStatusMtrs(cur.mtrs)} mtrs &middot; ${wipDuration(plan.minsPerDeckle)} at ${plan.speedMpm} mtrs/min`
-          : `<span style="color:#a16207;">Deckle R.M. not set on this job &mdash; no ETA</span>`]);
+          : `<span style="color:#a16207;">Deckle R.M. not set on this job, so no ETA</span>`]);
         if (cur.etaAt != null) {
           facts.push(["ETA", over != null
-            ? `<span style="color:#b91c1c;">~${wipEta(cur.etaAt)} &mdash; ${wipDuration(over)} past it</span>`
+            ? `<span style="color:#b91c1c;">~${wipEta(cur.etaAt)} &middot; ${wipDuration(over)} past it</span>`
             : `~${wipEta(cur.etaAt)}`]);
         }
       } else if (plan.phase === "setting") {
@@ -650,16 +730,20 @@
         facts.push(["Setting since", `${wipClock(plan.setting.startedAt)} &middot; ${since(plan.setting.startedAt)} so far${plan.setting.startMtrs != null ? ` &middot; counter at ${liveStatusMtrs(plan.setting.startMtrs)} mtrs` : ""}`]);
         stillToMake();
       } else if (plan.phase === "gap") {
-        facts.push(["On the machine", `Idle &mdash; between deckle ${plan.done} and ${plan.done + 1}`]);
+        facts.push(["On the machine", `Idle, between deckle ${plan.done} and ${plan.done + 1}`]);
         if (plan.gapSince != null) facts.push(["Idle time", `<span style="color:#c2410c;">${since(plan.gapSince)} so far &middot; since deckle ${plan.done} came off at ${wipClock(plan.gapSince)}</span>`]);
         stillToMake();
       } else if (plan.phase === "made") {
-        facts.push(["On the machine", `All ${plan.target} deckles made`]);
+        facts.push(["On the machine", `All made: ${plan.done} of ${wipPlural(plan.target, "deckle")}`]);
       } else {
-        facts.push(["On the machine", "Nothing yet &mdash; started, no deckle begun"]);
+        facts.push(["On the machine", "Nothing yet: started, no deckle begun"]);
         stillToMake();
       }
-      if (plan.jobStartedAt != null) facts.push(["Job started", wipClock(plan.jobStartedAt)]);
+      if (plan.jobStartedAt != null) {
+        facts.push(["Job started", plan.startInferred
+          ? `About ${wipClock(plan.jobStartedAt)} <span class="dlg-none">(not recorded; worked back from the first deckle)</span>`
+          : wipClock(plan.jobStartedAt)]);
+      }
       facts.push(["Finished", plan.done
         ? `${plan.done}${of} deckle${plan.done === 1 && !plan.target ? "" : "s"} &middot; ${liveStatusMtrs(progress.totalMeters)} mtrs${progress.lastDoneAt ? ` @ ${wipClock(progress.lastDoneAt)}` : ""}`
         : "Nothing made yet"]);
@@ -668,7 +752,7 @@
       const look = wipOutlook(plan);
       facts.push(["Target", look.targetMins != null
         ? `${wipDuration(look.targetMins)} &middot; ${wipPlural(plan.targetDeckles, "deckle")} &times; ${liveStatusMtrs(plan.deckleMtrs)} mtrs, nonstop at ${plan.speedMpm} mtrs/min${plan.priorDone ? ` &middot; ${plan.priorDone} made on an earlier card` : ""}`
-        : `<span style="color:#a16207;">${wipNoTargetReason(plan)} &mdash; no Target</span>`]);
+        : `<span style="color:#a16207;">${wipNoTargetReason(plan)}, so no Target</span>`]);
       if (look.state) {
         facts.push(["Status", `${wipStatusPill(look)} &nbsp;${look.finished && look.state !== "ontime" ? "finished " : ""}${wipDelayText(look)}`]);
       }
@@ -685,10 +769,79 @@
       } else if (look.targetMins != null) {
         facts.push(["Estimate", `<span style="color:#a16207;">${wipNoEstimateReason(plan) || "Not known yet"}</span>`]);
       }
-      runPanel = `<h3 class="section-title">Now Running</h3>
-        <table class="diff-table" style="margin-bottom:6px;"><tbody>${facts.map(([k, v]) => `<tr><td class="key-col">${k}</td><td class="resolved">${v}</td></tr>`).join("")}</tbody></table>
-        <div style="margin:0 0 22px; font-size:11.5px; color:#64748b;">Approx: counted from the deckle's Start punch at ${plan.speedMpm} mtrs/min. Stops between deckles (reel change, joints) are not counted. Idle time is the time from one deckle's End to the next one's Start. Target is how long the job takes run nonstop; Estimate is Target plus the delay so far (every setting, idle time and overrun, counted to now). Within ${WIP_ON_TIME_MINS} min of Target is on time.</div>`;
+
+      const detailRow = `<tr class="dlg-detail-row" hidden><td colspan="${PROD_COLS}"><dl class="dlg-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl></td></tr>`;
+      const badge = (cls, text) => `<span class="dlg-badge ${cls}">${text}</span>`;
+      // The row's last cell: its value, and the dropdown arrow at the right.
+      const rowEnd = (inner) => `<div class="dlg-row-end"><div>${inner}</div><button type="button" class="dlg-toggle" aria-expanded="false" aria-label="Show details" title="Show details"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button></div>`;
+      const notYet = `<span class="dlg-none">Not yet</span>`;
+      if (cur) {
+        // The deckle on the machine, in the log's own columns. Its Deckle ID
+        // and joints only exist once its Stop inwards it.
+        const late = over != null;
+        let made = none;
+        if (cur.mtrs && !late && cur.etaAt != null) {
+          const pct = Math.min(Math.max(Math.floor(((Date.now() - cur.startedAt) / (cur.etaAt - cur.startedAt)) * 100), 0), 100);
+          made = `${pct}% <span class="dlg-none">of ${liveStatusMtrs(cur.mtrs)} mtrs</span>`;
+        } else if (cur.mtrs) {
+          made = `${liveStatusMtrs(cur.mtrs)} mtrs <span class="dlg-none">to make</span>`;
+        }
+        // ETA as a time of day, with "next day" when it falls after the
+        // Start's day (the Date column is the Start's).
+        let end = none;
+        if (cur.etaAt != null) {
+          const eta = new Date(Math.round(cur.etaAt / 60000) * 60000);
+          const days = Math.round((new Date(eta).setHours(0, 0, 0, 0) - new Date(cur.startedAt).setHours(0, 0, 0, 0)) / 86400000);
+          const when = `ETA ~${liveStatusClock(eta)}${days === 1 ? nextDay : days > 1 ? ` <span class="dlg-none">${dlgDate(eta)}</span>` : ""}`;
+          end = late
+            ? `<span class="dlg-late">${when}</span><span class="dlg-sub dlg-late">${wipDuration(over)} over</span>`
+            : when;
+        }
+        statusRows = `<tr class="dlg-status-row ${late ? "is-overdue" : "is-running"}" onclick="toggleLiveDetails(this)">
+            <td>${cur.index}</td><td>${dlgDate(cur.startedAt)}</td>
+            <td>${badge(late ? "is-overdue" : "is-running", "Running")}${wipExtraDeckle(plan, cur) ? ` <span class="dlg-none">extra deckle</span>` : ""}</td>
+            <td style="font-weight:700;">${made}</td>
+            <td>${liveStatusValue(cur.startTime || liveStatusClock(cur.startedAt))}</td>
+            <td>${end}</td>
+            <td>${notYet}</td><td>${rowEnd(notYet)}</td>
+          </tr>${detailRow}`;
+      } else {
+        // Nothing on the machine: one line, dated by when that state began.
+        let cls;
+        let label;
+        let text;
+        let at;
+        if (plan.phase === "setting") {
+          cls = "is-setting"; label = "Job Setting"; at = plan.setting.startedAt;
+          text = `Since ${liveStatusClock(at)} &middot; ${since(at)} so far${plan.done ? ` &middot; after deckle ${plan.done}${of}` : ""}`;
+        } else if (plan.phase === "gap") {
+          cls = "is-idle"; label = "Idle"; at = plan.gapSince;
+          text = at != null
+            ? `${since(at)} since deckle ${plan.done} came off at ${liveStatusClock(at)} &middot; deckle ${plan.done + 1} not started yet`
+            : `Between deckle ${plan.done} and ${plan.done + 1}`;
+        } else if (plan.phase === "made") {
+          cls = "is-made"; label = "All made"; at = plan.lastDoneAt;
+          text = `${plan.done} of ${wipPlural(plan.target, "deckle")} made &middot; Job Card not saved yet`;
+        } else {
+          cls = "is-started"; label = "Started"; at = plan.jobStartedAt;
+          text = `${at != null ? `Started ${liveStatusClock(at)} &middot; ` : ""}no deckle begun yet`;
+        }
+        statusRows = `<tr class="dlg-status-row ${cls}" onclick="toggleLiveDetails(this)">
+            <td></td><td>${at != null ? dlgDate(at) : none}</td>
+            <td colspan="${PROD_COLS - 2}">${rowEnd(`${badge(cls, label)} <span class="dlg-status-text">${text}</span>`)}</td>
+          </tr>${detailRow}`;
+      }
     }
+    const productionBody = productionRows
+      || `<tr><td colspan="${PROD_COLS}" style="color:#64748b; text-align:center;">Nothing produced yet on this job.</td></tr>`;
+    // One header for the Production Log and for a running deckle's row in
+    // Current Status, which is laid out in the same columns. A one-line state
+    // (setting, idle, all made, started) has no columns to head.
+    const PROD_HEAD = `<thead><tr><th>#</th><th>Date</th><th>Deckle ID</th><th>Made</th><th>Start Time</th><th>End Time</th><th>Facestock Joint / Wrinkle</th><th>Release Joint / Wrinkle</th></tr></thead>`;
+    const statusSection = statusRows
+      ? `<div class="dlg-section-head"><h3 class="section-title">Current Status</h3>${deviceChip}</div>
+          <div class="dlg-scroll-x dlg-status-wrap"><table class="diff-table dlg-log-table">${PROD_COLGROUP}${plan?.current ? PROD_HEAD : ""}<tbody>${statusRows}</tbody></table></div>`
+      : deviceChip ? `<div class="dlg-section-head">${deviceChip}</div>` : "";
 
     document.getElementById("live-status-dialog-body").innerHTML = `
       <div class="tape-details-card"><div class="details-scroll-area">
@@ -696,12 +849,29 @@
           <div class="header-subtitle">${liveStatusEscape(order.productCode || "Label Stock")} · ${progress.jobCardId ? `Job Card ${liveStatusEscape(progress.jobCardId)}` : "Job Card not saved yet"}</div></div>
           <div class="header-actions"><span class="header-action-link" style="pointer-events:none;"><i class="fa-solid fa-ruler-horizontal"></i> Total: ${liveStatusMtrs(progress.totalMeters)} mtrs</span>
           <button type="button" onclick="closeLiveStatusDialog()" class="header-action-link" style="border:none; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button></div></div>
-        <div class="tape-details-body">${runningLine}${runPanel}<h3 class="section-title">Job Setting Log</h3>
+        <div class="tape-details-body">${statusSection}<h3 class="section-title">Job Setting Log</h3>
           <div class="dlg-scroll-x" style="overflow-x:auto; margin-bottom:22px;"><table class="diff-table dlg-log-table">${SETTING_COLGROUP}<thead><tr><th>#</th><th>Mtrs</th><th>Start Time</th><th>End Time</th><th>Counter</th><th>Status</th></tr></thead><tbody>${settingRows}</tbody></table></div>
           <h3 class="section-title">Production Log</h3>
-          <div class="dlg-scroll-x" style="overflow-x:auto;"><table class="diff-table dlg-log-table">${PROD_COLGROUP}<thead><tr><th>#</th><th>Deckle ID</th><th>Made</th><th>Start Time</th><th>End Time</th><th>Facestock Joint / Wrinkle</th><th>Release Joint / Wrinkle</th></tr></thead><tbody>${productionBody}</tbody></table></div>
+          <div class="dlg-scroll-x" style="overflow-x:auto;"><table class="diff-table dlg-log-table">${PROD_COLGROUP}${PROD_HEAD}<tbody>${productionBody}</tbody></table></div>
         </div></div></div>`;
     document.getElementById("live-status-dialog").style.display = "flex";
+  };
+  // The Current Status row at the top of the dialog opens and closes the
+  // details underneath it -- a click anywhere on the row, its dropdown arrow
+  // included (the arrow is a button, so the keyboard reaches it too; its
+  // click bubbles up to the row, so the row is the one place this runs).
+  window.toggleLiveDetails = function (row) {
+    const detail = row.nextElementSibling;
+    if (!detail || !detail.classList.contains("dlg-detail-row")) return;
+    const open = detail.hidden;
+    detail.hidden = !open;
+    row.classList.toggle("is-open", open);
+    const arrow = row.querySelector(".dlg-toggle");
+    if (arrow) {
+      arrow.setAttribute("aria-expanded", String(open));
+      arrow.setAttribute("aria-label", open ? "Hide details" : "Show details");
+      arrow.title = open ? "Hide details" : "Show details";
+    }
   };
   // Closed by its ✕ only. A click outside it does nothing, so a stray click
   // while reading the logs doesn't throw the dialog away -- the same as this
