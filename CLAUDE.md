@@ -919,11 +919,13 @@ should be done at the laminator's **15 m/min** (`LAMINATOR_SPEED_MPM` in
   header (`PROD_HEAD`) — Date, a **Running** badge (red once past its ETA;
   "extra deckle" beside it), "45% of 500 mtrs", its Start, "ETA ~2:39 PM"
   (with how far over), joints "Not yet". Otherwise one line, no header, with
-  a **Job Setting / Idle / All made / Started** badge (a plain label). A
-  round dropdown arrow at the right end of the row (`.dlg-toggle`, in the last
-  cell — the grid is untouched) is the one control: it, or a click anywhere on
-  the row, opens the details underneath (`toggleLiveDetails`), and it turns
-  up while they're open: on the machine, started, idle before it,
+  a **Job Setting / Idle / All made / Started** badge (a plain label). The
+  row looks exactly like a Production Log row — no tint, no button chrome; the
+  only sign it opens is a bare grey chevron at its right end (`.dlg-toggle`,
+  in the last cell — the grid is untouched), blue under the pointer, plus a
+  faint hover highlight. The chevron, or a click anywhere on the row, opens the
+  details underneath (`toggleLiveDetails`), and it turns up while they're
+  open: on the machine, started, idle before it,
   to make, ETA, job started, Finished, Target, Status, Estimate. The heading
   carries the operator app's chip on the right — "Operator app online · TAB-1"
   while its claim is fresh (`activeClaim`), "last seen …" once it isn't — in
