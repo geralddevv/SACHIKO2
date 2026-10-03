@@ -16,6 +16,7 @@ import MaintenanceRequest from "../../models/system/maintenanceRequest.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { deckleTotalRunningMetres, deckleRunningMetersText } from "../../utils/deckleTotals.js";
+import { deckleTargetOf } from "../../utils/productionEta.js";
 import { computeRawMaterialNeed } from "../../utils/rawMaterialNeed.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { normalizeLocationName } from "../../utils/locations.js";
@@ -653,9 +654,7 @@ export async function buildQueueRows(match) {
     // batch as noOfRolls). A plain order's own noOfRolls is the sales order's
     // finished-roll count, a downstream slitting figure that never drives the
     // machine queue or the job card.
-    const deckleTarget = p.isDeckleBatch
-      ? (p.noOfRolls != null ? Number(p.noOfRolls) : null)
-      : (p.quantity != null ? Number(p.quantity) : null);
+    const deckleTarget = deckleTargetOf(p);
     const rolls = deckleTarget;
     const allottedRolls = p.allottedRolls != null ? p.allottedRolls : null;
     // Rolls this order's Job Cards have already produced -- one per Production
@@ -1517,6 +1516,22 @@ export async function produceDecklesFromLog({ pendingDoc, productionLog, jobSett
         sourceReels,
         productionRowToken: row.rowToken || undefined,
         producedVia: "jobcard",
+        productionTime: {
+          startTime: trim(row.time?.startTime) || undefined,
+          endTime: trim(row.time?.endTime) || undefined,
+        },
+        // Per web, for the WIP tab's Live Status until the card is saved
+        // (`joints` above is one merged label, for the sticker).
+        productionJoints: {
+          face: {
+            joint: trim(row.face?.joint) || undefined,
+            mtr: numOrUndef(row.face?.mtr),
+          },
+          release: {
+            joint: trim(row.release?.joint) || undefined,
+            mtr: numOrUndef(row.release?.mtr),
+          },
+        },
       });
     } catch (createErr) {
       // Lost the race to a concurrent instant-produce of this same row (its
@@ -1798,6 +1813,124 @@ router.post("/machine/jobcard/mark-in-use", requireAuth, requireMachineFloor, cr
   }
 });
 
+// The deckle the machine is running right now (PendingProduction.liveRun) --
+// what the WIP tab's Live column counts its ETA from. Shared by the web card's
+// POST below and the operator app's POST /api/operator/jobcard/log/start.
+//
+// Answers why it did nothing rather than throwing: the caller is a fire-and-
+// forget punch that must never hold the operator up.
+export async function startLiveRun({ pendingId, rowToken, startTime, startMtrs }) {
+  const token = trim(rowToken).slice(0, 128);
+  if (!mongoose.isValidObjectId(pendingId) || !token) return { ok: false, code: "bad-request" };
+  // A row whose Deckle already exists has finished. A Start replayed for it
+  // (a retry, a restored draft) must not put it back on the machine.
+  if (await MaterialStock.exists({ productionRowToken: token })) return { ok: true, code: "already-made" };
+  // Only a job still on a machine; and a repeat of the SAME row's Start keeps
+  // the first stamp, so a retried call can't push the ETA back. A deckle on
+  // the machine means setting is over (liveSetting goes), and the job counts
+  // as played from here if nothing was punched before it ($min: set once).
+  const now = new Date();
+  const result = await PendingProduction.updateOne(
+    { _id: pendingId, assignedMachineId: { $ne: null }, producedAt: null, "liveRun.rowToken": { $ne: token } },
+    {
+      $set: {
+        liveRun: {
+          rowToken: token,
+          startedAt: now,
+          startTime: trim(startTime).slice(0, 16) || undefined,
+          startMtrs: numOrUndef(startMtrs),
+        },
+      },
+      $unset: { liveSetting: "" },
+      $min: { liveStartedAt: now },
+    },
+  );
+  return { ok: true, code: result.modifiedCount ? "started" : "unchanged" };
+}
+
+// A Job Setting row's Start / Stop (PendingProduction.liveSetting) -- the WIP
+// tab's JOB SETTING phase, and the first punch that makes a job STARTED.
+// Shared by the web card's POSTs below and the operator app's
+// /api/operator/jobcard/setting/*. Fire-and-forget from the caller's side,
+// like the deckle Start: they answer, never throw at the operator.
+export async function startLiveSetting({ pendingId, startTime, startMtrs }) {
+  if (!mongoose.isValidObjectId(pendingId)) return { ok: false, code: "bad-request" };
+  const now = new Date();
+  const result = await PendingProduction.updateOne(
+    { _id: pendingId, assignedMachineId: { $ne: null }, producedAt: null },
+    {
+      $set: {
+        liveSetting: {
+          startedAt: now,
+          startTime: trim(startTime).slice(0, 16) || undefined,
+          startMtrs: numOrUndef(startMtrs),
+        },
+      },
+      $min: { liveStartedAt: now },
+    },
+  );
+  return { ok: true, code: result.modifiedCount ? "started" : "unchanged" };
+}
+
+// Ends the setting row whose Start was punched at `startTime` (the card row's
+// own start time, which a restored draft keeps) -- so a Stop can't end a
+// different row's setting. Without a start time it ends whatever is running.
+export async function stopLiveSetting({ pendingId, startTime }) {
+  if (!mongoose.isValidObjectId(pendingId)) return { ok: false, code: "bad-request" };
+  const filter = { _id: pendingId };
+  const punched = trim(startTime).slice(0, 16);
+  if (punched) filter["liveSetting.startTime"] = punched;
+  const result = await PendingProduction.updateOne(filter, { $unset: { liveSetting: "" } });
+  return { ok: true, code: result.modifiedCount ? "stopped" : "unchanged" };
+}
+
+// That row's Deckle is made, so it is no longer running. Matched on the row's
+// token so a Stop can never end a different row's run. Best-effort: a stale
+// liveRun is also ignored on read once its Deckle exists
+// (buildJobCardProgressMap in routes/fairdesk_route.js).
+export async function endLiveRun(pendingId, rowToken) {
+  const token = trim(rowToken);
+  if (!mongoose.isValidObjectId(pendingId) || !token) return;
+  try {
+    await PendingProduction.updateOne({ _id: pendingId, "liveRun.rowToken": token }, { $unset: { liveRun: "" } });
+  } catch (err) {
+    console.error("END LIVE RUN ERROR:", err);
+  }
+}
+
+// Fire the moment a Job Setting row's Start / Stop is punched (the
+// .js-start-btn / .js-stop-btn handlers in jobCardForm.ejs).
+router.post("/machine/jobcard/setting/start", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
+  try {
+    const result = await startLiveSetting(req.body || {});
+    res.status(result.code === "bad-request" ? 400 : 200).json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("JOB CARD SETTING START ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+router.post("/machine/jobcard/setting/stop", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
+  try {
+    const result = await stopLiveSetting(req.body || {});
+    res.status(result.code === "bad-request" ? 400 : 200).json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("JOB CARD SETTING STOP ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Fires the moment a Production Log row's Start is punched (the
+// .log-start-btn handler in jobCardForm.ejs), alongside mark-in-use.
+router.post("/machine/jobcard/log/start", requireAuth, requireMachineFloor, createLimiter, async (req, res) => {
+  try {
+    const result = await startLiveRun(req.body || {});
+    res.status(result.code === "bad-request" ? 400 : 200).json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("JOB CARD LOG START ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
 // Fires the moment a Production Log row's Stop is punched (with its Meters
 // already filled in) -- see the .log-stop-btn handler in jobCardForm.ejs --
 // rather than waiting for the whole Job Card to be saved. On a job that runs
@@ -1835,6 +1968,7 @@ router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, cr
         .populate({ path: "material", select: "productCode" })
         .lean();
       if (priorDeckle) {
+        await endLiveRun(b.pendingId, rowToken);
         return res.json({
           success: true,
           deckleId: priorDeckle.rollId,
@@ -1898,6 +2032,8 @@ router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, cr
     if (!deckleId) {
       return res.status(400).json({ success: false, message: "Couldn't produce a Deckle for this row." });
     }
+    // The row is off the machine -- the WIP tab stops counting down to it.
+    await endLiveRun(b.pendingId, rowToken);
 
     // Firm the reel reservation: every reel this Deckle actually consumed is
     // now locked to this order, whether or not the scan-time mark-in-use call
@@ -2484,7 +2620,10 @@ export async function saveMachineJobCard({ body, actorName }) {
         const complete = !hasTarget || totalProduced >= requiredRolls;
         const update = {
           $set: { producedRolls: totalProduced },
-          $unset: { liveMaterialInUse: "" },
+          // The live punches go with it: this card's rows are now filed, so
+          // nothing of it is running or setting, and a resumed job is played
+          // afresh on its next card.
+          $unset: { liveMaterialInUse: "", liveRun: "", liveSetting: "", liveStartedAt: "" },
         };
         if (complete) update.$set.producedAt = new Date();
         await PendingProduction.updateOne({ _id: b.pendingId }, update);

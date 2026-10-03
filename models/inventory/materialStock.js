@@ -152,6 +152,28 @@ const materialStockSchema = new mongoose.Schema(
       type: String,
       enum: ["assign", "jobcard"],
     },
+    // Start / End punched on the Production Log row this Deckle was made from,
+    // exactly as the job card records them ("1:23 PM"). The card itself is
+    // only written by Save Production Entry at the end of the job, so until
+    // then this is the only place the times are kept -- the WIP tab's Live
+    // Status reads it. Only on "jobcard" Deckles made after this field was
+    // added; for older ones createdAt (the Stop punch) is the end time and the
+    // start is not known.
+    productionTime: {
+      startTime: { type: String, trim: true },
+      endTime: { type: String, trim: true },
+    },
+    // The same row's Facestock and Release Joint / Wrinkle, per web, with the
+    // metre mark it was punched at -- kept for the same reason as
+    // productionTime: until Save Production Entry the card isn't written, and
+    // `joints` above merges both webs into one label for the reel's sticker,
+    // so it can't say which web a joint was on. Absent on a clean run (Mongoose
+    // drops the empty object), and on Deckles made before it was added -- for
+    // those, an absent `joints` still means a clean run on both webs.
+    productionJoints: {
+      face: { joint: { type: String, trim: true }, mtr: { type: Number } },
+      release: { joint: { type: String, trim: true }, mtr: { type: Number } },
+    },
   },
   { timestamps: true },
 );

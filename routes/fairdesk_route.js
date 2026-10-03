@@ -68,6 +68,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
 import { computeRawMaterialNeed } from "../utils/rawMaterialNeed.js";
 import { deckleTotalRunningMetres, deckleRunningMetersText } from "../utils/deckleTotals.js";
+import { buildRunPlan } from "../utils/productionEta.js";
 // The code every generated id starts with -- the Company master's own
 // (utils/companyBrand.js), read live so a rename needs no restart.
 import { currentIdPrefix } from "../utils/companyBrand.js";
@@ -4862,7 +4863,13 @@ router.get("/prodcalc/details/:id", async (req, res) => {
 //     (MaterialStock.producedFor + producedVia "jobcard") -- real metres;
 //   - PendingProduction.runningOn, claimed at the first Job Setting Start and
 //     heartbeated by that device -- an operator is on it right now;
-//   - PendingProduction.liveMaterialInUse, the reels scanned onto the machine.
+//   - PendingProduction.liveMaterialInUse, the reels scanned onto the machine;
+//   - PendingProduction.liveRun, the deckle row whose Start was punched and
+//     whose Stop hasn't been -- the one on the machine now, and since when.
+//     It is what the Live column's ETA counts from (utils/productionEta.js);
+//   - PendingProduction.liveSetting / liveStartedAt, the Job Setting row
+//     running now and when the job was first played -- the Live column's
+//     JOB SETTING and STARTED phases.
 //
 // A Deckle that a filed card already accounts for is counted ONCE: the card's
 // own Production Log row carries the same rowToken (and deckleId) the Deckle
@@ -4874,7 +4881,7 @@ async function buildJobCardProgressMap(pendingIds) {
   // has its rows concatenated in the order they were produced.
   const [cards, liveDeckles, liveOrders] = await Promise.all([
     MachineJobCard.find({ pendingProductionId: { $in: pendingIds } })
-      .select("pendingProductionId jobCardId jobSetting productionLog updatedAt")
+      .select("pendingProductionId jobCardId jobSetting productionLog createdAt updatedAt")
       .sort({ updatedAt: 1 })
       .lean(),
     // producedVia "jobcard" only: a Deckle laminated at Assign & Continue
@@ -4882,11 +4889,11 @@ async function buildJobCardProgressMap(pendingIds) {
     // has run -- counting those would show every freshly assigned order as
     // part-produced before anyone touched the machine.
     MaterialStock.find({ producedFor: { $in: pendingIds }, producedVia: "jobcard" })
-      .select("producedFor rollId reelMtrs productionRowToken createdAt")
+      .select("producedFor rollId reelMtrs productionRowToken productionTime productionJoints joints createdAt")
       .sort({ createdAt: 1 })
       .lean(),
     PendingProduction.find({ _id: { $in: pendingIds } })
-      .select("runningOn liveMaterialInUse")
+      .select("runningOn liveMaterialInUse liveRun liveSetting liveStartedAt")
       .lean(),
   ]);
   const numberOrNull = (value) => (
@@ -4905,7 +4912,20 @@ async function buildJobCardProgressMap(pendingIds) {
     // scanned, a Deckle made, or a card filed. It is what the WIP tab lists
     // on, so a row there is always a job that is actually running.
     started: true, live: false, running: false, runningOn: null, mounted: 0,
+    // When the last deckle came off (the Finished column's "@ time"), and
+    // the deckle on the machine now ({ startedAt, startTime, startMtrs }).
+    lastDoneAt: null, currentRun: null,
+    // The Job Setting row running now ({ startedAt, startTime, startMtrs }),
+    // and when the job was first played.
+    setting: null, jobStartedAt: null,
   });
+  const laterOf = (a, b) => (!a ? b : !b ? a : new Date(a) > new Date(b) ? a : b);
+  // When each order's last deckle was finished. A Deckle's createdAt is its
+  // Stop punch (it is inwarded right then), so the Deckles answer this whether
+  // or not a card has filed them yet. Only an order with filed rows and no
+  // Deckle at all (the save couldn't make them) falls back to the card's save.
+  const lastDeckleAt = new Map();
+  const lastCardAt = new Map();
   // Deckles a filed card already accounts for, per order -- by rowToken (the
   // idempotency key both the card row and the Deckle carry) and by Deckle id.
   const claimedDeckles = new Map();
@@ -4946,7 +4966,6 @@ async function buildJobCardProgressMap(pendingIds) {
       .forEach((row) => {
         acc.production.push({
           index: acc.production.length + 1,
-          rollId: row.rollId || "",
           deckleId: row.deckleId || "",
           meters: Number(row.meters),
           startTime: row.time?.startTime || "",
@@ -4959,6 +4978,9 @@ async function buildJobCardProgressMap(pendingIds) {
       });
 
     acc.totalMeters = acc.production.reduce((sum, row) => sum + row.meters, 0);
+    if ((card.productionLog || []).some((row) => Number(row?.meters) > 0)) {
+      lastCardAt.set(key, laterOf(lastCardAt.get(key) || null, card.createdAt || card.updatedAt || null));
+    }
     // Latest card wins for the header id/timestamp (cards are oldest-first).
     acc.jobCardId = card.jobCardId;
     acc.updatedAt = card.updatedAt;
@@ -4966,9 +4988,10 @@ async function buildJobCardProgressMap(pendingIds) {
   });
 
   // ---- Deckles made since (or without) a card: the metres actually run ----
-  const laterOf = (a, b) => (!a ? b : !b ? a : new Date(a) > new Date(b) ? a : b);
   liveDeckles.forEach((deckle) => {
     const key = String(deckle.producedFor);
+    // Every Deckle, filed on a card or not, is a finished deckle.
+    lastDeckleAt.set(key, laterOf(lastDeckleAt.get(key) || null, deckle.createdAt || null));
     const seen = deckleKeys(key);
     const token = deckle.productionRowToken ? `t:${String(deckle.productionRowToken).trim()}` : null;
     const rollKey = deckle.rollId ? `d:${normDeckleId(deckle.rollId)}` : null;
@@ -4979,17 +5002,25 @@ async function buildJobCardProgressMap(pendingIds) {
     const acc = map.get(key) || blank();
     acc.production.push({
       index: acc.production.length + 1,
-      rollId: "",
       deckleId: deckle.rollId || "",
       meters: Number(deckle.reelMtrs) || 0,
-      // The Job Card holds the times; this Deckle was inwarded straight off
-      // the Stop punch, so all it knows is when that was.
-      startTime: "",
-      endTime: "",
-      faceJoint: "",
-      faceMtrs: null,
-      releaseJoint: "",
-      releaseMtrs: null,
+      // Punched on the card row and stored on the Deckle at Stop. A Deckle
+      // made before the times were stored has neither; the dialog then falls
+      // back to producedAt (the Stop punch itself) for the END time only.
+      startTime: deckle.productionTime?.startTime || "",
+      endTime: deckle.productionTime?.endTime || "",
+      // Joint / Wrinkle per web, stored on the Deckle at Stop
+      // (productionJoints) because the card that holds them isn't written
+      // yet. A Deckle made before that has only `joints`, one label merging
+      // both webs: absent, the run was clean on both (every jobcard Deckle
+      // has been minted with it -- it is omitted only for a clean run);
+      // present, it can't say which web, so it travels as jointsUnattributed
+      // rather than being filed under one of them.
+      faceJoint: deckle.productionJoints?.face?.joint || "",
+      faceMtrs: numberOrNull(deckle.productionJoints?.face?.mtr),
+      releaseJoint: deckle.productionJoints?.release?.joint || "",
+      releaseMtrs: numberOrNull(deckle.productionJoints?.release?.mtr),
+      jointsUnattributed: !deckle.productionJoints && deckle.joints ? deckle.joints : "",
       producedAt: deckle.createdAt || null,
       live: true,
     });
@@ -5011,9 +5042,27 @@ async function buildJobCardProgressMap(pendingIds) {
     const held = activeClaim(order.runningOn);
     const mounted = Object.values(order.liveMaterialInUse || {})
       .reduce((n, reels) => n + (Array.isArray(reels) ? reels.filter(Boolean).length : 0), 0);
-    if (!claimed && !mounted) return;
+    // A run whose row already has a Deckle (on a card or in stock) is over,
+    // even if the Stop that made it failed to clear it -- never show a deckle
+    // as running once it is made.
+    const run = order.liveRun;
+    const runToken = String(run?.rowToken || "").trim();
+    const currentRun = runToken && run.startedAt && !deckleKeys(key).has(`t:${runToken}`)
+      ? { startedAt: run.startedAt, startTime: run.startTime || "", startMtrs: run.startMtrs ?? null }
+      : null;
+    const setting = order.liveSetting?.startedAt
+      ? { startedAt: order.liveSetting.startedAt, startTime: order.liveSetting.startTime || "", startMtrs: order.liveSetting.startMtrs ?? null }
+      : null;
+    // When the job was played: its first punch. A job punched before that was
+    // recorded falls back to the app's running claim -- which a re-claim
+    // moves, so it is only the best that is known for those.
+    const jobStartedAt = order.liveStartedAt || order.runningOn?.claimedAt || null;
+    if (!claimed && !mounted && !currentRun && !setting && !order.liveStartedAt) return;
 
     const acc = map.get(key) || blank();
+    acc.currentRun = currentRun;
+    acc.setting = setting;
+    acc.jobStartedAt = jobStartedAt;
     acc.started = true;
     acc.running = Boolean(held);
     acc.runningOn = claimed
@@ -5028,7 +5077,13 @@ async function buildJobCardProgressMap(pendingIds) {
     // A live job with nothing on a card yet still has a "when": the last
     // heartbeat is the most recent thing known about it.
     acc.updatedAt = laterOf(acc.updatedAt, order.runningOn?.lastSeenAt || null);
+    acc.updatedAt = laterOf(acc.updatedAt, currentRun?.startedAt || null);
+    acc.updatedAt = laterOf(acc.updatedAt, setting?.startedAt || null);
     map.set(key, acc);
+  });
+
+  map.forEach((acc, key) => {
+    acc.lastDoneAt = lastDeckleAt.get(key) || lastCardAt.get(key) || null;
   });
 
   return map;
@@ -6470,6 +6525,10 @@ function mapPendingProductionRow(r, jobCardProgress, advance = new Map()) {
     paperSize: r.paperSize || "—",
     deckleSize: r.deckleSize ?? null,
     runningMeters: r.runningMeters != null && r.runningMeters !== "" ? Number(r.runningMeters) : null,
+    // The whole job's web metres -- what the WIP tab's "Total Mtrs Required"
+    // shows. Derived (utils/deckleTotals.js), the same figure the machine
+    // queue shows: a batch's stored runningMeters is not a total.
+    totalRunningMeters: deckleTotalRunningMetres(r),
     noOfRolls: r.noOfRolls ?? "—",
     allottedRolls: rollsAllotted,
     rollsStatus,
@@ -6490,6 +6549,9 @@ function mapPendingProductionRow(r, jobCardProgress, advance = new Map()) {
     createdAt: r.createdAt,
     assignedAt: r.assignedAt || null,
     liveUpdate: progress,
+    // The WIP tab's Live column: the deckle running now, its metres and ETA
+    // at the laminator's speed, and when the whole job should be done.
+    runPlan: progress ? buildRunPlan(r, progress) : null,
     // Whether "Send Back to Pending" can work, decided by the same facts the
     // POST refuses on (see /labels/production/unassign/:id): anything already
     // produced, or a reel reconciled mid-job, can't be reversed from here.
@@ -7112,10 +7174,11 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     // job that had Start punched carries a device claim, and it is cleared
     // only by the job card's own save. Left behind, it follows the order back
     // to Pending and then blocks the next device to pick the job up until it
-    // goes stale (JOB_CLAIM_STALE_MS, 15 minutes).
+    // goes stale (JOB_CLAIM_STALE_MS, 15 minutes). `liveRun` (a deckle row
+    // whose Start was punched) likewise: the job is off the machine.
     await PendingProduction.findByIdAndUpdate(id, {
       $set: { assignedMachineId: null, operatorId: null, helperId: null, allottedRollIds: [], producedRolls: 0 },
-      $unset: { allottedRolls: "", assignedAt: "", allottedLayers: "", liveMaterialInUse: "", runningOn: "" },
+      $unset: { allottedRolls: "", assignedAt: "", allottedLayers: "", liveMaterialInUse: "", runningOn: "", liveRun: "", liveSetting: "", liveStartedAt: "" },
     });
 
     res.locals.auditDescription = `Sent production order ${id} back to Pending`;

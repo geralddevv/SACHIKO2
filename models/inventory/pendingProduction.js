@@ -275,6 +275,39 @@ const pendingProductionSchema = new mongoose.Schema(
       claimedAt: { type: Date },
       lastSeenAt: { type: Date },
     },
+    // The Production Log row (= one deckle) the machine is running RIGHT NOW,
+    // stamped the moment its Start is punched (POST /machine/jobcard/log/start
+    // and the operator app's /api/operator/jobcard/log/start). Without it the
+    // server learns of a row only at Stop, when its Deckle is inwarded -- so
+    // the WIP tab could say what was made but never what was being made, or
+    // when it would be done. `startedAt` is the server's clock at the punch
+    // and is what the WIP tab's ETA is counted from (utils/productionEta.js);
+    // `startTime` is the punch as the card shows it ("1:07 PM"), kept for
+    // reference. Ended when that row's Deckle is made (matched on rowToken),
+    // and cleared by the Job Card save and by unassign. A Start the next row
+    // punches simply replaces it.
+    liveRun: {
+      rowToken: { type: String, trim: true },
+      startedAt: { type: Date },
+      startTime: { type: String, trim: true },
+      startMtrs: { type: Number },
+    },
+    // The Job Setting row running RIGHT NOW (setup on the machine before, or
+    // between, deckles) -- set by its Start punch (POST /machine/jobcard/
+    // setting/start, app: /api/operator/jobcard/setting/start) and cleared by
+    // its Stop, by a Production Log Start (production has begun), by the Job
+    // Card save and by unassign. The WIP tab's Live column shows JOB SETTING
+    // off it. `startTime` (the punch as the card shows it) is what a Stop is
+    // matched on, so a Stop can only end the row it belongs to.
+    liveSetting: {
+      startedAt: { type: Date },
+      startTime: { type: String, trim: true },
+      startMtrs: { type: Number },
+    },
+    // When this job was first played -- the first Start of any kind (Job
+    // Setting or Production Log) punched on its card. Set once ($min) and
+    // cleared with the card save / unassign. The WIP tab's STARTED phase.
+    liveStartedAt: { type: Date },
     // One entry per roll/drum an operator swapped out mid-job via the
     // Materials in Use "Add" flow on the Job Card (POST /sachiko/machine/
     // jobcard/material/set-remaining) -- the live counterpart to the

@@ -18,6 +18,10 @@
   const fixedCols = 5;
   const existingTargets = targetDeckles.filter((d) => d.existing);
   const curingTargets = targetDeckles.filter((d) => d.curing && d.curing.cured === false);
+  // Each Deckle's own curing window (CHROMO 6 h, PP 8 h) -- "6" or "6 / 8".
+  const curingHours = [...new Set(curingTargets.map((d) => Number(d.curing.hours)).filter((h) => h > 0))]
+    .sort((a, b) => a - b)
+    .join(" / ");
   // Every Deckle of this order's Product Code + Size, in stock right now --
   // the ones being allocated here (targetDeckles) plus the rest left
   // unticked on the Slitting Queue (groupDeckles, "Other Deckles in this
@@ -477,10 +481,10 @@
       <div class="sl-warn-note">
         <i class="fa-solid fa-hourglass-half"></i>
         <% if (curingTargets.length === 1) { %>
-          Deckle <strong><%= dash(curingTargets[0].rollId) %></strong> is still curing<%= curingTargets[0].curing.curedAtLabel ? ` — the adhesive is ready at ${curingTargets[0].curing.curedAtLabel}` : "" %> (6&nbsp;h after lamination).
+          Deckle <strong><%= dash(curingTargets[0].rollId) %></strong> is still curing<%= curingTargets[0].curing.curedAtLabel ? ` — the adhesive is ready at ${curingTargets[0].curing.curedAtLabel}` : "" %><% if (curingHours) { %> (<%= curingHours %>&nbsp;h after lamination)<% } %>.
           You can allocate it now, but the operator won't be able to run it on the machine until curing is over.
         <% } else { %>
-          <%= curingTargets.length %> of these Deckles are still curing (6&nbsp;h after lamination): <strong><%= curingTargets.map((d) => d.rollId).join(", ") %></strong>.
+          <%= curingTargets.length %> of these Deckles are still curing<% if (curingHours) { %> (<%= curingHours %>&nbsp;h after lamination)<% } %>: <strong><%= curingTargets.map((d) => d.rollId).join(", ") %></strong>.
           You can allocate them now, but the operator won't be able to run them on the machine until curing is over.
         <% } %>
       </div>

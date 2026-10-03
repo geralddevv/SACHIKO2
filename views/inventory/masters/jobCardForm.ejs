@@ -2147,6 +2147,25 @@
       }
     });
 
+    // Tells the server a Job Setting row's Start / Stop was punched -- the WIP
+    // tab's JOB SETTING phase, and the first punch is when the job counts as
+    // started (POST /machine/jobcard/setting/start|stop). The Stop sends the
+    // row's own Start time, which is what it is matched on, so it can only
+    // end its own row's setting. Fire and forget, like mark-in-use.
+    function reportSettingPunch(kind, row) {
+      const pendingId = document.querySelector('input[name="pendingId"]')?.value || "";
+      if (!pendingId) return;
+      const startTime = row.querySelector(".js-start-input")?.value || "";
+      const body = kind === "start"
+        ? { pendingId, startTime, startMtrs: row.querySelector(".js-mtrs1")?.value || "" }
+        : { pendingId, startTime };
+      fetch(`/app/machine/jobcard/setting/${kind}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).catch(() => {});
+    }
+
     jsBody.addEventListener("click", (e) => {
       const startBtn = e.target.closest(".js-start-btn");
       if (startBtn) {
@@ -2167,6 +2186,7 @@
         startBtn.style.background = "#6b7280";
         startBtn.style.cursor = "default";
         markRowMaterialsInUse(row, "js");
+        reportSettingPunch("start", row);
         updateStartProdLogButton();
         return;
       }
@@ -2188,6 +2208,7 @@
         stopBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
         stopBtn.style.background = "#6b7280";
         stopBtn.style.cursor = "default";
+        reportSettingPunch("stop", row);
         updateStartProdLogButton();
       }
     });
@@ -2416,6 +2437,22 @@
       note.style.color = color;
     }
 
+    // Fires the instant a row's Start is punched: tells the server which
+    // deckle is on the machine now, and since when -- the WIP tab counts its
+    // Live ETA from it (POST /machine/jobcard/log/start). Until this, nothing
+    // about a row reached the server before its Stop. Fire and forget, like
+    // mark-in-use: a failed call costs the WIP tab its ETA, never the punch.
+    function reportLogRowStart(row, time) {
+      const pendingId = document.querySelector('input[name="pendingId"]')?.value || "";
+      const rowToken = logRowVal(row, ".log-row-token");
+      if (!pendingId || !rowToken) return;
+      fetch("/app/machine/jobcard/log/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingId, rowToken, startTime: time, startMtrs: logRowVal(row, ".log-start-mtrs") }),
+      }).catch(() => {});
+    }
+
     // Fires the instant a row's Stop is punched (see the .log-stop-btn
     // handler below) -- POSTs just this one row to
     // /machine/jobcard/log/produce so its Deckle is created and inwarded to
@@ -2517,6 +2554,7 @@
         startBtn.style.background = "#6b7280";
         startBtn.style.cursor = "default";
         markRowMaterialsInUse(row, "log");
+        reportLogRowStart(row, time);
         return;
       }
       const stopBtn = e.target.closest(".log-stop-btn");

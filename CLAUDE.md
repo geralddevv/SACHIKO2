@@ -682,6 +682,23 @@ removes it.
 Note `safeJson()` turns a bare falsy value into `"{}"` — wrap a boolean in an
 object before embedding it (`safeJson({ picked })`), or it reads as true.
 
+### Slitting: a Deckle has to cure before it is run
+
+After lamination the adhesive cures for a time set by the **facestock family**
+— **CHROMO 6 h, PP 8 h**, any other family 6 h (`DEFAULT_CURING_HOURS`) —
+counted from the Deckle's `createdAt`. A build whose **every** adhesive layer
+is hot melt (`HOTMELT` / `HOT MELT`) has no curing at all; a hot melt +
+waterbase double build still cures. The table is `CURING_HOURS_BY_FAMILY` in
+`routes/system/slitting.js`. The Label Stock's own `family` and its
+`facestock.facestockFamily` (plus `facestock2` on a DOUBLE FACESTOCK) are all
+read, and the longest wait wins.
+
+Allocation is **not** gated (a job can be planned while the reel cures); the
+operator's run **is** — scanning, Start and Stop on the slitting job card all
+refuse an uncured Deckle, and the queues show the countdown. Any query whose
+reels go to `deckleCuring()` must populate `CURING_MATERIAL_FIELDS`: without
+the family, every Deckle quietly falls back to 6 h.
+
 ### Machine queue: how far the allotted material gets
 
 `buildQueueRows()` (`routes/system/machine.js`) reports, per order, **how many
@@ -761,8 +778,8 @@ actually started** — not every order sitting on a machine queue. Being
 assigned is not being in progress: an order can wait days on a queue, and
 listing those buried the handful genuinely running.
 
-The membership test and the Live Status column are the same question, answered
-by `buildJobCardProgressMap()` (`routes/fairdesk_route.js`). A `MachineJobCard`
+The membership test and the **Finished** / **Live** columns are the same
+question, answered by `buildJobCardProgressMap()` (`routes/fairdesk_route.js`). A `MachineJobCard`
 is written **once, by Save Production Entry, at the end of the job**, so
 reading only cards left this column saying "Not started" for a job that had
 been running for hours with Deckles already in Semi Finished Stock. Three
@@ -771,9 +788,11 @@ there to be read:
 
 | signal | written by | shows as |
 |---|---|---|
-| `MaterialStock.producedFor` + `producedVia: "jobcard"` | each Stop punch (`POST /machine/jobcard/log/produce`) | the metres, tagged **LIVE** |
+| `MaterialStock.producedFor` + `producedVia: "jobcard"` | each Stop punch (`POST /machine/jobcard/log/produce`) | the metres, and the dialog's Production Log row (untagged — made is made) |
 | `PendingProduction.runningOn` | first Start (`POST /api/operator/jobcard/claim`), heartbeated | **Running** |
 | `PendingProduction.liveMaterialInUse` | each reel scanned (`POST /machine/jobcard/mark-in-use`) | **In Setting** |
+| `PendingProduction.liveRun` | a Production Log row's Start (`POST /machine/jobcard/log/start`, app: `/api/operator/jobcard/log/start`) | the Live column's start + ETA |
+| `PendingProduction.liveSetting` / `liveStartedAt` | a Job Setting row's Start / Stop (`POST /machine/jobcard/setting/start\|stop`, app: `/api/operator/jobcard/setting/*`); the first punch of any kind stamps `liveStartedAt` (`$min`) | **JOB SETTING** / **STARTED** |
 | `MachineJobCard` | Save Production Entry | the filed figures |
 
 Three rules hold it together:
@@ -781,6 +800,11 @@ Three rules hold it together:
 - **A Deckle is counted once.** A card's Production Log row carries the same
   `rowToken` (and `deckleId`) the Deckle was minted with, so a Deckle a card
   already accounts for is matched and skipped rather than added again.
+- **A live Deckle carries its own row times.** The Stop punch stores the
+  row's Start / End on the Deckle (`MaterialStock.productionTime`), because
+  the card that would hold them doesn't exist yet. A Deckle made before that
+  field has neither, and its `createdAt` (the Stop punch) stands in for the
+  **End** time only — never the Start.
 - **`producedVia: "assign"` never counts.** Those Deckles are the order's raw
   material being laminated at Assign & Continue, not metres it has run —
   counting them would show every freshly assigned order as part-produced.
@@ -796,6 +820,148 @@ query, same `mapPendingProductionRow()`, same filter as the page render) and
 the poll reconciles: update, add, and delete what is no longer there. It used
 to send progress alone and call `wipTable.updateData()`, which rejects on any
 row the table doesn't have.
+
+**Finished** is the metres the job has made, and **Deckles** beside it how
+many of the planned deckles. When the last one came off (`lastDoneAt`: the
+newest jobcard Deckle's `createdAt`, i.e. its Stop punch — not the card's
+save, and not `updatedAt`, which a heartbeat moves) is shown in the Live
+Status dialog, not the column.
+
+**Live** is the deckle on the machine now: its Start, its metres, and when it
+should be done at the laminator's **15 m/min** (`LAMINATOR_SPEED_MPM` in
+`utils/productionEta.js`, which does the arithmetic — plain numbers, no DB):
+
+    deckle ETA = Start punch + Deckle R.M. / 15 min        (1,000 m -> 66.7 min)
+    job ETA    = deckle ETA + deckles after it x R.M. / 15
+
+- **The Start punch only exists because of `liveRun`.** Before it the server
+  heard nothing about a row until its Stop. Both clients now POST it at Start
+  (web `reportLogRowStart()` in `jobCardForm.ejs`; app `logStart()` in
+  sachikoOperatorApp — an older app build doesn't send it, so its jobs show
+  no ETA). `startedAt` is the server's clock; the punched string is kept too.
+  A retried Start for the same `rowToken` keeps the first stamp, and a Start
+  for a row that already has a Deckle is refused.
+- **It ends when the row's Deckle is made** (`endLiveRun()`, matched on
+  `rowToken`, from both produce routes), and is cleared by the card save and by
+  unassign. On read, a `liveRun` whose token already has a Deckle is ignored,
+  so a Stop whose clear failed can never leave a made deckle "running".
+- **Deckle R.M.** is `deckleRunningMeters`, else the first layout's
+  `deckleRunningMeter`, else — on a plain order only — `runningMeters`. A batch
+  with none of those gets **no ETA**, never a guess off `runningMeters` (not a
+  web length on a batch; see `utils/deckleTotals.js`). Deckle target and count
+  are `deckleTargetOf()` (shared with the machine queue) and the larger of the
+  progress map's de-duplicated production rows and `producedRolls`.
+- **Overrun is the page's call, not the server's.** The browser decides "past
+  its ETA" against its own clock on every draw (running rows are redrawn
+  every 10 s), and once a deckle overruns the job ETA becomes
+  `max(job ETA, now + deckles after it x R.M. / 15)` — the next deckles can't
+  start before now. ETAs show to the nearest minute; punched times stay cut to
+  the minute, as the job card punches them.
+- **While a deckle runs, the Live cell blinks green; past its ETA, red** —
+  the same 1.2 s `step-end` rhythm, so the two differ by colour alone. Red
+  starts on the same test as the "X min over" text (a whole minute past), so
+  the two never disagree. Job Setting / Idle / All made / Started don't
+  blink. `tableDisp.css` sets the cell colour `!important`, which an animation
+  can't beat, so the red keyframes move two `@property` colours that the
+  `!important` declarations read; `step-end` keeps it a hard blink (never a
+  muddy, unreadable midpoint). **One function owns the cell's state,
+  `wipSetLiveCell()`** — its classes and its inline `animation`, which holds
+  the green blink, the fill and the red blink alike; two helpers setting
+  that one property separately wiped out each other's timing. Tabulator
+  rebuilds a row's cells on every redraw, so each animation starts at the
+  point the wall clock is at (a blink at its phase of 1.2 s, the fill at the
+  time gone since Start) and a cell already in the same state is left alone.
+  Rows with a deckle running are redrawn every 10 s on their own clock,
+  independent of the 20 s data poll. Reduced motion (`animation: none
+  !important`, since the animations are inline): solid pale green / solid
+  red, the fill held still.
+- A deckle started after all the planned ones are made reads
+  "Deckle 3 · 2 planned" / "Extra deckle", never "Deckle 3 of 2".
+- **Live shows the job's phase** — `plan.phase` from `buildRunPlan()`, in
+  this precedence: **RUNNING** (a deckle row started) > **JOB SETTING** (a
+  setting row started, before or between deckles) > **ALL MADE** > **IDLE**
+  (phase `"gap"`: a deckle has come off, the next isn't started — idle time
+  counted from that Deckle's `createdAt`) > **STARTED** (played, nothing made
+  yet). On screen it is always **Idle** / "idle time", never "gap" — the
+  internal names (`phase: "gap"`, `gapSince`, `gapBeforeMins`) are unchanged. With no
+  deckle running, what is left shows as a **duration**, not a clock — there
+  is no start to count from. Stops between deckles are never modelled.
+- **A setting Stop only ends its own row**: it is matched on the row's Start
+  time (`liveSetting.startTime`, kept by a restored draft). A deckle Start
+  clears `liveSetting` (production has begun); the card save and unassign
+  clear all three live fields.
+- **Idle time in the dialog**: a separator between Production Log rows from
+  the card's own punches (previous End → next Start — same tablet clock at
+  both ends, so they agree even where that clock is off; midnight wraps; a
+  missing punch shows none), and a closing line for now off server times — the
+  idle time before the running deckle (`gapBeforeMins`) or the idle time still
+  running. The dialog's scroll areas use the app's brand-blue table scrollbar
+  (the same rules as `.tabulator .tabulator-tableholder`).
+- **The dialog's two logs share one grid.** *Job Setting Log*: # · Mtrs ·
+  Start Time · End Time · Counter · Status (no Roll ID — a setting row has no
+  id of its own, so Mtrs takes the width of Deckle ID + Made). *Production
+  Log*: # · Deckle ID · Made · Start Time · End Time · **Facestock Joint /
+  Wrinkle** · **Release Joint / Wrinkle**. Start, End and the two right-hand
+  columns sit exactly over each other (`SETTING_COLGROUP` / `PROD_COLGROUP` —
+  keep the sums). A joint cell is the card's own record, "Joint at 120 mtrs" /
+  "Wrinkle at 85 mtrs", and an empty value anywhere in the logs reads
+  **None**, never a dash. No LIVE badge on unsaved rows.
+- **A live Deckle carries its joints per web** (`MaterialStock.productionJoints`,
+  written at the Stop punch beside `productionTime`), because `joints` merges
+  both webs into one label for the reel's sticker. An older live Deckle has
+  only `joints`: absent means a clean run on both webs (every jobcard Deckle
+  has been minted with it, omitted only for a clean run), so None is true;
+  present, the dialog shows it across both columns as "(facestock or release
+  not recorded)" rather than filing it under the wrong web.
+- **The Live cell's background is also the running deckle's progress bar** —
+  a stronger green than the blink's pale one fills it from the left, Start to
+  ETA (a `background-size` animation in `wipSetLiveCell()`; re-setting a
+  running animation's delay would count the elapsed time twice, hence
+  "left alone"). Past the ETA the red blink takes over.
+- **Each clickable cell carries one underlined headline** (`.wip-link`) all
+  the time, not only on hover — the figure in Deckles / Finished / Target /
+  Estimate, the state word in Live, the "17 min late" line in Status, the
+  reason line under a "—" — because every one of them opens the dialog.
+
+**The columns, left to right: Deckles · Finished · Live · Target · Status ·
+Estimate.** Each is a figure with at most one quiet line under it, and they
+speak in **durations only** — no time of day appears in any of them (or in
+their Excel export). Times of day are the Live Status dialog's, which every
+one of these cells opens. **Deckles** is `runPlan.done` / `target` with a bar;
+**Finished** is metres alone. The table runs `columnDefaults: { vertAlign:
+"middle" }` so one-line cells sit level with the two-line ones.
+
+**Target / Status / Estimate** answer "is this job on time?":
+
+    Target   = (deckle target - producedRolls) x R.M. / 15            (a duration)
+    delay    = finish counted from now - (jobStartedAt + Target)
+               finish = job ETA, never before now + deckles after it x R.M. / 15  (running)
+                      = now + deckles still to make x R.M. / 15       (setting / idle / started)
+                      = when the last deckle came off                 (all made: actual)
+    Status   = delay: Delayed / Ahead / On time (within ±5 min, WIP_ON_TIME_MINS)
+    Estimate = Target + delay  (start to finish, a duration)
+
+- **Target is fixed once the job is played** (`runPlan.targetAt` /
+  `targetDeckles`, worked out in `buildRunPlan()`): the run done nonstop at
+  speed from its first punch — no setting, no idle time, no overrun. So setting time
+  counts as delay; that is deliberate, it is time the job was not running.
+- **The delay is counted from now**, so every setting, idle time and overrun so far
+  is already in it — which is what makes Estimate "the time including the
+  delay". It is the page's call (the browser's clock), like overrun; rows not
+  yet all made — `started` included — are redrawn every 10 s.
+- **A job switched off mid-order owes only what wasn't filed.** The card save
+  clears `liveStartedAt` and files the deckles as `producedRolls`, so the next
+  card's run is timed from its own first punch for `target - producedRolls`
+  deckles (`priorDone` / `targetDeckles` on the plan).
+- **The three figures add up exactly as shown**: Target and the delay are
+  whole minutes and Estimate is *built* as their sum (`wipOutlook()`), never
+  worked out separately and rounded on its own.
+- Target needs Deckle R.M. and Deckle Qty; Status and Estimate also need the
+  recorded start. A missing one shows "—" with what is missing under it,
+  rather than a guess.
+
+"Total Mtrs Required" on this tab is `deckleTotalRunningMetres()` (the machine
+queue's figure), not the batch's stored `runningMeters`.
 
 "Send Back to Pending" is disabled on `canSendBack`, computed from the same
 facts `POST /labels/production/unassign/:id` refuses on (anything produced, or

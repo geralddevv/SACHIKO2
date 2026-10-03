@@ -24,6 +24,10 @@ import {
   saveMachineJobCard,
   reelsInUseElsewhere,
   produceDecklesFromLog,
+  startLiveRun,
+  endLiveRun,
+  startLiveSetting,
+  stopLiveSetting,
   consumePoolUsage,
   resolveDeckleLocation,
   resolveScannedCombinationVariant,
@@ -434,6 +438,61 @@ router.post("/jobcard/mark-in-use", requireOperatorApiAuth, createLimiter, async
   }
 });
 
+// Fired the moment a Job Setting row's Start / Stop is punched -- the WIP
+// tab's JOB SETTING phase, and the first punch that makes a job STARTED. Same
+// core as the web card's POST /machine/jobcard/setting/start|stop.
+async function ownsJob(req, res) {
+  const { pendingId } = req.body || {};
+  if (!mongoose.isValidObjectId(pendingId)) {
+    res.status(400).json({ success: false, code: "bad-request" });
+    return false;
+  }
+  const pendingDoc = await PendingProduction.findById(pendingId).select("operatorId").lean();
+  if (!pendingDoc) {
+    res.status(404).json({ success: false, code: "no-order" });
+    return false;
+  }
+  if (String(pendingDoc.operatorId || "") !== req.authUser.empObjId) {
+    res.status(403).json({ success: false, code: "forbidden" });
+    return false;
+  }
+  return true;
+}
+router.post("/jobcard/setting/start", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    if (!(await ownsJob(req, res))) return;
+    const result = await startLiveSetting(req.body || {});
+    res.status(result.code === "bad-request" ? 400 : 200).json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("OPERATOR API SETTING START ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+router.post("/jobcard/setting/stop", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    if (!(await ownsJob(req, res))) return;
+    const result = await stopLiveSetting(req.body || {});
+    res.status(result.code === "bad-request" ? 400 : 200).json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("OPERATOR API SETTING STOP ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Fired the moment a Production Log row's Start is punched -- records which
+// deckle is on the machine now and since when, for the WIP tab's Live ETA.
+// Same core as the web card's POST /machine/jobcard/log/start.
+router.post("/jobcard/log/start", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    if (!(await ownsJob(req, res))) return;
+    const result = await startLiveRun(req.body || {});
+    res.status(result.code === "bad-request" ? 400 : 200).json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("OPERATOR API LOG START ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
 router.post("/jobcard/log/produce", requireOperatorApiAuth, createLimiter, async (req, res) => {
   try {
     const b = req.body || {};
@@ -452,6 +511,7 @@ router.post("/jobcard/log/produce", requireOperatorApiAuth, createLimiter, async
         .populate({ path: "material", select: "productCode" })
         .lean();
       if (priorDeckle) {
+        await endLiveRun(b.pendingId, rowToken);
         return res.json({
           success: true,
           deckleId: priorDeckle.rollId,
@@ -528,6 +588,8 @@ router.post("/jobcard/log/produce", requireOperatorApiAuth, createLimiter, async
     if (!deckleId) {
       return res.status(400).json({ success: false, message: "Couldn't produce a Deckle for this row." });
     }
+    // The row is off the machine -- the WIP tab stops counting down to it.
+    await endLiveRun(b.pendingId, rowToken);
 
     // Firm the reel reservation, best-effort -- see the EJS route's own
     // comment on this same block in routes/system/machine.js.

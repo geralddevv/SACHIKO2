@@ -273,9 +273,9 @@
 
   // TEMP (testing): keeps the Slit button live even for a group with NO Deckle
   // laminated yet, so the allocate flow can be walked through before any web
-  // exists. Set to false to restore the real gate. Mirrors CURING_HOURS = 0 in
-  // routes/system/slitting.js -- both are test switches, not behaviour, and
-  // both should go back together.
+  // exists. Set to false to restore the real gate. A test switch, not
+  // behaviour. (It used to be paired with a curing-off switch in
+  // routes/system/slitting.js; curing is back on, this one is still open.)
   //
   // Note the picker has nothing to tick in that state: the dialog opens on its
   // "No Deckle produced yet" panel and Continue has nothing to carry. That is

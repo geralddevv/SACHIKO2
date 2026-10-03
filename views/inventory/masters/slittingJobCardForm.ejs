@@ -710,15 +710,22 @@
     }
   });
 
-  // Curing gate: a Deckle can't be run until its adhesive has cured (6 h after
-  // lamination). The server sends `cured`; re-check the clock here too so a
-  // card left open unlocks on its own when the time passes. Hot-melt builds
-  // carry no curedAt and are never gated.
+  // Curing gate: a Deckle can't be run until its adhesive has cured (CHROMO
+  // 6 h, PP 8 h after lamination -- the server works out which, per Deckle).
+  // The server sends `cured`; re-check the clock here too so a card left open
+  // unlocks on its own when the time passes. Hot-melt builds carry no curedAt
+  // and are never gated.
   function curedNow(row) {
     const c = row.curing;
     if (!c || c.hotMelt || c.cured) return true;
     if (c.curedAt) return Date.now() >= Date.parse(c.curedAt);
     return false;
+  }
+
+  // " (8 h after lamination)" for this Deckle's own curing window.
+  function cureWindow(row) {
+    const h = Number(row.curing && row.curing.hours);
+    return h > 0 ? ` (${h} h after lamination)` : "";
   }
 
   // Which row the scan has confirmed. Only that row's Start is live -- a
@@ -970,7 +977,7 @@
       // there is no Status column to spell it out in any more.
       const state = running ? "running" : curing ? "curing" : armed ? "armed" : "pending";
       const cureMsg = curing
-        ? `Adhesive still curing${row.curing && row.curing.curedAtLabel ? ` — ready at ${esc(row.curing.curedAtLabel)}` : ""} (6 h after lamination)`
+        ? `Adhesive still curing${row.curing && row.curing.curedAtLabel ? ` — ready at ${esc(row.curing.curedAtLabel)}` : ""}${cureWindow(row)}`
         : "";
 
       const rolls = (row.cuts || []).length;
@@ -1074,7 +1081,7 @@
         armedIndex = null;
         render();
         const lbl = ROWS[i].curing && ROWS[i].curing.curedAtLabel ? ` — ready at ${ROWS[i].curing.curedAtLabel}` : "";
-        setScanMsg(`${ROWS[i].deckleId} is still curing (6 h after lamination)${lbl}. It can't be run yet.`, "bad");
+        setScanMsg(`${ROWS[i].deckleId} is still curing${cureWindow(ROWS[i])}${lbl}. It can't be run yet.`, "bad");
         return false;
       }
       armRow(i);

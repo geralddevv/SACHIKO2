@@ -182,14 +182,39 @@ function pendingLayouts(pending) {
 
 // ---- Deckle curing -------------------------------------------------------->
 // After lamination the adhesive has to cure before the web can be slit --
-// CURING_HOURS from the moment the Deckle (MaterialStock reel) was created.
-// A build whose every adhesive layer is hot melt sets on contact and is
-// exempt. The PLANNER's allocation is deliberately NOT gated on this (a job
-// can be planned while the reel cures); the OPERATOR's run IS -- Start and
-// Stop on the slitting job card refuse an un-cured Deckle, and the machine /
-// operator queues flag it.
-const CURING_HOURS = 0; // TEMP: curing gate off for testing -- restore to 6
+// counted from the moment the Deckle (MaterialStock reel) was created, for as
+// long as its facestock family needs: CHROMO 6 h, PP 8 h. A family not listed
+// takes DEFAULT_CURING_HOURS. A build whose every adhesive layer is hot melt
+// sets on contact and is exempt whatever the family. The PLANNER's allocation
+// is deliberately NOT gated on this (a job can be planned while the reel
+// cures); the OPERATOR's run IS -- Start and Stop on the slitting job card
+// refuse an un-cured Deckle, and the machine / operator queues flag it.
+const CURING_HOURS_BY_FAMILY = [
+  { re: /\bPP\b/, hours: 8 },
+  { re: /\bCHROMO\b/, hours: 6 },
+];
+const DEFAULT_CURING_HOURS = 6;
 const HOT_MELT_RE = /HOT\s*-?\s*MELT/i;
+
+// What deckleCuring() reads off a reel's populated `material`. Any query whose
+// reels are passed to deckleCuring() must populate at least these -- without
+// the family every Deckle silently falls back to DEFAULT_CURING_HOURS.
+const CURING_MATERIAL_FIELDS =
+  "family rollType facestock.facestockFamily facestock2.facestockFamily adhesive adhesive2";
+
+// Hours this build needs. The Label Stock's own Family and its facestock's
+// family normally agree; where they don't (or a DOUBLE FACESTOCK pairs two
+// families) the longest wait wins, so a web is never run early.
+function curingHoursFor(material) {
+  const families = [material?.family, material?.facestock?.facestockFamily];
+  if (material?.rollType === "DOUBLE FACESTOCK") families.push(material?.facestock2?.facestockFamily);
+  let hours = null;
+  for (const family of families.map((f) => trim(f).toUpperCase()).filter(Boolean)) {
+    const hit = CURING_HOURS_BY_FAMILY.find((e) => e.re.test(family));
+    if (hit) hours = Math.max(hours ?? 0, hit.hours);
+  }
+  return hours ?? DEFAULT_CURING_HOURS;
+}
 
 // Exempt only when there is at least one adhesive layer and EVERY layer
 // present is hot melt -- a waterbase + hotmelt double build still cures.
@@ -200,16 +225,17 @@ function adhesiveExemptFromCuring(material) {
   return types.length > 0 && types.every((t) => HOT_MELT_RE.test(t));
 }
 
-// { hotMelt, curedAt: Date|null, cured: bool } for one Deckle reel. A reel
-// with no createdAt (pre-timestamps legacy stock) is treated as cured.
+// { hotMelt, hours, curedAt: Date|null, cured: bool } for one Deckle reel. A
+// reel with no createdAt (pre-timestamps legacy stock) is treated as cured.
 function deckleCuring(reel, at = Date.now()) {
   const hotMelt = adhesiveExemptFromCuring(reel?.material);
+  const hours = hotMelt ? 0 : curingHoursFor(reel?.material);
   const createdAt = reel?.createdAt ? new Date(reel.createdAt) : null;
   const curedAt = hotMelt || !createdAt
     ? null
-    : new Date(createdAt.getTime() + CURING_HOURS * 3600 * 1000);
+    : new Date(createdAt.getTime() + hours * 3600 * 1000);
   const cured = !curedAt || at >= curedAt.getTime();
-  return { hotMelt, curedAt, cured };
+  return { hotMelt, hours, curedAt, cured };
 }
 
 // Short "ready at 14:30 (about 2 h 10 min from now)" tail for messages/labels.
@@ -222,11 +248,11 @@ function curingWhenLabel(curedAt, at = Date.now()) {
   return sameDay ? `${hh}:${mm}` : `${hh}:${mm}, ${d.toLocaleDateString("en-IN")}`;
 }
 
-function curingBlockedMessage(rollId, curedAt) {
+function curingBlockedMessage(rollId, curedAt, hours) {
   const mins = Math.max(0, Math.round((new Date(curedAt).getTime() - Date.now()) / 60000));
   const left = mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`;
-  const gateMins = Math.round(CURING_HOURS * 60);
-  const gate = gateMins >= 60 ? `${CURING_HOURS} h` : `${gateMins} min`;
+  const gateMins = Math.round(hours * 60);
+  const gate = gateMins >= 60 ? `${hours} h` : `${gateMins} min`;
   return `Deckle ${rollId} is still curing (${gate} after lamination) — ready at `
     + `${curingWhenLabel(curedAt)}, about ${left} from now. Only fully hot-melt Deckles skip curing.`;
 }
@@ -293,7 +319,7 @@ async function deckleOptionsFor(pending) {
   if (familyIds.length) or.push({ material: { $in: familyIds } });
 
   const reels = await MaterialStock.find({ $or: or, reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
-    .populate({ path: "material", select: "productCode skuCode adhesive adhesive2" })
+    .populate({ path: "material", select: `productCode skuCode ${CURING_MATERIAL_FIELDS}` })
     .sort({ createdAt: 1 })
     .lean();
 
@@ -326,6 +352,7 @@ async function deckleOptionsFor(pending) {
       // operator can't run it until this clears.
       curing: {
         hotMelt: cure.hotMelt,
+        hours: cure.hours,
         cured: cure.cured,
         curedAt: cure.curedAt ? cure.curedAt.toISOString() : null,
         curedAtLabel: cure.curedAt ? curingWhenLabel(cure.curedAt) : "",
@@ -357,7 +384,7 @@ export async function buildSlittingQueueRows(match) {
   const cureReels = pendingDeckleIds.length
     ? await MaterialStock.find({ _id: { $in: pendingDeckleIds } })
         .select("createdAt rollId")
-        .populate({ path: "material", select: "adhesive adhesive2" })
+        .populate({ path: "material", select: CURING_MATERIAL_FIELDS })
         .lean()
     : [];
   const cureByReel = new Map(cureReels.map((r) => [String(r._id), deckleCuring(r)]));
@@ -427,7 +454,7 @@ async function buildAvailableDeckleRows() {
       .sort({ assignedAt: -1, createdAt: -1 })
       .lean(),
     MaterialStock.find({ reelMtrs: { $gt: 0 }, quantity: { $gt: 0 } })
-      .populate({ path: "material", select: "productCode skuCode adhesive adhesive2" })
+      .populate({ path: "material", select: `productCode skuCode ${CURING_MATERIAL_FIELDS}` })
       .select("material producedFor reelMtrs rollId size location lotNo createdAt")
       .sort({ location: 1, rollId: 1 })
       .lean(),
@@ -1599,7 +1626,7 @@ export async function buildSlittingCard(cardId) {
   const reels = stockIds.length
     ? await MaterialStock.find({ _id: { $in: stockIds } })
         .select("rollId reelMtrs location createdAt size")
-        .populate({ path: "material", select: "adhesive adhesive2" })
+        .populate({ path: "material", select: CURING_MATERIAL_FIELDS })
         .lean()
     : [];
   const reelById = new Map(reels.map((r) => [String(r._id), r]));
@@ -1663,10 +1690,11 @@ export async function buildSlittingCard(cardId) {
           // What is actually left on the reel right now.
           reelMtrs: reel ? round2(Number(reel.reelMtrs) || 0) : null,
           // Curing gate -- Start / Stop stay locked until the adhesive has
-          // cured (6 h after lamination), unless it's a hot-melt build.
+          // cured (CHROMO 6 h / PP 8 h after lamination), unless hot melt.
           curing: {
             cured: cure.cured,
             hotMelt: cure.hotMelt,
+            hours: cure.hours,
             curedAt: cure.curedAt ? cure.curedAt.toISOString() : null,
             curedAtLabel: cure.curedAt ? curingWhenLabel(cure.curedAt) : "",
           },
@@ -1784,7 +1812,7 @@ export async function swapSlittingDeckle({ cardId, index, rollId }) {
   // One fetch, fully populated, for every check below plus the curing gate.
   const newReel = await MaterialStock.findById(scanned._id)
     .select("rollId size location quantity reelMtrs createdAt")
-    .populate({ path: "material", select: "productCode skuCode adhesive adhesive2" })
+    .populate({ path: "material", select: `productCode skuCode ${CURING_MATERIAL_FIELDS}` })
     .lean();
 
   const newCode = trim(newReel.material?.productCode || newReel.material?.skuCode);
@@ -1817,7 +1845,7 @@ export async function swapSlittingDeckle({ cardId, index, rollId }) {
   // hears about it the moment they scan rather than only at Start.
   const cure = deckleCuring(newReel);
   if (!cure.cured) {
-    return fail(curingBlockedMessage(newReel.rollId, cure.curedAt), "curing");
+    return fail(curingBlockedMessage(newReel.rollId, cure.curedAt, cure.hours), "curing");
   }
 
   // Already claimed by another open card -- the entire "someone else can't
@@ -1850,6 +1878,7 @@ export async function swapSlittingDeckle({ cardId, index, rollId }) {
       curing: {
         cured: cure.cured,
         hotMelt: cure.hotMelt,
+        hours: cure.hours,
         curedAt: cure.curedAt ? cure.curedAt.toISOString() : null,
         curedAtLabel: cure.curedAt ? curingWhenLabel(cure.curedAt) : "",
       },
@@ -1895,7 +1924,7 @@ export async function startSlittingRow({ cardId, index, startTime, startMtrs }) 
   // Curing gate: the adhesive must have cured before the web is run.
   const cureReel = await MaterialStock.findById(row.deckleStockId)
     .select("rollId createdAt")
-    .populate({ path: "material", select: "adhesive adhesive2" })
+    .populate({ path: "material", select: CURING_MATERIAL_FIELDS })
     .lean();
   if (cureReel) {
     const cure = deckleCuring(cureReel);
@@ -1904,7 +1933,7 @@ export async function startSlittingRow({ cardId, index, startTime, startMtrs }) 
         ok: false,
         status: 400,
         code: "curing",
-        message: curingBlockedMessage(cureReel.rollId || row.deckleId || "this reel", cure.curedAt),
+        message: curingBlockedMessage(cureReel.rollId || row.deckleId || "this reel", cure.curedAt, cure.hours),
       };
     }
   }
@@ -1989,15 +2018,15 @@ export async function produceSlittingRow(b, { createdBy }) {
   if (!cuts.length) return fail("This Deckle has no roll widths allocated.");
 
   const reel = await MaterialStock.findById(row.deckleStockId)
-    .populate({ path: "material", select: "productCode skuCode adhesive adhesive2" })
+    .populate({ path: "material", select: `productCode skuCode ${CURING_MATERIAL_FIELDS}` })
     .lean();
   if (!reel) return fail("That Deckle no longer exists.");
 
-  // Curing gate: refuse to slit a web whose adhesive has not cured (6 h
-  // after lamination), unless it's a hot-melt build.
+  // Curing gate: refuse to slit a web whose adhesive has not cured (CHROMO 6 h,
+  // PP 8 h after lamination), unless it's a hot-melt build.
   const cure = deckleCuring(reel);
   if (!cure.cured) {
-    return fail(curingBlockedMessage(reel.rollId || row.deckleId || "this reel", cure.curedAt));
+    return fail(curingBlockedMessage(reel.rollId || row.deckleId || "this reel", cure.curedAt, cure.hours));
   }
 
   const available = round2(Number(reel.reelMtrs) || 0);
