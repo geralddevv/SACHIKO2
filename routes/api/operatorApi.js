@@ -6,6 +6,7 @@ import PendingProduction from "../../models/inventory/pendingProduction.js";
 import Machine from "../../models/system/machine.js";
 import MaterialStock from "../../models/inventory/materialStock.js";
 import FinishedStock from "../../models/inventory/finishedStock.js";
+import SlittingJobCard from "../../models/inventory/slittingJobCard.js";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import MaintenanceRequest from "../../models/system/maintenanceRequest.js";
 import { authenticateOperator } from "../../utils/operatorAuth.js";
@@ -1129,10 +1130,16 @@ router.get("/finished/:stockId/prn", requireOperatorApiAuth, async (req, res) =>
       .lean();
     if (!roll) return res.status(404).json({ error: "Roll not found" });
 
-    const owningJob = roll.pendingProductionId
-      ? await PendingProduction.findOne({ _id: roll.pendingProductionId, operatorId: req.authUser.empObjId }).select("_id").lean()
-      : null;
-    if (!owningJob) return res.status(403).json({ error: "Forbidden" });
+    // Ownership is the SLITTING card, not the lamination job: the slitting
+    // operator is picked separately at allocation (SlittingJobCard.operatorId),
+    // and is usually not the operator who laminated the Deckle. Checking the
+    // PendingProduction's operatorId here 403'd every slitting operator's print.
+    // The card that cut this roll is the one whose cuts[].stockId is it.
+    const owningCard = await SlittingJobCard.findOne({
+      operatorId: req.authUser.empObjId,
+      "slittingLog.cuts.stockId": roll._id,
+    }).select("_id").lean();
+    if (!owningCard) return res.status(403).json({ error: "Forbidden" });
 
     const tspl = buildFinishedStockRollLabelPrn({
       rollId: roll.rollId,
@@ -1197,21 +1204,49 @@ router.get("/logs", requireOperatorApiAuth, async (req, res) => {
 
   const mine = deckles.filter((d) => String(d.producedFor?.operatorId || "") === String(operatorObjId));
 
+  // Finished slit rolls this operator cut, so the Logs tab can reprint them.
+  // Ownership is the slitting card, the same test as GET /finished/:stockId/prn.
+  const myCards = await SlittingJobCard.find({ operatorId: operatorObjId }).select("slittingLog.cuts.stockId").lean();
+  const mineIds = new Set(
+    myCards.flatMap((c) => (c.slittingLog || []).flatMap((r) => (r.cuts || []).map((cut) => String(cut.stockId || "")))).filter(Boolean),
+  );
+  const rolls = mineIds.size
+    ? await FinishedStock.find({ _id: { $in: [...mineIds] }, createdAt: { $gte: start, $lt: end } })
+        .select("rollId mtrs paperSize cutWidth lotNo material createdAt")
+        .populate({ path: "material", select: "productCode" })
+        .sort({ createdAt: -1 })
+        .lean()
+    : [];
+
   res.json({
     date: day,
-    rows: mine.map((d) => ({
-      // The MaterialStock _id, so the app can reprint this Deckle's label
-      // through GET /deckle/:stockId/prn (the same call the job card uses).
-      // Every row here is producedFor an order this operator owns, so that
-      // route's ownership check will pass.
-      stockId: String(d._id),
-      deckleId: d.rollId || "",
-      productCode: d.material?.productCode || "",
-      lotNo: d.lotNo || "",
-      size: d.size || "",
-      meters: Number(d.reelMtrs) || 0,
-      at: d.createdAt,
-    })),
+    rows: [
+      ...mine.map((d) => ({
+        // The MaterialStock _id, so the app can reprint this Deckle's label
+        // through GET /deckle/:stockId/prn (the same call the job card uses).
+        // Every row here is producedFor an order this operator owns, so that
+        // route's ownership check will pass.
+        kind: "deckle",
+        stockId: String(d._id),
+        deckleId: d.rollId || "",
+        productCode: d.material?.productCode || "",
+        lotNo: d.lotNo || "",
+        size: d.size || "",
+        meters: Number(d.reelMtrs) || 0,
+        at: d.createdAt,
+      })),
+      ...rolls.map((r) => ({
+        // A finished slit roll: reprinted through GET /finished/:stockId/prn.
+        kind: "finished",
+        stockId: String(r._id),
+        deckleId: r.rollId || "",
+        productCode: r.material?.productCode || "",
+        lotNo: r.lotNo || "",
+        size: r.cutWidth != null ? String(r.cutWidth) : r.paperSize || "",
+        meters: Number(r.mtrs) || 0,
+        at: r.createdAt,
+      })),
+    ].sort((a, b) => new Date(b.at) - new Date(a.at)),
     totals: {
       deckles: mine.length,
       meters: Math.round(mine.reduce((sum, d) => sum + (Number(d.reelMtrs) || 0), 0) * 100) / 100,
