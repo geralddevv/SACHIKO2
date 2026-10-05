@@ -221,7 +221,7 @@
 
   <div class="toolbar screen-only">
     <h1>
-      Deckle Label — <%= rollId %>
+      <%= labelNoun %> Label — <%= rollId %>
       <small>Pick the label printer in the print dialog. Set <b>Scale: 100%</b> (or Default) and <b>Margins: None</b>.</small>
     </h1>
     <button type="button" class="tb-btn primary" id="printBtn">Print</button>
@@ -239,7 +239,7 @@
       <!-- The Deckle QR sits 1 mm higher than the prior placement; the
            Deckle ID remains centered in its full adjacent field. -->
       <span class="slot" style="left: <%= mm.qr.left %>mm; top: <%= mm.qr.top + 1 %>mm; width: <%= mm.qr.size %>mm; height: <%= mm.qr.size %>mm;">
-        <img src="<%= qrDataUrl %>" alt="Deckle QR" />
+        <img src="<%= qrDataUrl %>" alt="<%= labelNoun %> QR" />
       </span>
     </div>
   </div>

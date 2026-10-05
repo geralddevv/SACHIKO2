@@ -333,6 +333,7 @@ router.get("/label/:stockId", requireAuth, async (req, res) => {
     const qrPayload = buildQrPayload(labelInput);
 
     res.render("stock/materialStockRollLabel.ejs", {
+      labelNoun: "Deckle",
       rollId: reel.rollId,
       fields: buildLabelFields(labelInput),
       // Named `mm`, not `layout` -- `layout` is ejs-mate's own helper and a

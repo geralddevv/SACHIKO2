@@ -1,5 +1,5 @@
 import { buildLabelFields } from "./materialStockRollLabel.js";
-import { buildPrnFromFields } from "./materialRollLabel.js";
+import { buildPrnFromFields, buildQrPayloadFromFields, labelLayoutMm } from "./materialRollLabel.js";
 
 // The label a FINISHED slit roll (models/inventory/finishedStock.js) gets stuck
 // on it. It is the Deckle label (utils/materialStockRollLabel.js) with two
@@ -13,9 +13,11 @@ import { buildPrnFromFields } from "./materialRollLabel.js";
 const FINISHED_ROLL_ID_PT = 24;
 
 // `roll`: { rollId, mtrs, width, lotNo, joints, prodCode } read off a
-// FinishedStock doc (width = its physically cut width).
-export function buildFinishedStockRollLabelPrn(roll) {
-  const fields = buildLabelFields({
+// FinishedStock doc (width = its physically cut width). Shared by the
+// operator app's TSPL output and the browser-printed label, so the two can
+// never disagree about which box a value goes in.
+export function buildFinishedStockLabelFields(roll) {
+  return buildLabelFields({
     prodCode: roll.prodCode,
     reelMtrs: roll.mtrs, // the roll's own metres -> LENGTH box
     rollId: roll.rollId,
@@ -23,5 +25,23 @@ export function buildFinishedStockRollLabelPrn(roll) {
     joints: roll.joints,
     lotNo: roll.lotNo,
   });
-  return buildPrnFromFields(fields, { rollIdPt: FINISHED_ROLL_ID_PT });
+}
+
+// The same layout labelLayoutMm() gives a Deckle, with only the Roll ID's
+// starting size lowered (see FINISHED_ROLL_ID_PT). The view still shrinks it
+// further if the value runs past its box.
+export function finishedStockLabelLayoutMm(qrModuleCount) {
+  const mm = labelLayoutMm(qrModuleCount);
+  return {
+    ...mm,
+    slots: { ...mm.slots, rollId: { ...mm.slots.rollId, pt: FINISHED_ROLL_ID_PT } },
+  };
+}
+
+export function finishedStockLabelQrPayload(roll) {
+  return buildQrPayloadFromFields(buildFinishedStockLabelFields(roll));
+}
+
+export function buildFinishedStockRollLabelPrn(roll) {
+  return buildPrnFromFields(buildFinishedStockLabelFields(roll), { rollIdPt: FINISHED_ROLL_ID_PT });
 }

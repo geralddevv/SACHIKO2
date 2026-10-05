@@ -9,6 +9,17 @@ import Location from "../../models/system/location.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateFinishedRollId, previewFinishedRollIds } from "../../utils/finishedRollId.js";
+import {
+  LABEL_HEIGHT_MM,
+  LABEL_WIDTH_MM,
+  rollLabelModuleCount,
+  rollLabelQrDataUrl,
+} from "../../utils/materialRollLabel.js";
+import {
+  buildFinishedStockLabelFields,
+  finishedStockLabelLayoutMm,
+  finishedStockLabelQrPayload,
+} from "../../utils/finishedStockRollLabel.js";
 
 const router = express.Router();
 const MAX_ROLLS_PER_BATCH = 100;
@@ -220,6 +231,9 @@ router.get("/", async (req, res) => {
     JS: false,
     CSS: "tableDisp.css",
     title: "Finished Goods Stock",
+    // Same as the Deckle page: the Print dialog's frame is sized from this,
+    // so it can't quietly disagree with the label built from the same util.
+    labelSizeMm: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM },
     locations,
     stock: stock.map((s) => ({
       _id: String(s._id),
@@ -510,6 +524,59 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     console.error("FINISHED STOCK CREATE ERROR:", err);
     const msg = err.code === 11000 ? "Roll ID collision, please retry." : "Failed to produce finished rolls.";
     res.status(400).json({ success: false, message: msg });
+  }
+});
+
+// Failures are read inside the Print dialog's iframe (see openLabelDialog in
+// views/stock/finishedStock.ejs), which writes this response in as srcdoc --
+// the same reason routes/stock/semiFinishedStock.js answers errors this way.
+function sendLabelError(res, status, message) {
+  res.status(status).type("html").send(
+    `<!DOCTYPE html><meta charset="utf-8">`
+    + `<div style="font:600 13px/1.5 Arial,Helvetica,sans-serif;color:#b91c1c;`
+    + `display:flex;align-items:center;justify-content:center;height:100vh;`
+    + `margin:0;text-align:center;padding:0 12px;">${message}</div>`,
+  );
+}
+
+// The finished roll's sticker, as a page the browser prints -- the same
+// document the operator app's TSPL label is built from (see
+// utils/finishedStockRollLabel.js), so a roll labelled from either screen
+// carries identical values. WIDTH is the roll's own cut width, not the
+// Deckle's, as on the operator's label.
+router.get("/label/:stockId", requireAuth, async (req, res) => {
+  try {
+    const { stockId } = req.params;
+    if (!mongoose.isValidObjectId(stockId)) return sendLabelError(res, 404, "Finished roll not found.");
+
+    const roll = await FinishedStock.findById(stockId)
+      .select("rollId mtrs paperSize cutWidth lotNo material")
+      .populate({ path: "material", select: "productCode skuCode" })
+      .lean();
+    if (!roll) return sendLabelError(res, 404, "Finished roll not found.");
+
+    const labelInput = {
+      rollId: roll.rollId,
+      mtrs: roll.mtrs,
+      width: roll.cutWidth != null ? roll.cutWidth : roll.paperSize,
+      lotNo: roll.lotNo,
+      prodCode: roll.material?.productCode || roll.material?.skuCode,
+    };
+    // The QR's module count depends on the payload's length, so the layout
+    // can only be sized once the payload exists.
+    const qrPayload = finishedStockLabelQrPayload(labelInput);
+
+    res.render("stock/materialStockRollLabel.ejs", {
+      labelNoun: "Finished Roll",
+      rollId: roll.rollId,
+      fields: buildFinishedStockLabelFields(labelInput),
+      // Named `mm`, not `layout` -- `layout` is ejs-mate's own helper.
+      mm: finishedStockLabelLayoutMm(rollLabelModuleCount(qrPayload)),
+      qrDataUrl: await rollLabelQrDataUrl(qrPayload),
+    });
+  } catch (err) {
+    console.error("FINISHED STOCK LABEL ERROR:", err);
+    sendLabelError(res, 500, "Failed to build the label.");
   }
 });
 
