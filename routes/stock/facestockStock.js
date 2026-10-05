@@ -399,9 +399,12 @@ function kgToRunningMetres(kg, gsm, widthMm) {
   return (k * 1e6) / (g * w);
 }
 
-router.get("/", async (req, res) => {
-  const [locations, stock, releaseStock, adhesiveStock, specOptions, reelUsage] = await Promise.all([
-    Location.find().sort({ locationName: 1 }).lean(),
+// The page's live figures: the masters with their reels, and the header
+// totals. Shared by the page render and GET /figures, which the page re-reads
+// after an edit, remove or inward so it can redraw in place instead of
+// reloading (a reload dropped the open specs and the search box).
+async function loadFacestockFigures() {
+  const [stock, releaseStock, adhesiveStock, reelUsage] = await Promise.all([
     FacestockStock.find().sort({ createdAt: -1 }).lean(),
     // Release Liner and Adhesive Stock's own value figures, shown alongside
     // Facestock's on this page's header (this is the shopfloor's one raw-
@@ -410,7 +413,6 @@ router.get("/", async (req, res) => {
     // totalStockValueOf and each pool's own stock page.
     ReleaseLinerStock.find().select("quantity reelMtrs rate").lean(),
     AdhesiveStock.find().select("quantity reelMtrs rate").lean(),
-    loadSpecOptions({}),
     loadFacestockReelUsage(),
   ]);
   const masters = await loadMastersWithStock(stock, reelUsage);
@@ -418,17 +420,31 @@ router.get("/", async (req, res) => {
   const releaseValue = totalStockValueOf(releaseStock);
   const adhesiveValue = totalStockValueOf(adhesiveStock);
   const totalRunningMeters = masters.reduce((sum, m) => sum + kgToRunningMetres(m.currentStock, m.gsm, m.size), 0);
+  return {
+    masters,
+    totals: {
+      facestockValue,
+      releaseValue,
+      adhesiveValue,
+      totalStockValue: facestockValue + releaseValue + adhesiveValue,
+      totalRunningMeters,
+    },
+  };
+}
+
+router.get("/", async (req, res) => {
+  const [locations, specOptions, { masters, totals }] = await Promise.all([
+    Location.find().sort({ locationName: 1 }).lean(),
+    loadSpecOptions({}),
+    loadFacestockFigures(),
+  ]);
   res.render("stock/facestockStock.ejs", {
     JS: false,
     CSS: "tableDisp.css",
     title: "Facestock Stock",
     locations,
     masters,
-    facestockValue,
-    releaseValue,
-    adhesiveValue,
-    totalStockValue: facestockValue + releaseValue + adhesiveValue,
-    totalRunningMeters,
+    ...totals,
     // Sizes the Print dialog's preview frame to the real sticker. Passed
     // from utils/facestockRollLabel.js rather than written into the view, so
     // the frame can't quietly disagree with the label inside it.
@@ -436,6 +452,18 @@ router.get("/", async (req, res) => {
     ...specOptions,
     notification: req.flash("notification"),
   });
+});
+
+// Read-only: the same figures the page was drawn from, as JSON, for redrawing
+// the table in place after a change. Nothing here writes.
+router.get("/figures", async (req, res) => {
+  try {
+    const figures = await loadFacestockFigures();
+    res.json({ success: true, ...figures });
+  } catch (err) {
+    console.error("FACESTOCK FIGURES ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to load facestock stock." });
+  }
 });
 
 // Inward Timeline -- every Facestock reel ever inwarded, across every spec,
@@ -637,8 +665,9 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     }
 
     res.locals.auditDescription = `Added ${createdRollIds.length} facestock stock reel(s) (${header.type}) at "${header.location}": ${createdRollIds.join(", ")}`;
-    req.flash("notification", `${createdRollIds.length} facestock reel(s) added successfully!`);
-    res.json({ success: true, redirect: "/app/facestockstock" });
+    // No flash: the page refreshes its own table and shows a toast, and a
+    // flash here would sit in the session and pop up on some later page load.
+    res.json({ success: true, added: createdRollIds.length });
   } catch (err) {
     console.error("FACESTOCK STOCK CREATE ERROR:", err);
     const msg = err.code === 11000 ? "Roll ID collision, please retry." : "Failed to add facestock stock.";

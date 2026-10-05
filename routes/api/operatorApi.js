@@ -5,6 +5,7 @@ import Location from "../../models/system/location.js";
 import PendingProduction from "../../models/inventory/pendingProduction.js";
 import Machine from "../../models/system/machine.js";
 import MaterialStock from "../../models/inventory/materialStock.js";
+import FinishedStock from "../../models/inventory/finishedStock.js";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import MaintenanceRequest from "../../models/system/maintenanceRequest.js";
 import { authenticateOperator } from "../../utils/operatorAuth.js";
@@ -14,6 +15,7 @@ import { buildFacestockRollLabelPrn } from "../../utils/facestockRollLabel.js";
 import { buildAdhesiveRollLabelPrn } from "../../utils/adhesiveRollLabel.js";
 import { buildReleaseLinerRollLabelPrn } from "../../utils/releaseLinerRollLabel.js";
 import { buildMaterialStockRollLabelPrn } from "../../utils/materialStockRollLabel.js";
+import { buildFinishedStockRollLabelPrn } from "../../utils/finishedStockRollLabel.js";
 import { loginLimiter, createLimiter } from "../../utils/limiters.js";
 import { POOL_MODELS, pickStockIds, getEligibleRawMaterials } from "../../utils/labelStockProduction.js";
 import { findScannedReel } from "../../utils/rollId.js";
@@ -28,6 +30,8 @@ import {
   endLiveRun,
   startLiveSetting,
   stopLiveSetting,
+  pauseLiveJob,
+  endLivePause,
   consumePoolUsage,
   resolveDeckleLocation,
   resolveScannedCombinationVariant,
@@ -49,6 +53,12 @@ import {
   produceSlittingRow,
   editSlittingRowJoint,
   slittingCardOperatorId,
+  startSlittingSetting,
+  stopSlittingSetting,
+  pauseSlittingCard,
+  resumeSlittingCard,
+  claimSlittingCard,
+  heartbeatSlittingCard,
 } from "../system/slitting.js";
 
 /*
@@ -113,6 +123,28 @@ const claimStateFor = (runningOn, deviceId) => {
   };
 };
 
+// A job's hold as the app reads it -- { since, reason } or null.
+const pausedStateOf = (livePause) => (livePause?.since
+  ? { since: livePause.since, reason: livePause.reason || "" }
+  : null);
+
+// When a punch actually happened, on THIS server's clock. The app keeps its
+// live punches (setting / deckle Start, Stop, Pause, Resume) in an outbox and
+// sends them when it can, so one may arrive minutes after it was tapped. It
+// stamps each with the tablet's clock when tapped (`at`) and again when sent
+// (`sentAt`): the difference is how long it waited, and taking that off the
+// server's now puts the punch back where it happened -- without having to
+// trust that the tablet's clock is set right, only that it ticks. Capped, so
+// a punch left in a drawer for a week can't backdate a job by a week. No
+// stamps (an older app build) is "now", as it always was.
+const MAX_PUNCH_DELAY_MS = 24 * 60 * 60 * 1000;
+export const eventTimeOf = (body, now = Date.now()) => {
+  const at = Number(body?.at);
+  const sentAt = Number(body?.sentAt);
+  if (!Number.isFinite(at) || !Number.isFinite(sentAt)) return new Date(now);
+  return new Date(now - Math.min(Math.max(sentAt - at, 0), MAX_PUNCH_DELAY_MS));
+};
+
 router.post("/login", loginLimiter, async (req, res) => {
   const { operatorNick, location, geo } = req.body || {};
   const rawPw = (req.body || {}).password;
@@ -165,11 +197,14 @@ router.get("/queue", requireOperatorApiAuth, async (req, res) => {
     ...queue,
     groups: (queue.groups || []).map((group) => ({
       ...group,
-      jobs: (group.jobs || []).map(({ paperSize, rollType, runningOn, ...job }) => ({
+      jobs: (group.jobs || []).map(({ paperSize, rollType, runningOn, livePause, ...job }) => ({
         ...job,
         // Whether THIS device may run the job. runningOn itself is never
         // shipped -- the device only needs to know "not you, and who".
         ...claimStateFor(runningOn, queueDeviceId),
+        // On hold, and since when -- so the card reads Paused / Resume even
+        // on a tablet that never had this job's draft.
+        paused: pausedStateOf(livePause),
       })),
     })),
   });
@@ -182,7 +217,7 @@ router.get("/jobcard/:pendingId", requireOperatorApiAuth, async (req, res) => {
   }
 
   const pendingDoc = await PendingProduction.findById(pendingId)
-    .select("assignedMachineId itemId allottedLayers materialSwapLog operatorId runningOn")
+    .select("assignedMachineId itemId allottedLayers materialSwapLog operatorId runningOn livePause")
     .lean();
   if (!pendingDoc) {
     return res.status(404).json({ error: "Not found" });
@@ -196,7 +231,11 @@ router.get("/jobcard/:pendingId", requireOperatorApiAuth, async (req, res) => {
   let eligibleRawStock = { facestock: [], adhesive: [], release: [] };
   if (pendingDoc.assignedMachineId) {
     machine = await Machine.findById(pendingDoc.assignedMachineId).lean();
-    const rows = await buildQueueRows({ assignedMachineId: pendingDoc.assignedMachineId });
+    // Just this job's row: buildQueueRows works each row out on its own, so
+    // there is no need to build the machine's whole queue (every order's
+    // reels, deckle counts and coverage) to read one of them -- which is what
+    // every job card open used to cost.
+    const rows = await buildQueueRows({ _id: pendingDoc._id, assignedMachineId: pendingDoc.assignedMachineId });
     prefill = rows.find((r) => r._id === String(pendingId)) || null;
     if (pendingDoc.itemId) {
       eligibleRawStock = await getEligibleRawMaterials({
@@ -230,6 +269,7 @@ router.get("/jobcard/:pendingId", requireOperatorApiAuth, async (req, res) => {
     // finding out when the claim is refused.
     ...claimStateFor(pendingDoc.runningOn, deviceIdOf(req)),
     heartbeatMs: JOB_CLAIM_HEARTBEAT_MS,
+    paused: pausedStateOf(pendingDoc.livePause),
   });
 });
 
@@ -461,7 +501,7 @@ async function ownsJob(req, res) {
 router.post("/jobcard/setting/start", requireOperatorApiAuth, createLimiter, async (req, res) => {
   try {
     if (!(await ownsJob(req, res))) return;
-    const result = await startLiveSetting(req.body || {});
+    const result = await startLiveSetting({ ...(req.body || {}), at: eventTimeOf(req.body) });
     res.status(result.code === "bad-request" ? 400 : 200).json({ success: result.ok, code: result.code });
   } catch (err) {
     console.error("OPERATOR API SETTING START ERROR:", err);
@@ -471,7 +511,7 @@ router.post("/jobcard/setting/start", requireOperatorApiAuth, createLimiter, asy
 router.post("/jobcard/setting/stop", requireOperatorApiAuth, createLimiter, async (req, res) => {
   try {
     if (!(await ownsJob(req, res))) return;
-    const result = await stopLiveSetting(req.body || {});
+    const result = await stopLiveSetting({ ...(req.body || {}), at: eventTimeOf(req.body) });
     res.status(result.code === "bad-request" ? 400 : 200).json({ success: result.ok, code: result.code });
   } catch (err) {
     console.error("OPERATOR API SETTING STOP ERROR:", err);
@@ -485,10 +525,44 @@ router.post("/jobcard/setting/stop", requireOperatorApiAuth, createLimiter, asyn
 router.post("/jobcard/log/start", requireOperatorApiAuth, createLimiter, async (req, res) => {
   try {
     if (!(await ownsJob(req, res))) return;
-    const result = await startLiveRun(req.body || {});
+    const result = await startLiveRun({ ...(req.body || {}), at: eventTimeOf(req.body) });
     res.status(result.code === "bad-request" ? 400 : 200).json({ success: result.ok, code: result.code });
   } catch (err) {
     console.error("OPERATOR API LOG START ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Pause / Resume -- the operator stepping away from a job without ending it
+// (a break, a shift change, waiting on a reel). The WIP tab then shows the job
+// ON HOLD and holds its clock (PendingProduction.livePause). Nothing about the
+// card itself changes: every punch so far stays in the tablet's draft, and a
+// deckle already made stays made. Both are safe to repeat -- a second Pause
+// keeps the first one's time, a Resume with nothing on hold does nothing --
+// so the app can retry them freely from its outbox.
+router.post("/jobcard/pause", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    if (!(await ownsJob(req, res))) return;
+    const result = await pauseLiveJob({
+      pendingId: req.body.pendingId,
+      reason: req.body.reason,
+      deviceLabel: deviceLabelOf(req),
+      at: eventTimeOf(req.body),
+    });
+    res.status(result.code === "bad-request" ? 400 : 200).json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("OPERATOR API PAUSE ERROR:", err);
+    res.status(500).json({ success: false });
+  }
+});
+router.post("/jobcard/resume", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    if (!(await ownsJob(req, res))) return;
+    const result = await endLivePause(req.body.pendingId, eventTimeOf(req.body), { explicit: true });
+    res.status(result.code === "bad-request" ? 400 : result.code === "error" ? 500 : 200)
+      .json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("OPERATOR API RESUME ERROR:", err);
     res.status(500).json({ success: false });
   }
 });
@@ -588,8 +662,10 @@ router.post("/jobcard/log/produce", requireOperatorApiAuth, createLimiter, async
     if (!deckleId) {
       return res.status(400).json({ success: false, message: "Couldn't produce a Deckle for this row." });
     }
-    // The row is off the machine -- the WIP tab stops counting down to it.
+    // The row is off the machine -- the WIP tab stops counting down to it --
+    // and a deckle coming off at its Stop means the job wasn't on hold then.
     await endLiveRun(b.pendingId, rowToken);
+    await endLivePause(b.pendingId, eventTimeOf(b));
 
     // Firm the reel reservation, best-effort -- see the EJS route's own
     // comment on this same block in routes/system/machine.js.
@@ -817,7 +893,7 @@ router.post("/slitting/jobcard/row/start", requireOperatorApiAuth, createLimiter
     const { cardId, index, startTime, startMtrs } = req.body || {};
     if (!(await ownsSlittingCard(req, res, cardId))) return undefined;
 
-    const result = await startSlittingRow({ cardId, index, startTime, startMtrs });
+    const result = await startSlittingRow({ cardId, index, startTime, startMtrs, at: eventTimeOf(req.body) });
     if (!result.ok) {
       return res.status(result.status).json({ success: false, message: result.message, code: result.code });
     }
@@ -837,7 +913,7 @@ router.post("/slitting/jobcard/row/produce", requireOperatorApiAuth, createLimit
     const body = req.body || {};
     if (!(await ownsSlittingCard(req, res, body.cardId))) return undefined;
 
-    const result = await produceSlittingRow(body, { createdBy: req.authUser.empName });
+    const result = await produceSlittingRow(body, { createdBy: req.authUser.empName, at: eventTimeOf(body) });
     if (!result.ok) return res.status(result.status).json({ success: false, message: result.message });
     const { ok, status, auditDescription, ...payload } = result;
     return res.json({ success: true, ...payload });
@@ -858,6 +934,84 @@ router.post("/slitting/jobcard/row/edit", requireOperatorApiAuth, createLimiter,
   } catch (err) {
     console.error("OPERATOR API SLITTING ROW EDIT ERROR:", err);
     return res.status(500).json({ success: false, message: "Failed to save the joint note." });
+  }
+});
+
+// ---- Slitting live signals (the Slitting WIP page) -------------------------
+// The slitting counterparts of /jobcard/setting/start|stop, /pause, /resume,
+// /claim and /heartbeat above -- thin adapters over the exported cores in
+// routes/system/slitting.js, each gated on this operator owning the card and
+// each dating its punch with eventTimeOf so an outbox-delayed punch lands where
+// it was tapped. All are repeat-safe.
+router.post("/slitting/jobcard/setting/start", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    if (!(await ownsSlittingCard(req, res, req.body?.cardId))) return undefined;
+    const result = await startSlittingSetting({ ...(req.body || {}), at: eventTimeOf(req.body) });
+    return res.status(result.code === "bad-request" ? 400 : result.code === "no-card" ? 404 : 200)
+      .json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING SETTING START ERROR:", err);
+    return res.status(500).json({ success: false });
+  }
+});
+router.post("/slitting/jobcard/setting/stop", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    if (!(await ownsSlittingCard(req, res, req.body?.cardId))) return undefined;
+    const result = await stopSlittingSetting({ ...(req.body || {}), at: eventTimeOf(req.body) });
+    return res.status(result.code === "bad-request" ? 400 : result.code === "no-card" ? 404 : 200)
+      .json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING SETTING STOP ERROR:", err);
+    return res.status(500).json({ success: false });
+  }
+});
+router.post("/slitting/jobcard/pause", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    if (!(await ownsSlittingCard(req, res, req.body?.cardId))) return undefined;
+    const result = await pauseSlittingCard({
+      cardId: req.body?.cardId,
+      reason: req.body?.reason,
+      deviceLabel: deviceLabelOf(req),
+      at: eventTimeOf(req.body),
+    });
+    return res.status(result.code === "bad-request" ? 400 : result.code === "no-card" ? 404 : 200)
+      .json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING PAUSE ERROR:", err);
+    return res.status(500).json({ success: false });
+  }
+});
+router.post("/slitting/jobcard/resume", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    if (!(await ownsSlittingCard(req, res, req.body?.cardId))) return undefined;
+    const result = await resumeSlittingCard({ cardId: req.body?.cardId, at: eventTimeOf(req.body) });
+    return res.status(result.code === "bad-request" ? 400 : result.code === "no-card" ? 404 : 200)
+      .json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING RESUME ERROR:", err);
+    return res.status(500).json({ success: false });
+  }
+});
+router.post("/slitting/jobcard/claim", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    if (!(await ownsSlittingCard(req, res, req.body?.cardId))) return undefined;
+    const result = await claimSlittingCard({ cardId: req.body?.cardId, deviceId: deviceIdOf(req), deviceLabel: deviceLabelOf(req) });
+    return res.status(result.ok ? 200 : result.code === "bad-request" ? 400 : 409)
+      .json({ success: result.ok, code: result.code, heartbeatMs: result.heartbeatMs });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING CLAIM ERROR:", err);
+    return res.status(500).json({ success: false });
+  }
+});
+router.post("/slitting/jobcard/heartbeat", requireOperatorApiAuth, async (req, res) => {
+  try {
+    if (!(await ownsSlittingCard(req, res, req.body?.cardId))) return undefined;
+    const result = await heartbeatSlittingCard({ cardId: req.body?.cardId, deviceId: deviceIdOf(req) });
+    return res.status(result.ok ? 200 : result.code === "bad-request" ? 400 : 409)
+      .json({ success: result.ok, code: result.code });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING HEARTBEAT ERROR:", err);
+    return res.status(500).json({ success: false });
   }
 });
 
@@ -954,6 +1108,44 @@ router.get("/deckle/:stockId/prn", requireOperatorApiAuth, async (req, res) => {
     res.json({ tspl });
   } catch (err) {
     console.error("OPERATOR API DECKLE PRN ERROR:", err);
+    res.status(500).json({ error: "Failed to build label" });
+  }
+});
+
+// The label for one FINISHED slit roll, by its FinishedStock id -- the slitting
+// counterpart of /deckle/:stockId/prn above. The app's print queue fetches this
+// to auto-print each roll the moment its Stop is punched. WIDTH is the roll's
+// own cut width (not the Deckle's), and the id font starts a shade smaller
+// (utils/finishedStockRollLabel.js). Scoped to this operator's own job, exactly
+// as the Deckle route is.
+router.get("/finished/:stockId/prn", requireOperatorApiAuth, async (req, res) => {
+  try {
+    const { stockId } = req.params;
+    if (!mongoose.isValidObjectId(stockId)) return res.status(400).json({ error: "Invalid roll id" });
+
+    const roll = await FinishedStock.findById(stockId)
+      .select("rollId mtrs paperSize cutWidth lotNo material pendingProductionId")
+      .populate({ path: "material", select: "productCode skuCode" })
+      .lean();
+    if (!roll) return res.status(404).json({ error: "Roll not found" });
+
+    const owningJob = roll.pendingProductionId
+      ? await PendingProduction.findOne({ _id: roll.pendingProductionId, operatorId: req.authUser.empObjId }).select("_id").lean()
+      : null;
+    if (!owningJob) return res.status(403).json({ error: "Forbidden" });
+
+    const tspl = buildFinishedStockRollLabelPrn({
+      rollId: roll.rollId,
+      mtrs: roll.mtrs,
+      // The physical roll width: the knife position it came off (cutWidth on a
+      // graced cut), else its paperSize (ungraced -- the two are the same).
+      width: roll.cutWidth != null ? roll.cutWidth : roll.paperSize,
+      lotNo: roll.lotNo,
+      prodCode: roll.material?.productCode || roll.material?.skuCode,
+    });
+    res.json({ tspl });
+  } catch (err) {
+    console.error("OPERATOR API FINISHED ROLL PRN ERROR:", err);
     res.status(500).json({ error: "Failed to build label" });
   }
 });

@@ -99,6 +99,14 @@ const slittingRowSchema = new mongoose.Schema(
     jointMtr: { type: Number },
     startTime: { type: String, trim: true },
     endTime: { type: String, trim: true },
+    // Server-clock timestamps for the Slitting WIP page's live Deckle/ETA
+    // (utils/productionEta.js buildSlittingRunPlan). startedAt is stamped the
+    // moment Start is punched (routes/system/slitting.js startSlittingRow);
+    // producedAt the moment Stop inwards the rolls. The punched startTime/
+    // endTime strings above stay as the operator's own record -- these two are
+    // the clock the WIP page counts from, exactly as lamination's liveRun /
+    // Deckle createdAt do (routes/fairdesk_route.js buildJobCardProgressMap).
+    startedAt: { type: Date },
     producedAt: { type: Date },
   },
   { _id: false },
@@ -115,6 +123,11 @@ const jobSettingRowSchema = new mongoose.Schema(
     startTime: { type: String, trim: true },
     mtrs2: { type: Number },
     stopTime: { type: String, trim: true },
+    // Server-clock stamps for the WIP page's JOB SETTING phase, written by the
+    // per-punch setting/start and setting/stop endpoints. The mtrs/time strings
+    // above remain the operator's record; these drive the live clock.
+    startedAt: { type: Date },
+    stoppedAt: { type: Date },
   },
   { _id: false },
 );
@@ -177,6 +190,55 @@ const slittingJobCardSchema = new mongoose.Schema(
     totalDeckleMeter: { type: Number, default: 0 },
     totalRolls: { type: Number, default: 0 },
     totalFinishedMeter: { type: Number, default: 0 },
+
+    // ---- live signals for the Slitting WIP page -----------------------------
+    // The exact counterparts of PendingProduction's own live fields (see
+    // models/inventory/pendingProduction.js) -- the Slitting WIP page
+    // (routes/system/slitting.js buildSlittingProgressMap -> buildSlittingRunPlan)
+    // reads them the same way the lamination WIP reads those. The running Deckle
+    // itself needs no `liveRun`: unlike MachineJobCard (written once at save),
+    // this card is updated per punch, so the started-not-done slittingLog row
+    // (its own startedAt) IS the deckle on the machine now.
+    //
+    // Which device is running this card now, claimed at the first punch and
+    // heartbeated while the job card is open. Its presence is "started"; its
+    // freshness (activeClaim, routes/api/operatorApi.js) is "running now".
+    runningOn: {
+      deviceId: { type: String },
+      deviceLabel: { type: String },
+      claimedAt: { type: Date },
+      lastSeenAt: { type: Date },
+    },
+    // The Job Setting row running RIGHT NOW (index into jobSetting), set by its
+    // Start punch and cleared by its Stop, by a Deckle Start, by card completion.
+    liveSetting: {
+      index: { type: Number },
+      startedAt: { type: Date },
+      startTime: { type: String, trim: true },
+      startMtrs: { type: Number },
+    },
+    // When this card was first played -- the first punch of any kind. Set once ($min).
+    liveStartedAt: { type: Date },
+    // The card is ON HOLD (operator tapped Pause). Cleared by Resume or by any
+    // later punch (endLivePause). The WIP page holds the job's clock at `since`.
+    livePause: {
+      since: { type: Date },
+      reason: { type: String, trim: true },
+      deviceLabel: { type: String, trim: true },
+    },
+    // Every hold this card has come back out of, oldest first, capped at
+    // LIVE_PAUSE_LOG_MAX. The WIP page takes these out of every clock.
+    livePauseLog: {
+      type: [
+        {
+          from: { type: Date },
+          to: { type: Date },
+          reason: { type: String, trim: true },
+          _id: false,
+        },
+      ],
+      default: undefined,
+    },
 
     allocatedBy: { type: String, trim: true },
     completedAt: { type: Date },

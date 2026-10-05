@@ -849,6 +849,10 @@ export async function buildQueueRows(match) {
       // read only by the operator API's /queue, which turns it into a plain
       // "not you, and who" flag -- the web queue pages ignore it.
       runningOn: p.runningOn || null,
+      // The job's hold, if it is paused (see PendingProduction.livePause) --
+      // read by the operator API's /queue the same way, so a paused job reads
+      // "Paused" on the tablet even when its local draft is gone.
+      livePause: p.livePause?.since ? p.livePause : null,
       deckleTarget: deckleTarget != null ? deckleTarget : null,
       rolls: rolls != null ? String(rolls) : "—",
       allottedRolls: allottedRolls != null ? String(allottedRolls) : "—",
@@ -1819,7 +1823,15 @@ router.post("/machine/jobcard/mark-in-use", requireAuth, requireMachineFloor, cr
 //
 // Answers why it did nothing rather than throwing: the caller is a fire-and-
 // forget punch that must never hold the operator up.
-export async function startLiveRun({ pendingId, rowToken, startTime, startMtrs }) {
+//
+// `at` (here and in the setting / pause functions below) is when the punch
+// actually happened, as a Date on the server's clock -- the operator app
+// works it out for a punch that waited in its outbox (eventTimeOf in
+// routes/api/operatorApi.js). Anything else -- the web card sends none -- is
+// "now".
+const liveEventTime = (at) => (at instanceof Date && Number.isFinite(at.getTime()) ? at : new Date());
+
+export async function startLiveRun({ pendingId, rowToken, startTime, startMtrs, at }) {
   const token = trim(rowToken).slice(0, 128);
   if (!mongoose.isValidObjectId(pendingId) || !token) return { ok: false, code: "bad-request" };
   // A row whose Deckle already exists has finished. A Start replayed for it
@@ -1829,7 +1841,10 @@ export async function startLiveRun({ pendingId, rowToken, startTime, startMtrs }
   // the first stamp, so a retried call can't push the ETA back. A deckle on
   // the machine means setting is over (liveSetting goes), and the job counts
   // as played from here if nothing was punched before it ($min: set once).
-  const now = new Date();
+  const now = liveEventTime(at);
+  // A deckle starting is the machine running: whatever hold the job was on
+  // ends here, even if its Resume never arrived.
+  await endLivePause(pendingId, now);
   const result = await PendingProduction.updateOne(
     { _id: pendingId, assignedMachineId: { $ne: null }, producedAt: null, "liveRun.rowToken": { $ne: token } },
     {
@@ -1853,9 +1868,10 @@ export async function startLiveRun({ pendingId, rowToken, startTime, startMtrs }
 // Shared by the web card's POSTs below and the operator app's
 // /api/operator/jobcard/setting/*. Fire-and-forget from the caller's side,
 // like the deckle Start: they answer, never throw at the operator.
-export async function startLiveSetting({ pendingId, startTime, startMtrs }) {
+export async function startLiveSetting({ pendingId, startTime, startMtrs, at }) {
   if (!mongoose.isValidObjectId(pendingId)) return { ok: false, code: "bad-request" };
-  const now = new Date();
+  const now = liveEventTime(at);
+  await endLivePause(pendingId, now);
   const result = await PendingProduction.updateOne(
     { _id: pendingId, assignedMachineId: { $ne: null }, producedAt: null },
     {
@@ -1875,13 +1891,78 @@ export async function startLiveSetting({ pendingId, startTime, startMtrs }) {
 // Ends the setting row whose Start was punched at `startTime` (the card row's
 // own start time, which a restored draft keeps) -- so a Stop can't end a
 // different row's setting. Without a start time it ends whatever is running.
-export async function stopLiveSetting({ pendingId, startTime }) {
+export async function stopLiveSetting({ pendingId, startTime, at }) {
   if (!mongoose.isValidObjectId(pendingId)) return { ok: false, code: "bad-request" };
+  await endLivePause(pendingId, liveEventTime(at));
   const filter = { _id: pendingId };
   const punched = trim(startTime).slice(0, 16);
   if (punched) filter["liveSetting.startTime"] = punched;
   const result = await PendingProduction.updateOne(filter, { $unset: { liveSetting: "" } });
   return { ok: true, code: result.modifiedCount ? "stopped" : "unchanged" };
+}
+
+// ---- On hold (PendingProduction.livePause / livePauseLog) ----
+// The operator app's Pause and Resume. Only a job still on a machine can be
+// put on hold, and a job already on hold keeps the hold it has -- a Pause
+// retried after its response was lost must not move `since` on.
+export const LIVE_PAUSE_LOG_MAX = 100;
+export async function pauseLiveJob({ pendingId, reason, deviceLabel, at }) {
+  if (!mongoose.isValidObjectId(pendingId)) return { ok: false, code: "bad-request" };
+  const result = await PendingProduction.updateOne(
+    { _id: pendingId, assignedMachineId: { $ne: null }, producedAt: null, "livePause.since": { $exists: false } },
+    {
+      $set: {
+        livePause: {
+          since: liveEventTime(at),
+          reason: trim(reason).slice(0, 80) || undefined,
+          deviceLabel: trim(deviceLabel).slice(0, 64) || undefined,
+        },
+      },
+    },
+  );
+  return { ok: true, code: result.modifiedCount ? "paused" : "unchanged" };
+}
+
+// Ends the hold, filing it in livePauseLog. Called by the app's Resume
+// (`explicit`) and by every punch on the card (startLiveRun / startLiveSetting
+// / stopLiveSetting above, and a Deckle's Stop). A punch only ends a hold
+// that began before it: a Start that sat in an offline tablet's outbox and
+// arrives after the Pause that followed it must leave that Pause alone. An
+// explicit Resume is never earlier than its own Pause -- the two came off the
+// same tablet in order, so a gap below zero is only network jitter between
+// two taps a moment apart, and it is closed rather than refused.
+//
+// The write is conditional on the very `since` read, so a Resume and a punch
+// landing together file the hold once, not twice.
+export async function endLivePause(pendingId, at, { explicit = false } = {}) {
+  if (!mongoose.isValidObjectId(pendingId)) return { ok: false, code: "bad-request" };
+  try {
+    const doc = await PendingProduction.findById(pendingId).select("livePause").lean();
+    const since = doc?.livePause?.since ? new Date(doc.livePause.since) : null;
+    if (!since) return { ok: true, code: "not-paused" };
+    let end = liveEventTime(at);
+    if (end < since) {
+      if (!explicit) return { ok: true, code: "before-pause" };
+      end = since;
+    }
+    const result = await PendingProduction.updateOne(
+      { _id: pendingId, "livePause.since": since },
+      {
+        $push: {
+          livePauseLog: {
+            $each: [{ from: since, to: end, reason: doc.livePause.reason || "" }],
+            $slice: -LIVE_PAUSE_LOG_MAX,
+          },
+        },
+        $unset: { livePause: "" },
+      },
+    );
+    return { ok: true, code: result.modifiedCount ? "resumed" : "unchanged" };
+  } catch (err) {
+    // A punch must never fail on the hold's bookkeeping.
+    console.error("END LIVE PAUSE ERROR:", err);
+    return { ok: false, code: "error" };
+  }
 }
 
 // That row's Deckle is made, so it is no longer running. Matched on the row's
@@ -2032,8 +2113,10 @@ router.post("/machine/jobcard/log/produce", requireAuth, requireMachineFloor, cr
     if (!deckleId) {
       return res.status(400).json({ success: false, message: "Couldn't produce a Deckle for this row." });
     }
-    // The row is off the machine -- the WIP tab stops counting down to it.
+    // The row is off the machine -- the WIP tab stops counting down to it --
+    // and a deckle coming off means the job isn't on hold.
     await endLiveRun(b.pendingId, rowToken);
+    await endLivePause(b.pendingId);
 
     // Firm the reel reservation: every reel this Deckle actually consumed is
     // now locked to this order, whether or not the scan-time mark-in-use call
@@ -2621,9 +2704,11 @@ export async function saveMachineJobCard({ body, actorName }) {
         const update = {
           $set: { producedRolls: totalProduced },
           // The live punches go with it: this card's rows are now filed, so
-          // nothing of it is running or setting, and a resumed job is played
-          // afresh on its next card.
-          $unset: { liveMaterialInUse: "", liveRun: "", liveSetting: "", liveStartedAt: "" },
+          // nothing of it is running, setting or on hold, and a resumed job is
+          // played afresh on its next card.
+          $unset: {
+            liveMaterialInUse: "", liveRun: "", liveSetting: "", liveStartedAt: "", livePause: "", livePauseLog: "",
+          },
         };
         if (complete) update.$set.producedAt = new Date();
         await PendingProduction.updateOne({ _id: b.pendingId }, update);

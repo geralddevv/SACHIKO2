@@ -872,7 +872,8 @@ should be done at the laminator's **15 m/min** (`LAMINATOR_SPEED_MPM` in
   point the wall clock is at (a blink at its phase of 1.2 s, the fill at the
   time gone since Start) and a cell already in the same state is left alone.
   Rows with a deckle running are redrawn every 10 s on their own clock,
-  independent of the 20 s data poll. Reduced motion (`animation: none
+  independent of the 10 s data poll (skipped while the browser tab is
+  hidden, re-run the moment it is shown). Reduced motion (`animation: none
   !important`, since the animations are inline): solid pale green / solid
   red, the fill held still.
 - A deckle started after all the planned ones are made reads
@@ -889,7 +890,31 @@ should be done at the laminator's **15 m/min** (`LAMINATOR_SPEED_MPM` in
 - **A setting Stop only ends its own row**: it is matched on the row's Start
   time (`liveSetting.startTime`, kept by a restored draft). A deckle Start
   clears `liveSetting` (production has begun); the card save and unassign
-  clear all three live fields.
+  clear all the live fields (`livePause` / `livePauseLog` included).
+- **PAUSED (on hold) outranks every phase.** The operator app's Pause
+  (reason picked from a fixed list) → `POST /api/operator/jobcard/pause` sets
+  `PendingProduction.livePause { since, reason, deviceLabel }`; Resume (the
+  queue's ▶ Resume, or the card's banner) → `/resume` files it into
+  `livePauseLog [{ from, to, reason }]` (capped, `LIVE_PAUSE_LOG_MAX`).
+  **Any punch also ends a hold** — setting Start/Stop, deckle Start, a
+  Deckle's Stop, from the app or the web card (`endLivePause` in
+  routes/system/machine.js) — but only a hold that began *before* that punch,
+  so a late-arriving older punch can't end a newer Pause. While on hold the
+  page reads the job's clocks at `runPlan.clockAt` (= the hold's start) via
+  `wipNow()`: the deckle stops filling (`wip-paused`, slate, fill frozen
+  grey), nothing turns overdue, Status/Estimate hold still. `buildRunPlan()`
+  takes finished holds out of every clock — `current.runFromAt`/`etaAt`,
+  `setting.heldMs`, `gapHeldMs`, `gapBeforeMins`, and the Target
+  (`targetAt += heldMs`) — so a break never reads as Delayed. `phase` is
+  `"paused"`; what it was doing underneath is `basePhase`. The dialog shows a
+  one-line Paused status row and a **Hold Log** under the Production Log.
+- **Punch times from the app are dated when tapped, not when received.** The
+  app sends its live punches from a persistent outbox (it may be offline),
+  each stamped `at` (tablet clock at the tap) and `sentAt` (at sending);
+  `eventTimeOf()` in routes/api/operatorApi.js takes `sentAt − at` off the
+  server's clock (capped at 24 h), so the tablet's clock never has to be
+  right. No stamps (old app / web card) = now. Every live endpoint must stay
+  safe to repeat — the outbox resends on a lost answer.
 - **Idle time in the dialog**: a separator between Production Log rows from
   the card's own punches (previous End → next Start — same tablet clock at
   both ends, so they agree even where that clock is off; midnight wraps; a
@@ -901,8 +926,8 @@ should be done at the laminator's **15 m/min** (`LAMINATOR_SPEED_MPM` in
   panel, no footnote. The logs share one grid. *Job Setting Log*: # · Mtrs · Start Time
   · End Time · Counter · Status (no Roll ID — a setting row has no id or date
   of its own, so Mtrs takes the width of Date + Deckle ID + Made).
-  *Production Log*: # · **Date** · Deckle ID · Made · Start Time · End Time ·
-  **Facestock Joint / Wrinkle** · **Release Joint / Wrinkle**. Start, End and
+  *Production Log*: # · Deckle ID · Made · **Date** · Start Time · End Time ·
+  **Face Joint** · **Release Joint**. Start, End and
   the two right-hand columns sit exactly over each other (`SETTING_COLGROUP` /
   `PROD_COLGROUP` — keep the sums). A joint cell is the card's own record,
   "Joint at 120 mtrs" / "Wrinkle at 85 mtrs", and an empty value anywhere in
@@ -926,7 +951,7 @@ should be done at the laminator's **15 m/min** (`LAMINATOR_SPEED_MPM` in
   faint hover highlight. The chevron, or a click anywhere on the row, opens the
   details underneath (`toggleLiveDetails`), and it turns up while they're
   open: on the machine, started, idle before it,
-  to make, ETA, job started, Finished, Target, Status, Estimate. The heading
+  to make, job started, Finished, Target, Status, Estimate. The heading
   carries the operator app's chip on the right — "Operator app online · TAB-1"
   while its claim is fresh (`activeClaim`), "last seen …" once it isn't — in
   place of the old "Running now on …" bar. The Production Log below holds only

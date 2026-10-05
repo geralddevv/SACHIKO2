@@ -372,18 +372,19 @@ function kgToRunningMetres(kg, gsm, widthMm) {
   return (k * 1e6) / (g * w);
 }
 
-router.get("/", async (req, res) => {
-  const [locations, stock, facestockStock, adhesiveStock, specOptions, reelUsage] = await Promise.all([
-    Location.find().sort({ locationName: 1 }).lean(),
+// The page's live figures: the masters with their {noun}, and the header
+// totals. Shared by the page render and GET /figures, which the page re-reads
+// after an edit, remove or inward so it can redraw in place instead of
+// reloading (a reload dropped the open specs and the search box).
+async function loadReleaseLinerFigures() {
+  const [stock, facestockStock, adhesiveStock, reelUsage] = await Promise.all([
     ReleaseLinerStock.find().sort({ createdAt: -1 }).lean(),
     // Facestock and Adhesive Stock's own value figures, shown alongside
-    // Release Liner's on this page's header (this is the shopfloor's one
-    // raw-material value overview -- see routes/stock/facestockStock.js's
+    // Release Liner's on this page's header (see routes/stock/facestockStock.js's
     // own header) -- each pool's rate can differ reel/drum to reel/drum, so
     // this sums per-reel/drum, same as this page's own totalStockValueOf.
     FacestockStock.find().select("quantity reelMtrs rate").lean(),
     AdhesiveStock.find().select("quantity reelMtrs rate").lean(),
-    loadSpecOptions({}),
     loadReleaseReelUsage(),
   ]);
   const masters = await loadMastersWithStock(stock, reelUsage);
@@ -391,17 +392,31 @@ router.get("/", async (req, res) => {
   const facestockValue = totalStockValueOf(facestockStock);
   const adhesiveValue = totalStockValueOf(adhesiveStock);
   const totalRunningMeters = masters.reduce((sum, m) => sum + kgToRunningMetres(m.currentStock, m.gsm, m.size), 0);
+  return {
+    masters,
+    totals: {
+      releaseValue,
+      facestockValue,
+      adhesiveValue,
+      totalStockValue: releaseValue + facestockValue + adhesiveValue,
+      totalRunningMeters,
+    },
+  };
+}
+
+router.get("/", async (req, res) => {
+  const [locations, specOptions, { masters, totals }] = await Promise.all([
+    Location.find().sort({ locationName: 1 }).lean(),
+    loadSpecOptions({}),
+    loadReleaseLinerFigures(),
+  ]);
   res.render("stock/releaseLinerStock.ejs", {
     JS: false,
     CSS: "tableDisp.css",
     title: "Release Liner Stock",
     locations,
     masters,
-    releaseValue,
-    facestockValue,
-    adhesiveValue,
-    totalStockValue: releaseValue + facestockValue + adhesiveValue,
-    totalRunningMeters,
+    ...totals,
     // Sizes the Print dialog's preview frame to the real sticker. Passed
     // from utils/releaseLinerRollLabel.js rather than written into the view,
     // so the frame can't quietly disagree with the label inside it.
@@ -409,6 +424,18 @@ router.get("/", async (req, res) => {
     ...specOptions,
     notification: req.flash("notification"),
   });
+});
+
+// Read-only: the same figures the page was drawn from, as JSON, for redrawing
+// the table in place after a change. Nothing here writes.
+router.get("/figures", async (req, res) => {
+  try {
+    const figures = await loadReleaseLinerFigures();
+    res.json({ success: true, ...figures });
+  } catch (err) {
+    console.error("RELEASELINERSTOCK FIGURES ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to load release liner stock." });
+  }
 });
 
 // Inward Timeline -- every Release Liner reel ever inwarded, across every
@@ -609,8 +636,9 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     }
 
     res.locals.auditDescription = `Added ${createdRollIds.length} release liner stock reel(s) (${header.type}) at "${header.location}": ${createdRollIds.join(", ")}`;
-    req.flash("notification", `${createdRollIds.length} release liner reel(s) added successfully!`);
-    res.json({ success: true, redirect: "/app/releaselinerstock" });
+    // No flash: the page refreshes its own table and shows a toast (see the
+    // facestock stock route for why).
+    res.json({ success: true, added: createdRollIds.length });
   } catch (err) {
     console.error("RELEASE LINER STOCK CREATE ERROR:", err);
     const msg = err.code === 11000 ? "Roll ID collision, please retry." : "Failed to add release liner stock.";

@@ -696,21 +696,21 @@
       </div>
       <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
-        Total Value: <span style="color: #15803d; font-size: 15px;">₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+        Total Value: <span id="stockTotalValue" style="color: #15803d; font-size: 15px;">₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;"
         title="Release Liner's Stock (Kg) converted to running metres at each spec's own GSM and width -- specs with no GSM aren't included.">
-        Total RM: <span style="color: #15803d; font-size: 15px;"><%= Number(totalRunningMeters || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %> m</span>
+        Total RM: <span id="stockTotalRm" style="color: #15803d; font-size: 15px;"><%= Number(totalRunningMeters || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %> m</span>
       </span>
       <span style="width: 1px; align-self: stretch; background: rgba(255, 255, 255, 0.4);"></span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
-        Facestock Value: <span style="color: #15803d;">₹<%= Number(facestockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+        Facestock Value: <span id="stockFacestockValue" style="color: #15803d;">₹<%= Number(facestockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
-        Adhesive Value: <span style="color: #15803d;">₹<%= Number(adhesiveValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+        Adhesive Value: <span id="stockAdhesiveValue" style="color: #15803d;">₹<%= Number(adhesiveValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px; box-shadow: 0 0 0 2px #044a78, 0 0 0 3.5px #fff;">
-        Release Liner Value: <span style="color: #15803d;">₹<%= Number(releaseValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+        Release Liner Value: <span id="stockReleaseValue" style="color: #15803d;">₹<%= Number(releaseValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
       </div>
     </div>
@@ -1069,7 +1069,7 @@
 <script id="release-specs-data" type="application/json"><%- safeJson({ types, colors, sizes, gsms, vendors, makes, vendorSkuCodes }) %></script>
 <script id="release-masters-data" type="application/json"><%- safeJson(masters) %></script>
 <script>
-  const mastersData = JSON.parse(document.getElementById("release-masters-data").textContent);
+  let mastersData = JSON.parse(document.getElementById("release-masters-data").textContent);
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
   const releaseSpecsData = JSON.parse(document.getElementById("release-specs-data").textContent);
 
@@ -1375,12 +1375,16 @@
       // master row's Stock (RM) column applies.
       const rollMaster = findMasterForRoll(data._id);
       const reelRm = kgToRm(data.reelMtrs, rollMaster.gsm, rollMaster.size);
+      // Serial No.: the reel's place in its spec's list (the master's Sr. No.
+      // is the same idea one level up). Counted over the whole list, not the
+      // search results, so the number doesn't move while a search is on.
+      const serialNo = (findMasterForRoll(data._id).rolls || []).findIndex((r) => r._id === data._id) + 1;
       const parts = [
         `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
         allottedBadge,
         usedBadge,
         data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
-        `Kg ${fmtKg(data.reelMtrs)}`,
+        `<b style="color:#1f2a44;font-weight:800;">Kg ${fmtKg(data.reelMtrs)}</b>`,
         reelRm != null ? `RM ${fmtRm(reelRm)}` : "",
         data.location ? escapeHtml(data.location) : "",
         data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
@@ -1395,6 +1399,14 @@
       editBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit';
       editBtn.addEventListener("click", () => openEditRollDialog(data, findMasterForRoll(data._id)));
       bar.insertBefore(editBtn, bar.firstChild);
+      // S.No sits in front of Edit, as its own label (not part of the detail text).
+      if (serialNo) {
+        const sno = document.createElement("span");
+        sno.className = "roll-sno";
+        sno.style.cssText = "background:#e2e8f0;color:#1f2a44;font-weight:800;padding:4px 9px;border-radius:6px;font-size:12.5px;white-space:nowrap;align-self:center;";
+        sno.textContent = serialNo;
+        bar.insertBefore(sno, bar.firstChild);
+      }
       const printBtn = document.createElement("button");
       printBtn.type = "button";
       printBtn.className = "roll-print-btn";
@@ -1672,7 +1684,8 @@
   let stockFindNeedle = "";
   let stockFindTimer = null;
 
-  function runStockFind() {
+  // keepOpen: a Set of master _ids to leave expanded (see refreshStockTable).
+  function runStockFind(keepOpen) {
     const needle = stockFindKey(stockFindInput.value);
     stockFindClearBtn.hidden = !stockFindInput.value;
     if (needle === stockFindNeedle) return;
@@ -1682,7 +1695,13 @@
       stockFindStatus.textContent = "";
       stockFindStatus.title = "";
       stockFindStatus.classList.remove("is-empty");
-      mastersTable.setData(buildMastersTreeData(mastersData));
+      mastersTable.setData(buildMastersTreeData(mastersData)).then(() => {
+        if (!keepOpen) return;
+        mastersTable.getRows().forEach((row) => {
+          const d = row.getData();
+          if (d._children && keepOpen.has(String(d._id))) row.treeExpand();
+        });
+      });
       return;
     }
 
@@ -2057,7 +2076,8 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/app/releaselinerstock";
+        closeAddDialog();
+        await afterStockChange(`${data.added} reels added.`);
       } else {
         showError("addReleaseError", data.message || "Failed to add release liner stock.");
       }
@@ -2541,6 +2561,50 @@
     editingRollId = null;
   }
 
+  // ---- Keeping the table in step ----
+  // An edit, a remove or an inward used to end in window.location.reload(),
+  // which threw away the open specs, the find box and the scroll position.
+  // Now the figures are re-read and the tree is rebuilt in place. Specs that
+  // were open stay open, and the find box is applied again to the new rows.
+  const STOCK_TOTAL_FMT = { maximumFractionDigits: 2 };
+  function setStockTotals(t) {
+    document.getElementById("stockTotalValue").textContent = `₹${Number(t.totalStockValue || 0).toLocaleString("en-IN", STOCK_TOTAL_FMT)}`;
+    document.getElementById("stockTotalRm").textContent = `${Number(t.totalRunningMeters || 0).toLocaleString("en-IN", STOCK_TOTAL_FMT)} m`;
+    document.getElementById("stockFacestockValue").textContent = `₹${Number(t.facestockValue || 0).toLocaleString("en-IN", STOCK_TOTAL_FMT)}`;
+    document.getElementById("stockAdhesiveValue").textContent = `₹${Number(t.adhesiveValue || 0).toLocaleString("en-IN", STOCK_TOTAL_FMT)}`;
+    document.getElementById("stockReleaseValue").textContent = `₹${Number(t.releaseValue || 0).toLocaleString("en-IN", STOCK_TOTAL_FMT)}`;
+  }
+
+  async function refreshStockTable() {
+    const keepOpen = new Set(
+      mastersTable.getRows()
+        .filter((row) => row.getData()._children && row.isTreeExpanded())
+        .map((row) => String(row.getData()._id))
+    );
+    const res = await fetch("/app/releaselinerstock/figures", { credentials: "same-origin" });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.message || "Failed to refresh stock.");
+    mastersData = data.masters;
+    setStockTotals(data.totals);
+    // runStockFind skips a redraw when the find text hasn't changed, so forget
+    // the last one to make it apply the box to the fresh rows.
+    stockFindNeedle = null;
+    runStockFind(keepOpen);
+  }
+
+  // Called once the server has saved the change. The change is already
+  // committed, so if the re-read fails the page reloads rather than showing
+  // figures that no longer match the database.
+  async function afterStockChange(message) {
+    try {
+      await refreshStockTable();
+      showToast(message, "success");
+    } catch (err) {
+      console.error(err);
+      window.location.reload();
+    }
+  }
+
   async function submitEditRoll() {
     if (!editingRollId) return;
 
@@ -2585,7 +2649,8 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.reload();
+        closeEditRollDialog();
+        await afterStockChange("Reel updated.");
       } else {
         showError("editRollError", data.message || "Failed to update release liner reel.");
       }
@@ -2630,7 +2695,8 @@
       const res = await fetch(`/app/releaselinerstock/${removingRollId}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        window.location.reload();
+        closeRemoveRollDialog();
+        await afterStockChange("Reel removed.");
       } else {
         showError("removeRollError", data.message || "Failed to remove this reel.");
       }

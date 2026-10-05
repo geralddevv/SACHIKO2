@@ -253,7 +253,11 @@ export function buildRollIdLines(value, { x, y, pt }, maxWidthMm) {
 // but kept as the reference the on-screen label is measured against, and the
 // way to drive a TSC unit directly if the browser path is ever swapped for
 // raw printing.
-export function buildPrnFromFields(fields) {
+// `opts.rollIdPt` overrides the starting point size of the ROLL ID box only
+// (default: the slot's own 28pt). The finished slit-roll label passes a smaller
+// one because its id is longer (…/00001-A); every other label omits it and is
+// byte-for-byte unchanged. The auto-fit below still shrinks from there as needed.
+export function buildPrnFromFields(fields, opts = {}) {
   const { slots: prnSlots } = labelLayoutMm(0);
   const body = [
     `SIZE ${LABEL_WIDTH_MM} mm, ${LABEL_HEIGHT_MM} mm`,
@@ -279,7 +283,8 @@ export function buildPrnFromFields(fields) {
       // size depends on that), so any argument gives the same box widths.
       const maxWidth = prnSlots[key]?.maxWidth;
       if (key === "rollId") {
-        return buildRollIdLines(fields[key], slot, maxWidth);
+        const idSlot = opts.rollIdPt ? { ...slot, pt: opts.rollIdPt } : slot;
+        return buildRollIdLines(fields[key], idSlot, maxWidth);
       }
       const size = fitPointSize(fields[key], slot.pt, maxWidth);
       return [tsplText(slot.x, slot.y, size, fields[key])];

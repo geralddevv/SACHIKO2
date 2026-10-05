@@ -4869,7 +4869,10 @@ router.get("/prodcalc/details/:id", async (req, res) => {
 //     It is what the Live column's ETA counts from (utils/productionEta.js);
 //   - PendingProduction.liveSetting / liveStartedAt, the Job Setting row
 //     running now and when the job was first played -- the Live column's
-//     JOB SETTING and STARTED phases.
+//     JOB SETTING and STARTED phases;
+//   - PendingProduction.livePause / livePauseLog, the hold the operator app
+//     has the job on now, and every hold it has come out of -- the Live
+//     column's PAUSED phase, and the time taken out of the job's clock.
 //
 // A Deckle that a filed card already accounts for is counted ONCE: the card's
 // own Production Log row carries the same rowToken (and deckleId) the Deckle
@@ -4893,7 +4896,7 @@ async function buildJobCardProgressMap(pendingIds) {
       .sort({ createdAt: 1 })
       .lean(),
     PendingProduction.find({ _id: { $in: pendingIds } })
-      .select("runningOn liveMaterialInUse liveRun liveSetting liveStartedAt")
+      .select("runningOn liveMaterialInUse liveRun liveSetting liveStartedAt livePause livePauseLog")
       .lean(),
   ]);
   const numberOrNull = (value) => (
@@ -4918,6 +4921,9 @@ async function buildJobCardProgressMap(pendingIds) {
     // The Job Setting row running now ({ startedAt, startTime, startMtrs }),
     // and when the job was first played.
     setting: null, jobStartedAt: null,
+    // The hold the job is on now ({ since, reason, deviceLabel }), and the
+    // holds this run has already come out of ([{ from, to, reason }]).
+    paused: null, pauses: [],
   });
   const laterOf = (a, b) => (!a ? b : !b ? a : new Date(a) > new Date(b) ? a : b);
   // When each order's last deckle was finished. A Deckle's createdAt is its
@@ -5072,12 +5078,20 @@ async function buildJobCardProgressMap(pendingIds) {
     // recorded falls back to the app's running claim -- which a re-claim
     // moves, so it is only the best that is known for those.
     const jobStartedAt = order.liveStartedAt || order.runningOn?.claimedAt || null;
-    if (!claimed && !mounted && !currentRun && !setting && !order.liveStartedAt) return;
+    const paused = order.livePause?.since
+      ? { since: order.livePause.since, reason: order.livePause.reason || "", deviceLabel: order.livePause.deviceLabel || "" }
+      : null;
+    const pauses = (Array.isArray(order.livePauseLog) ? order.livePauseLog : [])
+      .filter((p) => p?.from && p?.to)
+      .map((p) => ({ from: p.from, to: p.to, reason: p.reason || "" }));
+    if (!claimed && !mounted && !currentRun && !setting && !order.liveStartedAt && !paused) return;
 
     const acc = map.get(key) || blank();
     acc.currentRun = currentRun;
     acc.setting = setting;
     acc.jobStartedAt = jobStartedAt;
+    acc.paused = paused;
+    acc.pauses = pauses;
     acc.started = true;
     acc.running = Boolean(held);
     acc.runningOn = claimed
@@ -5094,6 +5108,7 @@ async function buildJobCardProgressMap(pendingIds) {
     acc.updatedAt = laterOf(acc.updatedAt, order.runningOn?.lastSeenAt || null);
     acc.updatedAt = laterOf(acc.updatedAt, currentRun?.startedAt || null);
     acc.updatedAt = laterOf(acc.updatedAt, setting?.startedAt || null);
+    acc.updatedAt = laterOf(acc.updatedAt, paused?.since || null);
     map.set(key, acc);
   });
 
@@ -6555,7 +6570,7 @@ function mapPendingProductionRow(r, jobCardProgress, advance = new Map()) {
     balance: Math.max((Number(r.quantity) || 0) - (Number(r.dispatchedQuantity) || 0), 0),
     machineName: r.assignedMachineId?.machineName || "",
     assignedMachineId: r.assignedMachineId ? { _id: String(r.assignedMachineId._id) } : null,
-    operatorName: r.operatorId?.empName || "",
+    operatorName: r.operatorId?.empNickName || r.operatorId?.empName || "",
     helperName: r.helperId?.empName || "",
     poNumber: r.poNumber || "—",
     estimatedDate: r.estimatedDate,
@@ -6604,7 +6619,7 @@ router.get("/labels/production/pending", async (req, res) => {
     .populate("userId", "clientName userName clientType")
     .populate("itemId", "productCode skuCode rollType")
     .populate("assignedMachineId", "machineName machineType")
-    .populate("operatorId", "empName")
+    .populate("operatorId", "empName empNickName")
     .populate("helperId", "empName")
     .sort({ createdAt: -1 })
     .lean();
@@ -6667,7 +6682,7 @@ async function loadWipRows() {
     .populate("userId", "clientName userName clientType")
     .populate("itemId", "productCode skuCode rollType")
     .populate("assignedMachineId", "machineName machineType")
-    .populate("operatorId", "empName")
+    .populate("operatorId", "empName empNickName")
     .populate("helperId", "empName")
     .lean();
   const progress = await buildJobCardProgressMap(assigned.map((r) => r._id));
@@ -7190,10 +7205,14 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
     // only by the job card's own save. Left behind, it follows the order back
     // to Pending and then blocks the next device to pick the job up until it
     // goes stale (JOB_CLAIM_STALE_MS, 15 minutes). `liveRun` (a deckle row
-    // whose Start was punched) likewise: the job is off the machine.
+    // whose Start was punched) likewise: the job is off the machine -- and
+    // so is any hold it was on (livePause / livePauseLog).
     await PendingProduction.findByIdAndUpdate(id, {
       $set: { assignedMachineId: null, operatorId: null, helperId: null, allottedRollIds: [], producedRolls: 0 },
-      $unset: { allottedRolls: "", assignedAt: "", allottedLayers: "", liveMaterialInUse: "", runningOn: "", liveRun: "", liveSetting: "", liveStartedAt: "" },
+      $unset: {
+        allottedRolls: "", assignedAt: "", allottedLayers: "", liveMaterialInUse: "", runningOn: "",
+        liveRun: "", liveSetting: "", liveStartedAt: "", livePause: "", livePauseLog: "",
+      },
     });
 
     res.locals.auditDescription = `Sent production order ${id} back to Pending`;

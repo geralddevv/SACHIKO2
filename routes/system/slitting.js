@@ -17,6 +17,9 @@ import { findScannedReel } from "../../utils/rollId.js";
 // The code every generated id starts with -- the Company master's own
 // (utils/companyBrand.js), read live so a rename needs no restart.
 import { currentIdPrefix } from "../../utils/companyBrand.js";
+// The Slitting WIP page's live run plan -- the slitting sibling of buildRunPlan
+// (same output contract, measured per Deckle). See utils/productionEta.js.
+import { buildSlittingRunPlan, SLITTING_SPEED_MPM } from "../../utils/productionEta.js";
 
 const router = express.Router();
 
@@ -1007,19 +1010,186 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
 // it. This page is read-only and scoped narrower still: only cards with a
 // row the operator has actually punched Start on (and not yet Stopped) --
 // i.e. physically running on the floor right now, not merely queued.
-router.get("/slitting/wip", requireSlittingView, async (req, res) => {
-  const rows = (await buildSlittingQueueRows({})).filter((r) => r.running);
+// The live run facts of one slitting card, shaped exactly like the lamination
+// WIP tab's progress entry (buildJobCardProgressMap in routes/fairdesk_route.js)
+// so buildSlittingRunPlan + the view read them the same way. The card is updated
+// per punch, so this is built straight off it -- no second collection to join.
+//   metres: a Deckle's planned run length, falling back to the metres it
+//   actually ran, else 0, so the ETA/Target have a figure even on a card the
+//   planner left blank.
+function plannedMetresOf(row) {
+  const planned = Number(row?.plannedMeter);
+  if (Number.isFinite(planned) && planned > 0) return planned;
+  const ran = Number(row?.meter);
+  return Number.isFinite(ran) && ran > 0 ? ran : 0;
+}
+
+function buildSlittingProgressMap(card) {
+  const rows = Array.isArray(card.slittingLog) ? card.slittingLog : [];
+  const doneRows = rows.filter((r) => r.status === "done");
+  const production = doneRows.map((r, idx) => ({
+    index: idx + 1,
+    deckleId: r.deckleId || "",
+    width: r.width ?? null,
+    meters: Number(r.meter) || 0,
+    runningMeter: r.runningMeter ?? null,
+    cuts: Array.isArray(r.cuts) ? r.cuts.length : 0,
+    startTime: r.startTime || "",
+    endTime: r.endTime || "",
+    joint: r.joint || "",
+    jointMtr: r.jointMtr ?? null,
+    producedAt: r.producedAt || null,
+  }));
+  // The Deckle on the slitter now: started, not yet done. Its own startedAt is
+  // what the Live ETA counts from (no separate liveRun -- the card is live).
+  const curIdx = rows.findIndex((r) => r.status !== "done" && r.startedAt);
+  const cur = curIdx >= 0 ? rows[curIdx] : null;
+  const currentRun = cur
+    ? { index: curIdx + 1, startedAt: cur.startedAt, startTime: cur.startTime || "", startMtrs: cur.startMtrs ?? null, mtrs: plannedMetresOf(cur) }
+    : null;
+  const setting = card.liveSetting?.startedAt
+    ? { startedAt: card.liveSetting.startedAt, startTime: card.liveSetting.startTime || "", startMtrs: card.liveSetting.startMtrs ?? null }
+    : null;
+  const lastDoneAt = doneRows.reduce((max, r) => {
+    const t = r.producedAt ? new Date(r.producedAt).getTime() : null;
+    return t != null && (max == null || t > max) ? t : max;
+  }, null);
+  const settings = (Array.isArray(card.jobSetting) ? card.jobSetting : []).map((r, idx) => ({
+    index: idx + 1,
+    startMtrs: Number.isFinite(Number(r.mtrs1)) ? Number(r.mtrs1) : null,
+    stopMtrs: Number.isFinite(Number(r.mtrs2)) ? Number(r.mtrs2) : null,
+    startTime: r.startTime || "",
+    stopTime: r.stopTime || "",
+    completed: !!r.stopTime,
+  }));
+  const pendingRows = rows.filter((r) => r.status !== "done");
+  const paused = card.livePause?.since
+    ? { since: card.livePause.since, reason: card.livePause.reason || "", deviceLabel: card.livePause.deviceLabel || "" }
+    : null;
+  const pauses = (Array.isArray(card.livePauseLog) ? card.livePauseLog : [])
+    .filter((p) => p?.from && p?.to)
+    .map((p) => ({ from: p.from, to: p.to, reason: p.reason || "" }));
+  const claimed = slittingActiveClaim(card.runningOn);
+  return {
+    settings,
+    production,
+    currentRun,
+    setting,
+    jobStartedAt: card.liveStartedAt || card.runningOn?.claimedAt || null,
+    lastDoneAt: lastDoneAt != null ? new Date(lastDoneAt) : null,
+    paused,
+    pauses,
+    totalMeters: round2(doneRows.reduce((n, r) => n + (Number(r.meter) || 0), 0)),
+    target: rows.length,
+    totalPlannedMtrs: rows.reduce((n, r) => n + plannedMetresOf(r), 0),
+    remainingMtrs: pendingRows.reduce((n, r) => n + plannedMetresOf(r), 0),
+    remainingMtrsAfterCurrent: pendingRows.filter((r) => r !== cur).reduce((n, r) => n + plannedMetresOf(r), 0),
+    running: !!claimed,
+    runningOn: card.runningOn?.deviceId
+      ? {
+          deviceLabel: card.runningOn.deviceLabel || "",
+          claimedAt: card.runningOn.claimedAt || null,
+          lastSeenAt: card.runningOn.lastSeenAt || null,
+          stale: !claimed,
+        }
+      : null,
+  };
+}
+
+// One Slitting WIP row: the identity/progress columns (same fields as a queue
+// row) plus liveUpdate (the dialog's data) and runPlan (the Live/Target/Status/
+// Estimate columns). `cureByReel` is the shared curing lookup built once below.
+function mapSlittingWipRow(card, cureByReel) {
+  const rows = Array.isArray(card.slittingLog) ? card.slittingLog : [];
+  const done = rows.filter((r) => r.status === "done").length;
+  const uncured = rows
+    .filter((r) => r.status !== "done")
+    .map((r) => cureByReel.get(String(r.deckleStockId)))
+    .filter((info) => info && !info.cured && info.curedAt);
+  const curingUntil = uncured.reduce((max, info) => Math.max(max, new Date(info.curedAt).getTime()), 0);
+  const progress = buildSlittingProgressMap(card);
+  return {
+    _id: String(card._id),
+    slittingJobCardId: card.slittingJobCardId,
+    machineName: card.machineName || "",
+    lotNo: card.lotNo || "—",
+    productCode: card.productCode || "—",
+    clientName: card.clientName || "—",
+    operatorName: card.operatorName || "—",
+    helperName: card.helperName || "—",
+    deckleCount: rows.length,
+    deckleDone: done,
+    deckleLeft: rows.length - done,
+    plannedRolls: rows.reduce((n, r) => n + (Array.isArray(r.cuts) ? r.cuts.length : 0), 0),
+    producedRolls: rows.filter((r) => r.status === "done").reduce((n, r) => n + (Array.isArray(r.cuts) ? r.cuts.length : 0), 0),
+    curing: uncured.length > 0,
+    curingUntilLabel: curingUntil ? curingWhenLabel(curingUntil) : "",
+    // The office/floor reads these the same way the lamination WIP tab does.
+    liveUpdate: progress,
+    runPlan: buildSlittingRunPlan(progress, SLITTING_SPEED_MPM),
+  };
+}
+
+// Every slitting card an operator has actually STARTED (not merely allocated and
+// sitting on a queue) and not yet completed -- the WIP membership, mirroring the
+// lamination WIP tab. "started" = the card was played (liveStartedAt), someone
+// is on it now (a fresh claim), or a row has been started/run (covers cards from
+// before the live fields existed).
+async function collectSlittingWipRows() {
+  const cards = await SlittingJobCard.find({ status: "allocated" }).sort({ createdAt: 1 }).lean();
+  const started = cards.filter(
+    (c) =>
+      c.liveStartedAt
+      || slittingActiveClaim(c.runningOn)
+      || (Array.isArray(c.slittingLog) && c.slittingLog.some((r) => r.startedAt || r.status === "done")),
+  );
+  const pendingDeckleIds = [
+    ...new Set(
+      started.flatMap((c) =>
+        (c.slittingLog || [])
+          .filter((r) => r.status !== "done")
+          .map((r) => String(r.deckleStockId || ""))
+          .filter(Boolean),
+      ),
+    ),
+  ];
+  const cureReels = pendingDeckleIds.length
+    ? await MaterialStock.find({ _id: { $in: pendingDeckleIds } })
+        .select("createdAt rollId")
+        .populate({ path: "material", select: CURING_MATERIAL_FIELDS })
+        .lean()
+    : [];
+  const cureByReel = new Map(cureReels.map((r) => [String(r._id), deckleCuring(r)]));
+  const rows = started.map((c) => mapSlittingWipRow(c, cureByReel));
   rows.sort(
     (a, b) => a.machineName.localeCompare(b.machineName) || a.slittingJobCardId.localeCompare(b.slittingJobCardId),
   );
+  return rows;
+}
 
+router.get("/slitting/wip", requireSlittingView, async (req, res) => {
+  const rows = await collectSlittingWipRows();
   res.render("inventory/masters/slittingWip.ejs", {
     title: "Slitting WIP",
     CSS: "tableDisp.css",
     JS: false,
     rows,
+    slittingSpeedMpm: SLITTING_SPEED_MPM,
     notification: req.flash("notification"),
   });
+});
+
+// The 10 s reconcile poll -- the whole current row set (same builder as the
+// render), so the page can update, add and drop rows without a reload. Mirrors
+// GET /labels/production/wip-progress.
+router.get("/slitting/wip-progress", requireSlittingView, async (req, res) => {
+  try {
+    const rows = await collectSlittingWipRows();
+    res.json({ rows });
+  } catch (err) {
+    console.error("SLITTING WIP PROGRESS ERROR:", err);
+    res.status(500).json({ rows: [] });
+  }
 });
 
 // ---- Allocation: the planner fixes one or more Deckles' jobs up front ------
@@ -1738,11 +1908,19 @@ export async function saveSlittingSetting({ cardId, rows }) {
   // real reading (a fresh counter starts there), and the falsy-zero form
   // silently dropped it -- which then rendered the field blank AND
   // readonly on reload, with no way left to correct it.
-  card.jobSetting = rows.map((r) => ({
+  //
+  // This replaces the whole jobSetting array, so the server-clock startedAt /
+  // stoppedAt that the per-punch setting endpoints stamped (used by the WIP
+  // page's JOB SETTING phase) are carried forward by index -- a bulk save of
+  // the readings must not wipe the live timing.
+  const prev = Array.isArray(card.jobSetting) ? card.jobSetting : [];
+  card.jobSetting = rows.map((r, i) => ({
     mtrs1: numOrNull(r?.mtrs1),
     startTime: trim(r?.startTime),
     mtrs2: numOrNull(r?.mtrs2),
     stopTime: trim(r?.stopTime),
+    startedAt: prev[i]?.startedAt,
+    stoppedAt: prev[i]?.stoppedAt,
   }));
   await card.save();
   return { ok: true };
@@ -1903,7 +2081,154 @@ router.post("/slitting/jobcard/row/swap-deckle", requireAuth, requireSlittingFlo
 // Stamps the clock on one row when the operator punches Start. Deliberately
 // separate from produce: a run that is started and then abandoned leaves a
 // start time and no stock movement, which is exactly what happened.
-export async function startSlittingRow({ cardId, index, startTime, startMtrs }) {
+// ---- Live signals for the Slitting WIP page --------------------------------
+// The slitting counterparts of routes/system/machine.js's startLiveSetting /
+// pauseLiveJob / endLivePause and routes/api/operatorApi.js's claim/heartbeat,
+// written onto the SlittingJobCard (models/inventory/slittingJobCard.js). The
+// card is updated per punch, so the started-not-done slittingLog row is itself
+// the "liveRun" -- these manage the Job Setting live row, the hold, the running
+// claim and the "when the card was played" stamp. All are repeat-safe so the
+// operator app can resend them from its offline outbox.
+const SLITTING_CLAIM_STALE_MS = 15 * 60 * 1000; // mirrors JOB_CLAIM_STALE_MS
+const SLITTING_HEARTBEAT_MS = 60 * 1000;
+const SLITTING_PAUSE_LOG_MAX = 50;
+const asDate = (at) => (at instanceof Date ? at : at != null ? new Date(at) : new Date());
+
+// A fresh claim or null -- the same 15-min rule as activeClaim in
+// routes/api/operatorApi.js, kept local to avoid a slitting->operatorApi import
+// cycle (operatorApi already imports from here).
+export function slittingActiveClaim(runningOn, now = Date.now()) {
+  if (!runningOn || !runningOn.deviceId) return null;
+  const seen = runningOn.lastSeenAt || runningOn.claimedAt;
+  if (!seen) return null;
+  return now - new Date(seen).getTime() > SLITTING_CLAIM_STALE_MS ? null : runningOn;
+}
+
+// Mutate the in-memory card: stamp it as first played at `at` (once -- the
+// earliest punch wins). Caller saves.
+function stampSlittingStart(card, at) {
+  const t = asDate(at);
+  if (!card.liveStartedAt || new Date(card.liveStartedAt).getTime() > t.getTime()) {
+    card.liveStartedAt = t;
+  }
+}
+
+// File the current hold into livePauseLog and clear it. On a plain punch only a
+// hold that began BEFORE the punch is closed (a late-arriving older punch can't
+// end a newer Pause); on an explicit Resume it is always closed. Mutates the
+// in-memory card; returns whether anything changed. Caller saves.
+function closeSlittingPause(card, at, { explicit = false } = {}) {
+  const since = card.livePause?.since ? new Date(card.livePause.since) : null;
+  if (!since) return false;
+  const to = asDate(at);
+  if (!explicit && since.getTime() > to.getTime()) return false;
+  const log = Array.isArray(card.livePauseLog) ? card.livePauseLog : [];
+  log.push({ from: since, to, reason: card.livePause.reason || "" });
+  card.livePauseLog = log.slice(-SLITTING_PAUSE_LOG_MAX);
+  card.livePause = undefined;
+  card.markModified("livePause");
+  return true;
+}
+
+function clearSlittingSetting(card) {
+  card.liveSetting = undefined;
+  card.markModified("liveSetting");
+}
+
+// A Job Setting row's Start / Stop punch -- the WIP page's JOB SETTING phase and
+// (for Start) the first thing that makes a card STARTED. The setting readings
+// themselves are still saved in bulk by saveSlittingSetting; this only carries
+// the live server-clock so the phase shows in real time. Index-tolerant: the
+// bulk save may not have created the row yet, so liveSetting is held at card
+// level regardless and the row is stamped only if present.
+export async function startSlittingSetting({ cardId, index, startTime, startMtrs, at }) {
+  if (!mongoose.isValidObjectId(cardId)) return { ok: false, status: 400, code: "bad-request" };
+  const card = await SlittingJobCard.findById(cardId);
+  if (!card) return { ok: false, status: 404, code: "no-card" };
+  const i = Number(index);
+  const when = asDate(at);
+  const row = Number.isInteger(i) ? card.jobSetting?.[i] : null;
+  if (row && !row.startedAt) row.startedAt = when;
+  card.liveSetting = { index: Number.isInteger(i) ? i : undefined, startedAt: when, startTime: trim(startTime), startMtrs: numOrNull(startMtrs) };
+  stampSlittingStart(card, when);
+  closeSlittingPause(card, when);
+  await card.save();
+  return { ok: true, code: "started" };
+}
+
+export async function stopSlittingSetting({ cardId, index, at }) {
+  if (!mongoose.isValidObjectId(cardId)) return { ok: false, status: 400, code: "bad-request" };
+  const card = await SlittingJobCard.findById(cardId);
+  if (!card) return { ok: false, status: 404, code: "no-card" };
+  const i = Number(index);
+  const when = asDate(at);
+  const row = Number.isInteger(i) ? card.jobSetting?.[i] : null;
+  if (row && !row.stoppedAt) row.stoppedAt = when;
+  if (card.liveSetting && Number(card.liveSetting.index) === i) clearSlittingSetting(card);
+  closeSlittingPause(card, when);
+  await card.save();
+  return { ok: true, code: "stopped" };
+}
+
+// Pause / Resume -- the operator stepping away without ending the card. The WIP
+// page then shows it ON HOLD and freezes its clock. Repeat-safe: a second Pause
+// keeps the first one's time; a Resume with nothing on hold is a no-op.
+export async function pauseSlittingCard({ cardId, reason, deviceLabel, at }) {
+  if (!mongoose.isValidObjectId(cardId)) return { ok: false, status: 400, code: "bad-request" };
+  const card = await SlittingJobCard.findById(cardId);
+  if (!card) return { ok: false, status: 404, code: "no-card" };
+  if (!card.livePause?.since) {
+    card.livePause = { since: asDate(at), reason: trim(reason), deviceLabel: trim(deviceLabel) };
+    await card.save();
+  }
+  return { ok: true, code: "paused" };
+}
+
+export async function resumeSlittingCard({ cardId, at }) {
+  if (!mongoose.isValidObjectId(cardId)) return { ok: false, status: 400, code: "bad-request" };
+  const card = await SlittingJobCard.findById(cardId);
+  if (!card) return { ok: false, status: 404, code: "no-card" };
+  const changed = closeSlittingPause(card, asDate(at), { explicit: true });
+  if (changed) await card.save();
+  return { ok: true, code: changed ? "resumed" : "not-paused" };
+}
+
+// Running-device claim + heartbeat -- atomic conditional writes, the exact
+// pattern of operatorApi.js's /jobcard/claim and /heartbeat, so two devices
+// can't both run one card.
+export async function claimSlittingCard({ cardId, deviceId, deviceLabel }) {
+  if (!mongoose.isValidObjectId(cardId) || !deviceId) return { ok: false, status: 400, code: "bad-request" };
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - SLITTING_CLAIM_STALE_MS);
+  const claimed = await SlittingJobCard.findOneAndUpdate(
+    {
+      _id: cardId,
+      $or: [
+        { runningOn: null },
+        { "runningOn.deviceId": { $in: [null, ""] } },
+        { "runningOn.deviceId": { $exists: false } },
+        { "runningOn.deviceId": deviceId },
+        { "runningOn.lastSeenAt": { $lt: staleBefore } },
+      ],
+    },
+    { $set: { runningOn: { deviceId, deviceLabel: trim(deviceLabel), claimedAt: now, lastSeenAt: now } } },
+    { new: true, projection: { runningOn: 1 } },
+  ).lean();
+  if (!claimed) return { ok: false, status: 409, code: "running-elsewhere" };
+  return { ok: true, code: "claimed", heartbeatMs: SLITTING_HEARTBEAT_MS };
+}
+
+export async function heartbeatSlittingCard({ cardId, deviceId }) {
+  if (!mongoose.isValidObjectId(cardId) || !deviceId) return { ok: false, status: 400, code: "bad-request" };
+  const result = await SlittingJobCard.updateOne(
+    { _id: cardId, "runningOn.deviceId": deviceId },
+    { $set: { "runningOn.lastSeenAt": new Date() } },
+  );
+  if (!result.matchedCount) return { ok: false, status: 409, code: "claim-lost" };
+  return { ok: true };
+}
+
+export async function startSlittingRow({ cardId, index, startTime, startMtrs, at }) {
   if (!mongoose.isValidObjectId(cardId)) return { ok: false, status: 400, message: "Invalid card." };
 
   const card = await SlittingJobCard.findById(cardId);
@@ -1940,6 +2265,14 @@ export async function startSlittingRow({ cardId, index, startTime, startMtrs }) 
 
   row.startMtrs = startMtrsNum;
   row.startTime = trim(startTime) || row.startTime;
+  // Live signals for the WIP page: this Deckle is on the slitter now (startedAt
+  // is what its ETA is counted from), the card is played, Job Setting is over,
+  // and any hold older than this punch ends.
+  const when = asDate(at);
+  if (!row.startedAt) row.startedAt = when;
+  stampSlittingStart(card, when);
+  clearSlittingSetting(card);
+  closeSlittingPause(card, when);
   await card.save();
   return { ok: true, startTime: row.startTime, startMtrs: row.startMtrs };
 }
@@ -1962,7 +2295,7 @@ router.post("/slitting/jobcard/row/start", requireAuth, requireSlittingFloor, up
 // (cardId, index, stopMtrs, meter, runningMeter, joint, jointMtr, endTime);
 // `createdBy` is whoever is signed in, which differs by front end -- a
 // session user on the EJS card, the bearer-token operator in the app.
-export async function produceSlittingRow(b, { createdBy }) {
+export async function produceSlittingRow(b, { createdBy, at } = {}) {
   const fail = (message) => ({ ok: false, status: 400, message });
 
   if (!mongoose.isValidObjectId(b.cardId)) return fail("Invalid card.");
@@ -1982,6 +2315,9 @@ export async function produceSlittingRow(b, { createdBy }) {
       ok: true,
       replayed: true,
       rollIds: (row.cuts || []).map((c) => c.rollId).filter(Boolean),
+      rolls: (row.cuts || [])
+        .filter((c) => c.stockId && c.rollId)
+        .map((c) => ({ stockId: String(c.stockId), rollId: c.rollId, productCode: card.productCode || "" })),
       meter: row.meter,
       runningMeter: row.runningMeter,
       stopMtrs: row.stopMtrs,
@@ -2102,6 +2438,10 @@ export async function produceSlittingRow(b, { createdBy }) {
   const runSuffix = runIndex === 0 ? "" : String(runIndex);
 
   const createdRolls = [];
+  // The finished rolls, with their stock ids -- so the app can auto-print each
+  // one's label the moment Stop is punched, the same way the lamination card
+  // auto-prints a Deckle (its print queue fetches the label by stock id).
+  const createdRollDocs = [];
   for (const cut of cuts) {
     const rollId = `${reel.rollId}-${cut.slot}${runSuffix}`;
     // Grace: the knife cut `width`, but the client ordered -- and is billed --
@@ -2136,6 +2476,7 @@ export async function produceSlittingRow(b, { createdBy }) {
     cut.rollId = rollId;
     cut.stockId = doc._id;
     createdRolls.push(rollId);
+    createdRollDocs.push({ stockId: String(doc._id), rollId, productCode: code });
 
     await FinishedStockLog.create({
       material,
@@ -2199,7 +2540,13 @@ export async function produceSlittingRow(b, { createdBy }) {
   row.joint = trim(b.joint) || undefined;
   row.jointMtr = numOrNull(b.jointMtr) ?? undefined;
   row.endTime = trim(b.endTime) || row.endTime;
-  row.producedAt = new Date();
+  // producedAt is the WIP page's clock for "when this Deckle came off" -- the
+  // event time (eventTimeOf, for an app punch that waited in the outbox), else now.
+  row.producedAt = asDate(at);
+  // This Deckle's run is over: Job Setting (if any) is done and a hold older than
+  // the Stop ends. The next Deckle's Start re-arms everything.
+  clearSlittingSetting(card);
+  closeSlittingPause(card, row.producedAt);
 
   const done = card.slittingLog.filter((r) => r.status === "done");
   card.totalDeckleMeter = round2(done.reduce((n, r) => n + (Number(r.meter) || 0), 0));
@@ -2211,6 +2558,10 @@ export async function produceSlittingRow(b, { createdBy }) {
   if (allDone) {
     card.status = "completed";
     card.completedAt = new Date();
+    // The card is off the floor -- drop the running claim rather than waiting
+    // for it to go stale (mirrors the lamination save unsetting runningOn).
+    card.runningOn = undefined;
+    card.markModified("runningOn");
   }
   await card.save();
 
@@ -2219,6 +2570,7 @@ export async function produceSlittingRow(b, { createdBy }) {
     auditDescription:
       `${card.slittingJobCardId}: slit Deckle "${reel.rollId}" into ${createdRolls.length} finished roll(s) — ${createdRolls.join(", ")}`,
     rollIds: createdRolls,
+    rolls: createdRollDocs,
     meter: row.meter,
     runningMeter: row.runningMeter,
     stopMtrs: row.stopMtrs,

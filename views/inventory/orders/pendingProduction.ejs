@@ -53,6 +53,13 @@
      long id breaks inside its own cell instead of running into the next one.
      An empty value reads "None", never a dash. */
   .dlg-log-table { table-layout: fixed; min-width: 860px; }
+  /* Separate borders, so the table's rounded corners are real (a collapsed
+     border ignores border-radius and squares off under the clip). The last
+     visible row then drops its own bottom line -- the table's border is the
+     frame. */
+  .dlg-log-table { border-collapse: separate; border-spacing: 0; }
+  .dlg-log-table tbody tr:last-child td,
+  .dlg-log-table tbody tr.dlg-status-row:has(+ tr.dlg-detail-row[hidden]) td { border-bottom: 0; }
   .dlg-log-table td { overflow-wrap: anywhere; }
   .dlg-log-table .dlg-none { color: #94a3b8; font-weight: 500; }
   .dlg-log-table .dlg-flag { color: #b45309; font-weight: 700; }
@@ -111,6 +118,7 @@
   .dlg-badge.is-setting { color: #a16207; }
   .dlg-badge.is-idle { color: #c2410c; }
   .dlg-badge.is-started { color: #1d4ed8; }
+  .dlg-badge.is-paused { color: #475569; }
   /* A deckle on the machine: its badge's dot blinks, like the Live cell. */
   @keyframes dlgDotBlink { 50% { opacity: 0.2; } }
   .dlg-badge.is-running::before, .dlg-badge.is-overdue::before { animation: dlgDotBlink 1.2s step-end infinite; }
@@ -119,9 +127,12 @@
   }
   /* The details the status row opens: label over value, as many across as
      fit. */
-  .dlg-log-table tr.dlg-detail-row td { padding: 14px 16px; background: #fbfdff; }
-  .dlg-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 24px; margin: 0; }
-  .dlg-facts > div { min-width: 0; }
+  .dlg-log-table tr.dlg-detail-row td { padding: 0; background: #fbfdff; }
+  /* Hairlines between the cells only: each cell draws its top and left edge,
+     pulled 1px out so neighbours share one line; the overflow clips those
+     edges, and the table's own border frames the whole. */
+  .dlg-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0; margin: 0; overflow: hidden; border-top: 1px solid #e2e8f0; }
+  .dlg-facts > div { min-width: 0; margin: -1px 0 0 -1px; padding: 10px 16px; border-top: 1px solid #e2e8f0; border-left: 1px solid #e2e8f0; }
   .dlg-facts dt { margin: 0 0 2px; font-size: 11.5px; font-weight: 600; color: #64748b; }
   .dlg-facts dd { margin: 0; font-size: 12.5px; font-weight: 600; color: #1f2a44; line-height: 1.45; }
 
@@ -145,6 +156,16 @@
   .details-scroll-area::-webkit-scrollbar-thumb, .dlg-scroll-x::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
   .details-scroll-area::-webkit-scrollbar-thumb:hover, .dlg-scroll-x::-webkit-scrollbar-thumb:hover { background: #044a78; }
   .details-scroll-area::-webkit-scrollbar-corner, .dlg-scroll-x::-webkit-scrollbar-corner { background: #f0f2f5; }
+  /* Live Production Status: the header stays put and only the body scrolls,
+     so its scrollbar starts under the header and stops short of the card's
+     rounded bottom corners instead of running the full height. */
+  .details-scroll-area.is-pinned-head { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+  .details-scroll-area.is-pinned-head > .tape-details-header { flex-shrink: 0; }
+  .details-scroll-area.is-pinned-head > .tape-details-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .is-pinned-head > .tape-details-body::-webkit-scrollbar { width: 10px; height: 10px; }
+  .is-pinned-head > .tape-details-body::-webkit-scrollbar-track { background: #f0f2f5; margin: 8px 0; border-radius: 6px; }
+  .is-pinned-head > .tape-details-body::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+  .is-pinned-head > .tape-details-body { scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
   /* Firefox */
   .details-scroll-area, .dlg-scroll-x {
     scrollbar-width: thin;
@@ -179,6 +200,7 @@
   .wip-phase.is-amber { color: #b45309; }
   .wip-phase.is-blue { color: #1d4ed8; }
   .wip-phase.is-orange { color: #c2410c; }
+  .wip-phase.is-slate { color: #475569; }
   .wip-phase.is-pulse::before { box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2); }
   /* Deckles: made against planned. */
   .wip-bar { width: 72px; height: 4px; border-radius: 999px; background: #e2e8f0; overflow: hidden; flex-shrink: 0; }
@@ -244,10 +266,10 @@
      red, never a muddy in-between where the text would fade into the
      background. Reduced motion holds solid red (the properties' initial
      values). */
-  @property --wip-alarm-bg { syntax: "<color>"; inherits: false; initial-value: #dc2626; }
+  @property --wip-alarm-bg { syntax: "<color>"; inherits: false; initial-value: #ef4444; }
   @property --wip-alarm-ink { syntax: "<color>"; inherits: false; initial-value: #ffffff; }
   @keyframes wipAlarmBlink {
-    0%, 100% { --wip-alarm-bg: #dc2626; --wip-alarm-ink: #ffffff; }
+    0%, 100% { --wip-alarm-bg: #ef4444; --wip-alarm-ink: #ffffff; }
     50% { --wip-alarm-bg: #fee2e2; --wip-alarm-ink: #991b1b; }
   }
   .tabulator .tabulator-row .tabulator-cell.wip-overdue {
@@ -256,6 +278,21 @@
   }
   .wip-overdue .wip-cell, .wip-overdue .wip-cell * { color: inherit !important; }
   .wip-overdue .wip-phase::before { background: currentColor !important; box-shadow: none !important; }
+
+  /* ON HOLD: the operator paused the job in the app. Nothing moves -- no
+     blink, no fill running on -- on a slate tint, and a deckle that was on the
+     machine keeps the fill it had reached, gone grey, so how far it got is
+     still there to read. The fill's width is set inline (wipSetLiveCell). */
+  .tabulator .tabulator-row .tabulator-cell.wip-paused {
+    background-color: #f1f5f9;
+    background-image:
+      linear-gradient(to left, #64748b 0, #64748b 2px, transparent 2px),
+      linear-gradient(90deg, #e2e8f0, #cbd5e1);
+    background-repeat: no-repeat;
+    background-origin: border-box;
+    background-position: left center;
+  }
+  .wip-paused .wip-sub { color: #334155; }
 
   /* The animations are set inline (wipSetLiveCell), so only !important
      stops them. */
@@ -427,14 +464,38 @@
   // is a whole minute past (so it never reads "0 min over"). Worked out
   // against this browser's clock each time the row is drawn (the poll redraws
   // every row), so it moves on its own.
-  const wipOverMins = (etaAt) => (etaAt != null && Date.now() - etaAt >= 60000 ? (Date.now() - etaAt) / 60000 : null);
+  const wipOverMins = (etaAt, now = Date.now()) => (etaAt != null && now - etaAt >= 60000 ? (now - etaAt) / 60000 : null);
   const wipPlural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  // The time a job's figures are read at: now -- or, for a job on hold, the
+  // moment it went on hold (runPlan.clockAt, utils/productionEta.js), so its
+  // deckle stops filling, nothing turns overdue and Status / Estimate stay
+  // where they were until it resumes.
+  const wipNow = (plan) => plan?.clockAt ?? Date.now();
+  // Minutes from `at` up to the job's clock, less `heldMs` it spent on hold in
+  // between (a hold is not idle or setting time).
+  const wipElapsedMins = (plan, at, heldMs = 0) => Math.max(wipNow(plan) - at - (heldMs || 0), 0) / 60000;
+  // How far the deckle on the machine has got, 0-100: from its Start moved
+  // on by any time on hold (runFromAt) to its ETA, at the job's clock.
+  const wipDecklePct = (plan, cur) => {
+    const from = cur.runFromAt ?? cur.startedAt;
+    return Math.min(Math.max(Math.floor(((wipNow(plan) - from) / (cur.etaAt - from)) * 100), 0), 100);
+  };
+  // What a job on hold was doing when it stopped -- the line under "Paused".
+  const wipHeldWhat = (plan) => {
+    const base = plan.basePhase || "started";
+    const cur = plan.current;
+    if (base === "running" && cur) return `Deckle ${cur.index}${cur.etaAt != null ? ` · ${wipDecklePct(plan, cur)}%` : ""}`;
+    if (base === "setting") return "in Job Setting";
+    if (base === "gap") return `after deckle ${plan.done}`;
+    if (base === "made") return "all made";
+    return "no deckle yet";
+  };
   // When the whole job should be done. The server counts it from the running
   // deckle's ETA; once that deckle overruns, the deckles after it can't start
   // before now, so it is never earlier than now + their running time.
   const wipJobEta = (plan) => (plan.jobEtaAt == null
     ? null
-    : Math.max(plan.jobEtaAt, Date.now() + plan.afterCurrent * plan.minsPerDeckle * 60000));
+    : Math.max(plan.jobEtaAt, wipNow(plan) + plan.afterCurrent * plan.minsPerDeckle * 60000));
   // A Finished / Live / Target / Status / Estimate cell: its lines stacked,
   // the whole cell opening the job's Live Production Status dialog.
   const wipCellBtn = (orderId, title, inner) => `<button type="button" class="wip-cell" onclick="openLiveStatus('${orderId}')" title="${liveStatusEscape(title)}">${inner}</button>`;
@@ -449,8 +510,9 @@
   const wipBar = (frac, title) => `<span class="wip-bar" title="${liveStatusEscape(title)}"><span style="width:${Math.round(Math.min(Math.max(frac, 0), 1) * 100)}%;"></span></span>`;
 
   // The Live cell's state -- "running" (blinks green; with an ETA, `fill`,
-  // the green fill too), "overdue" (blinks red) or "" (neither) -- and the
-  // one place its classes and inline `animation` are set (see the CSS).
+  // the green fill too), "overdue" (blinks red), "paused" (still, slate, the
+  // fill held where it had got to at `fill.at`) or "" (none of them) -- and
+  // the one place its classes and inline `animation` are set (see the CSS).
   // Every animation starts at the point the wall clock is at: the blinks at
   // their phase of WIP_BLINK_MS, the fill at the time gone since the Start.
   // A cell already in the same state (the poll updating it in place) is left
@@ -459,15 +521,20 @@
   const WIP_BLINK_MS = 1200;
   const wipSetLiveCell = (cell, mode, fill) => {
     const el = cell.getElement();
-    const filling = mode === "running" && fill && fill.startedAt != null && fill.durMs > 0;
-    const elapsed = filling ? Math.min(Math.max(Date.now() - fill.startedAt, 0), fill.durMs) : 0;
-    // The fill held still -- all that reduced motion gets, redrawn every 10 s.
-    el.style.backgroundSize = filling ? `${(elapsed / fill.durMs) * 100}% 100%` : "";
+    const hasFill = !!(fill && fill.startedAt != null && fill.durMs > 0);
+    const filling = mode === "running" && hasFill;
+    const held = mode === "paused";
+    const at = held && fill?.at != null ? fill.at : Date.now();
+    const elapsed = hasFill ? Math.min(Math.max(at - fill.startedAt, 0), fill.durMs) : 0;
+    // The fill held still -- all that reduced motion gets, redrawn every 10 s,
+    // and all a job on hold gets.
+    el.style.backgroundSize = filling || (held && hasFill) ? `${(elapsed / fill.durMs) * 100}% 100%` : held ? "0% 100%" : "";
     const key = mode === "running" ? `running|${filling ? `${fill.startedAt}|${fill.durMs}` : "-"}` : mode;
     if ((el.dataset.wipLive || "") === key) return;
     el.classList.toggle("wip-running", mode === "running");
     el.classList.toggle("wip-loading", !!filling);
     el.classList.toggle("wip-overdue", mode === "overdue");
+    el.classList.toggle("wip-paused", held);
     el.style.animation = "none";
     void el.offsetWidth; // let the "none" land, so what follows starts afresh
     const blink = (name) => `${name} ${WIP_BLINK_MS}ms step-end -${Date.now() % WIP_BLINK_MS}ms infinite`;
@@ -499,15 +566,21 @@
   // Estimate = how long the job will have taken start to finish, i.e.
   //            Target + that delay. It is BUILT as that sum in whole minutes,
   //            so the three figures on a row always add up exactly as shown.
+  // A job on hold reads all of this at the moment it went on hold (wipNow),
+  // and the Target it is measured against has every earlier hold taken out
+  // already (runPlan.targetAt) -- so a break is never counted as a delay.
   const WIP_ON_TIME_MINS = 5;
   const wipOutlook = (plan) => {
     if (!plan) return null;
+    const now = wipNow(plan);
     const targetMins = plan.targetDeckles != null && plan.minsPerDeckle != null
       ? Math.round(plan.targetDeckles * plan.minsPerDeckle)
       : null;
     let finishAt = null;
     let finished = false;
-    if (plan.phase === "made") {
+    // What the job was doing, on hold or not: one paused with every deckle
+    // already made is still finished.
+    if ((plan.basePhase || plan.phase) === "made") {
       if (plan.lastDoneAt != null) {
         finishAt = plan.lastDoneAt;
         finished = true;
@@ -515,7 +588,7 @@
     } else if (plan.current) {
       finishAt = wipJobEta(plan);
     } else if (plan.remainingMins != null) {
-      finishAt = Date.now() + plan.remainingMins * 60000;
+      finishAt = now + plan.remainingMins * 60000;
     }
     const delayMins = finishAt != null && plan.targetAt != null ? Math.round((finishAt - plan.targetAt) / 60000) : null;
     const estMins = targetMins != null && delayMins != null ? Math.max(targetMins + delayMins, 0) : null;
@@ -523,7 +596,7 @@
       : delayMins >= WIP_ON_TIME_MINS ? "late"
       : delayMins <= -WIP_ON_TIME_MINS ? "early"
       : "ontime";
-    const leftMins = !finished && finishAt != null ? Math.max((finishAt - Date.now()) / 60000, 0) : null;
+    const leftMins = !finished && finishAt != null ? Math.max((finishAt - now) / 60000, 0) : null;
     return { targetMins, delayMins, estMins, state, finished, leftMins };
   };
   const WIP_STATE = {
@@ -559,12 +632,12 @@
     const production = Array.isArray(progress.production) ? progress.production : [];
     // The two logs on one grid (see .dlg-log-table):
     //   Job Setting Log  # | Mtrs                        | Start Time | End Time | Counter       | Status
-    //   Production Log   # | Date | Deckle ID | Made     | Start Time | End Time | Facestock J/W | Release J/W
+    //   Production Log   # | Deckle ID | Made     | Date | Start Time | End Time | Face Joint | Release Joint
     // A setting row has no id or date of its own, so its Mtrs takes the width
     // of Date + Deckle ID + Made (10 + 22 + 9 = 41) and everything to its
     // right lines up. The widths below must add to 100 and keep those sums.
     const SETTING_COLGROUP = `<colgroup><col style="width:4%"><col style="width:41%"><col style="width:10%"><col style="width:11%"><col style="width:17%"><col style="width:17%"></colgroup>`;
-    const PROD_COLGROUP = `<colgroup><col style="width:4%"><col style="width:10%"><col style="width:22%"><col style="width:9%"><col style="width:10%"><col style="width:11%"><col style="width:17%"><col style="width:17%"></colgroup>`;
+    const PROD_COLGROUP = `<colgroup><col style="width:4%"><col style="width:22%"><col style="width:9%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:17%"><col style="width:17%"></colgroup>`;
     const PROD_COLS = 8;
     const none = `<span class="dlg-none">None</span>`;
     // A setting row is a run off the machine's counter, so its Mtrs is stop
@@ -667,8 +740,9 @@
           const gap = i > 0 ? punchGap(production[i - 1].endTime, row.startTime) : null;
           const day = rowDay(row);
           return `${gap >= 1 ? gapRow(`Idle time &middot; ${wipDuration(gap)}`) : ""}
-          <tr><td>${row.index}</td><td>${day ? dlgDate(day.date) : none}</td><td>${liveStatusValue(row.deckleId)}</td>
+          <tr><td>${row.index}</td><td>${liveStatusValue(row.deckleId)}</td>
           <td style="font-weight:700;">${liveStatusMtrs(row.meters)} mtrs</td>
+          <td>${day ? dlgDate(day.date) : none}</td>
           <td>${liveStatusValue(row.startTime)}</td>
           <td>${liveStatusValue(row.endTime || (row.live && row.producedAt ? liveStatusClock(row.producedAt) : ""))}${day?.overnight ? nextDay : ""}</td>
           ${jointCells(row)}</tr>`;
@@ -698,13 +772,24 @@
       const cur = plan.current;
       const of = plan.target ? ` of ${plan.target}` : "";
       const facts = [];
-      const since = (at) => wipDuration((Date.now() - at) / 60000);
+      // How long a stretch has lasted, up to the job's clock (frozen while it
+      // is on hold), less any time it spent on hold.
+      const since = (at, heldMs = 0) => wipDuration(wipElapsedMins(plan, at, heldMs));
+      const heldNote = (heldMs) => (heldMs >= 60000 ? ` <span class="dlg-none">(not counting ${wipDuration(heldMs / 60000)} on hold)</span>` : "");
       const stillToMake = () => {
         if (plan.toMake > 0 && plan.remainingMins != null) {
           facts.push(["Still to make", `${wipPlural(plan.toMake, "deckle")} &times; ${liveStatusMtrs(plan.deckleMtrs)} mtrs &middot; ${wipDuration(plan.remainingMins)} of running at ${plan.speedMpm} mtrs/min`]);
         }
       };
-      const over = cur ? wipOverMins(cur.etaAt) : null;
+      // On hold: nothing is running late while it is held.
+      const pausedNow = plan.phase === "paused" && plan.paused;
+      const base = plan.basePhase || plan.phase;
+      const over = cur && !pausedNow ? wipOverMins(cur.etaAt, wipNow(plan)) : null;
+      if (pausedNow) {
+        facts.push(["On hold", `<span style="color:#475569;">Since ${wipClock(plan.paused.since)} &middot; ${wipDuration((Date.now() - plan.paused.since) / 60000)} so far</span>`]);
+        facts.push(["Reason", plan.paused.reason ? liveStatusEscape(plan.paused.reason) : `<span class="dlg-none">Not given</span>`]);
+        if (plan.paused.deviceLabel) facts.push(["Paused on", liveStatusEscape(plan.paused.deviceLabel)]);
+      }
       if (cur) {
         facts.push(["On the machine", wipDeckleLabel(plan, cur)]);
         facts.push(["Deckle started", `${wipClock(cur.startedAt)}${cur.startMtrs != null ? ` &middot; counter at ${liveStatusMtrs(cur.startMtrs)} mtrs` : ""}`]);
@@ -712,22 +797,21 @@
           facts.push(["Idle before it", `${wipDuration(plan.gapBeforeMins)} &middot; deckle ${plan.done} came off at ${wipClock(plan.lastDoneAt)}`]);
         }
         facts.push(["To make", cur.mtrs
-          ? `${liveStatusMtrs(cur.mtrs)} mtrs &middot; ${wipDuration(plan.minsPerDeckle)} at ${plan.speedMpm} mtrs/min`
+          ? `${liveStatusMtrs(cur.mtrs)} mtrs &middot; ${wipDuration(plan.minsPerDeckle)} at ${plan.speedMpm} mtrs/min${heldNote(cur.heldMs)}`
           : `<span style="color:#a16207;">Deckle R.M. not set on this job, so no ETA</span>`]);
-        if (cur.etaAt != null) {
-          facts.push(["ETA", over != null
-            ? `<span style="color:#b91c1c;">~${wipEta(cur.etaAt)} &middot; ${wipDuration(over)} past it</span>`
-            : `~${wipEta(cur.etaAt)}`]);
+        if (pausedNow && cur.etaAt != null) {
+          facts.push(["Held at", `${wipDecklePct(plan, cur)}% &middot; ${wipDuration((cur.etaAt - wipNow(plan)) / 60000)} of it still to run once it resumes`]);
         }
-      } else if (plan.phase === "setting") {
+        // No ETA fact: the Running row above already shows it, and how far over.
+      } else if (base === "setting") {
         facts.push(["On the machine", "Job Setting"]);
-        facts.push(["Setting since", `${wipClock(plan.setting.startedAt)} &middot; ${since(plan.setting.startedAt)} so far${plan.setting.startMtrs != null ? ` &middot; counter at ${liveStatusMtrs(plan.setting.startMtrs)} mtrs` : ""}`]);
+        facts.push(["Setting since", `${wipClock(plan.setting.startedAt)} &middot; ${since(plan.setting.startedAt, plan.setting.heldMs)} so far${heldNote(plan.setting.heldMs)}${plan.setting.startMtrs != null ? ` &middot; counter at ${liveStatusMtrs(plan.setting.startMtrs)} mtrs` : ""}`]);
         stillToMake();
-      } else if (plan.phase === "gap") {
+      } else if (base === "gap") {
         facts.push(["On the machine", `Idle, between deckle ${plan.done} and ${plan.done + 1}`]);
-        if (plan.gapSince != null) facts.push(["Idle time", `<span style="color:#c2410c;">${since(plan.gapSince)} so far &middot; since deckle ${plan.done} came off at ${wipClock(plan.gapSince)}</span>`]);
+        if (plan.gapSince != null) facts.push(["Idle time", `<span style="color:#c2410c;">${since(plan.gapSince, plan.gapHeldMs)} so far &middot; since deckle ${plan.done} came off at ${wipClock(plan.gapSince)}</span>${heldNote(plan.gapHeldMs)}`]);
         stillToMake();
-      } else if (plan.phase === "made") {
+      } else if (base === "made") {
         facts.push(["On the machine", `All made: ${plan.done} of ${wipPlural(plan.target, "deckle")}`]);
       } else {
         facts.push(["On the machine", "Nothing yet: started, no deckle begun"]);
@@ -750,10 +834,18 @@
       if (look.state) {
         facts.push(["Status", `${wipStatusPill(look)} &nbsp;${look.finished && look.state !== "ontime" ? "finished " : ""}${wipDelayText(look)}`]);
       }
+      // Holds the job has come out of: their time is taken out of the Target
+      // and Estimate, so a break never reads as a delay.
+      const pastHolds = Array.isArray(plan.pauses) ? plan.pauses : [];
+      if (pastHolds.length) {
+        facts.push(["Earlier holds", `${wipPlural(pastHolds.length, "hold")} &middot; ${wipDuration((plan.heldMs || 0) / 60000)} in all <span class="dlg-none">(not counted against the Target)</span>`]);
+      }
       if (look.estMins != null) {
         let estText;
         if (look.finished) {
-          estText = `${wipDuration(look.estMins)} &middot; actual, start to the last deckle`;
+          estText = `${wipDuration(look.estMins)} &middot; actual, start to the last deckle${plan.heldMs >= 60000 ? `, less ${wipDuration(plan.heldMs / 60000)} on hold` : ""}`;
+        } else if (pausedNow) {
+          estText = `${wipDuration(look.estMins)} start to finish &middot; held where it was while the job is on hold`;
         } else if (cur) {
           estText = `${wipDuration(look.estMins)} start to finish &middot; ${wipExtraDeckle(plan, cur) || plan.afterCurrent === 0 ? "ends with this deckle" : `${wipPlural(plan.afterCurrent, "more deckle")} after this one`} &middot; ${wipLeftText(look)}`;
         } else {
@@ -769,13 +861,28 @@
       // The row's last cell: its value, and the dropdown arrow at the right.
       const rowEnd = (inner) => `<div class="dlg-row-end"><div>${inner}</div><button type="button" class="dlg-toggle" aria-expanded="false" aria-label="Show details" title="Show details"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button></div>`;
       const notYet = `<span class="dlg-none">Not yet</span>`;
-      if (cur) {
+      if (pausedNow) {
+        // On hold: one line, like the other states with nothing moving --
+        // since when, why, and what it was held at. The deckle on the machine
+        // and everything else stay in the details underneath.
+        const held = wipDuration((Date.now() - plan.paused.since) / 60000);
+        const what = base === "running" && cur
+          ? `${wipDeckleLabel(plan, cur)}${cur.etaAt != null ? ` held at ${wipDecklePct(plan, cur)}%` : " on the machine"}`
+          : base === "setting" ? "held in Job Setting"
+          : base === "gap" ? `held after deckle ${plan.done}${of}`
+          : base === "made" ? `${plan.done}${of} made, Job Card not saved yet`
+          : "no deckle begun yet";
+        statusRows = `<tr class="dlg-status-row is-paused" onclick="toggleLiveDetails(this)">
+            <td></td><td>${dlgDate(plan.paused.since)}</td>
+            <td colspan="${PROD_COLS - 2}">${rowEnd(`${badge("is-paused", "Paused")} <span class="dlg-status-text">Since ${liveStatusClock(plan.paused.since)} &middot; ${held} on hold${plan.paused.reason ? ` &middot; ${liveStatusEscape(plan.paused.reason)}` : ""} &middot; ${what}</span>`)}</td>
+          </tr>${detailRow}`;
+      } else if (cur) {
         // The deckle on the machine, in the log's own columns. Its Deckle ID
         // and joints only exist once its Stop inwards it.
         const late = over != null;
         let made = none;
         if (cur.mtrs && !late && cur.etaAt != null) {
-          const pct = Math.min(Math.max(Math.floor(((Date.now() - cur.startedAt) / (cur.etaAt - cur.startedAt)) * 100), 0), 100);
+          const pct = wipDecklePct(plan, cur);
           made = `${pct}% <span class="dlg-none">of ${liveStatusMtrs(cur.mtrs)} mtrs</span>`;
         } else if (cur.mtrs) {
           made = `${liveStatusMtrs(cur.mtrs)} mtrs <span class="dlg-none">to make</span>`;
@@ -792,9 +899,10 @@
             : when;
         }
         statusRows = `<tr class="dlg-status-row ${late ? "is-overdue" : "is-running"}" onclick="toggleLiveDetails(this)">
-            <td>${cur.index}</td><td>${dlgDate(cur.startedAt)}</td>
+            <td>${cur.index}</td>
             <td>${badge(late ? "is-overdue" : "is-running", "Running")}${wipExtraDeckle(plan, cur) ? ` <span class="dlg-none">extra deckle</span>` : ""}</td>
             <td style="font-weight:700;">${made}</td>
+            <td>${dlgDate(cur.startedAt)}</td>
             <td>${liveStatusValue(cur.startTime || liveStatusClock(cur.startedAt))}</td>
             <td>${end}</td>
             <td>${notYet}</td><td>${rowEnd(notYet)}</td>
@@ -805,15 +913,15 @@
         let label;
         let text;
         let at;
-        if (plan.phase === "setting") {
+        if (base === "setting") {
           cls = "is-setting"; label = "Job Setting"; at = plan.setting.startedAt;
-          text = `Since ${liveStatusClock(at)} &middot; ${since(at)} so far${plan.done ? ` &middot; after deckle ${plan.done}${of}` : ""}`;
-        } else if (plan.phase === "gap") {
+          text = `Since ${liveStatusClock(at)} &middot; ${since(at, plan.setting.heldMs)} so far${plan.done ? ` &middot; after deckle ${plan.done}${of}` : ""}`;
+        } else if (base === "gap") {
           cls = "is-idle"; label = "Idle"; at = plan.gapSince;
           text = at != null
-            ? `${since(at)} since deckle ${plan.done} came off at ${liveStatusClock(at)} &middot; deckle ${plan.done + 1} not started yet`
+            ? `${since(at, plan.gapHeldMs)} since deckle ${plan.done} came off at ${liveStatusClock(at)} &middot; deckle ${plan.done + 1} not started yet`
             : `Between deckle ${plan.done} and ${plan.done + 1}`;
-        } else if (plan.phase === "made") {
+        } else if (base === "made") {
           cls = "is-made"; label = "All made"; at = plan.lastDoneAt;
           text = `${plan.done} of ${wipPlural(plan.target, "deckle")} made &middot; Job Card not saved yet`;
         } else {
@@ -831,14 +939,31 @@
     // One header for the Production Log and for a running deckle's row in
     // Current Status, which is laid out in the same columns. A one-line state
     // (setting, idle, all made, started) has no columns to head.
-    const PROD_HEAD = `<thead><tr><th>#</th><th>Date</th><th>Deckle ID</th><th>Made</th><th>Start Time</th><th>End Time</th><th>Facestock Joint / Wrinkle</th><th>Release Joint / Wrinkle</th></tr></thead>`;
+    const PROD_HEAD = `<thead><tr><th>#</th><th>Deckle ID</th><th>Made</th><th>Date</th><th>Start Time</th><th>End Time</th><th>Face Joint</th><th>Release Joint</th></tr></thead>`;
     const statusSection = statusRows
       ? `<div class="dlg-section-head"><h3 class="section-title">Current Status</h3>${deviceChip}</div>
-          <div class="dlg-scroll-x dlg-status-wrap"><table class="diff-table dlg-log-table">${PROD_COLGROUP}${plan?.current ? PROD_HEAD : ""}<tbody>${statusRows}</tbody></table></div>`
+          <div class="dlg-scroll-x dlg-status-wrap"><table class="diff-table dlg-log-table">${PROD_COLGROUP}${plan?.current && plan.phase !== "paused" ? PROD_HEAD : ""}<tbody>${statusRows}</tbody></table></div>`
       : deviceChip ? `<div class="dlg-section-head">${deviceChip}</div>` : "";
 
+    // Hold Log: every time the operator paused this job in the app, oldest
+    // first, the one it is on now last. Only there once it has been paused.
+    const holds = [
+      ...(Array.isArray(plan?.pauses) ? plan.pauses : []).map((p) => ({ ...p, open: false })),
+      ...(plan?.paused ? [{ from: plan.paused.since, to: null, reason: plan.paused.reason, open: true }] : []),
+    ];
+    const holdSection = holds.length
+      ? `<h3 class="section-title" style="margin-top:22px;">Hold Log</h3>
+          <div class="dlg-scroll-x" style="overflow-x:auto;"><table class="diff-table dlg-log-table">
+            <colgroup><col style="width:4%"><col style="width:22%"><col style="width:22%"><col style="width:17%"><col style="width:35%"></colgroup>
+            <thead><tr><th>#</th><th>Paused</th><th>Resumed</th><th>On hold</th><th>Reason</th></tr></thead>
+            <tbody>${holds.map((h, i) => `<tr><td>${i + 1}</td><td>${wipClock(h.from)}</td>
+              <td>${h.open ? `<span class="dlg-badge is-paused">Still on hold</span>` : wipClock(h.to)}</td>
+              <td style="font-weight:700;">${wipDuration(((h.open ? Date.now() : h.to) - h.from) / 60000)}</td>
+              <td>${liveStatusValue(h.reason)}</td></tr>`).join("")}</tbody></table></div>`
+      : "";
+
     document.getElementById("live-status-dialog-body").innerHTML = `
-      <div class="tape-details-card"><div class="details-scroll-area">
+      <div class="tape-details-card"><div class="details-scroll-area is-pinned-head">
         <div class="tape-details-header"><div class="header-copy"><h1>Live Production Status</h1>
           <div class="header-subtitle">${liveStatusEscape(order.productCode || "Label Stock")} · ${progress.jobCardId ? `Job Card ${liveStatusEscape(progress.jobCardId)}` : "Job Card not saved yet"}</div></div>
           <div class="header-actions"><span class="header-action-link" style="pointer-events:none;"><i class="fa-solid fa-ruler-horizontal"></i> Total: ${liveStatusMtrs(progress.totalMeters)} mtrs</span>
@@ -847,6 +972,7 @@
           <div class="dlg-scroll-x" style="overflow-x:auto; margin-bottom:22px;"><table class="diff-table dlg-log-table">${SETTING_COLGROUP}<thead><tr><th>#</th><th>Mtrs</th><th>Start Time</th><th>End Time</th><th>Counter</th><th>Status</th></tr></thead><tbody>${settingRows}</tbody></table></div>
           <h3 class="section-title">Production Log</h3>
           <div class="dlg-scroll-x" style="overflow-x:auto;"><table class="diff-table dlg-log-table">${PROD_COLGROUP}${PROD_HEAD}<tbody>${productionBody}</tbody></table></div>
+          ${holdSection}
         </div></div></div>`;
     document.getElementById("live-status-dialog").style.display = "flex";
   };
@@ -1130,34 +1256,45 @@
         title: "Live",
         field: "runPlan",
         headerSort: false,
-        headerTooltip: "What the machine is doing now. While a deckle runs, the green fill is how far it has got",
+        headerTooltip: "What the machine is doing now. While a deckle runs, the green fill is how far it has got. Paused: the operator has put the job on hold in the app",
         minWidth: 170,
         // The deckle on the machine right now, and how far it has got at the
         // laminator's speed -- counted on the server (utils/productionEta.js)
         // from the Start the card reports (PendingProduction.liveRun); only
         // "past its ETA" is decided here, against this browser's clock, so it
-        // moves without a reload.
+        // moves without a reload. A job on hold (PendingProduction.livePause)
+        // stands still at the moment it was paused (wipNow).
         formatter: (cell) => {
           const row = cell.getRow().getData();
           const val = row.liveUpdate;
           const plan = row.runPlan;
           const cur = plan?.current || null;
+          const paused = plan?.phase === "paused" && plan.paused;
           // A deckle on the machine blinks the cell green, and fills it green
           // from its Start to its ETA. Past the ETA by a whole minute
           // (wipOverMins) -- the same test the "min over" text uses, so it
-          // turns exactly when it says so -- the red blink takes over.
-          const over = cur ? wipOverMins(cur.etaAt) : null;
+          // turns exactly when it says so -- the red blink takes over. On hold,
+          // neither: the cell goes still and slate, the fill held where it got.
+          const over = cur && !paused ? wipOverMins(cur.etaAt) : null;
+          const fillFrom = cur ? cur.runFromAt ?? cur.startedAt : null;
           wipSetLiveCell(cell,
-            !val || !cur ? "" : over != null ? "overdue" : "running",
-            cur && cur.etaAt != null ? { startedAt: cur.startedAt, durMs: cur.etaAt - cur.startedAt } : null);
+            !val || !plan ? "" : paused ? "paused" : !cur ? "" : over != null ? "overdue" : "running",
+            cur && cur.etaAt != null ? { startedAt: fillFrom, durMs: cur.etaAt - fillFrom, at: plan.clockAt } : null);
           if (!val || !plan) return `<span class="wip-none">Not started</span>`;
           const phase = (cls, text) => `<span class="wip-phase wip-link ${cls}">${text}</span>`;
-          const since = (at) => wipDuration((Date.now() - at) / 60000);
+          const since = (at, heldMs) => wipDuration(wipElapsedMins(plan, at, heldMs));
           const mountedTip = val.mounted ? ` · ${wipPlural(val.mounted, "reel")} mounted` : "";
           let head;
           let sub;
           let tip;
-          if (cur) {
+          if (paused) {
+            // On hold: what it was doing when it stopped, and for how long it
+            // has been held -- that one keeps counting, it is real time.
+            const heldFor = wipDuration((Date.now() - plan.paused.since) / 60000);
+            head = `${phase("is-slate", "Paused")}<span class="wip-sub">${wipHeldWhat(plan)}</span>`;
+            sub = `<span class="wip-main">${heldFor}</span><span class="wip-sub">on hold${plan.paused.reason ? ` · ${liveStatusEscape(plan.paused.reason)}` : ""}</span>`;
+            tip = `On hold since ${wipClock(plan.paused.since)}${plan.paused.reason ? ` (${plan.paused.reason})` : ""}${plan.paused.deviceLabel ? ` · paused on ${plan.paused.deviceLabel}` : ""} · nothing here moves until it resumes`;
+          } else if (cur) {
             // The count itself is the Deckles column's; here only which one.
             const which = wipExtraDeckle(plan, cur) ? `Deckle ${cur.index} · extra` : `Deckle ${cur.index}`;
             head = `${phase("is-green is-pulse", "Running")}<span class="wip-sub">${which}</span>`;
@@ -1165,9 +1302,10 @@
               sub = `<span class="wip-main">${wipDuration(over)} over</span>`;
               tip = `${wipDeckleLabel(plan, cur)} has run ${wipDuration(over)} past its ~${wipDuration(plan.minsPerDeckle)}`;
             } else if (cur.etaAt != null) {
-              const pct = Math.min(Math.max(Math.floor(((Date.now() - cur.startedAt) / (cur.etaAt - cur.startedAt)) * 100), 0), 100);
-              sub = `<span class="wip-main">${pct}%</span><span class="wip-sub">${wipDuration((cur.etaAt - Date.now()) / 60000)} left</span>`;
+              const pct = wipDecklePct(plan, cur);
+              sub = `<span class="wip-main">${pct}%</span><span class="wip-sub">${wipDuration((cur.etaAt - wipNow(plan)) / 60000)} left</span>`;
               tip = `${wipDeckleLabel(plan, cur)}: ${liveStatusMtrs(cur.mtrs)} mtrs, ~${wipDuration(plan.minsPerDeckle)} at ${plan.speedMpm} mtrs/min`;
+              if (cur.heldMs >= 60000) tip += ` · ${wipDuration(cur.heldMs / 60000)} on hold added to its ETA`;
             } else {
               sub = `<span class="wip-sub">Deckle R.M. not set</span>`;
               tip = `${wipDeckleLabel(plan, cur)}: no Deckle R.M. on this job, so no ETA`;
@@ -1176,10 +1314,11 @@
           } else {
             // No deckle on the machine. The phase comes from the server
             // (plan.phase, utils/productionEta.js); how long it has lasted is
-            // counted to now, so these rows are redrawn on the clock too.
+            // counted to now -- less any time on hold -- so these rows are
+            // redrawn on the clock too.
             if (plan.phase === "setting") {
               head = phase("is-amber", "Job Setting");
-              sub = `<span class="wip-main">${since(plan.setting.startedAt)}</span><span class="wip-sub">so far</span>`;
+              sub = `<span class="wip-main">${since(plan.setting.startedAt, plan.setting.heldMs)}</span><span class="wip-sub">so far</span>`;
             } else if (plan.phase === "made") {
               head = phase("is-green", "All made");
               sub = `<span class="wip-sub">Job Card not saved</span>`;
@@ -1188,7 +1327,7 @@
               // is idle, counted from that deckle's Stop.
               head = `${phase("is-orange", "Idle")}<span class="wip-sub">after deckle ${plan.done}</span>`;
               sub = plan.gapSince != null
-                ? `<span class="wip-main">${since(plan.gapSince)}</span><span class="wip-sub">so far</span>`
+                ? `<span class="wip-main">${since(plan.gapSince, plan.gapHeldMs)}</span><span class="wip-sub">so far</span>`
                 : `<span class="wip-sub">Between deckles</span>`;
             } else {
               // Played, nothing on the machine, nothing made yet.
@@ -1205,16 +1344,19 @@
           const plan = data.runPlan;
           if (!data.liveUpdate || !plan) return "";
           const cur = plan.current;
-          const since = (at) => wipDuration((Date.now() - at) / 60000);
+          const since = (at, heldMs) => wipDuration(wipElapsedMins(plan, at, heldMs));
+          if (plan.phase === "paused" && plan.paused) {
+            return `Paused · ${wipHeldWhat(plan)} · ${wipDuration((Date.now() - plan.paused.since) / 60000)} on hold${plan.paused.reason ? ` · ${plan.paused.reason}` : ""}`;
+          }
           if (cur) {
             const over = wipOverMins(cur.etaAt);
             if (over != null) return `Running · Deckle ${cur.index} · ${wipDuration(over)} over`;
             if (cur.etaAt != null) return `Running · Deckle ${cur.index} · ${wipDuration((cur.etaAt - Date.now()) / 60000)} left`;
             return `Running · Deckle ${cur.index}`;
           }
-          if (plan.phase === "setting") return `Job Setting · ${since(plan.setting.startedAt)}`;
+          if (plan.phase === "setting") return `Job Setting · ${since(plan.setting.startedAt, plan.setting.heldMs)}`;
           if (plan.phase === "made") return "All made";
-          if (plan.phase === "gap") return plan.gapSince != null ? `Idle · ${since(plan.gapSince)}` : "Idle";
+          if (plan.phase === "gap") return plan.gapSince != null ? `Idle · ${since(plan.gapSince, plan.gapHeldMs)}` : "Idle";
           return "Started";
         },
       },
@@ -1304,7 +1446,9 @@
               <span class="wip-line"><span class="wip-main wip-link">${wipDuration(look.estMins)}</span></span>
               <span class="wip-line"><span class="wip-sub">Done</span></span>`);
           }
-          const how = plan.current
+          const how = plan.phase === "paused"
+            ? "Held where it was: the job is on hold"
+            : plan.current
             ? "If it keeps running at speed from the deckle on the machine"
             : "If the next deckle starts now and the rest run nonstop";
           return wipCellBtn(row._id, `${how} (${plan.speedMpm} mtrs/min)`, `
@@ -1339,7 +1483,17 @@
   // starts it and LEAVES when it is produced. The endpoint answers with the
   // full set (same query, mapper and filter as the page render), so whatever
   // is missing from that answer is no longer running and its row goes.
-  setInterval(async () => {
+  //
+  // Every WIP_POLL_MS while the page is in view -- short enough that a Pause
+  // tapped on the floor shows here within seconds. A tab left open in the
+  // background skips its polls (each one is a full WIP build on the server,
+  // for nobody to read) and catches up the moment it is looked at again. One
+  // poll at a time: a slow answer is never overtaken by the next one.
+  const WIP_POLL_MS = 10000;
+  let wipPolling = false;
+  const refreshWip = async () => {
+    if (wipPolling) return;
+    wipPolling = true;
     try {
       const res = await fetch("/app/labels/production/wip-progress");
       if (!res.ok) return;
@@ -1356,16 +1510,24 @@
       gone.forEach((row) => row.delete());
     } catch (err) {
       console.error("WIP live update poll failed:", err);
+    } finally {
+      wipPolling = false;
     }
-  }, 20000);
+  };
+  setInterval(() => {
+    if (!document.hidden) refreshWip();
+  }, WIP_POLL_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshWip();
+  });
 
   // The Live column also depends on the time NOW -- how far through its
   // deckle a job is, whether it has run past its ETA (the red blink), how long
-  // a setting or a gap has lasted -- and so do Status and Estimate for any job
-  // not yet all made (with nothing running, the Estimate is now + what is
-  // left). So those rows are redrawn on a clock of their own, not only when
+  // a setting, a gap or a hold has lasted -- and so do Status and Estimate for
+  // any job not yet all made (with nothing running, the Estimate is now + what
+  // is left). So those rows are redrawn on a clock of their own, not only when
   // the poll above brings new data (or fails to).
-  const WIP_CLOCK_PHASES = new Set(["running", "setting", "gap", "started"]);
+  const WIP_CLOCK_PHASES = new Set(["running", "setting", "gap", "started", "paused"]);
   setInterval(() => {
     wipTable.getRows().forEach((row) => {
       if (WIP_CLOCK_PHASES.has(row.getData().runPlan?.phase)) row.reformat();

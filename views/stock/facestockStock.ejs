@@ -696,33 +696,27 @@
       </div>
       <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
-        Total Value: <span style="color: #15803d; font-size: 15px;">₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+        Total Value: <span id="stockTotalValue" style="color: #15803d; font-size: 15px;">₹<%= Number(totalStockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;"
         title="Facestock's Stock (Kg) converted to running metres at each spec's own GSM and width -- specs with no GSM (micron-only) aren't included.">
-        Total RM: <span style="color: #15803d; font-size: 15px;"><%= Number(totalRunningMeters || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %> m</span>
+        Total RM: <span id="stockTotalRm" style="color: #15803d; font-size: 15px;"><%= Number(totalRunningMeters || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %> m</span>
       </span>
       <span style="width: 1px; align-self: stretch; background: rgba(255, 255, 255, 0.4);"></span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px; box-shadow: 0 0 0 2px #044a78, 0 0 0 3.5px #fff;">
-        Facestock Value: <span style="color: #15803d;">₹<%= Number(facestockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+        Facestock: <span id="stockFacestockValue" style="color: #15803d;">₹<%= Number(facestockValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
-        Adhesive Value: <span style="color: #15803d;">₹<%= Number(adhesiveValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+        Adhesive: <span id="stockAdhesiveValue" style="color: #15803d;">₹<%= Number(adhesiveValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
       <span style="font-size: 13px; font-weight: 700; color: #044a78; background: #eef2f7; padding: 6px 12px; border-radius: 8px;">
-        Release Liner Value: <span style="color: #15803d;">₹<%= Number(releaseValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
+        Release Liner: <span id="stockReleaseValue" style="color: #15803d;">₹<%= Number(releaseValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) %></span>
       </span>
       </div>
     </div>
     <!-- Find a reel: the column header filters search the spec rows, this
          searches the reels underneath them (see .stock-find-bar above). -->
     <div class="stock-find-wrap">
-      <button type="button" id="download-xlsx" class="download-selector__trigger" style="width: auto;" title="Download this table as an Excel file, straight from the current Sachiko database">
-        <span>
-          <i class="fa-solid fa-file-excel"></i>
-          <span class="download-typo">Excel</span>
-        </span>
-      </button>
       <span id="stockFindStatus" class="stock-find-status"></span>
       <div class="stock-find-bar">
         <i class="fa-solid fa-magnifying-glass stock-find-icon"></i>
@@ -1067,7 +1061,6 @@
 
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
@@ -1076,7 +1069,7 @@
 <script>
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
   const facestockSpecsData = JSON.parse(document.getElementById("facestock-specs-data").textContent);
-  const mastersData = JSON.parse(document.getElementById("facestock-masters-data").textContent);
+  let mastersData = JSON.parse(document.getElementById("facestock-masters-data").textContent);
 
   function locationOptionsHtml(selectedName) {
     return locationsData
@@ -1398,12 +1391,16 @@
       // is the same conversion the master row's Stock (RM) column applies.
       const rollMaster = findMasterForRoll(data._id);
       const reelRm = kgToRm(data.reelMtrs, rollMaster.gsm, rollMaster.size);
+      // Serial No.: the reel's place in its spec's list (the master's Sr. No.
+      // is the same idea one level up). Counted over the whole list, not the
+      // search results, so the number doesn't move while a search is on.
+      const serialNo = (findMasterForRoll(data._id).rolls || []).findIndex((r) => r._id === data._id) + 1;
       const parts = [
         `↳ <b style="color:#1f2a44;">${escapeHtml(data.rollId || "—")}</b>`,
         allottedBadge,
         usedBadge,
         data.vendorRollId ? `Vendor Roll ID: ${escapeHtml(data.vendorRollId)}` : "",
-        `Kg ${fmtKg(data.reelMtrs)}`,
+        `<b style="color:#1f2a44;font-weight:800;">Kg ${fmtKg(data.reelMtrs)}</b>`,
         reelRm != null ? `RM ${fmtRm(reelRm)}` : "",
         data.location ? escapeHtml(data.location) : "",
         data.rate != null ? `Rate ₹${fmt(data.rate)}` : "",
@@ -1418,6 +1415,14 @@
       editBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit';
       editBtn.addEventListener("click", () => openEditRollDialog(data, findMasterForRoll(data._id)));
       bar.insertBefore(editBtn, bar.firstChild);
+      // S.No sits in front of Edit, as its own label (not part of the detail text).
+      if (serialNo) {
+        const sno = document.createElement("span");
+        sno.className = "roll-sno";
+        sno.style.cssText = "background:#e2e8f0;color:#1f2a44;font-weight:800;padding:4px 9px;border-radius:6px;font-size:12.5px;white-space:nowrap;align-self:center;";
+        sno.textContent = serialNo;
+        bar.insertBefore(sno, bar.firstChild);
+      }
       const printBtn = document.createElement("button");
       printBtn.type = "button";
       printBtn.className = "roll-print-btn";
@@ -1633,16 +1638,6 @@
     ],
   });
 
-  // ---- Download dropdown ----
-  // Tree children (the reel rows nested under each master) are excluded by
-  // Tabulator's download() by default, and the row range defaults to
-  // "active" -- whatever the header filters currently leave on screen -- so
-  // this always exports exactly the filtered master rows the table shows,
-  // never the full unfiltered set and never a blank row per reel.
-  document.getElementById("download-xlsx").addEventListener("click", () => {
-    mastersTable.download("xlsx", "facestock-stock.xlsx", { sheetName: "Facestock Stock" });
-  });
-
   // "renderComplete" is a Tabulator EVENT, not a constructor option -- a
   // `renderComplete:` key inside the options object above is silently
   // ignored (no error, callback just never runs). Subscribing via .on() is
@@ -1698,7 +1693,8 @@
   let stockFindNeedle = "";
   let stockFindTimer = null;
 
-  function runStockFind() {
+  // keepOpen: a Set of master _ids to leave expanded (see refreshStockTable).
+  function runStockFind(keepOpen) {
     const needle = stockFindKey(stockFindInput.value);
     stockFindClearBtn.hidden = !stockFindInput.value;
     if (needle === stockFindNeedle) return;
@@ -1708,7 +1704,13 @@
       stockFindStatus.textContent = "";
       stockFindStatus.title = "";
       stockFindStatus.classList.remove("is-empty");
-      mastersTable.setData(buildMastersTreeData(mastersData));
+      mastersTable.setData(buildMastersTreeData(mastersData)).then(() => {
+        if (!keepOpen) return;
+        mastersTable.getRows().forEach((row) => {
+          const d = row.getData();
+          if (d._children && keepOpen.has(String(d._id))) row.treeExpand();
+        });
+      });
       return;
     }
 
@@ -2080,7 +2082,8 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.href = data.redirect || "/app/facestockstock";
+        closeAddDialog();
+        await afterStockChange(`${data.added} facestock reel(s) added.`);
       } else {
         showError("addFacestockError", data.message || "Failed to add facestock stock.");
       }
@@ -2560,6 +2563,50 @@
     editingRollId = null;
   }
 
+  // ---- Keeping the table in step ----
+  // An edit, a remove or an inward used to end in window.location.reload(),
+  // which threw away the open specs, the find box and the scroll position.
+  // Now the figures are re-read and the tree is rebuilt in place. Specs that
+  // were open stay open, and the find box is applied again to the new rows.
+  const STOCK_TOTAL_FMT = { maximumFractionDigits: 2 };
+  function setStockTotals(t) {
+    document.getElementById("stockTotalValue").textContent = `₹${Number(t.totalStockValue || 0).toLocaleString("en-IN", STOCK_TOTAL_FMT)}`;
+    document.getElementById("stockTotalRm").textContent = `${Number(t.totalRunningMeters || 0).toLocaleString("en-IN", STOCK_TOTAL_FMT)} m`;
+    document.getElementById("stockFacestockValue").textContent = `₹${Number(t.facestockValue || 0).toLocaleString("en-IN", STOCK_TOTAL_FMT)}`;
+    document.getElementById("stockAdhesiveValue").textContent = `₹${Number(t.adhesiveValue || 0).toLocaleString("en-IN", STOCK_TOTAL_FMT)}`;
+    document.getElementById("stockReleaseValue").textContent = `₹${Number(t.releaseValue || 0).toLocaleString("en-IN", STOCK_TOTAL_FMT)}`;
+  }
+
+  async function refreshStockTable() {
+    const keepOpen = new Set(
+      mastersTable.getRows()
+        .filter((row) => row.getData()._children && row.isTreeExpanded())
+        .map((row) => String(row.getData()._id))
+    );
+    const res = await fetch("/app/facestockstock/figures", { credentials: "same-origin" });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.message || "Failed to refresh facestock stock.");
+    mastersData = data.masters;
+    setStockTotals(data.totals);
+    // runStockFind skips a redraw when the find text hasn't changed, so forget
+    // the last one to make it apply the box to the fresh rows.
+    stockFindNeedle = null;
+    runStockFind(keepOpen);
+  }
+
+  // Called once the server has saved the change. The change is already
+  // committed, so if the re-read fails the page reloads rather than showing
+  // figures that no longer match the database.
+  async function afterStockChange(message) {
+    try {
+      await refreshStockTable();
+      showToast(message, "success");
+    } catch (err) {
+      console.error(err);
+      window.location.reload();
+    }
+  }
+
   async function submitEditRoll() {
     if (!editingRollId) return;
 
@@ -2604,7 +2651,8 @@
       });
       const data = await res.json();
       if (data.success) {
-        window.location.reload();
+        closeEditRollDialog();
+        await afterStockChange("Reel updated.");
       } else {
         showError("editRollError", data.message || "Failed to update facestock reel.");
       }
@@ -2649,7 +2697,8 @@
       const res = await fetch(`/app/facestockstock/${removingRollId}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        window.location.reload();
+        closeRemoveRollDialog();
+        await afterStockChange("Reel removed.");
       } else {
         showError("removeRollError", data.message || "Failed to remove this reel.");
       }

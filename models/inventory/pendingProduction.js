@@ -308,6 +308,38 @@ const pendingProductionSchema = new mongoose.Schema(
     // Setting or Production Log) punched on its card. Set once ($min) and
     // cleared with the card save / unassign. The WIP tab's STARTED phase.
     liveStartedAt: { type: Date },
+    // The job is ON HOLD: the operator tapped Pause in the app (a break, a
+    // shift change, waiting on a reel). Set by POST /api/operator/jobcard/pause
+    // and cleared by /resume -- and by any punch on the card, from the app or
+    // the web form alike, since a Start or Stop means the machine is running
+    // again (endLivePause in routes/system/machine.js). While it is set the WIP
+    // tab holds the job's clock at `since`: the deckle on the machine stops
+    // filling, nothing blinks overdue, Status and Estimate stay where they
+    // were. `since` is when the Pause was tapped, carried onto the server's
+    // clock (eventTimeOf in routes/api/operatorApi.js), so a Pause that waited
+    // in an offline tablet's outbox still dates from the tap.
+    livePause: {
+      since: { type: Date },
+      reason: { type: String, trim: true },
+      deviceLabel: { type: String, trim: true },
+    },
+    // Every pause this run has come back out of, oldest first. The WIP tab
+    // takes them out of the job's clock so a break never reads as the machine
+    // running slow: the running deckle's ETA, an idle or setting stretch, and
+    // the Target all move on by the time spent on hold (utils/productionEta.js).
+    // Capped at LIVE_PAUSE_LOG_MAX and cleared, like the other live fields, by
+    // the card save and by unassign.
+    livePauseLog: {
+      type: [
+        {
+          from: { type: Date },
+          to: { type: Date },
+          reason: { type: String, trim: true },
+          _id: false,
+        },
+      ],
+      default: undefined,
+    },
     // One entry per roll/drum an operator swapped out mid-job via the
     // Materials in Use "Add" flow on the Job Card (POST /sachiko/machine/
     // jobcard/material/set-remaining) -- the live counterpart to the
