@@ -903,9 +903,9 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
   // Groups drops it once made >= expected), so nothing above ever gave its
   // group an `expected` -- it sat at 0, which reads as "this row has no plan
   // of its own". That is wrong twice over: the Stock cell lost its "of N", and
-  // the Slit dialog, which ticks `expected` webs and falls back to the WHOLE
-  // POOL when it is 0, pre-ticked every free web of that width. A layout
-  // wanting one web arrived with three ticked.
+  // the Slit dialog, which ticks `expected` webs (and, when it is 0, used to
+  // fall back to the WHOLE POOL), pre-ticked every free web of that width. A
+  // layout wanting one web arrived with three ticked.
   //
   // So a group with no planned entry of its own takes the count off its own
   // rows (`layoutWants` -- the layout's planned webs less any already slit).
@@ -951,8 +951,10 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
     // buildAvailableDeckleRows), then the rest of the pool oldest-first. A web
     // borrowed from another batch never carries this job's layout, so ticking
     // on the attribution alone would leave a borrowing job with nothing
-    // ticked. A job whose webs are all laminated takes the pool as it comes.
-    const wants = g.expected > 0 ? g.expected : pool.length;
+    // ticked. A group with no planned count ticks NOTHING: ticking the whole
+    // pool by default is how a job got every free web of its width pre-ticked,
+    // and the operator picks those by hand.
+    const wants = g.expected > 0 ? g.expected : 0;
     const order = [
       ...pool.filter((r) => g.layoutSig && r.layoutSig === g.layoutSig),
       ...pool.filter((r) => !(g.layoutSig && r.layoutSig === g.layoutSig)),

@@ -500,7 +500,8 @@
   // The dialog lists every free Deckle of this Product Code + width -- the
   // shared pool -- but ticks only the ones this cut job's layout still wants
   // (routes/system/slitting.js `forThisLayout`). The rest are there to take if
-  // the planner wants them; a job with no layout planned starts all ticked.
+  // the planner wants them; a job with no layout planned starts with none
+  // ticked, and the operator ticks what they need.
   function renderDeckleList(group) {
     // Reachable while ALLOW_SLIT_BEFORE_DECKLE is on (and defensive otherwise):
     // a "waiting" group has no Deckles to tick, so the dialog opens on this

@@ -248,17 +248,35 @@ router.put("/:id", requireAuth, updateLimiter, async (req, res) => {
 
     if (!location) return res.status(400).json({ success: false, message: "Location is required." });
 
+    // Available metres is a correction to what is physically on the reel, so
+    // it is taken as typed (2 dp, like every other mtrs figure here) and must
+    // be a real, non-negative number -- blank or "abc" is refused, not read as 0.
+    const rawMtrs = String(req.body.reelMtrs ?? "").trim();
+    const reelMtrs = rawMtrs === "" ? NaN : Math.round(Number(rawMtrs) * 100) / 100;
+    if (!Number.isFinite(reelMtrs) || reelMtrs < 0) {
+      return res.status(400).json({ success: false, message: "Available mtrs must be a number, 0 or more." });
+    }
+
     const locationExists = await Location.exists({ locationName: location });
     if (!locationExists) return res.status(400).json({ success: false, message: "Invalid location." });
 
+    const existing = await MaterialStock.findById(req.params.id).select("rollId reelMtrs").lean();
+    if (!existing) return res.status(404).json({ success: false, message: "Deckle reel not found." });
+
+    // Same convention as produceDeckle() / dissolveDeckle(): quantity is 1
+    // while the reel has metres and 0 once it is empty, so an emptied reel
+    // stops being offered for allotment and a restored one is offered again.
     const updated = await MaterialStock.findByIdAndUpdate(
       req.params.id,
-      { location, rate, remarks: remarks || undefined },
+      { location, rate, remarks: remarks || undefined, reelMtrs, quantity: reelMtrs > 0 ? 1 : 0 },
       { new: true, runValidators: true },
     );
     if (!updated) return res.status(404).json({ success: false, message: "Deckle reel not found." });
 
-    res.locals.auditDescription = `Updated semi finished goods (Deckle) reel "${updated.rollId}"`;
+    const mtrsChanged = Number(existing.reelMtrs) !== reelMtrs;
+    res.locals.auditDescription = mtrsChanged
+      ? `Updated semi finished goods (Deckle) reel "${updated.rollId}" -- available mtrs ${existing.reelMtrs} -> ${reelMtrs}`
+      : `Updated semi finished goods (Deckle) reel "${updated.rollId}"`;
     res.json({ success: true });
   } catch (err) {
     console.error("SEMI FINISHED STOCK UPDATE ERROR:", err);
