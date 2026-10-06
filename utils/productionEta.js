@@ -249,9 +249,9 @@ export function buildRunPlan(pp, progress, speedMpm = LAMINATOR_SPEED_MPM) {
 }
 
 // The slitting machine's run speed, metres per minute -- the slitting WIP page's
-// equivalent of LAMINATOR_SPEED_MPM. Env-overridable; defaults to the laminator
-// pace, which is the value the shop chose for it.
-export const SLITTING_SPEED_MPM = Number(process.env.SLITTING_SPEED_MPM) || 15;
+// equivalent of LAMINATOR_SPEED_MPM, and a different machine, so its own figure
+// (the shop runs the slitter at 30 m/min; the laminator is 15). Env-overridable.
+export const SLITTING_SPEED_MPM = Number(process.env.SLITTING_SPEED_MPM) || 30;
 
 // The slitting sibling of buildRunPlan: same output contract (so the Slitting
 // WIP view reuses the lamination view's wipOutlook / wipSetLiveCell JS), but

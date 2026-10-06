@@ -130,13 +130,60 @@
        everywhere. Layer 2 blocks reuse their base material's colour but get
        a dashed border, marking them as the recipe's second pass of that
        material. ---- */
+    /* Same strip as the Set Deckle page's job facts: one panel, cells side by
+       side, a thin rule between each. Scrolls sideways rather than wrapping. */
     .material-id-row {
-      display: flex; flex-wrap: wrap; gap: 30px; padding: 14px 18px;
-      border: 1px solid #e5e7eb; border-radius: 8px; background: #f8fafc; margin-bottom: 12px;
+      display: grid; grid-auto-flow: column; grid-auto-columns: minmax(155px, auto); justify-content: start; gap: 0;
+      width: 100%;
+      overflow-x: auto; padding: 0;
+      border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; margin-bottom: 12px;
     }
-    .material-id-row .mid-item { display: flex; flex-direction: column; gap: 4px; }
+    .material-id-row .mid-item {
+      display: flex; flex-direction: column; gap: 4px; min-width: 155px;
+      padding: 14px 16px; border-right: 1px solid #e2e8f0;
+    }
+    .material-id-row .mid-item:first-child { min-width: 170px; }
+    /* The strip's own border closes the last cell (Deckle Qty), so that cell
+       drops its divider rather than drawing a second line beside it. */
+    .material-id-row .mid-item:last-child { border-right: none; }
     .material-id-row .mid-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #7c8ba1; }
     .material-id-row .mid-value { font-size: 19px; font-weight: 800; color: #1f2a44; }
+    /* Deckle Qty: the same edit as Edge Trim on the Deckle Set page -- value
+       text, a pencil pinned top-right, and the input in its place on click. */
+    .material-id-row .dq-cell { position: relative; padding-right: 32px; max-width: 110px; }
+    .material-id-row .dq-cell.is-input { background: #fff; padding-right: 12px; }
+    .material-id-row .dq-cell.is-input .dq-edit-ic { display: none; }
+    /* The input itself: the Edge Trim input's own rules (Deckle Set page). */
+    /* Sized in ch, not px: the value is at most 4 digits (max="9999"), so the
+       box is 6 characters of this font plus a little padding -- enough for the
+       digits, no more. A fixed 96px left a wide empty box around a short
+       number. A percentage would be measured against the input's own default
+       size (about 20 characters), which is what made it too wide before. */
+    .material-id-row .dq-cell.is-input input.form-control.dq-input {
+      width: 6ch; max-width: 100%; height: 40px !important; box-sizing: border-box;
+      font-size: 20px !important; font-weight: 800 !important; color: #1f2a44; padding: 0 8px;
+    }
+    .material-id-row .dq-cell .mid-label {
+      font-size: 10.5px; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .material-id-row .dq-cell .mid-value {
+      font-size: 20px; line-height: 1.3; letter-spacing: 0.02em;
+    }
+    #dq-cell {
+      position: relative;
+      padding-right: 32px;
+      max-width: 240px;
+      min-width: 0;
+    }
+    .dq-edit-ic {
+      position: absolute; top: 7px; right: 7px;
+      border: none; background: rgba(4,74,120,0.09); color: #044a78; cursor: pointer;
+      width: 24px; height: 24px; border-radius: 6px; font-size: 11px;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .dq-edit-ic:hover { background: rgba(4,74,120,0.18); }
+    .dq-form { margin: 0; }
+    .dq-form[hidden] { display: none; }
 
     .layer-stack { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow-y: auto; padding: 2px; }
     .layer-block {
@@ -892,8 +939,75 @@
           <span class="mid-label">Total Running Mtrs</span>
           <span class="mid-value" title="<%= webLen > 0 && webCount > 0 ? `${fmtQty(webLen)} m per deckle × ${fmtQty(webCount)} deckles` : "" %>"><%= fmtQty(totalRunningMeters) %></span>
         </div>
-        <div class="mid-item"><span class="mid-label">Deckle Qty</span><span class="mid-value"><%= dash(pp.noOfRolls) %></span></div>
-      </div>
+        <div id="dq-cell" style="position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 11px 12px; border-right: 1px solid #e2e8f0;">
+          <span class="mid-label">Deckle Qty</span>
+          <% if (deckleQtyEditable) { %>
+            <!-- Same pattern as Edge Trim on the Deckle Set page: the value shows,
+                 the pencil swaps in the input. Enter or leaving the field saves a
+                 changed number (POST /labels/production/assign/:id/deckle-count);
+                 Escape puts the old one back. -->
+            <button type="button" id="dq-edit" class="dq-edit-ic" title="Edit Deckle Qty" aria-label="Edit Deckle Qty">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+            <span class="mid-value" id="dq-text"><%= dash(pp.noOfRolls) %></span>
+            <form id="dq-form" class="dq-form" method="post" action="/app/labels/production/assign/<%= pp._id %>/deckle-count" hidden>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input id="dq-input" class="form-control dq-input" name="noOfRolls" type="number" min="1" max="9999" step="1" inputmode="numeric" value="<%= pp.noOfRolls || "" %>" data-current="<%= pp.noOfRolls || "" %>" aria-label="Deckle Qty" required />
+            </form>
+          <% } else { %>
+            <span class="mid-value"><%= dash(pp.noOfRolls) %></span>
+          <% } %>
+        </div>
+          <script>
+            (function () {
+              const cell = document.getElementById("dq-cell");
+              const edit = document.getElementById("dq-edit");
+              const text = document.getElementById("dq-text");
+              const form = document.getElementById("dq-form");
+              const input = document.getElementById("dq-input");
+              const current = input.dataset.current;
+              let cancelled = false;
+              let submitting = false;
+
+              function showText() {
+                form.hidden = true;
+                text.hidden = false;
+              }
+              function startEdit() {
+                cancelled = false;
+                text.hidden = true;
+                form.hidden = false;
+                input.focus();
+                input.select();
+              }
+              function commit() {
+                if (submitting) return;
+                const v = input.value.trim();
+                const n = Number(v);
+                const valid = Number.isInteger(n) && n >= 1 && n <= 9999;
+                if (cancelled || !valid || v === current) {
+                  input.value = current;
+                  showText();
+                  return;
+                }
+                submitting = true;
+                form.requestSubmit();
+              }
+
+              edit.addEventListener("click", startEdit);
+              input.addEventListener("blur", commit);
+              input.addEventListener("keydown", (ev) => {
+                if (ev.key === "Enter") {
+                  ev.preventDefault();
+                  input.blur();
+                } else if (ev.key === "Escape") {
+                  cancelled = true;
+                  input.blur();
+                }
+              });
+            })();
+          </script>
+        </div>
 
       <div class="layer-stack custom-scrollbar">
         <% materialGroups.forEach(function (g, idx) { %>

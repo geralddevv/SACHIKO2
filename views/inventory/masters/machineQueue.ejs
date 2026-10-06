@@ -419,6 +419,21 @@
                       <i class="fa-solid fa-pen"></i>
                     </a>
                   <% } %>
+                  <% if (authUser && authUser.role !== "operator") { %>
+                    <% if (row.canUndo) { %>
+                      <button type="button" class="mq-undo-btn"
+                        data-id="<%= row._id %>" data-card="<%= row.slittingJobCardId %>" data-lot="<%= row.lotNo %>"
+                        onclick="requestSlitUndo(this.dataset.id, this.dataset.card, this.dataset.lot)"
+                        title="Undo this allocation — the Deckle goes back to the Slitting Queue" aria-label="Undo this allocation">
+                        <i class="fa-solid fa-rotate-left"></i>
+                      </button>
+                    <% } else { %>
+                      <button type="button" class="mq-undo-btn mq-undo-disabled" disabled
+                        title="<%= row.undoBlockedReason %>" aria-label="Can't undo this allocation">
+                        <i class="fa-solid fa-rotate-left"></i>
+                      </button>
+                    <% } %>
+                  <% } %>
                 </div>
               </td>
             </tr>
@@ -471,6 +486,31 @@
         <button class="logout-btn" type="button" onclick="closeModal('undoDialog')">Cancel</button>
         <button class="logout-btn" type="button" id="undoConfirmBtn"
           style="background:#dc2626; color:#fff; border-color:#dc2626;">Yes, send it back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ UNDO SLITTING ALLOCATION DIALOG ============ -->
+<div class="logout-modal" id="slitUndoDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="slitUndoTitle"
+    style="width: min(480px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="slitUndoTitle">Undo this slitting allocation?</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeModal('slitUndoDialog')" aria-label="Close">&times;</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <div id="slitUndoSummary" style="margin-bottom: 14px; padding: 10px 12px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; font-size: 13px; font-weight: 700; color: #9a3412;"></div>
+      <p style="font-size: 13px; color: #4b5563; margin: 0 0 6px;">The card is removed from this machine:</p>
+      <ul style="font-size: 13px; color: #4b5563; margin: 0 0 10px; padding-left: 18px; line-height: 1.7;">
+        <li>its Deckle goes back to the Slitting Queue, free for any job</li>
+        <li>nothing has been cut, so no stock moves</li>
+      </ul>
+      <div id="slitUndoError" class="dialog-error" style="color:#ef4444; font-size:12px; display:none;"></div>
+      <div class="dialog-actions" style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button class="logout-btn" type="button" onclick="closeModal('slitUndoDialog')">Cancel</button>
+        <button class="logout-btn" type="button" id="slitUndoConfirmBtn"
+          style="background:#dc2626; color:#fff; border-color:#dc2626;">Yes, undo it</button>
       </div>
     </div>
   </div>
@@ -641,5 +681,29 @@
 
   document.getElementById("undoDialog").addEventListener("click", (e) => {
     if (e.target.id === "undoDialog") closeModal("undoDialog");
+  });
+
+  // Undo a slitting allocation (routes/system/slitting.js POST
+  // /slitting/jobcard/:cardId/undo). The server re-checks everything the
+  // button shows, so a card started on the floor since this page loaded is
+  // refused with the reason, not removed.
+  window.requestSlitUndo = function (cardId, cardCode, lotNo) {
+    document.getElementById("slitUndoSummary").textContent = `${cardCode || "Slitting card"} · Deckle ${lotNo || "—"}`;
+    document.getElementById("slitUndoError").style.display = "none";
+    document.getElementById("slitUndoConfirmBtn").onclick = () => {
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = `/app/slitting/jobcard/${cardId}/undo`;
+      const csrf = document.createElement("input");
+      csrf.type = "hidden"; csrf.name = "_csrf"; csrf.value = "<%= csrfToken %>";
+      form.appendChild(csrf);
+      document.body.appendChild(form);
+      form.submit();
+    };
+    openModal("slitUndoDialog");
+  };
+
+  document.getElementById("slitUndoDialog").addEventListener("click", (e) => {
+    if (e.target.id === "slitUndoDialog") closeModal("slitUndoDialog");
   });
 </script>

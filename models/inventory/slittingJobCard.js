@@ -63,6 +63,21 @@ const slittingRowSchema = new mongoose.Schema(
     // snapshotted so the filed card stays readable after the reel is emptied.
     deckleStockId: { type: mongoose.Schema.Types.ObjectId, ref: "MaterialStock" },
     deckleId: { type: String, trim: true, uppercase: true },
+    // Every Deckle this row was re-pointed AWAY from by a scan (oldest first),
+    // so the Deckle the planner allocated is not lost when the operator runs a
+    // different web of the same spec. Lets the queue show it as unused stock
+    // that came off this card.
+    swappedFrom: [
+      {
+        _id: false,
+        deckleStockId: { type: mongoose.Schema.Types.ObjectId, ref: "MaterialStock" },
+        deckleId: { type: String, trim: true, uppercase: true },
+        cardId: { type: mongoose.Schema.Types.ObjectId, ref: "SlittingJobCard" },
+        slittingJobCardId: { type: String, trim: true },
+        at: { type: Date, default: Date.now },
+        by: { type: String, trim: true },
+      },
+    ],
     // Web width of the Deckle, in mm -- what the roll widths have to fit in.
     width: { type: Number },
     cuts: [rollWidthSchema],

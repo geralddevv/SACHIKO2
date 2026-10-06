@@ -55,9 +55,10 @@ import {
 import { upsertPendingProduction, removePendingProduction, advanceShareByBatch } from "../utils/pendingProduction.js";
 // "Is an operator running this right now" -- the same freshness rule the
 // operator app itself applies to PendingProduction.runningOn.
-import { activeClaim } from "./api/operatorApi.js";
+import { activeClaim, JOB_CLAIM_STALE_MS } from "./api/operatorApi.js";
 import { produceDeckle, dissolveDeckle, requiredLayersFor, trackAllottedCombinations, suggestDeckleSize, DECKLE_EDGE_TRIM_MM, LAYER_META, POOL_MODELS, pickStockIds } from "../utils/labelStockProduction.js";
-import { CUT_SLOTS } from "./system/slitting.js";
+import { CUT_SLOTS, cutsSignature } from "./system/slitting.js";
+import SlittingJobCard from "../models/inventory/slittingJobCard.js";
 import {
   planDeckleLayouts,
   isDeckleAutoEnabled,
@@ -6782,6 +6783,10 @@ router.get("/labels/production/assign/:id", async (req, res) => {
       // renders the result.
       JS: "rawAutoAllot.js",
       pp: pendingProduction,
+      // Whether the Deckle Qty can be edited here: a deckle batch not yet
+      // produced and not being run on a device right now. Same test the POST
+      // makes (see deckle-count below), so the button and the save agree.
+      deckleQtyEditable: !!pendingProduction.isDeckleBatch && !pendingProduction.producedAt && !activeClaim(pendingProduction.runningOn),
       advance,
       rawNeed,
       // One web's length x how many webs. Derived here rather than read off
@@ -6798,6 +6803,115 @@ router.get("/labels/production/assign/:id", async (req, res) => {
     console.error("ASSIGN PRODUCTION LOAD ERROR:", err);
     req.flash("notification", "Failed to load Assign Production.");
     res.redirect("/app/labels/production/deckle-set");
+  }
+});
+
+// Changes a deckle batch's Deckle Qty (noOfRolls) from its Assign Production
+// page. The webs are split across the batch's layouts (deckleLayout[].count,
+// which sum to the Deckle Qty), so the layouts move with it: extra webs go on
+// the last layout, and webs taken away come off the last layout first. A
+// layout never drops below the webs already slit on it, nor below one.
+//
+// Refused once the job has been produced or has started on a device, and when
+// the new count would fall under the webs already made or already on a
+// slitting card -- those are real stock and real cuts, not plan.
+router.post("/labels/production/assign/:id/deckle-count", requireAuth, updateLimiter, async (req, res) => {
+  const back = `/app/labels/production/assign/${req.params.id}`;
+  const refuse = (message) => {
+    req.flash("notification", message);
+    return res.redirect(back);
+  };
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return refuse("Invalid order id.");
+    const next = Number(String(req.body.noOfRolls ?? "").trim());
+    if (!Number.isInteger(next) || next < 1 || next > 9999) {
+      return refuse("Deckle Qty must be a whole number from 1 to 9999.");
+    }
+
+    const pp = await PendingProduction.findById(id)
+      .select("isDeckleBatch noOfRolls producedAt producedRolls runningOn lotNo deckleLayout")
+      .lean();
+    if (!pp) return refuse("Order not found.");
+    if (!pp.isDeckleBatch) return refuse("Only a deckle batch has a Deckle Qty to change.");
+    if (pp.producedAt) return refuse("This job has already been produced, so its Deckle Qty is fixed.");
+    // A fresh device claim means it is being run right now. A stale one (the
+    // tablet went away) no longer blocks: the job is still started, so the
+    // webs it has already made are counted below.
+    if (activeClaim(pp.runningOn)) {
+      return refuse("A device is running this job right now. Save its job card before changing the Deckle Qty.");
+    }
+    // Filed on the job card (producedRolls) or already stamped by a Stop punch
+    // that is not yet filed -- both are real stock from this job.
+    const stamped = await MaterialStock.countDocuments({ producedFor: pp._id, producedVia: "jobcard" });
+    const made = Math.max(Number(pp.producedRolls) || 0, stamped);
+    if (next < made) {
+      return refuse(`${made} deckle(s) are already made from this job, so the Deckle Qty can't go below ${made}.`);
+    }
+
+    // Every web of this batch that is already on a slitting card, by layout.
+    const cards = await SlittingJobCard.find({ pendingProductionId: pp._id }).select("slittingLog.cuts").lean();
+    const slitRows = cards.flatMap((c) => c.slittingLog || []);
+    if (next < slitRows.length) {
+      return refuse(`${slitRows.length} web(s) are already on slitting cards for this job, so the Deckle Qty can't go below ${slitRows.length}.`);
+    }
+    const slitSigs = slitRows.map((r) => cutsSignature(r.cuts)).filter(Boolean);
+
+    const layouts = Array.isArray(pp.deckleLayout) ? pp.deckleLayout : [];
+    const $set = { noOfRolls: next };
+    if (layouts.length) {
+      const counts = layouts.map((L) => Math.max(1, Number(L.count) || 1));
+      const floors = layouts.map((L) => {
+        const sig = cutsSignature(L.cuts);
+        const onSlit = sig ? slitSigs.filter((s) => s === sig).length : 0;
+        return Math.max(1, onSlit);
+      });
+      const out = counts.slice();
+      const delta = next - counts.reduce((a, b) => a + b, 0);
+      if (delta > 0) {
+        out[out.length - 1] += delta;
+      } else if (delta < 0) {
+        let take = -delta;
+        for (let i = out.length - 1; i >= 0 && take > 0; i--) {
+          const cut = Math.min(Math.max(0, out[i] - floors[i]), take);
+          out[i] -= cut;
+          take -= cut;
+        }
+        if (take > 0) {
+          return refuse(`The layouts can't give up ${-delta} web(s) without going below the webs already slit on them. Re-plan this batch on Deckle Set instead.`);
+        }
+      }
+      layouts.forEach((_, i) => {
+        $set[`deckleLayout.${i}.count`] = out[i];
+      });
+    }
+
+    // Guarded on the same facts the checks above read, so a job that starts
+    // or is produced between the read and the write is refused, not changed.
+    const staleBefore = new Date(Date.now() - JOB_CLAIM_STALE_MS);
+    const result = await PendingProduction.updateOne(
+      {
+        _id: pp._id,
+        producedAt: null,
+        $or: [
+          { runningOn: null },
+          { "runningOn.lastSeenAt": { $lt: staleBefore } },
+          { "runningOn.lastSeenAt": null, "runningOn.claimedAt": { $lt: staleBefore } },
+        ],
+        producedRolls: { $lte: next },
+      },
+      { $set },
+    );
+    if (!result.matchedCount) {
+      return refuse("This job changed while you were editing it. Reload the page and try again.");
+    }
+
+    res.locals.auditDescription = `Changed Deckle Qty of "${pp.lotNo || id}" from ${pp.noOfRolls ?? "—"} to ${next}`;
+    req.flash("notification", `Deckle Qty changed from ${pp.noOfRolls ?? "—"} to ${next}.`);
+    return res.redirect(back);
+  } catch (err) {
+    console.error("DECKLE QTY EDIT ERROR:", err);
+    return refuse("Failed to change the Deckle Qty.");
   }
 });
 

@@ -84,7 +84,7 @@ const numOrNull = (value) => {
 // Identity is the multiset of roll widths, not the slot letters: A/B/C and
 // B/A/C cut the same web, and the slitting card's own row is often typed in a
 // different order than the plan was.
-function cutsSignature(cuts) {
+export function cutsSignature(cuts) {
   const widths = (Array.isArray(cuts) ? cuts : [])
     .map((c) => Number(c?.width))
     .filter((w) => Number.isFinite(w) && w > 0)
@@ -405,9 +405,13 @@ export async function buildSlittingQueueRows(match) {
       0,
     );
 
+    const undoBlock = slittingUndoBlock(c);
     return {
       _id: String(c._id),
       slittingJobCardId: c.slittingJobCardId,
+      // Undo (see slittingUndoBlock): offered only while nothing has run.
+      canUndo: !undoBlock,
+      undoBlockedReason: undoBlock || "",
       // For the queue's Edit button -- reopens exactly the Allocate page this
       // card was created from (routes/system/slitting.js "/slitting/allocate").
       pendingProductionId: c.pendingProductionId ? String(c.pendingProductionId) : "",
@@ -449,7 +453,7 @@ export async function buildSlittingQueueRows(match) {
 // Allocate page below counts as "this batch"'s Total/Available. Kept as one
 // function so the two pages can never disagree on which Deckles club
 // together or how many of them are actually still free.
-async function buildAvailableDeckleRows() {
+async function buildAvailableDeckleRows({ includeHeld = false } = {}) {
   const [orders, reels] = await Promise.all([
     PendingProduction.find({ deckleBatchId: null })
       .populate({ path: "itemId", select: "productCode skuCode" })
@@ -507,6 +511,29 @@ async function buildAvailableDeckleRows() {
           operatorName: c.operatorName || "—",
           run,
         });
+      }
+    }
+  }
+
+  // Deckles a scan swapped OFF a card (see swapSlittingDeckle). The planner's
+  // allocation for these was replaced by another web, so they are free stock
+  // with no job on them -- the queue names the card they came off so the
+  // planner can see the web was meant for a job and put it back on one. Only
+  // the newest removal per web is kept.
+  const cameOff = new Map();
+  for (const c of cards) {
+    for (const lr of c.slittingLog || []) {
+      for (const s of lr.swappedFrom || []) {
+        const k = String(s.deckleStockId || "");
+        if (!k) continue;
+        const prev = cameOff.get(k);
+        if (!prev || new Date(s.at || 0) >= new Date(prev.at || 0)) {
+          cameOff.set(k, {
+            slittingJobCardId: s.slittingJobCardId || c.slittingJobCardId || "",
+            at: s.at || null,
+            by: s.by || "",
+          });
+        }
       }
     }
   }
@@ -588,6 +615,9 @@ async function buildAvailableDeckleRows() {
       layoutCuts: null,
       layoutTrim: null,
       card,
+      // Set when a scan took this web off a card (see cameOff above) -- null
+      // for every other Deckle.
+      cameOff: cameOff.get(String(reel._id)) || null,
       // Deckle-scoped: the allocation page cuts exactly the Deckle named here,
       // never "the order". Every Deckle row therefore carries its own stock id.
       allocateHref: order
@@ -652,7 +682,14 @@ async function buildAvailableDeckleRows() {
     a.location.localeCompare(b.location) || a.rollId.localeCompare(b.rollId),
   );
 
-  return visibleRows;
+  if (!includeHeld) return visibleRows;
+  // Deckles already held by an open card, returned only for the queue to show
+  // them. They are not free: they never get a layout, are never ticked, and
+  // are not counted in any group's stock.
+  const heldRows = rows
+    .filter((r) => r.card && !r.card.run)
+    .map((r) => ({ ...r, held: true }));
+  return [...visibleRows, ...heldRows];
 }
 
 // Deckle configs that are SET but not yet (fully) made -- what the planner
@@ -765,10 +802,15 @@ async function buildPlannedDeckleGroups() {
 // planner picks a Deckle here and "Allocate" opens the Slitting Job Card for
 // that Deckle's order with the Deckle pre-filled as the first row.
 router.get("/slitting/queue", requireSlittingView, async (req, res) => {
-  const [visibleRows, planned] = await Promise.all([
-    buildAvailableDeckleRows(),
+  const [allRows, planned] = await Promise.all([
+    buildAvailableDeckleRows({ includeHeld: true }),
     buildPlannedDeckleGroups(),
   ]);
+  // Free webs are the stock the groups are built and counted from. Held webs
+  // (on an open card) are listed under their group too, so an operator can see
+  // where a web went, but they are shown disabled and never counted or ticked.
+  const visibleRows = allRows.filter((r) => !r.held);
+  const heldRows = allRows.filter((r) => r.held);
 
   // Club same Product Code + Size + Running Meters + Layout together -- these
   // are interchangeable for slitting, so the queue shows one group with one
@@ -970,6 +1012,20 @@ router.get("/slitting/queue", requireSlittingView, async (req, res) => {
       _rowId: `${g._id}|${r.deckleStockId}`,
       forThisLayout: ticked.has(r.deckleStockId),
     }));
+    // The held webs of this family + width, listed after the free ones and
+    // left out of every count above.
+    g._children.push(
+      ...heldRows
+        .filter((r) => r.productCodeBase === g.productCode && widthKey(r.size) === widthKey(g.size))
+        .map((r) => ({
+          ...r,
+          isGroup: false,
+          _id: r.deckleStockId,
+          _rowId: `${g._id}|${r.deckleStockId}`,
+          forThisLayout: false,
+          allocateHref: null,
+        })),
+    );
     g._rowId = g._id;
     g.deckleCount = pool.length;
     g.readyCount = pool.filter((r) => !r.curing).length;
@@ -1950,7 +2006,7 @@ router.post("/slitting/jobcard/setting", requireAuth, requireSlittingFloor, upda
 //   - the reel being scanned in is locked to THIS card the instant it does,
 //     because "in use" is exactly "referenced by an allocated card's row" --
 //     the clash check below is the whole lock, there is no separate flag.
-export async function swapSlittingDeckle({ cardId, index, rollId }) {
+export async function swapSlittingDeckle({ cardId, index, rollId, by }) {
   const fail = (message, code) => ({ ok: false, status: 400, message, code });
 
   if (!mongoose.isValidObjectId(cardId)) return fail("Invalid card.");
@@ -2043,6 +2099,19 @@ export async function swapSlittingDeckle({ cardId, index, rollId }) {
     );
   }
 
+  // Keep the Deckle being let go. Its planned allocation is not lost: it is
+  // free stock again, and the queue lists it as "came off <card>" until it is
+  // run or allocated to another job.
+  if (row.deckleStockId && String(row.deckleStockId) !== String(newReel._id)) {
+    row.swappedFrom.push({
+      deckleStockId: row.deckleStockId,
+      deckleId: row.deckleId || "",
+      cardId: card._id,
+      slittingJobCardId: card.slittingJobCardId || "",
+      at: new Date(),
+      by: trim(by) || "",
+    });
+  }
   row.deckleStockId = newReel._id;
   row.deckleId = newReel.rollId || "";
   // The card's own snapshot fields should name the reel actually on it now.
@@ -2069,7 +2138,8 @@ export async function swapSlittingDeckle({ cardId, index, rollId }) {
 router.post("/slitting/jobcard/row/swap-deckle", requireAuth, requireSlittingFloor, updateLimiter, async (req, res) => {
   try {
     const { cardId, index, rollId } = req.body || {};
-    const result = await swapSlittingDeckle({ cardId, index, rollId });
+    const by = req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM";
+    const result = await swapSlittingDeckle({ cardId, index, rollId, by });
     if (!result.ok) {
       return res.status(result.status).json({ success: false, message: result.message, code: result.code });
     }
@@ -2104,6 +2174,23 @@ export function slittingActiveClaim(runningOn, now = Date.now()) {
   const seen = runningOn.lastSeenAt || runningOn.claimedAt;
   if (!seen) return null;
   return now - new Date(seen).getTime() > SLITTING_CLAIM_STALE_MS ? null : runningOn;
+}
+
+// Why an allocation can't be undone, or null when it can. Allocating a card
+// writes nothing but the card itself (no reel, no order), so undoing an
+// allocation is removing that card -- and only while nothing has happened on
+// it yet. Shared by the machine queue's Undo button and the undo route, so the
+// button and the server can never disagree.
+export function slittingUndoBlock(card, now = Date.now()) {
+  if (card.status !== "allocated") return "This card is already finished.";
+  const log = card.slittingLog || [];
+  if (log.some((r) => r.status === "done")) return "A Deckle on this card has already been run.";
+  if (log.some((r) => r.startTime || r.startMtrs != null)) {
+    return "A Deckle on this card has been started, so the card can't be undone.";
+  }
+  if (card.liveStartedAt || card.liveSetting?.startTime) return "This card is in use on the floor right now.";
+  if (slittingActiveClaim(card.runningOn, now)) return "A device is running this card right now.";
+  return null;
 }
 
 // Mutate the in-memory card: stamp it as first played at `at` (once -- the
@@ -2278,6 +2365,47 @@ export async function startSlittingRow({ cardId, index, startTime, startMtrs, at
   await card.save();
   return { ok: true, startTime: row.startTime, startMtrs: row.startMtrs };
 }
+
+// Undo an allocation: take an unrun slitting card off its machine. Its Deckle
+// goes back to the Slitting Queue, which is the whole of the undo, because
+// allocation wrote nothing else (see slittingUndoBlock).
+router.post("/slitting/jobcard/:cardId/undo", requireAuth, requireSlittingPlanner, updateLimiter, async (req, res) => {
+  const queueOf = (machineId) => (machineId ? `/app/machine/${machineId}/queue` : "/app/slitting/queue");
+  try {
+    const { cardId } = req.params;
+    if (!mongoose.isValidObjectId(cardId)) {
+      req.flash("notification", "Invalid slitting card.");
+      return res.redirect("/app/slitting/queue");
+    }
+    const card = await SlittingJobCard.findById(cardId)
+      .select("slittingJobCardId status slittingLog liveStartedAt liveSetting runningOn machineId machineName lotNo")
+      .lean();
+    if (!card) {
+      req.flash("notification", "That slitting card no longer exists.");
+      return res.redirect("/app/slitting/queue");
+    }
+    const back = queueOf(card.machineId);
+    const reason = slittingUndoBlock(card);
+    if (reason) {
+      req.flash("notification", `${card.slittingJobCardId} can't be undone. ${reason}`);
+      return res.redirect(back);
+    }
+    // Guarded on status too, so a card finished between the read and this
+    // delete is kept, not removed.
+    const result = await SlittingJobCard.deleteOne({ _id: card._id, status: "allocated" });
+    if (!result.deletedCount) {
+      req.flash("notification", `${card.slittingJobCardId} changed while you were undoing it. Check the queue and try again.`);
+      return res.redirect(back);
+    }
+    res.locals.auditDescription = `Undid slitting allocation ${card.slittingJobCardId} (Deckle ${card.lotNo || "—"}) on ${card.machineName || "machine"}`;
+    req.flash("notification", `${card.slittingJobCardId} is undone. Its Deckle is back in the Slitting Queue.`);
+    return res.redirect(back);
+  } catch (err) {
+    console.error("SLITTING CARD UNDO ERROR:", err);
+    req.flash("notification", "Failed to undo the slitting allocation.");
+    return res.redirect("/app/slitting/queue");
+  }
+});
 
 router.post("/slitting/jobcard/row/start", requireAuth, requireSlittingFloor, updateLimiter, async (req, res) => {
   try {

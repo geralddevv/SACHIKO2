@@ -96,7 +96,7 @@ const router = express.Router();
  * older than JOB_CLAIM_STALE_MS any device may take the job -- without that,
  * a broken device would strand a job on the floor with no in-app recovery.
  */
-const JOB_CLAIM_STALE_MS = 15 * 60 * 1000;
+export const JOB_CLAIM_STALE_MS = 15 * 60 * 1000;
 const JOB_CLAIM_HEARTBEAT_MS = 60 * 1000;
 
 const deviceIdOf = (req) => String(req.get("x-device-id") || "").trim().slice(0, 128);
@@ -878,7 +878,7 @@ router.post("/slitting/jobcard/row/swap-deckle", requireOperatorApiAuth, createL
     const { cardId, index, rollId } = req.body || {};
     if (!(await ownsSlittingCard(req, res, cardId))) return undefined;
 
-    const result = await swapSlittingDeckle({ cardId, index, rollId });
+    const result = await swapSlittingDeckle({ cardId, index, rollId, by: req.authUser?.empName });
     if (!result.ok) {
       return res.status(result.status).json({ success: false, message: result.message, code: result.code });
     }
