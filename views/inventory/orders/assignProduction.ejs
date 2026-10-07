@@ -159,14 +159,6 @@
        digits, no more. A fixed 96px left a wide empty box around a short
        number. A percentage would be measured against the input's own default
        size (about 20 characters), which is what made it too wide before. */
-    .material-id-row .dq-cell.is-input input.form-control.dq-input {
-      width: 100%; height: 40px !important; box-sizing: border-box;
-      font-size: 19px !important; font-weight: 800 !important; color: #1f2a44;
-      padding: 4px 8px; border-radius: 6px; border: 1px solid #044a78; background: #f4f9ff;
-    }
-    .material-id-row .dq-cell.is-input input.form-control.dq-input:focus {
-      outline: none; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.14);
-    }
     .material-id-row .dq-cell .mid-label {
       font-size: 10.5px; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
@@ -192,13 +184,13 @@
     .dq-form { margin: 0; }
     .dq-form[hidden] { display: none; }
 
-    /* Lot No input field - matches Edge Trim styling */
-    #ln-input {
+    /* Lot No & Deckle Qty input fields - match Edge Trim styling */
+    #ln-input, #dq-input {
       height: 40px !important; font-size: 19px !important; font-weight: 800 !important; color: #1f2a44;
       width: 100%; padding: 4px 8px; border-radius: 6px; border: 1px solid #044a78; background: #f4f9ff;
       box-sizing: border-box;
     }
-    #ln-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.14); }
+    #ln-input:focus, #dq-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.14); }
 
     .layer-stack { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow-y: auto; padding: 2px; }
     .layer-block {
@@ -989,68 +981,66 @@
         <div id="dq-cell" style="position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 11px 12px; border-right: 1px solid #e2e8f0;">
           <span class="mid-label">Deckle Qty</span>
           <% if (deckleQtyEditable) { %>
-            <!-- Same pattern as Edge Trim on the Deckle Set page: the value shows,
-                 the pencil swaps in the input. Enter or leaving the field saves a
-                 changed number (POST /labels/production/assign/:id/deckle-count);
-                 Escape puts the old one back. -->
             <button type="button" id="dq-edit" class="dq-edit-ic" title="Edit Deckle Qty" aria-label="Edit Deckle Qty">
               <i class="fa-solid fa-pen"></i>
             </button>
             <span class="mid-value" id="dq-text"><%= dash(pp.noOfRolls) %></span>
-            <form id="dq-form" class="dq-form" method="post" action="/app/labels/production/assign/<%= pp._id %>/deckle-count" hidden>
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-              <input id="dq-input" class="form-control dq-input" name="noOfRolls" type="number" min="1" max="9999" step="1" inputmode="numeric" value="<%= pp.noOfRolls || "" %>" data-current="<%= pp.noOfRolls || "" %>" aria-label="Deckle Qty" required />
-            </form>
+            <input type="number" id="dq-input" name="noOfRolls" min="1" max="9999" step="1" value="<%= pp.noOfRolls || "" %>" class="form-control" hidden />
           <% } else { %>
             <span class="mid-value"><%= dash(pp.noOfRolls) %></span>
           <% } %>
         </div>
           <script>
             (function () {
-              const cell = document.getElementById("dq-cell");
               const edit = document.getElementById("dq-edit");
               const text = document.getElementById("dq-text");
-              const form = document.getElementById("dq-form");
               const input = document.getElementById("dq-input");
-              const current = input.dataset.current;
+              const current = String(input.value).trim();
+              const orderId = "<%= pp._id %>";
               let cancelled = false;
-              let submitting = false;
 
               function showText() {
-                form.hidden = true;
+                input.hidden = true;
                 text.hidden = false;
               }
-              function startEdit() {
+              function editDeckleQty() {
                 cancelled = false;
                 text.hidden = true;
-                form.hidden = false;
+                input.hidden = false;
                 input.focus();
                 input.select();
               }
-              function commit() {
-                if (submitting) return;
-                const v = input.value.trim();
-                const n = Number(v);
-                const valid = Number.isInteger(n) && n >= 1 && n <= 9999;
-                if (cancelled || !valid || v === current) {
+              function saveDeckleQty() {
+                if (cancelled) {
                   input.value = current;
                   showText();
                   return;
                 }
-                submitting = true;
-                form.requestSubmit();
+                const v = String(input.value).trim();
+                const n = Number(v);
+                if (!Number.isInteger(n) || n < 1 || n > 9999) {
+                  alert("Deckle Qty must be a whole number from 1 to 9999.");
+                  input.focus();
+                  return;
+                }
+                if (v === current) {
+                  showText();
+                  return;
+                }
+                fetch(`/app/labels/production/assign/${orderId}/deckle-count`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/x-www-form-urlencoded", "x-csrf-token": document.querySelector('input[name="_csrf"]')?.value || "" },
+                  body: `noOfRolls=${encodeURIComponent(v)}`
+                })
+                .then(r => r.ok ? location.reload() : r.text().then(t => { alert("Failed to save: " + t); input.focus(); }))
+                .catch(e => { alert("Error: " + e.message); input.focus(); });
               }
 
-              edit.addEventListener("click", startEdit);
-              input.addEventListener("blur", commit);
+              edit.addEventListener("click", editDeckleQty);
+              input.addEventListener("blur", saveDeckleQty);
               input.addEventListener("keydown", (ev) => {
-                if (ev.key === "Enter") {
-                  ev.preventDefault();
-                  input.blur();
-                } else if (ev.key === "Escape") {
-                  cancelled = true;
-                  input.blur();
-                }
+                if (ev.key === "Enter") { ev.preventDefault(); input.blur(); }
+                else if (ev.key === "Escape") { cancelled = true; input.blur(); }
               });
             })();
           </script>
