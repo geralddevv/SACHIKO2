@@ -6755,6 +6755,22 @@ async function highestLotNoSerial(itemCode, fy, yearLetter) {
   return max;
 }
 
+// True when `value` is already a structured Lot No for this product code --
+// i.e. it was minted under (or hand-typed to match) the current scheme.
+// Anything else -- most notably an order assigned before this scheme existed
+// (the old flat "SP | LOT | 0042") -- reads as false, which is what lets the
+// Assign Production page offer a fresh, correctly-structured suggestion
+// instead of echoing the stale value back at the user forever (see
+// previewLotNo in the GET handler below). It does NOT check the financial
+// year or year-letter -- an order assigned last year and only now being
+// re-opened (via Undo) should keep showing its own real lot no, not get a
+// new one suggested just because the calendar moved on.
+function isStructuredLotNo(value, itemCodeRaw) {
+  const itemCode = normalizeLotItemCode(itemCodeRaw);
+  if (!value || !itemCode) return false;
+  return new RegExp(`^${escapeRegex(itemCode)}\\s*\\/\\s*\\d{2}-\\d{2}\\s*\\/\\s*[A-Z]+\\d+\\s*$`, "i").test(String(value).trim());
+}
+
 // Read-only preview of the next lot no for this product code -- shown on the
 // Assign Production page before anything is submitted. Does not claim a
 // serial. Empty product code (nothing to key the series off) previews as "".
@@ -6818,7 +6834,16 @@ router.get("/labels/production/assign/:id", async (req, res) => {
       Employee.find({ isActive: true, empProfile: "HELPER" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
     ]);
 
-    const previewLotNo = pendingProduction.lotNo || (await previewNextLotNo(pendingProduction.itemId?.productCode));
+    // An order carrying an old-scheme Lot No ("SP | LOT | 0042", from before
+    // this product-code-structured format existed) gets a fresh, correctly
+    // structured suggestion here instead -- it's only ever a SUGGESTION
+    // (the input stays editable, and nothing is saved until the page is
+    // submitted), so revisiting this page can't silently change an order
+    // that already has a proper one.
+    const lotItemCode = pendingProduction.itemId?.productCode;
+    const previewLotNo = (pendingProduction.lotNo && (isStructuredLotNo(pendingProduction.lotNo, lotItemCode) || !lotItemCode))
+      ? pendingProduction.lotNo
+      : await previewNextLotNo(lotItemCode);
     // Rolls in this batch set ahead of their sales order -- flagged here too.
     const advance = pendingProduction.isDeckleBatch
       ? (await advanceShareByBatch([pendingProduction._id])).get(String(pendingProduction._id)) || null

@@ -873,6 +873,31 @@
        afterwards is visibly not part of the plan. */
     .raw-layer-table tbody tr.raw-layer-row-auto { background: #f4f9ff; }
     .raw-layer-table tbody tr.raw-layer-row-auto td:first-child { box-shadow: inset 3px 0 0 #044a78; }
+
+    .ap-lotno-row {
+      display: flex; align-items: center; gap: 8px; justify-content: flex-end;
+      flex-wrap: wrap; margin-top: 2px;
+    }
+    .ap-lotno-row label {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: rgba(255,255,255,0.75);
+    }
+    .lotno-input {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 15px; font-weight: 700; color: #fff;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 8px; padding: 6px 12px;
+      width: 300px; max-width: 100%;
+      text-align: left; letter-spacing: 0.01em;
+      transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+    }
+    .lotno-input::placeholder { color: rgba(255,255,255,0.45); font-weight: 500; }
+    .lotno-input:hover { border-color: rgba(255,255,255,0.6); }
+    .lotno-input:focus {
+      outline: none; border-color: #7dd3fc; background: rgba(255,255,255,0.18);
+      box-shadow: 0 0 0 3px rgba(125,211,252,0.28);
+    }
   </style>
 
   <div class="indi-head ap-head" style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
@@ -881,13 +906,11 @@
     </div>
     <div style="text-align:right; color:#fff; line-height:1.4;">
       <div style="font-size:17px; font-weight:600;">Date: <%= fmtDate(new Date()) %></div>
-      <div style="font-size:22px; font-weight:700; display:flex; align-items:center; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
-        <label for="lotNo-input" style="font-weight:700;">Lot No:</label>
-        <input type="text" id="lotNo-input" name="lotNo" form="assign-form"
-               value="<%= previewLotNo %>" placeholder="LOT NO"
-               style="font-size:18px; font-weight:700; color:#fff; background:rgba(255,255,255,0.08);
-                      border:1px solid rgba(255,255,255,0.5); border-radius:6px; padding:3px 10px;
-                      width:260px; max-width:100%; text-align:right;" />
+      <div class="ap-lotno-row">
+        <label for="lotNo-input">Lot No</label>
+        <input type="text" id="lotNo-input" name="lotNo" form="assign-form" class="lotno-input"
+               value="<%= previewLotNo %>" placeholder="e.g. C001WB / 26-27 / G001"
+               autocomplete="off" spellcheck="false" />
       </div>
     </div>
   </div>
@@ -903,7 +926,7 @@
     <div class="ap-card-title"><span><i class="fa-solid fa-layer-group"></i> Material Details</span></div>
     <div style="padding: 14px;">
       <div class="material-id-row">
-        <div id="ln-cell" style="position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 11px 12px; border-right: 1px solid #e2e8f0; flex: 0 0 auto; min-width: 250px;">
+        <div id="ln-cell" style="position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 11px 12px; border-right: 1px solid #e2e8f0; flex: 0 0 auto; min-width: 320px;">
           <span class="mid-label">Lot No</span>
           <button type="button" id="ln-edit" class="dq-edit-ic" title="Edit Lot No" aria-label="Edit Lot No">
             <i class="fa-solid fa-pen"></i>
