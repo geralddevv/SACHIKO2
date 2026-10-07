@@ -276,6 +276,13 @@
       .join("");
   }
 
+  function stockDateText(v) {
+    const d = v ? new Date(v) : null;
+    return d && !Number.isNaN(d.getTime())
+      ? d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+      : "—";
+  }
+
   const table = new Tabulator("#semi-finished-stock-table", {
     data: stockData,
     height: "100%",
@@ -288,6 +295,9 @@
       // filtering instead of a static index frozen at load time.
       { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
         formatter: (cell) => cell.getRow().getPosition(true) },
+      { title: "Date", field: "createdAt", minWidth: 120, headerFilter: "input", headerFilterPlaceholder: "Search",
+        headerFilterFunc: (term, val) => stockDateText(val).toLowerCase().includes(String(term || "").toLowerCase()),
+        formatter: (cell) => stockDateText(cell.getValue()) },
       { title: "Deckle ID", field: "rollId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 170 },
       { title: "Product Code", field: "productCode", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },
       { title: "Family", field: "family", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 140, formatter: (cell) => cell.getValue() || "—" },

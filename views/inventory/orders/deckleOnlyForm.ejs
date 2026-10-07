@@ -114,11 +114,6 @@
             <span class="sl-job-value"><%= picked ? dash(item.rollType) : "—" %></span>
           </div>
           <div class="sl-job-cell is-input">
-            <label class="sl-job-label" for="dsoTrim">Edge Trim (total mm)</label>
-            <input type="number" step="any" min="0" id="dsoTrim" name="deckleTrim" class="form-control" inputmode="decimal"
-                   value="5" title="Total edge trim across both edges, taken off the deckle width." />
-          </div>
-          <div class="sl-job-cell is-input">
             <label class="sl-job-label" for="dsoSize">Deckle Size (mm)</label>
             <input type="number" step="any" min="0" id="dsoSize" name="deckleSize" class="form-control" inputmode="decimal"
                    placeholder="mm" title="Width of the deckle web, in mm." />
@@ -169,7 +164,6 @@
     const PICKED = JSON.parse(document.getElementById("dso-state").textContent).picked === true;
     const form = document.getElementById("dsoForm");
     const pick = document.getElementById("dsoPick");
-    const trimEl = document.getElementById("dsoTrim");
     const sizeEl = document.getElementById("dsoSize");
     const drmEl = document.getElementById("dsoDrm");
     const countEl = document.getElementById("dsoCount");
@@ -177,7 +171,7 @@
     const issuesEl = document.getElementById("dsoIssues");
     const issuesBody = document.getElementById("dsoIssuesBody");
     const statsEl = document.getElementById("dsoStats");
-    const inputs = [trimEl, sizeEl, drmEl, countEl];
+    const inputs = [sizeEl, drmEl, countEl];
 
     // Same sane bounds the Set Deckle page holds a typed deckle size to.
     const MIN_DECKLE_MM = 25;
@@ -206,14 +200,6 @@
       if (sizeBad) errors.push(`Deckle Size looks wrong — expected ${fmt(MIN_DECKLE_MM)}–${fmt(MAX_DECKLE_MM)} mm.`);
       sizeEl.classList.toggle("is-bad", sizeBad);
 
-      const trimRaw = raw(trimEl);
-      const trim = Number(trimRaw);
-      const trimBad = trimRaw === "" || !Number.isFinite(trim) || trim < 0;
-      const trimTooBig = !trimBad && size != null && trim >= size;
-      if (trimBad) errors.push("Edge Trim must be 0 mm or more.");
-      if (trimTooBig) errors.push(`Edge Trim (${fmt(trim)} mm) leaves nothing to cut on the ${fmt(size)} mm deckle.`);
-      trimEl.classList.toggle("is-bad", trimBad || trimTooBig);
-
       const drmRaw = raw(drmEl);
       const drm = Number(drmRaw);
       const drmBad = drmRaw !== "" && (!Number.isFinite(drm) || drm <= 0 || drm > MAX_RM);
@@ -238,14 +224,12 @@
       ready = !errors.length && !notReady;
       submitEl.disabled = !ready;
 
-      const usable = size != null && !trimBad && !trimTooBig ? round2(size - trim) : null;
       const sqm = size != null && drmOk && countOk ? round2((size / 1000) * drm * count) : null;
       statsEl.innerHTML = [
         stat("Deckle Size", size != null ? `${fmt(size)} mm` : "—"),
         stat("Deckle Count", countOk ? fmt(count) : "—"),
         stat("Deckle R.M.", drmOk ? `${fmt(drm)} m` : "—"),
         stat("Total Running", drmOk && countOk ? `${fmt(round2(drm * count))} m` : "—", "One web's length × how many webs."),
-        stat("Usable Web", usable != null ? `${fmt(usable)} mm` : "—", "Deckle size less the edge trim — the widest a roll slit from it can be."),
         stat("Facestock Used", sqm != null ? `${fmt(sqm)} m²` : "—"),
       ].join("");
     }

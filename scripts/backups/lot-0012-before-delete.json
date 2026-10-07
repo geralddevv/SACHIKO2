@@ -1,0 +1,222 @@
+{
+ "batch": {
+  "_id": "6aabe01833e3127332cf97af",
+  "onModel": "SachikoLabelStock",
+  "itemId": "6a79dcc0ee9bec8f0c0cc0f0",
+  "userId": "6a35209ee4c881ed14d52595",
+  "quantity": 6,
+  "dispatchedQuantity": 0,
+  "poNumber": "PILOT1",
+  "deckleOption": "DECKLE_FREE",
+  "estimatedDate": "2026-09-25T00:00:00.000Z",
+  "paperSize": "635",
+  "runningMeters": 1000,
+  "runningMetersText": "500 M/DECKLE · 1,000 M TOTAL",
+  "deckleRunningMeters": 500,
+  "noOfRolls": 2,
+  "deckleSize": 635,
+  "isDeckleBatch": true,
+  "batchOrderIds": [
+   "6aabc0b2208aef9869c9f84b"
+  ],
+  "deckleLayout": [
+   {
+    "cuts": [
+     {
+      "slot": "A",
+      "width": 210
+     },
+     {
+      "slot": "B",
+      "width": 210
+     },
+     {
+      "slot": "C",
+      "width": 210
+     }
+    ],
+    "deckleRunningMeter": 500,
+    "plannedRunningMeter": 500,
+    "count": 2
+   }
+  ],
+  "deckleTrim": 5,
+  "allottedRollIds": [],
+  "producedRolls": 2,
+  "createdAt": "2026-09-17T12:42:00.376Z",
+  "updatedAt": "2026-10-07T07:02:57.276Z",
+  "__v": 0,
+  "allottedLayers": {
+   "facestock": {
+    "pool": "facestock",
+    "stockIds": [
+     "6a82f1ecc4c19e213e87f76a"
+    ]
+   },
+   "adhesive": {
+    "pool": "adhesive",
+    "stockIds": [
+     "6a86cb2f339e93284df73426"
+    ]
+   },
+   "releaseLiner": {
+    "pool": "release",
+    "stockIds": [
+     "6a857e5f39295d124ad89282"
+    ]
+   },
+   "adhesive2": {
+    "pool": "adhesive",
+    "stockIds": [
+     "6a86cb2f339e93284df73426"
+    ]
+   },
+   "releaseLiner2": {
+    "pool": "release",
+    "stockIds": [
+     "6a857e5f39295d124ad89282"
+    ]
+   }
+  },
+  "allottedRolls": 0,
+  "assignedAt": "2026-09-17T12:42:29.810Z",
+  "assignedMachineId": "6a363d6f2e0858e9a592ca1b",
+  "helperId": null,
+  "lotNo": "SP | LOT | 0012",
+  "operatorId": "69bcf73fd3f224644ffc98fb",
+  "producedAt": "2026-10-07T07:02:57.274Z"
+ },
+ "member": [
+  {
+   "_id": "6aabc0b2208aef9869c9f84b",
+   "__v": 0,
+   "allottedRollIds": [],
+   "batchOrderIds": [],
+   "createdAt": "2026-09-17T10:28:02.907Z",
+   "deckleOption": "DECKLE_FREE",
+   "dispatchedQuantity": 0,
+   "estimatedDate": "2026-09-25T00:00:00.000Z",
+   "isDeckleBatch": false,
+   "itemId": "6a79dcc0ee9bec8f0c0cc0f0",
+   "noOfRolls": 6,
+   "onModel": "SachikoLabelStock",
+   "orderRate": 26,
+   "paperSize": "210",
+   "poNumber": "PILOT1",
+   "producedRolls": 0,
+   "quantity": 6,
+   "remarks": "PILOT",
+   "runningMeters": 500,
+   "updatedAt": "2026-09-17T12:42:00.382Z",
+   "userId": "6a35209ee4c881ed14d52595",
+   "deckleBatchId": "6aabe01833e3127332cf97af",
+   "deckleSize": 635
+  }
+ ],
+ "deckles": [
+  {
+   "_id": "6aabe0b033e3127332cf9948",
+   "material": "6aabe0b033e3127332cf9937",
+   "location": "UNIT 2",
+   "quantity": 1,
+   "reelMtrs": 500,
+   "slitRunCount": 0,
+   "size": "635",
+   "lotNo": "SP | LOT | 0012",
+   "rollId": "C004WB (DR)-B/26-27/G0012/00001",
+   "sourceReels": [
+    {
+     "pool": "facestock",
+     "stockId": "6a82f1ecc4c19e213e87f76a",
+     "rollId": "FACESTOCK/26-27/007"
+    },
+    {
+     "pool": "adhesive",
+     "stockId": "6a86cb2f339e93284df73426",
+     "rollId": "ADHESIVE/26-27/015"
+    },
+    {
+     "pool": "release",
+     "stockId": "6a857e5f39295d124ad89282",
+     "rollId": "RELEASE/26-27/003"
+    }
+   ],
+   "producedFor": "6aabe01833e3127332cf97af",
+   "productionRowToken": "r-mu5it7sr-fjssfi79",
+   "producedVia": "jobcard",
+   "createdAt": "2026-09-17T12:44:32.941Z",
+   "updatedAt": "2026-09-17T12:44:32.941Z",
+   "__v": 0
+  },
+  {
+   "_id": "6aabe23933e3127332cf9983",
+   "material": "6aabe0b033e3127332cf9937",
+   "location": "UNIT 2",
+   "quantity": 1,
+   "reelMtrs": 500,
+   "slitRunCount": 0,
+   "size": "635",
+   "lotNo": "SP | LOT | 0012",
+   "rollId": "C004WB (DR)-B/26-27/G0012/00002",
+   "sourceReels": [
+    {
+     "pool": "facestock",
+     "stockId": "6a82f1ecc4c19e213e87f76a",
+     "rollId": "FACESTOCK/26-27/007"
+    },
+    {
+     "pool": "adhesive",
+     "stockId": "6a86cb2f339e93284df73426",
+     "rollId": "ADHESIVE/26-27/015"
+    },
+    {
+     "pool": "release",
+     "stockId": "6a857e5f39295d124ad89282",
+     "rollId": "RELEASE/26-27/003"
+    }
+   ],
+   "producedFor": "6aabe01833e3127332cf97af",
+   "productionRowToken": "r-mu5iuwo7-5rbu9nvb",
+   "producedVia": "jobcard",
+   "createdAt": "2026-09-17T12:51:05.051Z",
+   "updatedAt": "2026-09-17T12:51:05.051Z",
+   "__v": 0
+  }
+ ],
+ "logs": [
+  {
+   "_id": "6aabe0b033e3127332cf994a",
+   "material": "6aabe0b033e3127332cf9937",
+   "location": "UNIT 2",
+   "openingStock": 0,
+   "quantity": 1,
+   "closingStock": 1,
+   "reelMtrs": 500,
+   "rollId": "C004WB (DR)-B/26-27/G0012/00001",
+   "type": "INWARD",
+   "source": "SYSTEM",
+   "remarks": "Deckle produced from Production Log row 1 — as C004WB (DR)-B from FS FACESTOCK/26-27/007; AD ADHESIVE/26-27/015; REL RELEASE/26-27/003",
+   "createdBy": "IRFAN ABDUL SAMAD ANSAR",
+   "createdAt": "2026-09-17T12:44:32.947Z",
+   "updatedAt": "2026-09-17T12:44:32.947Z",
+   "__v": 0
+  },
+  {
+   "_id": "6aabe23933e3127332cf9985",
+   "material": "6aabe0b033e3127332cf9937",
+   "location": "UNIT 2",
+   "openingStock": 1,
+   "quantity": 1,
+   "closingStock": 2,
+   "reelMtrs": 500,
+   "rollId": "C004WB (DR)-B/26-27/G0012/00002",
+   "type": "INWARD",
+   "source": "SYSTEM",
+   "remarks": "Deckle produced from Production Log row 1 — as C004WB (DR)-B from FS FACESTOCK/26-27/007; AD ADHESIVE/26-27/015; REL RELEASE/26-27/003",
+   "createdBy": "IRFAN ABDUL SAMAD ANSAR",
+   "createdAt": "2026-09-17T12:51:05.052Z",
+   "updatedAt": "2026-09-17T12:51:05.052Z",
+   "__v": 0
+  }
+ ]
+}
