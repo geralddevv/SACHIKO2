@@ -1,0 +1,155 @@
+[
+ {
+  "_id": "6ab3e48d207f974c17bc728b",
+  "onModel": "SachikoLabelStock",
+  "itemId": "6a79dcc0ee9bec8f0c0cc0e1",
+  "userId": "6a35209ee4c881ed14d52595",
+  "quantity": 21,
+  "dispatchedQuantity": 0,
+  "poNumber": "111",
+  "deckleOption": "DECKLE_FREE",
+  "estimatedDate": "2026-09-25T00:00:00.000Z",
+  "isAdvance": false,
+  "paperSize": "660",
+  "runningMeters": 7000,
+  "runningMetersText": "1,000 M/DECKLE · 7,000 M TOTAL",
+  "deckleRunningMeters": 1000,
+  "noOfRolls": 7,
+  "deckleSize": 660,
+  "isDeckleBatch": true,
+  "batchOrderIds": [
+   "6aaaab2b3f7fcffadb469387",
+   "6ab4b8c2b87d8edd14adddc2",
+   "6ab506e57cafee77b5d2e20b"
+  ],
+  "deckleLayout": [
+   {
+    "cuts": [
+     {
+      "slot": "A",
+      "width": 225
+     },
+     {
+      "slot": "B",
+      "width": 215,
+      "orderedWidth": 210
+     },
+     {
+      "slot": "C",
+      "width": 215,
+      "orderedWidth": 210
+     }
+    ],
+    "deckleRunningMeter": 1000,
+    "plannedRunningMeter": 1000,
+    "count": 7
+   }
+  ],
+  "deckleTrim": 5,
+  "allottedRollIds": [],
+  "producedRolls": 0,
+  "createdAt": "2026-09-23T14:39:09.900Z",
+  "updatedAt": "2026-09-24T11:17:57.209Z",
+  "__v": 0
+ },
+ {
+  "_id": "6ab3e48d207f974c17bc728f",
+  "onModel": "SachikoLabelStock",
+  "itemId": "6a79dcc0ee9bec8f0c0cc0e1",
+  "quantity": 1,
+  "dispatchedQuantity": 0,
+  "deckleOption": "DECKLE_FREE",
+  "estimatedDate": "2026-09-25T00:00:00.000Z",
+  "isAdvance": false,
+  "paperSize": "635",
+  "runningMeters": 1000,
+  "runningMetersText": "1,000 M/DECKLE · 1,000 M TOTAL",
+  "deckleRunningMeters": 1000,
+  "noOfRolls": 1,
+  "deckleSize": 635,
+  "isDeckleBatch": true,
+  "batchOrderIds": [
+   "6ab3e48d207f974c17bc7291"
+  ],
+  "deckleLayout": [
+   {
+    "cuts": [
+     {
+      "slot": "A",
+      "width": 210
+     },
+     {
+      "slot": "B",
+      "width": 210
+     },
+     {
+      "slot": "C",
+      "width": 210
+     }
+    ],
+    "count": 1
+   }
+  ],
+  "deckleTrim": 5,
+  "allottedRollIds": [],
+  "producedRolls": 0,
+  "createdAt": "2026-09-23T14:39:09.905Z",
+  "updatedAt": "2026-09-23T14:39:09.910Z",
+  "__v": 0
+ },
+ {
+  "_id": "6ab507b07cafee77b5d2e2da",
+  "onModel": "SachikoLabelStock",
+  "itemId": "6a79dcc0ee9bec8f0c0cc0e6",
+  "userId": "6a35209ee4c881ed14d52595",
+  "quantity": 9,
+  "dispatchedQuantity": 0,
+  "poNumber": "PR/26-27/003, PR/26-27/003",
+  "deckleOption": "DECKLE_FREE",
+  "estimatedDate": "2026-10-08T00:00:00.000Z",
+  "isAdvance": false,
+  "paperSize": "660",
+  "runningMeters": 4000,
+  "runningMetersText": "1,000 M/DECKLE · 4,000 M TOTAL",
+  "deckleRunningMeters": 1000,
+  "noOfRolls": 4,
+  "deckleSize": 660,
+  "isDeckleBatch": true,
+  "batchOrderIds": [
+   "6ab506e57cafee77b5d2e202",
+   "6ab506e57cafee77b5d2e261"
+  ],
+  "deckleLayout": [
+   {
+    "cuts": [
+     {
+      "slot": "A",
+      "width": 220
+     },
+     {
+      "slot": "B",
+      "width": 220
+     },
+     {
+      "slot": "C",
+      "width": 215,
+      "orderedWidth": 210
+     }
+    ],
+    "deckleRunningMeter": 1000,
+    "plannedRunningMeter": 1000,
+    "count": 4
+   }
+  ],
+  "deckleTrim": 5,
+  "allottedRollIds": [],
+  "producedRolls": 0,
+  "createdAt": "2026-09-24T11:21:20.738Z",
+  "updatedAt": "2026-10-02T14:24:45.004Z",
+  "__v": 0,
+  "assignedMachineId": null,
+  "helperId": null,
+  "lotNo": "SP | LOT | 0013",
+  "operatorId": null
+ }
+]

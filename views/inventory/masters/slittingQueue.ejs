@@ -137,7 +137,7 @@
       transition: border-color 0.15s ease, background 0.15s ease;
     }
     .sq-deckle-row:hover { border-color: #a9c8e8; background: #f7fbff; }
-    .sq-deckle-row.is-off { opacity: 0.55; }
+    .sq-deckle-row.is-off { }
     .sq-deckle-row.is-disabled { opacity: 0.5; cursor: not-allowed; }
     .sq-deckle-row input[type="checkbox"] { flex: none; width: 17px; height: 17px; accent-color: #044a78; }
     /* "2 of 2 needed" beside the picker heading -- green on the mark, amber
@@ -520,12 +520,14 @@
         : "";
       const disabled = !d.allocateHref;
       const tick = !disabled && d.forThisLayout !== false;
+      const createdDate = fmtDate(d.createdAt);
+      const createdTime = fmtTime(d.createdAt);
       return `
         <label class="sq-deckle-row${disabled ? " is-disabled" : ""}${tick ? "" : " is-off"}">
           <input type="checkbox" value="${esc(d._id)}" ${disabled ? "disabled" : (tick ? "checked" : "")} />
           <span class="sq-deckle-main">
             <span class="sq-deckle-top">${esc(d.rollId)}</span>
-            <span class="sq-deckle-sub">${fmtMtrs(d.mtrs)} mtrs &nbsp;·&nbsp; ${esc(d.location)} &nbsp;·&nbsp; lot ${esc(d.lotNo)}${d.held ? ` &nbsp;·&nbsp; already on ${esc(d.card.slittingJobCardId)}${d.card.machineName && d.card.machineName !== "—" ? ` (${esc(d.card.machineName)})` : ""} — not run yet` : (disabled ? " &nbsp;·&nbsp; not linked to any pending order" : "")}</span>
+            <span class="sq-deckle-sub">${fmtMtrs(d.mtrs)} mtrs &nbsp;·&nbsp; ${esc(d.location)} &nbsp;·&nbsp; lot ${esc(d.lotNo)} &nbsp;·&nbsp; ${createdDate} ${createdTime}${d.held ? ` &nbsp;·&nbsp; already on ${esc(d.card.slittingJobCardId)}${d.card.machineName && d.card.machineName !== "—" ? ` (${esc(d.card.machineName)})` : ""} — not run yet` : (disabled ? " &nbsp;·&nbsp; not linked to any pending order" : "")}</span>
             ${d.held ? `<span class="sq-deckle-sub" style="color:#64748b;">Shown for reference. It can't be picked here until ${esc(d.card.slittingJobCardId)} is run.</span>` : ""}
             ${d.cameOff ? `<span class="sq-deckle-sub" style="color:#8a5a00;"><i class="fa-solid fa-arrow-rotate-left"></i> came off ${esc(d.cameOff.slittingJobCardId)} — a different web was scanned in its place${d.cameOff.by ? ` by ${esc(d.cameOff.by)}` : ""}</span>` : ""}
           </span>
