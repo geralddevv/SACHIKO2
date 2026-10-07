@@ -6,6 +6,7 @@ import MaterialStock from "../../models/inventory/materialStock.js";
 import MaterialStockLog from "../../models/inventory/materialStockLog.js";
 import PendingProduction from "../../models/inventory/pendingProduction.js";
 import Location from "../../models/system/location.js";
+import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateFinishedRollId, previewFinishedRollIds } from "../../utils/finishedRollId.js";
@@ -216,8 +217,13 @@ router.post("/export", requireAuth, createLimiter, async (req, res) => {
 // client order's spec. Slitting is always tied to an order -- see
 // PendingProduction below -- never a free-standing pick of any Deckle.
 router.get("/", async (req, res) => {
-  const [locations, stock] = await Promise.all([
+  const [locations, labelStocks, stock] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
+    // Product Codes the Add Roll dialog can inward against.
+    SachikoLabelStock.find({ productCode: { $exists: true, $ne: "" } })
+      .select("productCode family")
+      .sort({ productCode: 1 })
+      .lean(),
     // Stock only. A roll dispatched to FAIRTECH keeps its row and its whole
     // ledger history, but it has physically left -- it belongs on the
     // Dispatched page below, not in a list of what is on the floor.
@@ -235,6 +241,7 @@ router.get("/", async (req, res) => {
     // so it can't quietly disagree with the label built from the same util.
     labelSizeMm: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM },
     locations,
+    labelStocks: labelStocks.map((l) => ({ _id: String(l._id), productCode: l.productCode, family: l.family || "" })),
     stock: stock.map((s) => ({
       _id: String(s._id),
       rollId: s.rollId,
@@ -524,6 +531,106 @@ router.post("/create", requireAuth, createLimiter, async (req, res) => {
     console.error("FINISHED STOCK CREATE ERROR:", err);
     const msg = err.code === 11000 ? "Roll ID collision, please retry." : "Failed to produce finished rolls.";
     res.status(400).json({ success: false, message: msg });
+  }
+});
+
+// Manual inward of finished rolls that were not slit through the app -- rolls
+// already on the shelf (opening stock, a count correction). Writes what a slit
+// roll writes (a FinishedStock row + its INWARD ledger line, same Roll ID
+// scheme) but there is no order or Deckle behind it, so nothing is deducted
+// anywhere, and the row is flagged `manualInward`. The export to FAIRTECH,
+// the label and the dispatched page treat it like any other roll; the export
+// still refuses one with no rate, so a rate is worth entering.
+router.post("/manual", requireAuth, createLimiter, async (req, res) => {
+  const created = [];
+  try {
+    const materialId = String(req.body.materialId || "").trim();
+    const location = String(req.body.location || "").trim();
+    const paperSize = String(req.body.paperSize || "").trim();
+    const lotNo = String(req.body.lotNo || "").trim();
+    const clientName = String(req.body.clientName || "").trim();
+    const remarks = String(req.body.remarks || "").trim();
+    const rate = req.body.rate === undefined || req.body.rate === "" ? undefined : Number(req.body.rate);
+
+    if (!mongoose.isValidObjectId(materialId)) return res.status(400).json({ success: false, message: "Select a Product Code." });
+    if (!location) return res.status(400).json({ success: false, message: "Location is required." });
+    const sizeNum = Number(paperSize);
+    if (!paperSize || !Number.isFinite(sizeNum) || sizeNum <= 0) {
+      return res.status(400).json({ success: false, message: "Paper Size (mm) must be a number above 0." });
+    }
+    if (rate !== undefined && (!Number.isFinite(rate) || rate < 0)) {
+      return res.status(400).json({ success: false, message: "Rate must be a number, 0 or more." });
+    }
+
+    const rawRolls = Array.isArray(req.body.rolls) ? req.body.rolls : [];
+    if (!rawRolls.length) return res.status(400).json({ success: false, message: "Add at least one roll." });
+    if (rawRolls.length > MAX_ROLLS_PER_BATCH) {
+      return res.status(400).json({ success: false, message: `At most ${MAX_ROLLS_PER_BATCH} rolls can be added at once.` });
+    }
+    const mtrsList = rawRolls.map((r) => round2(r?.mtrs));
+    const bad = mtrsList.findIndex((m) => !Number.isFinite(m) || m <= 0);
+    if (bad !== -1) return res.status(400).json({ success: false, message: `Mtrs must be above 0 for roll ${bad + 1}.` });
+
+    const [labelStock, locationExists] = await Promise.all([
+      SachikoLabelStock.findById(materialId).select("productCode").lean(),
+      Location.exists({ locationName: location }),
+    ]);
+    if (!labelStock?.productCode) return res.status(400).json({ success: false, message: "Product Code not found." });
+    if (!locationExists) return res.status(400).json({ success: false, message: "Invalid location." });
+
+    const by = req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM";
+    const bal = await FinishedStock.aggregate([
+      { $match: { material: labelStock._id, location } },
+      { $group: { _id: null, qty: { $sum: "$quantity" } } },
+    ]);
+    let opening = bal[0]?.qty || 0;
+
+    for (const mtrs of mtrsList) {
+      const rollId = await generateFinishedRollId(labelStock.productCode);
+      const doc = await FinishedStock.create({
+        manualInward: true,
+        material: labelStock._id,
+        location,
+        paperSize: String(sizeNum),
+        lotNo: lotNo || undefined,
+        clientName: clientName || undefined,
+        quantity: 1,
+        mtrs,
+        rate,
+        rollId,
+        remarks: remarks || undefined,
+      });
+      created.push(doc);
+      await FinishedStockLog.create({
+        material: labelStock._id,
+        location,
+        openingStock: opening,
+        quantity: 1,
+        closingStock: opening + 1,
+        mtrs,
+        rate,
+        rollId,
+        type: "INWARD",
+        source: "MANUAL",
+        remarks: `Manual inward of finished roll${remarks ? ` — ${remarks}` : ""}`,
+        createdBy: by,
+      });
+      opening += 1;
+    }
+
+    const ids = created.map((d) => d.rollId);
+    res.locals.auditDescription = `Manually inwarded ${ids.length} finished roll(s) of ${labelStock.productCode} at ${location}: ${ids.join(", ")}`;
+    req.flash("notification", `${ids.length} finished roll(s) added: ${ids.join(", ")}`);
+    res.json({ success: true, rollIds: ids });
+  } catch (err) {
+    console.error("FINISHED STOCK MANUAL INWARD ERROR:", err);
+    // Nothing half-added: take back what this request had already written.
+    if (created.length) {
+      const rollIds = created.map((d) => d.rollId);
+      await FinishedStockLog.deleteMany({ rollId: { $in: rollIds }, source: "MANUAL", type: "INWARD" }).catch(() => {});
+      await FinishedStock.deleteMany({ _id: { $in: created.map((d) => d._id) } }).catch(() => {});
+    }
+    res.status(400).json({ success: false, message: "Failed to add finished rolls." });
   }
 });
 

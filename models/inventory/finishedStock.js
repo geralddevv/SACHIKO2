@@ -10,10 +10,18 @@ import mongoose from "mongoose";
 // output roll, so finished-roll creation is its own explicit action.
 const finishedStockSchema = new mongoose.Schema(
   {
+    // Set on a roll entered by hand through the page's Add Roll dialog
+    // (POST /manual): stock that already exists on the shelf, so there is no
+    // order or Deckle behind it. Those two links are required for every other
+    // roll and absent on these.
+    manualInward: {
+      type: Boolean,
+      default: false,
+    },
     pendingProductionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "PendingProduction",
-      required: true,
+      required() { return !this.manualInward; },
       index: true,
     },
     // Denormalized from the order's itemId -- the Label Stock SKU this roll is.
@@ -27,7 +35,7 @@ const finishedStockSchema = new mongoose.Schema(
     deckleStockId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "MaterialStock",
-      required: true,
+      required() { return !this.manualInward; },
     },
     deckleRollId: {
       type: String,

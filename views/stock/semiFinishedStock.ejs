@@ -10,6 +10,57 @@
       flex: 1 1 auto;
       min-height: 0;
     }
+    .header-action-btn {
+      background-color: #f0f0f0;
+      color: #044a78;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+      transition: background-color 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+    .header-action-btn:hover { background-color: #e4e4e4; }
+    .add-note {
+      margin: 0 0 18px;
+      padding: 10px 12px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: #0c4a6e;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 8px;
+    }
+    .add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    @media (max-width: 520px) { .add-grid { grid-template-columns: 1fr; } }
+    .add-rows-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      background: #f8fafc;
+      padding: 10px;
+    }
+    .add-row { display: flex; gap: 8px; align-items: center; }
+    .add-row-no {
+      flex: 0 0 26px; height: 26px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #044a78; background: #e0f2fe;
+    }
+    .add-row-del {
+      flex: 0 0 auto; width: 34px; height: 34px; padding: 0 !important;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 18px !important; line-height: 1; color: #b91c1c !important;
+    }
+    .add-footer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; flex-wrap: wrap; }
+    .add-summary {
+      font-size: 12.5px; font-weight: 700; color: #044a78;
+      background: #e0f2fe; padding: 5px 12px; border-radius: 999px;
+    }
     .dialog-header {
       background: #044A78;
       padding: 18px 22px;
@@ -147,10 +198,83 @@
 
   <div class="indi-head">
     <h1>Semi Finished Goods Stock</h1>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <button class="header-action-btn" type="button" onclick="openAddDialog()">
+        <i class="fa-solid fa-plus" style="margin-right: 6px;"></i>Add Deckle
+      </button>
+      <div id="tab-container" style="display: flex; gap: 6px; align-items: center; background: #f0f4f8; padding: 2px; border-radius: 10px;">
+        <button id="tab-all-stock" class="tab-btn tab-btn-active" style="padding: 8px 14px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; background-color: #044a78; color: #fff; transition: all 0.3s ease; box-shadow: 0 2px 6px rgba(4, 74, 120, 0.2); font-size: 13px;">
+          <i class="fa-solid fa-boxes-stacked" style="margin-right: 6px;"></i>All Stock
+        </button>
+        <button id="tab-empty-stock" class="tab-btn" style="padding: 8px 14px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; background-color: transparent; color: #64748b; transition: all 0.3s ease; font-size: 13px;">
+          <i class="fa-solid fa-trash-can" style="margin-right: 6px;"></i>Empty Stock (0 Mtrs)
+        </button>
+      </div>
+    </div>
   </div>
 
-  <div class="table-spinner"><div class="spinner-circle"></div></div>
+  <div class="table-spinner" id="table-spinner"><div class="spinner-circle"></div></div>
   <div id="semi-finished-stock-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- ============ ADD DECKLE (MANUAL INWARD) DIALOG ============ -->
+<div class="logout-modal" id="addDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
+    style="width: min(560px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="addDialogTitle">Add Deckle (Inward)</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <p class="add-note">
+        Adds Deckle reels that are already on the shelf. Nothing is laminated and no raw material is deducted.
+        Each reel gets its own Deckle ID.
+      </p>
+
+      <label class="dialog-field-label" for="addProductSelect">Product Code</label>
+      <select id="addProductSelect" style="margin-bottom: 16px;"></select>
+
+      <div class="add-grid">
+        <div>
+          <label class="dialog-field-label" for="addSizeInput">Deckle Size (mm)</label>
+          <input type="number" id="addSizeInput" class="form-control premium-input" placeholder="e.g. 660" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addLotInput">Lot No</label>
+          <input type="text" id="addLotInput" class="form-control premium-input" placeholder="e.g. SP | LOT | 0012" />
+        </div>
+      </div>
+
+      <label class="dialog-field-label" for="addLocationSelect">Location</label>
+      <select id="addLocationSelect" style="margin-bottom: 16px;"></select>
+
+      <div class="add-grid">
+        <div>
+          <label class="dialog-field-label" for="addRateInput">Rate (optional)</label>
+          <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addRemarksInput">Remarks (optional)</label>
+          <input type="text" id="addRemarksInput" class="form-control premium-input" placeholder="Optional remarks" />
+        </div>
+      </div>
+
+      <label class="dialog-field-label">Deckle reels (mtrs each)</label>
+      <div class="add-rows-box">
+        <div id="addRows" style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto;"></div>
+      </div>
+      <div class="add-footer-row">
+        <button class="logout-btn" type="button" onclick="addDeckleRow()"><i class="fa-solid fa-plus" style="margin-right: 6px;"></i>Add reel</button>
+        <span id="addSummary" class="add-summary"></span>
+      </div>
+
+      <div id="addSemiFinishedError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Add Deckle</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ============ EDIT DECKLE DIALOG ============ -->
@@ -266,9 +390,17 @@
 
 <script id="stock-data" type="application/json"><%- safeJson(stock) %></script>
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
+<script id="labelstocks-data" type="application/json"><%- safeJson(labelStocks) %></script>
 <script>
   const stockData = JSON.parse(document.getElementById("stock-data").textContent);
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
+  const labelStocksData = JSON.parse(document.getElementById("labelstocks-data").textContent);
+
+  // Separate stock into active and empty
+  const activeStock = stockData.filter(s => (s.reelMtrs != null && Number(s.reelMtrs) > 0));
+  const emptyStock = stockData.filter(s => (s.reelMtrs == null || Number(s.reelMtrs) === 0));
+
+  let currentTab = 'all'; // Default tab
 
   function locationOptionsHtml(selectedName) {
     return locationsData
@@ -284,7 +416,7 @@
   }
 
   const table = new Tabulator("#semi-finished-stock-table", {
-    data: stockData,
+    data: activeStock,
     height: "100%",
     responsiveLayout: false,
     movableColumns: true,
@@ -574,6 +706,103 @@
     syncLabelRotateBtn();
   }
 
+  // ---- ADD (manual inward) ----
+  let addProductChoices = null;
+  let addLocationChoices = null;
+  const escAttr = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+  function addDeckleRow(value = "") {
+    const rows = document.getElementById("addRows");
+    const wrap = document.createElement("div");
+    wrap.className = "add-row";
+    wrap.innerHTML = `
+      <span class="add-row-no"></span>
+      <input type="number" class="form-control premium-input add-row-mtrs" placeholder="Mtrs" min="0" step="0.01" value="${escAttr(value)}" style="flex: 1;" />
+      <button type="button" class="logout-btn add-row-del" aria-label="Remove reel" title="Remove reel">×</button>`;
+    wrap.querySelector(".add-row-del").addEventListener("click", () => {
+      if (rows.children.length > 1) wrap.remove();
+      renumberAddRows();
+    });
+    wrap.querySelector(".add-row-mtrs").addEventListener("input", renumberAddRows);
+    rows.appendChild(wrap);
+    renumberAddRows();
+  }
+  function renumberAddRows() {
+    const rows = [...document.querySelectorAll("#addRows > div")];
+    let total = 0;
+    rows.forEach((r, i) => {
+      r.querySelector(".add-row-no").textContent = i + 1;
+      total += Number(r.querySelector(".add-row-mtrs").value) || 0;
+    });
+    document.getElementById("addSummary").textContent =
+      `${rows.length} reel${rows.length === 1 ? "" : "s"} · ${total.toLocaleString("en-IN", { maximumFractionDigits: 2 })} mtrs`;
+  }
+
+  function openAddDialog() {
+    if (addProductChoices) { addProductChoices.destroy(); addProductChoices = null; }
+    if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
+
+    const prodSel = document.getElementById("addProductSelect");
+    prodSel.innerHTML = `<option value="">Select Product Code</option>` + labelStocksData
+      .map((l) => `<option value="${escAttr(l._id)}">${escAttr(l.productCode)}${l.family ? " — " + escAttr(l.family) : ""}</option>`)
+      .join("");
+    addProductChoices = new Choices(prodSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    const locSel = document.getElementById("addLocationSelect");
+    locSel.innerHTML = locationOptionsHtml("");
+    addLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    for (const id of ["addSizeInput", "addLotInput", "addRateInput", "addRemarksInput"]) document.getElementById(id).value = "";
+    document.getElementById("addRows").innerHTML = "";
+    addDeckleRow();
+
+    hideError("addSemiFinishedError");
+    openModal("addDialog");
+  }
+  function closeAddDialog() {
+    closeModal("addDialog");
+  }
+
+  async function submitAdd() {
+    const materialId = document.getElementById("addProductSelect").value;
+    const location = document.getElementById("addLocationSelect").value;
+    const size = document.getElementById("addSizeInput").value;
+    const lotNo = document.getElementById("addLotInput").value.trim();
+    const mtrs = [...document.querySelectorAll("#addRows .add-row-mtrs")].map((i) => i.value);
+
+    if (!materialId) return showError("addSemiFinishedError", "Select a Product Code.");
+    if (!(Number(size) > 0)) return showError("addSemiFinishedError", "Deckle Size (mm) must be a number above 0.");
+    if (!/\d$/.test(lotNo)) return showError("addSemiFinishedError", "Lot No is required and must end in a number (e.g. SP | LOT | 0012).");
+    if (!location) return showError("addSemiFinishedError", "Location is required.");
+    const bad = mtrs.findIndex((m) => !(Number(m) > 0));
+    if (bad !== -1) return showError("addSemiFinishedError", `Mtrs must be above 0 for reel ${bad + 1}.`);
+
+    hideError("addSemiFinishedError");
+    setLoading("addSubmitBtn", true);
+    try {
+      const res = await fetch("/app/semifinishedstock/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          materialId, location, size, lotNo,
+          rate: document.getElementById("addRateInput").value,
+          remarks: document.getElementById("addRemarksInput").value,
+          deckles: mtrs.map((m) => ({ mtrs: m })),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        showError("addSemiFinishedError", data.message || "Failed to add Deckle reels.");
+      }
+    } catch {
+      showError("addSemiFinishedError", "Server error. Please try again.");
+    } finally {
+      setLoading("addSubmitBtn", false);
+    }
+  }
+
   // ---- EDIT ----
   let editId = null;
   let editLocationChoices = null;
@@ -665,4 +894,38 @@
       setLoading("deleteConfirmBtn", false);
     }
   }
+
+  // ---- Tab Switching ----
+  function updateTabButtons() {
+    const allBtn = document.getElementById("tab-all-stock");
+    const emptyBtn = document.getElementById("tab-empty-stock");
+
+    if (currentTab === 'all') {
+      allBtn.style.backgroundColor = "#044a78";
+      allBtn.style.color = "#fff";
+      allBtn.style.boxShadow = "0 2px 6px rgba(4, 74, 120, 0.2)";
+      emptyBtn.style.backgroundColor = "transparent";
+      emptyBtn.style.color = "#64748b";
+      emptyBtn.style.boxShadow = "none";
+    } else {
+      allBtn.style.backgroundColor = "transparent";
+      allBtn.style.color = "#64748b";
+      allBtn.style.boxShadow = "none";
+      emptyBtn.style.backgroundColor = "#ef4444";
+      emptyBtn.style.color = "#fff";
+      emptyBtn.style.boxShadow = "0 2px 6px rgba(239, 68, 68, 0.2)";
+    }
+  }
+
+  document.getElementById("tab-all-stock").addEventListener("click", () => {
+    currentTab = 'all';
+    updateTabButtons();
+    table.setData(activeStock);
+  });
+
+  document.getElementById("tab-empty-stock").addEventListener("click", () => {
+    currentTab = 'empty';
+    updateTabButtons();
+    table.setData(emptyStock);
+  });
 </script>

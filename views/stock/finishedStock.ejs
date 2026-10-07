@@ -330,6 +330,40 @@
       flex: 1 1 auto;
       min-height: 0;
     }
+    .add-note {
+      margin: 0 0 18px;
+      padding: 10px 12px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: #0c4a6e;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 8px;
+    }
+    .add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    @media (max-width: 520px) { .add-grid { grid-template-columns: 1fr; } }
+    .add-rows-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      background: #f8fafc;
+      padding: 10px;
+    }
+    .add-row { display: flex; gap: 8px; align-items: center; }
+    .add-row-no {
+      flex: 0 0 26px; height: 26px; border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #044a78; background: #e0f2fe;
+    }
+    .add-row-del {
+      flex: 0 0 auto; width: 34px; height: 34px; padding: 0 !important;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 18px !important; line-height: 1; color: #b91c1c !important;
+    }
+    .add-footer-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; flex-wrap: wrap; }
+    .add-summary {
+      font-size: 12.5px; font-weight: 700; color: #044a78;
+      background: #e0f2fe; padding: 5px 12px; border-radius: 999px;
+    }
     .dialog-header {
       background: #044A78;
       padding: 18px 22px;
@@ -437,6 +471,9 @@
   <div class="indi-head">
     <h1>Finished Goods Stock</h1>
     <div style="display: flex; gap: 10px; align-items: center">
+      <button class="header-action-btn" type="button" onclick="openAddDialog()">
+        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Add Roll
+      </button>
       <a href="/app/finishedstock/dispatched" class="header-action-btn" style="text-decoration:none;">
         <i class="fa-solid fa-truck-fast" style="margin-right: 4px"></i> Dispatched
       </a>
@@ -448,6 +485,69 @@
 
   <div class="table-spinner"><div class="spinner-circle"></div></div>
   <div id="finished-stock-table" class="tabulator tabulator-modern"></div>
+</div>
+
+<!-- ============ ADD ROLL (MANUAL INWARD) DIALOG ============ -->
+<div class="logout-modal" id="addDialog" aria-hidden="true">
+  <div class="logout-dialog" role="dialog" aria-modal="true" aria-labelledby="addDialogTitle"
+    style="width: min(560px, 95vw); padding: 0; border-radius: 14px; border: none;">
+    <div class="dialog-header" style="border-radius: 14px 14px 0 0;">
+      <h2 id="addDialogTitle">Add Finished Roll (Inward)</h2>
+      <button class="dialog-close-btn" type="button" onclick="closeAddDialog()" aria-label="Close">×</button>
+    </div>
+    <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
+      <p class="add-note">
+        Adds finished rolls that are already on the shelf. No order or Deckle is touched.
+        Each roll gets its own Roll ID. Enter the Rate if these will be exported to FAIRTECH — the export needs one.
+      </p>
+
+      <label class="dialog-field-label" for="addProductSelect">Product Code</label>
+      <select id="addProductSelect" style="margin-bottom: 16px;"></select>
+
+      <div class="add-grid">
+        <div>
+          <label class="dialog-field-label" for="addSizeInput">Paper Size (mm)</label>
+          <input type="number" id="addSizeInput" class="form-control premium-input" placeholder="e.g. 210" min="0" step="any" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addRateInput">Rate</label>
+          <input type="number" id="addRateInput" class="form-control premium-input" placeholder="Enter rate" min="0" step="any" />
+        </div>
+      </div>
+
+      <label class="dialog-field-label" for="addLocationSelect">Location</label>
+      <select id="addLocationSelect" style="margin-bottom: 16px;"></select>
+
+      <div class="add-grid">
+        <div>
+          <label class="dialog-field-label" for="addLotInput">Lot No (optional)</label>
+          <input type="text" id="addLotInput" class="form-control premium-input" placeholder="e.g. SP | LOT | 0012" />
+        </div>
+        <div>
+          <label class="dialog-field-label" for="addClientInput">Client (optional)</label>
+          <input type="text" id="addClientInput" class="form-control premium-input" placeholder="Client name" />
+        </div>
+      </div>
+
+      <label class="dialog-field-label" for="addRemarksInput">Remarks (optional)</label>
+      <input type="text" id="addRemarksInput" class="form-control premium-input" placeholder="Optional remarks" style="margin-bottom: 16px;" />
+
+      <label class="dialog-field-label">Rolls (mtrs each)</label>
+      <div class="add-rows-box">
+        <div id="addRows" style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto;"></div>
+      </div>
+      <div class="add-footer-row">
+        <button class="logout-btn" type="button" onclick="addRollRow()"><i class="fa-solid fa-plus" style="margin-right: 6px;"></i>Add roll</button>
+        <span id="addSummary" class="add-summary"></span>
+      </div>
+
+      <div id="addFinishedError" class="dialog-error"></div>
+      <div class="dialog-actions">
+        <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
+        <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Add Roll</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ============ EDIT FINISHED ROLL DIALOG ============ -->
@@ -606,9 +706,11 @@
 
 <script id="stock-data" type="application/json"><%- safeJson(stock) %></script>
 <script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
+<script id="labelstocks-data" type="application/json"><%- safeJson(labelStocks) %></script>
 <script>
   const stockData = JSON.parse(document.getElementById("stock-data").textContent);
   const locationsData = JSON.parse(document.getElementById("locations-data").textContent);
+  const labelStocksData = JSON.parse(document.getElementById("labelstocks-data").textContent);
 
   function locationOptionsHtml(selectedName) {
     return locationsData
@@ -737,6 +839,104 @@
   });
 
   // ---- Helpers ----
+  // ---- ADD (manual inward) ----
+  let addProductChoices = null;
+  let addLocationChoices = null;
+
+  function addRollRow(value = "") {
+    const rows = document.getElementById("addRows");
+    const wrap = document.createElement("div");
+    wrap.className = "add-row";
+    wrap.innerHTML = `
+      <span class="add-row-no"></span>
+      <input type="number" class="form-control premium-input add-row-mtrs" placeholder="Mtrs" min="0" step="0.01" value="${cellEsc(value)}" style="flex: 1;" />
+      <button type="button" class="logout-btn add-row-del" aria-label="Remove roll" title="Remove roll">×</button>`;
+    wrap.querySelector(".add-row-del").addEventListener("click", () => {
+      if (rows.children.length > 1) wrap.remove();
+      renumberAddRows();
+    });
+    wrap.querySelector(".add-row-mtrs").addEventListener("input", renumberAddRows);
+    rows.appendChild(wrap);
+    renumberAddRows();
+  }
+  function renumberAddRows() {
+    const rows = [...document.querySelectorAll("#addRows > div")];
+    let total = 0;
+    rows.forEach((r, i) => {
+      r.querySelector(".add-row-no").textContent = i + 1;
+      total += Number(r.querySelector(".add-row-mtrs").value) || 0;
+    });
+    document.getElementById("addSummary").textContent =
+      `${rows.length} roll${rows.length === 1 ? "" : "s"} · ${total.toLocaleString("en-IN", { maximumFractionDigits: 2 })} mtrs`;
+  }
+
+  function openAddDialog() {
+    if (addProductChoices) { addProductChoices.destroy(); addProductChoices = null; }
+    if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
+
+    const prodSel = document.getElementById("addProductSelect");
+    prodSel.innerHTML = `<option value="">Select Product Code</option>` + labelStocksData
+      .map((l) => `<option value="${cellEsc(l._id)}">${cellEsc(l.productCode)}${l.family ? " — " + cellEsc(l.family) : ""}</option>`)
+      .join("");
+    addProductChoices = new Choices(prodSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    const locSel = document.getElementById("addLocationSelect");
+    locSel.innerHTML = locationOptionsHtml("");
+    addLocationChoices = new Choices(locSel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
+
+    for (const id of ["addSizeInput", "addRateInput", "addLotInput", "addClientInput", "addRemarksInput"]) {
+      document.getElementById(id).value = "";
+    }
+    document.getElementById("addRows").innerHTML = "";
+    addRollRow();
+
+    hideError("addFinishedError");
+    openModal("addDialog");
+  }
+  function closeAddDialog() {
+    closeModal("addDialog");
+  }
+
+  async function submitAdd() {
+    const materialId = document.getElementById("addProductSelect").value;
+    const location = document.getElementById("addLocationSelect").value;
+    const paperSize = document.getElementById("addSizeInput").value;
+    const mtrs = [...document.querySelectorAll("#addRows .add-row-mtrs")].map((i) => i.value);
+
+    if (!materialId) return showError("addFinishedError", "Select a Product Code.");
+    if (!(Number(paperSize) > 0)) return showError("addFinishedError", "Paper Size (mm) must be a number above 0.");
+    if (!location) return showError("addFinishedError", "Location is required.");
+    const bad = mtrs.findIndex((m) => !(Number(m) > 0));
+    if (bad !== -1) return showError("addFinishedError", `Mtrs must be above 0 for roll ${bad + 1}.`);
+
+    hideError("addFinishedError");
+    setLoading("addSubmitBtn", true);
+    try {
+      const res = await fetch("/app/finishedstock/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          materialId, location, paperSize,
+          rate: document.getElementById("addRateInput").value,
+          lotNo: document.getElementById("addLotInput").value,
+          clientName: document.getElementById("addClientInput").value,
+          remarks: document.getElementById("addRemarksInput").value,
+          rolls: mtrs.map((m) => ({ mtrs: m })),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.reload();
+      } else {
+        showError("addFinishedError", data.message || "Failed to add finished rolls.");
+      }
+    } catch {
+      showError("addFinishedError", "Server error. Please try again.");
+    } finally {
+      setLoading("addSubmitBtn", false);
+    }
+  }
+
   function openModal(id) {
     const d = document.getElementById(id);
     d.classList.add("show");

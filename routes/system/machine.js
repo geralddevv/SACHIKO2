@@ -818,6 +818,29 @@ export async function buildQueueRows(match) {
       };
     });
 
+    // The deckle layout(s) this job was planned with on Set Deckle -- one
+    // line per cut pattern, its knife widths and how many webs run it, the
+    // same `cuts`/`count` shape Assign Production's Material Details card and
+    // the Slitting Queue already read (PendingProduction.deckleLayout). A
+    // plain order with no batch plan, or a batch saved before layouts existed,
+    // has none -- the queue shows "—" rather than guessing one from the
+    // order's own width.
+    const layoutRows = (Array.isArray(p.deckleLayout) ? p.deckleLayout : [])
+      .map((L) => {
+        const widths = (Array.isArray(L.cuts) ? L.cuts : [])
+          .map((c) => Number(c.width))
+          .filter((w) => w > 0);
+        return {
+          label: widths.map((w) => (w % 1 ? w.toFixed(2) : String(w))).join(" + "),
+          count: Math.max(1, Math.floor(Number(L.count) || 1)),
+          deckleSize: Number(L.deckleSize) > 0 ? Number(L.deckleSize) : (p.deckleSize ?? null),
+        };
+      })
+      .filter((L) => L.label);
+    const layoutSummary = layoutRows
+      .map((L) => `${L.label}${L.count > 1 ? ` × ${L.count}` : ""}`)
+      .join("  |  ");
+
     return {
       _id: String(p._id),
       machineId: String(p.assignedMachineId || ""),
@@ -830,6 +853,8 @@ export async function buildQueueRows(match) {
       paperSize: p.paperSize || "—",
       rollType: item.rollType || "—",
       deckleSize: p.deckleSize ?? null,
+      layoutSummary: layoutSummary || "",
+      layoutRows,
       // Both derived rather than read straight off the order: on a batch the
       // stored `runningMeters` (and the text built from it) is a sum of the
       // member orders' per-roll lengths, which counted orders rather than

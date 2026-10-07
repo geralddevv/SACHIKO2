@@ -1,13 +1,16 @@
 import express from "express";
 import mongoose from "mongoose";
 import MaterialStock from "../../models/inventory/materialStock.js";
+import MaterialStockLog from "../../models/inventory/materialStockLog.js";
+import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import MachineJobCard from "../../models/inventory/machineJobCard.js";
 import FacestockStock from "../../models/inventory/facestockStock.js";
 import AdhesiveStock from "../../models/inventory/adhesiveStock.js";
 import ReleaseLinerStock from "../../models/inventory/releaseLinerStock.js";
 import Location from "../../models/system/location.js";
 import { requireAuth } from "../../middleware/auth.js";
-import { updateLimiter, deleteLimiter } from "../../utils/limiters.js";
+import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
+import { generateDeckleId } from "../../utils/rollId.js";
 import {
   LABEL_HEIGHT_MM,
   LABEL_WIDTH_MM,
@@ -29,8 +32,13 @@ const router = express.Router();
 // POST /machine/jobcard/form). This page is a list/edit/delete view onto
 // that same MaterialStock data either way, not a third way to create one.
 router.get("/", async (req, res) => {
-  const [locations, stock] = await Promise.all([
+  const [locations, labelStocks, stock] = await Promise.all([
     Location.find().sort({ locationName: 1 }).lean(),
+    // Product Codes the manual Add Deckle dialog can inward against.
+    SachikoLabelStock.find({ productCode: { $exists: true, $ne: "" } })
+      .select("productCode family")
+      .sort({ productCode: 1 })
+      .lean(),
     MaterialStock.find()
       .populate({ path: "material", select: "productCode skuCode family" })
       .populate({ path: "producedFor", select: "paperSize materialSwapLog" })
@@ -198,6 +206,7 @@ router.get("/", async (req, res) => {
     // utils/materialStockRollLabel.js.
     labelSizeMm: { width: LABEL_WIDTH_MM, height: LABEL_HEIGHT_MM },
     locations,
+    labelStocks: labelStocks.map((l) => ({ _id: String(l._id), productCode: l.productCode, family: l.family || "" })),
     stock: stock.map((s) => {
       const productCode = s.material?.productCode || s.material?.skuCode || "";
       const jc = jobCardRowByDeckle.get(s.rollId);
@@ -238,6 +247,110 @@ router.get("/", async (req, res) => {
     }),
     notification: req.flash("notification"),
   });
+});
+
+// Manual inward of Deckle reels that did not come off a job card -- stock that
+// already exists on the shelf (opening stock, a reel bought in, a count
+// correction). Nothing is laminated and no raw material is touched: this only
+// writes the finished-web side, exactly what a job-card Deckle writes (a
+// MaterialStock row + its INWARD ledger line), with the same Deckle ID format
+// so it prints, slits and counts like any other. It carries no `producedFor`,
+// so unassigning / dissolving an order can never reach it.
+const MAX_MANUAL_DECKLES = 50;
+const round2 = (n) => Math.round(Number(n) * 100) / 100;
+
+router.post("/create", requireAuth, createLimiter, async (req, res) => {
+  const created = [];
+  try {
+    const materialId = String(req.body.materialId || "").trim();
+    const location = String(req.body.location || "").trim();
+    const lotNo = String(req.body.lotNo || "").trim();
+    const size = String(req.body.size || "").trim();
+    const remarks = String(req.body.remarks || "").trim();
+    const rate = req.body.rate === undefined || req.body.rate === "" ? undefined : Number(req.body.rate);
+
+    if (!mongoose.isValidObjectId(materialId)) return res.status(400).json({ success: false, message: "Select a Product Code." });
+    if (!location) return res.status(400).json({ success: false, message: "Location is required." });
+    if (!/\d$/.test(lotNo)) {
+      return res.status(400).json({ success: false, message: "Lot No is required and must end in a number (e.g. 12 or SP | LOT | 0012)." });
+    }
+    const sizeNum = Number(size);
+    if (!size || !Number.isFinite(sizeNum) || sizeNum <= 0) {
+      return res.status(400).json({ success: false, message: "Deckle Size (mm) must be a number above 0." });
+    }
+    if (rate !== undefined && (!Number.isFinite(rate) || rate < 0)) {
+      return res.status(400).json({ success: false, message: "Rate must be a number, 0 or more." });
+    }
+
+    const rawRows = Array.isArray(req.body.deckles) ? req.body.deckles : [];
+    if (!rawRows.length) return res.status(400).json({ success: false, message: "Add at least one Deckle." });
+    if (rawRows.length > MAX_MANUAL_DECKLES) {
+      return res.status(400).json({ success: false, message: `At most ${MAX_MANUAL_DECKLES} Deckles can be added at once.` });
+    }
+    const mtrsList = rawRows.map((r) => round2(r?.mtrs));
+    const bad = mtrsList.findIndex((m) => !Number.isFinite(m) || m <= 0);
+    if (bad !== -1) return res.status(400).json({ success: false, message: `Mtrs must be above 0 for Deckle ${bad + 1}.` });
+
+    const [labelStock, locationExists] = await Promise.all([
+      SachikoLabelStock.findById(materialId).select("productCode skuCode").lean(),
+      Location.exists({ locationName: location }),
+    ]);
+    if (!labelStock?.productCode) return res.status(400).json({ success: false, message: "Product Code not found." });
+    if (!locationExists) return res.status(400).json({ success: false, message: "Invalid location." });
+
+    const by = req.session?.authUser?.username || req.session?.authUser?.empName || "SYSTEM";
+    const bal = await MaterialStock.aggregate([
+      { $match: { material: labelStock._id, location } },
+      { $group: { _id: null, qty: { $sum: "$quantity" } } },
+    ]);
+    let opening = bal[0]?.qty || 0;
+
+    for (const mtrs of mtrsList) {
+      const rollId = await generateDeckleId(labelStock.productCode, lotNo);
+      const doc = await MaterialStock.create({
+        material: labelStock._id,
+        location,
+        quantity: 1,
+        reelMtrs: mtrs,
+        size: String(sizeNum),
+        lotNo,
+        rate,
+        rollId,
+        remarks: remarks || undefined,
+      });
+      created.push(doc);
+      await MaterialStockLog.create({
+        material: labelStock._id,
+        location,
+        openingStock: opening,
+        quantity: 1,
+        closingStock: opening + 1,
+        reelMtrs: mtrs,
+        rate,
+        rollId,
+        type: "INWARD",
+        source: "MANUAL",
+        remarks: `Manual inward of Deckle${remarks ? ` — ${remarks}` : ""}`,
+        createdBy: by,
+      });
+      opening += 1;
+    }
+
+    const ids = created.map((d) => d.rollId);
+    res.locals.auditDescription = `Manually inwarded ${ids.length} Deckle reel(s) of ${labelStock.productCode} at ${location}: ${ids.join(", ")}`;
+    req.flash("notification", `${ids.length} Deckle reel(s) added: ${ids.join(", ")}`);
+    res.json({ success: true, rollIds: ids });
+  } catch (err) {
+    console.error("SEMI FINISHED STOCK CREATE ERROR:", err);
+    // Nothing half-added: take back the reels (and their ledger lines) this
+    // request had already written before it failed.
+    if (created.length) {
+      const rollIds = created.map((d) => d.rollId);
+      await MaterialStockLog.deleteMany({ rollId: { $in: rollIds }, source: "MANUAL", type: "INWARD" }).catch(() => {});
+      await MaterialStock.deleteMany({ _id: { $in: created.map((d) => d._id) } }).catch(() => {});
+    }
+    res.status(400).json({ success: false, message: "Failed to add Deckle reels." });
+  }
 });
 
 router.put("/:id", requireAuth, updateLimiter, async (req, res) => {

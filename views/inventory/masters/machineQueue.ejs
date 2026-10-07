@@ -237,23 +237,28 @@
               Required Rolls: a code is six or eight characters ("C001WB",
               "C001WB-A") and had the widest column on the table, while
               Required Rolls now carries the "material for 2 of 15" note on the
-              same line as its figure and was clipping it. Still sums to 100. %>
+              same line as its figure and was clipping it. Lot No is widened
+              again for the id's full width ("SP | LOT | 0042"), and Layout
+              (the Set Deckle cut pattern, row.layoutSummary) is new. Still
+              sums to 100. %>
           <colgroup>
-            <col style="width: 11%" />
-            <col style="width: 11%" />
+            <col style="width: 15%" />
             <col style="width: 9%" />
-            <col style="width: 17%" />
-            <col style="width: 11%" />
-            <col style="width: 11%" />
-            <col style="width: 11%" />
-            <col style="width: 9%" />
-            <col style="width: 10%" />
+            <col style="width: 7%" />
+            <col style="width: 12%" />
+            <col style="width: 13%" />
+            <col style="width: 8%" />
+            <col style="width: 8%" />
+            <col style="width: 8%" />
+            <col style="width: 8%" />
+            <col style="width: 12%" />
           </colgroup>
           <thead>
             <tr>
               <th>Lot No</th>
               <th>Product Code</th>
               <th>Paper Size</th>
+              <th>Layout</th>
               <th>Required Rolls</th>
               <th>Facestock</th>
               <th>Adhesive</th>
@@ -284,6 +289,7 @@
                 <td data-label="Lot No" title="<%= row.lotNo %>"><%= row.lotNo %></td>
                 <td data-label="Product Code" title="<%= row.productCode %>"><%= row.productCode %><% if (row.advance) { %> <span class="adv-tag" title="<%= row.advance.rolls %> roll(s) set in advance — no sales order yet">ADVANCE</span><% } %></td>
                 <td data-label="Paper Size"><%= row.paperSize %></td>
+                <td data-label="Layout" title="<%= row.layoutSummary || 'No deckle layout was planned for this job' %>"><%= row.layoutSummary || "—" %></td>
                 <%
                   // What the allotted reels will actually get through, under
                   // the figure the job was assigned for. Only shown when the
@@ -381,9 +387,9 @@
     <div class="ap-table-wrap">
       <table class="ap-table">
         <colgroup>
-          <col style="width: 16%" /><col style="width: 12%" /><col style="width: 14%" />
-          <col style="width: 18%" /><col style="width: 12%" /><col style="width: 14%" />
-          <col style="width: 14%" />
+          <col style="width: 12%" /><col style="width: 16%" /><col style="width: 11%" />
+          <col style="width: 14%" /><col style="width: 13%" /><col style="width: 10%" /><col style="width: 12%" />
+          <col style="width: 12%" />
         </colgroup>
         <thead>
           <tr>
@@ -391,6 +397,7 @@
             <th>Lot No</th>
             <th>Product Code</th>
             <th>Client</th>
+            <th>Layout</th>
             <th>Deckles</th>
             <th>Slice</th>
             <th>Actions</th>
@@ -403,6 +410,7 @@
               <td data-label="Lot No"><%= row.lotNo %></td>
               <td data-label="Product Code"><%= row.productCode %></td>
               <td data-label="Client" title="<%= row.clientName %>"><%= row.clientName %></td>
+              <td data-label="Layout" title="<%= row.layoutSummary || 'No cut layout recorded for this card' %>"><%= row.layoutSummary || "—" %></td>
               <td data-label="Deckles">
                 <%= row.deckleLeft %> to run
                 <% if (row.deckleDone > 0) { %><span style="color:#64748b;font-weight:600;font-size:11px;">(<%= row.deckleDone %> of <%= row.deckleCount %> done)</span><% } %>

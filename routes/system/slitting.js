@@ -406,6 +406,27 @@ export async function buildSlittingQueueRows(match) {
     );
 
     const undoBlock = slittingUndoBlock(c);
+
+    // The knife layout(s) this card's Deckles are cut to -- one line per
+    // distinct cut pattern, its roll widths and how many Deckles run it.
+    // Each slittingLog row carries its own `cuts` (set at allocation from the
+    // batch's deckleLayout, see Slitting Allocation), so a card can in theory
+    // mix patterns even though the common case is one pattern across every
+    // row. Grouped so the queue shows "150 + 200 + 150 × 8" rather than
+    // repeating the same pattern once per Deckle.
+    const layoutGroups = new Map();
+    for (const r of rows) {
+      const widths = (Array.isArray(r.cuts) ? r.cuts : [])
+        .map((cut) => Number(cut.width))
+        .filter((w) => w > 0);
+      if (!widths.length) continue;
+      const label = widths.map((w) => (w % 1 ? w.toFixed(2) : String(w))).join(" + ");
+      layoutGroups.set(label, (layoutGroups.get(label) || 0) + 1);
+    }
+    const layoutSummary = [...layoutGroups.entries()]
+      .map(([label, n]) => `${label}${n > 1 ? ` × ${n}` : ""}`)
+      .join("  |  ");
+
     return {
       _id: String(c._id),
       slittingJobCardId: c.slittingJobCardId,
@@ -424,6 +445,7 @@ export async function buildSlittingQueueRows(match) {
       clientName: c.clientName || "—",
       operatorName: c.operatorName || "—",
       helperName: c.helperName || "—",
+      layoutSummary,
       deckleCount: rows.length,
       deckleDone: done,
       deckleLeft: rows.length - done,
