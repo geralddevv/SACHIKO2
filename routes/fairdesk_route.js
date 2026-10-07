@@ -5850,8 +5850,10 @@ router.post("/labels/production/deckle-set", requireAuth, updateLimiter, async (
 
 // Deckle Only -- a deckle made for stock: the web alone, for one Product Code,
 // with NO orders and no slitting layout. Opened by its own button on Deckle
-// Sorting (beside Advance Order). Deckle Size, Deckle R.M., Deckle Count and
-// the edge trim are the whole plan.
+// Sorting (beside Advance Order). Deckle Size, Deckle R.M. and Deckle Count
+// are the whole plan -- no Edge Trim field here (removed from the form; see
+// deckleOnlyForm.ejs), since there's no slitting layout for a trim figure to
+// describe. deckleTrim is simply left unset on the batch this creates.
 //
 // The batch it makes has no members (batchOrderIds: []) and no finished rolls
 // ordered (quantity: 0). It runs Deckle Queue -> Assign Production -> machine
@@ -5908,10 +5910,6 @@ router.post("/labels/production/deckle-set/deckle-only", requireAuth, createLimi
   if (!Number.isFinite(deckleSize) || deckleSize <= 0 || deckleSize > 20000) {
     return fail("Enter a valid Deckle Size.");
   }
-  const trim = Number(req.body.deckleTrim);
-  if (!Number.isFinite(trim) || trim < 0 || trim >= deckleSize) {
-    return fail("Enter an edge trim of 0 mm or more that leaves something of the deckle to cut.");
-  }
   const drm = Number(req.body.deckleRunningMeters);
   if (!Number.isFinite(drm) || drm <= 0 || drm > 1000000) {
     return fail("Enter the Deckle R.M. — the length of one deckle web.");
@@ -5938,7 +5936,10 @@ router.post("/labels/production/deckle-set/deckle-only", requireAuth, createLimi
     }) || undefined,
     deckleRunningMeters: drm,
     deckleSize,
-    deckleTrim: trim,
+    // No Edge Trim field on this form (a Deckle Only batch is a plain web for
+    // stock, not a slitting plan) -- deckleTrim stays unset, same as any
+    // other batch that never had one (see slitting.js's reads: absent shows
+    // no edge rather than inventing one).
     batchOrderIds: [],
   });
 

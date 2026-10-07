@@ -693,14 +693,18 @@ the documented way a batch's size is changed anyway.
 **Deckle Only** is its own button on Deckle Sorting, beside Advance Order. It
 opens `GET /labels/production/deckle-set/deckle-only` (`deckleOnlyForm.ejs`):
 pick the Product Code (a reload with `?itemId=`, as on Advance Order — the
-inputs stay locked until one is picked), then one row of Edge Trim, Deckle
-Size (typed, 25–2,000 mm), Deckle R.M. and Deckle Count, and one footer row of
-the figures with Create Deckle Batch. It is a page of its own, not a mode of
-Set Deckle: the Set Deckle pages (`deckleSetForm.ejs`) know nothing about it.
+inputs stay locked until one is picked), then one row of Deckle Size (typed,
+25–2,000 mm), Deckle R.M. and Deckle Count, and one footer row of the figures
+with Create Deckle Batch. It is a page of its own, not a mode of Set Deckle:
+the Set Deckle pages (`deckleSetForm.ejs`) know nothing about it. No Edge Trim
+field here — there's no slitting layout on a Deckle Only batch for a trim
+figure to describe, so `deckleTrim` is just left unset on what this creates
+(every downstream read already treats a missing `deckleTrim` as "no edge" —
+see Slitting Allocation's pre-fill in `routes/system/slitting.js`).
 
 `POST /labels/production/deckle-set/deckle-only` makes one batch
 (`deckleOnly: true`, `batchOrderIds: []`, `quantity: 0`, `noOfRolls` = the
-count) and reads nothing but the Product Code and those four figures — no
+count) and reads nothing but the Product Code and those three figures — no
 `orderIds`, no `advanceJson` — so it cannot touch an order. A refusal returns
 to the page with the code still picked.
 
