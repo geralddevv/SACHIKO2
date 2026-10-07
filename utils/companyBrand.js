@@ -6,7 +6,7 @@ import AuditLog from "../models/system/auditLog.js";
 //   - name     : the display name  (<title>, nav header, login screen)
 //   - slug     : the URL prefix    (/<slug>/...  in the address bar)
 //   - idPrefix : the code every generated id starts with
-//                ("SP | FCS | 000001", "SP | LOT | 0042")
+//                ("SP | FCS | 000001", "SP | LS | 000001")
 // Registering or renaming the company changes both, app-wide, with no restart:
 // middleware/brandPrefix.js maps the live slug onto the fixed internal mount
 // (INTERNAL_PREFIX) that every route is really registered under.

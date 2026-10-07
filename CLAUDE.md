@@ -270,8 +270,9 @@ restart — the same live path the app name and the URL slug already take.
 
 Every mint site reads `currentIdPrefix()` — Facestock / Adhesive / Core /
 Release Master, Label Stock (id + SKU code, incl. `utils/labelStockVariant.js`),
-Machine, Machine Job Card, Slitting Job Card, Maintenance ticket and Lot No.
-Add a new one the same way; don't write the letters in.
+Machine, Machine Job Card, Slitting Job Card and Maintenance ticket. Add a new
+one the same way; don't write the letters in. Lot No is the one exception —
+see "Lot No" below, it's structured around the product code instead.
 
 `scripts/serialize-labelstock-sku-codes.js` mints too, so it calls
 `refreshBrand()` after `connectDB()` and uses the same code — it used to
@@ -286,6 +287,40 @@ the one place existing ids change, and only when someone runs it with
 `routes/fairdesk_route.js`. They are a different, older family whose prefix
 never matched the company code even for Sachiko, so switching them would change
 client and tape ids for an installation that has not renamed anything.
+
+### Lot No
+
+`PendingProduction.lotNo` (`routes/fairdesk_route.js`, minted/edited at
+`GET`/`POST /labels/production/assign/:id`) is
+**`PRODUCTCODE / FY / <year-letter><serial>`** — e.g. `C001WB / 26-27 / G001`.
+Unlike every other id above it carries no company code at all; it is built
+around the **product code** instead, because that's what the business reads
+it by. The serial is scoped to one product code within one financial year —
+`C001WB`'s first lot of FY 2026-27 is `G001`, its second `G002`, and FY
+2027-28 starts over at `H001` (the year-letter, `financialYearLetter()` in
+`utils/rollId.js`, changes with it) — so it directly answers "how many lots
+has this product had this year", never a company-wide total.
+
+**Manually editable, deliberately.** The field on Assign Production
+(`assignProduction.ejs`'s header) is a plain text input (`form="assign-form"`,
+so it posts with the rest of the page despite sitting outside the `<form>`
+tag), pre-filled with the current/previewed value — whatever is submitted is
+what's saved, changed or not. There is **no separate `Counter` document** for
+this, unlike every other generator in this file: the next AUTO lot no is
+always read straight off the **highest serial already saved** for that
+product + year (`highestLotNoSerial()`, scanning both `PendingProduction.lotNo`
+and `MachineJobCard.lotNo`), so a hand-typed lot no becomes the new baseline
+the instant it's saved — nothing to resync, nothing to fall behind. A typed
+value is only checked for a collision when it actually **changed** from what
+was already on file, so an unchanged resubmit (the normal case on a
+re-assignment after Undo — lotNo is kept across unassign, see "Undoing an
+assignment" below) never trips over its own existing value.
+
+A Deckle's own id (`generateDeckleId()` in `utils/rollId.js`) still regex-reads
+its lot number off the **trailing digits** of this string (`deckleLotNumber()`)
+— `.../G001` yields `0001` — so it keeps working unchanged against the new
+format exactly as it did against the old flat one; nothing there needed to
+change.
 
 ### Label Stock order rates follow the binding, not the product
 

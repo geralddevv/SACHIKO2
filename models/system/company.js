@@ -24,7 +24,7 @@ const companySchema = new mongoose.Schema(
     },
 
     // The code every id this installation generates starts with:
-    // "SP | FCS | 000001", "SP | LOT | 0042". Suggested from the company name
+    // "SP | FCS | 000001", "SP | LS | 000001". Suggested from the company name
     // (suggestIdPrefix in utils/companyBrand.js) but typed, because a
     // company's short code is a fact about the company, not something a rule
     // can guess -- Zactac call themselves ZC, which no derivation produces.

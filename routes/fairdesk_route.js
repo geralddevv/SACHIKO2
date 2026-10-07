@@ -48,6 +48,7 @@ import CoreStock from "../models/inventory/coreStock.js";
 import { escapeRegex } from "../utils/security.js";
 import { getUserLocationNames, normalizeLocationName } from "../utils/locations.js";
 import { generateMaterialRollId } from "../utils/materialRollId.js";
+import { financialYearLabel, financialYearLetter } from "../utils/rollId.js";
 import {
   reconcileUserBindingLocations,
   syncLabelBindingIdentity,
@@ -70,9 +71,6 @@ import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.j
 import { computeRawMaterialNeed } from "../utils/rawMaterialNeed.js";
 import { deckleTotalRunningMetres, deckleRunningMetersText } from "../utils/deckleTotals.js";
 import { buildRunPlan } from "../utils/productionEta.js";
-// The code every generated id starts with -- the Company master's own
-// (utils/companyBrand.js), read live so a rename needs no restart.
-import { currentIdPrefix } from "../utils/companyBrand.js";
 
 const router = express.Router();
 
@@ -6703,27 +6701,85 @@ router.get("/labels/production/wip-progress", async (req, res) => {
   }
 });
 
-const formatLotNo = (seq) => `${currentIdPrefix()} | LOT | ${String(seq).padStart(4, "0")}`;
+// ---------------------------------------------------------------------------
+// Lot No -- PRODUCTCODE / FY / <year-letter><serial>, e.g. "C001WB / 26-27 /
+// G001". The serial is scoped to one product code within one financial
+// year: it starts at 1 for a product code's first lot of the year and
+// climbs from there, resetting (with the year-letter) on the next financial
+// year -- it answers "how many lots has THIS product had THIS year", not a
+// company-wide total.
+//
+// Deliberately NOT a Counter document. The field stays manually editable at
+// Assign Production (see the GET/POST handlers below), and "the series
+// continues from whatever was last entered, including by hand" falls out
+// for free if the next auto lot no is always read off the highest serial
+// already saved -- there is no separate counter to fall behind a manual
+// edit or to resync. The cost is an extra couple of indexed-field queries
+// per assignment, which this action is far too infrequent to notice.
+// ---------------------------------------------------------------------------
 
-// Read-only preview of the next lot no -- the number isn't consumed until an
-// order is actually assigned.
-async function previewNextLotNo() {
-  const counter = await Counter.findOne({ key: "sachikoProductionLotNo" }).select("seq").lean();
-  return formatLotNo(Number(counter?.seq || 0) + 1);
+const formatStructuredLotNo = (itemCode, fy, yearLetter, serial) =>
+  `${itemCode} / ${fy} / ${yearLetter}${String(serial).padStart(3, "0")}`;
+
+const normalizeLotItemCode = (value) => String(value ?? "").trim().toUpperCase();
+
+// Matches a structured Lot No for one product code + financial year +
+// year-letter, capturing the trailing serial. Tolerant of extra/missing
+// whitespace around the slashes, since a hand-typed Lot No won't necessarily
+// match the auto-generated spacing exactly.
+function lotNoSerialPattern(itemCode, fy, yearLetter) {
+  return new RegExp(
+    `^${escapeRegex(itemCode)}\\s*\\/\\s*${escapeRegex(fy)}\\s*\\/\\s*${escapeRegex(yearLetter)}(\\d+)\\s*$`,
+    "i",
+  );
 }
 
-// Claims the next lot no for real, skipping any candidate already held by an
-// order or a job card (guards against a pre-existing manually-assigned lot
-// no colliding with the counter).
-async function generateLotNo() {
-  const maxAttempts = 10000;
-  for (let i = 0; i < maxAttempts; i++) {
-    const counter = await Counter.findOneAndUpdate(
-      { key: "sachikoProductionLotNo" },
-      { $inc: { seq: 1 } },
-      { new: true, upsert: true, setDefaultsOnInsert: true },
-    ).lean();
-    const candidate = formatLotNo(counter.seq);
+// The highest serial already in use for this product code + financial year
+// -- across both the live order (PendingProduction) and the permanent
+// production record (MachineJobCard), the same two places the old global
+// counter checked for collisions. This IS "the last no" the series
+// continues from: a Lot No typed by hand at Assign Production becomes the
+// new baseline the moment it's saved, because the very next lookup sees it.
+async function highestLotNoSerial(itemCode, fy, yearLetter) {
+  const pattern = lotNoSerialPattern(itemCode, fy, yearLetter);
+  const [orders, cards] = await Promise.all([
+    PendingProduction.find({ lotNo: pattern }).select("lotNo").lean(),
+    MachineJobCard.find({ lotNo: pattern }).select("lotNo").lean(),
+  ]);
+  let max = 0;
+  for (const doc of [...orders, ...cards]) {
+    const match = pattern.exec(String(doc.lotNo || "").trim());
+    const n = match ? Number(match[1]) : 0;
+    if (n > max) max = n;
+  }
+  return max;
+}
+
+// Read-only preview of the next lot no for this product code -- shown on the
+// Assign Production page before anything is submitted. Does not claim a
+// serial. Empty product code (nothing to key the series off) previews as "".
+async function previewNextLotNo(itemCodeRaw, date = new Date()) {
+  const itemCode = normalizeLotItemCode(itemCodeRaw);
+  if (!itemCode) return "";
+  const fy = financialYearLabel(date);
+  const yearLetter = financialYearLetter(date);
+  const next = (await highestLotNoSerial(itemCode, fy, yearLetter)) + 1;
+  return formatStructuredLotNo(itemCode, fy, yearLetter, next);
+}
+
+// Claims the next lot no for real. Retries against a live uniqueness check
+// (PendingProduction.lotNo is unique) in case of a race -- two assignments
+// for the same product code at once, or a manually-typed Lot No that has
+// already claimed the very number this attempt computed.
+async function generateLotNo(itemCodeRaw, date = new Date()) {
+  const itemCode = normalizeLotItemCode(itemCodeRaw);
+  if (!itemCode) throw new Error("A product code is required to generate a lot no");
+  const fy = financialYearLabel(date);
+  const yearLetter = financialYearLetter(date);
+  const base = await highestLotNoSerial(itemCode, fy, yearLetter);
+
+  for (let attempt = 1; attempt <= 10000; attempt++) {
+    const candidate = formatStructuredLotNo(itemCode, fy, yearLetter, base + attempt);
     const [heldByOrder, onJobCard] = await Promise.all([
       PendingProduction.exists({ lotNo: candidate }),
       MachineJobCard.exists({ lotNo: candidate }),
@@ -6762,7 +6818,7 @@ router.get("/labels/production/assign/:id", async (req, res) => {
       Employee.find({ isActive: true, empProfile: "HELPER" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
     ]);
 
-    const previewLotNo = pendingProduction.lotNo || (await previewNextLotNo());
+    const previewLotNo = pendingProduction.lotNo || (await previewNextLotNo(pendingProduction.itemId?.productCode));
     // Rolls in this batch set ahead of their sales order -- flagged here too.
     const advance = pendingProduction.isDeckleBatch
       ? (await advanceShareByBatch([pendingProduction._id])).get(String(pendingProduction._id)) || null
@@ -6912,6 +6968,49 @@ router.post("/labels/production/assign/:id/deckle-count", requireAuth, updateLim
   } catch (err) {
     console.error("DECKLE QTY EDIT ERROR:", err);
     return refuse("Failed to change the Deckle Qty.");
+  }
+});
+
+router.post("/labels/production/assign/:id/lot-no", requireAuth, updateLimiter, async (req, res) => {
+  const back = `/app/labels/production/assign/${req.params.id}`;
+  const refuse = (message) => {
+    req.flash("notification", message);
+    return res.redirect(back);
+  };
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return refuse("Invalid order id.");
+    const next = String(req.body.lotNo ?? "").trim();
+    if (!next) {
+      return refuse("Lot No cannot be empty.");
+    }
+
+    const pp = await PendingProduction.findById(id)
+      .select("lotNo producedAt runningOn")
+      .lean();
+    if (!pp) return refuse("Order not found.");
+    if (pp.producedAt) return refuse("This job has already been produced, so its Lot No is fixed.");
+    if (activeClaim(pp.runningOn)) {
+      return refuse("A device is running this job right now. Save its job card before changing the Lot No.");
+    }
+
+    // Check if this lot no collides with another order
+    const existing = await PendingProduction.findOne({
+      _id: { $ne: pp._id },
+      lotNo: next,
+    }).select("_id").lean();
+    if (existing) {
+      return refuse("This Lot No is already in use by another order. Please choose a different one.");
+    }
+
+    await PendingProduction.updateOne({ _id: pp._id }, { $set: { lotNo: next } });
+
+    res.locals.auditDescription = `Changed Lot No of order "${id}" from "${pp.lotNo || "—"}" to "${next}"`;
+    req.flash("notification", `Lot No changed from "${pp.lotNo || "—"}" to "${next}".`);
+    return res.redirect(back);
+  } catch (err) {
+    console.error("LOT NO EDIT ERROR:", err);
+    return refuse("Failed to change the Lot No.");
   }
 });
 
@@ -7116,7 +7215,34 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
     let deckleId = null;
     let variantProductCode = null;
     let stockWarning = null;
-    const lotNo = pendingProduction.lotNo || (await generateLotNo());
+    // Lot No is manually editable on this page (assignProduction.ejs),
+    // pre-filled with the current/previewed value -- whatever is submitted
+    // is what's saved, changed or not. This is also what makes "it should
+    // follow the previous one entered" true for free: the next AUTO lot no
+    // for this product+year is read straight off whatever's already saved
+    // (see highestLotNoSerial above), so a hand-typed one becomes the new
+    // baseline the instant this request saves it. Only checked for a
+    // collision when it actually changed from what's on file -- an
+    // unchanged resubmit (the normal case on a re-assignment after Undo)
+    // can never collide with itself. A blank submission (no JS, or a bare
+    // API call) falls back to the existing/auto value exactly as before.
+    const typedLotNo = String(req.body.lotNo || "").trim().toUpperCase();
+    let lotNo;
+    if (typedLotNo) {
+      if (typedLotNo !== pendingProduction.lotNo) {
+        const [takenByOrder, takenByCard] = await Promise.all([
+          PendingProduction.exists({ lotNo: typedLotNo, _id: { $ne: pendingProduction._id } }),
+          MachineJobCard.exists({ lotNo: typedLotNo }),
+        ]);
+        if (takenByOrder || takenByCard) {
+          req.flash("notification", `Lot No "${typedLotNo}" is already in use -- pick a different one.`);
+          return res.redirect(`/app/labels/production/assign/${id}`);
+        }
+      }
+      lotNo = typedLotNo;
+    } else {
+      lotNo = pendingProduction.lotNo || (await generateLotNo(labelStock?.productCode));
+    }
     if (rawProduceMtrs > 0) {
       const layersPicked = required.length > 0 && required.every((key) => rawLayers && rawLayers[key]);
 

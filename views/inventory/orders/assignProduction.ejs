@@ -881,7 +881,14 @@
     </div>
     <div style="text-align:right; color:#fff; line-height:1.4;">
       <div style="font-size:17px; font-weight:600;">Date: <%= fmtDate(new Date()) %></div>
-      <div style="font-size:22px; font-weight:700;">Lot No: <%= previewLotNo %></div>
+      <div style="font-size:22px; font-weight:700; display:flex; align-items:center; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+        <label for="lotNo-input" style="font-weight:700;">Lot No:</label>
+        <input type="text" id="lotNo-input" name="lotNo" form="assign-form"
+               value="<%= previewLotNo %>" placeholder="LOT NO"
+               style="font-size:18px; font-weight:700; color:#fff; background:rgba(255,255,255,0.08);
+                      border:1px solid rgba(255,255,255,0.5); border-radius:6px; padding:3px 10px;
+                      width:260px; max-width:100%; text-align:right;" />
+      </div>
     </div>
   </div>
 
@@ -896,6 +903,17 @@
     <div class="ap-card-title"><span><i class="fa-solid fa-layer-group"></i> Material Details</span></div>
     <div style="padding: 14px;">
       <div class="material-id-row">
+        <div id="ln-cell" style="position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 11px 12px; border-right: 1px solid #e2e8f0;">
+          <span class="mid-label">Lot No</span>
+          <button type="button" id="ln-edit" class="dq-edit-ic" title="Edit Lot No" aria-label="Edit Lot No">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          <span class="mid-value" id="ln-text"><%= dash(previewLotNo) %></span>
+          <form id="ln-form" class="dq-form" method="post" action="/app/labels/production/assign/<%= pp._id %>/lot-no" hidden>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <input id="ln-input" class="form-control dq-input" name="lotNo" type="text" inputmode="text" value="<%= previewLotNo || "" %>" data-current="<%= previewLotNo || "" %>" aria-label="Lot No" />
+          </form>
+        </div>
         <div class="mid-item"><span class="mid-label">Product Code</span><span class="mid-value"><%= dash(item.productCode || item.skuCode) %></span></div>
         <!-- Set on the Deckle Set page (before an order ever reaches Assign
              Production); the dialog below only asks again for a legacy
@@ -1008,6 +1026,53 @@
             })();
           </script>
         </div>
+        <script>
+          (function () {
+            const cell = document.getElementById("ln-cell");
+            const edit = document.getElementById("ln-edit");
+            const text = document.getElementById("ln-text");
+            const form = document.getElementById("ln-form");
+            const input = document.getElementById("ln-input");
+            const current = input.dataset.current;
+            let cancelled = false;
+            let submitting = false;
+
+            function showText() {
+              form.hidden = true;
+              text.hidden = false;
+            }
+            function startEdit() {
+              cancelled = false;
+              text.hidden = true;
+              form.hidden = false;
+              input.focus();
+              input.select();
+            }
+            function commit() {
+              if (submitting) return;
+              const v = input.value.trim();
+              if (cancelled || v === current) {
+                input.value = current;
+                showText();
+                return;
+              }
+              submitting = true;
+              form.requestSubmit();
+            }
+
+            edit.addEventListener("click", startEdit);
+            input.addEventListener("blur", commit);
+            input.addEventListener("keydown", (ev) => {
+              if (ev.key === "Enter") {
+                ev.preventDefault();
+                input.blur();
+              } else if (ev.key === "Escape") {
+                cancelled = true;
+                input.blur();
+              }
+            });
+          })();
+        </script>
 
       <div class="layer-stack custom-scrollbar">
         <% materialGroups.forEach(function (g, idx) { %>
