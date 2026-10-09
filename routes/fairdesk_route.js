@@ -6757,13 +6757,15 @@ function lotNoSerialPattern(itemCode, fy, yearLetter) {
 async function highestLotNoSerial(itemCode, fy, yearLetter, { includeBaseline = true } = {}) {
   const pattern = lotNoSerialPattern(itemCode, fy, yearLetter);
   const [orders, cards, baseline] = await Promise.all([
-    PendingProduction.find({ lotNo: pattern }).select("lotNo").lean(),
-    MachineJobCard.find({ lotNo: pattern }).select("lotNo").lean(),
+    PendingProduction.find({ lotNo: pattern }).select("lotNo createdAt").lean(),
+    MachineJobCard.find({ lotNo: pattern }).select("lotNo createdAt").lean(),
     // Lots made before this system tracked them (Lot No Setup page).
-    includeBaseline ? LotNoBaseline.findOne({ productCode: itemCode, fy }).select("lastSerial").lean() : null,
+    includeBaseline ? LotNoBaseline.findOne({ productCode: itemCode, fy }).select("lastSerial forcedAt").lean() : null,
   ]);
   let max = Number(baseline?.lastSerial) || 0;
   for (const doc of [...orders, ...cards]) {
+    // A forced override: lots filed before it no longer count.
+    if (baseline?.forcedAt && doc.createdAt && new Date(doc.createdAt) < baseline.forcedAt) continue;
     const match = pattern.exec(String(doc.lotNo || "").trim());
     const n = match ? Number(match[1]) : 0;
     if (n > max) max = n;
@@ -7057,9 +7059,12 @@ router.get("/labels/production/lot-no-setup", async (req, res) => {
     const [codesRaw, recorded, baselines] = await Promise.all([
       SachikoLabelStock.distinct("productCode"),
       recordedLotSerialsByCode(fy, yearLetter),
-      LotNoBaseline.find({ fy }).select("productCode lastSerial").lean(),
+      LotNoBaseline.find({ fy }).select("productCode lastSerial forcedAt").lean(),
     ]);
     const baseByCode = new Map(baselines.map((b) => [normalizeLotItemCode(b.productCode), b.lastSerial]));
+    // A forced series ignores the lots filed before the override.
+    const forcedCodes = baselines.filter((b) => b.forcedAt).map((b) => normalizeLotItemCode(b.productCode));
+    for (const fc of forcedCodes) recorded.set(fc, await highestLotNoSerial(fc, fy, yearLetter, { includeBaseline: false }));
     // A "-A"/"-B" variant is never something an order is placed against and is
     // not listed: only masters are (a variant whose master isn't a product at
     // all stands in for it).
@@ -7067,11 +7072,12 @@ router.get("/labels/production/lot-no-setup", async (req, res) => {
     const known = new Set(all);
     const codes = all.filter((c) => deckleBaseCode(c) === c || !known.has(deckleBaseCode(c)));
     const rows = codes.map((code) => {
-      const highest = Math.max(recorded.get(code) || 0, baseByCode.get(code) || 0);
+      const highest = forcedCodes.includes(code) ? baseByCode.get(code) || 0 : Math.max(recorded.get(code) || 0, baseByCode.get(code) || 0);
       return {
         code,
         // true once a starting number was typed for it here
         isSet: baseByCode.has(code),
+        forced: forcedCodes.includes(code),
         highest,
         last: highest ? formatStructuredLotNo(code, fy, yearLetter, highest) : "",
         next: formatStructuredLotNo(code, fy, yearLetter, highest + 1),
@@ -7100,25 +7106,29 @@ router.post("/labels/production/lot-no-setup", requireAuth, updateLimiter, async
 
     // Lots already recorded in the system can't be un-used: the series may be
     // moved forward to match the paper records, never behind what exists.
+    // `force` overrides that: the series is set exactly as typed, and only
+    // lots filed from now on count toward it (forcedAt).
+    const force = ["1", "true", "on"].includes(String(req.body.force ?? "").toLowerCase());
     const recorded = await highestLotNoSerial(code, fy, yearLetter, { includeBaseline: false });
-    if (serial < recorded) {
+    if (serial < recorded && !force) {
       return refuse(
-        `${code}: ${formatStructuredLotNo(code, fy, yearLetter, recorded)} is already recorded in the system, so the last Lot No can't be set below ${recorded}.`,
+        `${code}: ${formatStructuredLotNo(code, fy, yearLetter, recorded)} is already recorded in the system, so the last Lot No can't be set below ${recorded}. Tick "Force override" to set it anyway.`,
       );
     }
+    const forcedBelow = force && serial < recorded;
 
     await LotNoBaseline.updateOne(
       { productCode: code, fy },
-      { $set: { lastSerial: serial, updatedBy: req.session?.authUser?.name || req.session?.authUser?.role || "" } },
+      { $set: { lastSerial: serial, updatedBy: req.session?.authUser?.name || req.session?.authUser?.role || "", ...(forcedBelow ? { forcedAt: new Date() } : {}) } },
       { upsert: true },
     );
     const last = formatStructuredLotNo(code, fy, yearLetter, serial);
     const next = formatStructuredLotNo(code, fy, yearLetter, serial + 1);
-    res.locals.auditDescription = `Set last Lot No of "${code}" (${fy}) to ${last}`;
+    res.locals.auditDescription = `Set last Lot No of "${code}" (${fy}) to ${last}${forcedBelow ? ` (FORCED below recorded ${formatStructuredLotNo(code, fy, yearLetter, recorded)})` : ""}`;
     return res.json({
       ok: true,
       message: `${code}: last Lot No set to ${last}. Next will be ${next}.`,
-      row: { code, isSet: true, highest: serial, last, next },
+      row: { code, isSet: true, forced: forcedBelow, highest: serial, last, next },
     });
   } catch (err) {
     console.error("LOT NO SETUP ERROR:", err);

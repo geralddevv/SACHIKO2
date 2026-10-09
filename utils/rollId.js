@@ -347,8 +347,11 @@ export const formatDeckleSerial = (seq) => String(seq).padStart(4, "0");
 // The highest serial a Deckle of this product (master or any variant) already
 // carries this year, in any lot. The counter is never allowed to sit below it (see generateDeckleId),
 // so numbering can't fall behind Deckles that were made or entered by hand.
-export async function recordedDeckleSerial(series) {
-  const docs = await MaterialStock.find({ rollId: series.idPattern }).select("rollId").lean();
+export async function recordedDeckleSerial(series, since = null) {
+  // `since`: a forced override of the series -- only Deckles made from then on count.
+  const filter = { rollId: series.idPattern };
+  if (since) filter.createdAt = { $gte: since };
+  const docs = await MaterialStock.find(filter).select("rollId").lean();
   let max = 0;
   for (const d of docs) {
     const m = series.idPattern.exec(String(d.rollId || ""));
@@ -359,10 +362,8 @@ export async function recordedDeckleSerial(series) {
 
 // Where the series stands: the larger of its counter and what already exists.
 export async function highestDeckleSerial(series) {
-  const [counter, recorded] = await Promise.all([
-    Counter.findOne({ key: series.key }).select("seq").lean(),
-    recordedDeckleSerial(series),
-  ]);
+  const counter = await Counter.findOne({ key: series.key }).select("seq forcedAt").lean();
+  const recorded = await recordedDeckleSerial(series, counter?.forcedAt || null);
   return Math.max(Number(counter?.seq) || 0, recorded);
 }
 
@@ -378,7 +379,8 @@ export async function generateDeckleId(itemCodeRaw, lotNoRaw, date = new Date())
   // Never number below a Deckle that already exists this year -- the counter is
   // lifted to it first. Also what makes a Deckle typed in by hand (or made
   // under the old per-lot numbering) count toward the series.
-  const floor = await recordedDeckleSerial(series);
+  const forced = await Counter.findOne({ key }).select("forcedAt").lean();
+  const floor = await recordedDeckleSerial(series, forced?.forcedAt || null);
   if (floor > 0) await Counter.updateOne({ key }, { $max: { seq: floor } }, { upsert: true });
 
   for (let attempt = 0; attempt < 10000; attempt++) {

@@ -1039,9 +1039,14 @@ const MAX_DECKLE_SERIAL = 9999; // the id carries four digits
 async function deckleHighestByCode(fy, yearLetter) {
   const idRe = new RegExp(`^(.+)\\/${escapeRegex(fy)}\\/${yearLetter}\\d+\\/(\\d+)$`);
   const [counters, stock] = await Promise.all([
-    Counter.find({ key: new RegExp(`^deckleId:.+:${escapeRegex(fy)}:${yearLetter}$`) }).select("key seq").lean(),
-    MaterialStock.find({ rollId: new RegExp(`\\/${escapeRegex(fy)}\\/${yearLetter}\\d+\\/\\d+$`) }).select("rollId").lean(),
+    Counter.find({ key: new RegExp(`^deckleId:.+:${escapeRegex(fy)}:${yearLetter}$`) }).select("key seq forcedAt").lean(),
+    MaterialStock.find({ rollId: new RegExp(`\\/${escapeRegex(fy)}\\/${yearLetter}\\d+\\/\\d+$`) }).select("rollId createdAt").lean(),
   ]);
+  // Series forced below existing Deckles: only Deckles made since count.
+  const forcedAtByCode = new Map();
+  for (const c of counters) {
+    if (c.forcedAt) forcedAtByCode.set(deckleBaseCode(String(c.key).slice("deckleId:".length, -(`:${fy}:${yearLetter}`.length))), c.forcedAt);
+  }
   const byCode = new Map();
   const raise = (code, n) => { if (code && n > (byCode.get(code) || 0)) byCode.set(code, n); };
   for (const c of counters) {
@@ -1050,7 +1055,11 @@ async function deckleHighestByCode(fy, yearLetter) {
   }
   for (const d of stock) {
     const m = idRe.exec(String(d.rollId || ""));
-    if (m) raise(deckleBaseCode(m[1]), Number(m[2]));
+    if (!m) continue;
+    const base = deckleBaseCode(m[1]);
+    const forcedAt = forcedAtByCode.get(base);
+    if (forcedAt && d.createdAt && new Date(d.createdAt) < forcedAt) continue;
+    raise(base, Number(m[2]));
   }
   return byCode;
 }
@@ -1134,17 +1143,25 @@ router.post("/machine/deckle-no-setup", requireAuth, requireMachineFloor, update
     }
     // Deckles this year can't be un-made: the series may be moved forward to
     // match the paper records, never behind what already exists.
+    // `force` overrides that: the counter is set exactly as typed and only
+    // Deckles made from now on count toward the floor (Counter.forcedAt).
+    const force = ["1", "true", "on"].includes(String(req.body.force ?? "").toLowerCase());
     const highest = await highestDeckleSerial(series);
-    if (serial < highest) {
-      return refuse(`${code}: Deckle ${formatDeckleSerial(highest)} is already in use this year, so the last Deckle No can't be set below ${highest}.`);
+    if (serial < highest && !force) {
+      return refuse(`${code}: Deckle ${formatDeckleSerial(highest)} is already in use this year, so the last Deckle No can't be set below ${highest}. Tick "Force override" to set it anyway.`);
+    }
+    const forcedBelow = force && serial < highest;
+
+    if (forcedBelow) {
+      await Counter.updateOne({ key: series.key }, { $set: { seq: serial, forcedAt: new Date() } }, { upsert: true });
+    } else {
+      // $max: never lowers, and is atomic against a Deckle being minted at the
+      // same moment (the next one then takes serial + 1 or whatever is higher).
+      await Counter.updateOne({ key: series.key }, { $max: { seq: serial } }, { upsert: true });
     }
 
-    // $max: never lowers, and is atomic against a Deckle being minted at the
-    // same moment (the next one then takes serial + 1 or whatever is higher).
-    await Counter.updateOne({ key: series.key }, { $max: { seq: serial } }, { upsert: true });
-
-    const row = deckleSetupRow(code, serial);
-    res.locals.auditDescription = `Set last Deckle No of "${series.baseCode}" and its variants (${series.fy}) to ${row.last}`;
+    const row = deckleSetupRow(code, forcedBelow ? serial : Math.max(serial, highest));
+    res.locals.auditDescription = `Set last Deckle No of "${series.baseCode}" and its variants (${series.fy}) to ${row.last}${forcedBelow ? ` (FORCED below existing ${formatDeckleSerial(highest)})` : ""}`;
     return res.json({
       ok: true,
       message: `${code}: last Deckle No set to ${row.last}. Next will be ${row.next}.`,

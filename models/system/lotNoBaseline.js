@@ -12,6 +12,9 @@ const lotNoBaselineSchema = new mongoose.Schema(
     fy: { type: String, required: true, trim: true },
     lastSerial: { type: Number, required: true, min: 0 },
     updatedBy: { type: String, trim: true },
+    // Set when the series was forced BELOW lots already on file: only lots
+    // created from then on count toward "the highest used".
+    forcedAt: { type: Date },
   },
   { timestamps: true },
 );

@@ -1382,6 +1382,9 @@
   .lnd-note { padding: 10px 14px; border-radius: 10px; background: #fff8e1; border: 1px solid #f0d58a; border-left: 4px solid #e0a800; color: #5b4a12; font-size: 0.88rem; line-height: 1.5; }
   .lnd-note code { background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 4px; font-weight: 700; color: #3f3200; }
   .lnd-note ul { margin: 4px 0 0; padding-left: 18px; }
+  .lnd-force { display: flex; align-items: flex-start; gap: 10px; padding: 9px 14px; border-radius: 10px; background: #fdecea; border: 1px solid #f0b7b0; border-left: 4px solid #c0392b; color: #6b1d14; font-size: 0.86rem; line-height: 1.45; cursor: pointer; }
+  .lnd-force input { margin-top: 3px; width: 16px; height: 16px; accent-color: #c0392b; flex: none; }
+  .lnd-force:has(input:checked) { background: #f9d6d2; }
   .lnd-preview { display: none; align-items: center; gap: 8px 22px; flex-wrap: wrap; padding: 9px 14px; border-radius: 10px; background: #eef6ff; border: 1px solid #c5dcf3; font-size: 0.88rem; color: #1f2a44; }
   .lnd-preview.is-on { display: flex; }
   .lnd-preview > span { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1456,8 +1459,12 @@
           <li><strong>Last Lot No</strong> &mdash; the serial of the last lot used (<code>14</code> means <code>G014</code>, so the next lot is <code>G015</code>).</li>
           <li><strong>Last Deckle</strong> &mdash; the serial of the last Deckle made, running across lots (<code>123</code> means <code>0123</code>, so the next is <code>0124</code>). Web job card and operator app both continue from it. A variant (<code>-A</code>, <code>-B</code>) isn't listed: it counts on its master's series, and only the product code in its Deckle ID differs.</li>
         </ul>
-        Either can be moved forward later, never below a lot or Deckle the system already holds.
+        Either can be moved forward later, never below a lot or Deckle the system already holds &mdash; unless <strong>Force override</strong> is ticked.
       </div>
+      <label class="lnd-force" for="lnd-force">
+        <input type="checkbox" id="lnd-force" />
+        <span><strong>Force override</strong> &mdash; allow the last Lot No / Deckle No to be set <em>below</em> lots or Deckles already on file. The series is set exactly as typed and only lots / Deckles made from now on count toward it; existing ones are not changed or deleted, so a number can repeat across lots. Applies to the next Save only.</span>
+      </label>
       <div class="lnd-preview" id="lnd-preview">
         <span>Next Lot No: <b class="lnd-id is-next" id="lnd-pv-lot">&mdash;</b></span>
         <span>Next Deckle ID: <b class="lnd-id is-next" id="lnd-pv-deckle">&mdash;</b></span>
@@ -1506,6 +1513,7 @@
     const preview = document.getElementById("lnd-preview");
     const pvLot = document.getElementById("lnd-pv-lot");
     const pvDeckle = document.getElementById("lnd-pv-deckle");
+    const forceBox = document.getElementById("lnd-force");
     let fy = "", letter = "";
     let curLotNext = "";   // this order's product: next Lot No
     let curDeckleNext = 1; // this order's product: next Deckle serial
@@ -1608,6 +1616,8 @@
     }
 
     function post(url, params) {
+      // Force override is read at click time and covers this save only.
+      if (forceBox.checked) params.force = "1";
       return fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
@@ -1655,6 +1665,7 @@
           if (st.deckleDirty && next.deckle === d.deckle) fresh.querySelectorAll(".lnd-serial")[1].value = st.dv;
           fresh.querySelectorAll(".lnd-serial")[0].dispatchEvent(new Event("input"));
         }
+        if (!errors.length) forceBox.checked = false;
         say((notes.length ? "Saved " + code + ": next " + notes.join(", next ") + ". " : "") + errors.join(" "), !errors.length);
       }).catch(function (e) { say("Error: " + e.message, false); save.disabled = false; });
     }
@@ -1727,6 +1738,7 @@
     }
     openBtn.addEventListener("click", function () {
       search.value = "";
+      forceBox.checked = false;
       dlg.showModal();
       load(); // fresh every time: someone else may have moved a series
     });

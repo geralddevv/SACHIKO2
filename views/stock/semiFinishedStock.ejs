@@ -287,7 +287,8 @@
     </div>
     <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
       <label class="dialog-field-label" for="editRollIdDisplay">Deckle ID</label>
-      <input type="text" id="editRollIdDisplay" class="form-control premium-input" readonly style="margin-bottom: 16px; background: #f1f5f9;" />
+      <input type="text" id="editRollIdDisplay" class="form-control premium-input" maxlength="80" autocomplete="off" style="margin-bottom: 4px;" />
+      <div style="font-size: 12px; color: #64748b; margin-bottom: 16px;">Already-printed stickers keep the old ID. The new ID is carried to this Deckle's stock log, job cards and slit rolls.</div>
 
       <label class="dialog-field-label" for="editReelMtrsInput">Available Mtrs</label>
       <input type="number" id="editReelMtrsInput" class="form-control premium-input" placeholder="Enter available mtrs" min="0" step="0.01" style="margin-bottom: 16px;" />
@@ -834,6 +835,8 @@
     if (reelMtrs === "" || Number(reelMtrs) < 0 || !Number.isFinite(Number(reelMtrs))) {
       return showError("editSemiFinishedError", "Available mtrs must be a number, 0 or more.");
     }
+    const rollId = document.getElementById("editRollIdDisplay").value.trim();
+    if (!rollId) return showError("editSemiFinishedError", "Deckle ID is required.");
     if (!editId) return;
 
     hideError("editSemiFinishedError");
@@ -843,6 +846,7 @@
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          rollId,
           reelMtrs,
           location,
           rate: document.getElementById("editRateInput").value,

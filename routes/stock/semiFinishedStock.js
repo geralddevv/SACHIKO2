@@ -4,6 +4,8 @@ import MaterialStock from "../../models/inventory/materialStock.js";
 import MaterialStockLog from "../../models/inventory/materialStockLog.js";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import MachineJobCard from "../../models/inventory/machineJobCard.js";
+import SlittingJobCard from "../../models/inventory/slittingJobCard.js";
+import FinishedStock from "../../models/inventory/finishedStock.js";
 import FacestockStock from "../../models/inventory/facestockStock.js";
 import AdhesiveStock from "../../models/inventory/adhesiveStock.js";
 import ReleaseLinerStock from "../../models/inventory/releaseLinerStock.js";
@@ -378,23 +380,63 @@ router.put("/:id", requireAuth, updateLimiter, async (req, res) => {
     const existing = await MaterialStock.findById(req.params.id).select("rollId reelMtrs").lean();
     if (!existing) return res.status(404).json({ success: false, message: "Deckle reel not found." });
 
+    // Deckle ID is editable. It is typed (upper-cased like the model does);
+    // blank means "leave it". The id is printed on the sticker QR and copied
+    // onto logs/cards/finished rolls, so a change is carried to those below.
+    const typedRollId = String(req.body.rollId ?? "").trim().toUpperCase();
+    const newRollId = typedRollId && typedRollId !== existing.rollId ? typedRollId : "";
+    if (newRollId) {
+      // Quotes / line breaks would corrupt the TSPL stream the label builds.
+      if (/["\r\n]/.test(newRollId) || newRollId.length > 80) {
+        return res.status(400).json({ success: false, message: "Deckle ID is invalid (no quotes or line breaks, 80 characters max)." });
+      }
+      if (await MaterialStock.exists({ rollId: newRollId, _id: { $ne: req.params.id } })) {
+        return res.status(400).json({ success: false, message: `Deckle ID "${newRollId}" already exists.` });
+      }
+    }
+
     // Same convention as produceDeckle() / dissolveDeckle(): quantity is 1
     // while the reel has metres and 0 once it is empty, so an emptied reel
     // stops being offered for allotment and a restored one is offered again.
     const updated = await MaterialStock.findByIdAndUpdate(
       req.params.id,
-      { location, rate, remarks: remarks || undefined, reelMtrs, quantity: reelMtrs > 0 ? 1 : 0 },
+      { location, rate, remarks: remarks || undefined, reelMtrs, quantity: reelMtrs > 0 ? 1 : 0, ...(newRollId ? { rollId: newRollId } : {}) },
       { new: true, runValidators: true },
     );
     if (!updated) return res.status(404).json({ success: false, message: "Deckle reel not found." });
 
+    if (newRollId) {
+      const old = existing.rollId;
+      await Promise.all([
+        MaterialStockLog.updateMany({ rollId: old }, { $set: { rollId: newRollId } }),
+        FinishedStock.updateMany({ deckleRollId: old }, { $set: { deckleRollId: newRollId } }),
+        MachineJobCard.updateMany(
+          { "productionLog.deckleId": old },
+          { $set: { "productionLog.$[r].deckleId": newRollId } },
+          { arrayFilters: [{ "r.deckleId": old }] },
+        ),
+        SlittingJobCard.updateMany(
+          { "slittingLog.deckleId": old },
+          { $set: { "slittingLog.$[r].deckleId": newRollId } },
+          { arrayFilters: [{ "r.deckleId": old }] },
+        ),
+        SlittingJobCard.updateMany(
+          { "slittingLog.swappedFrom.deckleId": old },
+          { $set: { "slittingLog.$[].swappedFrom.$[s].deckleId": newRollId } },
+          { arrayFilters: [{ "s.deckleId": old }] },
+        ),
+      ]);
+    }
+
     const mtrsChanged = Number(existing.reelMtrs) !== reelMtrs;
+    const idNote = newRollId ? ` -- Deckle ID "${existing.rollId}" -> "${newRollId}"` : "";
     res.locals.auditDescription = mtrsChanged
-      ? `Updated semi finished goods (Deckle) reel "${updated.rollId}" -- available mtrs ${existing.reelMtrs} -> ${reelMtrs}`
-      : `Updated semi finished goods (Deckle) reel "${updated.rollId}"`;
+      ? `Updated semi finished goods (Deckle) reel "${updated.rollId}" -- available mtrs ${existing.reelMtrs} -> ${reelMtrs}${idNote}`
+      : `Updated semi finished goods (Deckle) reel "${updated.rollId}"${idNote}`;
     res.json({ success: true });
   } catch (err) {
     console.error("SEMI FINISHED STOCK UPDATE ERROR:", err);
+    if (err?.code === 11000) return res.status(400).json({ success: false, message: "That Deckle ID already exists." });
     res.status(400).json({ success: false, message: "Failed to update Deckle reel." });
   }
 });
