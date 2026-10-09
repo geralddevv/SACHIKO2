@@ -64,6 +64,7 @@ import { safeJson } from "./utils/security.js";
 import { currentBrand, ensureFreshBrand, refreshBrand, shortBrand } from "./utils/companyBrand.js";
 import { brandPrefix } from "./middleware/brandPrefix.js";
 import { sendAsset, assetExists, assetPath } from "./utils/media.js";
+import { offlinePageHtml } from "./utils/offlinePage.js";
 import { loginLimiter, createLimiter, updateLimiter, deleteLimiter } from "./utils/limiters.js";
 
 const app = express();
@@ -362,16 +363,19 @@ app.get("/company/pwa-icon/:size.png", async (req, res) => {
       return res.type("image/png").send(png);
     }
     if (logo && logo.filename && assetExists(logo)) {
-      // Logo centred on white; maskable gets extra padding so the OS's circle
-      // crop (safe zone = inner 80%) never clips it.
-      const inner = Math.round(size * (maskable ? 0.6 : 0.8));
-      const fitted = await sharp(assetPath(logo)).rotate().resize(inner, inner, { fit: "contain", background: "#ffffff" }).png().toBuffer();
-      png = await sharp({ create: { width: size, height: size, channels: 3, background: "#ffffff" } })
-        .composite([{ input: fitted, gravity: "centre" }]).png().toBuffer();
+      // "any" icons: a round badge (transparent corners) with the logo inside.
+      // Maskable: full-bleed, extra padding -- the OS applies its own circle crop
+      // (safe zone = inner 80%), so the logo must not reach the edge.
+      const inner = Math.round(size * (maskable ? 0.58 : 0.74));
+      const fitted = await sharp(assetPath(logo)).rotate().resize(inner, inner, { fit: "inside" }).png().toBuffer();
+      const disc = maskable
+        ? Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="${size}" height="${size}" fill="#ffffff"/></svg>`)
+        : Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="#ffffff"/></svg>`);
+      png = await sharp(disc).composite([{ input: fitted, gravity: "centre" }]).png().toBuffer();
     } else {
       const letter = (String(name || "S").trim().toUpperCase().match(/[A-Z0-9]/) || ["S"])[0];
       const svg =
-        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="${maskable ? 0 : 14}" fill="#044a78"/>` +
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${maskable ? '<rect width="64" height="64" fill="#044a78"/>' : '<circle cx="32" cy="32" r="32" fill="#044a78"/>'}` +
         `<text x="32" y="34" dominant-baseline="central" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" ` +
         `font-weight="700" font-size="${maskable ? 26 : 34}" fill="#ffffff">${letter}</text></svg>`;
       png = await sharp(Buffer.from(svg), { density: 384 }).resize(size, size).png().toBuffer();
@@ -392,10 +396,18 @@ app.get("/company/pwa-icon/:size.png", async (req, res) => {
    CSRF token and per-user data); offline shows a small notice instead. Bump
    SW_VERSION to drop old caches. */
 const SW_SOURCE = `
-const SW_VERSION = "v2";
+const SW_VERSION = "v5";
 const STATIC_CACHE = "static-" + SW_VERSION;
 const STATIC_RE = /^\\/(css|js|assets|bootstrap|company\\/pwa-icon)\\//;
-self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("install", (e) => {
+  // Precache the offline page so it can be shown when the server is unreachable.
+  e.waitUntil(
+    caches.open(STATIC_CACHE)
+      .then((c) => c.add(new Request("/offline.html", { cache: "reload" })))
+      .catch(() => {})
+      .then(() => self.skipWaiting())
+  );
+});
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys()
@@ -409,11 +421,11 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
   if (req.mode === "navigate") {
-    e.respondWith(fetch(req).catch(() => new Response(
-      '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title>' +
-      '<body style="font-family:system-ui,sans-serif;text-align:center;padding:3rem 1rem;color:#044a78"><h2>You are offline</h2>' +
-      '<p>Check your connection, then try again.</p><button onclick="location.reload()" style="padding:.6rem 1.2rem;border:0;border-radius:8px;background:#044a78;color:#fff;font-size:1rem">Retry</button></body>',
-      { headers: { "Content-Type": "text/html; charset=utf-8" } })));
+    e.respondWith(
+      fetch(req).catch(() =>
+        caches.match("/offline.html").then((hit) => hit || new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } }))
+      )
+    );
     return;
   }
   if (STATIC_RE.test(url.pathname)) {
@@ -428,6 +440,10 @@ self.addEventListener("fetch", (e) => {
   }
 });
 `;
+app.get("/offline.html", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
+  res.type("html").send(offlinePageHtml({ name: currentBrand().name }));
+});
 app.get("/sw.js", (req, res) => {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Service-Worker-Allowed", "/");

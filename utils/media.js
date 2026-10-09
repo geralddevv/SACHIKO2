@@ -347,6 +347,82 @@ async function storeAudio(file, bucket) {
 }
 
 /*
+ * Company logo: PNG (keeps transparency -- a JPEG would turn it black), and
+ * SVG is accepted. An SVG is never stored or served as SVG: it is rasterized
+ * here to a 1024px PNG, so no script or external reference in the file can ever
+ * run in a browser. The few SVG features that could make the renderer read
+ * local files or the network are refused outright.
+ */
+const LOGO_MAX_EDGE = 1024;
+const LOGO_THUMB_EDGE = 512;
+const SVG_MAX_BYTES = 2 * 1024 * 1024;
+const SVG_FORBIDDEN =
+  /<\s*(script|foreignObject|image|iframe|embed|object|use|link|audio|video)\b|<!ENTITY|<!DOCTYPE[^>]*\[|\bon\w+\s*=|(?:xlink:)?href\s*=\s*["'](?!#)/i;
+
+export async function storeLogo(files, bucket) {
+  const file = flattenFiles(files)[0];
+  if (!file) throw new Error("Choose an image to use as the logo.");
+  try {
+    const isSvg =
+      path.extname(file.originalname || "").toLowerCase() === ".svg" || file.mimetype === "image/svg+xml";
+    let source = file.path;
+    let options = {};
+    if (isSvg) {
+      if (file.size > SVG_MAX_BYTES) throw new Error("SVG is too large (max 2MB).");
+      const text = await fs.promises.readFile(file.path, "utf8");
+      if (!/<svg[\s>]/i.test(text)) throw new Error("That file is not a valid SVG.");
+      if (SVG_FORBIDDEN.test(text)) {
+        throw new Error("That SVG uses scripts, embedded images or external references. Export a plain vector logo (shapes and paths only).");
+      }
+      source = Buffer.from(text);
+      options = { density: 300 }; // rasterize crisp, then scale down
+    }
+
+    const dir = ensureBucket(bucket);
+    const base = randomName();
+    const filename = `${base}.png`;
+    const thumbnail = `${base}.thumb.png`;
+    const resize = (edge) => ({ width: edge, height: edge, fit: "inside", withoutEnlargement: !isSvg });
+
+    let info;
+    try {
+      // Cut away the empty margin around the artwork (white on a JPEG,
+      // transparent on a PNG/SVG) so the logo fills a round badge instead of
+      // floating small in the middle of it.
+      let trimmed = null;
+      try {
+        const raw = await sharp(source, options).rotate().png().toBuffer();
+        trimmed = await sharp(raw).trim({ threshold: 14 }).toBuffer();
+      } catch {
+        trimmed = null; // blank or uniform image: keep as is
+      }
+      const input = trimmed || source;
+      const inOpts = trimmed ? {} : options;
+      info = await sharp(input, inOpts).resize(resize(LOGO_MAX_EDGE)).png({ compressionLevel: 9 }).toFile(path.join(dir, filename));
+      await sharp(input, inOpts).resize(resize(LOGO_THUMB_EDGE)).png({ compressionLevel: 9 }).toFile(path.join(dir, thumbnail));
+    } catch (e) {
+      await Promise.all([filename, thumbnail].map((f) => fs.promises.unlink(path.join(dir, f)).catch(() => {})));
+      throw new Error(isSvg ? "Could not read that SVG." : "Could not read that image.");
+    }
+    return {
+      kind: "image",
+      bucket: sanitizeBucket(bucket),
+      filename,
+      thumbnail,
+      mimeType: "image/png",
+      size: info.size,
+      width: info.width,
+      height: info.height,
+      durationSec: null,
+      originalName: file.originalname || "",
+      uploadedAt: new Date(),
+    };
+  } finally {
+    await removeTempFiles(files);
+  }
+}
+
+/*
  * Compress every uploaded file into the bucket and return the stored assets in
  * field order. The temp uploads are always cleaned up, and if any one file
  * fails the ones already stored are removed too -- so a caller never ends up
@@ -414,7 +490,10 @@ export function sendAsset(res, asset, { thumb = false, download = false } = {}) 
     return res.status(404).send("File not found");
   }
 
-  const type = thumb && asset.thumbnail ? "image/jpeg" : asset.mimeType || "application/octet-stream";
+  const type =
+    thumb && asset.thumbnail
+      ? (/\.png$/i.test(asset.thumbnail) ? "image/png" : "image/jpeg")
+      : asset.mimeType || "application/octet-stream";
   res.setHeader("Content-Type", type);
   res.setHeader("Cache-Control", "private, max-age=3600");
   if (download) {

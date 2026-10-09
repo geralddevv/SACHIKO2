@@ -16,6 +16,16 @@
         (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
         window.navigator.standalone === true;
       if (!standalone) return;
+      // The installed app's title bar already shows the app name (manifest name,
+      // "Sachiko Packaging"), so the page title's own "Sachiko - " prefix would
+      // read "Sachiko Packaging - Sachiko - Welcome". Drop the prefix there only;
+      // browser tabs keep it.
+      var prefix = <%- JSON.stringify((typeof brandShort !== 'undefined' && brandShort ? brandShort : 'Sachiko') + ' - ').replace(/</g, '\\u003c') %>;
+      var stripPrefix = function () {
+        if (document.title.indexOf(prefix) === 0) document.title = document.title.slice(prefix.length);
+      };
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", stripPrefix);
+      else stripPrefix();
       if (localStorage.getItem("pwaLayout") === "mobile") return; // user chose the responsive layout
       var vp = document.querySelector('meta[name="viewport"]');
       if (vp) vp.setAttribute("content", "width=1280, minimum-scale=0.1, user-scalable=yes");

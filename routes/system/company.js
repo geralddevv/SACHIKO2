@@ -5,7 +5,7 @@ import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiter
 import { refreshBrand, refreshBrandAfterSwitch, currentBrand, currentIdPrefix, isIdPrefix, suggestIdPrefix, slugifyCompany, INTERNAL_PREFIX } from "../../utils/companyBrand.js";
 import { rewriteIdPrefix, describeRewrite } from "../../utils/idPrefixRewrite.js";
 import { renameCompanyDb, currentDbName, makeCompanyDbId, isCompanyDbName } from "../../utils/companyDb.js";
-import { mediaUpload, storeUploads, removeAssets, removeTempFiles } from "../../utils/media.js";
+import { mediaUpload, storeUploads, storeLogo, removeAssets, removeTempFiles } from "../../utils/media.js";
 
 const router = express.Router();
 
@@ -223,7 +223,7 @@ router.post(
         return res.status(404).json({ success: false, message: "Company not found." });
       }
 
-      stored = await storeUploads(req.files, "company"); // compresses + cleans temps
+      stored = [await storeLogo(req.files, "company")]; // PNG/SVG -> transparent PNG; cleans temps
       // $set rather than doc.save() -- avoids re-validating the whole record.
       const previous = await Company.findByIdAndUpdate(
         req.params.id,

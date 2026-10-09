@@ -92,18 +92,23 @@
 }
 
 .login-mark {
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  border-radius: 50%;
   border: 1px solid var(--login-border);
   display: grid;
   place-items: center;
-  background: var(--login-accent);
+  background: #fff;
+  overflow: hidden;
 }
 
 .login-mark img {
-  width: 28px;
-  height: 28px;
+  width: 100%;
+  height: 100%;
+  padding: 6%;
+  box-sizing: border-box;
+  object-fit: contain;
 }
 
 .login-header h2 {
