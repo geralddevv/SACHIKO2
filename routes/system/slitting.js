@@ -18,6 +18,7 @@ import { findScannedReel } from "../../utils/rollId.js";
 // The code every generated id starts with -- the Company master's own
 // (utils/companyBrand.js), read live so a rename needs no restart.
 import { currentIdPrefix } from "../../utils/companyBrand.js";
+import { normalizeLocationName } from "../../utils/locations.js";
 // The Slitting WIP page's live run plan -- the slitting sibling of buildRunPlan
 // (same output contract, measured per Deckle). See utils/productionEta.js.
 import { buildSlittingRunPlan, SLITTING_SPEED_MPM } from "../../utils/productionEta.js";
@@ -343,6 +344,8 @@ async function deckleOptionsFor(pending) {
       _id: String(r._id),
       rollId: r.rollId,
       reelMtrs: round2(Number(r.reelMtrs) || 0),
+      // When this web was laminated -- shown beside it on the allocate page.
+      createdAt: r.createdAt || null,
       // The Deckle web's own width as recorded when it was laminated; falls
       // back to the order's paper size for reels made before it was stored.
       size: r.size || pending.paperSize || "",
@@ -1394,8 +1397,8 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
 
   const [machines, operators, helpers] = await Promise.all([
     Machine.find({ machineType: SLITTING_MACHINE_RE }).populate("location").sort({ machineName: 1 }).lean(),
-    Employee.find({ isActive: true, empProfile: "OPERATOR" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
-    Employee.find({ isActive: true, empProfile: "HELPER" }, "empName empProfileCode").sort({ empName: 1 }).lean(),
+    Employee.find({ isActive: true, empProfile: "OPERATOR" }, "empName empNickName empProfileCode empLoc").sort({ empName: 1 }).lean(),
+    Employee.find({ isActive: true, empProfile: "HELPER" }, "empName empNickName empProfileCode").sort({ empName: 1 }).lean(),
   ]);
 
   const order = {
@@ -1435,6 +1438,7 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
       _id: t._id,
       rollId: t.rollId,
       reelMtrs: t.reelMtrs,
+      createdAt: t.createdAt || null,
       size: t.size,
       location: t.location,
       productCode: t.productCode,
@@ -1472,14 +1476,19 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
   const groupProductCode = productCodeBase(targets[0].productCode);
   const groupSize = targets[0].size;
   const groupRunningMeters = order.runningMeters ?? null;
-  const availableRows = await buildAvailableDeckleRows();
+  const availableRows = await buildAvailableDeckleRows({ includeHeld: true });
   const groupDeckles = availableRows
     .filter((r) =>
-      r.productCodeBase === groupProductCode
-      && r.size === groupSize
-      && (r.runningMeters ?? null) === groupRunningMeters
-      && (!wantLayout || r.layoutSig === wantLayout)
-      && !targetIds.has(r.deckleStockId),
+      !targetIds.has(r.deckleStockId)
+      && r.productCodeBase === groupProductCode
+      // Webs already on an open card carry no layout or running-meters match
+      // (they were left out of grouping); the queue lists them by product
+      // family + width alone, so this does too -- shown for reference.
+      && (r.held
+        ? widthKey(r.size) === widthKey(groupSize)
+        : r.size === groupSize
+          && (r.runningMeters ?? null) === groupRunningMeters
+          && (!wantLayout || r.layoutSig === wantLayout)),
     )
     .map((r) => ({
       _id: r.deckleStockId,
@@ -1488,6 +1497,14 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
       location: r.location,
       lotNo: r.lotNo,
       curing: { cured: !r.curing, curedAtLabel: r.curingUntilLabel },
+      // Same rule as the queue's Choose Deckle dialog: a web with no order of
+      // its own can't be allocated, one already on an open card is reference only.
+      createdAt: r.createdAt || null,
+      curingUntil: r.curingUntil || null,
+      hotMelt: !!r.hotMelt,
+      card: r.card && !r.card.run ? { slittingJobCardId: r.card.slittingJobCardId, machineName: r.card.machineName } : null,
+      selectable: !!r.order && !(r.card && !r.card.run),
+      heldOn: r.card && !r.card.run ? (r.card.slittingJobCardId || "another card") : "",
     }));
 
   // The deckle layouts the planner drew on the Set Deckle page for this batch
@@ -1628,9 +1645,18 @@ router.get("/slitting/allocate/:pendingId", requireSlittingPlanner, async (req, 
       machineName: m.machineName,
       machineType: m.machineType || "",
       locationName: m.location?.locationName || "",
+      operatorKey: `${String(m.machineName || "").trim().toUpperCase()}||${normalizeLocationName(m.location?.locationName)}`,
     })),
-    operators: operators.map((e) => ({ _id: String(e._id), empName: e.empName })),
-    helpers: helpers.map((e) => ({ _id: String(e._id), empName: e.empName })),
+    // Profile code + location is how an operator is tied to a machine (the
+    // machine's name / location) -- the allocate page uses it to pick the
+    // operator when a machine is chosen.
+    operators: operators.map((e) => ({
+      _id: String(e._id),
+      empName: e.empName,
+      empNickName: e.empNickName || "",
+      machineKey: e.empProfileCode ? `${String(e.empProfileCode).trim().toUpperCase()}||${normalizeLocationName(e.empLoc)}` : "",
+    })),
+    helpers: helpers.map((e) => ({ _id: String(e._id), empName: e.empName, empNickName: e.empNickName || "" })),
     crew,
     submissionToken: randomUUID(),
     notification: req.flash("notification"),

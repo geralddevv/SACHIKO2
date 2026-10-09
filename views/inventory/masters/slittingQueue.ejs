@@ -102,7 +102,7 @@
 
     /* ---- Choose Deckle dialog ---- */
     .sq-dialog {
-      width: min(620px, 95vw); max-height: min(600px, 88vh); padding: 0; border: none;
+      width: min(810px, 95vw); max-height: min(720px, 90vh); padding: 0; border: none;
       border-radius: 16px; overflow: hidden; background: #fff; display: flex; flex-direction: column;
       box-shadow: 0 24px 60px rgba(4, 74, 120, 0.28);
       transform: scale(0.96); transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -122,24 +122,49 @@
     .sq-close-btn:hover { background: rgba(255, 255, 255, 0.26); }
     #sq-dialog-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
     .sq-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 24px; }
-    .sq-dialog-body::-webkit-scrollbar { width: 6px; }
-    .sq-dialog-body::-webkit-scrollbar-thumb { background: #044a78; border-radius: 10px; }
+    /* Same brand-blue scrollbar as the tables (tableDisp.css). */
+    .sq-dialog-body::-webkit-scrollbar { width: 10px; height: 10px; }
+    .sq-dialog-body::-webkit-scrollbar-track { background: #f0f2f5; }
+    .sq-dialog-body::-webkit-scrollbar-thumb { background: #044A78; border-radius: 6px; }
+    .sq-dialog-body::-webkit-scrollbar-thumb:hover { background: #044A78; }
+    .sq-dialog-body { scrollbar-width: thin; scrollbar-color: #044A78 #f0f2f5; }
 
     .sq-section-label {
       font-size: 11px; font-weight: 700; color: #044a78; text-transform: uppercase;
       letter-spacing: 0.4px; margin-bottom: 8px;
     }
 
-    .sq-deckle-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+    .sq-deckle-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 4px; }
     .sq-deckle-row {
-      display: flex; align-items: center; gap: 12px; padding: 10px 14px;
-      border-radius: 10px; border: 1.5px solid #e6eaf2; cursor: pointer;
+      display: flex; align-items: center; gap: 12px; padding: 6px 12px 6px 14px;
+      border-radius: 999px; border: 1.5px solid #e6eaf2; cursor: pointer;
       transition: border-color 0.15s ease, background 0.15s ease;
     }
     .sq-deckle-row:hover { border-color: #a9c8e8; background: #f7fbff; }
-    .sq-deckle-row.is-off { }
+    .sq-deckle-row.is-off { background: #fafbfd; }
+    .sq-deckle-row.is-off .sq-deckle-top { color: #64748b; }
+    .sq-deckle-no {
+      flex: none; width: 22px; height: 22px; border-radius: 50%; background: #eef3f9; color: #044a78;
+      font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    }
+    .sq-deckle-head { display: flex; gap: 12px; padding: 0 13.5px 0 15.5px; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.4px; }
+    .sq-deckle-head-pad { flex: none; width: 16px; margin-right: 34px; }
+    .sq-deckle-head .sq-deckle-line { flex: 1 1 auto; }
+    .sq-deckle-head .sq-deckle-top { font-size: 10px; font-weight: 700; color: #94a3b8; }
+    .sq-deckle-line { display: flex; align-items: center; gap: 0; }
+    .sq-deckle-line .sq-deckle-top { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sq-fact-value { flex: none; font-size: 12.5px; font-weight: 600; color: #475569; white-space: nowrap; }
+    .sq-fact-mtrs, .sq-fact-date, .sq-fact-cure { flex: none; box-sizing: content-box; padding: 3px 14px; border-left: 1px solid #dbe3ec; text-align: center; }
+    .sq-deckle-head .sq-fact-mtrs, .sq-deckle-head .sq-fact-date, .sq-deckle-head .sq-fact-cure { border-left-color: transparent; }
+    .sq-fact-mtrs { width: 92px; }
+    .sq-fact-date { width: 128px; color: #64748b; }
+    .sq-fact-cure { width: 104px; font-weight: 700; }
+    .sq-fact-value.is-cured { color: #15803d; }
+    .sq-fact-value.is-curing { color: #b45309; }
+    .sq-deckle-note { font-size: 12px; margin-top: 5px; padding-top: 5px; border-top: 1px solid #e2e8f0; }
+    .sq-deckle-row:has(.sq-deckle-note) { border-radius: 22px; }
     .sq-deckle-row.is-disabled { opacity: 0.5; cursor: not-allowed; }
-    .sq-deckle-row input[type="checkbox"] { flex: none; width: 17px; height: 17px; accent-color: #044a78; }
+    .sq-deckle-row input[type="checkbox"] { flex: none; width: 16px; height: 16px; accent-color: #044a78; }
     /* "2 of 2 needed" beside the picker heading -- green on the mark, amber
        under it, red over it. */
     .sq-deckle-count {
@@ -147,6 +172,7 @@
       text-transform: none; padding: 1px 9px; border-radius: 999px;
       border: 1px solid #dbe3ec; background: #f8fafc; color: #5b6b80;
     }
+    .sq-deckle-count-head { float: none; flex: none; margin: 2px 8px 0 auto; font-size: 12px; padding: 3px 12px; white-space: nowrap; }
     .sq-deckle-count.is-ok { color: #15803d; background: #ecfdf5; border-color: #a7f3d0; }
     .sq-deckle-count.is-under { color: #b45309; background: #fff8e1; border-color: #f0c36d; }
     .sq-deckle-count.is-over { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
@@ -218,19 +244,12 @@
         <h2 id="chooseDeckleDialogTitle">Choose Deckles</h2>
         <p class="sq-dialog-subtitle" id="sq-dialog-subtitle"></p>
       </div>
+      <span id="sq-deckle-count" class="sq-deckle-count sq-deckle-count-head"></span>
       <button type="button" class="sq-close-btn" id="sq-close-btn" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <form id="sq-dialog-form" novalidate>
       <div class="sq-dialog-body">
-        <div class="sq-section-label">
-          Deckles to allocate — untick any you don't want to include
-          <%# How the pick stands against what the layout plans, live as boxes
-              are ticked. Sits on the section heading because that is where the
-              eye already is when ticking. %>
-          <span id="sq-deckle-count" class="sq-deckle-count"></span>
-        </div>
-        <p id="sq-pool-note" style="margin:0 0 10px;font-size:12px;color:#64748b;"></p>
         <div id="sq-deckle-list" class="sq-deckle-list"></div>
         <div id="sq-deckle-error" class="sq-error-text"></div>
       </div>
@@ -440,7 +459,7 @@
   const childText = (r) => ({
     item: r.rollId,
     sizeText: "",
-    rmText: "",
+    rmText: `${fmtMtrs(r.mtrs)} mtrs`,
     layoutLabel: "",
     graceText: "",
     stockText: `${fmtMtrs(r.mtrs)} mtrs`,
@@ -453,9 +472,10 @@
   // group; _children are the physical Deckles clubbed into it
   // (routes/system/slitting.js).
   const rowsData = JSON.parse(document.getElementById("sq-data").textContent).map((g) => {
-    const kids = (g._children || []).map((r) => ({
+    const kids = (g._children || []).map((r, i) => ({
       ...r,
       isGroup: false,
+      sNo: i + 1,
       lotNo: r.order ? (r.order.lotNo || "-") : "-",
       curingLabel: r.hotMelt ? "Hot melt" : (r.curing ? (r.curingUntilLabel ? `Curing · ${r.curingUntilLabel}` : "Curing") : "Cured"),
       ...childText(r),
@@ -515,25 +535,33 @@
         + `</span></div>`;
       return;
     }
-    sqDeckleList.innerHTML = (group._children || []).map((d) => {
+    const listHead = `<div class="sq-deckle-head"><span class="sq-deckle-head-pad"></span>`
+      + `<span class="sq-deckle-line"><span class="sq-deckle-top">Deckle ID</span>`
+      + `<span class="sq-fact-mtrs">Running Mtrs</span><span class="sq-fact-date">Made on</span><span class="sq-fact-cure">Curing</span></span></div>`;
+    sqDeckleList.innerHTML = listHead + (group._children || []).map((d, i) => {
       const curingLeft = curingTimeLeft(d.curingUntil);
-      const curingTag = d.curing
-        ? `<span class="sq-deckle-curing"><i class="fa-solid fa-hourglass-half"></i> curing${curingLeft ? ` · ${esc(curingLeft)} left` : ""}</span>`
-        : "";
       const disabled = !d.allocateHref;
       const tick = !disabled && d.forThisLayout !== false;
-      const createdDate = fmtDate(d.createdAt);
-      const createdTime = fmtTime(d.createdAt);
+      const curingCls = d.hotMelt ? "is-cured" : (d.curing ? "is-curing" : "is-cured");
+      const curingTxt = d.hotMelt
+        ? "Hot melt"
+        : d.curing
+          ? `Curing${curingLeft ? ` · ${esc(curingLeft)} left` : ""}`
+          : "Cured";
       return `
         <label class="sq-deckle-row${disabled ? " is-disabled" : ""}${tick ? "" : " is-off"}">
           <input type="checkbox" value="${esc(d._id)}" ${disabled ? "disabled" : (tick ? "checked" : "")} />
+          <span class="sq-deckle-no">${i + 1}</span>
           <span class="sq-deckle-main">
-            <span class="sq-deckle-top">${esc(d.rollId)}</span>
-            <span class="sq-deckle-sub">${fmtMtrs(d.mtrs)} mtrs &nbsp;·&nbsp; ${esc(d.location)} &nbsp;·&nbsp; lot ${esc(d.lotNo)} &nbsp;·&nbsp; ${createdDate} ${createdTime}${d.held ? ` &nbsp;·&nbsp; already on ${esc(d.card.slittingJobCardId)}${d.card.machineName && d.card.machineName !== "—" ? ` (${esc(d.card.machineName)})` : ""} — not run yet` : (disabled ? " &nbsp;·&nbsp; not linked to any pending order" : "")}</span>
-            ${d.held ? `<span class="sq-deckle-sub" style="color:#64748b;">Shown for reference. It can't be picked here until ${esc(d.card.slittingJobCardId)} is run.</span>` : ""}
-            ${d.cameOff ? `<span class="sq-deckle-sub" style="color:#8a5a00;"><i class="fa-solid fa-arrow-rotate-left"></i> came off ${esc(d.cameOff.slittingJobCardId)} — a different web was scanned in its place${d.cameOff.by ? ` by ${esc(d.cameOff.by)}` : ""}</span>` : ""}
+            <span class="sq-deckle-line">
+              <span class="sq-deckle-top" title="${esc(d.rollId)}">${esc(d.rollId)}</span>
+              <span class="sq-fact-value sq-fact-mtrs">${fmtMtrs(d.mtrs)} mtrs</span>
+              <span class="sq-fact-value sq-fact-date">${fmtDate(d.createdAt)}, ${fmtTime(d.createdAt)}</span>
+              <span class="sq-fact-value sq-fact-cure ${curingCls}">${curingTxt}</span>
+            </span>
+            ${d.held ? `<span class="sq-deckle-note" style="color:#b45309;"><i class="fa-solid fa-lock"></i> Already on ${esc(d.card.slittingJobCardId)}${d.card.machineName && d.card.machineName !== "—" ? ` (${esc(d.card.machineName)})` : ""} — not run yet. Shown for reference; it can't be picked until that card is run.</span>` : (disabled ? `<span class="sq-deckle-note" style="color:#64748b;">Not linked to any pending order.</span>` : "")}
+            ${d.cameOff ? `<span class="sq-deckle-note" style="color:#8a5a00;"><i class="fa-solid fa-arrow-rotate-left"></i> Came off ${esc(d.cameOff.slittingJobCardId)} — a different web was scanned in its place${d.cameOff.by ? ` by ${esc(d.cameOff.by)}` : ""}</span>` : ""}
           </span>
-          ${curingTag}
         </label>`;
     }).join("");
 
@@ -564,12 +592,12 @@
     const picked = checkedDeckles().length;
     const need = deckleseNeeded();
     if (!need) {
-      el.className = "sq-deckle-count";
+      el.className = "sq-deckle-count sq-deckle-count-head";
       el.textContent = `${picked} Deckle${picked === 1 ? "" : "s"} ticked`;
       return;
     }
     const over = picked - need;
-    el.className = "sq-deckle-count" + (over > 0 ? " is-over" : picked === need ? " is-ok" : " is-under");
+    el.className = "sq-deckle-count sq-deckle-count-head" + (over > 0 ? " is-over" : picked === need ? " is-ok" : " is-under");
     el.textContent = over > 0
       ? `${picked} ticked · this layout needs ${need} — ${over} too many`
       : `${picked} of ${need} needed`;
@@ -587,20 +615,6 @@
       + ` · ${group.deckleCount} Deckle${group.deckleCount === 1 ? "" : "s"}`;
 
     renderDeckleList(group);
-
-    // Say plainly that these webs are not this job's alone, and what the
-    // default tick means, so the list is not read as reserved stock.
-    const pooled = (group._children || []).length;
-    const ticked = (group._children || []).filter((d) => d.allocateHref && d.forThisLayout !== false).length;
-    const note = [];
-    if (group.poolShared) {
-      note.push(`These ${pooled} free Deckle${pooled === 1 ? "" : "s"} of ${group.productCode} at ${group.size}mm`
-        + " are shared with the other cut jobs of this width.");
-    }
-    if (pooled && ticked !== pooled) {
-      note.push(`${ticked} of them ticked — what this job still needs.`);
-    }
-    document.getElementById("sq-pool-note").textContent = note.join(" ");
 
     sqDeckleError.textContent = "";
 
@@ -702,7 +716,11 @@
     columns: [
       {
         field: "_tree", title: "", headerSort: false, headerFilter: false,
-        width: 34, minWidth: 34, hozAlign: "center", formatter: () => "",
+        width: 41, minWidth: 41, hozAlign: "center",
+        formatter: (cell) => {
+          const row = cell.getRow().getData();
+          return row.isGroup ? "" : `<span style="color:#64748b;font-weight:600;">${row.sNo}</span>`;
+        },
       },
       {
         // Group = the deckle config / its clubbed Deckles. Child = one physical
@@ -711,7 +729,7 @@
         // each, now that the group rows are down to the four facts that
         // identify a job.
         title: "Product Code / Deckle ID", field: "item", headerSort: false, widthGrow: 3,
-        minWidth: 240,
+        minWidth: 250,
         cellClick: (e, cell) => {
           // Anywhere in the cell, group row or Deckle row beneath it -- a Deckle
           // row opens the card of the exact code that web was laminated under.
@@ -745,16 +763,7 @@
               : "";
             return `<span class="pd-link" title="Show product details">${esc(row.productCode)}</span>${tail}`;
           }
-          const bits = [`${fmtMtrs(row.mtrs)} mtrs`, esc(row.location)];
-          if (row.lotNo) bits.push(`lot ${esc(row.lotNo)}`);
-          const timeLeft = curingTimeLeft(row.curingUntil);
-          const cure = row.curingLabel === "Hot melt"
-            ? '<span style="color:#15803d;font-weight:700;"><i class="fa-solid fa-fire"></i> hot melt</span>'
-            : row.curing
-              ? `<span style="color:#b45309;font-weight:700;"><i class="fa-solid fa-hourglass-half"></i> ${esc(row.curingLabel)}${timeLeft ? ` (${esc(timeLeft)} left)` : ""}</span>`
-              : '<span style="color:#64748b;font-weight:600;"><i class="fa-solid fa-check"></i> cured</span>';
-          return `<span style="font-weight:700;color:#044a78;">↳ ${esc(row.rollId)}</span>`
-            + `<span style="color:#94a3b8;font-weight:600;"> &nbsp;·&nbsp; ${bits.join(" &nbsp;·&nbsp; ")} &nbsp;·&nbsp; </span>${cure}`;
+          return `<span style="font-weight:700;color:#044a78;">↳ ${esc(row.rollId)}</span>`;
         },
       },
       {
@@ -772,7 +781,7 @@
         headerFilterFunc: numLikeFilter,
         formatter: (cell) => {
           const row = cell.getRow().getData();
-          if (!row.isGroup) return "";
+          if (!row.isGroup) return `${fmtMtrs(row.mtrs)} mtrs`;
           return row.runningMeters != null ? `${fmtMtrs(row.runningMeters)} mtrs` : "—";
         },
       },
@@ -802,7 +811,7 @@
         // cell beside it shows the CUT widths -- without this the row states
         // widths nobody ordered and nothing says why. Per roll under the
         // total, since that is the figure an operator setting knives needs.
-        title: "Grace", field: "graceText", hozAlign: "center", width: 110,
+        title: "Grace", field: "graceText", hozAlign: "center", width: 90,
         headerTooltip: "How much wider than ordered each roll is cut — spare web the Deckle Set planner handed to the rolls instead of scrapping it. The client is still billed the width ordered.",
         headerSort: false, headerFilter: "input", headerFilterPlaceholder: "Search",
         headerFilterFunc: numLikeFilter,
@@ -825,7 +834,7 @@
       {
         // Deckles of this width actually made and still free to slit, against
         // what the config calls for. 0 of N = set, not yet run.
-        title: "Stock", field: "stockText", hozAlign: "center", width: 120, headerSort: false,
+        title: "Stock", field: "stockText", hozAlign: "center", width: 100, headerSort: false,
         headerFilter: "input", headerFilterPlaceholder: "Search",
         headerFilterFunc: numLikeFilter,
         formatter: (cell) => {
@@ -849,7 +858,7 @@
         },
       },
       {
-        title: "Status", field: "statusText", hozAlign: "center", width: 180, headerSort: false,
+        title: "Status", field: "statusText", hozAlign: "center", width: 150, headerSort: false,
         headerFilter: "input", headerFilterPlaceholder: "Search",
         formatter: (cell) => {
           const row = cell.getRow().getData();

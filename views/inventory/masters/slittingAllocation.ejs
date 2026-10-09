@@ -35,6 +35,11 @@
 <style>
   .span-full { padding: 0 !important; }
   .span-full.form-heading, .span-full.form-subheading { padding: 10px !important; }
+  input.sl-qty.sl-qty-over,
+  input.sl-qty.sl-qty-over:focus {
+    border-color: #dc2626 !important; outline: none !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.3) !important;
+  }
   .sl-panel { align-self: stretch; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
   .sl-sec-head { display: flex; flex-direction: row; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
   .sl-sec-head h1 { margin: 0; }
@@ -325,18 +330,8 @@
             <span class="sl-job-value"><%= order.runningMeters != null ? `${order.runningMeters} mtrs` : "—" %></span>
           </div>
           <div class="sl-job-cell">
-            <span class="sl-job-label">Total Deckles</span>
-            <span class="sl-job-value"><%= deckleTotal %></span>
-          </div>
-          <div class="sl-job-cell">
-            <span class="sl-job-label">Available</span>
-            <%# Total minus however many of the ticked Deckles are currently
-                assigned to a layout's "Deckle Rolls" count below -- static
-                here (deckleAvailable = the batch's untouched Deckles) only
-                until JS takes over in recalc(), which keeps it live as
-                those counts change (e.g. Total 6, one layout's Deckle Rolls
-                set to 5 -> 1 still available for another layout). %>
-            <span class="sl-job-value" id="slAvailableValue"><%= deckleAvailable %></span>
+            <span class="sl-job-label">Selected Deckles</span>
+            <span class="sl-job-value"><%= targetDeckles.length %></span>
           </div>
           <% if (typeof layoutNeed !== "undefined" && layoutNeed) {
                const stillNeeded = Math.max(0, layoutNeed - (layoutAllocated || 0)); %>
@@ -387,7 +382,7 @@
                 <%= machines.length ? "Select machine" : "No slitting machine set up" %>
               </option>
               <% machines.forEach((m) => { %>
-                <option value="<%= m._id %>" <%= crew.machineId === m._id ? "selected" : "" %>><%= m.machineName %><%= m.locationName ? " · " + m.locationName : "" %></option>
+                <option value="<%= m._id %>" data-operator-key="<%= m.operatorKey %>" <%= crew.machineId === m._id ? "selected" : "" %>><%= m.machineName %><%= m.locationName ? " · " + m.locationName : "" %></option>
               <% }) %>
             </select>
           </div>
@@ -396,7 +391,7 @@
             <select id="slOperator" class="form-control">
               <option value="" disabled <%= crew.operatorId ? "" : "selected" %> hidden>Select operator</option>
               <% operators.forEach((e) => { %>
-                <option value="<%= e._id %>" <%= crew.operatorId === e._id ? "selected" : "" %>><%= e.empName %></option>
+                <option value="<%= e._id %>" data-machine-key="<%= e.machineKey %>" <%= crew.operatorId === e._id ? "selected" : "" %>><%= e.empNickName || e.empName %></option>
               <% }) %>
             </select>
           </div>
@@ -405,7 +400,7 @@
             <select id="slHelper" class="form-control">
               <option value="">— none —</option>
               <% helpers.forEach((e) => { %>
-                <option value="<%= e._id %>" <%= crew.helperId === e._id ? "selected" : "" %>><%= e.empName %></option>
+                <option value="<%= e._id %>" <%= crew.helperId === e._id ? "selected" : "" %>><%= e.empNickName || e.empName %></option>
               <% }) %>
             </select>
           </div>
@@ -415,55 +410,305 @@
 
     <!-- The Deckles this page is actually allocating -- what was ticked on
          the Slitting Queue's Choose Deckle dialog (or a single Deckle's own
-         Allocate/Edit link). Only worth a list once there's more than one:
-         a solo Deckle already names itself in the header chip and the
-         Deckle Layout row below. -->
-    <% if (targetDeckles.length > 1) { %>
+         Allocate/Edit link). Shown for a single Deckle too, so the
+         bar and the Add Deckles bar are always there; Remove needs two or more
+         (the last one can't be taken off). -->
+    <% if (targetDeckles.length > 0) { %>
     <div class="span-full" style="border:none !important;">
-      <div class="sl-panel" style="padding: 12px 14px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7c8ba1;margin-bottom:8px;">
-          Selected Deckles — <%= targetDeckles.length %>
-        </div>
+      <style>
+        .sl-sel-panel > summary {
+          list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 11px 16px;
+          background: linear-gradient(135deg, #e8f2fb 0%, #dbeafe 100%); color: #044a78;
+          font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; user-select: none;
+        }
+        .sl-sel-panel > summary::-webkit-details-marker { display: none; }
+        .sl-sel-panel > summary:hover { background: linear-gradient(135deg, #dcebf8 0%, #cfe0f5 100%); }
+        .sl-sel-count { background: #044a78; color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 12px; letter-spacing: 0; }
+        .sl-sel-chev { margin-left: auto; font-size: 11px; transition: transform .2s ease; }
+        .sl-sel-panel[open] > summary .sl-sel-chev { transform: rotate(180deg); }
+        .sl-sel-panel[open] > summary { border-bottom: 1px solid #cfe0f5; }
+        .sl-sel-cell { padding: 0 26px; border-left: 1px solid #cfe0f5; color: #475569; font-weight: 600; white-space: nowrap; }
+        .sl-sel-cure { font-weight: 700; }
+        .sl-sel-cure.is-cured { color: #15803d; }
+        .sl-sel-cure.is-curing { color: #b45309; }
+        .sl-sel-remove {
+          display: inline-flex; align-items: center; gap: 5px; border: 1px solid #fecaca; background: #fff;
+          color: #b91c1c; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 700; cursor: pointer;
+          transition: background .15s ease;
+        }
+        .sl-sel-remove:hover { background: #fef2f2; }
+      </style>
+      <details class="sl-panel sl-sel-panel">
+        <summary>
+          <i class="fa-solid fa-layer-group"></i> Selected Deckles
+          <span class="sl-sel-count"><%= targetDeckles.length %></span>
+          <i class="fa-solid fa-chevron-down sl-sel-chev"></i>
+        </summary>
+        <div style="padding: 12px 14px;">
         <div style="display:flex;flex-direction:column;gap:6px;">
-          <% targetDeckles.forEach((d) => { %>
+          <% targetDeckles.forEach((d, idx) => { %>
             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 12px;border:1.5px solid #cfe0f5;background:#f7fbff;border-radius:8px;font-size:12.5px;">
+              <span style="flex:none;width:22px;height:22px;border-radius:50%;background:#dbeafe;color:#044a78;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;"><%= idx + 1 %></span>
               <span style="font-weight:700;color:#044a78;min-width:150px;"><%= dash(d.rollId) %></span>
-              <span style="color:#64748b;"><%= dash(d.reelMtrs) %> mtrs &middot; <%= dash(d.location) %></span>
+              <span class="sl-sel-cell"><%= dash(d.reelMtrs) %> mtrs</span>
+              <span class="sl-sel-cell sl-sel-made" data-created="<%= d.createdAt ? new Date(d.createdAt).toISOString() : "" %>">—</span>
+              <span class="sl-sel-cell sl-sel-cure" data-hotmelt="<%= d.curing && d.curing.hotMelt ? 1 : 0 %>" data-cured="<%= d.curing && d.curing.cured === false ? 0 : 1 %>" data-cured-at="<%= d.curing && d.curing.curedAt ? d.curing.curedAt : "" %>">—</span>
               <% if (d.existing) { %>
                 <span style="font-size:10.5px;font-weight:700;color:#044a78;background:#e0ecf8;border-radius:999px;padding:2px 9px;">on <%= d.existing.slittingJobCardId %></span>
               <% } %>
-              <% if (d.curing && d.curing.cured === false) { %>
-                <span style="margin-left:auto;font-size:10.5px;font-weight:700;color:#b45309;background:#fffaf0;border:1px solid #fde8c9;border-radius:999px;padding:2px 9px;">curing</span>
-              <% } %>
+              <span style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+                <% if (targetDeckles.length > 1) { %>
+                <button type="button" class="sl-sel-remove" data-deckle-id="<%= d._id %>" title="Remove this Deckle from the allocation" aria-label="Remove <%= dash(d.rollId) %>">
+                  <i class="fa-solid fa-xmark"></i> Remove
+                </button>
+                <% } %>
+              </span>
             </div>
           <% }) %>
         </div>
-      </div>
+        </div>
+      </details>
     </div>
     <% } %>
 
     <!-- Deckles clubbed with these on the Slitting Queue (same Product Code
          + Size) but left unticked there -- context only, never edited from
-         this page. -->
+         this page. One bar saying how many are free; clicking it opens them
+         in a dialog. The ones being allocated here are never in that list. -->
     <% if (typeof groupDeckles !== "undefined" && groupDeckles.length > 0) { %>
+    <style>
+      .sl-avail-bar {
+        width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 16px; cursor: pointer;
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 13px; color: #334155; text-align: left;
+        transition: border-color .15s ease, background .15s ease;
+      }
+      .sl-avail-bar:hover { border-color: #a9c8e8; background: #f7fbff; }
+      .sl-avail-count {
+        flex: none; min-width: 28px; text-align: center; font-weight: 800; font-size: 13px; color: #fff;
+        background: #044a78; border-radius: 999px; padding: 2px 10px;
+      }
+      .sl-avail-bar .sl-avail-go { margin-left: auto; color: #044a78; font-weight: 700; font-size: 12px; white-space: nowrap; }
+
+    .sq-dialog {
+      width: min(810px, 95vw); max-height: min(720px, 90vh); padding: 0; border: none;
+      border-radius: 16px; overflow: hidden; background: #fff; display: flex; flex-direction: column;
+      box-shadow: 0 24px 60px rgba(4, 74, 120, 0.28);
+      transform: scale(0.96); transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    #chooseDeckleDialog.show .sq-dialog { transform: scale(1); }
+    .sq-dialog-header {
+      flex: none; background: linear-gradient(135deg, #044a78 0%, #03365a 100%); padding: 14px 24px;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    }
+    .sq-dialog-header h2 { margin: 0; font-size: 17px; font-weight: 700; color: #fff; letter-spacing: 0.2px; }
+    .sq-dialog-subtitle { margin: 4px 0 0; font-size: 12.5px; color: rgba(255, 255, 255, 0.75); }
+    .sq-close-btn {
+      flex: none; border: none; background: rgba(255, 255, 255, 0.14); color: #fff;
+      width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 13px;
+      display: flex; align-items: center; justify-content: center; transition: background 0.15s ease;
+    }
+    .sq-close-btn:hover { background: rgba(255, 255, 255, 0.26); }
+    #sq-dialog-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .sq-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 24px; }
+    /* Same brand-blue scrollbar as the tables (tableDisp.css). */
+    .sq-dialog-body::-webkit-scrollbar { width: 10px; height: 10px; }
+    .sq-dialog-body::-webkit-scrollbar-track { background: #f0f2f5; }
+    .sq-dialog-body::-webkit-scrollbar-thumb { background: #044A78; border-radius: 6px; }
+    .sq-dialog-body::-webkit-scrollbar-thumb:hover { background: #044A78; }
+    .sq-dialog-body { scrollbar-width: thin; scrollbar-color: #044A78 #f0f2f5; }
+
+    .sq-section-label {
+      font-size: 11px; font-weight: 700; color: #044a78; text-transform: uppercase;
+      letter-spacing: 0.4px; margin-bottom: 8px;
+    }
+
+    .sq-deckle-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 4px; }
+    .sq-deckle-row {
+      display: flex; align-items: center; gap: 12px; padding: 6px 12px 6px 14px;
+      border-radius: 999px; border: 1.5px solid #e6eaf2; cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .sq-deckle-row:hover { border-color: #a9c8e8; background: #f7fbff; }
+    .sq-deckle-row.is-off { background: #fafbfd; }
+    .sq-deckle-row.is-off .sq-deckle-top { color: #64748b; }
+    .sq-deckle-no {
+      flex: none; width: 22px; height: 22px; border-radius: 50%; background: #eef3f9; color: #044a78;
+      font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    }
+    .sq-deckle-head { display: flex; gap: 12px; padding: 0 13.5px 0 15.5px; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.4px; }
+    .sq-deckle-head-pad { flex: none; width: 16px; margin-right: 34px; }
+    .sq-deckle-head .sq-deckle-line { flex: 1 1 auto; }
+    .sq-deckle-head .sq-deckle-top { font-size: 10px; font-weight: 700; color: #94a3b8; }
+    .sq-deckle-line { display: flex; align-items: center; gap: 0; }
+    .sq-deckle-line .sq-deckle-top { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sq-fact-value { flex: none; font-size: 12.5px; font-weight: 600; color: #475569; white-space: nowrap; }
+    .sq-fact-mtrs, .sq-fact-date, .sq-fact-cure { flex: none; box-sizing: content-box; padding: 3px 14px; border-left: 1px solid #dbe3ec; text-align: center; }
+    .sq-deckle-head .sq-fact-mtrs, .sq-deckle-head .sq-fact-date, .sq-deckle-head .sq-fact-cure { border-left-color: transparent; }
+    .sq-fact-mtrs { width: 92px; }
+    .sq-fact-date { width: 128px; color: #64748b; }
+    .sq-fact-cure { width: 104px; font-weight: 700; }
+    .sq-fact-value.is-cured { color: #15803d; }
+    .sq-fact-value.is-curing { color: #b45309; }
+    .sq-deckle-note { font-size: 12px; margin-top: 5px; padding-top: 5px; border-top: 1px solid #e2e8f0; }
+    .sq-deckle-row:has(.sq-deckle-note) { border-radius: 22px; }
+    .sq-deckle-row.is-disabled { opacity: 0.5; cursor: not-allowed; }
+    .sq-deckle-row input[type="checkbox"] { flex: none; width: 16px; height: 16px; accent-color: #044a78; }
+    /* "2 of 2 needed" beside the picker heading -- green on the mark, amber
+       under it, red over it. */
+    .sq-deckle-count {
+      float: right; font-size: 11.5px; font-weight: 700; letter-spacing: 0;
+      text-transform: none; padding: 1px 9px; border-radius: 999px;
+      border: 1px solid #dbe3ec; background: #f8fafc; color: #5b6b80;
+    }
+    .sq-deckle-count-head { float: none; flex: none; margin: 2px 8px 0 auto; font-size: 12px; padding: 3px 12px; white-space: nowrap; }
+    .sq-deckle-count.is-ok { color: #15803d; background: #ecfdf5; border-color: #a7f3d0; }
+    .sq-deckle-count.is-under { color: #b45309; background: #fff8e1; border-color: #f0c36d; }
+    .sq-deckle-count.is-over { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+    .sq-deckle-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .sq-deckle-top { font-weight: 700; color: #1f2a44; font-size: 13.5px; }
+    .sq-deckle-sub { color: #64748b; font-size: 12px; }
+    .sq-deckle-curing {
+      flex: none; font-size: 10.5px; font-weight: 700; color: #b45309; background: #fffaf0;
+      border: 1px solid #fde8c9; border-radius: 999px; padding: 2px 9px;
+    }
+    .sq-error-text { color: #dc2626; font-size: 12px; font-weight: 600; min-height: 16px; margin-top: 6px; }
+
+    .sq-dialog-footer {
+      flex: none; display: flex; justify-content: flex-end; gap: 10px;
+      padding: 12px 24px; border-top: 1px solid #e6eaf2; background: #fafbfd;
+    }
+    .sq-btn {
+      border: none; border-radius: 9px; padding: 11px 20px; font-size: 14px; font-weight: 700; cursor: pointer;
+      transition: opacity 0.18s ease; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .sq-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .sq-btn-ghost { background: #eef1f5; color: #475569; }
+    .sq-btn-ghost:hover { background: #e2e6ec; }
+    .sq-btn-primary { background: linear-gradient(135deg, #044a78 0%, #03365a 100%); color: #fff; }
+    .sq-btn-primary:hover { opacity: 0.92; }
+    </style>
     <div class="span-full" style="border:none !important;">
-      <div class="sl-panel" style="padding: 12px 14px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7c8ba1;margin-bottom:8px;">
-          Other Deckles in this batch — <%= dash(order.productCode) %> · <%= dash(targetDeckles[0].size) %>mm
+      <button type="button" class="sl-avail-bar" id="otherDecklesBtn" aria-haspopup="dialog">
+        <% const freeCount = groupDeckles.filter((d) => d.selectable).length; %>
+        <span class="sl-avail-count"><%= freeCount %></span>
+        <span>more <strong><%= dash(order.productCode) %></strong> &middot; <%= dash(targetDeckles[0].size) %>mm Deckle<%= freeCount === 1 ? "" : "s" %> available<% if (groupDeckles.length > freeCount) { %> &middot; <%= groupDeckles.length - freeCount %> on other cards<% } %></span>
+        <span class="sl-avail-go">Add Deckles <i class="fa-solid fa-chevron-right"></i></span>
+      </button>
+    </div>
+
+    <!-- Same dialog as the Slitting Queue's Choose Deckles (slittingQueue.ejs),
+         listing only the Deckles NOT already on this page. -->
+    <div class="logout-modal" id="chooseDeckleDialog" aria-hidden="true">
+      <div class="sq-dialog" role="dialog" aria-modal="true" aria-labelledby="chooseDeckleDialogTitle">
+        <div class="sq-dialog-header">
+          <div>
+            <h2 id="chooseDeckleDialogTitle">Choose Deckles</h2>
+            <p class="sq-dialog-subtitle"><%= dash(order.productCode) %> &middot; <%= dash(targetDeckles[0].size) %>mm &middot; <%= order.runningMeters != null ? `${order.runningMeters} mtrs` : "no running meters set" %> &middot; <%= groupDeckles.length %> Deckle<%= groupDeckles.length === 1 ? "" : "s" %></p>
+          </div>
+          <span id="sq-deckle-count" class="sq-deckle-count sq-deckle-count-head"></span>
+          <button type="button" class="sq-close-btn" id="sq-close-btn" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          <% groupDeckles.forEach((d) => { %>
-            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 12px;border:1.5px solid #e6eaf2;border-radius:8px;font-size:12.5px;">
-              <span style="font-weight:700;color:#1f2a44;min-width:150px;"><%= dash(d.rollId) %></span>
-              <span style="color:#64748b;"><%= dash(d.reelMtrs) %> mtrs &middot; <%= dash(d.location) %> &middot; lot <%= dash(d.lotNo) %></span>
-              <% if (d.curing && d.curing.cured === false) { %>
-                <span style="margin-left:auto;font-size:10.5px;font-weight:700;color:#b45309;background:#fffaf0;border:1px solid #fde8c9;border-radius:999px;padding:2px 9px;">curing</span>
-              <% } %>
-            </div>
-          <% }) %>
+        <div id="sq-dialog-form">
+          <div class="sq-dialog-body">
+            <div id="sq-deckle-list" class="sq-deckle-list"></div>
+            <div id="sq-deckle-error" class="sq-error-text"></div>
+          </div>
+          <div class="sq-dialog-footer">
+            <button type="button" class="sq-btn sq-btn-ghost" id="sq-cancel-btn">Cancel</button>
+            <button type="button" class="sq-btn sq-btn-primary" id="sq-submit-btn">Add to allocation <i class="fa-solid fa-arrow-right-long"></i></button>
+          </div>
         </div>
       </div>
     </div>
+    <script id="sl-group-deckles" type="application/json"><%- safeJson(groupDeckles) %></script>
+    <script>
+      (function () {
+        const dlg = document.getElementById("chooseDeckleDialog");
+        const list = document.getElementById("sq-deckle-list");
+        const errEl = document.getElementById("sq-deckle-error");
+        const countEl = document.getElementById("sq-deckle-count");
+        const DECKLES = JSON.parse(document.getElementById("sl-group-deckles").textContent);
+        const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        const fmtMtrs = (v) => (Number.isFinite(Number(v)) ? Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—");
+        const fmtDate = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—"; };
+        const fmtTime = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : "—"; };
+        function curingTimeLeft(iso) {
+          if (!iso) return "";
+          const ms = Date.parse(iso) - Date.now();
+          if (!Number.isFinite(ms) || ms <= 0) return "";
+          const mins = Math.ceil(ms / 60000);
+          if (mins < 60) return `${mins}m`;
+          const h = Math.floor(mins / 60), m = mins % 60;
+          return m ? `${h}h ${m}m` : `${h}h`;
+        }
+        const checked = () => [...list.querySelectorAll('input[type="checkbox"]:checked')];
+
+        function renderCount() {
+          const n = checked().length;
+          countEl.className = "sq-deckle-count sq-deckle-count-head" + (n ? " is-ok" : "");
+          countEl.textContent = n ? `${n} Deckle${n === 1 ? "" : "s"} ticked` : "None ticked";
+        }
+
+        list.innerHTML = `<div class="sq-deckle-head"><span class="sq-deckle-head-pad"></span>`
+          + `<span class="sq-deckle-line"><span class="sq-deckle-top">Deckle ID</span>`
+          + `<span class="sq-fact-mtrs">Running Mtrs</span><span class="sq-fact-date">Made on</span><span class="sq-fact-cure">Curing</span></span></div>`
+          + DECKLES.map((d, i) => {
+            const curingLeft = curingTimeLeft(d.curingUntil);
+            const disabled = !d.selectable;
+            const curing = d.curing && d.curing.cured === false;
+            const curingCls = d.hotMelt ? "is-cured" : (curing ? "is-curing" : "is-cured");
+            const curingTxt = d.hotMelt ? "Hot melt" : curing ? `Curing${curingLeft ? ` · ${esc(curingLeft)} left` : ""}` : "Cured";
+            const held = d.card;
+            return `
+        <label class="sq-deckle-row${disabled ? " is-disabled" : ""} is-off">
+          <input type="checkbox" value="${esc(d._id)}" ${disabled ? "disabled" : ""} />
+          <span class="sq-deckle-no">${i + 1}</span>
+          <span class="sq-deckle-main">
+            <span class="sq-deckle-line">
+              <span class="sq-deckle-top" title="${esc(d.rollId)}">${esc(d.rollId)}</span>
+              <span class="sq-fact-value sq-fact-mtrs">${fmtMtrs(d.reelMtrs)} mtrs</span>
+              <span class="sq-fact-value sq-fact-date">${fmtDate(d.createdAt)}, ${fmtTime(d.createdAt)}</span>
+              <span class="sq-fact-value sq-fact-cure ${curingCls}">${curingTxt}</span>
+            </span>
+            ${held ? `<span class="sq-deckle-note" style="color:#b45309;"><i class="fa-solid fa-lock"></i> Already on ${esc(held.slittingJobCardId)}${held.machineName && held.machineName !== "—" ? ` (${esc(held.machineName)})` : ""} — not run yet. Shown for reference; it can't be picked until that card is run.</span>` : (disabled ? `<span class="sq-deckle-note" style="color:#64748b;">Not linked to any pending order.</span>` : "")}
+          </span>
+        </label>`;
+          }).join("");
+
+        list.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+          cb.addEventListener("change", () => {
+            cb.closest(".sq-deckle-row").classList.toggle("is-off", !cb.checked);
+            if (checked().length) errEl.textContent = "";
+            renderCount();
+          });
+        });
+        renderCount();
+
+        const open = () => { dlg.classList.add("show"); dlg.setAttribute("aria-hidden", "false"); };
+        const close = () => { dlg.classList.remove("show"); dlg.setAttribute("aria-hidden", "true"); };
+        document.getElementById("otherDecklesBtn").addEventListener("click", open);
+        document.getElementById("sq-close-btn").addEventListener("click", close);
+        document.getElementById("sq-cancel-btn").addEventListener("click", close);
+        dlg.addEventListener("click", (e) => { if (e.target === dlg) close(); });
+        document.addEventListener("keydown", (e) => { if (e.key === "Escape" && dlg.classList.contains("show")) close(); });
+
+        // Same page, same layout, plus the extra Deckles -- everything already
+        // in the URL (current Deckles, ?layout=) is kept.
+        document.getElementById("sq-submit-btn").addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const picked = checked();
+          if (!picked.length) { errEl.textContent = "Tick at least one Deckle to add."; return; }
+          const params = new URLSearchParams(window.location.search);
+          const have = new Set(params.getAll("deckle"));
+          picked.filter((b) => !have.has(b.value)).forEach((b) => params.append("deckle", b.value));
+          // Adding Deckles reloads the page; keep what has been filled in so the
+          // layout, crew and trim are not lost (restored at the end of the page script).
+          if (typeof window.slSaveFormState === "function") window.slSaveFormState();
+          window.location.href = window.location.pathname + "?" + params.toString();
+        });
+      })();
+    </script>
     <% } %>
 
     <% if (!machines.length) { %>
@@ -677,7 +922,7 @@
       </td>
       ${SLOTS.map((s) => `<td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-roll-width sl-width-input" data-slot="${s}" placeholder="${s}" title="Roll ${s} width in mm" /></td>`).join("")}
       <td><input type="number" step="any" min="0" inputmode="decimal" class="form-control sl-rm" placeholder="Mtrs" /></td>
-      <td><input type="number" step="1" min="1" inputmode="numeric" class="form-control sl-qty" placeholder="Qty" title="How many Deckles use this same roll-width layout" /></td>
+      <td><input type="text" inputmode="numeric" maxlength="4" autocomplete="off" class="form-control sl-qty" placeholder="Qty" title="How many Deckles use this same roll-width layout" /></td>
       <td style="background:#fff;">
         <button type="button" class="sl-row-btn sl-remove-layout" title="Remove this layout" aria-label="Remove this layout">
           <i class="fa-solid fa-xmark"></i>
@@ -701,10 +946,55 @@
     if (GROUP_WIDTH !== null) widthEl.value = GROUP_WIDTH;
     qtyEl.value = qty;
 
+    // "Deckle Rolls" going past the Deckles selected: the typed number is left
+    // alone, the field (and the other layouts' counts it adds up with) gets a
+    // red ring from recalc(), and a toast says why. Save stays blocked.
+    // A plain text box (digits only) rather than type=number: a number box
+    // can't be told where its caret is, and this one must always put it after
+    // what is typed, wherever it is clicked.
+    const caretToEnd = () => { const n = qtyEl.value.length; try { qtyEl.setSelectionRange(n, n); } catch (_) {} };
+    qtyEl.addEventListener("focus", () => { caretToEnd(); setTimeout(caretToEnd, 0); });
+    qtyEl.addEventListener("mouseup", () => setTimeout(caretToEnd, 0));
+    qtyEl.addEventListener("input", () => {
+      const clean = qtyEl.value.replace(/\D+/g, "");
+      if (clean !== qtyEl.value) qtyEl.value = clean;
+    });
+    qtyEl.addEventListener("input", () => {
+      const typed = Math.floor(Number(qtyEl.value));
+      if (!Number.isFinite(typed) || typed < 1) return;
+      const others = [...document.querySelectorAll("#slLogBody .sl-log-row .sl-qty")]
+        .filter((el) => el !== qtyEl)
+        .reduce((n, el) => n + Math.max(0, Math.floor(Number(el.value) || 0)), 0);
+      const allowed = Math.max(0, SEQUENCED.length - others);
+      if (typed <= allowed) return;
+      if (typeof showToast === "function") {
+        showToast(`Only ${SEQUENCED.length} Deckle Roll${SEQUENCED.length === 1 ? " is" : "s are"} allowed.`, "error");
+      }
+    });
+
     tr.querySelectorAll("input").forEach((el) => el.addEventListener("input", recalc));
 
     // Enter walks along A..L, so a layout can be typed straight through.
     const widthInputs = [...tr.querySelectorAll(".sl-roll-width")];
+    // Roll widths are filled in order: B needs A, C needs A and B, and so on.
+    // Landing on (or typing into) a slot with an earlier one still empty sends
+    // you back to that earlier slot, quietly.
+    const firstEmptyBefore = (idx) => widthInputs.slice(0, idx).find((x) => x.value.trim() === "");
+    const sendBack = (empty) => empty.focus();
+    widthInputs.forEach((el, idx) => {
+      el.addEventListener("focus", () => {
+        const empty = firstEmptyBefore(idx);
+        if (empty) sendBack(empty);
+      });
+      el.addEventListener("input", () => {
+        if (el.value.trim() === "") return;
+        const empty = firstEmptyBefore(idx);
+        if (!empty) return;
+        el.value = "";
+        sendBack(empty);
+        recalc();
+      });
+    });
     widthInputs.forEach((el, idx) => {
       el.addEventListener("keydown", (ev) => {
         if (ev.key !== "Enter") return;
@@ -851,8 +1141,12 @@
 
       // First thing standing between this plan and Save, named in the order it
       // is filled in -- otherwise the button just sits dead.
+      // A filled slot after an empty one (A cleared while B is still set).
+      const slotInputs = [...tr.querySelectorAll(".sl-roll-width")];
+      const gapAt = slotInputs.findIndex((el, k) => el.value.trim() !== "" && slotInputs.slice(0, k).some((x) => x.value.trim() === ""));
       const why = !(r.qty >= 1) ? "enter how many Deckles use this layout"
         : !widths.length ? "enter at least one roll width (A–L)"
+        : gapAt >= 0 ? `enter the roll widths in order — roll ${slotInputs.slice(0, gapAt).find((x) => x.value.trim() === "").dataset.slot} is empty before roll ${slotInputs[gapAt].dataset.slot}`
         : !widths.every((w) => w > 0) ? "roll widths must be more than zero"
         : over ? "the roll widths add up to more than the Deckle web"
         : !(r.plannedRunningMeter > 0) ? "enter the R. Meter"
@@ -862,6 +1156,8 @@
 
     const statusEl = document.getElementById("slAssignStatus");
     const fullyAssigned = totalQty === SEQUENCED.length;
+    document.querySelectorAll("#slLogBody .sl-log-row .sl-qty")
+      .forEach((el) => el.classList.toggle("sl-qty-over", totalQty > SEQUENCED.length));
     if (statusEl) {
       statusEl.textContent = `${totalQty} of ${SEQUENCED.length} Deckle${SEQUENCED.length === 1 ? "" : "s"} assigned`;
       statusEl.classList.toggle("is-ok", fullyAssigned);
@@ -886,8 +1182,8 @@
     if (addLayoutBtn) addLayoutBtn.disabled = unassigned <= 0;
     if (!blocked && !fullyAssigned) {
       blocked = totalQty < SEQUENCED.length
-        ? `${SEQUENCED.length - totalQty} Deckle${SEQUENCED.length - totalQty === 1 ? "" : "s"} not yet assigned to a layout.`
-        : `${totalQty - SEQUENCED.length} too many Deckles assigned across layouts — lower a "Deckle Rolls" count.`;
+        ? `${SEQUENCED.length} Deckle Roll${SEQUENCED.length === 1 ? " is" : "s are"} required.`
+        : `Only ${SEQUENCED.length} Deckle Roll${SEQUENCED.length === 1 ? " is" : "s are"} allowed.`;
     }
 
     if (!rows.length) blocked = "Add a Deckle layout.";
@@ -937,6 +1233,21 @@
     if (msg && typeof showToast === "function") showToast(msg, "error");
   }
 
+  // Picking a machine picks its operator: an operator's profile code is the
+  // machine's name (same location), so the match is exact. No match leaves
+  // the operator as it was. Only on a deliberate machine change -- a saved
+  // card's crew on page load is never touched.
+  document.getElementById("slMachine").addEventListener("change", (e) => {
+    const key = e.target.selectedOptions[0]?.dataset.operatorKey;
+    if (!key) return;
+    const opSel = document.getElementById("slOperator");
+    const match = [...opSel.options].find((o) => o.dataset.machineKey && o.dataset.machineKey === key);
+    if (match) {
+      opSel.value = match.value;
+      opSel.dispatchEvent(new Event("change"));
+    }
+  });
+
   ["slMachine", "slOperator", "slHelper"].forEach((id) =>
     document.getElementById(id).addEventListener("change", recalc));
 
@@ -962,7 +1273,14 @@
     const label = btn.textContent;
 
     recalc();
-    if (submitBlockReason) return showError(submitBlockReason);
+    if (submitBlockReason) {
+      // Short of the selected Deckles: ring the Deckle Rolls boxes too (the
+      // next edit's recalc() clears it), as the over-count case does.
+      const qtyEls = [...document.querySelectorAll("#slLogBody .sl-log-row .sl-qty")];
+      const total = qtyEls.reduce((n, el) => n + Math.max(0, Math.floor(Number(el.value) || 0)), 0);
+      if (total < SEQUENCED.length) qtyEls.forEach((el) => el.classList.add("sl-qty-over"));
+      return showError(submitBlockReason);
+    }
 
     const rows = expandLayoutsToRows();
     if (!rows.length) return showError("Add a Deckle layout.");
@@ -1107,4 +1425,104 @@
       addLayoutRow(group.length, group[0].existing ? group[0].existing.row : undefined);
     });
   }
+
+  // Selected Deckles list: made-on date/time and curing status, formatted in
+  // the browser like the Choose Deckles dialog (dd/mm/yy, hh:mm AM).
+  (function fillSelectedDeckles() {
+    const timeLeft = (iso) => {
+      const ms = Date.parse(iso) - Date.now();
+      if (!Number.isFinite(ms) || ms <= 0) return "";
+      const mins = Math.ceil(ms / 60000);
+      if (mins < 60) return `${mins}m`;
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return m ? `${h}h ${m}m` : `${h}h`;
+    };
+    document.querySelectorAll(".sl-sel-made").forEach((el) => {
+      const d = el.dataset.created ? new Date(el.dataset.created) : null;
+      if (!d || isNaN(d)) return;
+      el.textContent = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" })
+        + ", " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+    });
+    document.querySelectorAll(".sl-sel-cure").forEach((el) => {
+      if (el.dataset.hotmelt === "1") { el.textContent = "Hot melt"; el.classList.add("is-cured"); }
+      else if (el.dataset.cured === "0") {
+        const left = timeLeft(el.dataset.curedAt);
+        el.textContent = "Curing" + (left ? ` · ${left} left` : "");
+        el.classList.add("is-curing");
+      } else { el.textContent = "Cured"; el.classList.add("is-cured"); }
+    });
+  })();
+
+  // Filled-in state kept across the reload that adding or removing a Deckle
+  // causes; restoreAfterAdd() below reads it back.
+  window.slSaveFormState = function () {
+    try {
+      const val = (id) => (document.getElementById(id) || {}).value || "";
+      sessionStorage.setItem("slAddDeckles:" + CONFIG.pendingId, JSON.stringify({
+        oldCount: SEQUENCED.length,
+        machine: val("slMachine"), operator: val("slOperator"), helper: val("slHelper"), trim: val("slTrim"),
+        rows: [...document.querySelectorAll("#slLogBody .sl-log-row")].map((tr) => {
+          const cuts = {};
+          tr.querySelectorAll(".sl-roll-width").forEach((el) => { if (el.value.trim() !== "") cuts[el.dataset.slot] = el.value; });
+          return {
+            width: tr.querySelector(".sl-width")?.value || "",
+            rm: tr.querySelector(".sl-rm")?.value || "",
+            qty: tr.querySelector(".sl-qty")?.value || "",
+            cuts,
+          };
+        }),
+      }));
+    } catch (_) {}
+  };
+
+  // Remove (unselect) a Deckle: same page without that ?deckle=, filled-in
+  // state kept. The Deckle goes back to the "more Deckles available" list.
+  document.querySelectorAll(".sl-sel-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.deckleId;
+      const params = new URLSearchParams(window.location.search);
+      const keep = params.getAll("deckle").filter((d) => d !== id);
+      if (!keep.length) return;
+      params.delete("deckle");
+      keep.forEach((d) => params.append("deckle", d));
+      window.slSaveFormState();
+      window.location.href = window.location.pathname + "?" + params.toString();
+    });
+  });
+
+  // Coming back from "Add Deckles": put back what was filled in before the
+  // reload -- crew, trim and the layout rows -- instead of starting blank.
+  // The rows are only restored for a fresh, editable layout (not a locked
+  // planner layout, and not one seeded from existing cards).
+  (function restoreAfterAdd() {
+    const KEY = "slAddDeckles:" + CONFIG.pendingId;
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(KEY) || "null"); sessionStorage.removeItem(KEY); } catch (_) {}
+    if (!saved) return;
+    const setSel = (id, v) => {
+      const el = document.getElementById(id);
+      if (el && v && [...el.options].some((o) => o.value === v)) el.value = v;
+    };
+    setSel("slMachine", saved.machine);
+    setSel("slOperator", saved.operator);
+    setSel("slHelper", saved.helper);
+    if (saved.trim !== "" && saved.trim != null) {
+      trimInput.value = saved.trim;
+      TOTAL_TRIM_MM = num(trimInput.value) ?? 10;
+      EDGE_TRIM_MM = TOTAL_TRIM_MM / 2;
+      GROUP_WIDTH = rawWebWidth !== null ? round2(rawWebWidth - TOTAL_TRIM_MM) : null;
+    }
+    if (!LAYOUT_LOCKED && !anyExisting && Array.isArray(saved.rows) && saved.rows.length) {
+      document.querySelectorAll("#slLogBody tr").forEach((r) => r.remove());
+      saved.rows.forEach((r) => {
+        // One layout that covered every Deckle before still covers every Deckle now.
+        const qty = saved.rows.length === 1 && Number(r.qty) === saved.oldCount ? SEQUENCED.length : (Number(r.qty) || 0);
+        addLayoutRow(qty, { plannedRunningMeter: r.rm === "" ? undefined : Number(r.rm), cuts: r.cuts });
+        const tr = document.querySelector("#slLogBody .sl-log-row:last-of-type") || [...document.querySelectorAll("#slLogBody .sl-log-row")].pop();
+        const w = tr && tr.querySelector(".sl-width");
+        if (w && r.width !== "" && Number(r.width) !== Number(w.value)) w.value = r.width;
+      });
+    }
+    recalc();
+  })();
 </script>
