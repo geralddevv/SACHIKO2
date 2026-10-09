@@ -316,11 +316,41 @@ was already on file, so an unchanged resubmit (the normal case on a
 re-assignment after Undo — lotNo is kept across unassign, see "Undoing an
 assignment" below) never trips over its own existing value.
 
-A Deckle's own id (`generateDeckleId()` in `utils/rollId.js`) still regex-reads
-its lot number off the **trailing digits** of this string (`deckleLotNumber()`)
-— `.../G001` yields `0001` — so it keeps working unchanged against the new
-format exactly as it did against the old flat one; nothing there needed to
-change.
+**Temporary Lot No Setup replaces the inline edit.** Production was already
+running before the ERP kept lot numbers, so the series is told where it stands:
+the **gear** beside Lot No on Assign Production (the pencil is switched off, and
+`POST .../assign/:id/lot-no` refuses) opens a dialog — one row per Label Stock
+product code — to enter "the last Lot No used this year" (`14` = `G014`). It is
+stored in `LotNoBaseline` (`models/system/lotNoBaseline.js`, one row per product
++ FY), and `highestLotNoSerial()` now takes **max(that, the highest serial in
+orders/job cards)**, so the "no separate counter" statement above holds for the
+database, with the baseline layered under it. A save can move a series forward,
+never below a lot the system holds (admin/proprietor/hod only; JSON endpoints
+`GET|POST /labels/production/lot-no-setup`, no page of its own — a reload would
+drop ticked reels).
+
+**Deckle IDs: `PRODUCT/FY/<year letter><lot>/<4-digit serial>`**, e.g.
+`C001WB/26-27/G0025/0124`. A Deckle's own id (`generateDeckleId()` in
+`utils/rollId.js`) regex-reads its lot number off the **trailing digits** of the
+Lot No (`deckleLotNumber()`) — `.../G001` yields `0001`. The **serial is one
+running count per MASTER product code per financial year, across lots** (counter
+key `deckleId:<base code>:<fy>:<letter>`; the old per-lot counters, one segment
+longer, are dead). **A "-A"/"-B" variant counts on its master's series** —
+`deckleBaseCode()` strips the suffix — so after `C001WB/26-27/G0025/0124` the
+next Deckle is `C001WB-A/26-27/G0025/0125`: only the product code in the id
+changes, never the number's run. Variants are not listed in the setup dialog — the same scoping the Lot No's serial has, to match the plant's paper
+numbering. `generateDeckleId()` first lifts the counter to the highest serial any
+existing Deckle of that product/year carries (either width: ids made when it
+was five digits, `/00019`, still exist and still scan — hence `\d{4,}` in
+`DECKLE_TAIL`, the job card page's copy, and the operator app's own
+`src/utils/rollId.js`), and the taken-check compares by number, not text.
+**Lot No & Deckle No Setup** is one dialog (the gear beside Lot No on Assign
+Production; `GET|POST /labels/production/lot-no-setup` and
+`GET|POST /machine/deckle-no-setup`) listing every **master** product with its
+last Lot serial and last Deckle serial; it moves the Deckle counter forward with
+`$max` — never below an existing Deckle of the master or any variant. Web
+job card, Assign & Continue and the operator app all mint through the one
+function, so one setting covers all three.
 
 ### Label Stock order rates follow the binding, not the product
 

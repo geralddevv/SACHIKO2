@@ -927,13 +927,20 @@
     <div class="ap-card-title"><span><i class="fa-solid fa-layer-group"></i> Material Details</span></div>
     <div style="padding: 14px;">
       <div class="material-id-row">
-        <div id="ln-cell" style="position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 320px; padding: 11px 12px; border-right: 1px solid #e2e8f0;">
+        <div id="ln-cell" data-lot-own="<%= pp.lotNo && pp.lotNo === previewLotNo ? "1" : "0" %>" style="position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 320px; padding: 11px 12px; border-right: 1px solid #e2e8f0;">
           <span class="mid-label">Lot No</span>
-          <button type="button" id="ln-edit" class="dq-edit-ic" title="Edit Lot No" aria-label="Edit Lot No">
-            <i class="fa-solid fa-pen"></i>
+          <!-- Inline editing is switched off for now: the last Lot No used is
+               set once per product in the Lot No Setup dialog (bottom of this
+               page), which this gear opens. POST .../lot-no is refused
+               server-side too. Only the roles that may change the series see
+               the gear. -->
+          <% if (authUser && ["proprietor", "admin", "hod"].includes(authUser.role)) { %>
+          <button type="button" id="ln-edit" class="dq-edit-ic" title="Set the last Lot No and Deckle No used (Lot &amp; Deckle No Setup)" aria-label="Open Lot No and Deckle No Setup" aria-haspopup="dialog">
+            <i class="fa-solid fa-gear"></i>
           </button>
+          <% } %>
           <span class="mid-value" id="ln-text"><%= dash(previewLotNo) %></span>
-          <input type="text" id="ln-input" name="lotNo" value="<%= previewLotNo || "" %>" class="form-control" hidden />
+          <input type="hidden" id="ln-input" name="lotNo" value="<%= previewLotNo || "" %>" />
         </div>
         <div class="mid-item"><span class="mid-label">Product Code</span><span class="mid-value"><%= dash(item.productCode || item.skuCode) %></span></div>
         <!-- Set on the Deckle Set page (before an order ever reaches Assign
@@ -1045,59 +1052,6 @@
             })();
           </script>
         </div>
-        <script>
-          (function () {
-            const edit = document.getElementById("ln-edit");
-            const text = document.getElementById("ln-text");
-            const input = document.getElementById("ln-input");
-            const current = String(input.value).trim();
-            const orderId = "<%= pp._id %>";
-            let cancelled = false;
-
-            function showText() {
-              input.hidden = true;
-              text.hidden = false;
-            }
-            function editLotNo() {
-              cancelled = false;
-              text.hidden = true;
-              input.hidden = false;
-              input.focus();
-              input.select();
-            }
-            function saveLotNo() {
-              if (cancelled) {
-                input.value = current;
-                showText();
-                return;
-              }
-              const v = String(input.value).trim();
-              if (v === current) {
-                showText();
-                return;
-              }
-              if (!v) {
-                alert("Lot No cannot be empty.");
-                input.focus();
-                return;
-              }
-              fetch(`/app/labels/production/assign/${orderId}/lot-no`, {
-                method: "POST",
-                headers: { "Content-Type": "application/x-www-form-urlencoded", "x-csrf-token": document.querySelector('input[name="_csrf"]')?.value || "" },
-                body: `lotNo=${encodeURIComponent(v)}`
-              })
-              .then(r => r.ok ? location.reload() : r.text().then(t => { alert("Failed to save: " + t); input.focus(); }))
-              .catch(e => { alert("Error: " + e.message); input.focus(); });
-            }
-
-            edit.addEventListener("click", editLotNo);
-            input.addEventListener("blur", saveLotNo);
-            input.addEventListener("keydown", (ev) => {
-              if (ev.key === "Enter") { ev.preventDefault(); input.blur(); }
-              else if (ev.key === "Escape") { cancelled = true; input.blur(); }
-            });
-          })();
-        </script>
 
       <div class="layer-stack custom-scrollbar">
         <% materialGroups.forEach(function (g, idx) { %>
@@ -1402,6 +1356,385 @@
     </div>
   </form>
 </div>
+
+<%# Lot No & Deckle No Setup -- TEMPORARY. Opened by the gear beside Lot No.
+    Production was already running before the ERP kept either series, so each
+    product is told where its numbering stands, in one place:
+      - Lot No    : the last serial used this year (G014 -> 14), per product
+      - Deckle No : the last Deckle serial made this year (0123 -> 123), per
+                    product, running across lots
+    Rows load from GET .../lot-no-setup and GET /machine/deckle-no-setup when it
+    opens and are merged by product code; Save posts whichever of the two
+    changed (JSON), so nothing here reloads the page -- a reload would drop the
+    reels already ticked below. Kept outside every <form> on this page. %>
+<style>
+  #lotNoDialog { width: min(1080px, 95vw); padding: 0; border-radius: 14px; border: none; background: #fff; }
+  #lotNoDialog::backdrop { background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px); }
+  #lotNoDialog .logout-dialog { width: 100%; padding: 0; border: none; box-shadow: none; background: transparent; }
+  .lnd-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: #044a78; color: #fff; border-radius: 14px 14px 0 0; }
+  .lnd-head h2 { margin: 0; font-size: 1.15rem; font-weight: 700; }
+  .lnd-head-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lnd-chip { display: inline-flex; gap: 6px; padding: 3px 11px; border-radius: 999px; background: rgba(255,255,255,0.16); font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+  .lnd-chip b { font-weight: 800; }
+  .lnd-close { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); color: #fff; border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .lnd-close:hover { background: rgba(255,255,255,0.28); }
+  .lnd-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; border-radius: 0 0 14px 14px; background: #fff; }
+  .lnd-note { padding: 10px 14px; border-radius: 10px; background: #fff8e1; border: 1px solid #f0d58a; border-left: 4px solid #e0a800; color: #5b4a12; font-size: 0.88rem; line-height: 1.5; }
+  .lnd-note code { background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 4px; font-weight: 700; color: #3f3200; }
+  .lnd-note ul { margin: 4px 0 0; padding-left: 18px; }
+  .lnd-preview { display: none; align-items: center; gap: 8px 22px; flex-wrap: wrap; padding: 9px 14px; border-radius: 10px; background: #eef6ff; border: 1px solid #c5dcf3; font-size: 0.88rem; color: #1f2a44; }
+  .lnd-preview.is-on { display: flex; }
+  .lnd-preview > span { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .lnd-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .lnd-search-wrap { position: relative; flex: 0 1 300px; min-width: 180px; }
+  .lnd-search-wrap i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.85rem; pointer-events: none; }
+  #lnd-search { width: 100%; height: 38px; padding: 2px 12px 2px 34px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 0.92rem; box-sizing: border-box; }
+  #lnd-search:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.14); }
+  .lnd-count { font-size: 0.85rem; color: #64748b; }
+  .lnd-count b { color: #1f2a44; }
+  .lnd-msg { min-height: 18px; margin: -4px 0; font-size: 0.88rem; font-weight: 600; }
+  .lnd-msg.is-ok { color: #1a7a3f; }
+  .lnd-msg.is-err { color: #c0392b; }
+
+  .lnd-card { border: 1px solid #d5dde8; border-radius: 12px; overflow: hidden; }
+  .lnd-hrow, .lnd-row {
+    display: grid; align-items: center; column-gap: 12px; padding: 0 14px;
+    grid-template-columns: minmax(120px, 1.1fr) 100px minmax(170px, 1.3fr) 100px 90px 76px;
+  }
+  /* The header sits OUTSIDE the scrolling rows, so the scrollbar starts under it. */
+  .lnd-hrow { background: #044a78; color: #fff; min-height: 40px; overflow: hidden; scrollbar-gutter: stable; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1.25; }
+  .lnd-scroll { max-height: min(44vh, 400px); overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
+  .lnd-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+  .lnd-scroll::-webkit-scrollbar-track { background: #f0f2f5; }
+  .lnd-scroll::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+  .lnd-scroll::-webkit-scrollbar-thumb:hover { background: #044a78; }
+  .lnd-row { min-height: 56px; padding-top: 7px; padding-bottom: 7px; border-top: 1px solid #e8edf3; font-size: 0.92rem; background: #fff; }
+  .lnd-row:first-child { border-top: 0; }
+  .lnd-row:hover { background: #f6faff; }
+  .lnd-row[hidden] { display: none; }
+  .lnd-row.is-dirty { background: #fffbea; }
+  .lnd-row.is-current { background: #eef6ff; box-shadow: inset 4px 0 0 #044a78; }
+  .lnd-row.is-current.is-dirty { background: #fff6d6; }
+  .lnd-code { font-weight: 800; color: #1f2a44; }
+  .lnd-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #044a78; color: #fff; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em; vertical-align: middle; }
+  .lnd-tag.is-family { background: #64748b; }
+  .lnd-serial { width: 88px; height: 36px; padding: 2px 10px; font-size: 1.02rem; font-weight: 800; color: #1f2a44; text-align: right; border: 1px solid #b8c7d9; border-radius: 8px; background: #f4f9ff; box-sizing: border-box; }
+  .lnd-serial:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4, 74, 120, 0.14); background: #fff; }
+  .lnd-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.84rem; font-weight: 700; white-space: nowrap; }
+  .lnd-id.is-next { display: inline-block; padding: 3px 10px; border-radius: 6px; background: #eaf3fb; color: #044a78; }
+  .lnd-save { height: 36px; min-width: 72px; padding: 0 14px; border: 0; border-radius: 8px; background: #044a78; color: #fff; font-weight: 700; font-size: 0.88rem; cursor: pointer; }
+  .lnd-save:hover:not(:disabled) { background: #03365a; }
+  .lnd-save:disabled { background: #e2e8f0; color: #94a3b8; cursor: default; }
+  .lnd-empty { text-align: center; padding: 30px 16px; color: #94a3b8; font-size: 0.92rem; }
+
+  @media (max-width: 860px) {
+    .lnd-col-next { display: none; }
+    .lnd-hrow, .lnd-row { grid-template-columns: minmax(64px, 1fr) 80px 80px 62px; column-gap: 8px; padding: 0 8px; }
+    .lnd-hrow { font-size: 0.66rem; letter-spacing: 0.03em; padding-top: 6px; padding-bottom: 6px; }
+    .lnd-chip-year { display: none; }
+    .lnd-head-meta { flex-wrap: nowrap; }
+    .lnd-search-wrap { flex: 1 1 100%; }
+    .lnd-scroll { max-height: 38vh; }
+    .lnd-serial { width: 72px; padding: 2px 6px; }
+    .lnd-save { min-width: 0; padding: 0 10px; }
+  }
+</style>
+
+<dialog id="lotNoDialog" class="logout-modal" aria-labelledby="lotNoDialogTitle">
+  <div class="logout-dialog">
+    <div class="lnd-head">
+      <h2 id="lotNoDialogTitle"><i class="fa-solid fa-hashtag" style="margin-right: 8px; opacity: .85;"></i>Lot No &amp; Deckle No Setup</h2>
+      <div class="lnd-head-meta">
+        <span class="lnd-chip lnd-chip-year">Financial year <b id="lnd-fy">&mdash;</b></span>
+        <button type="button" class="lnd-close" id="lnd-close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+    <div class="lnd-body">
+      <div class="lnd-note">
+        <strong>Temporary setup.</strong> Tell the ERP where each product's numbering stands this financial year. Leave a box blank if none has been used yet.
+        <ul>
+          <li><strong>Last Lot No</strong> &mdash; the serial of the last lot used (<code>14</code> means <code>G014</code>, so the next lot is <code>G015</code>).</li>
+          <li><strong>Last Deckle</strong> &mdash; the serial of the last Deckle made, running across lots (<code>123</code> means <code>0123</code>, so the next is <code>0124</code>). Web job card and operator app both continue from it. A variant (<code>-A</code>, <code>-B</code>) isn't listed: it counts on its master's series, and only the product code in its Deckle ID differs.</li>
+        </ul>
+        Either can be moved forward later, never below a lot or Deckle the system already holds.
+      </div>
+      <div class="lnd-preview" id="lnd-preview">
+        <span>Next Lot No: <b class="lnd-id is-next" id="lnd-pv-lot">&mdash;</b></span>
+        <span>Next Deckle ID: <b class="lnd-id is-next" id="lnd-pv-deckle">&mdash;</b></span>
+      </div>
+      <div class="lnd-toolbar">
+        <div class="lnd-search-wrap">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="lnd-search" placeholder="Filter by product code" autocomplete="off" aria-label="Filter by product code" />
+        </div>
+        <div class="lnd-count"><b id="lnd-shown">0</b> of <span id="lnd-total">0</span> products</div>
+      </div>
+      <div class="lnd-msg" id="lnd-msg" role="status" aria-live="polite"></div>
+      <div class="lnd-card">
+        <div class="lnd-hrow">
+          <div>Product Code</div>
+          <div>Last Lot No (serial)</div>
+          <div class="lnd-col-next">Next Lot No</div>
+          <div>Last Deckle (serial)</div>
+          <div class="lnd-col-next">Next Deckle</div>
+          <div></div>
+        </div>
+        <div class="lnd-scroll" id="lnd-body"></div>
+        <div class="lnd-empty" id="lnd-empty">Loading&hellip;</div>
+      </div>
+    </div>
+  </div>
+</dialog>
+<script id="lot-no-ctx-data" type="application/json"><%- safeJson({ code: String(item.productCode || "").trim().toUpperCase(), orderId: String(pp._id) }) %></script>
+<script>
+  (function () {
+    const openBtn = document.getElementById("ln-edit");
+    if (!openBtn) return; // role may not change the series: no gear, no dialog wiring
+    const URL_LOT = "/app/labels/production/lot-no-setup";
+    const URL_DECKLE = "/app/machine/deckle-no-setup";
+    const CTX = JSON.parse(document.getElementById("lot-no-ctx-data").textContent);
+    const ORDER_ID = CTX.orderId;
+    const CURRENT_ID = CTX.code;   // the code this order's Deckle ids are written under
+    let CURRENT = CTX.code;        // the (master) row it sits on -- set on load
+    const dlg = document.getElementById("lotNoDialog");
+    const body = document.getElementById("lnd-body");
+    const empty = document.getElementById("lnd-empty");
+    const search = document.getElementById("lnd-search");
+    const msg = document.getElementById("lnd-msg");
+    const shown = document.getElementById("lnd-shown");
+    const total = document.getElementById("lnd-total");
+    const preview = document.getElementById("lnd-preview");
+    const pvLot = document.getElementById("lnd-pv-lot");
+    const pvDeckle = document.getElementById("lnd-pv-deckle");
+    let fy = "", letter = "";
+    let curLotNext = "";   // this order's product: next Lot No
+    let curDeckleNext = 1; // this order's product: next Deckle serial
+
+    const pad4 = function (n) { return String(n).padStart(4, "0"); };
+    function say(text, ok) {
+      msg.textContent = text || "";
+      msg.className = "lnd-msg" + (text ? (ok ? " is-ok" : " is-err") : "");
+    }
+    function el(tag, cls, text) {
+      const n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text !== undefined) n.textContent = text;
+      return n;
+    }
+    // Same shape the server mints: CODE / FY / <letter><3+ digit serial>.
+    function lotFor(code, serial) {
+      return code + " / " + fy + " / " + letter + String(serial).padStart(3, "0");
+    }
+    // The Lot No this order will carry (shown on the page), read as the server
+    // reads it: the digits it ends in, four-padded, are what a Deckle ID holds.
+    function pageLotDigits() {
+      const m = /(\d+)\s*$/.exec(String((document.getElementById("ln-input") || {}).value || ""));
+      return m ? m[1].padStart(4, "0") : "";
+    }
+    // Both "next" figures for THIS order's product, shown above the table.
+    function showPreview() {
+      if (!CURRENT) { preview.classList.remove("is-on"); return; }
+      pvLot.textContent = curLotNext || "—";
+      const lot = pageLotDigits();
+      pvDeckle.textContent = lot ? CURRENT_ID + "/" + fy + "/" + letter + lot + "/" + pad4(curDeckleNext) : "—";
+      preview.classList.add("is-on");
+    }
+
+    // d = { code, lot:{highest,last,next}, deckle:{highest,last,next} }
+    function renderRow(d) {
+      const isCurrent = d.code === CURRENT;
+      const row = el("div", "lnd-row" + (isCurrent ? " is-current" : ""));
+      row.dataset.code = d.code;
+      const init = { lot: d.lot.highest ? String(d.lot.highest) : "", deckle: d.deckle.highest ? String(d.deckle.highest) : "" };
+
+      const c1 = el("div");
+      c1.appendChild(el("span", "lnd-code", d.code));
+      if (isCurrent) c1.appendChild(el("span", "lnd-tag", "THIS ORDER"));
+
+      function serialInput(value, label, max) {
+        const i = el("input", "lnd-serial");
+        i.type = "number"; i.min = "0"; i.max = String(max); i.step = "1";
+        i.inputMode = "numeric"; i.placeholder = "0";
+        i.value = value;
+        i.setAttribute("aria-label", label + " for " + d.code);
+        return i;
+      }
+      const lotIn = serialInput(init.lot, "Last Lot No serial", 999999);
+      const deckleIn = serialInput(init.deckle, "Last Deckle serial", 9999);
+
+      const c2 = el("div"); c2.appendChild(lotIn);
+      const lotNext = el("span", "lnd-id is-next", d.lot.next);
+      const c3 = el("div", "lnd-col-next"); c3.appendChild(lotNext);
+      const c4 = el("div"); c4.appendChild(deckleIn);
+      const deckleNext = el("span", "lnd-id is-next", d.deckle.next);
+      const c5 = el("div", "lnd-col-next"); c5.appendChild(deckleNext);
+      const save = el("button", "lnd-save", "Save");
+      save.type = "button"; save.disabled = true;
+      const c6 = el("div"); c6.appendChild(save);
+      [c1, c2, c3, c4, c5, c6].forEach(function (c) { row.appendChild(c); });
+
+      const lotNextDefault = d.lot.next;
+      const deckleNextDefault = Number(d.deckle.highest) + 1;
+      function state() {
+        const lv = lotIn.value.trim(), dv = deckleIn.value.trim();
+        const lotDirty = lv !== init.lot, deckleDirty = dv !== init.deckle;
+        const lotOk = /^\d{1,6}$/.test(lv), deckleOk = /^\d{1,4}$/.test(dv) && Number(dv) <= 9999;
+        return { lv: lv, dv: dv, lotDirty: lotDirty, deckleDirty: deckleDirty, lotOk: lotOk, deckleOk: deckleOk };
+      }
+      function refresh() {
+        const st = state();
+        row.classList.toggle("is-dirty", st.lotDirty || st.deckleDirty);
+        // Save wakes only when something changed and every changed box is valid.
+        save.disabled = !((st.lotDirty || st.deckleDirty) && (!st.lotDirty || st.lotOk) && (!st.deckleDirty || st.deckleOk));
+        const lotSerial = st.lotDirty && st.lotOk ? Number(st.lv) + 1 : null;
+        const deckleSerial = st.deckleDirty && st.deckleOk && Number(st.dv) < 9999 ? Number(st.dv) + 1 : deckleNextDefault;
+        lotNext.textContent = lotSerial !== null ? lotFor(d.code, lotSerial) : lotNextDefault;
+        deckleNext.textContent = pad4(deckleSerial);
+        if (isCurrent) {
+          curLotNext = lotNext.textContent;
+          curDeckleNext = deckleSerial;
+          showPreview();
+        }
+      }
+      [lotIn, deckleIn].forEach(function (i) {
+        i.addEventListener("input", refresh);
+        i.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter") { ev.preventDefault(); if (!save.disabled) save.click(); }
+        });
+      });
+      save.addEventListener("click", function () { saveRow(row, d, state(), save); });
+      row._lotIn = lotIn;
+      return row;
+    }
+
+    function post(url, params) {
+      return fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
+        body: new URLSearchParams(params).toString(),
+      }).then(function (res) { return res.json().catch(function () { return {}; }).then(function (j) { return { ok: res.ok, j: j }; }); });
+    }
+
+    // Saves whichever of the two changed. They are independent: if one is
+    // refused the other still goes through, and the message says which.
+    function saveRow(row, d, st, save) {
+      const code = d.code;
+      save.disabled = true;
+      say("Saving " + code + "…", true);
+      const next = { code: code, lot: d.lot, deckle: d.deckle };
+      const notes = [], errors = [];
+      let chain = Promise.resolve();
+      if (st.lotDirty) {
+        chain = chain.then(function () {
+          return post(URL_LOT, { productCode: code, lastSerial: st.lv }).then(function (out) {
+            if (out.ok) { next.lot = out.j.row; notes.push("Lot No → " + out.j.row.next); lotSaved(code, out.j.row); }
+            else errors.push("Lot No: " + (out.j.error || "failed"));
+          });
+        });
+      }
+      if (st.deckleDirty) {
+        chain = chain.then(function () {
+          return post(URL_DECKLE, { productCode: code, lastSerial: st.dv }).then(function (out) {
+            if (out.ok) { next.deckle = out.j.row; notes.push("Deckle → " + out.j.row.next); }
+            else errors.push("Deckle: " + (out.j.error || "failed"));
+          });
+        });
+      }
+      chain.then(function () {
+        const fresh = renderRow(next);
+        row.replaceWith(fresh);
+        if (code === CURRENT) {
+          curLotNext = next.lot.next;
+          curDeckleNext = Number(next.deckle.highest) + 1;
+          showPreview();
+        }
+        applyFilter();
+        if (errors.length) {
+          // Re-open the box that was refused, still holding what was typed.
+          if (st.lotDirty && next.lot === d.lot) fresh.querySelectorAll(".lnd-serial")[0].value = st.lv;
+          if (st.deckleDirty && next.deckle === d.deckle) fresh.querySelectorAll(".lnd-serial")[1].value = st.dv;
+          fresh.querySelectorAll(".lnd-serial")[0].dispatchEvent(new Event("input"));
+        }
+        say((notes.length ? "Saved " + code + ": next " + notes.join(", next ") + ". " : "") + errors.join(" "), !errors.length);
+      }).catch(function (e) { say("Error: " + e.message, false); save.disabled = false; });
+    }
+
+    // The page's own Lot No is only a suggestion until the order has one of
+    // its own: follow the series the moment it moves.
+    function lotSaved(code, row) {
+      const cell = document.getElementById("ln-cell");
+      if (code === CURRENT && cell && cell.dataset.lotOwn !== "1") {
+        const t = document.getElementById("ln-text");
+        const h = document.getElementById("ln-input");
+        if (t) t.textContent = row.next;
+        if (h) h.value = row.next;
+      }
+    }
+
+    function applyFilter() {
+      const q = search.value.trim().toUpperCase();
+      let n = 0, all = 0;
+      body.querySelectorAll(".lnd-row").forEach(function (r) {
+        all++;
+        const hide = q && !r.dataset.code.includes(q);
+        r.hidden = !!hide;
+        if (!hide) n++;
+      });
+      shown.textContent = n;
+      total.textContent = all;
+      empty.hidden = n > 0;
+      empty.textContent = all ? "No product code matches that filter." : "No Label Stock product codes yet.";
+    }
+    search.addEventListener("input", applyFilter);
+
+    function getJson(url) {
+      return fetch(url, { headers: { "Accept": "application/json" } })
+        .then(function (res) { return res.json().catch(function () { return {}; }).then(function (j) { return { ok: res.ok, j: j }; }); });
+    }
+
+    function load() {
+      say("", true);
+      empty.hidden = false; empty.textContent = "Loading…";
+      body.textContent = "";
+      preview.classList.remove("is-on");
+      Promise.all([getJson(URL_LOT), getJson(URL_DECKLE + "?pendingId=" + encodeURIComponent(ORDER_ID))])
+        .then(function (res) {
+          const lot = res[0], deckle = res[1];
+          if (!lot.ok || !deckle.ok) {
+            empty.textContent = (!lot.ok ? lot.j.error : deckle.j.error) || "Failed to load.";
+            return;
+          }
+          fy = lot.j.fy; letter = lot.j.yearLetter;
+          document.getElementById("lnd-fy").textContent = fy + " · " + letter;
+          const deckleBy = new Map(deckle.j.rows.map(function (r) { return [r.code, r]; }));
+          // Merge by product code. This order's product first, then its
+          // variants, then everything else (both lists are already A-Z).
+          const rows = lot.j.rows.map(function (l) {
+            const k = deckleBy.get(l.code) || { highest: 0, last: "", next: "0001" };
+            return { code: l.code, lot: l, deckle: k };
+          });
+          // This order's product (its master) first, then the rest A-Z.
+          CURRENT = deckle.j.series || CURRENT;
+          rows.sort(function (a, b) { return (b.code === CURRENT) - (a.code === CURRENT) || a.code.localeCompare(b.code); });
+          rows.forEach(function (r) { body.appendChild(renderRow(r)); });
+          const mine = rows.find(function (r) { return r.code === CURRENT; });
+          if (mine) { curLotNext = mine.lot.next; curDeckleNext = Number(mine.deckle.highest) + 1; showPreview(); }
+          applyFilter();
+          const cur = body.querySelector(".lnd-row.is-current .lnd-serial");
+          if (cur) cur.focus({ preventScroll: true });
+        })
+        .catch(function (e) { empty.textContent = "Failed to load: " + e.message; });
+    }
+    openBtn.addEventListener("click", function () {
+      search.value = "";
+      dlg.showModal();
+      load(); // fresh every time: someone else may have moved a series
+    });
+    document.getElementById("lnd-close").addEventListener("click", function () { dlg.close(); });
+    // A click on the dimmed backdrop (the <dialog> box itself, not its content) closes it.
+    dlg.addEventListener("mousedown", function (ev) { if (ev.target === dlg) dlg.close(); });
+  })();
+</script>
 
 <!-- Deckle Size dialog -- opened automatically on load (see the
      DOMContentLoaded handler below), before anything else on this page is

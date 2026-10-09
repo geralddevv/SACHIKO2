@@ -28,7 +28,9 @@ import MaterialStock from "../models/inventory/materialStock.js";
 // dashed-out empty boxes on a label be read as part of an id).
 const FY = "\\d{2}-\\d{2}";
 const SEQ_TAIL = `\\/${FY}\\/\\d{3,}`;                       // .../26-27/007
-const DECKLE_TAIL = `\\/${FY}\\/[A-Z]+\\d{4,}\\/\\d{5,}`;   // .../26-27/G0004/00001
+// The serial is four digits now (.../26-27/G0004/0001); ids minted when it was
+// five (.../00001) are still in stock and still scan, hence the open-ended 4+.
+const DECKLE_TAIL = `\\/${FY}\\/[A-Z]+\\d{4,}\\/\\d{4,}`;   // .../26-27/G0004/0001
 const ITEM_CODE = "[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?";
 
 export const ROLL_ID_RE = new RegExp(`^(?:${ITEM_CODE}${SEQ_TAIL}|${ITEM_CODE}${DECKLE_TAIL})$`);
@@ -285,21 +287,99 @@ const deckleLotNumber = (lotNoRaw) => {
   return match[1].padStart(4, "0");
 };
 
-const deckleCounterKey = (itemCode, fy, yearLetter, lotNo) =>
-  `deckleId:${itemCode}:${fy}:${yearLetter}:${lotNo}`;
+// One counter per MASTER product code per financial year -- NOT per lot, and
+// NOT per variant. The serial at the end of a Deckle ID runs on across the
+// year's lots, the same way a Lot No's serial does, so it matches the numbering
+// the plant already keeps on paper: C001WB's 124th Deckle of FY 26-27 is /0124
+// whichever lot it was made in. (The lot is still part of the id:
+// .../G0025/0124.) A "-A"/"-B"/... variant is the same product made from a
+// different recipe (utils/labelStockVariant.js), so it counts on its master's
+// series: the next Deckle after C001WB/26-27/G0025/0124 is
+// C001WB-A/26-27/G0025/0125 -- the id still names the variant it was made as,
+// only the number is shared.
+const deckleCounterKey = (baseCode, fy, yearLetter) => `deckleId:${baseCode}:${fy}:${yearLetter}`;
 
-// Deckle IDs are distinct from normal raw-material/finished roll IDs:
-// PRODUCT/FY/<year-letter><lot-number>/<five-digit reel sequence>.
-// Example for product C001, FY 2026-27 and lot 1:
-// C001/26-27/G0001/00001.
-export async function generateDeckleId(itemCodeRaw, lotNoRaw, date = new Date()) {
+// "C001WB-A" -> "C001WB"; a master returns itself. The variant rule the rest
+// of the app uses (finishedStock.js, slitting.js): BASE-<letters>.
+export const deckleBaseCode = (itemCodeRaw) => {
+  const code = normalizeItemCode(itemCodeRaw).replace(/\//g, "");
+  return /^(.*[^-])-[A-Z]+$/.exec(code)?.[1] || code;
+};
+
+const escapeForRegex = (text) => String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// The FY-wide series of one product (its master and every variant of it): its
+// counter, plus a pattern that reads the serial back off any Deckle id of that
+// family and year, in any lot and at either width (/0124 or the older /00124).
+// Shared by the minting below and by the Lot & Deckle No Setup dialog on Assign
+// Production, so the two can never disagree about which counter a Deckle
+// belongs to. `itemCode` is the code the id is written under (the variant);
+// `baseCode` is the master whose series it counts on.
+export function deckleFySeriesFor(itemCodeRaw, date = new Date()) {
   const itemCode = normalizeItemCode(itemCodeRaw).replace(/\//g, "");
   if (!itemCode) throw new Error("A product code is required to generate a Deckle ID");
-
+  const baseCode = deckleBaseCode(itemCode);
   const fy = financialYearLabel(date);
-  const lotNo = deckleLotNumber(lotNoRaw);
   const yearLetter = financialYearLetter(date);
-  const key = deckleCounterKey(itemCode, fy, yearLetter, lotNo);
+  return {
+    itemCode,
+    baseCode,
+    fy,
+    yearLetter,
+    key: deckleCounterKey(baseCode, fy, yearLetter),
+    idPattern: new RegExp(
+      `^${escapeForRegex(baseCode)}(?:-[A-Z]+)?\\/${escapeForRegex(fy)}\\/${yearLetter}\\d+\\/(\\d+)$`,
+    ),
+  };
+}
+
+// The series for one product + lot: the FY-wide counter above, and `prefix`,
+// everything in the id before its four-digit serial ("C001/26-27/G0004/").
+export function deckleSeriesFor(itemCodeRaw, lotNoRaw, date = new Date()) {
+  const series = deckleFySeriesFor(itemCodeRaw, date);
+  const lotNo = deckleLotNumber(lotNoRaw);
+  return { ...series, lotNo, prefix: `${series.itemCode}/${series.fy}/${series.yearLetter}${lotNo}/` };
+}
+
+export const formatDeckleId = (prefix, seq) => `${prefix}${String(seq).padStart(4, "0")}`;
+export const formatDeckleSerial = (seq) => String(seq).padStart(4, "0");
+
+// The highest serial a Deckle of this product (master or any variant) already
+// carries this year, in any lot. The counter is never allowed to sit below it (see generateDeckleId),
+// so numbering can't fall behind Deckles that were made or entered by hand.
+export async function recordedDeckleSerial(series) {
+  const docs = await MaterialStock.find({ rollId: series.idPattern }).select("rollId").lean();
+  let max = 0;
+  for (const d of docs) {
+    const m = series.idPattern.exec(String(d.rollId || ""));
+    if (m && Number(m[1]) > max) max = Number(m[1]);
+  }
+  return max;
+}
+
+// Where the series stands: the larger of its counter and what already exists.
+export async function highestDeckleSerial(series) {
+  const [counter, recorded] = await Promise.all([
+    Counter.findOne({ key: series.key }).select("seq").lean(),
+    recordedDeckleSerial(series),
+  ]);
+  return Math.max(Number(counter?.seq) || 0, recorded);
+}
+
+// Deckle IDs are distinct from normal raw-material/finished roll IDs:
+// PRODUCT/FY/<year-letter><lot-number>/<four-digit serial, running all year>.
+// Example for product C001, FY 2026-27, lot 1, and the 124th Deckle of the year:
+// C001/26-27/G0001/0124. (Ids made while the serial was five digits keep their
+// /00001 form; the series carries straight on from them.)
+export async function generateDeckleId(itemCodeRaw, lotNoRaw, date = new Date()) {
+  const series = deckleSeriesFor(itemCodeRaw, lotNoRaw, date);
+  const { key, prefix } = series;
+
+  // Never number below a Deckle that already exists this year -- the counter is
+  // lifted to it first. Also what makes a Deckle typed in by hand (or made
+  // under the old per-lot numbering) count toward the series.
+  const floor = await recordedDeckleSerial(series);
+  if (floor > 0) await Counter.updateOne({ key }, { $max: { seq: floor } }, { upsert: true });
 
   for (let attempt = 0; attempt < 10000; attempt++) {
     const counter = await Counter.findOneAndUpdate(
@@ -307,8 +387,14 @@ export async function generateDeckleId(itemCodeRaw, lotNoRaw, date = new Date())
       { $inc: { seq: 1 } },
       { new: true, upsert: true, setDefaultsOnInsert: true },
     ).lean();
-    const candidate = `${itemCode}/${fy}/${yearLetter}${lotNo}/${String(counter.seq).padStart(5, "0")}`;
-    if (!(await MaterialStock.exists({ rollId: candidate }))) return candidate;
+    const candidate = formatDeckleId(prefix, counter.seq);
+    // Taken by NUMBER, not by text -- a Deckle made while the serial was five
+    // digits ("/00020") is the same Deckle number as "/0020" -- and across the
+    // master and its variants in this lot, since they share the one series.
+    const taken = new RegExp(
+      `^${escapeForRegex(series.baseCode)}(?:-[A-Z]+)?\\/${escapeForRegex(series.fy)}\\/${series.yearLetter}${series.lotNo}\\/0*${counter.seq}$`,
+    );
+    if (!(await MaterialStock.exists({ rollId: taken }))) return candidate;
   }
   throw new Error("Unable to generate a unique Deckle ID");
 }

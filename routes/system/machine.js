@@ -20,7 +20,8 @@ import { deckleTargetOf } from "../../utils/productionEta.js";
 import { computeRawMaterialNeed } from "../../utils/rawMaterialNeed.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { normalizeLocationName } from "../../utils/locations.js";
-import { normalizeRollId, extractScannedRollId, findScannedReel, generateDeckleId } from "../../utils/rollId.js";
+import { normalizeRollId, extractScannedRollId, findScannedReel, generateDeckleId, deckleSeriesFor, deckleFySeriesFor, deckleBaseCode, highestDeckleSerial, formatDeckleId, formatDeckleSerial } from "../../utils/rollId.js";
+import { escapeRegex } from "../../utils/security.js";
 import { requiredLayersFor, LAYER_META, POOL_MODELS, pickStockIds, getEligibleRawMaterials } from "../../utils/labelStockProduction.js";
 import { resolveActualLabelStock, resolveLabelStockCombinations } from "../../utils/labelStockVariant.js";
 import { buildSlittingQueueRows } from "./slitting.js";
@@ -993,6 +994,147 @@ export async function reelsInUseElsewhere(exceptPendingId) {
 
 // Shows every order currently assigned to a machine (via Assign Production)
 // that hasn't been produced yet.
+// ---------------------------------------------------------------------------
+// TEMPORARY: Deckle No Setup. Every Deckle -- laminated at Assign & Continue,
+// or made on the shop floor from the web job card or the operator app -- gets
+// its id from generateDeckleId(): PRODUCT / FY / <year letter><lot> / <serial>.
+// The serial is one running count per product code per FINANCIAL YEAR (it does
+// not restart with each lot), exactly as the Lot No's serial is -- and a "-A"/"-B"
+// variant counts on its MASTER's series -- so the plant's numbering since the
+// year began has to be told to the ERP once, on the master: "the last
+// Deckle of C001WB this year was 0123" makes the next one 0124. The counter is
+// the single source, so web and app both follow it. Opened as a dialog from a
+// queue row (the gear); lists every product like the Lot No Setup does, with
+// that job's own product pinned to the top.
+// ---------------------------------------------------------------------------
+const DECKLE_SETUP_ROLES = ["proprietor", "admin", "hod"];
+const MAX_DECKLE_SERIAL = 9999; // the id carries four digits
+
+// Highest Deckle serial of every MASTER product for the current financial year
+// (a variant's Deckles count toward its master), in two queries: the FY
+// counters, and what Deckles already exist (any lot, either serial width).
+// Keys/ids of other years and of the old per-lot counters (one segment longer)
+// are ignored.
+async function deckleHighestByCode(fy, yearLetter) {
+  const idRe = new RegExp(`^(.+)\\/${escapeRegex(fy)}\\/${yearLetter}\\d+\\/(\\d+)$`);
+  const [counters, stock] = await Promise.all([
+    Counter.find({ key: new RegExp(`^deckleId:.+:${escapeRegex(fy)}:${yearLetter}$`) }).select("key seq").lean(),
+    MaterialStock.find({ rollId: new RegExp(`\\/${escapeRegex(fy)}\\/${yearLetter}\\d+\\/\\d+$`) }).select("rollId").lean(),
+  ]);
+  const byCode = new Map();
+  const raise = (code, n) => { if (code && n > (byCode.get(code) || 0)) byCode.set(code, n); };
+  for (const c of counters) {
+    // deckleId:<item>:<fy>:<letter>
+    raise(deckleBaseCode(String(c.key).slice("deckleId:".length, -(`:${fy}:${yearLetter}`.length))), Number(c.seq) || 0);
+  }
+  for (const d of stock) {
+    const m = idRe.exec(String(d.rollId || ""));
+    if (m) raise(deckleBaseCode(m[1]), Number(m[2]));
+  }
+  return byCode;
+}
+
+const deckleSetupRow = (code, highest) => ({
+  code,
+  highest,
+  last: highest ? formatDeckleSerial(highest) : "",
+  next: formatDeckleSerial(highest + 1),
+});
+
+router.get("/machine/deckle-no-setup", requireAuth, requireMachineFloor, async (req, res) => {
+  try {
+    if (!DECKLE_SETUP_ROLES.includes(req.session?.authUser?.role)) {
+      return res.status(403).json({ error: "You can't change the Deckle No series." });
+    }
+    // The job the dialog was opened from (optional): its product is pinned to
+    // the top and its Lot No is what the live "next Deckle ID" preview shows.
+    let job = null;
+    if (req.query.pendingId) {
+      if (!mongoose.isValidObjectId(req.query.pendingId)) return res.status(400).json({ error: "Invalid order." });
+      job = await PendingProduction.findById(req.query.pendingId).select("lotNo itemId").populate("itemId", "productCode").lean();
+      if (!job) return res.status(404).json({ error: "Order not found." });
+    }
+    const allCodes = [...new Set((await SachikoLabelStock.distinct("productCode")).map((c) => String(c).trim().toUpperCase()).filter(Boolean))].sort();
+    // A "-A"/"-B" variant is not a product of its own here: it counts on its
+    // master's series, so only masters are listed (a variant whose master isn't
+    // a product at all stands in for it).
+    const known = new Set(allCodes);
+    const codes = allCodes.filter((c) => deckleBaseCode(c) === c || !known.has(deckleBaseCode(c)));
+    if (!codes.length) return res.json({ fy: "", yearLetter: "", rows: [], current: "", series: "", jobPrefix: "", lotNo: "" });
+
+    const { fy, yearLetter } = deckleFySeriesFor(codes[0]);
+    const byCode = await deckleHighestByCode(fy, yearLetter);
+
+    // The job's own code is what its Deckle ids are written under (a variant of
+    // the order's product, once produced); the row it sits on is its master.
+    const own = String(job?.itemId?.productCode || "").trim().toUpperCase();
+    const series = own ? (known.has(deckleBaseCode(own)) ? deckleBaseCode(own) : own) : "";
+    const ordered = codes.slice().sort((a, b) => (b === series) - (a === series) || a.localeCompare(b));
+
+    let jobPrefix = "";
+    if (own && String(job.lotNo || "").trim()) {
+      try { jobPrefix = deckleSeriesFor(own, job.lotNo).prefix; } catch { jobPrefix = ""; }
+    }
+    return res.json({
+      fy,
+      yearLetter,
+      lotNo: job?.lotNo || "",
+      current: own,
+      series,
+      jobPrefix,
+      rows: ordered.map((c) => deckleSetupRow(c, byCode.get(deckleBaseCode(c)) || 0)),
+    });
+  } catch (err) {
+    console.error("DECKLE NO SETUP LOAD ERROR:", err);
+    return res.status(500).json({ error: "Failed to load the Deckle No series." });
+  }
+});
+
+router.post("/machine/deckle-no-setup", requireAuth, requireMachineFloor, updateLimiter, async (req, res) => {
+  const refuse = (message, status = 400) => res.status(status).json({ error: message });
+  try {
+    if (!DECKLE_SETUP_ROLES.includes(req.session?.authUser?.role)) {
+      return refuse("You can't change the Deckle No series.", 403);
+    }
+    const code = String(req.body.productCode ?? "").trim().toUpperCase();
+    if (!code) return refuse("Product Code is required.");
+    const raw = String(req.body.lastSerial ?? "").trim();
+    if (!/^\d{1,4}$/.test(raw)) return refuse("Last Deckle No must be a whole number, e.g. 123 for 0123.");
+    const serial = Number(raw);
+    if (serial > MAX_DECKLE_SERIAL) return refuse(`Last Deckle No can't be above ${MAX_DECKLE_SERIAL}.`);
+    // Only a real product -- never an arbitrary series.
+    if (!(await SachikoLabelStock.exists({ productCode: code }))) return refuse(`Unknown Product Code "${code}".`);
+
+    const series = deckleFySeriesFor(code);
+    // A variant has no series of its own: it counts on its master's, so that is
+    // where it is set (unless the master isn't a product here -- then this is it).
+    if (series.baseCode !== code && (await SachikoLabelStock.exists({ productCode: series.baseCode }))) {
+      return refuse(`${code} follows the Deckle series of ${series.baseCode}. Set it on ${series.baseCode}.`);
+    }
+    // Deckles this year can't be un-made: the series may be moved forward to
+    // match the paper records, never behind what already exists.
+    const highest = await highestDeckleSerial(series);
+    if (serial < highest) {
+      return refuse(`${code}: Deckle ${formatDeckleSerial(highest)} is already in use this year, so the last Deckle No can't be set below ${highest}.`);
+    }
+
+    // $max: never lowers, and is atomic against a Deckle being minted at the
+    // same moment (the next one then takes serial + 1 or whatever is higher).
+    await Counter.updateOne({ key: series.key }, { $max: { seq: serial } }, { upsert: true });
+
+    const row = deckleSetupRow(code, serial);
+    res.locals.auditDescription = `Set last Deckle No of "${series.baseCode}" and its variants (${series.fy}) to ${row.last}`;
+    return res.json({
+      ok: true,
+      message: `${code}: last Deckle No set to ${row.last}. Next will be ${row.next}.`,
+      row,
+    });
+  } catch (err) {
+    console.error("DECKLE NO SETUP ERROR:", err);
+    return refuse("Failed to save the last Deckle No.", 500);
+  }
+});
+
 router.get("/machine/:id/queue", requireMachineFloor, async (req, res) => {
   const fallbackUrl =
     req.session?.authUser?.role === "operator" ? "/app/machine/queue" : "/app/form/machine";

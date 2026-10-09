@@ -1072,7 +1072,7 @@
     // the reels the server already told this page about.
     const FY_RE = "\\d{2}-\\d{2}";
     const SEQ_TAIL_RE = "\\/" + FY_RE + "\\/\\d{3,}";
-    const DECKLE_TAIL_RE = "\\/" + FY_RE + "\\/[A-Z]+\\d{4,}\\/\\d{5,}";
+    const DECKLE_TAIL_RE = "\\/" + FY_RE + "\\/[A-Z]+\\d{4,}\\/\\d{4,}";
     const ITEM_CODE_RE = "[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?";
     const ROLL_ID_RE = new RegExp("^(?:" + ITEM_CODE_RE + SEQ_TAIL_RE + "|" + ITEM_CODE_RE + DECKLE_TAIL_RE + ")$");
     const TRAILING_TAIL_RE = new RegExp("(?:" + DECKLE_TAIL_RE + "|" + SEQ_TAIL_RE + ")$");

@@ -37,6 +37,7 @@ import Sample from "../models/inventory/sample.js";
 import PendingProduction from "../models/inventory/pendingProduction.js";
 import MaterialStock from "../models/inventory/materialStock.js";
 import MachineJobCard from "../models/inventory/machineJobCard.js";
+import LotNoBaseline from "../models/system/lotNoBaseline.js";
 import FacestockMaster from "../models/inventory/facestockMaster.js";
 import AdhesiveMaster from "../models/inventory/adhesiveMaster.js";
 import ReleaseMaster from "../models/inventory/releaseMaster.js";
@@ -48,7 +49,7 @@ import CoreStock from "../models/inventory/coreStock.js";
 import { escapeRegex } from "../utils/security.js";
 import { getUserLocationNames, normalizeLocationName } from "../utils/locations.js";
 import { generateMaterialRollId } from "../utils/materialRollId.js";
-import { financialYearLabel, financialYearLetter } from "../utils/rollId.js";
+import { financialYearLabel, financialYearLetter, deckleBaseCode } from "../utils/rollId.js";
 import {
   reconcileUserBindingLocations,
   syncLabelBindingIdentity,
@@ -6741,13 +6742,15 @@ function lotNoSerialPattern(itemCode, fy, yearLetter) {
 // counter checked for collisions. This IS "the last no" the series
 // continues from: a Lot No typed by hand at Assign Production becomes the
 // new baseline the moment it's saved, because the very next lookup sees it.
-async function highestLotNoSerial(itemCode, fy, yearLetter) {
+async function highestLotNoSerial(itemCode, fy, yearLetter, { includeBaseline = true } = {}) {
   const pattern = lotNoSerialPattern(itemCode, fy, yearLetter);
-  const [orders, cards] = await Promise.all([
+  const [orders, cards, baseline] = await Promise.all([
     PendingProduction.find({ lotNo: pattern }).select("lotNo").lean(),
     MachineJobCard.find({ lotNo: pattern }).select("lotNo").lean(),
+    // Lots made before this system tracked them (Lot No Setup page).
+    includeBaseline ? LotNoBaseline.findOne({ productCode: itemCode, fy }).select("lastSerial").lean() : null,
   ]);
-  let max = 0;
+  let max = Number(baseline?.lastSerial) || 0;
   for (const doc of [...orders, ...cards]) {
     const match = pattern.exec(String(doc.lotNo || "").trim());
     const n = match ? Number(match[1]) : 0;
@@ -6997,12 +7000,131 @@ router.post("/labels/production/assign/:id/deckle-count", requireAuth, updateLim
   }
 });
 
+// ---------------------------------------------------------------------------
+// TEMPORARY: Lot No Setup. Production was already running before this system
+// kept lot numbers, so the series for each product code has to be told where
+// it stands: "the last Lot No used was G014" makes the next one G015. One row
+// per product code for the current financial year; Save writes that row only.
+//
+// It is a dialog on Assign Production (the gear beside Lot No), which loads
+// its rows from the GET below and saves one row at a time with the POST --
+// both answer JSON. There is no page of its own: reloading Assign Production
+// to refresh would throw away reels the planner has already ticked.
+// ---------------------------------------------------------------------------
+const LOT_SETUP_ROLES = ["proprietor", "admin", "hod"];
+const lotSetupAllowed = (req) => LOT_SETUP_ROLES.includes(req.session?.authUser?.role);
+
+// Highest serial already recorded per product code (orders + job cards) for
+// one financial year, in two queries rather than three per product. Reads a
+// Lot No the same tolerant way lotNoSerialPattern does.
+async function recordedLotSerialsByCode(fy, yearLetter) {
+  const any = new RegExp(
+    `^(.+?)\\s*\\/\\s*${escapeRegex(fy)}\\s*\\/\\s*${escapeRegex(yearLetter)}(\\d+)\\s*$`,
+    "i",
+  );
+  const [orders, cards] = await Promise.all([
+    PendingProduction.find({ lotNo: any }).select("lotNo").lean(),
+    MachineJobCard.find({ lotNo: any }).select("lotNo").lean(),
+  ]);
+  const byCode = new Map();
+  for (const doc of [...orders, ...cards]) {
+    const m = any.exec(String(doc.lotNo || "").trim());
+    if (!m) continue;
+    const code = normalizeLotItemCode(m[1]);
+    const n = Number(m[2]);
+    if (n > (byCode.get(code) || 0)) byCode.set(code, n);
+  }
+  return byCode;
+}
+
+router.get("/labels/production/lot-no-setup", async (req, res) => {
+  try {
+    if (!lotSetupAllowed(req)) return res.status(403).json({ error: "You can't change the Lot No series." });
+    const fy = financialYearLabel();
+    const yearLetter = financialYearLetter();
+    const [codesRaw, recorded, baselines] = await Promise.all([
+      SachikoLabelStock.distinct("productCode"),
+      recordedLotSerialsByCode(fy, yearLetter),
+      LotNoBaseline.find({ fy }).select("productCode lastSerial").lean(),
+    ]);
+    const baseByCode = new Map(baselines.map((b) => [normalizeLotItemCode(b.productCode), b.lastSerial]));
+    // A "-A"/"-B" variant is never something an order is placed against and is
+    // not listed: only masters are (a variant whose master isn't a product at
+    // all stands in for it).
+    const all = [...new Set(codesRaw.map(normalizeLotItemCode).filter(Boolean))].sort();
+    const known = new Set(all);
+    const codes = all.filter((c) => deckleBaseCode(c) === c || !known.has(deckleBaseCode(c)));
+    const rows = codes.map((code) => {
+      const highest = Math.max(recorded.get(code) || 0, baseByCode.get(code) || 0);
+      return {
+        code,
+        // true once a starting number was typed for it here
+        isSet: baseByCode.has(code),
+        highest,
+        last: highest ? formatStructuredLotNo(code, fy, yearLetter, highest) : "",
+        next: formatStructuredLotNo(code, fy, yearLetter, highest + 1),
+      };
+    });
+    return res.json({ fy, yearLetter, rows });
+  } catch (err) {
+    console.error("LOT NO SETUP LOAD ERROR:", err);
+    return res.status(500).json({ error: "Failed to load the Lot No series." });
+  }
+});
+
+router.post("/labels/production/lot-no-setup", requireAuth, updateLimiter, async (req, res) => {
+  const refuse = (message, status = 400) => res.status(status).json({ error: message });
+  try {
+    if (!lotSetupAllowed(req)) return refuse("You can't change the Lot No series.", 403);
+    const code = normalizeLotItemCode(req.body.productCode);
+    const raw = String(req.body.lastSerial ?? "").trim();
+    if (!code) return refuse("Product Code is required.");
+    if (!/^\d{1,6}$/.test(raw)) return refuse("Last Lot No must be a whole number, e.g. 14 for G014.");
+    if (!(await SachikoLabelStock.exists({ productCode: code }))) return refuse(`Unknown Product Code "${code}".`);
+
+    const fy = financialYearLabel();
+    const yearLetter = financialYearLetter();
+    const serial = Number(raw);
+
+    // Lots already recorded in the system can't be un-used: the series may be
+    // moved forward to match the paper records, never behind what exists.
+    const recorded = await highestLotNoSerial(code, fy, yearLetter, { includeBaseline: false });
+    if (serial < recorded) {
+      return refuse(
+        `${code}: ${formatStructuredLotNo(code, fy, yearLetter, recorded)} is already recorded in the system, so the last Lot No can't be set below ${recorded}.`,
+      );
+    }
+
+    await LotNoBaseline.updateOne(
+      { productCode: code, fy },
+      { $set: { lastSerial: serial, updatedBy: req.session?.authUser?.name || req.session?.authUser?.role || "" } },
+      { upsert: true },
+    );
+    const last = formatStructuredLotNo(code, fy, yearLetter, serial);
+    const next = formatStructuredLotNo(code, fy, yearLetter, serial + 1);
+    res.locals.auditDescription = `Set last Lot No of "${code}" (${fy}) to ${last}`;
+    return res.json({
+      ok: true,
+      message: `${code}: last Lot No set to ${last}. Next will be ${next}.`,
+      row: { code, isSet: true, highest: serial, last, next },
+    });
+  } catch (err) {
+    console.error("LOT NO SETUP ERROR:", err);
+    return refuse("Failed to save the last Lot No.", 500);
+  }
+});
+
 router.post("/labels/production/assign/:id/lot-no", requireAuth, updateLimiter, async (req, res) => {
   const back = `/app/labels/production/assign/${req.params.id}`;
   const refuse = (message) => {
     req.flash("notification", message);
     return res.redirect(back);
   };
+  // Switched off for now: the last Lot No used is set once per product on
+  // the Lot No Setup page instead (/labels/production/lot-no-setup). Remove
+  // this line (and re-enable the pencil in assignProduction.ejs) to restore.
+  return refuse("Editing the Lot No here is switched off. Set the last Lot No used on the Lot No Setup page.");
+  // eslint-disable-next-line no-unreachable
   try {
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) return refuse("Invalid order id.");
