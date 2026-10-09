@@ -139,6 +139,16 @@
         placeholder="e.g. Coating, Slitting"
         autocomplete="off"
       />
+      <label class="dialog-field-label" for="addMachineSpeedInput" style="margin-top: 16px;">Machine Speed (mtrs/min)</label>
+      <input
+        type="number"
+        id="addMachineSpeedInput"
+        class="form-control premium-input"
+        placeholder="e.g. 15 (blank = default)"
+        autocomplete="off"
+        min="0"
+        step="any"
+      />
       <div id="addMachineError" class="dialog-error"></div>
       <div class="dialog-actions">
         <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
@@ -187,6 +197,16 @@
         class="form-control premium-input"
         placeholder="e.g. Coating, Slitting"
         autocomplete="off"
+      />
+      <label class="dialog-field-label" for="editMachineSpeedInput" style="margin-top: 16px;">Machine Speed (mtrs/min)</label>
+      <input
+        type="number"
+        id="editMachineSpeedInput"
+        class="form-control premium-input"
+        placeholder="e.g. 15 (blank = default)"
+        autocomplete="off"
+        min="0"
+        step="any"
       />
       <div id="editMachineError" class="dialog-error"></div>
       <div class="dialog-actions">
@@ -285,6 +305,16 @@
         formatter: (cell) => cell.getValue() || "—",
       },
       {
+        title: "Speed (mtrs/min)",
+        field: "speedMpm",
+        headerFilter: "input",
+        headerFilterPlaceholder: "Search",
+        minWidth: 150,
+        hozAlign: "left",
+        headerHozAlign: "left",
+        formatter: (cell) => cell.getValue() || "—",
+      },
+      {
         title: "Actions",
         width: 110,
         hozAlign: "center",
@@ -299,7 +329,7 @@
           editBtn.style.cssText = "padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:12px;color:#fff;background:#e67e22;";
           editBtn.title = "Edit Machine";
           editBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
-          editBtn.addEventListener("click", () => openEditDialog(row._id, row.machineName, row.machineWidth, row.location ? row.location._id : "", row.machineType || ""));
+          editBtn.addEventListener("click", () => openEditDialog(row._id, row.machineName, row.machineWidth, row.location ? row.location._id : "", row.machineType || "", row.speedMpm || ""));
 
           const deleteBtn = document.createElement("button");
           deleteBtn.className = "loc-btn";
@@ -372,6 +402,7 @@
     document.getElementById("addMachineNameInput").value = "";
     document.getElementById("addMachineWidthInput").value = "";
     document.getElementById("addMachineTypeInput").value = "";
+    document.getElementById("addMachineSpeedInput").value = "";
     if (addLocationChoices) { addLocationChoices.destroy(); addLocationChoices = null; }
     const sel = document.getElementById("addLocationSelect");
     sel.innerHTML = locationOptionsHtml("");
@@ -389,6 +420,7 @@
     const width = document.getElementById("addMachineWidthInput").value.trim();
     const locationId = document.getElementById("addLocationSelect").value;
     const machineType = document.getElementById("addMachineTypeInput").value.trim();
+    const speedMpm = document.getElementById("addMachineSpeedInput").value.trim();
     if (!name) {
       showError("addMachineError", "Machine name is required.");
       return;
@@ -401,13 +433,17 @@
       showError("addMachineError", "Location is required.");
       return;
     }
+    if (speedMpm && Number(speedMpm) <= 0) {
+      showError("addMachineError", "Machine speed must be above 0.");
+      return;
+    }
     hideError("addMachineError");
     setLoading("addSubmitBtn", true);
     try {
       const res = await fetch("/app/form/machine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ machineName: name, machineWidth: width, locationId, machineType }),
+        body: JSON.stringify({ machineName: name, machineWidth: width, locationId, machineType, speedMpm }),
       });
       const data = await res.json();
       if (data.success) {
@@ -425,11 +461,12 @@
   // ---- EDIT ----
   let editId = null;
 
-  function openEditDialog(id, name, width, locationId, machineType) {
+  function openEditDialog(id, name, width, locationId, machineType, speedMpm) {
     editId = id;
     document.getElementById("editMachineNameInput").value = name;
     document.getElementById("editMachineWidthInput").value = width;
     document.getElementById("editMachineTypeInput").value = machineType || "";
+    document.getElementById("editMachineSpeedInput").value = speedMpm || "";
     if (editLocationChoices) { editLocationChoices.destroy(); editLocationChoices = null; }
     const sel = document.getElementById("editLocationSelect");
     sel.innerHTML = locationOptionsHtml(locationId);
@@ -452,6 +489,7 @@
     const width = document.getElementById("editMachineWidthInput").value.trim();
     const locationId = document.getElementById("editLocationSelect").value;
     const machineType = document.getElementById("editMachineTypeInput").value.trim();
+    const speedMpm = document.getElementById("editMachineSpeedInput").value.trim();
     if (!name) {
       showError("editMachineError", "Machine name is required.");
       return;
@@ -465,13 +503,17 @@
       return;
     }
     if (!editId) return;
+    if (speedMpm && Number(speedMpm) <= 0) {
+      showError("editMachineError", "Machine speed must be above 0.");
+      return;
+    }
     hideError("editMachineError");
     setLoading("editSubmitBtn", true);
     try {
       const res = await fetch(`/app/api/machines/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ machineName: name, machineWidth: width, locationId, machineType }),
+        body: JSON.stringify({ machineName: name, machineWidth: width, locationId, machineType, speedMpm }),
       });
       const data = await res.json();
       if (data.success) {

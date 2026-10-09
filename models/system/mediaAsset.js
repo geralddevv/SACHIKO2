@@ -1,9 +1,10 @@
 import mongoose from "mongoose";
 
 /*
- * One stored file (photo or video) after it has been through the media
+ * One stored file (photo, video or voice note) after it has been through the media
  * pipeline in utils/media.js -- always normalized: images are JPEG, videos are
- * faststart H.264 MP4, and both carry a small JPEG thumbnail.
+ * faststart H.264 MP4, and both carry a small JPEG thumbnail. Voice notes are
+ * mono AAC .m4a with no thumbnail.
  *
  * Embed this schema anywhere a document needs attachments, so every feature
  * describes its files the same way:
@@ -13,7 +14,7 @@ import mongoose from "mongoose";
  */
 export const mediaAssetSchema = new mongoose.Schema(
   {
-    kind: { type: String, enum: ["image", "video"], required: true },
+    kind: { type: String, enum: ["image", "video", "audio"], required: true },
     // Which folder under media/ the file lives in -- one bucket per feature.
     bucket: { type: String, required: true, trim: true },
     filename: { type: String, required: true, trim: true },

@@ -8,53 +8,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm start          # Run the server (node server.js) — port from PORT in .env (required; the app refuses to start without it)
 ```
 
-No test suite exists. There is no build step — this is a plain Node.js ES-module project.
+No test suite, no build step — plain Node.js ES-module project.
 
-Utility scripts (run directly). The signature/backfill ones are dry-run by
-default — pass `--apply` to commit:
+Utility scripts (run directly). Signature/backfill ones are dry-run by default — pass `--apply` to commit:
 ```bash
 node scripts/backfill-prodbinding-signatures.js
 node scripts/backfill-prodbinding-calc.js
 node scripts/backfill-employee-nickname.js       # empNickName = first word of empName
 node scripts/backfill-facestock-signatures.js    # repair Facestock Master dup protection (also drops old vendor+SKU index)
-node scripts/backfill-adhesive-signatures.js     # repair Adhesive Master dup protection (also drops old vendor+SKU index)
+node scripts/backfill-adhesive-signatures.js     # same, Adhesive Master
 node scripts/backfill-release-signatures.js      # repair Release Master dup protection
-node scripts/backfill-releaselinerstock-sensing.js  # ReleaseLinerStock.sensing <- its Release Master's (needed: Release Liner allocation matches on Sensing alone)
+node scripts/backfill-releaselinerstock-sensing.js  # ReleaseLinerStock.sensing <- its Release Master's (Release Liner allocation matches on Sensing alone)
 node scripts/backfill-core-signatures.js         # repair Core Master dup protection
 node scripts/drop-legacy-skucode-index.js        # drop dead skuCode_1 index on Facestock/Adhesive/Release/Core Master
 node scripts/send-back-to-pending.js <orderId>   # unassign one WIP order back to Pending (CLI form of the UI button)
 node scripts/clear-label-stock-layer-data.js     # wipe SachikoLabelStock facestock/adhesive/releaseLiner (+2) so they're re-picked from master
-node scripts/backfill-pendingproduction-allotted-layers.js  # PendingProduction allottedLayers <- parsed from the produced Deckle's log, where missing
+node scripts/backfill-pendingproduction-allotted-layers.js  # PendingProduction allottedLayers <- parsed from the produced Deckle's log
 node scripts/backfill-labelstock-signatures.js   # repair SachikoLabelStock dup protection
 node scripts/backfill-finishedstock-rate.js      # price slit rolls that landed with no rate from their sales order's orderRate
-node scripts/resignature-labelstock.js           # resync every /sachiko/label-stock/view row's labelStockSignature + list rows sharing a recipe (--apply to write)
-node scripts/serialize-labelstock-sku-codes.js   # close gaps in SachikoLabelStock skuCode + re-anchor variant SKUs ("000002-A") to their base row's SKU
+node scripts/resignature-labelstock.js           # resync every /sachiko/label-stock/view row's labelStockSignature + list rows sharing a recipe
+node scripts/serialize-labelstock-sku-codes.js   # close gaps in SachikoLabelStock skuCode + re-anchor variant SKUs ("000002-A") to their base row
 node scripts/dissolve-deckle.js [deckleId]       # un-make a Deckle, returning its mtrs to the raw reels it was laminated from
-node scripts/backfill-family-master-seed.js      # seed the Family master with values already in use on Label Stock / Facestock Master + the old hardcoded dropdown list
-node scripts/backfill-type-master-seed.js        # seed the Type master with values already in use on Facestock / Adhesive / Release Master + the old hardcoded dropdown lists
-node scripts/backfill-location-master-seed.js    # seed the Location master with values already in use on employee records + the old hardcoded Employee form dropdown
+node scripts/backfill-family-master-seed.js      # seed Family master from values in use + old hardcoded dropdown
+node scripts/backfill-type-master-seed.js        # seed Type master likewise (Facestock / Adhesive / Release Master)
+node scripts/backfill-location-master-seed.js    # seed Location master likewise (employee records + old Employee form dropdown)
 node scripts/deckle-optimizer-bench.js [--verbose]  # bench + invariant check for utils/deckleOptimizer; no DB, exits non-zero on failure
-node scripts/raw-auto-allot-bench.js [--verbose]    # invariant check for public/js/rawAutoAllot.js (Assign Production's Auto Allot); no DB, exits non-zero on failure
+node scripts/raw-auto-allot-bench.js [--verbose]    # invariant check for public/js/rawAutoAllot.js; no DB, exits non-zero on failure
 node scripts/reset-transactional-data.js         # empty orders/production/bindings, KEEP masters+stock+people (dry-run; --apply --db=<name>)
-node scripts/company-slug-history.js             # URL prefixes the company is served under (renames record themselves; this is the manual override)
-node scripts/rewrite-id-prefix.js --from SP --to GM  # move ids left behind by an older company code (dry-run; --apply)
+node scripts/company-slug-history.js             # manual override for URL prefixes the company is served under (--add <slug> --apply)
+node scripts/rewrite-id-prefix.js --from SP --to GM  # move ids left behind by an older company code
 ```
 
 ## Environment
 
 Requires a `.env` file with at minimum:
-- `SESSION_SECRET` — app crashes at startup without this
-- `PORT` — app crashes at startup without this (no hardcoded default)
+- `SESSION_SECRET` — app crashes at startup without it
+- `PORT` — app crashes at startup without it (no default)
 - `MONGO_URI` (or equivalent — see `config/db.js`)
-- `TASKS_MONGO_URI` (optional) — the `/fairtech/tasks` feature stores its data in a separate, isolated database (`config/tasksDb.js`), for privacy. Without this set, it defaults to a sibling database named `<main db>_tasks` on the same server as `MONGO_URI`.
-- `DECKLE_AUTO_ENABLED` (optional) — kill switch for the Auto Deckle optimizer (see below). Enabled unless set to `false`/`0`/`off`/`no`. Set it to `false` and restart to remove the feature entirely: the Set Deckle page then renders with no Auto Set panel and no client code for it, and the API returns 503.
-- In dev only: `PROPRIETOR_USER`, `PROPRIETOR_PASS`, `ADMIN_USER`, `ADMIN_PASS`, `HR_USER`, `HR_PASS`, `HOD_USER`, `HOD_PASS`, `SALES_USER`, `SALES_PASS` (backdoor accounts; blocked in production)
+- `TASKS_MONGO_URI` (optional) — `/fairtech/tasks` stores data in a separate isolated DB (`config/tasksDb.js`). Defaults to sibling database `<main db>_tasks` on the same server.
+- `DECKLE_AUTO_ENABLED` (optional) — kill switch for the Auto Deckle optimizer. On unless `false`/`0`/`off`/`no`; off (restart needed) removes the Auto Set panel and client code, API returns 503.
+- Dev only: `PROPRIETOR_USER/PASS`, `ADMIN_USER/PASS`, `HR_USER/PASS`, `HOD_USER/PASS`, `SALES_USER/PASS` (backdoor accounts; blocked in production)
 
 ## Architecture
 
 ### Route structure
 
-All app routes live under `/fairtech/`. Routes are split into sub-router files and mounted in `server.js`:
+All routes live under `/fairtech/`, split into sub-routers mounted in `server.js`:
 
 | Mount point | File |
 |---|---|
@@ -68,341 +67,127 @@ All app routes live under `/fairtech/`. Routes are split into sub-router files a
 | `/fairtech/` (tape/ttr bindings) | `routes/inventory/*.js` |
 | `/fairtech/tapestock` etc. | `routes/stock/*.js` |
 
-Roles: `proprietor`, `admin`, `hod`, `sales`, `hr`, `employee`, `master`, `operator`. `proprietor` sits above `admin` and is granted access everywhere `admin` is. Access guarded by `requireAuth` and `requireRole([...])` from `middleware/auth.js`.
+Roles: `proprietor`, `admin`, `hod`, `sales`, `hr`, `employee`, `master`, `operator`. `proprietor` sits above `admin` and gets access everywhere `admin` does. Guard with `requireAuth` / `requireRole([...])` from `middleware/auth.js`.
 
-`operator` is a session-only role: shopfloor operators sign in at `/fairtech/operator/login` with nick name (`empNickName`) + location + password (their employee record has `empProfile: "OPERATOR"` and `role: "none"`), and land on the queue of the machine named by their profile code. They can reach only `routes/system/machine.js` — mounted ahead of the other `/fairtech` routers, since each of those runs `requireRole` for every `/fairtech/*` request, not just its own paths.
+`operator` is session-only: shopfloor operators sign in at `/fairtech/operator/login` with nick name (`empNickName`) + location + password (employee record has `empProfile: "OPERATOR"`, `role: "none"`) and land on the queue of the machine named by their profile code. They reach only `routes/system/machine.js` — mounted ahead of the other `/fairtech` routers, since each of those runs `requireRole` for every `/fairtech/*` request, not just its own paths.
 
 ### View rendering pattern
 
-Every route renders an EJS view using the `boilerplate.ejs` layout:
+Every route renders an EJS view in the `boilerplate.ejs` layout (views start with `<% layout('/layout/boilerplate') %>`):
 
 ```js
 res.render("inventory/machineMaster.ejs", {
   JS: false,            // or "filename.js" — loaded as /js/<filename>
   CSS: "tableDisp.css", // or false — loaded as /css/<filename>
   title: "Machine Master",
-  // ... data for the template
   notification: req.flash("notification"),
 });
 ```
 
-Views start with `<% layout('/layout/boilerplate') %>`. The layout loads `common.css`, `choices.min.css`, Bootstrap, Font Awesome, and `common.js` on every page. The `.indi-head` header bar class is in `tableDisp.css` — pass `CSS: "tableDisp.css"` in the route render call when using it.
+The layout loads `common.css`, `choices.min.css`, Bootstrap, Font Awesome and `common.js` on every page. `.indi-head` lives in `tableDisp.css` — pass `CSS: "tableDisp.css"` when using it.
 
 ### CSRF
 
-`common.js` wraps `window.fetch` globally to auto-inject `x-csrf-token` on every request. For HTML forms, either include `<input type="hidden" name="_csrf" value="<%= csrfToken %>">` or rely on the form submit interceptor in `common.js` (which also injects `_csrf` on POST forms).
+`common.js` wraps `window.fetch` to inject `x-csrf-token`, and intercepts POST form submits to inject `_csrf` (or include `<input type="hidden" name="_csrf" value="<%= csrfToken %>">`). Multipart uploads can't carry the token in the body (csurf can't find it) — send it as an `x-csrf-token` header.
 
 ### Rate limiting
 
-All mutating routes must use limiters from `utils/limiters.js`:
+Every mutating route uses limiters from `utils/limiters.js`:
 
 ```js
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
-
-router.post("/...", requireAuth, createLimiter, async (req, res) => { ... });
-router.put("/...",  requireAuth, updateLimiter, async (req, res) => { ... });
-router.delete("/...", requireAuth, deleteLimiter, async (req, res) => { ... });
+router.post("/...",   requireAuth, createLimiter, handler);
+router.put("/...",    requireAuth, updateLimiter, handler);
+router.delete("/...", requireAuth, deleteLimiter, handler);
 ```
 
 ### Photo / video uploads (shared media store)
 
-`utils/media.js` is the one way to take a photo or video from a user. It
-compresses on the way in (images → EXIF-rotated JPEG capped at 1600px; videos →
-faststart H.264 MP4 capped at 1280px, trimmed to 2 min, via the bundled
-`ffmpeg-static` binary), writes a 400px JPEG thumbnail for both, and returns
-records matching `mediaAssetSchema` (`models/system/mediaAsset.js`) to embed on
-your document. Files live in `media/<bucket>/` — one bucket per feature —
-under a random filename; `media/` is gitignored.
+`utils/media.js` is the one way to take a photo/video. It compresses (images → EXIF-rotated JPEG ≤1600px; videos → faststart H.264 MP4 ≤1280px, trimmed to 2 min, via `ffmpeg-static`), writes a 400px JPEG thumbnail, and returns records matching `mediaAssetSchema` (`models/system/mediaAsset.js`) to embed on your document. Files live in gitignored `media/<bucket>/` (one bucket per feature) under random filenames.
 
 ```js
 const upload = mediaUpload({ bucket: "maintenance", fields: [
   { name: "photo", kind: "image", maxCount: 1 },
   { name: "video", kind: "video", maxCount: 1 },
 ]});
-
 router.post("/x", requireAuth, createLimiter, upload, async (req, res) => {
-  const assets = await storeUploads(req.files, "maintenance"); // compresses + cleans temps
+  const assets = await storeUploads(req.files, "maintenance");
   try { await Thing.create({ media: assets }); }
-  catch (e) { await removeAssets(assets); throw e; }          // no orphan files
+  catch (e) { await removeAssets(assets); throw e; }   // no orphan files
 });
 ```
 
-Serve files back with `sendAsset(res, asset, { thumb })` after your own auth
-check — it honours Range requests, which is what lets a video seek and start
-playing immediately. Route them by document id + array index (see
-`routes/system/maintenance.js`), never by filename.
+Serve with `sendAsset(res, asset, { thumb })` after your own auth check (honours Range, so video seeks). Route by document id + array index (see `routes/system/maintenance.js`), never filename. CSP allows `media-src 'self' blob:` (blob to preview a clip before upload); image previews must use `data:` URLs (`img-src` disallows blob).
 
-Note the CSP in `server.js` allows `media-src 'self' blob:` — blob for previewing
-a picked clip before upload. Image previews must use a `data:` URL (`img-src`
-does not allow blob).
+### Front-end conventions
 
-### Embedding server data in views
-
-Use the `safeJson` helper (available as `res.locals.safeJson`) to safely embed JSON in templates:
-
-```html
-<script id="locations-data" type="application/json"><%- safeJson(locations) %></script>
-```
-
-Then in client JS:
-```js
-const locations = JSON.parse(document.getElementById("locations-data").textContent);
-```
-
-Never interpolate object data directly into `<script>` blocks or `onclick` attributes.
-
-### Dialog / modal pattern
-
-Use the `.logout-modal` / `.logout-dialog` CSS classes from `boilerplate.ejs` for all dialogs. Key rules:
-- Dialog `<dialog>` element: `style="width: min(440px, 95vw); padding: 0; border-radius: 14px; border: none;"` — **no `overflow: hidden`**
-- Apply `border-radius: 14px 14px 0 0` to `.dialog-header` and `border-radius: 0 0 14px 14px` to `.dialog-body` instead — avoids clipping Choices.js absolutely-positioned dropdowns
-
-### Choices.js
-
-Choices.js v11.1.0 is available globally — `boilerplate.ejs` loads it from `/js/choices.min.js` **with `defer`**, so it does not exist yet while a view's inline `<script>` runs. Never call `new Choices(...)` at the top level of an inline script: it throws `Choices is not defined` and takes the rest of that script with it. Create it on `DOMContentLoaded` (deferred scripts have run by then) or from a user action such as opening a dialog, and attach your `change` listener to the `<select>` first. In dialogs, use the destroy/reinit pattern:
-
-```js
-let myChoices = null;
-function openDialog() {
+- **Embedding data**: `res.locals.safeJson`: `<script id="x" type="application/json"><%- safeJson(data) %></script>`, read with `JSON.parse(document.getElementById("x").textContent)`. Never interpolate objects into `<script>` or `onclick`. `safeJson()` turns a bare falsy value into `"{}"` — wrap booleans (`safeJson({ picked })`).
+- **onclick data**: use `data-*` attributes and read via `this.dataset`; never interpolate strings into onclick.
+- **Dialogs**: use `.logout-modal` / `.logout-dialog` from `boilerplate.ejs`. `<dialog style="width: min(440px, 95vw); padding: 0; border-radius: 14px; border: none;">` — **no `overflow: hidden`** (clips Choices.js dropdowns); instead `border-radius: 14px 14px 0 0` on `.dialog-header` and `0 0 14px 14px` on `.dialog-body`.
+- **Choices.js v11.1.0** is global but loaded **with `defer`**, so `new Choices(...)` at the top level of an inline script throws `Choices is not defined` and kills the rest of the script. Create it on `DOMContentLoaded` or from a user action, and attach your `change` listener to the `<select>` first. In dialogs destroy/reinit:
+  ```js
   if (myChoices) { myChoices.destroy(); myChoices = null; }
-  const sel = document.getElementById("my-select");
   sel.innerHTML = options.map(o => `<option value="${o._id}">${o.name}</option>`).join("");
   myChoices = new Choices(sel, { searchEnabled: true, shouldSort: false, itemSelectText: "" });
-}
-```
-
-To pre-select a value on edit, set the `selected` attribute in the `<option>` HTML before calling `new Choices(...)` — more reliable than `setChoiceByValue` after init.
-
-Add `z-index: 99999` to `.choices__list--dropdown` inside dialogs so the dropdown list renders above the dialog overlay.
-
-### Passing data to onclick handlers
-
-Use `data-*` attributes on buttons; read them in the handler via `this.dataset`. Never interpolate strings into onclick attributes (escaping is fragile):
-
-```html
-<button data-id="<%= item._id %>" data-name="<%= item.name %>"
-        onclick="openEditDialog(this.dataset.id, this.dataset.name)">Edit</button>
-```
-
-### Text inputs auto-uppercase
-
-`common.js` automatically converts all `input[type="text"]` values to uppercase on input. This matches the Mongoose model convention of storing names in uppercase.
+  ```
+  Pre-select by setting `selected` on the `<option>` before init (more reliable than `setChoiceByValue`). Add `z-index: 99999` to `.choices__list--dropdown` inside dialogs.
+- **Text inputs auto-uppercase**: `common.js` uppercases all `input[type="text"]`, matching the models' uppercase-name convention.
 
 ### Renaming the company moves the URL prefix (and old links follow)
 
-The public prefix is the first word of the company name (`slugifyCompany`), so
-renaming **SACHIKO PACKAGING** to **RYT INFO** moves the whole app from
-`/sachiko/...` to `/ryt/...` the instant it is saved — no restart, because the
-brand cache is refreshed by the write (`routes/system/company.js` →
-`refreshBrand()`).
+The public prefix is the first word of the company name (`slugifyCompany`): renaming SACHIKO PACKAGING → RYT INFO moves the app from `/sachiko/...` to `/ryt/...` immediately (no restart; `routes/system/company.js` → `refreshBrand()`). Bookmarks on the old prefix would 404, so:
 
-That is also how a rename *looks broken*: the name is live everywhere (page
-titles, nav header, login screen), but every bookmark and open tab on the old
-prefix answers **404**, so it reads as "I renamed the company and nothing
-changed".
-
-`Company.slugHistory` closes that. The update route records the outgoing prefix
-whenever the name changes, and `middleware/brandPrefix.js` forwards any
-remembered prefix onto the current one:
-
-    /sachiko/labels/production/pending?tab=wip
-      -> 302 /ryt/labels/production/pending?tab=wip
-
-- **Temporary redirects, deliberately** — 302 for GET/HEAD, 307 for anything
-  else so a form post from a stale tab keeps its method and body. A 301 would
-  be cached by the browser and would then misroute if the company is ever
-  renamed back.
-- Five prefixes are kept, newest last, never the current one and never the
-  internal `/app` mount.
-- **A database that predates the field seeds itself.** On the first start
-  after this shipped, `seedSlugHistory()` reads every name the company has been
-  saved under out of the audit log (`Registered/Updated company "X"`, written
-  since the beginning), maps them through `slugifyCompany` and records them —
-  one line on the console, then never again (`undefined` means "never looked",
-  `[]` means "looked, nothing to forward"). So an old address starts working on
-  the next restart with nobody running anything.
-- `node scripts/company-slug-history.js` only exists for a prefix neither of
-  those can know — one used on an earlier installation, or from before the
-  audit log was kept. `--add <slug> --apply` records it.
-
-The database is **not** renamed: it is a fixed random id assigned at
-registration (`utils/companyDb.js`), so a rename touches nothing but the name,
-the prefix and — from then on — the id code.
+- `Company.slugHistory` records the outgoing prefix on rename; `middleware/brandPrefix.js` forwards remembered prefixes: `/sachiko/x?tab=wip` → 302 `/ryt/x?tab=wip`.
+- **302 for GET/HEAD, 307 otherwise** (keeps method/body for stale-tab form posts). Deliberately not 301 — browsers cache it and it misroutes if the company is renamed back.
+- Five prefixes kept, newest last, never the current one nor the internal `/app` mount.
+- A DB predating the field seeds itself on first start (`seedSlugHistory()` reads past names from the audit log; `undefined` = never looked, `[]` = looked, nothing).
+- `scripts/company-slug-history.js --add <slug> --apply` only for prefixes neither mechanism can know (earlier installation, pre-audit-log).
+- The database itself is **not** renamed (fixed random id from `utils/companyDb.js`).
 
 ### The id code every generated id starts with
 
-`SP | FCS | 000001`, `SP | LS | 000047`, `SP | LOT | 0042` — the `SP` is the
-**company's own id code**, not a constant. It comes from the Company master
-(`idPrefix`, `models/system/company.js`) through `currentIdPrefix()` in
-`utils/companyBrand.js`, read live at mint time, so changing it needs no
-restart — the same live path the app name and the URL slug already take.
+`SP | FCS | 000001`, `SP | LS | 000047`, `SP | LOT | 0042` — `SP` is the **company's id code** (`Company.idPrefix`), read live via `currentIdPrefix()` in `utils/companyBrand.js` at mint time (no restart on change).
 
-- **Typed, with a suggestion.** The field is pre-filled from the name by
-  `suggestIdPrefix()` (initials of the words; first two letters of a one-word
-  name: SACHIKO PACKAGING → SP, ORBIT LABELS PVT LTD → OL, ZACTAC → ZA) and
-  left blank it keeps using that. It is typed because a company's short code
-  is a fact about the company, not something a rule can guess — Zactac go by
-  **ZC**, which no derivation from the letters produces. 2–4 letters or digits,
-  validated in the route and on the field.
-- **Changing the code moves the ids minted under it.** When the code changes
-  (typed, or because the name's initials did), `rewriteIdPrefix()`
-  (`utils/idPrefixRewrite.js`) moves every id carrying the **outgoing** code
-  onto the new one — `GM | LS | 000047` → `XY | LS | 000047` — and says how
-  many in the flash message and the audit entry. Ids from an *earlier* code are
-  deliberately left alone: they belong to a period that is over, and moving
-  them would make old stickers and paper records disagree with the screen a
-  second time. `scripts/rewrite-id-prefix.js --from SP --to GM` moves one of
-  those by hand (dry-run by default).
-- **It is a blind scan of every string field, not a list of id fields.** The
-  same id string is copied between documents — an order's Lot No is stamped
-  onto its Deckles and Job Cards, and those copies are how they are matched
-  back up — so a field missing from a list would quietly break a link. The
-  audit log and every `*logs` collection are skipped: they record what happened
-  under the code in force at the time, and are read as history, never as links.
-  An id that would collide with one already under the new code is left alone
-  and reported.
-- **Numbering continues across a change.** Every generator takes its next
-  number either from a `Counter` document or from the trailing 6 digits of the
-  highest existing id (`parseSkuSeq`), both of which ignore the prefix. After
-  switching to ZC, the master that follows `SP | FCS | 000025` is
-  `ZC | FCS | 000026`, not `ZC | FCS | 000001`. The `exists()` probe each
-  generator does is prefix-aware, so it can't collide either.
+- **Typed, with a suggestion**: pre-filled by `suggestIdPrefix()` (initials; first two letters for one-word names: SACHIKO PACKAGING → SP, ZACTAC → ZA) and used as-is if left blank. Typed because a short code is a fact about the company (Zactac use **ZC**). 2–4 letters/digits, validated in the route and on the field.
+- **Changing it moves ids minted under the outgoing code** via `rewriteIdPrefix()` (`utils/idPrefixRewrite.js`): `GM | LS | 000047` → `XY | LS | 000047`; count reported in the flash message and audit entry. Ids from *earlier* codes are deliberately left alone (old stickers/paper records would otherwise disagree with the screen again); `scripts/rewrite-id-prefix.js` does those by hand.
+- **Blind scan of every string field, not a list of id fields** — the same id string is copied between documents (an order's Lot No is stamped on its Deckles and Job Cards), so a missing field would break a link. Audit log and every `*logs` collection are skipped (history, not links). An id that would collide with one under the new code is left alone and reported.
+- **Numbering continues across a change**: generators take the next number from a `Counter` or the trailing 6 digits of the highest existing id (`parseSkuSeq`), both prefix-agnostic; `SP | FCS | 000025` is followed by `ZC | FCS | 000026`. Each generator's `exists()` probe is prefix-aware.
 
-Every mint site reads `currentIdPrefix()` — Facestock / Adhesive / Core /
-Release Master, Label Stock (id + SKU code, incl. `utils/labelStockVariant.js`),
-Machine, Machine Job Card, Slitting Job Card and Maintenance ticket. Add a new
-one the same way; don't write the letters in. Lot No is the one exception —
-see "Lot No" below, it's structured around the product code instead.
+Mint sites (all read `currentIdPrefix()`): Facestock / Adhesive / Core / Release Master, Label Stock (id + SKU code, incl. `utils/labelStockVariant.js`), Machine, Machine Job Card, Slitting Job Card, Maintenance ticket. **Add new ones the same way — never write the letters in.** Lot No is the exception (see below). `scripts/serialize-labelstock-sku-codes.js` calls `refreshBrand()` after `connectDB()` and renumbers existing rows onto the current code (the one place existing ids change, only with `--apply`).
 
-`scripts/serialize-labelstock-sku-codes.js` mints too, so it calls
-`refreshBrand()` after `connectDB()` and uses the same code — it used to
-hardcode `SP`, which meant one run quietly renumbered every Label Stock SKU
-back to SP on an installation that had set its own. Note that this script
-renumbers *existing* rows, so it does move them onto the current code; that is
-the one place existing ids change, and only when someone runs it with
-`--apply`.
-
-**Still hardcoded, deliberately:** the FAIRTECH-era `FS | CLIENT | 1`,
-`FS | Tape | 000001` and `FS | <mat> | <cat> | 000001` ids in
-`routes/fairdesk_route.js`. They are a different, older family whose prefix
-never matched the company code even for Sachiko, so switching them would change
-client and tape ids for an installation that has not renamed anything.
+**Still hardcoded, deliberately:** FAIRTECH-era `FS | CLIENT | 1`, `FS | Tape | 000001`, `FS | <mat> | <cat> | 000001` ids in `routes/fairdesk_route.js` — an older family whose prefix never matched the company code; switching would change client/tape ids for installations that haven't renamed.
 
 ### Lot No
 
-`PendingProduction.lotNo` (`routes/fairdesk_route.js`, minted/edited at
-`GET`/`POST /labels/production/assign/:id`) is
-**`PRODUCTCODE / FY / <year-letter><serial>`** — e.g. `C001WB / 26-27 / G001`.
-Unlike every other id above it carries no company code at all; it is built
-around the **product code** instead, because that's what the business reads
-it by. The serial is scoped to one product code within one financial year —
-`C001WB`'s first lot of FY 2026-27 is `G001`, its second `G002`, and FY
-2027-28 starts over at `H001` (the year-letter, `financialYearLetter()` in
-`utils/rollId.js`, changes with it) — so it directly answers "how many lots
-has this product had this year", never a company-wide total.
+`PendingProduction.lotNo` (minted/edited at `GET`/`POST /labels/production/assign/:id`) is **`PRODUCTCODE / FY / <year-letter><serial>`**, e.g. `C001WB / 26-27 / G001`. No company code — it's built around the product code. Serial is scoped to one product code within one financial year (FY 2027-28 restarts at `H001`; `financialYearLetter()` in `utils/rollId.js`).
 
-**Manually editable, deliberately.** The field on Assign Production
-(`assignProduction.ejs`'s header) is a plain text input (`form="assign-form"`,
-so it posts with the rest of the page despite sitting outside the `<form>`
-tag), pre-filled with the current/previewed value — whatever is submitted is
-what's saved, changed or not. There is **no separate `Counter` document** for
-this, unlike every other generator in this file: the next AUTO lot no is
-always read straight off the **highest serial already saved** for that
-product + year (`highestLotNoSerial()`, scanning both `PendingProduction.lotNo`
-and `MachineJobCard.lotNo`), so a hand-typed lot no becomes the new baseline
-the instant it's saved — nothing to resync, nothing to fall behind. A typed
-value is only checked for a collision when it actually **changed** from what
-was already on file, so an unchanged resubmit (the normal case on a
-re-assignment after Undo — lotNo is kept across unassign, see "Undoing an
-assignment" below) never trips over its own existing value.
+- **Manually editable.** The Assign Production header field is a plain text input (`form="assign-form"`), pre-filled with the current/previewed value; whatever is submitted is saved. A typed value is collision-checked only when it **changed** from what's on file (so resubmits after Undo — lotNo is kept across unassign — don't trip over themselves).
+- **No separate `Counter`.** The next auto lot no is read off the highest saved serial for that product + year (`highestLotNoSerial()`, scanning `PendingProduction.lotNo` and `MachineJobCard.lotNo`), so a hand-typed value becomes the new baseline instantly.
+- **Temporary Lot No Setup replaces the inline edit** (production predates the ERP's lot numbers): the gear beside Lot No (pencil disabled; `POST .../assign/:id/lot-no` refuses) opens a dialog of one row per Label Stock product code to enter "last Lot No used this year" (`14` = `G014`). Stored in `LotNoBaseline` (`models/system/lotNoBaseline.js`, one row per product + FY); `highestLotNoSerial()` takes **max(baseline, highest in orders/job cards)**. Can move a series forward, never below a held lot. admin/proprietor/hod only; JSON endpoints `GET|POST /labels/production/lot-no-setup`, no page of its own (a reload would drop ticked reels).
 
-**Temporary Lot No Setup replaces the inline edit.** Production was already
-running before the ERP kept lot numbers, so the series is told where it stands:
-the **gear** beside Lot No on Assign Production (the pencil is switched off, and
-`POST .../assign/:id/lot-no` refuses) opens a dialog — one row per Label Stock
-product code — to enter "the last Lot No used this year" (`14` = `G014`). It is
-stored in `LotNoBaseline` (`models/system/lotNoBaseline.js`, one row per product
-+ FY), and `highestLotNoSerial()` now takes **max(that, the highest serial in
-orders/job cards)**, so the "no separate counter" statement above holds for the
-database, with the baseline layered under it. A save can move a series forward,
-never below a lot the system holds (admin/proprietor/hod only; JSON endpoints
-`GET|POST /labels/production/lot-no-setup`, no page of its own — a reload would
-drop ticked reels).
+**Deckle IDs: `PRODUCT/FY/<year letter><lot>/<4-digit serial>`**, e.g. `C001WB/26-27/G0025/0124` (`generateDeckleId()` in `utils/rollId.js`). The lot number is regex-read off the **trailing digits** of the Lot No (`deckleLotNumber()`; `.../G001` → `0001`). The **serial is one running count per MASTER product code per FY, across lots** (counter key `deckleId:<base code>:<fy>:<letter>`; old per-lot counters are dead). A "-A"/"-B" variant counts on its master's series (`deckleBaseCode()`): after `C001WB/26-27/G0025/0124` comes `C001WB-A/26-27/G0025/0125`. `generateDeckleId()` first lifts the counter to the highest serial any existing Deckle of that product/year carries (4+ digits — old five-digit ids like `/00019` still exist, hence `\d{4,}` in `DECKLE_TAIL`, the job card page's copy, and the operator app's `src/utils/rollId.js`), and compares by number, not text.
 
-**Deckle IDs: `PRODUCT/FY/<year letter><lot>/<4-digit serial>`**, e.g.
-`C001WB/26-27/G0025/0124`. A Deckle's own id (`generateDeckleId()` in
-`utils/rollId.js`) regex-reads its lot number off the **trailing digits** of the
-Lot No (`deckleLotNumber()`) — `.../G001` yields `0001`. The **serial is one
-running count per MASTER product code per financial year, across lots** (counter
-key `deckleId:<base code>:<fy>:<letter>`; the old per-lot counters, one segment
-longer, are dead). **A "-A"/"-B" variant counts on its master's series** —
-`deckleBaseCode()` strips the suffix — so after `C001WB/26-27/G0025/0124` the
-next Deckle is `C001WB-A/26-27/G0025/0125`: only the product code in the id
-changes, never the number's run. Variants are not listed in the setup dialog — the same scoping the Lot No's serial has, to match the plant's paper
-numbering. `generateDeckleId()` first lifts the counter to the highest serial any
-existing Deckle of that product/year carries (either width: ids made when it
-was five digits, `/00019`, still exist and still scan — hence `\d{4,}` in
-`DECKLE_TAIL`, the job card page's copy, and the operator app's own
-`src/utils/rollId.js`), and the taken-check compares by number, not text.
-**Lot No & Deckle No Setup** is one dialog (the gear beside Lot No on Assign
-Production; `GET|POST /labels/production/lot-no-setup` and
-`GET|POST /machine/deckle-no-setup`) listing every **master** product with its
-last Lot serial and last Deckle serial; it moves the Deckle counter forward with
-`$max` — never below an existing Deckle of the master or any variant. Web
-job card, Assign & Continue and the operator app all mint through the one
-function, so one setting covers all three.
+**Lot No & Deckle No Setup** is one dialog (gear beside Lot No; `GET|POST /labels/production/lot-no-setup` and `GET|POST /machine/deckle-no-setup`) listing every **master** product (variants not listed) with last Lot serial and last Deckle serial. Deckle counter moves forward with `$max`, never below an existing Deckle of the master or any variant. Web job card, Assign & Continue and the operator app all mint through the one function.
 
 ### Label Stock order rates follow the binding, not the product
 
-On `/sachiko/sales/order`, a Label Stock row's Rate is a property of the
-**`LabelStockBinding`**, whose identity is product + client + **Paper Size +
-RM** (`buildLabelStockBindingSignature` in `routes/fairdesk_route.js`). One
-product legitimately has several bindings at different rates — `C001WB` is
-bound at 62.5/RM 300 = ₹20, 210/RM 1000 = ₹26 and 250/RM 2000 = ₹27.
+On `/sachiko/sales/order`, a Label Stock row's Rate belongs to the **`LabelStockBinding`**, identity = product + client + **Paper Size + RM** (`buildLabelStockBindingSignature` in `routes/fairdesk_route.js`). One product has several bindings at different rates (`C001WB`: 62.5/RM 300 = ₹20, 210/RM 1000 = ₹26, 250/RM 2000 = ₹27), so the rate can't be settled at Product Code pick. `aiResolveRow()` in `views/inventory/orders/salesOrderForm.ejs` re-runs on Product Code, Paper Size *and* RM input:
 
-So the rate **cannot** be settled when the Product Code is picked. `aiResolveRow()`
-in `views/inventory/orders/salesOrderForm.ejs` re-runs on Product Code, Paper
-Size *and* RM input, and:
-
-- an exact binding match fills its rate and sets the row's `itemId`;
-- no exact match leaves `itemId` empty and sets `labelStockMasterId` instead
-  (the server auto-creates the binding), filling the rate from the client's
-  other binding for the same product purely as a starting point;
+- exact binding match → fills its rate, sets `itemId`;
+- no match → `itemId` empty, `labelStockMasterId` set (server auto-creates the binding); rate pre-filled from the client's other binding for that product as a starting point;
 - a hand-typed rate (`dataset.userEdited`) is never overwritten.
 
-An auto-filled rate shows yellow until clicked — `aiValidateRows()` blocks
-submit until it is acknowledged, so a rate that changed with the size can't be
-submitted unseen. The acknowledgement is only re-armed when the figure actually
-moves, since typing a size re-runs the resolve on every keystroke.
+An auto-filled rate shows yellow until clicked; `aiValidateRows()` blocks submit until acknowledged, re-armed only when the figure actually moves (typing re-runs the resolve on every keystroke).
 
-**`aiFindBinding()` must match the way the server's signature does** — Paper
-Size trimmed and uppercased with whitespace runs collapsed, RM compared as a
-number, blanks rejected (`Number("")` is `0` and would match a binding with no
-RM). If the two drift apart the form shows a rate the order is not placed at.
+**`aiFindBinding()` must match the server's signature**: Paper Size trimmed, uppercased, whitespace runs collapsed; RM compared as a number; blanks rejected (`Number("")` is `0` and would match a binding with no RM).
 
 ### Finished stock export (to the FAIRTECH ERP)
 
-The mirror of the paper re-order import below, going the other way: `/sachiko/finishedstock`
-has an **Export to FAIRTECH** button that turns ticked finished rolls into the JSON file
-FAIRTECH's `/fairtech/paperstock` **Import from Sachiko** takes in as paper stock.
+`/sachiko/finishedstock` **Export to FAIRTECH** turns ticked finished rolls into the JSON FAIRTECH's `/fairtech/paperstock` **Import from Sachiko** takes as paper stock. Rolls are ticked **in the dialog** (table ticks just pre-select); a roll FAIRTECH would refuse can't be ticked (the file is all-or-nothing).
 
-Rolls are ticked **in the dialog** (the table's own ticks just pre-select it), styled after
-FAIRTECH's own "Export to Sachiko" dialog. A roll FAIRTECH would refuse can't be ticked at
-all — the file is all-or-nothing, so one bad roll must never reach the server.
+`POST /finishedstock/export` **dispatches as it exports** (otherwise the same reels are counted in both databases). Nothing is deleted: `quantity` → 0, `dispatchedAt` / `dispatchInvoiceNo` stamped, INWARD/OUTWARD history kept. Dispatched rolls drop off `/sachiko/finishedstock` and show on `/sachiko/finishedstock/dispatched`. Rolls are claimed with an atomic `quantity > 0` guard (double-click / concurrent exports can't dispatch twice); if any claim loses the race the whole selection is put back.
 
-`POST /finishedstock/export` **dispatches** as it exports — the rolls physically leave, so
-they come off this stock in the same call, or the same reels are counted in both databases
-at once. Nothing is deleted: the roll keeps its row and its whole INWARD/OUTWARD history,
-`quantity` goes to 0 and `dispatchedAt` / `dispatchInvoiceNo` are stamped on it. A
-dispatched roll then drops off `/sachiko/finishedstock` (which lists stock only) and shows
-on **`/sachiko/finishedstock/dispatched`** with the invoice it went out on — recorded
-outright rather than parsed back out of the OUTWARD log line's remarks.
-Rolls are claimed with an atomic `quantity > 0` guard, so a double-click — or two people
-exporting at once — can't dispatch the same roll twice; if any claim loses the race the
-whole selection is put back.
-
-The mapping, all of which are **required** on a FAIRTECH `PaperStock`, so each is validated
-here rather than letting the import fail halfway through a delivery:
+Required FAIRTECH `PaperStock` fields, each validated here:
 
 | finished roll | → | FAIRTECH |
 |---|---|---|
@@ -411,979 +196,277 @@ here rather than letting the import fail halfway through a delivery:
 | `paperSize` / `mtrs` / `rate` | → | `paperSize` / `paperMtrs` / `rate` |
 | `rollId` | → | `vendorRollId` (FAIRTECH mints its own `rollId`) |
 
-**The base code is the trap.** A finished roll is booked against the Deckle's own Label
-Stock, so its code is often a production-time variant (`C001WB-B`). That split is internal
-to this app — FAIRTECH files the paper under `C001WB` and knows nothing about variants, so
-exporting the variant verbatim misses the existing Paper there and mints a junk duplicate.
-`baseProductCode()` strips it; the full code still travels as `variantProductCode`, for
-tracing a reel back here only.
-
-Rate comes from the sales order (see the slitting Stop handler), which is what makes the
-export worth anything: it is what FAIRTECH books the reel in at.
+**The base code is the trap**: a roll is booked against the Deckle's Label Stock, often a variant (`C001WB-B`). FAIRTECH knows nothing about variants; exporting verbatim misses the existing Paper and mints a junk duplicate. `baseProductCode()` strips it; the full code travels as `variantProductCode` (tracing only). Rate comes from the sales order (slitting Stop handler) — what FAIRTECH books the reel in at.
 
 ### Paper re-order import (from the FAIRTECH ERP)
 
-`/sachiko/sales/pending` has an **Import** button that takes the JSON file
-FAIRTECH's `/fairtech/inventory/paper-reorder` page exports and turns it into a
-multi-line Label Stock PO here. The two apps are separate deployments on
-separate databases — the file is the whole interface, so everything has to be
-re-resolved locally on the way in.
+`/sachiko/sales/pending` **Import** takes the JSON from FAIRTECH's `/fairtech/inventory/paper-reorder` and builds a multi-line Label Stock PO. Separate deployments/DBs — the file is the whole interface, so everything is re-resolved locally. Handshake = Product Code string (`SachikoLabelStock.productCode` ↔ FAIRTECH `Paper.prodCode`) plus client name (`Username.clientName`); neither is an id, so renames break the match (unmatched codes are reported per line, not skipped).
 
-The handshake is the Product Code string both masters already share
-(`SachikoLabelStock.productCode` ↔ FAIRTECH's `Paper.prodCode`: `C001WB`,
-`P002WB`, …), plus the client name (`Username.clientName`) FAIRTECH is filed
-under here. Neither is an id, so a rename on either side breaks the match —
-which is why an unmatched code is reported per line rather than skipped.
+Two steps (nothing is written from an unread file):
+1. `POST /sales/pending/import/preview` (multipart, field `file`) — resolves every line, parks resolved rows **on the session**, writes nothing. Each row reports its master, whether a `LabelStockBinding` (client + size + RM) exists (and its rate), and whether this PO already brought the line in. Unorderable lines carry an `error` and can't be ticked.
+2. `POST /sales/pending/import/commit` — browser sends only *which* rows and at what rate; products/quantities/sizes come from the session copy (a doctored post can't add a line). Session entry cleared on success; `submissionToken` = `import-<upload token>-<line index>` so re-confirming can't double-create.
 
-Two steps, because nothing should be written from a file nobody has read:
+Both call `createLabelStockPoLines()` in `routes/fairdesk_route.js`, shared with `POST /sales/order`'s multi-item branch — **don't fork it** (bindings, `orderSignature`s and `PendingProduction` rows must match exactly).
 
-1. `POST /sales/pending/import/preview` (multipart, field `file`) — parses the
-   file, resolves every line, and parks the resolved rows **on the session**.
-   Writes nothing. Each row reports its Label Stock master, whether a
-   `LabelStockBinding` for that client + paper size + RM already exists (and so
-   what rate to pre-fill), and whether this PO already brought the same line
-   in. A line that can't be ordered carries an `error` and can't be ticked.
-2. `POST /sales/pending/import/commit` — creates the ticked lines. The browser
-   sends only *which* rows to include and at what rate; the products,
-   quantities and sizes come from the session copy of the preview, so a
-   doctored post can't smuggle in a line that was never shown.
+- **Location is never asked for.** It only decides where a *new* binding is filed, but `resolveLabelStockBinding()` validates it for every line. Preview resolves: this user's binding locations → user's own location → Location master if it holds exactly one entry; carried on the session. No source → fails at preview telling the user to bind a product first.
+- A rate is always required (validated before the binding lookup). Pre-filled from the matching binding, else the client's latest binding for that product (marked as a guess). Editing writes back to the binding, as on the Sales Order form.
+- Same PO + product + size + RM already on the books = likely double upload, but a top-up is legitimate → line starts **unticked**, not blocked.
+- "-A"/"-B" variant codes are excluded from matching (as in `GET /sales/order`'s picker).
 
-Both call `createLabelStockPoLines()` in `routes/fairdesk_route.js` — the same
-helper `POST /sales/order`'s multi-item branch uses. An imported PO is the same
-PO, just typed by FAIRTECH's export instead of by hand, and it has to land on
-exactly the same bindings, `orderSignature`s and `PendingProduction` rows.
-**Don't fork it**: a second copy of that loop is how the two paths drift.
+### Inward: rows must add up to the invoice total
 
-Notes on the resolution rules:
-
-- **Location is never asked for.** It decides one thing — where a *newly
-  created* binding is filed — and a client's paper belongs wherever that
-  client's existing bindings already sit, so there is nothing to choose. The
-  preview resolves it (this user's binding locations → the user's own location
-  → the Location master when it holds exactly one entry) and carries it on the
-  session to the commit; the browser never sends it. It can't simply be
-  skipped: `resolveLabelStockBinding()` validates a location for *every* line,
-  including lines whose binding already exists. A client with nothing to go on
-  fails at preview with a message saying to bind a product first, rather than
-  halfway through the commit.
-- A rate is always required, even where a binding exists, because
-  `resolveLabelStockBinding()` validates the rate before it looks the binding
-  up. The preview pre-fills it from the matching binding, or failing that from
-  the client's most recent binding for the same product (clearly marked as a
-  guess). Editing it writes the new rate back to the binding, exactly as the
-  Sales Order form does.
-- Same PO + product + size + RM already on the books means the file has most
-  likely been uploaded twice. That isn't an error — a genuine top-up under one
-  PO number is legitimate — so the line starts **unticked** rather than
-  blocked.
-- `submissionToken` is `import-<upload token>-<line index>`, and the session
-  entry is cleared on a successful commit, so re-confirming the same staged
-  preview can't double-create.
-- "-A"/"-B" variant Product Codes are excluded from the match, the same way
-  `GET /sales/order`'s own Product Code picker excludes them (see "Label Stock
-  Product Code variants").
-
-The upload is multipart, so csurf can't find its token in the body — the client
-sends it as an `x-csrf-token` header instead.
-
-### Inward: the rows must add up to the invoice total
-
-Every Add Stock dialog — **Facestock**, **Adhesive**, **Release Liner** and
-**Core** — checks what the rows add up to against the total keyed off the
-invoice, and refuses to save when they disagree in **either** direction. Too
-much means a row has been keyed twice or a weight is wrong; too little means a
-row is missing. Both put stock on the shelf that isn't what arrived, and
-neither is recoverable from the rows alone afterwards — this is the one moment
-someone has the invoice in front of them.
+Every Add Stock dialog (**Facestock**, **Adhesive**, **Release Liner**, **Core**) refuses to save when row sum ≠ invoice total, in **either** direction (too much = double keyed/wrong weight; too little = missing row).
 
 | page | rows | total |
 |---|---|---|
 | Facestock | reels, Kg | Total Kg |
 | Adhesive | drums, Kg | Total Kg |
 | Release Liner | reels, Kg | Total Kg |
-| Core | lots, **Pieces** | **Total Pcs** |
+| Core | lots, **Pieces** | **Total Pcs** (`addTotalPcsInput`) |
 
-Core counts pieces rather than weighing, so it got the field it never had
-(`addTotalPcsInput`) and is compared as whole numbers — no tolerance, they
-either match or they don't. The kg pages compare to 2 decimals with a 0.01
-tolerance, so `100.005 + 99.995 + 100` against `300` passes rather than
-tripping on floating point.
-
-It is checked in three places, and all three have to stay in step: the dialog
-header says the difference as it is typed (`summaryKgCheck` /
-`summaryPcsCheck`), the submit refuses with the figures spelled out, and
-`POST /create` runs the same test server-side — the total is sent with the
-batch for exactly that reason. Before this, the total was a client-only field
-that nothing compared and that never even reached the server.
+Kg pages compare to 2 decimals with 0.01 tolerance; Core compares whole numbers exactly. Checked in three places that must stay in step: the dialog header live (`summaryKgCheck` / `summaryPcsCheck`), the submit, and `POST /create` server-side (the total is sent with the batch for that reason).
 
 ### Reel labels: one sticker or a whole batch
 
-On **`/sachiko/facestockstock`**, **`/sachiko/adhesivestock`** and
-**`/sachiko/releaselinerstock`** alike — the three are the same page three
-times over, so a change to one belongs in all three.
+On `/sachiko/facestockstock`, `/adhesivestock`, `/releaselinerstock` — the same page three times, so change all three. A reel row's **Print** button prints one (`GET /label/:stockId`); **clicking a master row** opens **Print Reel Labels** (that spec's reels in stock, ticked or **Select all**, `GET /labels?ids=...`), one sticker per page.
 
-The inward sticker a reel (a drum, on Adhesive) gets stuck on it. Two ways in,
-one label:
+`views/stock/facestockRollLabel.ejs` renders **both**: it takes `labels` as an array; with more than one, `<html class="sheet">` adds a page break before each label after the first (`@page` is one 101.5 × 75.1 mm sticker). Don't fork it (SVG, QR, fit-to-box pass and 180° flip would need fixing twice).
 
-- a reel row's own **Print** button, for the one reel (`GET /label/:stockId`);
-- **clicking any master row**, which opens **Print Reel Labels**: that spec's
-  reels in stock, ticked off (or **Select all**) and printed in one pass
-  (`GET /labels?ids=...`), one sticker per page, so a whole inward batch is
-  labelled at the printer in a single run.
+- **The preview is the print target**: the frame holds the printed document, fetched and written as `srcdoc` (navigating a frame to the URL dies on the login redirect's `X-Frame-Options` instead of saying the session ended); Print is `labelApi.print()`. Ticking re-fetches on a 300 ms debounce; Print re-fetches first if one is pending.
+- **Only ids travel**; every label value is re-read from the DB. A reel deleted meanwhile is dropped and the page says so.
+- Printing writes nothing: allotted/part-used reels are still printable (badge shown).
+- **Rotate 180°** = per-PC `localStorage.facestockLabelFlip180`, read by the label page itself (printer property, not reel property).
+- `MAX_LABELS_PER_SHEET` = 200.
+- Per pool only names differ: table id (`#facestock-` / `#adhesive-` / `#release-masters-table`), mount, flip key, noun (Adhesive prints **drums**), spec line (Adhesive has no family/size/micron; Release Liner adds Sensing and Colour). **The kg field is `reelMtrs` in every pool, drums included** — no `drumMtrs`.
 
-`views/stock/facestockRollLabel.ejs` renders **both**. It takes `labels` as an
-array and nothing else changed for a single reel: with more than one, `<html>`
-gets `class="sheet"`, which turns on a page break before every label after the
-first (the `@page` IS one 101.5 x 75.1 mm sticker, so without it two would land
-on the same page) and lets the body grow past one label's height. Don't fork it
-into a second view — the SVG, the QR, the fit-to-box pass and the remembered
-180° flip would then have to be fixed twice.
+Semi-Finished has its own label view and stock page; not wired in. **Create PO is switched off** on all three pages (greyed `disabled` button, `pointer-events: none` so the click falls through to the row, reason in tooltip); the dialog and `POST /purchase-order` are untouched — drop two lines in the Purchase Order column's formatter to re-enable.
 
-Notes on the dialog:
-
-- **The preview is the print target.** The frame holds the very document that
-  is printed (fetched and written in as `srcdoc`, for the same reason the
-  single-reel dialog does it — navigating a frame to the URL dies on the login
-  redirect's `X-Frame-Options` instead of saying the session has ended), and
-  Print is `labelApi.print()` on it. Ticking re-fetches on a 300 ms debounce;
-  Print re-fetches first if a debounce is still in flight, so it can never
-  print the previous selection.
-- **Only the ids travel.** Every value on every label is re-read from the
-  database by the route, exactly as the one-reel route reads it. A reel deleted
-  between opening the dialog and printing is dropped rather than failing the
-  sheet, and the page says so — a silently short stack is how a reel ends up
-  with no sticker on it.
-- Printing writes nothing, so an **allotted** or **part-used** reel is still
-  listed and still printable (it is a physical reel that needs a sticker like
-  any other); its state shows as a badge.
-- **Rotate 180°** is the same remembered per-PC setting the single-reel dialog
-  sets (`localStorage.facestockLabelFlip180`, read by the label page itself —
-  a `srcdoc` frame shares this origin's storage), because which way the stock
-  feeds is a property of the printer, not of the reel.
-- `MAX_LABELS_PER_SHEET` (200) caps one run.
-
-Per pool, only the names differ: the table id (`#facestock-` / `#adhesive-` /
-`#release-masters-table`), the mount the dialog fetches from, the flip key, the
-noun on screen (Adhesive prints **drums**), and the spec line the dialog's
-subtitle is built from — each page names its own master's fields (Adhesive has
-no family/size/micron; Release Liner adds Sensing and Colour). The **kg field
-is `reelMtrs` in every pool, drums included**; there is no `drumMtrs`.
-
-Semi-Finished has its own copy of the label view and its own stock page; this
-is not wired into it.
-
-While this went in, **Create PO was switched off** on all three pages: the
-button renders greyed and `disabled`, with `pointer-events: none` so the click
-falls through to the row underneath rather than dying on a dead button, and the
-reason on the cell's tooltip. Its dialog and `POST /purchase-order` are
-untouched — drop the two lines in the Purchase Order column's formatter to turn
-it back on.
-
-One trap in that column's neighbourhood: `tableDisp.css` sets
-`cursor: default !important` on `.tabulator .tabulator-row:hover`, so a plain
-`cursor: pointer` on the row is overridden for the whole time the cursor is
-actually over it. The rule has to name `:hover` and the `.tabulator-cell`
-children, and carry `!important`.
+Trap: `tableDisp.css` sets `cursor: default !important` on `.tabulator .tabulator-row:hover`, overriding a plain `cursor: pointer` on rows. The rule must name `:hover` and the `.tabulator-cell` children and carry `!important`.
 
 ### Label Stock Product Code variants
 
-`SachikoLabelStock.productCode` (`models/sachiko/sachikoLabelStock.js`) is free text, not itself unique — only the full `labelStockSignature` (every user-editable field, Product Code included) is unique-indexed, so nothing used to stop the *same* Product Code being entered again for a genuinely different recipe (e.g. `C011` re-entered against a different vendor).
+`SachikoLabelStock.productCode` is free text; only the full `labelStockSignature` (every editable field, Product Code included) is unique. `POST /sachiko/label-stock/form` (`routes/sachiko/sachiko_route.js`) resolves duplicates at create time via `resolveProductCodeVariant()`:
+1. Find the variant family: rows named exactly the code or `<code>-<LETTERS>`.
+2. Compare recipes with `buildLabelStockSpecSignature()` (same sha256 as `buildLabelStockSignature()` but without Product Code; shared builder `labelStockSignatureParts(payload, { includeProductCode })`).
+3. Identical recipe in the family → rejected as duplicate, naming the existing code.
+4. No match → new variant, next unused single-letter suffix (`C011` → `C011-A` → `C011-B`…, reusing freed letters).
+5. No family → saved under the plain code.
 
-`POST /sachiko/label-stock/form` (`routes/sachiko/sachiko_route.js`) now resolves this at create time via `resolveProductCodeVariant()`:
-1. Find every existing row named exactly the entered code or `<code>-<LETTERS>` (its variant family).
-2. Compare recipes with `buildLabelStockSpecSignature()` — the same sha256 signature `buildLabelStockSignature()` already used, just built **without** Product Code (`labelStockSignatureParts(payload, { includeProductCode })` is the shared builder both call).
-3. An existing family member has the identical recipe → rejected as a real duplicate, naming the existing Product Code it collides with.
-4. No family member matches → a legitimate new variant → assigned the next unused single-letter suffix (`C011` → `C011-A` → `C011-B` → …, reusing a freed letter rather than always climbing).
-5. No family yet → saved under the plain entered code, no suffix.
-
-Only applies at create time — editing an existing row still uses the plain exact-duplicate `buildLabelStockSignature()` check and never renames a row into a new variant on its own.
+Create-time only; editing uses the plain exact-duplicate check and never renames into a variant.
 
 ### DOUBLE RELEASE / DOUBLE FACESTOCK: one reel may serve two layers
 
-A DOUBLE RELEASE job is made in two passes — facestock + adhesive + release
-liner as normal, then a second adhesive and a second liner on top — so
-`LAYER_ORDER["DOUBLE RELEASE"]` is exactly that sequence
-(`utils/labelStockProduction.js`).
+`LAYER_ORDER["DOUBLE RELEASE"]` (`utils/labelStockProduction.js`) is facestock + adhesive + liner, then a second adhesive + liner — two sequential passes, so one reel/drum may be allotted to more than one layer. `POST /labels/production/assign/:id` therefore does **not** refuse a repeated pick (it used to, making these jobs unassignable — the operator ticks the one bound drum on both layers and the form bounced with a flash).
 
-Because the passes are **sequential**, one reel or drum may be allotted to more
-than one layer: the second pass unwinds the same liner again and draws the same
-glue again. `POST /labels/production/assign/:id` therefore does not refuse a
-repeated pick at all. It used to, and that made these jobs unassignable: the
-picker offers the one bound drum (and often the one liner of that spec), the
-operator ticks it on both layers because there is nothing else to tick, and the
-whole Assign & Continue bounced back to the form with a flash — allotting
-nothing and never reaching the machine queue, which reads as "selecting the
-material does nothing".
+`produceDeckle()` makes that safe: reels serving several layers are grouped by reel id (`drawByReel`), **checked once against the total** (102 left is refused for two 100 m coats) and **deducted once for the total** (per-layer `reelMtrs - draw` writes overwrote each other, so half the adhesive never left stock). Each layer still writes its own OUTWARD log line.
 
-`produceDeckle()` is what makes that safe. A reel serving several layers is
-grouped by reel id first (`drawByReel`), so it is:
-
-- **checked once, against the total** — a drum with 102 left is refused for two
-  100 m coats, where per-layer checks would each have passed;
-- **deducted once, for the total** — the loop used to compute
-  `reelMtrs - draw` per layer from the same starting figure and write both, so
-  the second write overwrote the first and half the adhesive never left stock.
-
-Each layer still writes its own OUTWARD log line, so the ledger says what each
-coat took.
-
-The machine queue has to answer the same way. `computeAllotmentCoverage()`
-(`routes/system/machine.js`) **pools the layers that share a reel** and asks
-whether that reel covers what they add up to, rather than counting it in full
-on each (which would say the material goes twice as far as it does) or
-splitting it (which invents a shortfall: 85 kg against needs of 35.3 + 43.0 is
-enough, but no apportionment of it makes both sides land). Layers that share
-nothing are measured on their own exactly as before.
+The machine queue agrees: `computeAllotmentCoverage()` (`routes/system/machine.js`) **pools layers sharing a reel** and asks whether it covers their sum (counting it in full on each overstates; splitting invents a shortfall). Layers sharing nothing are measured alone.
 
 ### Advance orders (a deckle set before the sales order exists)
 
-**Advance Order** on `/sachiko/labels/production/deckle-set` opens
-`/sachiko/labels/production/deckle-set/plan` — the Set Deckle page itself
-(`deckleSetForm.ejs`, `advanceMode: true`), not a copy of it. The Product Code is
-picked in its own box (a reload with `?itemId=`, because the recipe decides the
-deckle sizes offered), the orders are **typed in** as advance lines (Paper Size,
-Running Mtrs, Roll Qty, Remarks), and the code's real loose orders are listed
-unticked beside them. Layouts, grace and AI Deckle Set work as usual.
+**Advance Order** on `/sachiko/labels/production/deckle-set` opens `.../deckle-set/plan` — the Set Deckle page itself (`deckleSetForm.ejs`, `advanceMode: true`). Product Code picked in its own box (reload with `?itemId=`, since the recipe decides deckle sizes); orders **typed in** as advance lines (Paper Size, Running Mtrs, Roll Qty, Remarks); the code's real loose orders listed unticked beside them. Layouts, grace and AI Deckle Set work as usual.
 
-The typed lines are **not saved until Create Deckle Batch**: the page posts
-them as `advanceJson` to the same `POST /labels/production/deckle-set`, which
-creates them as loose `isAdvance` rows just before batching and **deletes them
-again on any refusal** (so an abandoned or rejected plan leaves nothing on Deckle
-Sorting). AI Deckle Set sends them as `advanceLines`. One line check,
-`parseAdvanceLine()`, serves all three. The typed rows' checkboxes carry
-`advance:<n>` values, which the server drops as non-ObjectIds.
+Typed lines are **not saved until Create Deckle Batch**: posted as `advanceJson` to the same `POST /labels/production/deckle-set`, which creates them as loose `isAdvance` rows just before batching and **deletes them on any refusal** (abandoned/rejected plans leave nothing on Deckle Sorting). AI Deckle Set sends them as `advanceLines`. One checker, `parseAdvanceLine()`, serves all three. Typed rows' checkboxes carry `advance:<n>` values, dropped server-side as non-ObjectIds.
 
-**Advance** on a Product Code's own `/plan/:itemId` page still saves one line
-straight away (`POST .../plan/:itemId/advance`). A loose advance row can be
-removed from Deckle Sorting; a batched one comes back out through Dissolve.
+**Advance** on a Product Code's `/plan/:itemId` page still saves one line immediately (`POST .../plan/:itemId/advance`). A loose advance row can be removed from Deckle Sorting; a batched one comes out via Dissolve.
 
-It is flagged (cornflowerblue, `.adv-tag` / `.adv-row` / `.adv-tr` /
-`.adv-banner` in `common.css`) on Deckle Sorting, Deckle Queue, Assign
-Production, WIP, the machine / operator queues, the web job card and the
-operator app's queue card + job card. Batch pages read it **live** off the
-members via `advanceShareByBatch()` (`utils/pendingProduction.js`), not from a
-stored flag, so it clears by itself. Clone and shortfall rows split off an
-advance member at batching carry `isAdvance` too.
+Flagged cornflowerblue (`.adv-tag` / `.adv-row` / `.adv-tr` / `.adv-banner` in `common.css`) on Deckle Sorting, Deckle Queue, Assign Production, WIP, machine/operator queues, web job card and the operator app's queue + job card. Batch pages read it **live** off members via `advanceShareByBatch()` (`utils/pendingProduction.js`), not a stored flag, so it clears itself. Clone/shortfall rows split off an advance member carry `isAdvance`.
 
-**The real order takes its place.** When a *new* Label Stock sales order syncs in
-(`upsertPendingProduction` → `absorbAdvanceOrders`), open advance rows with the
-same Product Code + Paper Size + Running Mtrs are consumed: batched ones first
-(the order's own row joins that batch, and a clone does the same for any further
-batch), then loose ones, oldest first. Whatever the order wants beyond the
-advance stays loose as a `parentOrderId` remainder; whatever the advance had
-beyond the order stays advance. A batch made only of advance rows takes the
-first real order's client and PO. An edit to an existing order never absorbs.
+**The real order takes its place**: when a *new* Label Stock sales order syncs (`upsertPendingProduction` → `absorbAdvanceOrders`), open advance rows with the same Product Code + Paper Size + Running Mtrs are consumed — batched first (the order's row joins that batch, a clone for further batches), then loose, oldest first. Order excess stays loose as a `parentOrderId` remainder; advance excess stays advance. A batch made only of advance rows takes the first real order's client and PO. Edits to existing orders never absorb.
 
 ### One deckle batch per deckle size
 
-`POST /labels/production/deckle-set` creates **one `PendingProduction` batch per
-deckle size the plan cuts**, not one per plan. A single-width plan makes the one
-batch it always did; a mixed-web plan (660 × 8 + 635 × 15 + 510 × 3) makes
-three, because they are three different things to make — three reels off the
-shelf, three runs through the laminator, three rows in the Deckle Queue, three
-Lot Nos, three machine assignments, three raw-material allotments.
+`POST /labels/production/deckle-set` creates **one `PendingProduction` batch per deckle size the plan cuts** (a 660 × 8 + 635 × 15 + 510 × 3 plan makes three — three reels, laminator runs, Deckle Queue rows, Lot Nos, assignments, allotments). Bundling made Assign Production unreadable: batch-level `deckleSize` holds only the width with most webs, so the 635 mm reels the job mostly ran on were flagged too narrow against a 660 budget.
 
-Bundling them into one batch is what made Assign Production unreadable: the
-batch-level `deckleSize` holds only whichever width carries the most webs, so a
-635 mm batch asked for raw material against a 660 mm budget and the 635 mm reels
-— the ones the job mostly runs on — came up flagged as too narrow.
-
-How an order that is cut at more than one width is divided:
-
-- layouts are grouped by `L.deckleSize ?? deckleSize`, widest first, and each
-  group's `rollsByWidth` is worked out from its own layouts;
-- each roll width's orders are served group by group, oldest order first, with
-  the overflow landing on the last order out of the last group that cuts it
-  (exactly where it landed when there was one group);
-- the order's **own row** joins the first group it appears in; a further group
-  gets a **clone** (`parentOrderId` = the order), the same device the shortfall
-  rows have always used — which is why Dissolve already folds them back
-  correctly, one batch at a time (it only re-merges a spare row whose parent is
-  itself loose);
+- layouts grouped by `L.deckleSize ?? deckleSize`, widest first; each group's `rollsByWidth` from its own layouts;
+- each roll width's orders served group by group, oldest first, overflow on the last order out of the last group that cuts it;
+- the order's **own row** joins the first group it appears in; further groups get a **clone** (`parentOrderId` = the order, like shortfall rows — which is why Dissolve folds back correctly one batch at a time; it only re-merges a spare row whose parent is itself loose);
 - whatever no group cuts is carved off to Deckle Sorting as before.
 
-`rollsByWidth` is keyed on **`orderedWidth ?? width`**. Where the planner
-applied grace the knife is set wider than the order (157.5 mm for a 150 mm
-roll), but the roll that comes off is still that order's, and it is billed at
-150 — keying on the knife width left those rolls belonging to nobody, so the
-order read as short and had its balance carved off while the rolls were on the
-machine.
+`rollsByWidth` is keyed on **`orderedWidth ?? width`**: with grace the knife is wider than the order (157.5 for a 150 roll) but the roll is still the order's and billed at 150; keying on knife width left rolls belonging to nobody so the order read as short and had its balance carved off.
 
-Per-layout `deckleSize` is **not** stored on the new batches (inside a
-single-width batch it is the batch's own size). Slitting Allocation's
-`BATCH_LAYOUT_FOR_WEB` filter already treats a layout with no width as always
-applicable, so its pre-fill is unaffected.
-
-Batches created before this change are still mixed. There is no migration:
-dissolve one from the Deckle Queue and re-create it from Deckle Set, which is
-the documented way a batch's size is changed anyway.
+Per-layout `deckleSize` is **not** stored on the new batches (Slitting Allocation's `BATCH_LAYOUT_FOR_WEB` treats a width-less layout as always applicable). Older mixed batches have no migration: dissolve and re-create from Deckle Set.
 
 ### Deckle Only (a deckle for stock — no orders, no slitting layout)
 
-**Deckle Only** is its own button on Deckle Sorting, beside Advance Order. It
-opens `GET /labels/production/deckle-set/deckle-only` (`deckleOnlyForm.ejs`):
-pick the Product Code (a reload with `?itemId=`, as on Advance Order — the
-inputs stay locked until one is picked), then one row of Deckle Size (typed,
-25–2,000 mm), Deckle R.M. and Deckle Count, and one footer row of the figures
-with Create Deckle Batch. It is a page of its own, not a mode of Set Deckle:
-the Set Deckle pages (`deckleSetForm.ejs`) know nothing about it. No Edge Trim
-field here — there's no slitting layout on a Deckle Only batch for a trim
-figure to describe, so `deckleTrim` is just left unset on what this creates
-(every downstream read already treats a missing `deckleTrim` as "no edge" —
-see Slitting Allocation's pre-fill in `routes/system/slitting.js`).
+**Deckle Only** (button on Deckle Sorting beside Advance Order) → `GET /labels/production/deckle-set/deckle-only` (`deckleOnlyForm.ejs`): pick Product Code (reload with `?itemId=`; inputs locked until picked), then Deckle Size (typed, 25–2,000 mm), Deckle R.M., Deckle Count. A page of its own — Set Deckle pages (`deckleSetForm.ejs`) know nothing about it. No Edge Trim field; `deckleTrim` is left unset (downstream reads treat missing as no edge; see Slitting Allocation pre-fill in `routes/system/slitting.js`).
 
-`POST /labels/production/deckle-set/deckle-only` makes one batch
-(`deckleOnly: true`, `batchOrderIds: []`, `quantity: 0`, `noOfRolls` = the
-count) and reads nothing but the Product Code and those three figures — no
-`orderIds`, no `advanceJson` — so it cannot touch an order. A refusal returns
-to the page with the code still picked.
+`POST .../deckle-only` makes one batch (`deckleOnly: true`, `batchOrderIds: []`, `quantity: 0`, `noOfRolls` = count) from only the Product Code and those three figures (no `orderIds`/`advanceJson`) so it can't touch an order. A refusal returns to the page with the code still picked.
 
-Downstream it is a batch with no layout and no client, both of which every
-page already handles (advance-only batches have no client either): Assign
-Production budgets it from `deckleSize × deckleRunningMeters × noOfRolls`, the
-machine queue's target is `noOfRolls`. The Slitting Queue's
-`buildPlannedDeckleGroups()` skips it (no "waiting" plan row); its webs appear
-there as free Deckles once laminated, and a roll slit against it gets no rate
-(no order to price it from — Finished Stock takes one by hand). The Deckle
-Queue tags it **DECKLE ONLY** with "Stock" in the Batch column; Dissolve just
-removes it.
-
-Note `safeJson()` turns a bare falsy value into `"{}"` — wrap a boolean in an
-object before embedding it (`safeJson({ picked })`), or it reads as true.
+Downstream: no layout, no client (advance-only batches already lack a client). Assign Production budgets from `deckleSize × deckleRunningMeters × noOfRolls`; machine queue target is `noOfRolls`. Slitting Queue's `buildPlannedDeckleGroups()` skips it (webs appear as free Deckles once laminated); slit rolls get no rate (Finished Stock takes one by hand). Deckle Queue tags it **DECKLE ONLY** with "Stock" in Batch; Dissolve just removes it.
 
 ### Slitting: a Deckle has to cure before it is run
 
-After lamination the adhesive cures for a time set by the **facestock family**
-— **CHROMO 6 h, PP 8 h**, any other family 6 h (`DEFAULT_CURING_HOURS`) —
-counted from the Deckle's `createdAt`. A build whose **every** adhesive layer
-is hot melt (`HOTMELT` / `HOT MELT`) has no curing at all; a hot melt +
-waterbase double build still cures. The table is `CURING_HOURS_BY_FAMILY` in
-`routes/system/slitting.js`. The Label Stock's own `family` and its
-`facestock.facestockFamily` (plus `facestock2` on a DOUBLE FACESTOCK) are all
-read, and the longest wait wins.
+Cure time by **facestock family** from the Deckle's `createdAt`: **CHROMO 6 h, PP 8 h**, other 6 h (`DEFAULT_CURING_HOURS`); `CURING_HOURS_BY_FAMILY` in `routes/system/slitting.js`. A build whose **every** adhesive layer is hot melt (`HOTMELT`/`HOT MELT`) has no curing; hot melt + waterbase double still cures. Label Stock `family`, `facestock.facestockFamily` (and `facestock2` on DOUBLE FACESTOCK) are all read; longest wait wins.
 
-Allocation is **not** gated (a job can be planned while the reel cures); the
-operator's run **is** — scanning, Start and Stop on the slitting job card all
-refuse an uncured Deckle, and the queues show the countdown. Any query whose
-reels go to `deckleCuring()` must populate `CURING_MATERIAL_FIELDS`: without
-the family, every Deckle quietly falls back to 6 h.
+Allocation is **not** gated; the operator's run **is** (scan, Start, Stop on the slitting job card refuse an uncured Deckle; queues show the countdown). Any query whose reels go to `deckleCuring()` must populate `CURING_MATERIAL_FIELDS`, or every Deckle quietly falls back to 6 h.
 
 ### Machine queue: how far the allotted material gets
 
-`buildQueueRows()` (`routes/system/machine.js`) reports, per order, **how many
-rolls the reels actually allotted to it will run** — shown under Required Rolls
-as "material for 4 of 15" and spelled out in the row's dialog.
-
-`materialStatus` has **three** states, not two:
+`buildQueueRows()` (`routes/system/machine.js`) reports per order **how many rolls the allotted reels will run** ("material for 4 of 15" under Required Rolls and in the row dialog). `materialStatus` has three states:
 
 | state | meaning | row | can start |
 |---|---|---|---|
-| `match` | every layer allotted, and enough of it for the whole job | green | yes |
-| `partial` | every layer allotted, but it runs out part way | amber | **yes** |
-| `short` | at least one layer has no reel at all | red | no |
+| `match` | every layer allotted, enough for the whole job | green | yes |
+| `partial` | every layer allotted, runs out part way | amber | **yes** |
+| `short` | at least one layer has no reel | red | no |
 
-`partial` exists because the old yes/no test only asked *is there a reel on
-every layer*, which says yes to a 27 kg remnant standing in for a 770 kg job —
-an order could sit green on the queue and stop three deckles in. A partial job
-still starts: every layer is on the machine, so it runs and stops when the
-material does, which is a normal way to work; the queue says how far it will get
-rather than barring it. The Facestock/Adhesive/Release badges fold the same fact
-in — "Partial" now means either *one of two layers of that pool* or *allotted
-but not enough*, and the tooltip says which.
+`partial` exists because "is there a reel on every layer" says yes to a 27 kg remnant standing in for a 770 kg job. A partial job runs and stops when material does. Facestock/Adhesive/Release badges: "Partial" = one of two layers of that pool *or* allotted-but-not-enough (tooltip says which).
 
-`computeAllotmentCoverage()` does the arithmetic with the same two figures
-Assign Production measures against (`utils/rawMaterialNeed.js`: kg and running
-metres per layer) and the same `kg x 1e6 / (gsm x width)` conversion — the
-reel's own GSM and width, or the recipe's wet GSM over the job's web for a drum.
-Coverage is the **worst layer** (a deckle is every layer at once), and rolls are
-rounded **down**: a deckle half fed is a deckle that stops mid-run. When *no*
-reel on a layer can be turned into a length (no GSM recorded), the metres side
-measures nothing, so the weight alone answers and the count of unmeasurable
-reels is reported instead — "0 of 15" with 800 kg on the machine is worse than
-saying nothing. A layer where only *some* reels are unmeasurable keeps both
-sides and so reads low, which is the safe direction.
+`computeAllotmentCoverage()` uses the same figures as Assign Production (`utils/rawMaterialNeed.js`: kg and running metres per layer) and `kg × 1e6 / (gsm × width)` — reel's own GSM and width, or the recipe's wet GSM over the job web for a drum. Coverage = **worst layer**; rolls rounded **down**. If *no* reel on a layer can be turned into a length (no GSM), weight alone answers and the unmeasurable count is reported (instead of a misleading "0 of 15" with 800 kg on the machine); if only *some* are unmeasurable both sides are kept and it reads low (safe direction).
 
 ### Undoing an assignment (taking a job back off a machine)
 
-"Undo" is `POST /labels/production/unassign/:id` — the order goes back to
-Pending, the machine/operator/helper are cleared, every reel and drum allotted
-to it is released, any Deckle laminated at **Assign & Continue**
-(`producedVia: "assign"`) is un-made and its material returned to the reels it
-came off, and the **Lot No is kept** so a re-assignment reuses it.
-`liveMaterialInUse` **and** `runningOn` are cleared with it: a job that had
-Start punched carries a device claim that only the job card's save would
-otherwise clear, and left behind it follows the order back to Pending and
-blocks the next device for 15 minutes.
+`POST /labels/production/unassign/:id`: order → Pending; machine/operator/helper cleared; every allotted reel/drum released; any Deckle laminated at **Assign & Continue** (`producedVia: "assign"`) un-made with material returned; **Lot No kept**. `liveMaterialInUse` **and** `runningOn` are cleared (a stale device claim would otherwise block the next device for 15 minutes).
 
-It is offered on the **machine queue row** (the natural place — that is where
-the job is looked at) and on the WIP tab. `buildQueueRows` decides it as
-`canUndo` / `undoBlockedReason`, from the same facts the POST refuses on, so a
-greyed button is never a surprise and an offered one never bounces. Operators
-don't see it (same `canEditOrder` gate as the Edit button).
+Offered on the **machine queue row** and the WIP tab (not for operators — same `canEditOrder` gate as Edit). `buildQueueRows` computes `canUndo` / `undoBlockedReason` from the same facts the POST refuses on.
 
-| state of the job | undo? |
+| state | undo? |
 |---|---|
 | assigned, untouched | yes |
-| Start punched, reels scanned, nothing made | yes — the scanned reels are released |
-| a Stop punched (a Deckle inwarded off the log) | **no** — save the Job Card to close it out |
+| Start punched, reels scanned, nothing made | yes (scanned reels released) |
+| a Stop punched (Deckle inwarded off the log) | **no** — save the Job Card to close out |
 | a reel reconciled mid-job (`materialSwapLog`) | **no** — same |
 | already produced (`producedAt`) | **no** |
 
-Once material has moved there is no clean reversal from here: the raw a
-job-card Deckle consumed is only settled when the whole card is saved, and
-`dissolveDeckle` has no lamination ledger to reverse for it. The way out is to
-open the Job Card and **Save Production Entry** (or cancel the order). To undo
-a produced Deckle deliberately, `node scripts/dissolve-deckle.js <deckleId>`
-first, then undo.
+Once material has moved there's no clean reversal (raw consumed by a job-card Deckle is settled only when the card is saved; `dissolveDeckle` has no lamination ledger for it). Way out: **Save Production Entry** or cancel the order. To undo a produced Deckle: `node scripts/dissolve-deckle.js <deckleId>` first, then undo. An undo from a queue returns to that queue (`from`, validated against this app's queue paths); elsewhere it lands on Deckle Set.
 
-An undo pressed on a queue returns to that queue (`from`, validated against
-this app's own queue paths); from anywhere else it lands on Deckle Set, where
-the job now is.
+### WIP tab: only started jobs, and what "live" means
 
-### WIP tab: only jobs that have started, and what "live" means
-
-`/sachiko/labels/production/pending?tab=wip` lists **jobs an operator has
-actually started** — not every order sitting on a machine queue. Being
-assigned is not being in progress: an order can wait days on a queue, and
-listing those buried the handful genuinely running.
-
-The membership test and the **Finished** / **Live** columns are the same
-question, answered by `buildJobCardProgressMap()` (`routes/fairdesk_route.js`). A `MachineJobCard`
-is written **once, by Save Production Entry, at the end of the job**, so
-reading only cards left this column saying "Not started" for a job that had
-been running for hours with Deckles already in Semi Finished Stock. Three
-things the shop floor writes as it goes are folded in, all of them already
-there to be read:
+`/sachiko/labels/production/pending?tab=wip` lists **jobs an operator has actually started**, not every order on a queue. Membership and the **Finished**/**Live** columns come from `buildJobCardProgressMap()` (`routes/fairdesk_route.js`). `MachineJobCard` is written **once, by Save Production Entry, at job end**, so cards alone read "Not started" for hours-long jobs; the shop floor's live writes are folded in:
 
 | signal | written by | shows as |
 |---|---|---|
-| `MaterialStock.producedFor` + `producedVia: "jobcard"` | each Stop punch (`POST /machine/jobcard/log/produce`) | the metres, and the dialog's Production Log row (untagged — made is made) |
+| `MaterialStock.producedFor` + `producedVia: "jobcard"` | each Stop punch (`POST /machine/jobcard/log/produce`) | metres; Production Log row |
 | `PendingProduction.runningOn` | first Start (`POST /api/operator/jobcard/claim`), heartbeated | **Running** |
 | `PendingProduction.liveMaterialInUse` | each reel scanned (`POST /machine/jobcard/mark-in-use`) | **In Setting** |
-| `PendingProduction.liveRun` | a Production Log row's Start (`POST /machine/jobcard/log/start`, app: `/api/operator/jobcard/log/start`) | the Live column's start + ETA |
-| `PendingProduction.liveSetting` / `liveStartedAt` | a Job Setting row's Start / Stop (`POST /machine/jobcard/setting/start\|stop`, app: `/api/operator/jobcard/setting/*`); the first punch of any kind stamps `liveStartedAt` (`$min`) | **JOB SETTING** / **STARTED** |
-| `MachineJobCard` | Save Production Entry | the filed figures |
+| `PendingProduction.liveRun` | a Production Log row's Start (`POST /machine/jobcard/log/start`; app `/api/operator/jobcard/log/start`) | Live start + ETA |
+| `PendingProduction.liveSetting` / `liveStartedAt` | Job Setting row Start/Stop (`POST /machine/jobcard/setting/start\|stop`; app `/api/operator/jobcard/setting/*`); first punch of any kind stamps `liveStartedAt` (`$min`) | **JOB SETTING** / **STARTED** |
+| `MachineJobCard` | Save Production Entry | filed figures |
 
-Three rules hold it together:
+Rules:
+- **A Deckle is counted once**: a card's Production Log row carries the same `rowToken` (and `deckleId`) the Deckle was minted with; matched and skipped.
+- **A live Deckle carries its row times** (`MaterialStock.productionTime`, written at Stop). Older Deckles have neither; `createdAt` stands in for **End** only, never Start.
+- **`producedVia: "assign"` never counts** (raw material laminated at Assign & Continue, not metres run).
+- **Started is persistent, running is not**: `runningOn` clears only on card save, so presence = started; `activeClaim()` (`routes/api/operatorApi.js`, the 15-minute freshness rule) makes the badge say Running. A dead tablet leaves the job listed as "In Setting".
+- Rows **join** at start and **leave** at produced, so `GET /labels/production/wip-progress` returns the whole row set (same query/`mapPendingProductionRow()`/filter as page render) and the poll reconciles update/add/delete (`wipTable.updateData()` alone rejects unknown rows).
+- **Finished** = metres made; **Deckles** = made of planned. `lastDoneAt` (newest jobcard Deckle's `createdAt` — not card save, not `updatedAt` which heartbeats move) is shown in the Live Status dialog only.
 
-- **A Deckle is counted once.** A card's Production Log row carries the same
-  `rowToken` (and `deckleId`) the Deckle was minted with, so a Deckle a card
-  already accounts for is matched and skipped rather than added again.
-- **A live Deckle carries its own row times.** The Stop punch stores the
-  row's Start / End on the Deckle (`MaterialStock.productionTime`), because
-  the card that would hold them doesn't exist yet. A Deckle made before that
-  field has neither, and its `createdAt` (the Stop punch) stands in for the
-  **End** time only — never the Start.
-- **`producedVia: "assign"` never counts.** Those Deckles are the order's raw
-  material being laminated at Assign & Continue, not metres it has run —
-  counting them would show every freshly assigned order as part-produced.
-- **Started is persistent, running is not.** `runningOn` is cleared only when
-  the card saves, so its *presence* is "started"; `activeClaim()` (exported
-  from `routes/api/operatorApi.js`, one definition of the 15-minute freshness
-  rule) is what makes the badge say Running. A tablet that dies leaves the job
-  listed, reading "In Setting".
-
-Because rows now **join** when a job starts and **leave** when it is produced,
-`GET /labels/production/wip-progress` answers with the whole row set (same
-query, same `mapPendingProductionRow()`, same filter as the page render) and
-the poll reconciles: update, add, and delete what is no longer there. It used
-to send progress alone and call `wipTable.updateData()`, which rejects on any
-row the table doesn't have.
-
-**Finished** is the metres the job has made, and **Deckles** beside it how
-many of the planned deckles. When the last one came off (`lastDoneAt`: the
-newest jobcard Deckle's `createdAt`, i.e. its Stop punch — not the card's
-save, and not `updatedAt`, which a heartbeat moves) is shown in the Live
-Status dialog, not the column.
-
-**Live** is the deckle on the machine now: its Start, its metres, and when it
-should be done at the laminator's **15 m/min** (`LAMINATOR_SPEED_MPM` in
-`utils/productionEta.js`, which does the arithmetic — plain numbers, no DB):
+**Live** = the deckle on the machine, ETA at that machine's **Machine Speed** (Machine Master `speedMpm`, mtrs/min; none set → laminator default **15**, `LAMINATOR_SPEED_MPM`, `utils/productionEta.js`; Slitting WIP likewise, default `SLITTING_SPEED_MPM` 30). Below, 15 stands for the machine's speed:
 
     deckle ETA = Start punch + Deckle R.M. / 15 min        (1,000 m -> 66.7 min)
     job ETA    = deckle ETA + deckles after it x R.M. / 15
 
-- **The Start punch only exists because of `liveRun`.** Before it the server
-  heard nothing about a row until its Stop. Both clients now POST it at Start
-  (web `reportLogRowStart()` in `jobCardForm.ejs`; app `logStart()` in
-  sachikoOperatorApp — an older app build doesn't send it, so its jobs show
-  no ETA). `startedAt` is the server's clock; the punched string is kept too.
-  A retried Start for the same `rowToken` keeps the first stamp, and a Start
-  for a row that already has a Deckle is refused.
-- **It ends when the row's Deckle is made** (`endLiveRun()`, matched on
-  `rowToken`, from both produce routes), and is cleared by the card save and by
-  unassign. On read, a `liveRun` whose token already has a Deckle is ignored,
-  so a Stop whose clear failed can never leave a made deckle "running".
-- **Deckle R.M.** is `deckleRunningMeters`, else the first layout's
-  `deckleRunningMeter`, else — on a plain order only — `runningMeters`. A batch
-  with none of those gets **no ETA**, never a guess off `runningMeters` (not a
-  web length on a batch; see `utils/deckleTotals.js`). Deckle target and count
-  are `deckleTargetOf()` (shared with the machine queue) and the larger of the
-  progress map's de-duplicated production rows and `producedRolls`.
-- **Overrun is the page's call, not the server's.** The browser decides "past
-  its ETA" against its own clock on every draw (running rows are redrawn
-  every 10 s), and once a deckle overruns the job ETA becomes
-  `max(job ETA, now + deckles after it x R.M. / 15)` — the next deckles can't
-  start before now. ETAs show to the nearest minute; punched times stay cut to
-  the minute, as the job card punches them.
-- **While a deckle runs, the Live cell blinks green; past its ETA, red** —
-  the same 1.2 s `step-end` rhythm, so the two differ by colour alone. Red
-  starts on the same test as the "X min over" text (a whole minute past), so
-  the two never disagree. Job Setting / Idle / All made / Started don't
-  blink. `tableDisp.css` sets the cell colour `!important`, which an animation
-  can't beat, so the red keyframes move two `@property` colours that the
-  `!important` declarations read; `step-end` keeps it a hard blink (never a
-  muddy, unreadable midpoint). **One function owns the cell's state,
-  `wipSetLiveCell()`** — its classes and its inline `animation`, which holds
-  the green blink, the fill and the red blink alike; two helpers setting
-  that one property separately wiped out each other's timing. Tabulator
-  rebuilds a row's cells on every redraw, so each animation starts at the
-  point the wall clock is at (a blink at its phase of 1.2 s, the fill at the
-  time gone since Start) and a cell already in the same state is left alone.
-  Rows with a deckle running are redrawn every 10 s on their own clock,
-  independent of the 10 s data poll (skipped while the browser tab is
-  hidden, re-run the moment it is shown). Reduced motion (`animation: none
-  !important`, since the animations are inline): solid pale green / solid
-  red, the fill held still.
-- A deckle started after all the planned ones are made reads
-  "Deckle 3 · 2 planned" / "Extra deckle", never "Deckle 3 of 2".
-- **Live shows the job's phase** — `plan.phase` from `buildRunPlan()`, in
-  this precedence: **RUNNING** (a deckle row started) > **JOB SETTING** (a
-  setting row started, before or between deckles) > **ALL MADE** > **IDLE**
-  (phase `"gap"`: a deckle has come off, the next isn't started — idle time
-  counted from that Deckle's `createdAt`) > **STARTED** (played, nothing made
-  yet). On screen it is always **Idle** / "idle time", never "gap" — the
-  internal names (`phase: "gap"`, `gapSince`, `gapBeforeMins`) are unchanged. With no
-  deckle running, what is left shows as a **duration**, not a clock — there
-  is no start to count from. Stops between deckles are never modelled.
-- **A setting Stop only ends its own row**: it is matched on the row's Start
-  time (`liveSetting.startTime`, kept by a restored draft). A deckle Start
-  clears `liveSetting` (production has begun); the card save and unassign
-  clear all the live fields (`livePause` / `livePauseLog` included).
-- **PAUSED (on hold) outranks every phase.** The operator app's Pause
-  (reason picked from a fixed list) → `POST /api/operator/jobcard/pause` sets
-  `PendingProduction.livePause { since, reason, deviceLabel }`; Resume (the
-  queue's ▶ Resume, or the card's banner) → `/resume` files it into
-  `livePauseLog [{ from, to, reason }]` (capped, `LIVE_PAUSE_LOG_MAX`).
-  **Any punch also ends a hold** — setting Start/Stop, deckle Start, a
-  Deckle's Stop, from the app or the web card (`endLivePause` in
-  routes/system/machine.js) — but only a hold that began *before* that punch,
-  so a late-arriving older punch can't end a newer Pause. While on hold the
-  page reads the job's clocks at `runPlan.clockAt` (= the hold's start) via
-  `wipNow()`: the deckle stops filling (`wip-paused`, slate, fill frozen
-  grey), nothing turns overdue, Status/Estimate hold still. `buildRunPlan()`
-  takes finished holds out of every clock — `current.runFromAt`/`etaAt`,
-  `setting.heldMs`, `gapHeldMs`, `gapBeforeMins`, and the Target
-  (`targetAt += heldMs`) — so a break never reads as Delayed. `phase` is
-  `"paused"`; what it was doing underneath is `basePhase`. The dialog shows a
-  one-line Paused status row and a **Hold Log** under the Production Log.
-- **Punch times from the app are dated when tapped, not when received.** The
-  app sends its live punches from a persistent outbox (it may be offline),
-  each stamped `at` (tablet clock at the tap) and `sentAt` (at sending);
-  `eventTimeOf()` in routes/api/operatorApi.js takes `sentAt − at` off the
-  server's clock (capped at 24 h), so the tablet's clock never has to be
-  right. No stamps (old app / web card) = now. Every live endpoint must stay
-  safe to repeat — the outbox resends on a lost answer.
-- **Idle time in the dialog**: a separator between Production Log rows from
-  the card's own punches (previous End → next Start — same tablet clock at
-  both ends, so they agree even where that clock is off; midnight wraps; a
-  missing punch shows none), and a closing line for now off server times — the
-  idle time before the running deckle (`gapBeforeMins`) or the idle time still
-  running. The dialog's scroll areas use the app's brand-blue table scrollbar
-  (the same rules as `.tabulator .tabulator-tableholder`).
-- **The dialog is Current Status, then the two logs** — no "Now Running"
-  panel, no footnote. The logs share one grid. *Job Setting Log*: # · Mtrs · Start Time
-  · End Time · Counter · Status (no Roll ID — a setting row has no id or date
-  of its own, so Mtrs takes the width of Date + Deckle ID + Made).
-  *Production Log*: # · Deckle ID · Made · **Date** · Start Time · End Time ·
-  **Face Joint** · **Release Joint**. Start, End and
-  the two right-hand columns sit exactly over each other (`SETTING_COLGROUP` /
-  `PROD_COLGROUP` — keep the sums). A joint cell is the card's own record,
-  "Joint at 120 mtrs" / "Wrinkle at 85 mtrs", and an empty value anywhere in
-  the logs reads **None**, never a dash. No LIVE badge on unsaved rows.
-- **Date** is the day the row's deckle was *started*: its Deckle's
-  `createdAt` (the Stop — card rows are matched to their Deckle by row token
-  / Deckle id in `buildJobCardProgressMap`, so filed rows are dated exactly
-  too), a day earlier when the punched Start is later in the day than the
-  punched End, in which case the End reads "next day". A row whose Deckle was
-  never made falls back to its card's `date`.
-- **Current Status is the dialog's first section**, above the Job Setting
-  Log: where the job is now, as one row (`.dlg-status-row`). A deckle on the
-  machine is a row in the Production Log's own columns, under the same
-  header (`PROD_HEAD`) — Date, a **Running** badge (red once past its ETA;
-  "extra deckle" beside it), "45% of 500 mtrs", its Start, "ETA ~2:39 PM"
-  (with how far over), joints "Not yet". Otherwise one line, no header, with
-  a **Job Setting / Idle / All made / Started** badge (a plain label). The
-  row looks exactly like a Production Log row — no tint, no button chrome; the
-  only sign it opens is a bare grey chevron at its right end (`.dlg-toggle`,
-  in the last cell — the grid is untouched), blue under the pointer, plus a
-  faint hover highlight. The chevron, or a click anywhere on the row, opens the
-  details underneath (`toggleLiveDetails`), and it turns up while they're
-  open: on the machine, started, idle before it,
-  to make, job started, Finished, Target, Status, Estimate. The heading
-  carries the operator app's chip on the right — "Operator app online · TAB-1"
-  while its claim is fresh (`activeClaim`), "last seen …" once it isn't — in
-  place of the old "Running now on …" bar. The Production Log below holds only
-  the deckles made.
-- **A live Deckle carries its joints per web** (`MaterialStock.productionJoints`,
-  written at the Stop punch beside `productionTime`), because `joints` merges
-  both webs into one label for the reel's sticker. An older live Deckle has
-  only `joints`: absent means a clean run on both webs (every jobcard Deckle
-  has been minted with it, omitted only for a clean run), so None is true;
-  present, the dialog shows it across both columns as "(facestock or release
-  not recorded)" rather than filing it under the wrong web.
-- **The Live cell's background is also the running deckle's progress bar** —
-  a stronger green than the blink's pale one fills it from the left, Start to
-  ETA (a `background-size` animation in `wipSetLiveCell()`; re-setting a
-  running animation's delay would count the elapsed time twice, hence
-  "left alone"). Past the ETA the red blink takes over.
-- **Each clickable cell carries one underlined headline** (`.wip-link`) all
-  the time, not only on hover — the figure in Deckles / Finished / Target /
-  Estimate, the state word in Live, the "17 min late" line in Status, the
-  reason line under a "—" — because every one of them opens the dialog.
+- **Start punch exists only via `liveRun`**; both clients POST it (web `reportLogRowStart()` in `jobCardForm.ejs`; app `logStart()` in sachikoOperatorApp — older app builds show no ETA). `startedAt` is the server clock (punched string kept too). Retried Start for the same `rowToken` keeps the first stamp; Start for a row already having a Deckle is refused.
+- **Ends when the row's Deckle is made** (`endLiveRun()`, by `rowToken`, from both produce routes); cleared by card save and unassign. On read, a `liveRun` whose token already has a Deckle is ignored.
+- **Deckle R.M.** = `deckleRunningMeters`, else first layout's `deckleRunningMeter`, else — plain orders only — `runningMeters`. Batch with none → **no ETA** (never guess off `runningMeters`; see `utils/deckleTotals.js`). Target/count: `deckleTargetOf()` (shared with machine queue) and the larger of de-duplicated production rows and `producedRolls`.
+- **Overrun is the browser's call** (its clock, every draw; running rows redrawn every 10 s on their own timer, independent of the 10 s data poll, skipped while tab hidden). Once overrun, job ETA = `max(job ETA, now + deckles after × R.M./15)`. ETAs to nearest minute; punched times cut to the minute.
+- **Blink**: running → Live cell blinks green; past ETA (same whole-minute test as "X min over") → red; same 1.2 s `step-end`; Job Setting/Idle/All made/Started don't blink. `tableDisp.css` sets the cell colour `!important`, which an animation can't beat, so red keyframes move two `@property` colours read by the `!important` declarations. **`wipSetLiveCell()` owns the cell's state** (classes + one inline `animation` holding green blink, fill and red blink — separate helpers wiped each other's timing). Tabulator rebuilds cells every redraw, so each animation starts at the wall-clock point (blink phase of 1.2 s; fill at time since Start); a cell already in the same state is left alone (resetting a running animation's delay double-counts elapsed time). Reduced motion (`animation: none !important`): solid pale green / solid red, fill held still.
+- The Live cell background doubles as a **progress bar** (stronger green, left to right, Start → ETA; `background-size` animation in `wipSetLiveCell()`).
+- A deckle started after all planned reads "Deckle 3 · 2 planned" / "Extra deckle", never "Deckle 3 of 2".
+- **Phase** (`plan.phase` from `buildRunPlan()`), precedence: **RUNNING** > **JOB SETTING** > **ALL MADE** > **IDLE** (`phase: "gap"`; idle counted from the last Deckle's `createdAt`) > **STARTED**. On screen always "Idle", never "gap" (internal names `gap`, `gapSince`, `gapBeforeMins` unchanged). With no deckle running, what's left shows as a **duration**. Stops between deckles aren't modelled.
+- **A setting Stop only ends its own row** (matched on `liveSetting.startTime`, kept by a restored draft). A deckle Start clears `liveSetting`; card save and unassign clear all live fields (`livePause`/`livePauseLog` included).
+- **PAUSED outranks every phase.** App Pause (fixed reason list) → `POST /api/operator/jobcard/pause` sets `livePause { since, reason, deviceLabel }`; Resume (queue ▶ or card banner) → `/resume` files `livePauseLog [{ from, to, reason }]` (capped, `LIVE_PAUSE_LOG_MAX`). **Any punch also ends a hold** (`endLivePause` in `routes/system/machine.js`) — but only one that began *before* the punch, so a late older punch can't end a newer Pause. While held, the page reads clocks at `runPlan.clockAt` via `wipNow()`: fill frozen grey (`wip-paused`), nothing overdue, Status/Estimate frozen. `buildRunPlan()` removes finished holds from every clock (`current.runFromAt`/`etaAt`, `setting.heldMs`, `gapHeldMs`, `gapBeforeMins`, Target `targetAt += heldMs`) so a break never reads Delayed. `phase` = `"paused"`, underlying = `basePhase`. Dialog shows a Paused status row and a **Hold Log** under the Production Log.
+- **App punch times are dated when tapped**: outbox punches carry `at` (tablet clock at tap) and `sentAt`; `eventTimeOf()` (`routes/api/operatorApi.js`) subtracts `sentAt − at` from the server clock (capped 24 h). No stamps (old app / web card) = now. **Every live endpoint must be safe to repeat** (the outbox resends).
+- **Idle time in the dialog**: separator between Production Log rows from the card's own punches (previous End → next Start; same tablet clock both ends; midnight wraps; missing punch shows none), plus a closing line for now off server times (`gapBeforeMins` or idle still running).
+- **A live Deckle carries joints per web** (`MaterialStock.productionJoints`, written at Stop; `joints` merges both webs into one sticker label). Older live Deckles have only `joints`; absent `productionJoints` = clean run (omitted only when clean) so None is true; present-but-unsplit shows across both columns as "(facestock or release not recorded)".
+- **Date** = day the row's deckle was *started*: Deckle `createdAt` (Stop; card rows matched by row token / Deckle id in `buildJobCardProgressMap`), a day earlier when punched Start is later in the day than punched End (End reads "next day"). Never-made rows fall back to card `date`.
+- **Each clickable cell carries one underlined headline** (`.wip-link`) always — every one opens the dialog.
 
-**The columns, left to right: Deckles · Finished · Live · Target · Status ·
-Estimate.** Each is a figure with at most one quiet line under it, and they
-speak in **durations only** — no time of day appears in any of them (or in
-their Excel export). Times of day are the Live Status dialog's, which every
-one of these cells opens. **Deckles** is `runPlan.done` / `target` with a bar;
-**Finished** is metres alone. The table runs `columnDefaults: { vertAlign:
-"middle" }` so one-line cells sit level with the two-line ones.
+**Dialog**: Current Status first, then Job Setting Log, then Production Log (no "Now Running" panel, no footnote). Shared grid: *Job Setting Log* # · Mtrs · Start · End · Counter · Status; *Production Log* # · Deckle ID · Made · **Date** · Start · End · **Face Joint** · **Release Joint**. Start/End/right columns align exactly (`SETTING_COLGROUP` / `PROD_COLGROUP` — keep the sums). Joint cell = card's record ("Joint at 120 mtrs" / "Wrinkle at 85 mtrs"); empty reads **None**, never a dash; no LIVE badge on unsaved rows. **Current Status** (`.dlg-status-row`) looks exactly like a Production Log row (no tint, no button chrome): a running deckle shows in Production Log columns under `PROD_HEAD` (Date, **Running** badge — red past ETA, "extra deckle" — "45% of 500 mtrs", Start, "ETA ~2:39 PM" with how far over, joints "Not yet"); otherwise a one-line **Job Setting / Idle / All made / Started** badge. A bare grey chevron at the right end (`.dlg-toggle`, blue under pointer; grid untouched) — or a click anywhere on the row — opens details (`toggleLiveDetails`): on the machine, started, idle before it, to make, job started, Finished, Target, Status, Estimate. Heading carries the app chip: "Operator app online · TAB-1" while `activeClaim` is fresh, "last seen …" otherwise. Scroll areas use the brand-blue table scrollbar (rules of `.tabulator .tabulator-tableholder`).
 
-**Target / Status / Estimate** answer "is this job on time?":
+**Columns: Deckles · Finished · Live · Target · Status · Estimate.** A figure plus at most one quiet line; **durations only** — no time of day in any cell or Excel export (times of day belong to the dialog). **Deckles** = `runPlan.done`/`target` with a bar; **Finished** = metres only. Table runs `columnDefaults: { vertAlign: "middle" }`.
+
+**Target / Status / Estimate** ("is this job on time?"):
 
     Target   = (deckle target - producedRolls) x R.M. / 15            (a duration)
     delay    = finish counted from now - (jobStartedAt + Target)
                finish = job ETA, never before now + deckles after it x R.M. / 15  (running)
                       = now + deckles still to make x R.M. / 15       (setting / idle / started)
                       = when the last deckle came off                 (all made: actual)
-    Status   = delay: Delayed / Ahead / On time (within ±5 min, WIP_ON_TIME_MINS)
+    Status   = Delayed / Ahead / On time (delay within ±5 min, WIP_ON_TIME_MINS)
     Estimate = Target + delay  (start to finish, a duration)
 
-- **Target is fixed once the job is played** (`runPlan.targetAt` /
-  `targetDeckles`, worked out in `buildRunPlan()`): the run done nonstop at
-  speed from its first punch — no setting, no idle time, no overrun. So setting time
-  counts as delay; that is deliberate, it is time the job was not running.
-- **A job can't start after its own deckle came off.** A recorded start that
-  is missing, or later than this run's first unfiled Deckle's Stop (deckles
-  made before `liveStartedAt` existed, or by an app build that never sent a
-  Start, then a later punch stamping "now"), is worked back from that Stop by
-  one deckle's running time (`startInferred`; the dialog says "About … (not
-  recorded; worked back from the first deckle)"). Otherwise the Target would
-  time deckles made days ago as still to run. A recorded start before the
-  first Stop is always kept, however fast that deckle ran.
-- **The delay is counted from now**, so every setting, idle time and overrun so far
-  is already in it — which is what makes Estimate "the time including the
-  delay". It is the page's call (the browser's clock), like overrun; rows not
-  yet all made — `started` included — are redrawn every 10 s.
-- **A job switched off mid-order owes only what wasn't filed.** The card save
-  clears `liveStartedAt` and files the deckles as `producedRolls`, so the next
-  card's run is timed from its own first punch for `target - producedRolls`
-  deckles (`priorDone` / `targetDeckles` on the plan).
-- **The three figures add up exactly as shown**: Target and the delay are
-  whole minutes and Estimate is *built* as their sum (`wipOutlook()`), never
-  worked out separately and rounded on its own.
-- Target needs Deckle R.M. and Deckle Qty; Status and Estimate also need the
-  recorded start. A missing one shows "—" with what is missing under it,
-  rather than a guess.
+- **Target is fixed once played** (`runPlan.targetAt`/`targetDeckles`, `buildRunPlan()`): the run done nonstop at speed from the first punch, so setting time counts as delay (deliberate).
+- **A job can't start after its own deckle came off**: a missing start, or one later than this run's first unfiled Deckle's Stop, is worked back from that Stop by one deckle's running time (`startInferred`; dialog: "About … (not recorded; worked back from the first deckle)"). A recorded start before the first Stop is always kept.
+- **Delay is counted from now** (browser clock), so settings/idle/overrun are already in it; not-all-made rows (`started` included) redraw every 10 s.
+- **A job switched off mid-order owes only what wasn't filed**: card save clears `liveStartedAt` and files deckles as `producedRolls`; the next card times `target - producedRolls` deckles from its own first punch (`priorDone` / `targetDeckles`).
+- **The three figures add up as shown**: Target and delay are whole minutes; Estimate is *built* as their sum (`wipOutlook()`).
+- Target needs Deckle R.M. and Deckle Qty; Status/Estimate also need the recorded start. Missing → "—" with what's missing underneath.
 
-"Total Mtrs Required" on this tab is `deckleTotalRunningMetres()` (the machine
-queue's figure), not the batch's stored `runningMeters`.
+"Total Mtrs Required" here is `deckleTotalRunningMetres()` (machine queue's figure), not stored `runningMeters`.
 
-"Send Back to Pending" is disabled on `canSendBack`, computed from the same
-facts `POST /labels/production/unassign/:id` refuses on (anything produced, or
-a reel reconciled mid-job) — *not* on "has this job started", which is the one
-case most worth sending back. Note this tab is the only UI path to that
-action, so an assigned-but-not-yet-started order can no longer be un-assigned
-from here (`scripts/send-back-to-pending.js <orderId>` still does it).
+"Send Back to Pending" is disabled on `canSendBack`, from the same facts `POST /labels/production/unassign/:id` refuses on (anything produced, or a reel reconciled mid-job) — *not* "has started". This tab is the only UI path, so an assigned-but-unstarted order can't be un-assigned here (`scripts/send-back-to-pending.js <orderId>` does).
 
 ### Auto Allot (`public/js/rawAutoAllot.js`)
 
-The **Auto Allot (FIFO)** button in Raw Material Allotment on
-`/labels/production/assign/:id`. Ticks the Facestock/Adhesive/Release Liner
-reels the job needs, oldest stock first, and says how much of the batch can
-actually be laminated. It only ticks checkboxes a person could have ticked
-themselves — nothing is reserved until **Assign & Continue**, and the server
-neither knows nor cares that a pick came from it.
+**Auto Allot (FIFO)** in Raw Material Allotment on `/labels/production/assign/:id` ticks Facestock/Adhesive/Release Liner reels the job needs, oldest first, and reports how much of the batch can be laminated. It only ticks checkboxes; nothing is reserved until **Assign & Continue**, and the server doesn't know a pick came from it.
 
-Split the same way `utils/deckleOptimizer/` is: the planner is plain numbers in,
-plain numbers out (no DOM, no fetch), so it can be tested without a browser —
-`scripts/raw-auto-allot-bench.js` loads it into a `vm` context and asserts the
-rules below. `assignProduction.ejs` does the measuring (what a reel weighs, the
-length that weight gives at its own width) and the rendering.
+Planner is plain numbers in/out (no DOM/fetch), tested by `scripts/raw-auto-allot-bench.js` (loads it in a `vm` context). `assignProduction.ejs` does measuring (reel weight, length at its width) and rendering.
 
-**A job is not one width.** This is the whole reason the planner works in
-*demands* rather than layer totals. A mixed-web batch laminates several widths
-(660 × 8 + 635 × 15 + 510 × 3) and the laminator mounts a reel per run, so the
-requirement is one demand per web width and a reel can only serve a demand it is
-wide enough for. Oldest-first over one flat list hands the three oldest 510 mm
-reels to the whole job and reads 100% allotted for a plan that cannot cut a
-single one of its 23 wider deckles. Demands are served widest first (those
-widths have the least to choose from). A **drum has no width**, so the adhesive
-states one demand for the whole job — splitting it per web would round a
-part-drum up once per width and lock drums the job never needed.
-
-The requirement per width is a *share* of the figures already on the Raw
-Material Required strip — metres by each width's share of the running metres, kg
-by its share of the area — so the parts add back to exactly what the bars show
-and the two can never disagree.
-
-Order of choice: exact-fit before wider (a 1020 mm reel run for a 660 mm web
-loses 360 mm to trim for the whole job), then FIFO on `inwardDate` (falling back
-to `createdAt`; a reel with neither sorts last), stopping the moment a demand is
-covered on **both** kg and running metres. A reel wider than the web it serves
-only counts the weight that lands on the web (`width / reel width` of it) — the
-rest is trim, and counting it says covered while the machine runs out.
-
-**The reel that tops a demand off is chosen by size, not by date.** While the
-next reel by date still leaves the demand short, take it — old stock the job
-will consume in full costs nothing. Only when that next reel would *overshoot*
-is the choice reopened, and then the leanest reel that finishes the job is taken
-instead. Without this, a 125 kg demand took the 102 kg remnant, landed 23 kg
-short, and reached for a 630 kg reel because that was next by date: 732 kg
-locked to a 125 kg job with a 27 kg remnant of the same paper still on the
-shelf. It now picks 102 + 27 = 129 kg. The test is on **the next FIFO reel**,
-not "can any reel finish this" — a full reel can nearly always finish a small
-demand alone, so asking that first walks straight past every remnant, which is
-the opposite of what FIFO is for. The width tier still outranks it: a wider reel
-loses trim down the whole run, which costs more than the tail it saves.
-
-**Matching to the shortest** (the toggle, on by default) allots every layer only
-what its widths can actually run: if the liner covers two thirds of the 635 mm
-webs, allotting a full 15 webs of facestock reserves paper that cannot be
-laminated for want of liner. Worked out per width, since a shortage at one width
-says nothing about another. What it cost is reported in **reels actually held
-back**, never as a percentage — whole reels mean a layer often comes out at the
-same pick either way, and claiming a layer was cut back when it wasn't is how a
-button like this loses trust.
-
-A layer with nothing pickable at all (no adhesive binding, nothing of that spec
-in the store) is reported as **blocked** and left out of the width arithmetic —
-letting its zero through would scale every other layer to nothing and tick
-nothing anywhere, which says less than ticking what is there and naming the
-blocker. `runMtrs` still goes to 0: a deckle is every layer at once.
-
-**The allotment tables list this deckle's own web width and nothing else**
-(`reelFitsBatchWeb`). A store holds every size the plant runs, and scrolling
-past 510 mm and 1020 mm reels to find the 635s — with the chance of ticking one
-by mistake — is not a choice worth offering on a page whose whole job is one
-deckle size. Drums are never narrowed (no width); a reel with no Size recorded
-is hidden with the rest. The count of off-width reels sits under the column
-heading as a **toggle**, off by default: a store can run out of the exact width
-while a 640 mm reel that would run a 635 mm web sits on the shelf, and hiding it
-outright would leave the job unassignable. A reel that is **ticked** stays
-listed whatever its width — the tick lives in the checkbox, so filtering its row
-away would silently un-allot it. Auto Allot only ever considers what the table
-shows.
-
-**Ticked reels are pinned to the top of their column** (`sortedReelsFor` takes
-the checked set as its first sort key; the column sort orders each half). A
-layer can hold several reels out of a fifty-row list, and a pick two thirds of
-the way down was invisible from the top of the page. A tick re-renders that
-column, so the row moves up as it is ticked.
-
-**"Too narrow" means narrower than *every* web in the plan.** Judging reels
-against the single widest web marked the batch's own main width unusable — on a
-batch whose `deckleSize` is 635 the page filtered the table down to 635 mm reels
-and then painted every one of them amber. For the same reason a mixed-web batch
-no longer has its Size filter seeded with one width, and `applyDeckleSize()`
-no longer overwrites the card's list of every web with the single headline
-number. `rawNeed.budgetWidthMm` (the widest web) is still what an adhesive
-drum's weight is spread over — it is not a fit test.
+- **Demands, not layer totals.** A mixed-web batch (660 × 8 + 635 × 15 + 510 × 3) needs a reel per run per width, and a reel serves only demands it is wide enough for. One flat oldest-first list would give all the oldest 510 mm reels to the whole job and read 100% for an uncuttable plan. Demands are served widest first. A **drum has no width**: adhesive states one demand for the whole job (per-web splitting would round part-drums up per width). Per-width requirement = *share* of the Raw Material Required strip's figures (metres by running-metre share, kg by area share) so parts add back exactly.
+- **Order of choice**: exact-fit before wider (wider loses trim down the run), then FIFO on `inwardDate` (fallback `createdAt`; neither sorts last), stopping when a demand is covered on **both** kg and running metres. A reel wider than its web counts only `width / reel width` of its weight.
+- **The topping-off reel is chosen by size, not date**: while the next FIFO reel still leaves the demand short, take it; only when it would *overshoot* reopen the choice and take the leanest reel that finishes. (A 125 kg demand took the 102 kg remnant then a 630 kg reel — 732 kg locked; now 102 + 27 = 129.) Test is on **the next FIFO reel**, not "can any reel finish" (a full reel nearly always can, walking past every remnant). Width tier still outranks it.
+- **Matching to the shortest** (toggle, default on): each layer is allotted only what its widths can run (liner covers two thirds of the 635s → don't reserve 15 webs of facestock). Per width. Reported as **reels actually held back**, never a percentage (whole reels often give the same pick).
+- A layer with nothing pickable (no adhesive binding / none in store) is **blocked** and left out of the width arithmetic (its zero would scale everything to nothing); `runMtrs` still goes to 0.
+- **Allotment tables list only this deckle's web width** (`reelFitsBatchWeb`). Drums never narrowed; a reel with no Size is hidden. Off-width count sits under the column heading as a **toggle** (default off) since a store can lack exact width while a 640 reel could run a 635 web. A **ticked** reel stays listed whatever its width (the tick lives in the checkbox). Auto Allot considers only what the table shows.
+- **Ticked reels pin to the top** of their column (`sortedReelsFor` takes the checked set as first sort key; re-render on tick).
+- **"Too narrow" = narrower than *every* web in the plan** (judging against the widest marked the batch's own width unusable). A mixed-web batch's Size filter isn't seeded with one width, and `applyDeckleSize()` doesn't overwrite the list of all webs. `rawNeed.budgetWidthMm` (widest web) is what an adhesive drum's weight spreads over — not a fit test.
 
 ### Auto Deckle (`utils/deckleOptimizer/`)
 
-Automatic deckle layout planning behind the **Auto Set Deckle** panel on
-`/labels/production/deckle-set/plan/:itemId`. Deliberately a standalone module —
-no mongoose, no express, no session; plain numbers in, plain numbers out — so
-the algorithm can be developed and benchmarked without disturbing the manual
-planner it sits beside.
+Automatic layout planning behind **Auto Set Deckle** on `/labels/production/deckle-set/plan/:itemId`. Standalone (no mongoose/express/session; numbers in/out) so it can be benchmarked separately.
 
 | File | Role |
 |---|---|
-| `patterns.js` | Enumerates every feasible A–L knife layout. Widths handled as integer hundredths of a mm (decimal paper sizes make float `<=` unsafe). |
-| `solver.js` | Picks how many webs of each pattern to run: greedy warm start, then branch & bound under node/time budgets. |
-| `index.js` | Public API `planDeckleLayouts()`, the `deckleSize` outer loop, overrun caps, waste accounting, `isDeckleAutoEnabled()`. |
+| `patterns.js` | Enumerates every feasible A–L knife layout (integer hundredths of mm — decimal sizes make float `<=` unsafe). |
+| `solver.js` | How many webs of each pattern: greedy warm start, then branch & bound under node/time budgets. |
+| `index.js` | Public API `planDeckleLayouts()`, `deckleSize` outer loop, overrun caps, waste accounting, `isDeckleAutoEnabled()`. |
 
-The underlying problem is one-dimensional cutting stock with three wrinkles:
+1-D cutting stock with three wrinkles: (1) **deckle size is an outer choice** — by default one size serves the batch (each candidate solved, cheapest wins); (2) **one roll length per layout** (`plannedRunningMeter` belongs to the layout) so orders are partitioned by running metres, one instance each; (3) **demand is in rolls, supply in position-webs** — one position on one web yields `floor(deckleRunningMeters / plannedRunningMeter)` rolls; this granularity usually forces overrun.
 
-1. **Deckle size is an outer choice** — by default one size serves the whole
-   batch: each candidate is solved independently and the cheapest wins. With
-   **mixed webs** (below) every size's patterns go into one solve and each
-   layout may come off a different width.
-2. **One roll length per layout** — `plannedRunningMeter` belongs to the layout,
-   not to a knife position, so orders wanting different roll lengths can never
-   share a layout. Orders are partitioned by running metres, one instance each.
-3. **Demand is in rolls, supply is in position-webs** — one knife position on one
-   web yields `floor(deckleRunningMeters / plannedRunningMeter)` rolls. This
-   granularity, not the packing, is usually what forces an overrun.
+**Objective**: minimise facestock consumed (`deckleSize × deckleRunningMeters × webs`). Under-production never allowed; ordered area fixed → least consumed = least waste; with Deckle R.M. fixed it collapses to minimising `deckleSize × totalWebs`.
 
-**Objective**: minimise facestock consumed (`deckleSize × deckleRunningMeters ×
-webs`). Under-production is never allowed and the ordered roll area is fixed, so
-useful area is identical in every feasible plan — which makes "least consumed"
-exactly equivalent to "least waste", and with Deckle R.M. fixed by the planner
-the whole objective collapses to minimising `deckleSize × totalWebs`.
+**Mixed webs** (*Different web per layout* toggle): each layout from whichever width suits (real 4-order job: waste 6.38% → 1.48%, overrun gone). Its search space contains every single-size answer but is much bigger for the same budget, so `planDeckleLayouts` always also runs single-size and keeps mixed only if genuinely cheaper (`notes` says so when mixed loses). Persistence:
+- `PendingProduction.deckleLayout[].deckleSize` = width **that** layout is cut from; batch-level `deckleSize` = width with most webs. Read as `L.deckleSize ?? pending.deckleSize` (older batches lack it).
+- Slitting Allocation allocates one width at a time, so its layout pre-fill filters `BATCH_LAYOUT` to layouts planned for that web (else a 1250 layout seeds onto a 510 deckle).
 
-**Mixed webs** (the *Different web per layout* toggle) lets each layout be cut
-from whichever deckle width suits it. Often a large trim reduction — on a real
-4-order job it took waste from 6.38% to 1.48% and removed the overrun entirely.
-Because the mixed search space *contains* every single-size answer it can only
-match or beat one width — but only if its search gets far enough, and that space
-is much bigger for the same budget. So `planDeckleLayouts` always runs the
-single-size search too and keeps the mixed plan only if it is genuinely cheaper,
-which turns that property into a guarantee. When mixed loses, `notes` says so.
-
-Mixed webs changes what has to be persisted, so it goes all the way through:
-
-- `PendingProduction.deckleLayout[].deckleSize` — the width **that** layout is
-  cut from. The batch-level `deckleSize` holds whichever width carries the most
-  webs (it is one number, and the Deckle Queue / Assign Production / job card
-  all show it). Read per-layout as `L.deckleSize ?? pending.deckleSize` —
-  batches saved before mixed webs have no per-layout width.
-- Slitting Allocation allocates the Deckles of **one** width at a time (they are
-  grouped by reel size), so its layout pre-fill filters `BATCH_LAYOUT` down to
-  the layouts planned for that web. Without that filter a 1250 mm layout would
-  seed onto a 510 mm deckle.
-
-**Overrun** — spare rolls made beyond what was ordered — is bounded by two
-ceilings, both editable on the page, of which the tighter one binds:
+**Overrun** (spare rolls beyond order), tighter ceiling binds:
 
     allowed extra = min( ceil(qty * pct), maxExtraRolls )
 
-`pct` (default 10%) scales with the order and usually governs; `maxExtraRolls`
-(default 5) is the absolute stop that keeps a large order from authorising a
-pile of spares. Either at 0 means no overrun at all. The percentage is rounded
-up so even a 3-roll order gets a whole roll of room.
+`pct` default 10% (rounded up so a 3-roll order gets a whole roll), `maxExtraRolls` default 5; either 0 = none. Spares aren't extra consumption (web count already minimal; the spare uses width otherwise trimmed). Where granularity makes the cap unreachable (4 ordered, 3 per position → 6 made), the cap widens for that width instead of refusing, and `notes` says so.
 
-Spares are not extra consumption: the web count is already at its minimum, so a
-knife position carrying a spare uses width that would otherwise have been
-trimmed off and scrapped. Where the rolls-per-web granularity makes even the cap
-unreachable (4 rolls ordered, 3 per knife position — 6 must be made), the cap is
-widened for that width rather than the plan being refused, and `notes` says so,
-so a forced overrun is never silent.
-
-**Waste accounting** follows from that, and the two balances are asserted by
-`scripts/deckle-optimizer-bench.js` — break either and the bench fails:
+**Waste accounting** — asserted by `scripts/deckle-optimizer-bench.js`; break either and it fails:
 
     consumedSqM = usefulSqM + edgeSqM + sideTrimSqM + endTrimSqM
     usefulSqM   = orderedSqM + overrunSqM
 
-The optimizer's own `wasteSqM` (and `wastePct`) is **scrap only** — edge trim +
-side trim + end tail. `overrunSqM` is a *slice of* `usefulSqM`, not a sibling of
-it: a spare roll is wound onto a finished roll off width that would otherwise
-have been trimmed away, and consumption is fixed by `size x drm x webs` before
-anything is cut, so booking it as waste charges the plan twice for width it
-never lost. It once did exactly that, which left the headline roughly double and
-unable to reconcile with its own parts.
+Optimizer `wasteSqM`/`wastePct` = **scrap only** (edge + side + end tail). `overrunSqM` is a *slice of* `usefulSqM`, not a sibling — booking it as waste double-charged width never lost (it once made the headline ~2× and unreconcilable).
 
-**The Set Deckle page's headline is `Total`, not waste**, and it is a wider
-figure than the optimizer's: everything the job gives up beyond the widths that
-were **ordered**, which is edge trim + Side Run (both scrapped) *and* **Grace**
-(cut and wound, but handed to the rolls rather than billed). Grace is not scrap
-— that is exactly why the column and the chip are not called waste — but it is
-width the client did not order and is not paying for, so leaving it out of the
-headline made a graced plan look tighter than it is. Per layout it works out as
-`deckle size − the ordered roll widths`, which is what makes the row add up
-across.
+**The Set Deckle page's headline is `Total`**, wider than optimizer waste: everything beyond the **ordered** widths = edge trim + Side Run (scrapped) + **Grace** (cut and wound but handed to the rolls, unbilled — not scrap, hence not called waste, but leaving it out made graced plans look tighter). Per layout Grace = `deckle size − ordered roll widths`. Side Run, Grace, Total are **whole-job totals** (mm and %), never per-web averages, so they reconcile by eye:
 
-Side Run, Grace and Total are all **whole-job totals**, in mm as well as %,
-never a per-web average — Side Run mm is every web's side trim added up, and the
-others likewise. That makes them reconcile by eye, which is the quickest check
-the figures are sane:
+    Total = edge trim x webs + Side Run + Grace
 
-    Total  =  edge trim x webs  +  Side Run  +  Grace
+matching the recap's Siderun / Trim / Grace / Total columns. Grace is already netted out of Side Run. Spare stock stays visible as m² beside Extra Rolls.
 
-in mm and in % alike, matching the recap table's Siderun / Trim / Grace / Total
-columns. (Showing a per-web average beside a whole-job percentage is what
-previously made these look like they disagreed.) Grace is already netted out of
-Side Run — the slack is what is left *after* it was shared out — so the three
-never double-count. The spare stock stays visible as m² beside the Extra Rolls
-count, so nothing is hidden by keeping it out of the headline.
-
-`POST /labels/production/deckle-set/plan/:itemId/auto` is **read-only**: it
-creates nothing and changes nothing, it only answers "here is the least-waste way
-to cut these". Order widths, quantities and roll lengths are re-read from the
-database — the client chooses *which* orders to plan, never what they say. The
-planner reviews the layouts it drops into the form and still presses Create
-Deckle Batch, which goes through the same POST and the same validation as a
-hand-drawn plan. That is what makes it safe on a production server: a wrong
-answer is discarded by not saving it.
+`POST /labels/production/deckle-set/plan/:itemId/auto` is **read-only**: order widths, quantities and roll lengths are re-read from the DB (the client chooses *which* orders, never what they say). The planner reviews the layouts dropped into the form and presses Create Deckle Batch, going through the same POST and validation as a hand-drawn plan — a wrong answer is discarded by not saving.
 
 ### Deckle Calculator (`/labels/production/deckle-calculator`)
 
-The Set Deckle planner with nothing behind it — a **Calculator** tab of its own
-in the sidebar. Same web strip, same layout dialog, same grace panel, same AI
-Deckle Set and the same figures as
-`/labels/production/deckle-set/plan/:itemId`, so a plan worked out here reads
-exactly as it will when the same plan is set for real. Two differences:
+The Set Deckle planner with nothing behind it — **Calculator** tab in the sidebar. Same web strip, layout dialog, grace panel, AI Deckle Set and figures as `/labels/production/deckle-set/plan/:itemId`. Differences: **requirements are typed** (roll width, running metres, roll quantity — "what would this cost me in trim" before an order exists), and it **ends nowhere** (no Create Deckle Batch, no writing POST, nothing stored).
 
-- **The requirements are typed**, not read off loose orders — roll width,
-  running metres, roll quantity. It answers "what would this job cost me in
-  trim" before there is an order to plan.
-- **It ends nowhere.** No Create Deckle Batch, no POST that writes: the page
-  creates no batch, touches no order and stores nothing. A wrong answer is
-  discarded by closing the tab.
+Files: `views/utilities/deckleCalculator.ejs`, `public/js/deckleCalculator.js`, `public/css/deckleCalculator.css`, plus one route each for page and optimizer. Ids/classes are the Set Deckle page's (`dsf-`/`sl-`); the stylesheet began as a copy of that page's inline `<style>` (it renders with `CSS: false`). **They are two copies of the same rules — change one, look at the other.** After editing either, **check braces balance** (an unclosed rule silently swallows every declaration after it; `node -e` counting `{`/`}` outside comments does it).
 
-Three files, plus one route each for the page and the optimizer:
-`views/utilities/deckleCalculator.ejs`, `public/js/deckleCalculator.js`,
-`public/css/deckleCalculator.css`. The ids and classes are the Set Deckle
-page's own (`dsf-`/`sl-`) and the stylesheet started as a copy of that page's
-inline `<style>` block — that page renders with `CSS: false`, so there is
-nothing to share yet. **Change one and look at the other**: they are two
-copies of the same rules, and a fix to a shared behaviour (the web strip, the
-grace panel, the recap) has to be made twice.
+Deliberate differences (not drift):
+- **Recap columns narrower** (`min-width: 1240px`, diagram 46%/380px vs 1520/560) so Rolls, Deckle and footer totals don't fall off the right on a laptop.
+- **Column filter boxes use a drawn magnifier**, not "Search" (clipped to "Sear" in 74px columns).
+- **Available Sizes are chips**; a width not in store is dashed grey (`.dsf-size-item.is-added`) — on Set Deckle every candidate comes from stock.
+- **Requirements** card (numbered, totals row, short/spare/exact states) exists only here.
+- **One deckle width folds into the chip row**; the full-width bar is kept for the multi-width list.
 
-Where the two deliberately differ, and why — keep these, they are not drift:
-
-- **Recap columns are narrower** (`min-width: 1240px`, diagram 46%/380px
-  against the original's 1520/560). Thirteen columns at the original widths put
-  Rolls, Deckle and the footer's own totals off the right edge of the card on a
-  laptop, so you scrolled sideways to read the figures the table exists to show.
-- **The per-column filter boxes carry a drawn magnifier, not the word
-  "Search"**, which clipped to "Sear" in the 74px Trim and Grace columns.
-- **Available Sizes are chips**, and a width the store does not hold is drawn
-  dashed and grey (`.dsf-size-item.is-added`) — on the Set Deckle page every
-  candidate comes from stock by construction, so there is nothing to
-  distinguish.
-- **Requirements** (the numbered card, its totals row, the short/spare/exact
-  states) exist only here; the Set Deckle page lists orders instead.
-- **One deckle width folds into the chip row** rather than taking a full-width
-  bar of its own; the bar is kept for the multi-width list, which is what it
-  was for.
-
-A rule left unclosed in a stylesheet swallows every declaration after it in
-silence — no error, the styles just stop applying. That happened once here,
-so **check the braces balance after editing either file**; there is a
-throwaway checker in the session notes, or `node -e` over the file counting
-`{`/`}` outside comments does it.
-
-What it reads, and what it does not:
-
-- **Available Sizes opens on the facestock widths in stock** (every width, with
-  its reel count and kg on the chip's tooltip), so a plan starts from reels
-  that exist. `suggestDeckleSize()` narrows the same roll-up to one recipe for
-  the Set Deckle page; there is no recipe here, so nothing is narrowed. It is a
-  starting point only — the pencil adds and removes, and nothing is tied back
-  to the store.
-- `POST /labels/production/deckle-calculator/auto` hands the typed requirements
-  to `planDeckleLayouts()` and returns the plan. Unlike its sister endpoint it
-  does **not** re-read anything from the database — there is nothing to re-read
-  (the requirements exist only on the page) and nothing to protect (the handler
-  owns no data and writes nothing), so a doctored request can only produce a
-  wrong answer in the asker's own browser. Same `DECKLE_AUTO_ENABLED` kill
-  switch: off, the page renders with no panel and the endpoint returns 503.
-
-**A requirement is a width AND a roll length, and rolls are matched on both.**
-20 rolls of 150 mm at 300 m are not met by 150 mm rolls wound to 1000 m, and
-"Rolls Set" says so ("no layout at this length") rather than reading as a plain
-shortfall. The Set Deckle page pools by width alone, which it can afford to —
-its orders come out of one Deckle Sorting group — but anything at all can be
-typed side by side here. Either side may leave the length unstated (a layout
-with no Deckle R.M./R. Meter, or a requirement with no Running Mtrs) and then
-it matches whatever the other side says; exact matches are served first.
-
-**Each layout picks its own deckle web**, and a layout that has not picked one
-is shown on the best fit **for its own knives** — not for the widest layout on
-the page. Measuring the whole plan against its widest layout is what would put
-a 600 mm run on the 1000 mm web its neighbour needs, and then report the trim
-of a job nobody would run.
+What it reads:
+- **Available Sizes opens on facestock widths in stock** (reel count and kg in the chip tooltip). `suggestDeckleSize()` narrows the same roll-up to a recipe on Set Deckle; here no recipe, nothing narrowed. Starting point only — the pencil adds/removes, nothing tied back to store.
+- `POST /labels/production/deckle-calculator/auto` passes typed requirements to `planDeckleLayouts()`. Unlike its sister endpoint it re-reads **nothing** from the DB (nothing to re-read or protect; a doctored request only yields a wrong answer in the asker's browser). Same `DECKLE_AUTO_ENABLED` kill switch (off → no panel, 503).
+- **A requirement is a width AND a roll length, matched on both**: 20 × 150 mm at 300 m aren't met by 150 mm rolls at 1000 m ("Rolls Set" says "no layout at this length", not a plain shortfall). Set Deckle pools by width alone (its orders come from one Deckle Sorting group). Either side may omit the length and then matches anything; exact matches served first.
+- **Each layout picks its own deckle web**; one that hasn't is shown on the best fit **for its own knives**, not the plan's widest layout (which would put a 600 mm run on its neighbour's 1000 mm web and report that trim).

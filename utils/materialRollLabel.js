@@ -218,13 +218,16 @@ const ROLL_ID_LINE_GAP_MM = 0.4;
 
 const tsplText = (x, y, pt, value) => `TEXT ${x},${y},"0",180,${pt},${pt},"${value}"`;
 
-export function buildRollIdLines(value, { x, y, pt }, maxWidthMm) {
+// The ROLL ID's lines as {text, pt, dropDots} -- dropDots is how far below the
+// slot's own y (lower on the label) the line sits. One planner for both
+// outputs: the .prn's TEXT commands and the browser label.
+export function planRollIdLines(value, { pt }, maxWidthMm) {
   const text = String(value ?? "");
   const cut = text.indexOf("/");
   // No separator (or nothing before it) -- a hand-assigned id that doesn't
   // follow the format. Keep the original single fitted line.
   if (cut <= 0 || cut === text.length - 1) {
-    return [tsplText(x, y, fitPointSize(text, pt, maxWidthMm), text)];
+    return [{ text, pt: fitPointSize(text, pt, maxWidthMm), dropDots: 0 }];
   }
   const head = text.slice(0, cut);
   const tail = text.slice(cut + 1);
@@ -243,7 +246,29 @@ export function buildRollIdLines(value, { x, y, pt }, maxWidthMm) {
   const tailPt = fitPointSize(tail, Math.min(pt, tailMaxPt), maxWidthMm);
 
   const dropDots = Math.round((headHeightMm + ROLL_ID_LINE_GAP_MM) * DOTS_PER_MM);
-  return [tsplText(x, y, headPt, head), tsplText(x, y - dropDots, tailPt, tail)];
+  return [
+    { text: head, pt: headPt, dropDots: 0 },
+    { text: tail, pt: tailPt, dropDots },
+  ];
+}
+
+export function buildRollIdLines(value, slot, maxWidthMm) {
+  return planRollIdLines(value, slot, maxWidthMm).map((l) => tsplText(slot.x, slot.y - l.dropDots, l.pt, l.text));
+}
+
+// What the browser label needs to print exactly what the .prn prints: every
+// value's whole-point size from fitPointSize (not the browser's own shrink
+// pass) and the Roll ID split over two lines. Merged onto labelLayoutMm()'s
+// result by the label route.
+export function applyPrnTextPlan(mm, fields, opts = {}) {
+  const slots = {};
+  for (const [key, slot] of Object.entries(mm.slots)) {
+    slots[key] = key === "rollId" ? slot : { ...slot, pt: fitPointSize(fields[key], slot.pt, slot.maxWidth) };
+  }
+  const idSlot = opts.rollIdPt ? { ...LABEL_SLOTS.rollId, pt: opts.rollIdPt } : LABEL_SLOTS.rollId;
+  const rollIdLines = planRollIdLines(fields.rollId, idSlot, mm.slots.rollId.maxWidth)
+    .map((l) => ({ text: l.text, pt: l.pt, dropMm: l.dropDots / DOTS_PER_MM }));
+  return { ...mm, slots, rollIdLines };
 }
 
 // The raw TSPL job -- byte-for-byte SOFT.prn with this fields map's values:
@@ -289,7 +314,7 @@ export function buildPrnFromFields(fields, opts = {}) {
       const size = fitPointSize(fields[key], slot.pt, maxWidth);
       return [tsplText(slot.x, slot.y, size, fields[key])];
     }),
-    `QRCODE ${QR_ANCHOR.x},${QR_ANCHOR.y},${QR_ECC_LEVEL},${QR_CELL_WIDTH_DOTS},A,180,M2,S7,"${buildQrPayloadFromFields(fields)}"`,
+    `QRCODE ${QR_ANCHOR.x},${QR_ANCHOR.y},${QR_ECC_LEVEL},${QR_CELL_WIDTH_DOTS},A,180,M2,S7,"${opts.qrPayload ?? buildQrPayloadFromFields(fields)}"`,
     "PRINT 1,1",
   ].join("\r\n");
 

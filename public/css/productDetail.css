@@ -1,0 +1,52 @@
+/* Product details dialog (public/js/productDetail.js). Same look as the
+   View dialog on Label Stock View (views/sachiko/labelStockView.ejs), minus
+   the layer-stack diagram. */
+@keyframes pdPopIn { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: none; } }
+.pd-link { font-weight: 800; color: #044a78; cursor: pointer; border-bottom: 1px dashed #044a78; }
+.pd-link:hover { background: #e0ecf8; }
+/* the whole Product Code cell is the click target, not just the text */
+.tabulator-cell[tabulator-field="item"], .tabulator-cell[tabulator-field="productCode"] { cursor: pointer !important; }
+
+#productDetailDialog {
+  display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); z-index: 2147483000;
+  justify-content: center; align-items: center; padding: 24px; backdrop-filter: blur(4px);
+}
+#productDetailDialog.show { display: flex; }
+.pd-box {
+  background: #fff; border-radius: 14px; overflow: hidden; width: min(1200px, 96vw); max-height: 92vh;
+  box-shadow: 0 20px 50px rgba(4, 74, 120, 0.2); animation: pdPopIn 0.2s ease-out;
+}
+.pd-head {
+  background: linear-gradient(135deg, #044a78 0%, #03365a 100%); padding: 26px 28px 24px; color: #fff;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+}
+.pd-head h2 { margin: 0; font-size: 23px; font-weight: 700; }
+.pd-head p { margin: 8px 0 0; font-size: 14px; opacity: 0.85; }
+.pd-close {
+  background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.25); color: #fff;
+  border-radius: 999px; padding: 7px 15px; cursor: pointer; font-size: 15px; font-weight: 700; flex-shrink: 0;
+}
+.pd-close:hover { background: rgba(255, 255, 255, 0.28); }
+.pd-content { padding: 26px 28px; overflow-y: auto; max-height: calc(92vh - 140px); scrollbar-width: thin; scrollbar-color: #044a78 #f0f2f5; }
+.pd-content::-webkit-scrollbar { width: 10px; height: 10px; }
+.pd-content::-webkit-scrollbar-track { background: #f0f2f5; border-radius: 6px; }
+.pd-content::-webkit-scrollbar-thumb { background: #044a78; border-radius: 6px; }
+.pd-variants { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.pd-chip { border: 1px solid #cbd5e1; background: #fff; color: #475569; font-size: 12px; font-weight: 700; padding: 3px 11px; border-radius: 999px; cursor: pointer; }
+.pd-chip.is-active { background: #044a78; border-color: #044a78; color: #fff; }
+.pd-section { margin-bottom: 24px; }
+.pd-section-title {
+  margin: 0 0 12px; font-size: 11.5px; font-weight: 800; color: #044a78; letter-spacing: 0.08em;
+  text-transform: uppercase; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0;
+}
+.pd-table-wrap { overflow-x: auto; border: 1.5px solid #e2e8f0; border-radius: 8px; }
+.pd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pd-table thead tr { background: #f8fafc; border-bottom: 2px solid #e2e8f0; }
+.pd-table th { padding: 12px 8px; color: #044a78; font-weight: 700; text-align: left; border-right: 1px solid #e2e8f0; }
+.pd-table td { padding: 12px 8px; color: #03365a; font-weight: 700; border-right: 1px solid #e2e8f0; word-wrap: break-word; }
+.pd-state { padding: 26px; text-align: center; color: #64748b; font-size: 13px; }
+
+/* a variant's cells that differ from its base code */
+.pd-table td.pd-changed { background: #fef3c7; color: #92400e; }
+.pd-legend { display: flex; align-items: center; gap: 8px; margin: -6px 0 16px; font-size: 12px; font-weight: 600; color: #92400e; }
+.pd-swatch { width: 14px; height: 14px; border-radius: 4px; background: #fef3c7; }

@@ -38,10 +38,12 @@ export const MEDIA_ROOT = path.join(process.cwd(), "media");
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
 const VIDEO_EXTS = [".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv", ".3gp"];
+const AUDIO_EXTS = [".m4a", ".aac", ".mp3", ".wav", ".ogg", ".oga", ".opus"];
 
 // Phones hand over big originals; these are the pre-compression ceilings.
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB
 const MAX_VIDEO_BYTES = 150 * 1024 * 1024; // 150MB
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024; // 10MB (a 30s voice note is ~250KB)
 
 // Compression targets.
 const IMAGE_MAX_EDGE = 1600;
@@ -51,6 +53,8 @@ const THUMB_QUALITY = 70;
 const VIDEO_MAX_EDGE = 1280;
 const VIDEO_CRF = 28; // visually fine for a shopfloor clip, ~10x smaller
 const VIDEO_MAX_SECONDS = 120; // anything longer is trimmed, not rejected
+const AUDIO_MAX_SECONDS = 30; // voice notes are hard-capped, not rejected
+const AUDIO_BITRATE = "64k";
 const FFMPEG_TIMEOUT_MS = 10 * 60 * 1000;
 
 export const bucketDir = (bucket) => path.join(MEDIA_ROOT, sanitizeBucket(bucket));
@@ -73,6 +77,7 @@ export const kindForExt = (filename) => {
   const ext = path.extname(String(filename || "")).toLowerCase();
   if (IMAGE_EXTS.includes(ext)) return "image";
   if (VIDEO_EXTS.includes(ext)) return "video";
+  if (AUDIO_EXTS.includes(ext)) return "audio";
   return null;
 };
 
@@ -104,12 +109,18 @@ export function mediaUpload({ bucket, fields }) {
     if (!want) return cb(new Error("Unexpected upload field"));
 
     const byExt = kindForExt(file.originalname);
-    const byMime = file.mimetype?.startsWith("image/") ? "image" : file.mimetype?.startsWith("video/") ? "video" : null;
+    const byMime = file.mimetype?.startsWith("image/")
+      ? "image"
+      : file.mimetype?.startsWith("video/")
+        ? "video"
+        : file.mimetype?.startsWith("audio/")
+          ? "audio"
+          : null;
     const kind = byExt || byMime;
 
-    if (!kind) return cb(new Error("Only image and video files are allowed."));
+    if (!kind) return cb(new Error("Only image, video and audio files are allowed."));
     if (want !== "any" && kind !== want) {
-      return cb(new Error(want === "image" ? "That field expects a photo." : "That field expects a video."));
+      return cb(new Error(want === "image" ? "That field expects a photo." : want === "audio" ? "That field expects a voice message." : "That field expects a video."));
     }
     // Trust the extension only when the browser agrees it's the same kind --
     // some Android browsers send video/* for .heic and vice versa.
@@ -146,6 +157,16 @@ export function mediaUpload({ bucket, fields }) {
         return res
           .status(400)
           .json({ success: false, message: `Photo too large (max ${Math.round(MAX_IMAGE_BYTES / 1024 / 1024)}MB).` });
+      }
+
+      const oversizeAudio = flattenFiles(req.files).find(
+        (f) => kindForExt(f.originalname) === "audio" && f.size > MAX_AUDIO_BYTES,
+      );
+      if (oversizeAudio) {
+        await removeTempFiles(req.files);
+        return res
+          .status(400)
+          .json({ success: false, message: `Voice message too large (max ${Math.round(MAX_AUDIO_BYTES / 1024 / 1024)}MB).` });
       }
 
       next();
@@ -289,6 +310,42 @@ async function storeVideo(file, bucket) {
   };
 }
 
+// Voice note -> mono AAC .m4a, cut off at AUDIO_MAX_SECONDS whatever the client
+// sent (the app also stops at 30s, but the server is the one that enforces it).
+async function storeAudio(file, bucket) {
+  const dir = ensureBucket(bucket);
+  const filename = `${randomName()}.m4a`;
+  const destPath = path.join(dir, filename);
+
+  const log = await runFfmpeg([
+    "-i", file.path,
+    "-vn",
+    "-t", String(AUDIO_MAX_SECONDS),
+    "-c:a", "aac",
+    "-b:a", AUDIO_BITRATE,
+    "-ac", "1",
+    "-movflags", "+faststart",
+    "-y", destPath,
+  ]);
+
+  const meta = parseFfmpegMeta(log);
+  const { size } = await fs.promises.stat(destPath);
+
+  return {
+    kind: "audio",
+    bucket: sanitizeBucket(bucket),
+    filename,
+    thumbnail: "",
+    mimeType: "audio/mp4",
+    size,
+    width: null,
+    height: null,
+    durationSec: meta.durationSec === null ? null : Math.min(meta.durationSec, AUDIO_MAX_SECONDS),
+    originalName: file.originalname || "",
+    uploadedAt: new Date(),
+  };
+}
+
 /*
  * Compress every uploaded file into the bucket and return the stored assets in
  * field order. The temp uploads are always cleaned up, and if any one file
@@ -301,8 +358,16 @@ export async function storeUploads(files, bucket) {
 
   try {
     for (const file of uploads) {
-      const kind = kindForExt(file.originalname) || (file.mimetype?.startsWith("video/") ? "video" : "image");
-      stored.push(kind === "video" ? await storeVideo(file, bucket) : await storeImage(file, bucket));
+      const kind =
+        kindForExt(file.originalname) ||
+        (file.mimetype?.startsWith("video/") ? "video" : file.mimetype?.startsWith("audio/") ? "audio" : "image");
+      stored.push(
+        kind === "video"
+          ? await storeVideo(file, bucket)
+          : kind === "audio"
+            ? await storeAudio(file, bucket)
+            : await storeImage(file, bucket),
+      );
     }
     return stored;
   } catch (err) {
@@ -310,7 +375,7 @@ export async function storeUploads(files, bucket) {
     if (err?.stderr) console.error("MEDIA FFMPEG ERROR:", String(err.stderr).slice(-1200));
     throw new Error(
       err?.message?.includes("ffmpeg") || err?.stderr
-        ? "Could not process the video. Please try a shorter clip."
+        ? "Could not process the video or voice message. Please try a shorter clip."
         : "Could not process the attachment.",
     );
   } finally {
@@ -389,4 +454,6 @@ export const MEDIA_LIMITS = {
   maxImageBytes: MAX_IMAGE_BYTES,
   maxVideoBytes: MAX_VIDEO_BYTES,
   maxVideoSeconds: VIDEO_MAX_SECONDS,
+  maxAudioBytes: MAX_AUDIO_BYTES,
+  maxAudioSeconds: AUDIO_MAX_SECONDS,
 };

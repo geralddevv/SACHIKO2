@@ -103,6 +103,15 @@ const consolidateUsageRows = (rows, amountKey) => {
 
 // ----------------------------------Machine Master---------------------------------->
 
+// Machine Speed (m/min) from the form: blank = not set (the WIP pages use
+// their default), otherwise a positive number.
+function parseMachineSpeed(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === "") return { value: null };
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return { error: "Machine speed must be a number above 0 (metres per minute)." };
+  return { value: n };
+}
+
 // This router is mounted on the bare "/app" prefix with no role gate (see
 // server.js for why), so every route below carries its own. The machine
 // master -- adding, editing and deleting machines -- stays with management;
@@ -131,9 +140,13 @@ router.post("/form/machine", requireAuth, requireMachineMaster, createLimiter, a
     const machineWidth = Number(req.body.machineWidth);
     const locationId = req.body.locationId;
     const machineType = String(req.body.machineType || "").trim();
+    const speed = parseMachineSpeed(req.body.speedMpm);
 
     if (!machineName) {
       return res.status(400).json({ success: false, message: "Machine name is required." });
+    }
+    if (speed.error) {
+      return res.status(400).json({ success: false, message: speed.error });
     }
     if (!machineWidth || machineWidth <= 0) {
       return res.status(400).json({ success: false, message: "Machine width is required." });
@@ -152,7 +165,7 @@ router.post("/form/machine", requireAuth, requireMachineMaster, createLimiter, a
       return res.status(400).json({ success: false, message: "Machine already exists at this location" });
     }
 
-    await Machine.create({ machineName, machineWidth, location: locationId, machineType });
+    await Machine.create({ machineName, machineWidth, location: locationId, machineType, ...(speed.value != null && { speedMpm: speed.value }) });
     res.locals.auditDescription = `Created machine "${machineName}" at "${locationDoc.locationName}"`;
     req.flash("notification", "Machine created successfully!");
     res.json({ success: true, redirect: "/app/form/machine" });
@@ -174,9 +187,13 @@ router.put("/api/machines/:id", requireAuth, requireMachineMaster, updateLimiter
     const machineWidth = Number(req.body.machineWidth);
     const locationId = req.body.locationId;
     const machineType = String(req.body.machineType || "").trim();
+    const speed = parseMachineSpeed(req.body.speedMpm);
 
     if (!machineName) {
       return res.status(400).json({ success: false, message: "Machine name is required." });
+    }
+    if (speed.error) {
+      return res.status(400).json({ success: false, message: speed.error });
     }
     if (!machineWidth || machineWidth <= 0) {
       return res.status(400).json({ success: false, message: "Machine width is required." });
@@ -199,9 +216,13 @@ router.put("/api/machines/:id", requireAuth, requireMachineMaster, updateLimiter
       return res.status(400).json({ success: false, message: "Machine already exists at this location." });
     }
 
+    // A blank speed clears it (back to the default), so it is $unset rather
+    // than written as null.
     const updated = await Machine.findByIdAndUpdate(
       req.params.id,
-      { machineName, machineWidth, location: locationId, machineType },
+      speed.value == null
+        ? { $set: { machineName, machineWidth, location: locationId, machineType }, $unset: { speedMpm: 1 } }
+        : { machineName, machineWidth, location: locationId, machineType, speedMpm: speed.value },
       { new: true, runValidators: true },
     );
 

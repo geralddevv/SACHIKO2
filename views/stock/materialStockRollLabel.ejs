@@ -232,9 +232,19 @@
   <div class="label label-frame">
     <div class="label-inner" id="labelInner">
       <% for (const [key, slot] of Object.entries(mm.slots)) { %>
+        <% if (key === "rollId" && mm.rollIdLines) { %>
+          <%# Same split the app's .prn prints: product code small on top, the
+              FY / lot / serial part large beneath it. Sizes come from the
+              server (whole points), so no browser fit pass. %>
+          <% for (const line of mm.rollIdLines) { %>
+            <span class="slot" data-fit
+                  style="left: <%= slot.left %>mm; top: <%= slot.top + line.dropMm %>mm; width: <%= slot.maxWidth %>mm; max-width: <%= slot.maxWidth %>mm; font-size: <%= line.pt %>pt;"><%= line.text %></span>
+          <% } %>
+        <% } else { %>
         <% const isDeckleId = key === "rollId"; %>
         <span class="slot<%= isDeckleId ? " deckle-id-slot" : "" %>" data-fit
               style="left: <%= slot.left %>mm; top: <%= isDeckleId ? slot.top + 2 : slot.top %>mm; max-width: <%= slot.maxWidth %>mm;<%= isDeckleId ? ` width: ${slot.maxWidth}mm;` : "" %> font-size: <%= slot.pt %>pt;"><%= fields[key] %></span>
+        <% } %>
       <% } %>
       <!-- The Deckle QR sits 1 mm higher than the prior placement; the
            Deckle ID remains centered in its full adjacent field. -->

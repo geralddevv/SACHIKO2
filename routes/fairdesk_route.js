@@ -69,6 +69,7 @@ import {
 } from "../utils/deckleOptimizer/index.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../utils/limiters.js";
+import { notifyOperatorQueue } from "../utils/operatorEvents.js";
 import { computeRawMaterialNeed } from "../utils/rawMaterialNeed.js";
 import { deckleTotalRunningMetres, deckleRunningMetersText } from "../utils/deckleTotals.js";
 import { buildRunPlan } from "../utils/productionEta.js";
@@ -4877,7 +4878,7 @@ router.get("/prodcalc/details/:id", async (req, res) => {
 // A Deckle that a filed card already accounts for is counted ONCE: the card's
 // own Production Log row carries the same rowToken (and deckleId) the Deckle
 // was minted with, so it is matched and skipped rather than added again.
-async function buildJobCardProgressMap(pendingIds) {
+export async function buildJobCardProgressMap(pendingIds) {
   if (!pendingIds.length) return new Map();
   // Oldest first, so an order run across more than one Job Card (a mid-order
   // job switch -- see routes/system/machine.js's producedRolls accumulation)
@@ -4896,7 +4897,7 @@ async function buildJobCardProgressMap(pendingIds) {
       .sort({ createdAt: 1 })
       .lean(),
     PendingProduction.find({ _id: { $in: pendingIds } })
-      .select("runningOn liveMaterialInUse liveRun liveSetting liveStartedAt livePause livePauseLog")
+      .select("runningOn liveMaterialInUse liveRun liveSetting liveStartedAt livePause livePauseLog overtimeLog")
       .lean(),
   ]);
   const numberOrNull = (value) => (
@@ -4924,6 +4925,8 @@ async function buildJobCardProgressMap(pendingIds) {
     // The hold the job is on now ({ since, reason, deviceLabel }), and the
     // holds this run has already come out of ([{ from, to, reason }]).
     paused: null, pauses: [],
+    // The operator's "why was it late?" remarks ([{ deckleIndex, runStartedAt, remark, at, byName }]).
+    overtimeRemarks: [],
   });
   const laterOf = (a, b) => (!a ? b : !b ? a : new Date(a) > new Date(b) ? a : b);
   // When each order's last deckle was finished. A Deckle's createdAt is its
@@ -5092,6 +5095,15 @@ async function buildJobCardProgressMap(pendingIds) {
     acc.jobStartedAt = jobStartedAt;
     acc.paused = paused;
     acc.pauses = pauses;
+    acc.overtimeRemarks = (Array.isArray(order.overtimeLog) ? order.overtimeLog : [])
+      .filter((e) => String(e?.remark || "").trim())
+      .map((e) => ({
+        deckleIndex: e.deckleIndex ?? null,
+        runStartedAt: e.runStartedAt ? new Date(e.runStartedAt).getTime() : null,
+        remark: e.remark,
+        at: e.at ? new Date(e.at).getTime() : null,
+        byName: e.byName || "",
+      }));
     acc.started = true;
     acc.running = Boolean(held);
     acc.runningOn = claimed
@@ -6581,8 +6593,8 @@ function mapPendingProductionRow(r, jobCardProgress, advance = new Map()) {
     assignedAt: r.assignedAt || null,
     liveUpdate: progress,
     // The WIP tab's Live column: the deckle running now, its metres and ETA
-    // at the laminator's speed, and when the whole job should be done.
-    runPlan: progress ? buildRunPlan(r, progress) : null,
+    // at the machine's speed (Machine Master; 15 mtrs/min if none set), and when the whole job should be done.
+    runPlan: progress ? buildRunPlan(r, progress, r.assignedMachineId?.speedMpm > 0 ? r.assignedMachineId.speedMpm : undefined) : null,
     // Whether "Send Back to Pending" can work, decided by the same facts the
     // POST refuses on (see /labels/production/unassign/:id): anything already
     // produced, or a reel reconciled mid-job, can't be reversed from here.
@@ -6619,7 +6631,7 @@ router.get("/labels/production/pending", async (req, res) => {
   const all = await PendingProduction.find({})
     .populate("userId", "clientName userName clientType")
     .populate("itemId", "productCode skuCode rollType")
-    .populate("assignedMachineId", "machineName machineType")
+    .populate("assignedMachineId", "machineName machineType speedMpm")
     .populate("operatorId", "empName empNickName")
     .populate("helperId", "empName")
     .sort({ createdAt: -1 })
@@ -6682,7 +6694,7 @@ async function loadWipRows() {
   const assigned = await PendingProduction.find({ assignedMachineId: { $ne: null }, producedAt: null })
     .populate("userId", "clientName userName clientType")
     .populate("itemId", "productCode skuCode rollType")
-    .populate("assignedMachineId", "machineName machineType")
+    .populate("assignedMachineId", "machineName machineType speedMpm")
     .populate("operatorId", "empName empNickName")
     .populate("helperId", "empName")
     .lean();
@@ -7434,6 +7446,9 @@ router.post("/labels/production/assign/:id", requireAuth, updateLimiter, async (
         assignedAt: new Date(),
       },
     });
+    // The tablets of whoever now has this order -- and of whoever had it before
+    // a re-assignment -- reload their queues.
+    notifyOperatorQueue(operator ? operatorId : null, pendingProduction.operatorId);
 
     // Complete the swap for every claimed reel that was just accepted onto
     // this order (see `swaps`/claimedByKey above): pull it out of whichever
@@ -7599,10 +7614,11 @@ router.post("/labels/production/unassign/:id", requireAuth, updateLimiter, async
       $set: { assignedMachineId: null, operatorId: null, helperId: null, allottedRollIds: [], producedRolls: 0 },
       $unset: {
         allottedRolls: "", assignedAt: "", allottedLayers: "", liveMaterialInUse: "", runningOn: "",
-        liveRun: "", liveSetting: "", liveStartedAt: "", livePause: "", livePauseLog: "",
+        liveRun: "", liveSetting: "", liveStartedAt: "", livePause: "", livePauseLog: "", overtimeLog: "",
       },
     });
 
+    notifyOperatorQueue(pendingProduction.operatorId);
     res.locals.auditDescription = `Sent production order ${id} back to Pending`;
     let message = "Order sent back to Pending Production.";
     if (dissolved.length) {

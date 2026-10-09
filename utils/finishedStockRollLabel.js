@@ -1,5 +1,5 @@
 import { buildLabelFields } from "./materialStockRollLabel.js";
-import { buildPrnFromFields, buildQrPayloadFromFields, labelLayoutMm } from "./materialRollLabel.js";
+import { applyPrnTextPlan, buildPrnFromFields, buildQrPayloadFromFields, labelLayoutMm } from "./materialRollLabel.js";
 
 // The label a FINISHED slit roll (models/inventory/finishedStock.js) gets stuck
 // on it. It is the Deckle label (utils/materialStockRollLabel.js) with two
@@ -27,15 +27,12 @@ export function buildFinishedStockLabelFields(roll) {
   });
 }
 
-// The same layout labelLayoutMm() gives a Deckle, with only the Roll ID's
-// starting size lowered (see FINISHED_ROLL_ID_PT). The view still shrinks it
-// further if the value runs past its box.
-export function finishedStockLabelLayoutMm(qrModuleCount) {
-  const mm = labelLayoutMm(qrModuleCount);
-  return {
-    ...mm,
-    slots: { ...mm.slots, rollId: { ...mm.slots.rollId, pt: FINISHED_ROLL_ID_PT } },
-  };
+// The same layout labelLayoutMm() gives a Deckle, planned exactly as the
+// operator app's TSPL is (whole-point sizes, Roll ID over two lines) with the
+// Roll ID's starting size lowered (see FINISHED_ROLL_ID_PT). The view still
+// shrinks anything that runs past its box.
+export function finishedStockLabelLayoutMm(qrModuleCount, fields) {
+  return applyPrnTextPlan(labelLayoutMm(qrModuleCount), fields, { rollIdPt: FINISHED_ROLL_ID_PT });
 }
 
 export function finishedStockLabelQrPayload(roll) {

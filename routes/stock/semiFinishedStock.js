@@ -14,12 +14,14 @@ import { generateDeckleId } from "../../utils/rollId.js";
 import {
   LABEL_HEIGHT_MM,
   LABEL_WIDTH_MM,
+  applyPrnTextPlan,
   buildLabelFields,
   buildQrPayload,
   labelLayoutMm,
   rollLabelModuleCount,
   rollLabelQrDataUrl,
 } from "../../utils/materialStockRollLabel.js";
+import { resolveDeckleLayerGsm } from "../../utils/deckleLayerGsm.js";
 
 const router = express.Router();
 
@@ -425,7 +427,7 @@ router.get("/label/:stockId", requireAuth, async (req, res) => {
       .select("rollId reelMtrs size joints lotNo producedFor")
       .populate({
         path: "material",
-        select: "productCode skuCode",
+        select: "productCode skuCode facestock facestock2 adhesive adhesive2 releaseLiner releaseLiner2",
       })
       .populate({ path: "producedFor", select: "lotNo" })
       .lean();
@@ -457,19 +459,21 @@ router.get("/label/:stockId", requireAuth, async (req, res) => {
       joints,
       lotNo,
       prodCode: reel.material?.productCode || reel.material?.skuCode,
+      ...(await resolveDeckleLayerGsm(reel.material, reel.producedFor)),
     };
     // The QR's module count depends on the whole payload's length, so the
     // box can only be sized once the payload exists -- hence building the
     // payload here rather than letting the view ask for a data URL.
     const qrPayload = buildQrPayload(labelInput);
 
+    const labelFields = buildLabelFields(labelInput);
     res.render("stock/materialStockRollLabel.ejs", {
       labelNoun: "Deckle",
       rollId: reel.rollId,
-      fields: buildLabelFields(labelInput),
+      fields: labelFields,
       // Named `mm`, not `layout` -- `layout` is ejs-mate's own helper and a
       // local of that name breaks rendering.
-      mm: labelLayoutMm(rollLabelModuleCount(qrPayload)),
+      mm: applyPrnTextPlan(labelLayoutMm(rollLabelModuleCount(qrPayload)), labelFields),
       qrDataUrl: await rollLabelQrDataUrl(qrPayload),
     });
   } catch (err) {

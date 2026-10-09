@@ -224,9 +224,14 @@
           <% if (r.media.length) { %>
             <div class="mnt-media">
               <% r.media.forEach((m) => { %>
-                <div class="mnt-tile" title="<%= m.label %>" data-url="<%= m.url %>" data-kind="<%= m.kind %>"
+                <div class="mnt-tile" title="<%= m.label %>"<% if (m.kind === "audio") { %> style="background:#1b2a4a;"<% } %> data-url="<%= m.url %>" data-kind="<%= m.kind %>"
                      onclick="openViewer(this.dataset.url, this.dataset.kind)">
+                  <% if (m.kind === "audio") { %>
+                    <span class="mnt-tile-play"><i class="fa-solid fa-microphone"></i></span>
+                    <% if (m.durationLabel) { %><span class="mnt-tile-len"><%= m.durationLabel %></span><% } %>
+                  <% } else { %>
                   <img src="<%= m.thumbUrl %>" alt="<%= m.label %> of the problem" loading="lazy" />
+                  <% } %>
                   <% if (m.kind === "video") { %>
                     <span class="mnt-tile-play"><i class="fa-solid fa-circle-play"></i></span>
                     <% if (m.durationLabel) { %><span class="mnt-tile-len"><%= m.durationLabel %></span><% } %>
@@ -425,8 +430,10 @@
   const lightboxVideo = document.getElementById("lightboxVideo");
 
   function openViewer(url, kind) {
-    const isVideo = kind === "video";
-    document.getElementById("mediaViewerTitle").textContent = isVideo ? "Problem Video" : "Problem Photo";
+    // A voice message plays in the same <video> element, with no picture.
+    const isVideo = kind === "video" || kind === "audio";
+    document.getElementById("mediaViewerTitle").textContent =
+      kind === "audio" ? "Voice Message" : isVideo ? "Problem Video" : "Problem Photo";
     lightboxImg.style.display = isVideo ? "none" : "block";
     lightboxVideo.style.display = isVideo ? "block" : "none";
     if (isVideo) {

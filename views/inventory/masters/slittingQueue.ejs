@@ -243,6 +243,8 @@
   </div>
 </div>
 
+<link rel="stylesheet" href="/css/productDetail.css?v=7">
+<script src="/js/productDetail.js?v=6"></script>
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
@@ -710,6 +712,12 @@
         // identify a job.
         title: "Product Code / Deckle ID", field: "item", headerSort: false, widthGrow: 3,
         minWidth: 240,
+        cellClick: (e, cell) => {
+          // Anywhere in the cell, group row or Deckle row beneath it -- a Deckle
+          // row opens the card of the exact code that web was laminated under.
+          const row = cell.getRow().getData();
+          if (row.productCode) ProductDetail.open(row.productCode, { url: "/app/slitting/product/" });
+        },
         headerFilter: "input", headerFilterPlaceholder: "Search code / Deckle ID",
         // The group row shows only the family's base code and hides the Deckle
         // IDs until it is expanded, so the search has to look wider than the
@@ -735,7 +743,7 @@
             const tail = variants.length
               ? `<span style="color:#94a3b8;font-weight:600;"> &nbsp;·&nbsp; ${esc(variants.join(", "))}</span>`
               : "";
-            return `<span style="font-weight:800;color:#044a78;">${esc(row.productCode)}</span>${tail}`;
+            return `<span class="pd-link" title="Show product details">${esc(row.productCode)}</span>${tail}`;
           }
           const bits = [`${fmtMtrs(row.mtrs)} mtrs`, esc(row.location)];
           if (row.lotNo) bits.push(`lot ${esc(row.lotNo)}`);

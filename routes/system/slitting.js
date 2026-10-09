@@ -13,6 +13,7 @@ import Employee from "../../models/hr/employee_model.js";
 import Counter from "../../models/system/counter.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter } from "../../utils/limiters.js";
+import { notifyOperatorQueue } from "../../utils/operatorEvents.js";
 import { findScannedReel } from "../../utils/rollId.js";
 // The code every generated id starts with -- the Company master's own
 // (utils/companyBrand.js), read live so a rename needs no restart.
@@ -823,6 +824,25 @@ async function buildPlannedDeckleGroups() {
 // One row per Deckle (the laminated web made upstream), not per order. The
 // planner picks a Deckle here and "Allocate" opens the Slitting Job Card for
 // that Deckle's order with the Deckle pre-filled as the first row.
+// Read-only Product Code card for the Slitting Queue's product dialog. A queue
+// row names the variant FAMILY ("C001WB"), so this returns the exact code plus
+// any "-A"/"-B" variants of it; the dialog lets the planner flip between them.
+router.get("/slitting/product/:code", requireSlittingView, async (req, res) => {
+  const code = String(req.params.code || "").trim();
+  if (!code) return res.status(400).json({ error: "Product Code is required." });
+  // A Deckle row carries its full code ("C001WB-A"); always load the whole
+  // family from the base so the card can flip between variants and diff them.
+  const escaped = code.replace(/-[A-Z]+$/i, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const docs = await SachikoLabelStock.find({
+    productCode: new RegExp(`^${escaped}(-[A-Z]+)?$`, "i"),
+  })
+    .select("-labelStockSignature -materialSignature -wordFile -pdfFile -wordFileOriginalName -pdfFileOriginalName -__v")
+    .sort({ productCode: 1 })
+    .lean();
+  if (!docs.length) return res.status(404).json({ error: `No Label Stock found for ${code}.` });
+  res.json({ code, items: docs });
+});
+
 router.get("/slitting/queue", requireSlittingView, async (req, res) => {
   const [allRows, planned] = await Promise.all([
     buildAvailableDeckleRows({ includeHeld: true }),
@@ -1104,6 +1124,21 @@ function plannedMetresOf(row) {
   return Number.isFinite(ran) && ran > 0 ? ran : 0;
 }
 
+// The operator's "why was it late?" remarks as the WIP pages read them: only the
+// ones that say something (a dismissed reminder is stored but not shown), times
+// as epoch ms like the rest of the run plan.
+export function overtimeRemarksOf(log) {
+  return (Array.isArray(log) ? log : [])
+    .filter((e) => String(e?.remark || "").trim())
+    .map((e) => ({
+      deckleIndex: e.deckleIndex ?? null,
+      runStartedAt: e.runStartedAt ? new Date(e.runStartedAt).getTime() : null,
+      remark: e.remark,
+      at: e.at ? new Date(e.at).getTime() : null,
+      byName: e.byName || "",
+    }));
+}
+
 function buildSlittingProgressMap(card) {
   const rows = Array.isArray(card.slittingLog) ? card.slittingLog : [];
   const doneRows = rows.filter((r) => r.status === "done");
@@ -1151,6 +1186,7 @@ function buildSlittingProgressMap(card) {
     .map((p) => ({ from: p.from, to: p.to, reason: p.reason || "" }));
   const claimed = slittingActiveClaim(card.runningOn);
   return {
+    overtimeRemarks: overtimeRemarksOf(card.overtimeLog),
     settings,
     production,
     currentRun,
@@ -1176,10 +1212,20 @@ function buildSlittingProgressMap(card) {
   };
 }
 
+// Machine Master's Machine Speed (mtrs/min) for the given machines, keyed by
+// machine id -- a machine with none set is simply absent, and the caller falls
+// back to SLITTING_SPEED_MPM.
+export async function slittingSpeedsByMachine(machineIds) {
+  const ids = [...new Set((machineIds || []).filter(Boolean).map(String))];
+  if (!ids.length) return new Map();
+  const machines = await Machine.find({ _id: { $in: ids }, speedMpm: { $gt: 0 } }).select("speedMpm").lean();
+  return new Map(machines.map((m) => [String(m._id), m.speedMpm]));
+}
+
 // One Slitting WIP row: the identity/progress columns (same fields as a queue
 // row) plus liveUpdate (the dialog's data) and runPlan (the Live/Target/Status/
 // Estimate columns). `cureByReel` is the shared curing lookup built once below.
-function mapSlittingWipRow(card, cureByReel) {
+function mapSlittingWipRow(card, cureByReel, speedMpm) {
   const rows = Array.isArray(card.slittingLog) ? card.slittingLog : [];
   const done = rows.filter((r) => r.status === "done").length;
   const uncured = rows
@@ -1206,7 +1252,7 @@ function mapSlittingWipRow(card, cureByReel) {
     curingUntilLabel: curingUntil ? curingWhenLabel(curingUntil) : "",
     // The office/floor reads these the same way the lamination WIP tab does.
     liveUpdate: progress,
-    runPlan: buildSlittingRunPlan(progress, SLITTING_SPEED_MPM),
+    runPlan: buildSlittingRunPlan(progress, speedMpm > 0 ? speedMpm : SLITTING_SPEED_MPM),
   };
 }
 
@@ -1240,7 +1286,8 @@ async function collectSlittingWipRows() {
         .lean()
     : [];
   const cureByReel = new Map(cureReels.map((r) => [String(r._id), deckleCuring(r)]));
-  const rows = started.map((c) => mapSlittingWipRow(c, cureByReel));
+  const speedByMachine = await slittingSpeedsByMachine(started.map((c) => c.machineId));
+  const rows = started.map((c) => mapSlittingWipRow(c, cureByReel, speedByMachine.get(String(c.machineId))));
   rows.sort(
     (a, b) => a.machineName.localeCompare(b.machineName) || a.slittingJobCardId.localeCompare(b.slittingJobCardId),
   );
@@ -1813,6 +1860,7 @@ router.post("/slitting/allocate/:pendingId", requireAuth, requireSlittingPlanner
       return res.json({ success: true, redirect: "/app/slitting/queue" });
     }
 
+    notifyOperatorQueue(operator._id);
     res.locals.auditDescription =
       `${anyUpdate ? "Updated/Allocated" : "Allocated"} ${cardIds.length} slitting job${cardIds.length === 1 ? "" : "s"} `
       + `(${cardIds.join(", ")}) on ${machine.machineName} for ${operator.empName} (order ${pending.lotNo || pending._id}).`;
@@ -1880,10 +1928,14 @@ export async function buildSlittingCard(cardId) {
         .lean()
     : [];
   const reelById = new Map(reels.map((r) => [String(r._id), r]));
+  // This machine's speed from Machine Master (SLITTING_SPEED_MPM where none is
+  // set) -- what the app's overtime reminder times each Deckle against.
+  const speedMpm = (await slittingSpeedsByMachine([card.machineId])).get(String(card.machineId)) || SLITTING_SPEED_MPM;
 
   return {
     ok: true,
     card: {
+      timing: { speedMpm },
       _id: String(card._id),
       slittingJobCardId: card.slittingJobCardId,
       date: card.date,
@@ -2017,6 +2069,71 @@ router.post("/slitting/jobcard/setting", requireAuth, requireSlittingFloor, upda
     res.status(500).json({ success: false, message: "Failed to save Job Setting." });
   }
 });
+
+// The operator re-orders the knives across one Deckle's web -- 210+210+230
+// laid out as 210+230+210 -- to suit the machine or the reel's edge. `order` is
+// the NEW left-to-right order given as the CURRENT positions: [0, 2, 1] means
+// "keep the first cut, then the third, then the second".
+//
+// Only the widths move. The slot letters (A, B, C...) are positions across the
+// web and stay where they are, so after a re-order slot B simply holds a
+// different width -- and the finished roll ids (<deckle>-<slot>) minted at Stop
+// follow the new positions. A graced cut's orderedWidth is the width the client
+// ordered for THAT cut, so it travels with its width, never with its slot.
+//
+// Allowed only until the Deckle is started: once the slitter has run, the rolls
+// physically exist in the old order. The set of widths never changes, so the
+// plan's cutsSignature (a sorted multiset) -- and with it every queue grouping
+// -- is untouched.
+export async function reorderSlittingCuts({ cardId, index, order }) {
+  const fail = (message, code) => ({ ok: false, status: 400, message, code });
+
+  if (!mongoose.isValidObjectId(cardId)) return fail("Invalid card.");
+
+  const card = await SlittingJobCard.findById(cardId);
+  if (!card) return { ok: false, status: 404, message: "Card not found." };
+  if (card.status === "completed") return fail(`${card.slittingJobCardId} is already finished.`);
+
+  const row = card.slittingLog?.[Number(index)];
+  if (!row) return fail("That row is not on this card.");
+  if (row.status === "done") return fail("That Deckle has already been run.", "done");
+  if (row.startTime || row.startedAt) {
+    return fail("That Deckle has already been started — its layout can't be changed now.", "started");
+  }
+
+  const current = Array.isArray(row.cuts) ? row.cuts : [];
+  const n = current.length;
+  if (n < 2) return fail("There is nothing to re-order on this Deckle.");
+
+  const next = Array.isArray(order) ? order.map(Number) : [];
+  const valid =
+    next.length === n &&
+    next.every((p) => Number.isInteger(p) && p >= 0 && p < n) &&
+    new Set(next).size === n;
+  if (!valid) return fail("That layout is not valid. Please try again.");
+
+  const before = current.map((c) => ({ width: c.width, orderedWidth: c.orderedWidth }));
+  row.cuts = next.map((from, pos) => {
+    const cut = { slot: current[pos].slot, width: before[from].width };
+    if (before[from].orderedWidth !== undefined && before[from].orderedWidth !== null) {
+      cut.orderedWidth = before[from].orderedWidth;
+    }
+    return cut;
+  });
+  card.markModified("slittingLog");
+  await card.save();
+
+  const saved = card.slittingLog[Number(index)];
+  return {
+    ok: true,
+    cuts: (saved.cuts || []).map((c) => ({
+      slot: c.slot, width: c.width, orderedWidth: c.orderedWidth ?? null, rollId: c.rollId || "",
+    })),
+    auditDescription:
+      `Re-ordered the knives on ${row.deckleId || "a Deckle"} (${card.slittingJobCardId}): ` +
+      `${before.map((c) => c.width).join("+")} -> ${(saved.cuts || []).map((c) => c.width).join("+")}`,
+  };
+}
 
 // A scan doesn't have to be the exact Deckle the planner allocated -- any
 // free web of the same Product Code (brand variants included) and the same
@@ -2400,7 +2517,7 @@ router.post("/slitting/jobcard/:cardId/undo", requireAuth, requireSlittingPlanne
       return res.redirect("/app/slitting/queue");
     }
     const card = await SlittingJobCard.findById(cardId)
-      .select("slittingJobCardId status slittingLog liveStartedAt liveSetting runningOn machineId machineName lotNo")
+      .select("slittingJobCardId status slittingLog liveStartedAt liveSetting runningOn machineId machineName lotNo operatorId")
       .lean();
     if (!card) {
       req.flash("notification", "That slitting card no longer exists.");
@@ -2419,6 +2536,7 @@ router.post("/slitting/jobcard/:cardId/undo", requireAuth, requireSlittingPlanne
       req.flash("notification", `${card.slittingJobCardId} changed while you were undoing it. Check the queue and try again.`);
       return res.redirect(back);
     }
+    notifyOperatorQueue(card.operatorId);
     res.locals.auditDescription = `Undid slitting allocation ${card.slittingJobCardId} (Deckle ${card.lotNo || "—"}) on ${card.machineName || "machine"}`;
     req.flash("notification", `${card.slittingJobCardId} is undone. Its Deckle is back in the Slitting Queue.`);
     return res.redirect(back);

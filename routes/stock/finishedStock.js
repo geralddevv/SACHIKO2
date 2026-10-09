@@ -673,12 +673,13 @@ router.get("/label/:stockId", requireAuth, async (req, res) => {
     // can only be sized once the payload exists.
     const qrPayload = finishedStockLabelQrPayload(labelInput);
 
+    const labelFields = buildFinishedStockLabelFields(labelInput);
     res.render("stock/materialStockRollLabel.ejs", {
       labelNoun: "Finished Roll",
       rollId: roll.rollId,
-      fields: buildFinishedStockLabelFields(labelInput),
+      fields: labelFields,
       // Named `mm`, not `layout` -- `layout` is ejs-mate's own helper.
-      mm: finishedStockLabelLayoutMm(rollLabelModuleCount(qrPayload)),
+      mm: finishedStockLabelLayoutMm(rollLabelModuleCount(qrPayload), labelFields),
       qrDataUrl: await rollLabelQrDataUrl(qrPayload),
     });
   } catch (err) {

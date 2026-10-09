@@ -340,6 +340,30 @@ const pendingProductionSchema = new mongoose.Schema(
       ],
       default: undefined,
     },
+    // The "why was it late?" reminder (operator app): one entry per overdue
+    // Deckle run, remark optional (an empty one = dismissed, so the reminder
+    // is shown only once per run). Shown on the WIP tab.
+    overtimeLog: {
+      type: [
+        {
+          // Which Deckle ran over, and which run of it (its Start time), so a
+          // re-run of the same Deckle number is told apart from the first.
+          deckleIndex: { type: Number },
+          runStartedAt: { type: Date },
+          // The Start punch's row token (lamination) -- how a remark that arrives
+          // late, from the app's outbox, is matched to its run and never stored twice.
+          rowToken: { type: String, trim: true },
+          // Why it ran late, as the operator typed it. Empty = the operator
+          // dismissed the reminder without a remark -- stored anyway so the
+          // reminder is only ever shown ONCE for that run.
+          remark: { type: String, trim: true, maxlength: 500, default: "" },
+          at: { type: Date, default: Date.now },
+          byName: { type: String, trim: true },
+          _id: false,
+        },
+      ],
+      default: undefined,
+    },
     // One entry per roll/drum an operator swapped out mid-job via the
     // Materials in Use "Add" flow on the Job Card (POST /sachiko/machine/
     // jobcard/material/set-remaining) -- the live counterpart to the

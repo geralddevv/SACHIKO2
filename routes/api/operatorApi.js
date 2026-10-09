@@ -9,13 +9,16 @@ import FinishedStock from "../../models/inventory/finishedStock.js";
 import SlittingJobCard from "../../models/inventory/slittingJobCard.js";
 import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import MaintenanceRequest from "../../models/system/maintenanceRequest.js";
+import { buildRunPlan, deckleWebLength, LAMINATOR_SPEED_MPM } from "../../utils/productionEta.js";
 import { authenticateOperator } from "../../utils/operatorAuth.js";
+import { openOperatorStream } from "../../utils/operatorEvents.js";
 import { signOperatorApiToken, requireOperatorApiAuth, requireOperatorApiMediaAuth } from "../../middleware/apiAuth.js";
 import { logAuthEvent } from "../../middleware/auditLogger.js";
 import { buildFacestockRollLabelPrn } from "../../utils/facestockRollLabel.js";
 import { buildAdhesiveRollLabelPrn } from "../../utils/adhesiveRollLabel.js";
 import { buildReleaseLinerRollLabelPrn } from "../../utils/releaseLinerRollLabel.js";
 import { buildMaterialStockRollLabelPrn } from "../../utils/materialStockRollLabel.js";
+import { resolveDeckleLayerGsm } from "../../utils/deckleLayerGsm.js";
 import { buildFinishedStockRollLabelPrn } from "../../utils/finishedStockRollLabel.js";
 import { loginLimiter, createLimiter } from "../../utils/limiters.js";
 import { POOL_MODELS, pickStockIds, getEligibleRawMaterials } from "../../utils/labelStockProduction.js";
@@ -50,6 +53,8 @@ import {
   buildSlittingCard,
   saveSlittingSetting,
   swapSlittingDeckle,
+  reorderSlittingCuts,
+  slittingSpeedsByMachine,
   startSlittingRow,
   produceSlittingRow,
   editSlittingRowJoint,
@@ -181,6 +186,12 @@ router.get("/locations", async (req, res) => {
   res.json({ locations: locations.map((l) => l.locationName) });
 });
 
+// Live feed: the tablet keeps this open and reloads its queue when told (see
+// utils/operatorEvents.js). Declared before /queue; it answers nothing but events.
+router.get("/events", requireOperatorApiAuth, (req, res) => {
+  openOperatorStream(req, res, req.authUser.empObjId);
+});
+
 router.get("/queue", requireOperatorApiAuth, async (req, res) => {
   const queueDeviceId = deviceIdOf(req);
   const queue = await buildOperatorQueue({
@@ -218,7 +229,10 @@ router.get("/jobcard/:pendingId", requireOperatorApiAuth, async (req, res) => {
   }
 
   const pendingDoc = await PendingProduction.findById(pendingId)
-    .select("assignedMachineId itemId allottedLayers materialSwapLog operatorId runningOn livePause")
+    .select(
+      "assignedMachineId itemId allottedLayers materialSwapLog operatorId runningOn livePause " +
+        "lotNo deckleRunningMeters deckleLayout isDeckleBatch runningMeters",
+    )
     .lean();
   if (!pendingDoc) {
     return res.status(404).json({ error: "Not found" });
@@ -271,6 +285,16 @@ router.get("/jobcard/:pendingId", requireOperatorApiAuth, async (req, res) => {
     ...claimStateFor(pendingDoc.runningOn, deviceIdOf(req)),
     heartbeatMs: JOB_CLAIM_HEARTBEAT_MS,
     paused: pausedStateOf(pendingDoc.livePause),
+    // What the app's overtime reminder times a Deckle against: its length, and
+    // this machine's speed from Machine Master (the default where none is set).
+    // Both are the WIP tab's own inputs, so the reminder fires when that page
+    // turns red. `deckleMtrs` is null where the job has no Deckle length (no ETA).
+    timing: {
+      lotNo: pendingDoc.lotNo || "",
+      machineName: machine?.machineName || "",
+      deckleMtrs: deckleWebLength(pendingDoc),
+      speedMpm: machine?.speedMpm > 0 ? machine.speedMpm : LAMINATOR_SPEED_MPM,
+    },
   });
 });
 
@@ -844,6 +868,107 @@ async function ownsSlittingCard(req, res, cardId) {
   return true;
 }
 
+/*
+ * Overtime reminder -- the operator's remark.
+ *
+ * The reminder itself runs on the tablet (src/services/overtimeReminder.js in the
+ * app): it times each Deckle from the operator's own Start punch against the
+ * machine's speed (Machine Master -> Machine Speed) and asks, once, when it has
+ * run a minute over -- the same moment the WIP pages turn the Live cell red -- so
+ * it works with no connection. Nothing here is polled. The app only brings back
+ * the answer: why it was late.
+ *
+ * It arrives through the app's outbox, so it may be hours old and may be posted
+ * twice; it is stored once per Deckle run. A remark is OPTIONAL -- an empty one is
+ * the "Not now" dismissal and is kept too, as the record that it was asked.
+ *
+ *   lamination -- the run is named by its rowToken (the one the Start punch
+ *                 carried); when that is still the Deckle on the machine, its
+ *                 number and Start time are filled in exactly as the WIP tab has
+ *                 them, which is how the Live cell finds the remark.
+ *   slitting   -- the run is the card's row `deckleIndex` (1-based); its Start
+ *                 time comes off the row.
+ */
+router.post("/overrun/remark", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    const { kind, id } = req.body || {};
+    const remark = String(req.body?.remark ?? "").trim().slice(0, 500);
+    const rowToken = String(req.body?.rowToken ?? "").trim();
+    let deckleIndex = Number.isInteger(Number(req.body?.deckleIndex)) ? Number(req.body.deckleIndex) : null;
+    const operatorObjId = String(req.authUser?.empObjId || "");
+    if (!mongoose.isValidObjectId(id) || (kind !== "slitting" && kind !== "lamination")) {
+      return res.status(400).json({ success: false, message: "Invalid request." });
+    }
+
+    let runStartedAt = null;
+    let Model;
+    if (kind === "slitting") {
+      Model = SlittingJobCard;
+      const card = await SlittingJobCard.findById(id).select("operatorId slittingLog.startedAt").lean();
+      if (!card) return res.status(404).json({ success: false, message: "That job no longer exists." });
+      if (String(card.operatorId || "") !== operatorObjId) {
+        return res.status(403).json({ success: false, message: "That job is allocated to another operator." });
+      }
+      if (deckleIndex === null || deckleIndex < 1) {
+        return res.status(400).json({ success: false, message: "Invalid request." });
+      }
+      runStartedAt = card.slittingLog?.[deckleIndex - 1]?.startedAt || null;
+    } else {
+      Model = PendingProduction;
+      const job = await PendingProduction.findById(id)
+        .select(
+          "operatorId noOfRolls quantity producedRolls isDeckleBatch runningMeters deckleRunningMeters " +
+            "deckleLayout liveRun livePause livePauseLog",
+        )
+        .lean();
+      if (!job) return res.status(404).json({ success: false, message: "That job no longer exists." });
+      if (String(job.operatorId || "") !== operatorObjId) {
+        return res.status(403).json({ success: false, message: "That job is allocated to another operator." });
+      }
+      if (!rowToken) return res.status(400).json({ success: false, message: "Invalid request." });
+      // Still the Deckle on the machine: number and Start exactly as the WIP tab
+      // has them. Already stopped by the time the remark got here: the app's own
+      // count and no Start time -- it still shows in the job's Delay Remarks table.
+      if (job.liveRun?.rowToken && job.liveRun.rowToken === rowToken && job.liveRun.startedAt) {
+        const { buildJobCardProgressMap } = await import("../fairdesk_route.js");
+        const progress = (await buildJobCardProgressMap([job._id])).get(String(job._id));
+        const current = progress ? buildRunPlan(job, progress).current : null;
+        if (current) deckleIndex = current.index;
+        runStartedAt = job.liveRun.startedAt;
+      }
+    }
+
+    // Atomic "only if this run has no answer yet".
+    const already = rowToken
+      ? { rowToken }
+      : { deckleIndex, runStartedAt };
+    const result = await Model.updateOne(
+      { _id: id, overtimeLog: { $not: { $elemMatch: already } } },
+      {
+        $push: {
+          overtimeLog: {
+            $each: [
+              {
+                deckleIndex,
+                runStartedAt,
+                rowToken: rowToken || undefined,
+                remark,
+                at: new Date(),
+                byName: req.authUser?.empName || "",
+              },
+            ],
+            $slice: -100,
+          },
+        },
+      },
+    );
+    return res.json({ success: true, saved: result.modifiedCount > 0 });
+  } catch (err) {
+    console.error("OPERATOR API OVERTIME REMARK ERROR:", err);
+    return res.status(500).json({ success: false, message: "Could not save the remark." });
+  }
+});
+
 router.get("/slitting/jobcard/:cardId", requireOperatorApiAuth, async (req, res) => {
   const { cardId } = req.params;
   if (!(await ownsSlittingCard(req, res, cardId))) return undefined;
@@ -886,6 +1011,25 @@ router.post("/slitting/jobcard/row/swap-deckle", requireOperatorApiAuth, createL
   } catch (err) {
     console.error("OPERATOR API SLITTING SWAP-DECKLE ERROR:", err);
     return res.status(500).json({ success: false, message: "Failed to confirm that Deckle." });
+  }
+});
+
+// Re-orders the knife widths across one Deckle's web (210+210+230 ->
+// 210+230+210) before it is started. `order` is the new left-to-right order as
+// the current positions; see reorderSlittingCuts.
+router.post("/slitting/jobcard/row/reorder-cuts", requireOperatorApiAuth, createLimiter, async (req, res) => {
+  try {
+    const { cardId, index, order } = req.body || {};
+    if (!(await ownsSlittingCard(req, res, cardId))) return undefined;
+
+    const result = await reorderSlittingCuts({ cardId, index, order });
+    if (!result.ok) {
+      return res.status(result.status).json({ success: false, message: result.message, code: result.code });
+    }
+    return res.json({ success: true, cuts: result.cuts });
+  } catch (err) {
+    console.error("OPERATOR API SLITTING REORDER CUTS ERROR:", err);
+    return res.status(500).json({ success: false, message: "Failed to save the new layout." });
   }
 });
 
@@ -1086,7 +1230,10 @@ router.get("/deckle/:stockId/prn", requireOperatorApiAuth, async (req, res) => {
 
     const reel = await MaterialStock.findById(stockId)
       .select("rollId reelMtrs size joints lotNo material producedFor")
-      .populate({ path: "material", select: "productCode skuCode" })
+      .populate({
+        path: "material",
+        select: "productCode skuCode facestock facestock2 adhesive adhesive2 releaseLiner releaseLiner2",
+      })
       .lean();
     if (!reel) return res.status(404).json({ error: "Roll not found" });
 
@@ -1105,6 +1252,7 @@ router.get("/deckle/:stockId/prn", requireOperatorApiAuth, async (req, res) => {
       joints: reel.joints,
       lotNo: reel.lotNo,
       prodCode: reel.material?.productCode || reel.material?.skuCode,
+      ...(await resolveDeckleLayerGsm(reel.material, reel.producedFor)),
     });
     res.json({ tspl });
   } catch (err) {

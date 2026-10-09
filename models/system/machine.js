@@ -27,6 +27,14 @@ const machineSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+    // Run speed in metres per minute. The WIP pages' Live / Target / Status /
+    // Estimate columns time a job off its machine's speed; a machine with none
+    // set falls back to the default (laminator 15, slitter 30 --
+    // utils/productionEta.js).
+    speedMpm: {
+      type: Number,
+      min: 0,
+    },
   },
   { timestamps: true },
 );

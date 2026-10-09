@@ -465,6 +465,20 @@
   // against this browser's clock each time the row is drawn (the poll redraws
   // every row), so it moves on its own.
   const wipOverMins = (etaAt, now = Date.now()) => (etaAt != null && now - etaAt >= 60000 ? (now - etaAt) / 60000 : null);
+
+  // The operator's "why was it late?" remark for the Deckle on the machine now
+  // (entered in the app when it first ran over; optional, so often absent).
+  const wipRemarkFor = (progress, cur) => (cur
+    ? (progress?.overtimeRemarks || []).find((r) => r.runStartedAt != null && r.runStartedAt === cur.startedAt) || null
+    : null);
+  const wipShort = (text, n = 60) => (String(text).length > n ? `${String(text).slice(0, n - 1)}…` : String(text));
+  // Every remark on this job, for the status dialog.
+  const wipRemarksSection = (progress) => {
+    const list = Array.isArray(progress?.overtimeRemarks) ? progress.overtimeRemarks : [];
+    if (!list.length) return "";
+    const rows = list.map((r) => `<tr><td>${r.deckleIndex ?? "—"}</td><td>${r.runStartedAt ? wipClock(r.runStartedAt) : "—"}</td><td>${r.at ? wipClock(r.at) : "—"}</td><td>${liveStatusEscape(r.byName || "—")}</td><td style="white-space:pre-wrap; word-break:break-word;">${liveStatusEscape(r.remark)}</td></tr>`).join("");
+    return `<h3 class="section-title" style="margin-top:22px;">Delay Remarks</h3><div class="dlg-scroll-x" style="overflow-x:auto;"><table class="diff-table dlg-log-table"><colgroup><col style="width:8%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:38%"></colgroup><thead><tr><th>Deckle</th><th>Started</th><th>Reported</th><th>By</th><th>Why it ran late</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
   const wipPlural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   // The time a job's figures are read at: now -- or, for a job on hold, the
   // moment it went on hold (runPlan.clockAt, utils/productionEta.js), so its
@@ -973,6 +987,7 @@
           <h3 class="section-title">Production Log</h3>
           <div class="dlg-scroll-x" style="overflow-x:auto;"><table class="diff-table dlg-log-table">${PROD_COLGROUP}${PROD_HEAD}<tbody>${productionBody}</tbody></table></div>
           ${holdSection}
+          ${wipRemarksSection(progress)}
         </div></div></div>`;
     document.getElementById("live-status-dialog").style.display = "flex";
   };
@@ -1301,6 +1316,8 @@
             if (over != null) {
               sub = `<span class="wip-main">${wipDuration(over)} over</span>`;
               tip = `${wipDeckleLabel(plan, cur)} has run ${wipDuration(over)} past its ~${wipDuration(plan.minsPerDeckle)}`;
+              const why = wipRemarkFor(val, cur);
+              if (why) { sub += `<span class="wip-sub">“${liveStatusEscape(wipShort(why.remark))}”</span>`; tip += ` · Operator: ${why.remark}`; }
             } else if (cur.etaAt != null) {
               const pct = wipDecklePct(plan, cur);
               sub = `<span class="wip-main">${pct}%</span><span class="wip-sub">${wipDuration((cur.etaAt - wipNow(plan)) / 60000)} left</span>`;

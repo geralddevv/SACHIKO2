@@ -40,16 +40,17 @@ const requireStaff = requireRole(["proprietor", "admin", "hod", "sales", "hr"]);
 const requireMaintenanceAction = requireRole(["proprietor", "admin", "hod"]);
 
 /* ================= ATTACHMENTS ================= */
-// A photo and/or a video of the problem, both optional individually but at
-// least one required. Compression, thumbnails and cleanup all live in
+// A photo, a video and/or a 30s voice message of the problem, all optional. Compression, thumbnails and cleanup all live in
 // utils/media.js -- this route only decides what it accepts.
 const MAINTENANCE_BUCKET = "maintenance";
+const VOICE_ONLY_DESCRIPTION = "Voice message (no text description)";
 
 const uploadMedia = mediaUpload({
   bucket: MAINTENANCE_BUCKET,
   fields: [
     { name: "photo", kind: "image", maxCount: 1 },
     { name: "video", kind: "video", maxCount: 1 },
+    { name: "audio", kind: "audio", maxCount: 1 },
   ],
 });
 // Re-exported for the operator JSON API, whose POST /maintenance accepts the
@@ -116,7 +117,7 @@ const toMedia = (doc) => {
   return assets.map((asset, index) => ({
     index,
     kind: asset.kind,
-    label: asset.kind === "video" ? "Video" : "Photo",
+    label: asset.kind === "video" ? "Video" : asset.kind === "audio" ? "Voice message" : "Photo",
     sizeLabel: asset.size ? formatBytes(asset.size) : "",
     durationLabel: asset.durationSec ? formatDuration(asset.durationSec) : "",
     // Both URLs are index-based: the filename never reaches the browser.
@@ -168,7 +169,10 @@ export class MaintenanceInputError extends Error {
 // touched before rethrowing, leaving nothing orphaned. Returns the saved doc
 // plus the bits the callers need for their audit line.
 export async function createOperatorTicket({ authUser, description, requestedMachineId, files }) {
-  const desc = String(description || "").trim();
+  // Operators who can't type may send a voice message alone; the ticket then
+  // gets a placeholder description so the lists and the required field still work.
+  const hasVoice = Boolean(files?.audio?.length);
+  const desc = String(description || "").trim() || (hasVoice ? VOICE_ONLY_DESCRIPTION : "");
   if (!desc) {
     await removeTempFiles(files);
     throw new MaintenanceInputError("Please describe the problem.");
