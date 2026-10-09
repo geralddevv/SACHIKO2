@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="csrf-token" content="<%= csrfToken %>" />
+    <%- include('pwaHead') %>
     <meta name="session-expires-at" content="<%= sessionExpiresAt || '' %>" />
     <%# Where common.js sends this user when their session ends -- operators
         sign in at their own portal, not the staff login. %>
@@ -19,6 +20,7 @@
     <% if (CSS) { %>
     <link rel="stylesheet" href="/css/<%= CSS %>" />
     <% } %>
+    <link rel="stylesheet" href="/css/mobile.css?v=1" />
 
     <style>
       .premium-input {
@@ -586,10 +588,52 @@
            the centred title runs straight underneath them and the two overlap.
            Reserve the space they occupy and truncate the title. */
         nav > a {
-          margin-left: 104px !important;
+          margin-left: 150px !important;
           margin-right: 12px !important;
-          max-width: calc(100vw - 168px);
+          max-width: calc(100vw - 214px);
           overflow: hidden;
+        }
+
+        /* Burger + drawer: the side nav leaves the layout row entirely and
+           slides in over the page from the left, under the 38px header. */
+        #fdMobileToggle { display: inline-flex; align-items: center; }
+        #fdNavBack, #fdNavForward, #fdMobileToggle { padding: 6px 10px; }
+        .header-nav-wrap { gap: 6px; }
+
+        .contain .side-nav {
+          position: fixed;
+          top: 38px;
+          left: 0;
+          bottom: 0;
+          height: auto !important;
+          width: min(260px, 82vw) !important;
+          min-width: 0 !important;
+          z-index: 1050;
+          transform: translateX(-100%);
+          visibility: hidden;
+          transition: transform 0.22s ease, visibility 0s linear 0.22s;
+          box-shadow: none;
+        }
+        body.nav-open .side-nav {
+          transform: translateX(0);
+          visibility: visible;
+          transition: transform 0.22s ease;
+          box-shadow: 4px 0 18px rgba(0, 0, 0, 0.35);
+        }
+        .side-nav-backdrop {
+          position: fixed;
+          inset: 38px 0 0 0;
+          background: rgba(0, 0, 0, 0.45);
+          z-index: 1040;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.22s ease;
+        }
+        body.nav-open .side-nav-backdrop { opacity: 1; pointer-events: auto; }
+        body.nav-open { overflow: hidden; }
+        .contain { height: calc(100vh - 38px) !important; }
+        @media (prefers-reduced-motion: reduce) {
+          .side-nav, .side-nav-backdrop { transition: none !important; }
         }
 
         nav h1 {
@@ -685,6 +729,11 @@
 
     <nav>
       <div class="header-nav-wrap">
+        <% if (authUser && authUser.role !== "operator") { %>
+        <button type="button" class="header-nav" id="fdMobileToggle" aria-label="Open menu" aria-controls="fdSideNav" aria-expanded="false">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <% } %>
         <button type="button" class="header-nav" id="fdNavBack">
           <i class="fa-solid fa-arrow-left"></i>
         </button>
@@ -729,6 +778,15 @@
               Change Password
             </button>
             
+            <button type="button" class="profile-menu-item" id="fdInstallApp" style="display: none;">
+              <i class="fa-solid fa-download"></i>
+              <span>Install App</span>
+            </button>
+            <button type="button" class="profile-menu-item" id="fdLayoutToggle" style="display: none;">
+              <i class="fa-solid fa-desktop"></i>
+              <span>Layout</span>
+            </button>
+
             <div class="profile-menu-divider"></div>
             
             <a href="/logout" class="profile-menu-item" id="fdLogout" style="color: #dc2626;">
@@ -837,7 +895,7 @@
            and the job card form, reached from it), so they get no side nav at
            all and the content takes the full width. -->
       <% if (!isOperator) { %>
-      <div class="side-nav nav-panel-toggle">
+      <div class="side-nav nav-panel-toggle" id="fdSideNav">
 
         <%# Home isn't /welcome for everyone -- the server hands the layout a
             homeUrl so this link follows whatever the role can actually open. %>
@@ -1382,6 +1440,8 @@
       </div>
       <% } %>
 
+      <% if (!isOperator) { %><div class="side-nav-backdrop" id="fdNavBackdrop"></div><% } %>
+
       <!--- Loading Content --->
       <div class="page-content" id="pageContent"></div>
       <div class="main-content">
@@ -1389,8 +1449,9 @@
       </div>
     </div>
 
-    <script src="/js/common.js?v=nav-default-open" defer></script>
+    <script src="/js/common.js?v=pwa-1" defer></script>
     <script src="/js/navSearch.js" defer></script>
+    <script src="/js/pwa.js?v=1" defer></script>
     <script src="/bootstrap/js/bootstrap.bundle.min.js" defer></script>
     <script src="/js/BTStrap.js" defer></script>
     <script src="/js/choices.min.js" defer></script>

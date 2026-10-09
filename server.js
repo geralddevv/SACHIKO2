@@ -63,7 +63,7 @@ import MongoSessionStore from "./utils/mongoSessionStore.js";
 import { safeJson } from "./utils/security.js";
 import { currentBrand, ensureFreshBrand, refreshBrand, shortBrand } from "./utils/companyBrand.js";
 import { brandPrefix } from "./middleware/brandPrefix.js";
-import { sendAsset, assetExists } from "./utils/media.js";
+import { sendAsset, assetExists, assetPath } from "./utils/media.js";
 import { loginLimiter, createLimiter, updateLimiter, deleteLimiter } from "./utils/limiters.js";
 
 const app = express();
@@ -311,6 +311,128 @@ function serveBrandFavicon(req, res) {
 }
 app.get("/company/favicon", serveBrandFavicon);
 app.get("/favicon.ico", serveBrandFavicon);
+
+/* PWA: manifest, service worker and install icons. Public (the browser fetches
+   them before/without a session) and branded from the Company master, so the
+   installed app carries the company's name and logo. start_url is "/" because
+   that already redirects every role to its own landing page, and scope "/"
+   covers whatever URL prefix the company is currently served under. */
+app.get("/manifest.webmanifest", (req, res) => {
+  const { name, ver } = currentBrand();
+  const v = encodeURIComponent(ver);
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.type("application/manifest+json").send(
+    JSON.stringify({
+      id: "/",
+      name,
+      short_name: shortBrand(name),
+      description: `${name} - production, stock and sales management`,
+      lang: "en-IN",
+      dir: "ltr",
+      categories: ["business", "productivity"],
+      start_url: "/",
+      scope: "/",
+      display: "standalone",
+      display_override: ["standalone", "minimal-ui"],
+      orientation: "any",
+      prefer_related_applications: false,
+      launch_handler: { client_mode: "focus-existing" },
+      theme_color: "#044a78",
+      background_color: "#f8f9fa",
+      icons: [
+        { src: `/company/pwa-icon/192.png?v=${v}`, sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: `/company/pwa-icon/512.png?v=${v}`, sizes: "512x512", type: "image/png", purpose: "any" },
+        { src: `/company/pwa-icon/512.png?v=${v}&maskable=1`, sizes: "512x512", type: "image/png", purpose: "maskable" },
+      ],
+    }),
+  );
+});
+
+const pwaIconMemo = new Map(); // size|maskable|brandVer -> PNG; sharp runs once per logo change
+app.get("/company/pwa-icon/:size.png", async (req, res) => {
+  try {
+    const size = Number(req.params.size);
+    if (![180, 192, 512].includes(size)) return res.status(404).end();
+    const maskable = req.query.maskable === "1";
+    const { name, logo, ver } = currentBrand();
+    const memoKey = `${size}|${maskable}|${ver}|${name}`;
+    let png = pwaIconMemo.get(memoKey);
+    if (png) {
+      res.setHeader("Cache-Control", "public, max-age=300");
+      return res.type("image/png").send(png);
+    }
+    if (logo && logo.filename && assetExists(logo)) {
+      // Logo centred on white; maskable gets extra padding so the OS's circle
+      // crop (safe zone = inner 80%) never clips it.
+      const inner = Math.round(size * (maskable ? 0.6 : 0.8));
+      const fitted = await sharp(assetPath(logo)).rotate().resize(inner, inner, { fit: "contain", background: "#ffffff" }).png().toBuffer();
+      png = await sharp({ create: { width: size, height: size, channels: 3, background: "#ffffff" } })
+        .composite([{ input: fitted, gravity: "centre" }]).png().toBuffer();
+    } else {
+      const letter = (String(name || "S").trim().toUpperCase().match(/[A-Z0-9]/) || ["S"])[0];
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="${maskable ? 0 : 14}" fill="#044a78"/>` +
+        `<text x="32" y="34" dominant-baseline="central" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" ` +
+        `font-weight="700" font-size="${maskable ? 26 : 34}" fill="#ffffff">${letter}</text></svg>`;
+      png = await sharp(Buffer.from(svg), { density: 384 }).resize(size, size).png().toBuffer();
+    }
+    if (pwaIconMemo.size > 30) pwaIconMemo.clear();
+    pwaIconMemo.set(memoKey, png);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.type("image/png").send(png);
+  } catch (e) {
+    console.error("pwa-icon failed:", e.message);
+    res.status(500).end();
+  }
+});
+
+/* Service worker -- served from the root so its scope covers every prefix.
+   Deliberately thin: it makes the app installable and caches same-origin static
+   files (stale-while-revalidate). Pages are never cached (they embed a per-session
+   CSRF token and per-user data); offline shows a small notice instead. Bump
+   SW_VERSION to drop old caches. */
+const SW_SOURCE = `
+const SW_VERSION = "v2";
+const STATIC_CACHE = "static-" + SW_VERSION;
+const STATIC_RE = /^\\/(css|js|assets|bootstrap|company\\/pwa-icon)\\//;
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== STATIC_CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.origin !== location.origin) return;
+  if (req.mode === "navigate") {
+    e.respondWith(fetch(req).catch(() => new Response(
+      '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title>' +
+      '<body style="font-family:system-ui,sans-serif;text-align:center;padding:3rem 1rem;color:#044a78"><h2>You are offline</h2>' +
+      '<p>Check your connection, then try again.</p><button onclick="location.reload()" style="padding:.6rem 1.2rem;border:0;border-radius:8px;background:#044a78;color:#fff;font-size:1rem">Retry</button></body>',
+      { headers: { "Content-Type": "text/html; charset=utf-8" } })));
+    return;
+  }
+  if (STATIC_RE.test(url.pathname)) {
+    e.respondWith(
+      caches.open(STATIC_CACHE).then((cache) =>
+        cache.match(req).then((hit) => {
+          const net = fetch(req).then((res) => { if (res.ok) cache.put(req, res.clone()); return res; }).catch(() => hit);
+          return hit || net;
+        })
+      )
+    );
+  }
+});
+`;
+app.get("/sw.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Service-Worker-Allowed", "/");
+  res.type("application/javascript").send(SW_SOURCE);
+});
 
 /* Session check endpoint – used by client-side polling (exempt from CSRF) */
 app.get("/check-session", (req, res) => {

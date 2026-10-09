@@ -1,3 +1,32 @@
+// ================= MOBILE BURGER MENU (side nav as a drawer ≤768px) =================
+(function () {
+  const btn = document.getElementById("fdMobileToggle");
+  const nav = document.getElementById("fdSideNav");
+  const backdrop = document.getElementById("fdNavBackdrop");
+  if (!btn || !nav) return;
+
+  const mq = window.matchMedia("(max-width: 768px)");
+  const setOpen = (open) => {
+    document.body.classList.toggle("nav-open", open);
+    btn.setAttribute("aria-expanded", String(open));
+    btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    const icon = btn.querySelector("i");
+    if (icon) icon.className = open ? "fa-solid fa-xmark" : "fa-solid fa-bars";
+  };
+
+  btn.addEventListener("click", () => setOpen(!document.body.classList.contains("nav-open")));
+  backdrop?.addEventListener("click", () => setOpen(false));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") setOpen(false);
+  });
+  // Following a link closes the drawer (matters for same-page hash links).
+  nav.addEventListener("click", (e) => {
+    if (e.target.closest("a[href]")) setOpen(false);
+  });
+  // Rotating/resizing to desktop width must not leave the page scroll-locked.
+  mq.addEventListener("change", () => setOpen(false));
+})();
+
 // ================= SIDEBAR TOGGLE WITH PERSISTENCE =================
 
 

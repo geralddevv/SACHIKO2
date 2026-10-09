@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="csrf-token" content="<%= csrfToken %>" />
+    <%- include('pwaHead') %>
     <title><%= typeof brandShort !== 'undefined' && brandShort ? brandShort : 'Sachiko' %> - <%= title %></title>
     <link rel="icon" href="<%= typeof faviconUrl !== 'undefined' ? faviconUrl : '/company/favicon' %>" />
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
@@ -109,5 +110,6 @@
         }
       });
     </script>
+    <script src="/js/pwa.js?v=1" defer></script>
   </body>
 </html>

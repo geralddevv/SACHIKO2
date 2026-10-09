@@ -1,0 +1,168 @@
+/* Mobile / small-screen layer. Loaded by boilerplate.ejs AFTER common.css and the
+   page's own stylesheet; pages' inline <style> blocks come later still, so the
+   rules that must win carry !important. Desktop is untouched: everything is
+   inside a max-width query. The ≤768px mark matches the burger-menu breakpoint. */
+
+@media screen and (max-width: 768px) {
+  /* ---- Page frame ------------------------------------------------------ */
+  .main-content {
+    padding: 0 !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .main-content .contain {
+    padding: 8px !important;
+    gap: 8px !important;
+  }
+
+  /* ---- Page headers (.indi-head) and their button rows ------------------ */
+  .indi-head {
+    flex-wrap: wrap !important;
+    gap: 8px;
+    padding: 8px 10px !important;
+  }
+  .indi-head h1 {
+    font-size: 1.05rem !important;
+  }
+  .indi-head > div,
+  .download-btns {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    max-width: 100%;
+  }
+  /* Header stat chips / pills shouldn't force the row wider than the screen */
+  .indi-head span,
+  .indi-head a,
+  .indi-head button {
+    max-width: 100%;
+  }
+
+  /* ---- Tables ------------------------------------------------------------
+     Tabulator lays its columns out against the container width in JS, so on a
+     phone a fit-to-width table crushes every column to a sliver. Give page-level
+     tables a sensible floor; the page then scrolls sideways (main-content) while
+     the table keeps scrolling vertically on its own. Tables inside dialogs are
+     left alone -- they size to the dialog. */
+  .main-content .tabulator {
+    min-width: 720px;
+  }
+  dialog .tabulator,
+  .logout-modal .tabulator {
+    min-width: 0 !important;
+  }
+  .tabulator .tabulator-col,
+  .tabulator .tabulator-col-content {
+    font-size: 13px !important;
+  }
+  .tabulator .tabulator-cell {
+    font-size: 13px;
+  }
+  .tabulator .tabulator-footer {
+    overflow-x: auto;
+  }
+  .tabulator .tabulator-footer .tabulator-page {
+    padding: 2px 6px;
+  }
+  /* Hand-rolled tables */
+  .ap-table-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  /* ---- Dialogs -----------------------------------------------------------
+     Many carry a fixed px width inline; max-width beats width. */
+  dialog,
+  .logout-dialog {
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px) !important;
+  }
+  dialog[open] {
+    margin: auto;
+  }
+  .dialog-header {
+    padding: 12px 14px !important;
+  }
+  .dialog-body {
+    padding: 14px !important;
+    max-height: calc(100dvh - 120px);
+    overflow-y: auto;
+  }
+  .dialog-field-row,
+  .add-grid,
+  dialog [style*="grid-template-columns"]:not([style*="32"]) {
+    grid-template-columns: 1fr !important;
+  }
+  .dialog-actions {
+    flex-wrap: wrap;
+  }
+  .dialog-actions > * {
+    flex: 1 1 120px;
+  }
+
+  /* ---- Forms -------------------------------------------------------------
+     common.css already stacks <form> and .span-* at this width; this covers the
+     grids that aren't <form>s (tab panels, inline 32-column wrappers). */
+  .hardware-options,
+  .software-options,
+  .client-content,
+  .user-content,
+  [style*="repeat(32"] {
+    grid-template-columns: 1fr !important;
+  }
+  [style*="repeat(32"] > * {
+    grid-column: auto !important;
+  }
+  .layer-card__fields {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* 16px inputs stop iOS Safari zooming the page on focus. Tabulator filters
+     keep their compact size. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  .tabulator input,
+  .tabulator select {
+    font-size: 13px;
+  }
+  select {
+    height: 2.6rem;
+  }
+  .btn-grp button,
+  button.btn,
+  .btn {
+    min-height: 38px;
+  }
+
+  /* ---- Misc ---------------------------------------------------------------- */
+  .toast-notification {
+    max-width: calc(100vw - 24px);
+  }
+  img,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+  .choices__list--dropdown {
+    max-width: calc(100vw - 24px);
+  }
+}
+
+/* Small phones */
+@media screen and (max-width: 480px) {
+  .layer-card__fields {
+    grid-template-columns: 1fr !important;
+  }
+  .main-content .tabulator {
+    min-width: 640px;
+  }
+}
+
+/* Installed app: no pull-to-refresh / rubber-band that could reload a half-filled form */
+@media (display-mode: standalone) {
+  html, body {
+    overscroll-behavior-y: none;
+  }
+}
