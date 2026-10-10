@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 const locationSchema = new mongoose.Schema(
   {
@@ -9,6 +10,7 @@ const locationSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+    ...verificationFields,
   },
   { timestamps: true },
 );

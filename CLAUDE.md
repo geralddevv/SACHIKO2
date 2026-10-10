@@ -243,6 +243,14 @@ Semi-Finished has its own label view and stock page; not wired in. **Create PO i
 
 Trap: `tableDisp.css` sets `cursor: default !important` on `.tabulator .tabulator-row:hover`, overriding a plain `cursor: pointer` on rows. The rule must name `:hover` and the `.tabulator-cell` children and carry `!important`.
 
+### New Client and New User are dialogs (one per page)
+
+**New Client** → `views/users/_clientDialog.ejs`, on `/client/view` ("+ Client", `openClientDialog()`). **New User** → `views/users/_userDialog.ejs`, on `/master/view` ("+ User", `openUserDialog(clientName)`). Each is one `<form class="so-dialog" data-so-form>` in its own `.so-dialog-backdrop`, styled by `public/css/soDialog.css` (the dialog half of FAIRTECH's form style, scoped so it never restyles the page; link it from the page) and driven by `public/js/soFormDialog.js`. The standalone page is gone: `GET /form/client?tab=client` redirects to `/client/view?new=client`, `?tab=user&clientName=X` to `/master/view?new=user&clientName=X`, which opens the dialog, so every old "Add User" link still works. Choices.js is created on `DOMContentLoaded` (it loads `defer`). "Unregistered" GST stores the sentinel `UNREGISTERED` in GST and PAN (the Edit Client page tolerates it). `public/js/clientForm.js` is still used by the Die pages — don't delete it.
+
+### Verified badge (who approved a record)
+
+Shared module: blue seal beside a record's name + "Approved by <user> on <date>" — `utils/verification.js` (`verificationFields`, `verificationUpdate(req, existing)`), `public/js/verification.js` (`verifiedBadge`, `verifiedText`), `views/partials/verifiedCheckbox.ejs`. Wired into Label Stock, Client, User and every Masters-tab form (Company, Location, Machine, Facestock, Adhesive, Release, Family, Type, Core, Board Paper, LS Adhesive). **Full how-to and gotchas: `VERIFICATION.md`** — reuse it, don't copy the SVG. Never put it in a `*Signature`; a hand-built table row object must copy `verified`/`verifiedBy`/`verifiedAt` across. **Never `res.render(view, { client })`** — EJS treats `client` as a compile option and the layout's `include()` breaks ("include is not a function"); use another name (`clientRec`).
+
 ### Label Stock Product Code variants
 
 `SachikoLabelStock.productCode` is free text; only the full `labelStockSignature` (every editable field, Product Code included) is unique. `POST /sachiko/label-stock/form` (`routes/sachiko/sachiko_route.js`) resolves duplicates at create time via `resolveProductCodeVariant()`:

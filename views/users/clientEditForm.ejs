@@ -1,50 +1,50 @@
 <% layout('/layout/boilerplate') -%>
 
 <%
-  const currentAccountHead = String(client.accountHead || "").trim();
+  const currentAccountHead = String(clientRec.accountHead || "").trim();
   const normalizedCurrentAccountHead = currentAccountHead.toLowerCase();
   const accountHeadMatch = (employees || []).find((employee) => String(employee.empName || "").trim().toLowerCase() === normalizedCurrentAccountHead);
 %>
 
 <div class="main-content" style="padding: 10px; display: flex; flex-direction: column; gap: 10px;">
-  <form class="client-content span-full needs-validation" action="/app/client/edit/<%= client._id %>" method="post" autocomplete="off" novalidate style="gap: 10px;">
+  <form class="client-content span-full needs-validation" action="/app/client/edit/<%= clientRec._id %>" method="post" autocomplete="off" novalidate style="gap: 10px;">
     <div class="span-full form-heading">
       <h1>Edit Client</h1>
     </div>
 
     <div class="span-four">
       <label>Client Id</label>
-      <input type="text" class="form-control input-tag" value="<%= client.clientId %>" readonly />
+      <input type="text" class="form-control input-tag" value="<%= clientRec.clientId %>" readonly />
     </div>
 
     <div class="span-seven">
       <label>Client Name</label>
-      <input type="text" class="form-control input-tag" name="clientName" value="<%= client.clientName %>" required />
+      <input type="text" class="form-control input-tag" name="clientName" value="<%= clientRec.clientName %>" required />
     </div>
 
     <div class="span-five">
       <label>Client Type</label>
       <select name="clientType" class="form-control select-tag" required>
-        <option value="DEALER" <%= client.clientType === 'DEALER' ? 'selected' : '' %>>DEALER</option>
-        <option value="CLIENT" <%= client.clientType === 'CLIENT' ? 'selected' : '' %>>CLIENT</option>
+        <option value="DEALER" <%= clientRec.clientType === 'DEALER' ? 'selected' : '' %>>DEALER</option>
+        <option value="CLIENT" <%= clientRec.clientType === 'CLIENT' ? 'selected' : '' %>>CLIENT</option>
       </select>
     </div>
 
     <div class="span-five">
       <label>Client Status</label>
       <select name="clientStatus" class="form-control select-tag" required>
-        <option value="ACTIVE" <%= client.clientStatus === 'ACTIVE' ? 'selected' : '' %>>ACTIVE</option>
-        <option value="INACTIVE" <%= client.clientStatus === 'INACTIVE' ? 'selected' : '' %>>INACTIVE</option>
-        <option value="FOLLOW UP" <%= client.clientStatus === 'FOLLOW UP' ? 'selected' : '' %>>FOLLOW UP</option>
-        <option value="BLACKLISTED" <%= client.clientStatus === 'BLACKLISTED' ? 'selected' : '' %>>BLACKLISTED</option>
-        <option value="ADVANCED" <%= client.clientStatus === 'ADVANCED' ? 'selected' : '' %>>ADVANCED</option>
-        <option value="OTHERS" <%= client.clientStatus === 'OTHERS' ? 'selected' : '' %>>OTHERS</option>
+        <option value="ACTIVE" <%= clientRec.clientStatus === 'ACTIVE' ? 'selected' : '' %>>ACTIVE</option>
+        <option value="INACTIVE" <%= clientRec.clientStatus === 'INACTIVE' ? 'selected' : '' %>>INACTIVE</option>
+        <option value="FOLLOW UP" <%= clientRec.clientStatus === 'FOLLOW UP' ? 'selected' : '' %>>FOLLOW UP</option>
+        <option value="BLACKLISTED" <%= clientRec.clientStatus === 'BLACKLISTED' ? 'selected' : '' %>>BLACKLISTED</option>
+        <option value="ADVANCED" <%= clientRec.clientStatus === 'ADVANCED' ? 'selected' : '' %>>ADVANCED</option>
+        <option value="OTHERS" <%= clientRec.clientStatus === 'OTHERS' ? 'selected' : '' %>>OTHERS</option>
       </select>
     </div>
 
     <div class="span-five">
       <label>H/O Location</label>
-      <input type="text" class="form-control input-tag" name="hoLocation" value="<%= client.hoLocation %>" required />
+      <input type="text" class="form-control input-tag" name="hoLocation" value="<%= clientRec.hoLocation %>" required />
     </div>
 
     <div class="span-six">
@@ -62,34 +62,35 @@
 
     <div class="span-six">
       <label for="client-verticals">Verticals</label>
-      <input type="text" id="client-verticals" class="form-control" name="verticals" value="<%= client.verticals || '' %>" />
+      <input type="text" id="client-verticals" class="form-control" name="verticals" value="<%= clientRec.verticals || '' %>" />
     </div>    
 
     <div class="span-six">
       <label for="client-vendor-code">Vendor Code</label>
-      <input type="text" id="client-vendor-code" class="form-control" name="vendorCode" value="<%= client.vendorCode || '' %>" />
+      <input type="text" id="client-vendor-code" class="form-control" name="vendorCode" value="<%= clientRec.vendorCode || '' %>" />
     </div>
 
     <div class="span-five">
       <label for="client-gst">GST</label>
-      <input type="text" maxlength="15" id="client-gst" class="form-control" name="clientGst" value="<%= client.clientGst %>" oninput="this.value = this.value.toUpperCase()" required />
+      <input type="text" maxlength="15" id="client-gst" class="form-control" name="clientGst" value="<%= clientRec.clientGst %>" oninput="this.value = this.value.toUpperCase()" required />
     </div>
 
     <div class="span-five">
       <label>MSME</label>
-      <input type="text" class="form-control" name="clientMsme" value="<%= client.clientMsme %>" required />
+      <input type="text" class="form-control" name="clientMsme" value="<%= clientRec.clientMsme %>" required />
     </div>
 
     <div class="span-five">
       <label>Gumasta</label>
-      <input type="text" class="form-control" name="clientGumasta" value="<%= client.clientGumasta %>" required />
+      <input type="text" class="form-control" name="clientGumasta" value="<%= clientRec.clientGumasta %>" required />
     </div>
 
     <div class="span-five">
       <label for="client-pan">PAN</label>
-      <input type="text" maxlength="10" id="client-pan" class="form-control" name="clientPan" value="<%= client.clientPan %>" oninput="this.value = this.value.toUpperCase()" required />
+      <input type="text" maxlength="10" id="client-pan" class="form-control" name="clientPan" value="<%= clientRec.clientPan %>" oninput="this.value = this.value.toUpperCase()" required />
     </div>
 
+    <%- include('../partials/verifiedCheckbox', { doc: clientRec }) %>
     <div class="span-full btn-grp" style="flex-direction: row-reverse;">
       <button class="submit-btn" type="submit">
         Update Client Details
@@ -154,6 +155,7 @@
     const panInput = document.getElementById("client-pan");
 
     const syncPan = (gst) => {
+      if (gst === "UNREGISTERED") return; // sentinel from the New Client dialog's "Unregistered" box
       if (gst.length >= 12) {
         const pan = gst.substring(2, 12);
         if (panInput) {
@@ -178,7 +180,7 @@
         syncPan(gst);
 
         const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-        if (gst.length > 0 && !gstRegex.test(gst)) {
+        if (gst.length > 0 && gst !== "UNREGISTERED" && !gstRegex.test(gst)) {
           this.setCustomValidity("Invalid GST format (e.g., 22AAAAA0000A1Z5)");
         } else {
           this.setCustomValidity("");
@@ -191,7 +193,7 @@
         const pan = this.value.toUpperCase();
         this.value = pan;
         const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-        if (pan.length > 0 && !panRegex.test(pan)) {
+        if (pan.length > 0 && pan !== "UNREGISTERED" && !panRegex.test(pan)) {
           this.setCustomValidity("Invalid PAN format (e.g., ABCDE1234F)");
         } else {
           this.setCustomValidity("");

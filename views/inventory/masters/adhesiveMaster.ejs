@@ -271,6 +271,13 @@
 
       <div id="addAdhesiveError" class="dialog-error"></div>
       <div class="dialog-actions">
+        <div style="display:flex;flex-direction:column;gap:2px;margin-right:auto;">
+          <label style="display:flex;align-items:center;gap:8px;margin:0;font-size:13.5px;font-weight:600;color:#0f172a;cursor:pointer;">
+            <input type="checkbox" id="addVerified" style="width:16px;height:16px;cursor:pointer;" />
+            Verified &mdash; data checked and approved
+          </label>
+          <span id="addVerifiedNote" style="display:none;margin-left:24px;font-size:12px;color:#64748b;"></span>
+        </div>
         <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
         <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Adhesive</button>
       </div>
@@ -355,6 +362,13 @@
 
       <div id="editAdhesiveError" class="dialog-error"></div>
       <div class="dialog-actions">
+        <div style="display:flex;flex-direction:column;gap:2px;margin-right:auto;">
+          <label style="display:flex;align-items:center;gap:8px;margin:0;font-size:13.5px;font-weight:600;color:#0f172a;cursor:pointer;">
+            <input type="checkbox" id="editVerified" style="width:16px;height:16px;cursor:pointer;" />
+            Verified &mdash; data checked and approved
+          </label>
+          <span id="editVerifiedNote" style="display:none;margin-left:24px;font-size:12px;color:#64748b;"></span>
+        </div>
         <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
         <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Adhesive</button>
       </div>
@@ -400,6 +414,7 @@
   </div>
 </div>
 
+<script src="/js/verification.js"></script>
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
@@ -468,7 +483,7 @@
           return wrap;
         },
       },
-      { title: "SKU ID", field: "skuId", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
+      { title: "SKU ID", field: "skuId", formatter: verifiedNameFormatter, headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 160 },
       { title: "Vendor Name", field: "vendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },
       { title: "Type", field: "type", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Make", field: "make", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
@@ -564,7 +579,7 @@
       detailRow("Shear", row.shear ?? "—"),
       detailRow("Density", row.density ?? "—"),
       detailRow("MSQ", row.msq ?? "—"),
-    ].join("");
+    ].concat(row.verified ? [detailRow("Verified", verifiedText(row))] : []).join("");
     openModal("viewDialog");
   }
   function closeViewDialog() {
@@ -583,6 +598,7 @@
 
   // ---- ADD ----
   function openAddDialog() {
+    setVerifiedDialogState("add", null);
     document.getElementById("addSkuIdPreview").value = previewSkuId;
     document.getElementById("addMakeInput").value = "";
     document.getElementById("addVendorSkuCodeInput").value = "";
@@ -623,6 +639,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          verified: document.getElementById("addVerified").checked,
           vendorId,
           type,
           make: document.getElementById("addMakeInput").value.trim(),
@@ -652,6 +669,7 @@
   let editId = null;
 
   function openEditDialog(row) {
+    setVerifiedDialogState("edit", row);
     editId = row._id;
     document.getElementById("editSkuIdDisplay").value = row.skuId;
     document.getElementById("editMakeInput").value = row.make || "";
@@ -695,6 +713,7 @@
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          verified: document.getElementById("editVerified").checked,
           vendorId,
           type,
           make: document.getElementById("editMakeInput").value.trim(),

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 let clientSchema = new mongoose.Schema({
   clientId: { type: String, required: true, unique: true },
@@ -18,6 +19,7 @@ let clientSchema = new mongoose.Schema({
   verticals: { type: String, trim: true, default: "" },
   clientSignature: { type: String, unique: true, sparse: true, trim: true },
   users: [{ type: mongoose.Schema.Types.ObjectId, ref: "Username" }],
+  ...verificationFields,
 });
 let Client = mongoose.model("Client", clientSchema);
 

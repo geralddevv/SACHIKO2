@@ -1,4 +1,5 @@
 import express from "express";
+import { verificationUpdate } from "../../utils/verification.js";
 import BoardPaper from "../../models/system/boardPaper.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -26,7 +27,7 @@ router.post("/form/board-paper", requireAuth, requireBoardPaperMaster, createLim
     const duplicate = await BoardPaper.exists({ boardPaperName });
     if (duplicate) return res.status(400).json({ success: false, message: "This board paper already exists." });
 
-    await BoardPaper.create({ boardPaperName });
+    await BoardPaper.create({ boardPaperName, ...verificationUpdate(req).set });
 
     res.locals.auditDescription = `Created board paper "${boardPaperName}"`;
     req.flash("notification", "Board paper created successfully!");
@@ -51,9 +52,12 @@ router.put("/api/board-paper/:id", requireAuth, requireBoardPaperMaster, updateL
     const duplicate = await BoardPaper.exists({ boardPaperName, _id: { $ne: req.params.id } });
     if (duplicate) return res.status(400).json({ success: false, message: "This board paper already exists." });
 
+    const existing = await BoardPaper.findById(req.params.id).select("verified verifiedBy").lean();
+    const vf = verificationUpdate(req, existing);
+
     const updated = await BoardPaper.findByIdAndUpdate(
       req.params.id,
-      { boardPaperName },
+      { $set: { boardPaperName, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) },
       { new: true, runValidators: true },
     );
     if (!updated) return res.status(404).json({ success: false, message: "Board paper not found." });

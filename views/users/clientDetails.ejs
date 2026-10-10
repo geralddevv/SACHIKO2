@@ -337,9 +337,9 @@
         <button class="action-btn-header" onclick="window.location.href='/app/form/client?tab=user&clientName=<%= encodeURIComponent(userData.clientName) %>'">
           <i class="fa-solid fa-user-plus"></i> Add User
         </button>
-        <a href="/app/form/edit/user/<%= userData._id %>" class="action-btn-header">
+        <button type="button" class="action-btn-header" onclick="openEditUserDialog()">
           <i class="fa-solid fa-pen"></i> Edit User
-        </a>
+        </button>
         <button class="action-btn-header danger" onclick="confirmDeleteUser()">
           <i class="fa-solid fa-trash"></i> Delete
         </button>
@@ -354,7 +354,10 @@
       </div>
       <div class="info-item">
         <span class="info-label">User Name</span>
-        <span class="info-value"><%= userData.userName %></span>
+        <span class="info-value" style="display:inline-flex;align-items:center;gap:6px;">
+          <%= userData.userName %>
+          <% if (userData.verified) { %><span id="userVerifiedBadge" data-by="<%= userData.verifiedBy || '' %>" data-at="<%= userData.verifiedAt ? new Date(userData.verifiedAt).toISOString() : '' %>"></span><% } %>
+        </span>
       </div>
       <div class="info-item">
         <span class="info-label">H/O Location</span>
@@ -598,6 +601,13 @@
       <% } %>
     </div>
   </div>
+
+  <% if (userData.verified) { %>
+  <div style="display:flex;align-items:center;justify-content:flex-start;gap:6px;padding:14px 0 4px;color:#94a3b8;font-size:12.5px;">
+    <span id="userVerifiedFootBadge"></span>
+    <span>Approved by <%= userData.verifiedBy || "—" %><%= userData.verifiedAt ? " on " + new Date(userData.verifiedAt).toLocaleString("en-IN") : "" %></span>
+  </div>
+  <% } %>
 </div>
 
 <!-- Delete Modal -->
@@ -643,3 +653,18 @@
   });
 </script>
 
+<script src="/js/verification.js"></script>
+<script>
+  (function () {
+    const el = document.getElementById("userVerifiedBadge");
+    if (!el) return;
+    el.innerHTML = verifiedBadgeFor({ verified: true, verifiedBy: el.dataset.by, verifiedAt: el.dataset.at }, 18);
+    el.style.display = "inline-flex";
+    const foot = document.getElementById("userVerifiedFootBadge");
+    if (foot) foot.innerHTML = verifiedBadgeFor({ verified: true, verifiedBy: el.dataset.by, verifiedAt: el.dataset.at }, 15);
+  })();
+</script>
+
+<!-- Edit User dialog (opened by "Edit User" above) -->
+<link href="/css/soDialog.css?v=2" rel="stylesheet" />
+<%- include('./_editUserDialog', { userData, initialLocationDetails }) %>

@@ -2,6 +2,8 @@
 
 <!-- ================= TABULATOR CSS ================= -->
 <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator.min.css" rel="stylesheet" />
+<!-- Form-dialog style for the New Client dialog (_clientDialog.ejs) -->
+<link href="/css/soDialog.css?v=2" rel="stylesheet" />
 
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
   <style>
@@ -44,10 +46,7 @@
     </style>
 
     <div style="display: flex; gap: 10px; align-items: center">
-      <button class="header-action-btn" onclick="window.location.href = '/app/form/client?tab=user'">
-        <i class="fa-solid fa-plus" style="margin-right: 4px"></i> User
-      </button>
-      <button class="header-action-btn" onclick="window.location.href = '/app/form/client?tab=client'">
+      <button type="button" class="header-action-btn" onclick="openClientDialog()">
         <i class="fa-solid fa-plus" style="margin-right: 4px"></i> Client
       </button>
 
@@ -186,6 +185,7 @@
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<script src="/js/verification.js"></script>
 
 <script>
   /* ===== Dropdown ===== */
@@ -245,10 +245,11 @@
           const row = cell.getRow().getData();
           const hasUsers = Array.isArray(row.users) && row.users.length > 0;
           cell.getElement().classList.add("client-name-cell");
-          if (!hasUsers) {
-            return `<span style="color:#dc2626;font-weight:600;text-decoration:underline;text-decoration-color:#dc2626;">${cell.getValue()}</span>`;
-          }
-          return cell.getValue();
+          const nameHtml = hasUsers
+            ? cell.getValue()
+            : `<span style="color:#dc2626;font-weight:600;text-decoration:underline;text-decoration-color:#dc2626;">${cell.getValue()}</span>`;
+          if (!row.verified) return nameHtml;
+          return `<span style="display:inline-flex;align-items:center;gap:5px;">${nameHtml}${verifiedBadge(verifiedText(row), 16)}</span>`;
         },
 
         cellClick: (e, cell) => {
@@ -365,7 +366,10 @@
     const res = await fetch(`/app/client/api/${id}`);
     const client = await res.json();
 
-    document.getElementById("clientModalTitle").innerText = client.clientName;
+    const titleEl = document.getElementById("clientModalTitle");
+    titleEl.textContent = client.clientName;
+    titleEl.style.cssText = "display:flex;align-items:center;gap:8px;";
+    if (client.verified) titleEl.insertAdjacentHTML("beforeend", verifiedBadge(verifiedText(client), 22));
     document.getElementById("editClientBtn").href =
       `/app/client/edit/${client._id}`;
 
@@ -382,6 +386,7 @@
       ["Gumasta", client.clientGumasta],
       ["Vendor Code", client.vendorCode],
     ];
+    if (client.verified) fields.push(["Verified", verifiedText(client)]);
 
     const body = document.getElementById("clientModalBody");
     body.innerHTML = "";
@@ -402,3 +407,7 @@
     document.getElementById("clientModal").style.display = "none";
   }
 </script>
+
+<!-- New Client dialog, opened by the "+ Client" button above and by old
+     /form/client?tab=client links (?new=client). New User lives on /master/view. -->
+<%- include('./_clientDialog', { employees, previewClientId }) %>

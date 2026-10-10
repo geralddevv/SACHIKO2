@@ -212,7 +212,14 @@
 
       <div id="bindFormError" style="color:#b91c1c; font-size:12.5px; font-weight:700;"></div>
 
-      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
+      <div style="display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:4px;">
+        <div style="display:flex; flex-direction:column; gap:2px; margin-right:auto;">
+          <label style="display:flex; align-items:center; gap:8px; margin:0; font-size:13.5px; font-weight:600; color:#0f172a; cursor:pointer;">
+            <input type="checkbox" id="bindVerified" name="verified" value="on" style="width:16px; height:16px; cursor:pointer;" />
+            Verified &mdash; data checked and approved
+          </label>
+          <span id="bindVerifiedNote" style="display:none; margin-left:24px; font-size:12px; color:#64748b;"></span>
+        </div>
         <button type="button" class="lsab-btn lsab-btn--ghost" onclick="document.getElementById('bindDialog').close()">Cancel</button>
         <button type="submit" id="bindSubmitBtn" class="lsab-btn">Bind</button>
       </div>
@@ -272,6 +279,9 @@
     adhesiveMake: b.adhesive?.make || "",
     adhesiveVendorName: b.adhesive?.vendorName || "",
     adhesiveVendorSkuCode: b.adhesive?.vendorSkuCode || "",
+    verified: !!b.verified,
+    verifiedBy: b.verifiedBy || "",
+    verifiedAt: b.verifiedAt || null,
   }))) %>;
 
   const LABEL_STOCKS = <%- safeJson(labelStocks.map((ls) => ({
@@ -581,6 +591,7 @@
     document.getElementById("bindSubmitBtn").textContent = "Bind";
     document.getElementById("bindForm").action = "/app/form/label-stock-adhesive-binding";
     document.getElementById("bindFormError").textContent = "";
+    setVerifiedDialogState("bind", null);
 
     if (productChoices) { productChoices.destroy(); productChoices = null; }
     fillProductSelect("");
@@ -599,6 +610,7 @@
     document.getElementById("bindSubmitBtn").textContent = "Save";
     document.getElementById("bindForm").action = `/app/label-stock-adhesive-binding/edit/${id}`;
     document.getElementById("bindFormError").textContent = "";
+    setVerifiedDialogState("bind", BINDINGS.find((r) => r._id === id));
 
     if (productChoices) { productChoices.destroy(); productChoices = null; }
     fillProductSelect(stockId);
@@ -710,11 +722,12 @@
       bindDetailRow("Make", row.adhesiveMake || "—"),
       bindDetailRow("Vendor Name", row.adhesiveVendorName || "—"),
       bindDetailRow("Vendor SKU Code", row.adhesiveVendorSkuCode || "—"),
-    ].join("");
+    ].concat(row.verified ? [bindDetailRow("Verified", verifiedText(row))] : []).join("");
     document.getElementById("viewBindDialog").showModal();
   }
 </script>
 
+<script src="/js/verification.js"></script>
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
@@ -774,7 +787,7 @@
           return wrap;
         },
       },
-      { title: "Label Stock", field: "labelStock", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 200 },
+      { title: "Label Stock", field: "labelStock", formatter: verifiedNameFormatter, headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 200 },
       { title: "Type", field: "adhesiveType", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 110 },
       { title: "Make", field: "adhesiveMake", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 130, formatter: (cell) => cell.getValue() || "—" },
       { title: "Vendor Name", field: "adhesiveVendorName", headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 150 },

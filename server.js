@@ -139,7 +139,18 @@ app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 // app.use(cookieParser()); // Redundant and can interfere with express-session
 
 /* STATIC FILES */
-app.use(express.static(path.join(dir_name, "public"), { maxAge: "1d" }));
+// Our own JS/CSS change with every release, so the browser must revalidate them
+// on each load (a cheap 304 when unchanged) instead of serving a day-old copy --
+// a page that calls a function added to a cached public/js file otherwise breaks
+// (its table never draws) until a hard refresh. Images/fonts keep the 1-day cache.
+app.use(
+  express.static(path.join(dir_name, "public"), {
+    maxAge: "1d",
+    setHeaders(res, filePath) {
+      if (/\.(js|css)$/i.test(filePath)) res.setHeader("Cache-Control", "no-cache");
+    },
+  }),
+);
 app.use("/bootstrap", express.static(dir_name + "/node_modules/bootstrap/dist", { maxAge: "1d" }));
 
 // Per-request nonce + HTML post-processing middleware to inject nonce on inline scripts
@@ -396,7 +407,7 @@ app.get("/company/pwa-icon/:size.png", async (req, res) => {
    CSRF token and per-user data); offline shows a small notice instead. Bump
    SW_VERSION to drop old caches. */
 const SW_SOURCE = `
-const SW_VERSION = "v5";
+const SW_VERSION = "v6";
 const STATIC_CACHE = "static-" + SW_VERSION;
 const STATIC_RE = /^\\/(css|js|assets|bootstrap|company\\/pwa-icon)\\//;
 self.addEventListener("install", (e) => {
@@ -429,6 +440,20 @@ self.addEventListener("fetch", (e) => {
     return;
   }
   if (STATIC_RE.test(url.pathname)) {
+    // Our JS/CSS: network first, cache only as the offline fallback. Serving the
+    // cached copy first (as below) hands a page the previous release's script and
+    // the table breaks until a second load.
+    if (/\\.(js|css)$/i.test(url.pathname)) {
+      e.respondWith(
+        fetch(req)
+          .then((res) => {
+            if (res.ok) { const copy = res.clone(); caches.open(STATIC_CACHE).then((c) => c.put(req, copy)); }
+            return res;
+          })
+          .catch(() => caches.match(req))
+      );
+      return;
+    }
     e.respondWith(
       caches.open(STATIC_CACHE).then((cache) =>
         cache.match(req).then((hit) => {

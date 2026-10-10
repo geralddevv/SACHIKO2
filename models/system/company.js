@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 import { mediaAssetSchema } from "./mediaAsset.js";
 
 // Company master -- the single registration record describing the company
@@ -137,6 +138,7 @@ const companySchema = new mongoose.Schema(
       ifsc: { type: String, trim: true, uppercase: true, default: "" },
       branch: { type: String, trim: true, uppercase: true, default: "" },
     },
+    ...verificationFields,
   },
   { timestamps: true },
 );

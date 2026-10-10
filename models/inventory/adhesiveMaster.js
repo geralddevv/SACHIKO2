@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 // Adhesive master -- a reusable catalog entry for an adhesive spec (as
 // opposed to models/inventory/adhesiveStock.js, which is a physical reel of
@@ -84,6 +85,7 @@ const adhesiveMasterSchema = new mongoose.Schema(
       sparse: true,
       trim: true,
     },
+    ...verificationFields,
   },
   { timestamps: true },
 );

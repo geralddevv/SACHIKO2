@@ -1,4 +1,5 @@
 import express from "express";
+import { verificationUpdate } from "../../utils/verification.js";
 import crypto from "crypto";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
 import AdhesiveStock from "../../models/inventory/adhesiveStock.js";
@@ -194,7 +195,7 @@ router.post("/form/adhesive", requireAuth, requireAdhesiveMaster, createLimiter,
     }
 
     const skuId = await generateId("adhesiveMasterSkuId", "ADH");
-    await AdhesiveMaster.create({ ...payload, skuId, adhesiveSignature });
+    await AdhesiveMaster.create({ ...payload, skuId, adhesiveSignature, ...verificationUpdate(req).set });
 
     res.locals.auditDescription = `Created adhesive master "${skuId}" (${payload.vendorSkuCode})`;
     req.flash("notification", "Adhesive master created successfully!");
@@ -223,7 +224,12 @@ router.put("/api/adhesive/:id", requireAuth, requireAdhesiveMaster, updateLimite
       return res.status(404).json({ success: false, message: "Adhesive master not found." });
     }
 
-    const updated = await AdhesiveMaster.findByIdAndUpdate(req.params.id, { ...payload, adhesiveSignature }, { new: true, runValidators: true });
+    const vf = verificationUpdate(req, before);
+    const updated = await AdhesiveMaster.findByIdAndUpdate(
+      req.params.id,
+      { $set: { ...payload, adhesiveSignature, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) },
+      { new: true, runValidators: true },
+    );
 
     const { match, update } = cascadeStockUpdate(before, payload);
     let stockUpdated = 0;

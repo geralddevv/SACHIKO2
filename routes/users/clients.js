@@ -4,6 +4,9 @@ import Client from "../../models/users/client.js";
 import Employee from "../../models/hr/employee_model.js";
 import Username from "../../models/users/username.js";
 import TapeSalesOrder from "../../models/inventory/TapeSalesOrder.js";
+import { editLocationRows } from "../../utils/userLocations.js";
+import { getNextClientIdPreview } from "../../utils/clientId.js";
+import { verificationUpdate } from "../../utils/verification.js";
 import { escapeRegex } from "../../utils/security.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -84,7 +87,7 @@ function purchaseCountPipeline() {
 /* ================= CLIENTS VIEW ================= */
 router.get("/view", async (req, res) => {
   try {
-    const [clients, userCounts, tapeCounts] = await Promise.all([
+    const [clients, userCounts, tapeCounts, employees, previewClientId] = await Promise.all([
       // Every client. This listing was temporarily pinned to one name
       // ("FAIRTECH SYSTEMS") while the other clients were archived out of the
       // app by scripts/move-non-fairtech-clients-temp.js. That archive is
@@ -98,6 +101,9 @@ router.get("/view", async (req, res) => {
           clientId: 1,
           clientName: 1,
           clientType: 1,
+          verified: 1,
+          verifiedBy: 1,
+          verifiedAt: 1,
           hoLocation: 1,
           accountHead: 1,
           clientGst: 1,
@@ -114,6 +120,9 @@ router.get("/view", async (req, res) => {
         .lean(),
       Username.aggregate([{ $group: { _id: "$clientId", count: { $sum: 1 } } }]),
       TapeSalesOrder.aggregate(purchaseCountPipeline()),
+      // For the New Client dialog (views/users/_clientDialog.ejs).
+      Employee.find({}, "empName").sort({ empName: 1 }).lean(),
+      getNextClientIdPreview(),
     ]);
 
     const userCountByClientId = new Map(userCounts.map((entry) => [String(entry._id || ""), Number(entry.count || 0)]));
@@ -134,6 +143,9 @@ router.get("/view", async (req, res) => {
     res.render("users/clientsView.ejs", {
       title: "Client View",
       jsonData: clients,
+      clients: clients.map((c) => c.clientName),
+      employees,
+      previewClientId,
       CSS: "tableDisp.css",
       JS: false,
       notification: req.flash("notification"),
@@ -215,7 +227,7 @@ router.get("/edit/:id", async (req, res) => {
 
     res.render("users/clientEditForm.ejs", {
       title: "Edit Client",
-      client,
+      clientRec: client,
       employees,
       JS: false,
       CSS: "tabOpt.css",
@@ -231,7 +243,7 @@ router.get("/edit/:id", async (req, res) => {
 /* ================= UPDATE CLIENT ================= */
 router.post("/edit/:id", requireAuth, updateLimiter, async (req, res) => {
   try {
-    const currentClient = await Client.findById(req.params.id).select("clientId").lean();
+    const currentClient = await Client.findById(req.params.id).select("clientId verified verifiedBy").lean();
 
     if (!currentClient) {
       return res.status(404).json({
@@ -256,14 +268,19 @@ router.post("/edit/:id", requireAuth, updateLimiter, async (req, res) => {
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
     const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
 
-    if (clientGst && !gstRegex.test(clientGst)) {
-      return res.status(400).json({ success: false, message: "Invalid GST number format" });
-    }
-    if (clientPan && !panRegex.test(clientPan)) {
-      return res.status(400).json({ success: false, message: "Invalid PAN number format" });
-    }
-    if (clientGst && clientPan && clientGst.substring(2, 12) !== clientPan) {
-      return res.status(400).json({ success: false, message: "PAN does not match GST number" });
+    // Clients saved with the dialog's "Unregistered" box carry this sentinel
+    // instead of a real GST/PAN; keep them editable.
+    const isUnregistered = clientGst === "UNREGISTERED" && clientPan === "UNREGISTERED";
+    if (!isUnregistered) {
+      if (clientGst && !gstRegex.test(clientGst)) {
+        return res.status(400).json({ success: false, message: "Invalid GST number format" });
+      }
+      if (clientPan && !panRegex.test(clientPan)) {
+        return res.status(400).json({ success: false, message: "Invalid PAN number format" });
+      }
+      if (clientGst && clientPan && clientGst.substring(2, 12) !== clientPan) {
+        return res.status(400).json({ success: false, message: "PAN does not match GST number" });
+      }
     }
 
     const clientSignature = hashSignature(
@@ -306,9 +323,12 @@ router.post("/edit/:id", requireAuth, updateLimiter, async (req, res) => {
       });
     }
 
+    const vf = verificationUpdate(req, currentClient);
     await Client.findByIdAndUpdate(
       req.params.id,
       {
+        $set: {
+        ...vf.set,
         clientName,
         clientType,
         clientStatus,
@@ -321,6 +341,8 @@ router.post("/edit/:id", requireAuth, updateLimiter, async (req, res) => {
         vendorCode,
         verticals,
         clientSignature,
+        },
+        ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}),
       },
       {
         runValidators: true,
@@ -368,7 +390,7 @@ router.get("/profile/:id", async (req, res) => {
 
     res.render("users/clientProfile.ejs", {
       title: "Client Profile",
-      client,
+      clientRec: client,
       CSS: false,
       JS: false,
       notification: req.flash("notification"),
@@ -403,6 +425,9 @@ router.get("/details/:userId", async (req, res) => {
       hoLocation: user.hoLocation,
       accountHead: user.accountHead,
       userName: user.userName,
+      verified: !!user.verified,
+      verifiedBy: user.verifiedBy,
+      verifiedAt: user.verifiedAt,
       userContact: user.userContact,
       userEmail: user.userEmail,
       userLocation: user.userLocation,
@@ -428,6 +453,7 @@ router.get("/details/:userId", async (req, res) => {
       CSS: false,
       JS: false,
       userData,
+      initialLocationDetails: editLocationRows(user),
       labels: user.label || [],
       labelStocks: user.labelStock || [],
       stats,

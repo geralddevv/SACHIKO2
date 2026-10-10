@@ -332,15 +332,15 @@
   <div class="profile-header-card">
     <div class="header-top">
       <div class="header-info">
-        <h1><%= client.clientName %></h1>
+        <h1><%= clientRec.clientName %></h1>
         <div class="header-badges">
-          <span class="badge badge-type"><%= client.clientType %></span>
-          <span class="badge badge-status <%= client.clientStatus !== 'ACTIVE' ? 'status-inactive' : '' %>">
-            <%= client.clientStatus %>
+          <span class="badge badge-type"><%= clientRec.clientType %></span>
+          <span class="badge badge-status <%= clientRec.clientStatus !== 'ACTIVE' ? 'status-inactive' : '' %>">
+            <%= clientRec.clientStatus %>
           </span>
         </div>
       </div>
-      <a href="/app/client/edit/<%= client._id %>" class="edit-btn">
+      <a href="/app/client/edit/<%= clientRec._id %>" class="edit-btn">
         <i class="fa-solid fa-pen"></i> Edit Client Master
       </a>
     </div>
@@ -348,31 +348,31 @@
     <div class="info-section">
       <div class="info-item">
         <span class="info-label">Client ID</span>
-        <span class="info-value"><%= client.clientId %></span>
+        <span class="info-value"><%= clientRec.clientId %></span>
       </div>
       <div class="info-item">
         <span class="info-label">H/O Location</span>
-        <span class="info-value"><%= client.hoLocation %></span>
+        <span class="info-value"><%= clientRec.hoLocation %></span>
       </div>
       <div class="info-item">
         <span class="info-label">Account Head</span>
-        <span class="info-value"><%= client.accountHead %></span>
+        <span class="info-value"><%= clientRec.accountHead %></span>
       </div>
       <div class="info-item">
         <span class="info-label">GST Number</span>
-        <span class="info-value"><%= client.clientGst || '-' %></span>
+        <span class="info-value"><%= clientRec.clientGst || '-' %></span>
       </div>
       <div class="info-item">
         <span class="info-label">PAN Number</span>
-        <span class="info-value"><%= client.clientPan || '-' %></span>
+        <span class="info-value"><%= clientRec.clientPan || '-' %></span>
       </div>
       <div class="info-item">
         <span class="info-label">MSME ID</span>
-        <span class="info-value"><%= client.clientMsme || '-' %></span>
+        <span class="info-value"><%= clientRec.clientMsme || '-' %></span>
       </div>
       <div class="info-item">
         <span class="info-label">Gumasta ID</span>
-        <span class="info-value"><%= client.clientGumasta || '-' %></span>
+        <span class="info-value"><%= clientRec.clientGumasta || '-' %></span>
       </div>
     </div>
   </div>
@@ -381,13 +381,13 @@
   <div class="section-card">
     <div class="section-header">
       <h2>Associated Users / Locations</h2>
-      <button class="header-action-btn" onclick="window.location.href='/app/form/client?tab=user&clientName=<%= encodeURIComponent(client.clientName) %>'" style="background: var(--primary); color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
+      <button class="header-action-btn" onclick="window.location.href='/app/form/client?tab=user&clientName=<%= encodeURIComponent(clientRec.clientName) %>'" style="background: var(--primary); color: white; border: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">
         <i class="fa-solid fa-plus"></i> Add User
       </button>
     </div>
 
     <div class="table-container">
-      <% if (client.users && client.users.length > 0) { %>
+      <% if (clientRec.users && clientRec.users.length > 0) { %>
         <table class="user-list-table">
           <thead>
             <tr>
@@ -400,7 +400,7 @@
             </tr>
           </thead>
           <tbody>
-            <% client.users.forEach(user => {
+            <% clientRec.users.forEach(user => {
               const userLocs = (user.locationDetails && user.locationDetails.length > 0)
                 ? user.locationDetails
                 : [{ userLocation: user.userLocation }];

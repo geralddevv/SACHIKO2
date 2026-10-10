@@ -1,4 +1,5 @@
 import express from "express";
+import { verificationUpdate } from "../../utils/verification.js";
 import crypto from "crypto";
 import CoreMaster from "../../models/inventory/coreMaster.js";
 import CoreStock from "../../models/inventory/coreStock.js";
@@ -172,7 +173,7 @@ router.post("/form/core", requireAuth, requireCoreMaster, createLimiter, async (
     }
 
     const skuId = await generateId("coreMasterSkuId", "COR");
-    await CoreMaster.create({ ...payload, skuId, coreSignature });
+    await CoreMaster.create({ ...payload, skuId, coreSignature, ...verificationUpdate(req).set });
 
     res.locals.auditDescription = `Created core master "${skuId}" (${payload.vendorName})`;
     req.flash("notification", "Core master created successfully!");
@@ -201,7 +202,12 @@ router.put("/api/core/:id", requireAuth, requireCoreMaster, updateLimiter, async
       return res.status(404).json({ success: false, message: "Core master not found." });
     }
 
-    const updated = await CoreMaster.findByIdAndUpdate(req.params.id, { ...payload, coreSignature }, { new: true, runValidators: true });
+    const vf = verificationUpdate(req, before);
+    const updated = await CoreMaster.findByIdAndUpdate(
+      req.params.id,
+      { $set: { ...payload, coreSignature, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) },
+      { new: true, runValidators: true },
+    );
 
     const { match, update } = cascadeStockUpdate(before, payload);
     let stockUpdated = 0;

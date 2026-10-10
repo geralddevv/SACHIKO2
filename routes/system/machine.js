@@ -1,4 +1,5 @@
 import express from "express";
+import { verificationUpdate } from "../../utils/verification.js";
 import mongoose from "mongoose";
 import { randomUUID } from "crypto";
 import Machine from "../../models/system/machine.js";
@@ -165,7 +166,7 @@ router.post("/form/machine", requireAuth, requireMachineMaster, createLimiter, a
       return res.status(400).json({ success: false, message: "Machine already exists at this location" });
     }
 
-    await Machine.create({ machineName, machineWidth, location: locationId, machineType, ...(speed.value != null && { speedMpm: speed.value }) });
+    await Machine.create({ machineName, machineWidth, location: locationId, machineType, ...(speed.value != null && { speedMpm: speed.value }), ...verificationUpdate(req).set });
     res.locals.auditDescription = `Created machine "${machineName}" at "${locationDoc.locationName}"`;
     req.flash("notification", "Machine created successfully!");
     res.json({ success: true, redirect: "/app/form/machine" });
@@ -218,11 +219,14 @@ router.put("/api/machines/:id", requireAuth, requireMachineMaster, updateLimiter
 
     // A blank speed clears it (back to the default), so it is $unset rather
     // than written as null.
+    const existing = await Machine.findById(req.params.id).select("verified verifiedBy").lean();
+    const vf = verificationUpdate(req, existing);
+    const baseSet = { machineName, machineWidth, location: locationId, machineType, ...vf.set };
     const updated = await Machine.findByIdAndUpdate(
       req.params.id,
       speed.value == null
-        ? { $set: { machineName, machineWidth, location: locationId, machineType }, $unset: { speedMpm: 1 } }
-        : { machineName, machineWidth, location: locationId, machineType, speedMpm: speed.value },
+        ? { $set: baseSet, $unset: { speedMpm: 1, ...vf.unset } }
+        : { $set: { ...baseSet, speedMpm: speed.value }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) },
       { new: true, runValidators: true },
     );
 
@@ -3011,34 +3015,43 @@ router.post("/machine/jobcard/form", requireAuth, requireMachineFloor, createLim
   }
 });
 
-router.get("/machine/jobcard/view", requireMachineFloor, async (req, res) => {
-  const jsonData = await MachineJobCard.find()
-    .populate({ path: "pendingProductionId", select: "deckleSize materialSwapLog" })
-    .sort({ createdAt: -1 })
-    .lean();
+// ---------------------------------- Deckle Logs ----------------------------------
+// The page loads nothing up front: /machine/jobcard/view is just the shell,
+// /machine/jobcard/days returns one summary line per day (a single aggregation,
+// a few hundred bytes), and a day's deckles are fetched from
+// /machine/jobcard/day/:yyyy-mm-dd only when that day is opened. A shop with
+// years of cards therefore costs one small query per page view instead of
+// reading, populating and decorating every card each time.
+//
+// "Day" = the day the Deckle was made (its Stop punch, MaterialStock.createdAt),
+// in the viewer's timezone (the page sends its offset); a log row with no Deckle
+// falls back to the card's own date.
 
-  // ---- Per-deckle reel breakdown for the "Deckles Produced" dialog, in the
-  //      same shape as /sachiko/semifinishedstock's view dialog (Layer / Reel
-  //      ID / Spec / Kg Used / Status / Remark). Spec is read off the raw
-  //      reel's own Stock row (kept at qty 0 after it is consumed); Kg Used
-  //      comes from this Job Card's end-of-job *Usage arrays, falling back to
-  //      the order's materialSwapLog for a reel swapped out mid-run, then
-  //      pro-rated across every Deckle row on the card that shared the reel
-  //      (same reasoning as semiFinishedStock.js); Remark is the swap reason. ----
-  const jcNorm = (v) => String(v || "").trim().toUpperCase();
-  const jcReelMatches = (entry, sid, rid) =>
-    (sid && String(entry.stockId) === sid) || (rid && jcNorm(entry.rollId) === rid);
-  const jcCompact = (parts) => parts.filter((p) => p != null && p !== "").join(" · ");
-  const POOL_ROLL_FIELD = { facestock: "fsRollId", adhesive: "adRollId", release: "rlRollId" };
-  const reelsOfRow = (row) => {
-    const list = Array.isArray(row.materialsUsed) && row.materialsUsed.length
-      ? row.materialsUsed.map((m) => ({ pool: m.pool, stockId: m.stockId, rollId: m.rollId }))
-      : Object.entries(POOL_ROLL_FIELD)
-          .map(([pool, f]) => (row[f] ? { pool, rollId: row[f] } : null))
-          .filter(Boolean);
-    return list.filter((r) => r && r.rollId);
-  };
+// ---- Per-deckle reel breakdown for the "Deckle" dialog, in the
+//      same shape as /sachiko/semifinishedstock's view dialog (Layer / Reel
+//      ID / Spec / Kg Used / Status / Remark). Spec is read off the raw
+//      reel's own Stock row (kept at qty 0 after it is consumed); Kg Used
+//      comes from this Job Card's end-of-job *Usage arrays, falling back to
+//      the order's materialSwapLog for a reel swapped out mid-run, then
+//      pro-rated across every Deckle row on the card that shared the reel
+//      (same reasoning as semiFinishedStock.js); Remark is the swap reason. ----
+const jcNorm = (v) => String(v || "").trim().toUpperCase();
+const jcReelMatches = (entry, sid, rid) =>
+  (sid && String(entry.stockId) === sid) || (rid && jcNorm(entry.rollId) === rid);
+const jcCompact = (parts) => parts.filter((p) => p != null && p !== "").join(" · ");
+const POOL_ROLL_FIELD = { facestock: "fsRollId", adhesive: "adRollId", release: "rlRollId" };
+const reelsOfRow = (row) => {
+  const list = Array.isArray(row.materialsUsed) && row.materialsUsed.length
+    ? row.materialsUsed.map((m) => ({ pool: m.pool, stockId: m.stockId, rollId: m.rollId }))
+    : Object.entries(POOL_ROLL_FIELD)
+        .map(([pool, f]) => (row[f] ? { pool, rollId: row[f] } : null))
+        .filter(Boolean);
+  return list.filter((r) => r && r.rollId);
+};
 
+// Adds reelDetails / madeAt / startTime / endTime to every Production Log row
+// of the given (lean, populated) job cards.
+async function decorateJobCards(jsonData) {
   const wantByPool = { facestock: new Set(), adhesive: new Set(), release: new Set() };
   for (const jc of jsonData) {
     for (const row of jc.productionLog || []) {
@@ -3103,13 +3116,164 @@ router.get("/machine/jobcard/view", requireMachineFloor, async (req, res) => {
     }
   }
 
+  // ---- When each Deckle was made. The Deckle (MaterialStock) is stamped the
+  //      moment the operator punched Stop, so its createdAt is the date + time
+  //      the Deckle Logs page shows. Start / End are the punches the card
+  //      recorded ("1:23 PM"), falling back to the ones kept on the Deckle
+  //      itself while the card is still unsaved. ----
+  const deckleKeys = new Set();
+  for (const jc of jsonData) {
+    for (const row of jc.productionLog || []) {
+      if (row?.deckleId) deckleKeys.add(jcNorm(row.deckleId));
+    }
+  }
+  const madeDeckles = deckleKeys.size
+    ? await MaterialStock.find({ rollId: { $in: [...deckleKeys] } }).select("rollId createdAt productionTime").lean()
+    : [];
+  const madeByDeckle = new Map(madeDeckles.map((d) => [jcNorm(d.rollId), d]));
+  for (const jc of jsonData) {
+    for (const row of jc.productionLog || []) {
+      const made = row?.deckleId ? madeByDeckle.get(jcNorm(row.deckleId)) : null;
+      row.madeAt = made?.createdAt || null;
+      row.startTime = row.time?.startTime || made?.productionTime?.startTime || "";
+      row.endTime = row.time?.endTime || made?.productionTime?.endTime || "";
+    }
+  }
+  return jsonData;
+}
+
+const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Browser offset (Date#getTimezoneOffset, minutes behind UTC) -> "+05:30" for
+// Mongo's $dateToString, and the same offset in ms for building a day's range.
+function readTzOffset(req) {
+  const raw = Number(req.query.tz);
+  const minutes = Number.isFinite(raw) && Math.abs(raw) <= 14 * 60 ? Math.round(raw) : 0;
+  const east = -minutes; // getTimezoneOffset is positive WEST of UTC
+  const sign = east < 0 ? "-" : "+";
+  const abs = Math.abs(east);
+  const pad = (n) => String(n).padStart(2, "0");
+  return { minutes, east, label: `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}` };
+}
+
+// Page shell only -- no data.
+router.get("/machine/jobcard/view", requireMachineFloor, (req, res) => {
   res.render("inventory/masters/jobCardView.ejs", {
     title: "Deckle Logs",
     CSS: "tableDisp.css",
     JS: false,
-    jsonData,
     notification: req.flash("notification"),
   });
+});
+
+// One line per day: deckles, production entries, metres. Newest day first.
+router.get("/machine/jobcard/days", requireMachineFloor, async (req, res) => {
+  try {
+    const tz = readTzOffset(req);
+    const rows = await MachineJobCard.aggregate([
+      { $unwind: "$productionLog" },
+      { $match: { $or: [{ "productionLog.deckleId": { $nin: [null, ""] } }, { "productionLog.meters": { $gt: 0 } }] } },
+      { $addFields: { dk: { $toUpper: { $trim: { input: { $ifNull: ["$productionLog.deckleId", ""] } } } } } },
+      {
+        $lookup: {
+          from: MaterialStock.collection.name,
+          localField: "dk",
+          foreignField: "rollId",
+          pipeline: [{ $project: { createdAt: 1 } }],
+          as: "mk",
+        },
+      },
+      { $addFields: { stamp: { $ifNull: [{ $arrayElemAt: ["$mk.createdAt", 0] }, "$date"] } } },
+      {
+        $group: {
+          _id: { $cond: [{ $ifNull: ["$stamp", false] }, { $dateToString: { format: "%Y-%m-%d", date: "$stamp", timezone: tz.label } }, null] },
+          deckles: { $sum: 1 },
+          cards: { $addToSet: "$_id" },
+          meters: { $sum: { $ifNull: ["$productionLog.meters", 0] } },
+        },
+      },
+      { $project: { _id: 0, key: "$_id", deckles: 1, cards: { $size: "$cards" }, meters: 1 } },
+      { $sort: { key: -1 } },
+    ]);
+    // Undated rows (key null) sort last for the page.
+    rows.sort((a, b) => (a.key === b.key ? 0 : !a.key ? 1 : !b.key ? -1 : a.key < b.key ? 1 : -1));
+    res.json({ success: true, days: rows });
+  } catch (err) {
+    console.error("DECKLE LOGS DAYS ERROR:", err);
+    res.status(500).json({ success: false, message: "Could not load the deckle logs." });
+  }
+});
+
+// The deckles of ONE day, ready for the table (and each one's reel breakdown).
+router.get("/machine/jobcard/day/:key", requireMachineFloor, async (req, res) => {
+  try {
+    const key = String(req.params.key || "");
+    const undated = key === "none";
+    if (!undated && !DAY_KEY_RE.test(key)) return res.status(400).json({ success: false, message: "Invalid day." });
+    const tz = readTzOffset(req);
+
+    let fromMs = 0;
+    let toMs = 0;
+    if (!undated) {
+      const [y, m, d] = key.split("-").map(Number);
+      fromMs = Date.UTC(y, m - 1, d) - tz.east * 60000; // local midnight, as a UTC instant
+      toMs = fromMs + 24 * 60 * 60 * 1000;
+    }
+    const inDay = (ms) => (undated ? !ms : ms != null && ms >= fromMs && ms < toMs);
+
+    // Cards that can hold a deckle of this day: those whose Deckle was made in
+    // range, plus those whose own date is in range (rows with no Deckle).
+    let cards = [];
+    if (undated) {
+      cards = await MachineJobCard.find({ $or: [{ date: null }, { date: { $exists: false } }] })
+        .populate({ path: "pendingProductionId", select: "deckleSize materialSwapLog" }).lean();
+    } else {
+      const madeIds = (await MaterialStock.find({ createdAt: { $gte: new Date(fromMs), $lt: new Date(toMs) } })
+        .select("rollId").lean()).map((d) => d.rollId);
+      cards = await MachineJobCard.find({
+        $or: [
+          { "productionLog.deckleId": { $in: madeIds } },
+          { date: { $gte: new Date(fromMs), $lt: new Date(toMs) } },
+        ],
+      }).populate({ path: "pendingProductionId", select: "deckleSize materialSwapLog" }).lean();
+    }
+    await decorateJobCards(cards);
+
+    const rows = [];
+    for (const jc of cards) {
+      (jc.productionLog || []).forEach((r, idx) => {
+        if (!r || !(r.deckleId || Number(r.meters) > 0)) return;
+        const stampMs = r.madeAt ? new Date(r.madeAt).getTime() : (jc.date ? new Date(jc.date).getTime() : null);
+        if (!inDay(stampMs)) return;
+        const reelIds = [...new Set((r.reelDetails || []).map((d) => d.rollId)
+          .concat([r.fsRollId, r.adRollId, r.rlRollId, r.rollId])
+          .map((id) => String(id || "").trim()).filter(Boolean).map((id) => id.toUpperCase()))];
+        rows.push({
+          deckleId: r.deckleId || "",
+          madeAt: r.madeAt || null,
+          stamp: stampMs,
+          jobCardId: jc.jobCardId,
+          logIndex: idx,
+          machineName: jc.machineName || "",
+          productCode: r.productCode || jc.productCode || "",
+          lotNo: jc.lotNo || "",
+          deckleSize: jc.pendingProductionId?.deckleSize ?? null,
+          meters: r.meters ?? null,
+          startTime: r.startTime || "",
+          endTime: r.endTime || "",
+          rollIdUsed: reelIds.join(", "),
+          operatorName: jc.operatorName || "",
+          helperName: jc.helperName || "",
+          detail: { deckleId: r.deckleId || "", productCode: r.productCode || jc.productCode || "", meters: r.meters ?? null, face: r.face || null, release: r.release || null, reelDetails: r.reelDetails || [] },
+        });
+      });
+    }
+    rows.sort((a, b) => (b.stamp || 0) - (a.stamp || 0));
+    res.json({ success: true, rows });
+  } catch (err) {
+    console.error("DECKLE LOGS DAY ERROR:", err);
+    res.status(500).json({ success: false, message: "Could not load this day." });
+  }
 });
 
 export default router;

@@ -5,6 +5,7 @@ import SachikoLabelStock from "../../models/sachiko/sachikoLabelStock.js";
 import AdhesiveMaster from "../../models/inventory/adhesiveMaster.js";
 import LabelStockAdhesiveBinding from "../../models/sachiko/labelStockAdhesiveBinding.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { verificationUpdate } from "../../utils/verification.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 
 const router = express.Router();
@@ -134,7 +135,7 @@ router.post("/form/label-stock-adhesive-binding", requireAuth, createLimiter, as
       return res.redirect(PAGE);
     }
 
-    const created = await LabelStockAdhesiveBinding.create(payload);
+    const created = await LabelStockAdhesiveBinding.create({ ...payload, ...verificationUpdate(req).set });
     res.locals.auditDescription = `Bound adhesive ${payload.adhesive} to label stock ${payload.labelStock}`;
     req.flash("notification", `Adhesive bound successfully (${created._id}).`);
     res.redirect(PAGE);
@@ -172,7 +173,13 @@ router.post("/label-stock-adhesive-binding/edit/:id", requireAuth, updateLimiter
       return res.redirect(PAGE);
     }
 
-    const updated = await LabelStockAdhesiveBinding.findByIdAndUpdate(id, { $set: payload }, { new: true });
+    const existing = await LabelStockAdhesiveBinding.findById(id).select("verified verifiedBy").lean();
+    const vf = verificationUpdate(req, existing);
+    const updated = await LabelStockAdhesiveBinding.findByIdAndUpdate(
+      id,
+      { $set: { ...payload, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) },
+      { new: true },
+    );
     if (!updated) {
       req.flash("notification", "Binding not found.");
       return res.redirect(PAGE);

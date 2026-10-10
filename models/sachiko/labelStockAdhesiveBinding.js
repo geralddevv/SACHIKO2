@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 // Binds a Label Stock SKU to the Adhesive Master(s) it is allowed to be made
 // with.
@@ -19,6 +20,7 @@ const labelStockAdhesiveBindingSchema = new mongoose.Schema(
     // way as LabelStockBinding's own bindingSignature (see
     // routes/sachiko/labelStockAdhesiveBinding.js).
     bindingSignature: { type: String, unique: true, sparse: true, trim: true },
+    ...verificationFields,
   },
   { timestamps: true },
 );

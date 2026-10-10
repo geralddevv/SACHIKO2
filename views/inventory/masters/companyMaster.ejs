@@ -287,7 +287,7 @@
       <div class="company-card-head">
         <div class="head-icon"><i class="fa-solid fa-building"></i></div>
         <div class="head-text">
-          <h2 id="cardTitle"><%= company ? "Company Details" : "Register Company" %></h2>
+          <h2 id="cardTitle" style="display:flex;align-items:center;gap:8px;"><%= company ? "Company Details" : "Register Company" %><span id="coVerifiedBadge"></span></h2>
           <p id="cardSubtitle">
             <%= company ? "Use Edit to change these details." : "Fill in the details below to register your company." %>
           </p>
@@ -479,6 +479,10 @@
 
       <div class="form-footer" id="formActions" style="<%= company ? 'display: none;' : '' %>">
         <span class="hint"><span class="req" style="color: #e8483f">*</span> Required fields</span>
+        <label for="coVerified" style="display:flex;align-items:center;gap:8px;margin:0 6px 0 0;font-size:13.5px;font-weight:600;color:#0f172a;cursor:pointer;">
+          <input type="checkbox" id="coVerified" style="width:16px;height:16px;cursor:pointer;" <%= company && company.verified ? "checked" : "" %> />
+          Verified &mdash; data checked and approved
+        </label>
         <button class="co-btn" type="button" id="cancelBtn" onclick="cancelEdit()"
           style="<%= company ? '' : 'display: none;' %>">Cancel</button>
         <button class="co-btn primary" type="button" id="saveBtn" onclick="submitForm()">
@@ -502,6 +506,7 @@
   </div>
 </div>
 
+<script src="/js/verification.js"></script>
 <script id="company-data" type="application/json"><%- safeJson(company || null) %></script>
 <script>
   // safeJson() serialises null as "{}" (utils/security.js) and {} is truthy,
@@ -528,6 +533,9 @@
   };
 
   const el = (id) => document.getElementById(id);
+
+  // Verified badge beside the card title (hover for who approved it and when).
+  el("coVerifiedBadge").innerHTML = verifiedBadgeFor(company, 22);
 
   function setDisabled(disabled) {
     ALL_FIELDS.forEach((f) => { el(f).disabled = disabled; });
@@ -685,6 +693,7 @@
     FIELDS.forEach((f) => { el(f).value = (company && company[f]) || ""; });
     const bank = (company && company.bankDetails) || {};
     BANK_FIELDS.forEach((f) => { el(f).value = bank[f] || ""; });
+    el("coVerified").checked = !!(company && company.verified);
     setDisabled(true);
     hideError();
     el("formActions").style.display = "none";
@@ -696,6 +705,7 @@
     FIELDS.forEach((f) => { payload[f] = el(f).value.trim(); });
     payload.bankDetails = {};
     BANK_FIELDS.forEach((f) => { payload.bankDetails[f] = el(f).value.trim(); });
+    payload.verified = el("coVerified").checked;
     return payload;
   }
 

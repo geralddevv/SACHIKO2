@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 const machineSchema = new mongoose.Schema(
   {
@@ -35,6 +36,7 @@ const machineSchema = new mongoose.Schema(
       type: Number,
       min: 0,
     },
+    ...verificationFields,
   },
   { timestamps: true },
 );

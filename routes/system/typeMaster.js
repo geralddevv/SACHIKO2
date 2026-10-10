@@ -1,4 +1,5 @@
 import express from "express";
+import { verificationUpdate } from "../../utils/verification.js";
 import Type from "../../models/system/type.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -26,7 +27,7 @@ router.post("/form/type", requireAuth, requireTypeMaster, createLimiter, async (
     const duplicate = await Type.exists({ typeName });
     if (duplicate) return res.status(400).json({ success: false, message: "This type already exists." });
 
-    await Type.create({ typeName });
+    await Type.create({ typeName, ...verificationUpdate(req).set });
 
     res.locals.auditDescription = `Created type "${typeName}"`;
     req.flash("notification", "Type created successfully!");
@@ -46,7 +47,10 @@ router.put("/api/type/:id", requireAuth, requireTypeMaster, updateLimiter, async
     const duplicate = await Type.exists({ typeName, _id: { $ne: req.params.id } });
     if (duplicate) return res.status(400).json({ success: false, message: "This type already exists." });
 
-    const updated = await Type.findByIdAndUpdate(req.params.id, { typeName }, { new: true, runValidators: true });
+    const existing = await Type.findById(req.params.id).select("verified verifiedBy").lean();
+    const vf = verificationUpdate(req, existing);
+
+    const updated = await Type.findByIdAndUpdate(req.params.id, { $set: { typeName, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) }, { new: true, runValidators: true });
     if (!updated) return res.status(404).json({ success: false, message: "Type not found." });
 
     res.locals.auditDescription = `Updated type "${updated.typeName}"`;

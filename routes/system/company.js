@@ -1,4 +1,5 @@
 import express from "express";
+import { verificationUpdate } from "../../utils/verification.js";
 import Company from "../../models/system/company.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -112,7 +113,7 @@ router.post("/form/company", requireAuth, requireCompanyMaster, createLimiter, a
       return res.status(400).json({ success: false, message: "A company is already registered. Edit it instead." });
     }
 
-    const created = await Company.create({ ...payload, singleton: "COMPANY" });
+    const created = await Company.create({ ...payload, singleton: "COMPANY", ...verificationUpdate(req).set });
 
     // Move the company onto its own database under a stable random name (one
     // copy, once). From here on the database name is fixed -- renaming the
@@ -153,7 +154,7 @@ router.put("/api/company/:id", requireAuth, requireCompanyMaster, updateLimiter,
     // every bookmark and open tab on it dies with a 404 the moment the name is
     // saved (see brandPrefix.js, which redirects a remembered prefix onto the
     // current one).
-    const before = await Company.findById(req.params.id).select("companyName slugHistory idPrefix").lean();
+    const before = await Company.findById(req.params.id).select("companyName slugHistory idPrefix verified verifiedBy").lean();
     // What ids are being minted with right now -- read before the save, since
     // that is what the ids already in the database carry.
     const beforePrefix = currentIdPrefix();
@@ -166,10 +167,12 @@ router.put("/api/company/:id", requireAuth, requireCompanyMaster, updateLimiter,
       payload.slugHistory = [...history.filter((x) => x !== oldSlug && x !== newSlug), oldSlug].slice(-5);
     }
 
-    const updated = await Company.findByIdAndUpdate(req.params.id, payload, {
-      new: true,
-      runValidators: true,
-    });
+    const vf = verificationUpdate(req, before);
+    const updated = await Company.findByIdAndUpdate(
+      req.params.id,
+      { $set: { ...payload, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) },
+      { new: true, runValidators: true },
+    );
     if (!updated) return res.status(404).json({ success: false, message: "Company not found." });
 
     // The company name drives only the URL slug + display name. The database is

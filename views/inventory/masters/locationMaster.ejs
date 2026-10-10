@@ -131,6 +131,13 @@
       />
       <div id="addLocationError" class="dialog-error"></div>
       <div class="dialog-actions">
+        <div style="display:flex;flex-direction:column;gap:2px;margin-right:auto;">
+          <label style="display:flex;align-items:center;gap:8px;margin:0;font-size:13.5px;font-weight:600;color:#0f172a;cursor:pointer;">
+            <input type="checkbox" id="addVerified" style="width:16px;height:16px;cursor:pointer;" />
+            Verified &mdash; data checked and approved
+          </label>
+          <span id="addVerifiedNote" style="display:none;margin-left:24px;font-size:12px;color:#64748b;"></span>
+        </div>
         <button class="logout-btn" type="button" onclick="closeAddDialog()">Cancel</button>
         <button class="logout-btn primary" type="button" id="addSubmitBtn" onclick="submitAdd()">Save Location</button>
       </div>
@@ -158,6 +165,13 @@
       />
       <div id="editLocationError" class="dialog-error"></div>
       <div class="dialog-actions">
+        <div style="display:flex;flex-direction:column;gap:2px;margin-right:auto;">
+          <label style="display:flex;align-items:center;gap:8px;margin:0;font-size:13.5px;font-weight:600;color:#0f172a;cursor:pointer;">
+            <input type="checkbox" id="editVerified" style="width:16px;height:16px;cursor:pointer;" />
+            Verified &mdash; data checked and approved
+          </label>
+          <span id="editVerifiedNote" style="display:none;margin-left:24px;font-size:12px;color:#64748b;"></span>
+        </div>
         <button class="logout-btn" type="button" onclick="closeEditDialog()">Cancel</button>
         <button class="logout-btn primary" type="button" id="editSubmitBtn" onclick="submitEdit()">Update Location</button>
       </div>
@@ -189,6 +203,7 @@
   </div>
 </div>
 
+<script src="/js/verification.js"></script>
 <!-- Tabulator JS -->
 <script src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script>
 
@@ -212,6 +227,7 @@
       {
         title: "Location Name",
         field: "locationName",
+        formatter: verifiedNameFormatter,
         headerFilter: "input",
         headerFilterPlaceholder: "Search",
         minWidth: 200,
@@ -301,6 +317,7 @@
 
   // ---- ADD ----
   function openAddDialog() {
+    setVerifiedDialogState("add", null);
     document.getElementById("addLocationInput").value = "";
     hideError("addLocationError");
     openModal("addDialog");
@@ -326,7 +343,7 @@
       const res = await fetch("/app/form/location", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locationName: name }),
+        body: JSON.stringify({ locationName: name, verified: document.getElementById("addVerified").checked }),
       });
       const data = await res.json();
       if (data.success) {
@@ -346,6 +363,7 @@
 
   function openEditDialog(id, name) {
     editId = id;
+    setVerifiedDialogState("edit", locationsData.find((r) => String(r._id) === String(id)));
     document.getElementById("editLocationInput").value = name;
     hideError("editLocationError");
     openModal("editDialog");
@@ -377,7 +395,7 @@
       const res = await fetch(`/app/api/locations/${editId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locationName: name }),
+        body: JSON.stringify({ locationName: name, verified: document.getElementById("editVerified").checked }),
       });
       const data = await res.json();
       if (data.success) {

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 // Core master -- a reusable catalog entry for a roll core spec (the tube a
 // reel is wound on). Lives under the Masters tab alongside Facestock/
@@ -74,6 +75,7 @@ const coreMasterSchema = new mongoose.Schema(
       sparse: true,
       trim: true,
     },
+    ...verificationFields,
   },
   { timestamps: true },
 );

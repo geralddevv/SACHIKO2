@@ -1,0 +1,1249 @@
+/* ============================================================================
+   Form dialogs (.so-dialog) -- the dialog half of the FAIRTECH form style
+   (FAIRTECH-ERP's formStyle.md), extracted from its salesOrderForm.css so a page
+   can use the dialogs without loading the whole Sales Order sheet.
+   Driven by public/js/soFormDialog.js. Tokens are scoped to the backdrop (not
+   :root) so loading this never restyles the rest of the page.
+   ========================================================================= */
+
+.so-dialog-backdrop {
+  --so-bg: #f4f6fa;
+  --so-surface: #ffffff;
+  --so-line: #969faf;
+  --so-line-soft: #a5acba;
+  --so-ink: #0f172a;
+  --so-ink-soft: #475569;
+  --so-muted: #2e3a4c;
+  --so-faint: #4e5b6f;
+  --so-brand: #044a78;
+  --so-brand-dark: #03365a;
+  --so-brand-soft: #eef4fa;
+  --so-ring: rgba(4, 74, 120, 0.13);
+  --so-danger: #e11d48;
+  --so-radius: 16px;
+  --so-radius-sm: 10px;
+  --so-field-h: 40px;
+  --so-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 26px -14px rgba(15, 23, 42, 0.16);
+
+  /* Fields carry their own weight rather than being hinted at. The form this
+     replaced drew every input in the brand blue (common.css: `.span-* input`
+     and `select`), so a hairline grey was a bigger change than the redesign
+     needed -- on a shopfloor monitor the boxes stopped being boxes. These
+     read as edges without going back to a page of blue rectangles. */
+  --so-field-border: var(--so-brand);
+  --so-field-border-hover: var(--so-brand-dark);
+  --so-placeholder: #2e3a4c;
+
+  /* Read-only stays plainly different from editable: no white ground, a
+     softer edge, and grey text. */
+  --so-field-ro-bg: #eaeff6;
+  --so-field-ro-border: #707d8f;
+  --so-field-ro-ink: #222d3d;
+}
+
+/* ── Choices.js, matched to the plain inputs ─────────────────────────────
+   Duplicated onto .so-dialog as well as .so-page: a dialog usually renders
+   outside the page wrapper (see the Dialogs section below), so a Choices.js
+   select used inside one — e.g. the New Color Label dialog's Client/User
+   pickers — needs the same paint without a .so-page ancestor to key off. */
+.so-page .choices,
+.so-dialog .choices {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.so-page .choices:last-child,
+.so-dialog .choices:last-child {
+  margin-bottom: 0;
+}
+
+.so-page .choices__inner,
+.so-dialog .choices__inner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--so-field-h) !important;
+  height: var(--so-field-h);
+  padding: 0 32px 0 12px !important;
+  background: var(--so-surface) !important;
+  border: 1.5px solid var(--so-field-border) !important;
+  border-radius: var(--so-radius-sm) !important;
+  box-shadow: 0 1px 1.5px rgba(15, 23, 42, 0.03);
+  font-size: 13.5px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.so-page .choices:hover .choices__inner,
+.so-dialog .choices:hover .choices__inner {
+  border-color: var(--so-field-border-hover) !important;
+}
+
+.so-page .choices.is-focused .choices__inner,
+.so-page .choices.choices--focused .choices__inner,
+.so-page .choices:focus-within .choices__inner,
+.so-page .choices.is-open .choices__inner,
+.so-dialog .choices.is-focused .choices__inner,
+.so-dialog .choices.choices--focused .choices__inner,
+.so-dialog .choices:focus-within .choices__inner,
+.so-dialog .choices.is-open .choices__inner {
+  border-color: var(--so-brand) !important;
+  box-shadow: 0 0 0 3.5px var(--so-ring) !important;
+}
+
+.so-page .choices.is-disabled .choices__inner,
+.so-dialog .choices.is-disabled .choices__inner {
+  background: var(--so-field-ro-bg) !important;
+  border-color: var(--so-field-ro-border) !important;
+  cursor: not-allowed;
+}
+
+.so-page .choices__list--single,
+.so-dialog .choices__list--single {
+  width: 100%;
+  padding: 0 !important;
+}
+
+.so-page .choices__list--single .choices__item,
+.so-dialog .choices__list--single .choices__item {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--so-ink);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Only loadClients() marks its blank option `placeholder: true`, so without
+   this the other pickers show "Select User" / "Location" in full ink while
+   "Select Client" alone reads as a placeholder. Key off the empty value
+   instead, which every blank option here has. */
+.so-page .choices__list--single .choices__item[data-value=""],
+.so-dialog .choices__list--single .choices__item[data-value=""],
+.so-page .so-grid select.form-control:required:invalid {
+  color: var(--so-placeholder);
+  font-weight: 450;
+}
+
+.so-page .choices__placeholder,
+.so-dialog .choices__placeholder {
+  color: var(--so-placeholder) !important;
+  font-weight: 450;
+  opacity: 1 !important;
+}
+
+/* common.css kills the default arrow (`display:none !important`) — draw a
+   proper chevron back in, and flip it while the list is open. */
+.so-page .choices[data-type*="select-one"]::after,
+.so-dialog .choices[data-type*="select-one"]::after {
+  display: block !important;
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 7px;
+  height: 7px;
+  margin: -5px 0 0;
+  border: none;
+  border-right: 1.7px solid var(--so-muted);
+  border-bottom: 1.7px solid var(--so-muted);
+  border-radius: 1px;
+  background: none;
+  transform: rotate(45deg);
+  pointer-events: none;
+  transition: transform 0.18s ease, margin-top 0.18s ease;
+}
+
+.so-page .choices[data-type*="select-one"].is-open::after,
+.so-dialog .choices[data-type*="select-one"].is-open::after {
+  margin-top: -2px;
+  transform: rotate(-135deg);
+  border-color: var(--so-brand);
+}
+
+.so-page .choices__list--dropdown,
+.so-page .choices__list[aria-expanded],
+.so-dialog .choices__list--dropdown,
+.so-dialog .choices__list[aria-expanded] {
+  margin-top: 6px;
+  padding: 5px;
+  background: var(--so-surface);
+  border: 1px solid var(--so-line);
+  border-radius: 12px;
+  box-shadow: 0 16px 38px -12px rgba(15, 23, 42, 0.26), 0 2px 6px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+  /* Dialog dropdowns float above the dialog's own overlay (formStyle.md,
+     Choices.js: "Add z-index: 99999 to .choices__list--dropdown inside
+     dialogs"). Harmless on .so-page, which has no competing overlay. */
+  z-index: 99999;
+}
+
+.so-page .choices__list--dropdown .choices__list,
+.so-page .choices__list[aria-expanded] .choices__list,
+.so-dialog .choices__list--dropdown .choices__list,
+.so-dialog .choices__list[aria-expanded] .choices__list {
+  max-height: 220px;
+}
+
+.so-page .choices__list--dropdown .choices__item,
+.so-page .choices__list[aria-expanded] .choices__item,
+.so-dialog .choices__list--dropdown .choices__item,
+.so-dialog .choices__list[aria-expanded] .choices__item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--so-ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+}
+
+.so-page .choices__list--dropdown .choices__item--selectable.is-highlighted,
+.so-page .choices__list[aria-expanded] .choices__item--selectable.is-highlighted,
+.so-dialog .choices__list--dropdown .choices__item--selectable.is-highlighted,
+.so-dialog .choices__list[aria-expanded] .choices__item--selectable.is-highlighted {
+  background: var(--so-brand-soft);
+  color: var(--so-brand);
+}
+
+.so-page .choices__list--dropdown .choices__item--selectable[data-value=""],
+.so-page .choices__list[aria-expanded] .choices__item--selectable[data-value=""],
+.so-dialog .choices__list--dropdown .choices__item--selectable[data-value=""],
+.so-dialog .choices__list[aria-expanded] .choices__item--selectable[data-value=""] {
+  color: var(--so-faint);
+}
+
+/* Search box inside an open dropdown. */
+.so-page .choices__input,
+.so-dialog .choices__input {
+  width: 100%;
+  margin: 1px 0 5px;
+  padding: 8px 10px;
+  background: #f7f9fc;
+  border: 1px solid var(--so-line) !important;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--so-ink);
+}
+
+.so-page .choices__input:focus,
+.so-dialog .choices__input:focus {
+  border-color: var(--so-brand) !important;
+  background: var(--so-surface);
+  outline: none;
+}
+
+/* ── Multi-select (Choices.js `multiple`) ────────────────────────────────
+   A multi-select can't wear the single-select paint as is: that fixes
+   .choices__inner at 40px with overflow hidden (a second row of chips would
+   be cut off) and styles .choices__input as a grey search box (here the
+   input is the inline "type to add" cursor inside the field, after the
+   chips). So the field keeps the 40px MINIMUM and the same border / hover /
+   focus ring as every other control, but grows by whole chip rows.
+   Chips are the brand fill so the white remove-X Choices draws stays visible.
+   No chevron: the arrow is for select-one only. */
+.so-page .choices[data-type*="select-multiple"] .choices__inner,
+.so-dialog .choices[data-type*="select-multiple"] .choices__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  height: auto;
+  min-height: var(--so-field-h) !important;
+  padding: 5px 10px 5px 6px !important;
+  overflow: visible;
+  cursor: text;
+}
+
+.so-page .choices[data-type*="select-multiple"] .choices__list--multiple,
+.so-dialog .choices[data-type*="select-multiple"] .choices__list--multiple {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 !important;
+}
+
+.so-page .choices[data-type*="select-multiple"] .choices__list--multiple .choices__item,
+.so-dialog .choices[data-type*="select-multiple"] .choices__list--multiple .choices__item {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin: 0;
+  padding: 0 6px 0 10px;
+  background: var(--so-brand);
+  border: 1px solid var(--so-brand-dark);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.so-page .choices[data-type*="select-multiple"] .choices__list--multiple .choices__item.is-highlighted,
+.so-dialog .choices[data-type*="select-multiple"] .choices__list--multiple .choices__item.is-highlighted {
+  background: var(--so-brand-dark);
+  border-color: var(--so-brand-dark);
+}
+
+.so-page .choices[data-type*="select-multiple"] .choices__list--multiple .choices__button,
+.so-dialog .choices[data-type*="select-multiple"] .choices__list--multiple .choices__button {
+  height: 14px;
+  margin: 0 0 0 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.4);
+  opacity: 0.8;
+}
+
+.so-page .choices[data-type*="select-multiple"] .choices__list--multiple .choices__button:hover,
+.so-dialog .choices[data-type*="select-multiple"] .choices__list--multiple .choices__button:hover {
+  opacity: 1;
+}
+
+.so-page .choices[data-type*="select-multiple"] .choices__input,
+.so-page .choices[data-type*="select-multiple"] .choices__input:focus,
+.so-dialog .choices[data-type*="select-multiple"] .choices__input,
+.so-dialog .choices[data-type*="select-multiple"] .choices__input:focus {
+  flex: 1 1 130px;
+  width: auto;
+  min-width: 130px;
+  height: 28px;
+  margin: 0;
+  padding: 0 4px;
+  background: transparent;
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--so-ink);
+}
+
+.so-page .choices[data-type*="select-multiple"] .choices__input::placeholder,
+.so-dialog .choices[data-type*="select-multiple"] .choices__input::placeholder {
+  color: var(--so-placeholder);
+  font-weight: 450;
+  opacity: 1;
+}
+
+/* ── Scrollbars ──────────────────────────────────────────────────────── */
+/* One scrollbar for every surface this page scrolls, in the app's own blue:
+   the page itself, the stock/location bar, the selected-item spec table, the
+   dispatch-log list, an open Choices dropdown and the dialogs. Same tokens as
+   every Tabulator table (tableDisp.css), restated because this page loads
+   its own stylesheet and inherits none of that. Matched on the class so a
+   surface added later is covered by being given one, rather than by being
+   remembered here.
+
+   The page scroll needs BOTH selectors: there are two nested .main-content
+   divs (boilerplate.ejs wraps the view in one, and this view's own root
+   carries the class too) and either can be the one that ends up with the
+   bar. The wrapper is reached through :has(), the only way to name a parent,
+   written as `> .so-page` so it matches this page's wrapper and no one
+   else's. Class-plus-class beats common.css's single-class 4px near-black
+   bar, so no !important is needed.
+
+   The last rule in each pair is the Firefox longhand -- it ignores every
+   ::-webkit- line above, and without it Firefox draws the OS default at OS
+   width. */
+.so-page #stock-display::-webkit-scrollbar,
+.so-page .ap-table-wrap::-webkit-scrollbar,
+.so-page .logs-scroll::-webkit-scrollbar,
+.so-page .custom-scrollbar::-webkit-scrollbar,
+.so-page .choices__list--dropdown .choices__list::-webkit-scrollbar,
+.so-page .choices__list[aria-expanded] .choices__list::-webkit-scrollbar,
+.so-dialog__body::-webkit-scrollbar,
+.so-dialog textarea::-webkit-scrollbar,
+.main-content.so-page::-webkit-scrollbar,
+.main-content:has(> .so-page)::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.so-page #stock-display::-webkit-scrollbar-track,
+.so-page .ap-table-wrap::-webkit-scrollbar-track,
+.so-page .logs-scroll::-webkit-scrollbar-track,
+.so-page .custom-scrollbar::-webkit-scrollbar-track,
+.so-page .choices__list--dropdown .choices__list::-webkit-scrollbar-track,
+.so-page .choices__list[aria-expanded] .choices__list::-webkit-scrollbar-track,
+.so-dialog__body::-webkit-scrollbar-track,
+.so-dialog textarea::-webkit-scrollbar-track,
+.main-content.so-page::-webkit-scrollbar-track,
+.main-content:has(> .so-page)::-webkit-scrollbar-track {
+  background: #f0f2f5;
+  border-radius: 6px;
+}
+
+.so-page #stock-display::-webkit-scrollbar-thumb,
+.so-page .ap-table-wrap::-webkit-scrollbar-thumb,
+.so-page .logs-scroll::-webkit-scrollbar-thumb,
+.so-page .custom-scrollbar::-webkit-scrollbar-thumb,
+.so-page .choices__list--dropdown .choices__list::-webkit-scrollbar-thumb,
+.so-page .choices__list[aria-expanded] .choices__list::-webkit-scrollbar-thumb,
+.so-dialog__body::-webkit-scrollbar-thumb,
+.so-dialog textarea::-webkit-scrollbar-thumb,
+.main-content.so-page::-webkit-scrollbar-thumb,
+.main-content:has(> .so-page)::-webkit-scrollbar-thumb {
+  background: #044a78;
+  border-radius: 6px;
+}
+
+.so-page #stock-display::-webkit-scrollbar-thumb:hover,
+.so-page .ap-table-wrap::-webkit-scrollbar-thumb:hover,
+.so-page .logs-scroll::-webkit-scrollbar-thumb:hover,
+.so-page .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.so-page .choices__list--dropdown .choices__list::-webkit-scrollbar-thumb:hover,
+.so-page .choices__list[aria-expanded] .choices__list::-webkit-scrollbar-thumb:hover,
+.so-dialog__body::-webkit-scrollbar-thumb:hover,
+.so-dialog textarea::-webkit-scrollbar-thumb:hover,
+.main-content.so-page::-webkit-scrollbar-thumb:hover,
+.main-content:has(> .so-page)::-webkit-scrollbar-thumb:hover {
+  background: #06639f;
+}
+
+/* Firefox */
+.so-page #stock-display,
+.so-page .ap-table-wrap,
+.so-page .logs-scroll,
+.so-page .custom-scrollbar,
+.so-page .choices__list--dropdown .choices__list,
+.so-page .choices__list[aria-expanded] .choices__list,
+.so-dialog__body,
+.so-dialog textarea,
+.main-content.so-page,
+.main-content:has(> .so-page) {
+  scrollbar-width: thin;
+  scrollbar-color: #044a78 #f0f2f5;
+}
+
+/* ── File upload field — public/js/soUpload.js ──────────────────────────
+   A field's control row: a styled "choose file" button (the real
+   <input type="file"> sits on top, visually hidden but still focusable and
+   in the tab order -- `opacity:0`, not `display:none`/`hidden`, so a
+   keyboard or screen-reader user can still reach and activate it) plus a
+   clear button that appears once a file is picked. soUpload.js is what
+   swaps the icon/text and toggles --filled; this file only paints the
+   states it sets. */
+.so-page .so-upload,
+.so-dialog .so-upload {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--so-field-h);
+}
+
+.so-page .so-upload__input,
+.so-dialog .so-upload__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.so-page .so-upload__control,
+.so-dialog .so-upload__control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--so-field-h);
+  padding: 0 14px;
+  border: 1px dashed var(--so-field-border);
+  border-radius: var(--so-radius-sm);
+  background: var(--so-surface);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.so-page .so-upload:hover .so-upload__control,
+.so-dialog .so-upload:hover .so-upload__control {
+  border-color: var(--so-brand);
+  background: var(--so-brand-soft);
+}
+
+/* The real input sits above the label in z-order (for click/tab targeting),
+   so hover/focus paint has to key off :has() on the wrapper instead of a
+   sibling selector -- the input is never actually hovered/focused "through"
+   the label. */
+.so-page .so-upload:has(.so-upload__input:focus-visible) .so-upload__control,
+.so-dialog .so-upload:has(.so-upload__input:focus-visible) .so-upload__control {
+  border-color: var(--so-brand);
+  border-style: solid;
+  box-shadow: 0 0 0 3.5px var(--so-ring);
+}
+
+.so-page .so-upload__icon,
+.so-dialog .so-upload__icon {
+  flex: none;
+  display: inline-flex;
+  font-size: 13px;
+  color: var(--so-ink-soft);
+}
+
+.so-page .so-upload__text,
+.so-dialog .so-upload__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--so-placeholder);
+}
+
+/* Filled: a file is picked. Solid border and full-ink text read as "has a
+   value", the same distinction readonly fields make elsewhere -- this one
+   just stays editable (click to replace, × to clear). */
+.so-page .so-upload--filled .so-upload__control,
+.so-dialog .so-upload--filled .so-upload__control {
+  border-style: solid;
+  border-color: var(--so-field-border);
+}
+
+.so-page .so-upload--filled .so-upload__icon,
+.so-dialog .so-upload--filled .so-upload__icon {
+  color: var(--so-brand);
+}
+
+.so-page .so-upload--filled .so-upload__text,
+.so-dialog .so-upload--filled .so-upload__text {
+  color: var(--so-ink);
+  font-weight: 600;
+}
+
+.so-page .so-upload__clear,
+.so-dialog .so-upload__clear {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--so-ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.so-page .so-upload__clear:hover,
+.so-dialog .so-upload__clear:hover {
+  background: #fde8ec;
+  color: var(--so-danger);
+}
+
+.so-page .so-upload__clear[hidden],
+.so-dialog .so-upload__clear[hidden] {
+  display: none;
+}
+
+/* ── Dialogs ─────────────────────────────────────────────────────────── */
+/* One below the layout's toasts (.toast-notification is 9999), so an error
+   toast raised while a dialog is open -- a failed save, a duplicate -- shows
+   on top of it instead of hidden behind the backdrop. */
+.so-dialog-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.so-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 440px;
+  max-width: 100%;
+  /* Keeps the head/tabs/foot in place and lets a tall body scroll instead of
+     pushing the dialog off the top/bottom of the viewport (see .so-dialog__body). */
+  max-height: calc(100vh - 40px);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.45);
+  animation: soDialogIn 0.18s ease-out;
+  overflow: hidden;
+}
+
+.so-dialog--sm {
+  width: 400px;
+}
+
+/* For a longer form (e.g. the Tape Master dialog's rows of three). */
+.so-dialog--lg {
+  width: 620px;
+}
+
+/* For a form with enough fields that it reads better as 4 columns than 2-3
+   (e.g. the New Color Label dialog's Individual tab). */
+.so-dialog--xl {
+  width: 1080px;
+}
+
+/* A dialog that is itself the <form> (head, body and foot inside it, so the
+   submit button in the foot submits it). common.css gives every <form> a
+   32-column grid, a 2px border, padding and gaps -- all undone here. */
+form.so-dialog {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: none;
+  gap: 0;
+  grid-template-columns: none;
+}
+
+/* A dialog card shown as a page of its own rather than over one (the
+   standalone create / edit pages behind a dialog, for anyone who lands on
+   the URL directly): centred on the page background, no backdrop. */
+.so-dialog-page {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100%;
+  padding: 48px 16px;
+  background: var(--so-bg);
+}
+
+@keyframes soDialogIn {
+  from {
+    transform: translateY(6px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Brand-blue head with white type -- the same bar the app's other dialogs
+   wear (Add Employee / Mark Inactive: #044A78 behind, #fff in front). The
+   icon tile and subtitle are re-tinted off white for the dark ground; the
+   card's own overflow: hidden rounds the head's top corners. */
+.so-dialog__head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 18px 20px;
+  background: var(--so-brand);
+}
+
+.so-dialog__icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 13px;
+}
+
+/* A destructive dialog keeps a solid light-red tile, which still reads on
+   the blue head and tells it apart from an ordinary one at a glance. */
+.so-dialog__icon--danger {
+  background: #fee2e2;
+  color: #e11d48;
+}
+
+.so-dialog__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.so-dialog__desc {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 450;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.so-dialog__head {
+  flex: none;
+}
+
+/* The scrolling middle of a tall dialog (e.g. the New Color Label dialog) --
+   head, tabs and foot stay put (see their own `flex: none`) while this
+   grows/shrinks to fill whatever height .so-dialog's own max-height leaves it. */
+.so-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 20px;
+}
+
+.so-dialog__body p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.so-dialog__field + .so-dialog__field {
+  margin-top: 14px;
+}
+
+/* Fields side by side (e.g. Width | Height | Gap): equal columns, however
+   many fields the row holds. Spaced from its neighbours like a field is. */
+.so-dialog__row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+/* A small uppercase divider for grouping a long dialog body into named
+   sections (e.g. "User Information", "Attachments") -- the dialog equivalent
+   of .so-page's .so-card__head, scaled down for a narrower column. */
+.so-dialog__section {
+  margin: 18px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid #eef1f6;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--so-brand);
+}
+
+.so-dialog__section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.so-dialog__field + .so-dialog__row,
+.so-dialog__row + .so-dialog__field,
+.so-dialog__row + .so-dialog__row {
+  margin-top: 14px;
+}
+
+.so-dialog__row > .so-dialog__field + .so-dialog__field {
+  margin-top: 0;
+}
+
+/* One line, "…" when it doesn't fit (formStyle.md, Long text). */
+.so-dialog__field > label {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A small red dot, not a literal asterisk -- matches the automatic one
+   .so-grid draws via :has() (formStyle.md, "Fields"). Dialog fields don't get
+   that automatic mechanism (the label isn't always a plain sibling of the
+   control -- GST's "Unregistered" checkbox row, for one), so it's added by
+   hand as <span class="so-req">*</span>; the "*" text itself is hidden
+   (font-size: 0) and a circle drawn in its place, so every existing so-req
+   span across the app (dialogs, and every so-dialog-style master form) picks
+   this up without any markup changes. */
+.so-dialog__field .so-req {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 1px;
+  border-radius: 50%;
+  background: var(--so-danger);
+  font-size: 0;
+  vertical-align: middle;
+}
+
+.so-dialog__foot {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  background: #f8fafc;
+  border-top: 1px solid #eef1f6;
+}
+
+/* ── In-dialog mode switch (e.g. New Color Label's Individual/Common) ────
+   Lives directly in the dialog's head (right-aligned next to the title --
+   see `.so-dialog__head .so-switch` below), not a toolbar row of its own:
+   a dialog this size can't spare a whole extra row just for a two-way
+   switch. A real sliding segmented switch (.so-switch), not two independent
+   buttons -- a filled thumb slides under whichever option is active, which
+   reads at a glance as "one setting, two positions" the way a button pair
+   doesn't. Unlike .so-page's .so-toggle (confirm mode's Extra/Preclose,
+   independent on/off pills), this is scoped to .so-dialog since the dialogs
+   it switches between render outside .so-page. */
+.so-dialog__head .so-switch {
+  flex: none;
+  margin-left: auto;
+}
+
+.so-switch {
+  position: relative;
+  display: inline-flex;
+  padding: 3px;
+  background: #e4e9f1;
+  border-radius: 999px;
+}
+
+/* The sliding thumb -- exactly half the switch's content box, so
+  `transform: translateX(100%)` (its own width) lands it precisely on the
+  second option with no extra math. JS toggles .so-switch--common to move it;
+  the CSS transition is what makes it slide instead of jump. */
+.so-switch__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  background: var(--so-brand);
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(4, 74, 120, 0.35);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.so-switch--common .so-switch__thumb {
+  transform: translateX(100%);
+}
+
+/* Fallback for a switch whose host script already toggles `.active` onto the
+   second option but knows nothing about this component (so it can't also add
+   `.so-switch--common`) -- the thumb follows on its own, no extra JS needed.
+   Prefer `.so-switch--common` (above) when you control the toggle script;
+   reach for this only when you don't. Requires the active option to reliably
+   be the *last* `.so-switch__opt` in the DOM. */
+.so-switch:has(.so-switch__opt:last-child.active) .so-switch__thumb {
+  transform: translateX(100%);
+}
+
+.so-switch__opt {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 128px;
+  height: 30px;
+  padding: 0 16px;
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  color: var(--so-ink-soft);
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.so-switch__opt:hover:not(.active) {
+  color: var(--so-brand);
+}
+
+.so-switch__opt.active {
+  color: #fff;
+}
+
+/* On the dialog's blue head (the only place .so-switch lives today): the
+   grey track and blue thumb would both vanish against it, so this repaints
+   it the same translucent-white-on-blue language the head's own icon tile
+   uses (.so-dialog__icon) -- a frosted track, solid white thumb, blue text
+   on the active option instead of white-on-blue. */
+.so-switch--on-brand {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.so-switch--on-brand .so-switch__thumb {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.so-switch--on-brand .so-switch__opt {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.so-switch--on-brand .so-switch__opt:hover:not(.active) {
+  color: #fff;
+}
+
+.so-switch--on-brand .so-switch__opt.active {
+  color: var(--so-brand);
+}
+
+/* The dialogs live outside .so-page in confirm mode, so give them their own
+   copy of the button/field paint rather than relying on the page scope.
+   The background carries !important because tableDisp.css (loaded on the
+   Tabulator list pages a dialog may open from) sets a bare
+   `input { background-color: #f8f9fa !important }`. */
+.so-dialog input,
+.so-dialog textarea {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #0f172a;
+  background-color: #fff !important;
+  border: 1.5px solid var(--so-field-border);
+  border-radius: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.so-dialog input::placeholder,
+.so-dialog textarea::placeholder {
+  color: var(--so-placeholder);
+  font-weight: 450;
+}
+
+/* Read-only: same paint as the page's read-only fields. */
+.so-dialog input[readonly],
+.so-dialog input[readonly]:focus {
+  background-color: var(--so-field-ro-bg) !important;
+  border-color: var(--so-field-ro-border);
+  color: var(--so-field-ro-ink);
+  box-shadow: none;
+  cursor: default;
+}
+
+/* Disabled: same grey paint as readonly -- a field a person can't change
+   should look like one either way. Unlike readonly, a disabled <select>
+   still painted white with its chevron (the default so-dialog select below
+   applies regardless of :disabled) reads as pickable when it isn't; this
+   greys it out and drops the chevron since there's nothing to open. */
+.so-dialog input:disabled,
+.so-dialog select:disabled {
+  background-color: var(--so-field-ro-bg) !important;
+  border-color: var(--so-field-ro-border);
+  color: var(--so-field-ro-ink);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.so-dialog select:disabled {
+  background-image: none;
+}
+
+/* A field the dialog's own validation flagged (the page JS adds/removes
+   .so-invalid) -- a red edge only; no Bootstrap tick/cross icon. */
+.so-dialog input.so-invalid,
+.so-dialog textarea.so-invalid {
+  border-color: var(--so-danger);
+}
+
+.so-dialog textarea {
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.45;
+  resize: none;
+  font-family: inherit;
+}
+
+.so-dialog input:focus,
+.so-dialog textarea:focus {
+  border-color: #044a78;
+  box-shadow: 0 0 0 3.5px rgba(4, 74, 120, 0.13);
+  outline: none;
+}
+
+/* A flagged field stays red while focused -- validation focuses the first
+   one, and the blue focus ring above would otherwise hide which it was. */
+.so-dialog input.so-invalid:focus,
+.so-dialog textarea.so-invalid:focus {
+  border-color: var(--so-danger);
+  box-shadow: 0 0 0 3.5px rgba(225, 29, 72, 0.14);
+}
+
+/* Plain <select> in a dialog, painted like the inputs, with its own chevron.
+   Beats common.css's global `select { height: 2.3rem; border: 1.8px ...;
+   background-image ... }` on specificity. A required select still on its
+   blank "Select" option reads as a placeholder. */
+.so-dialog select {
+  width: 100%;
+  height: 40px;
+  padding: 0 32px 0 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #0f172a;
+  background-color: #fff !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' stroke='%2364748b' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 11px 7px;
+  border: 1.5px solid var(--so-field-border);
+  border-radius: 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.so-dialog select:required:invalid {
+  color: var(--so-placeholder);
+  font-weight: 450;
+}
+
+.so-dialog select option {
+  color: #0f172a;
+}
+
+.so-dialog select:focus {
+  border-color: #044a78;
+  box-shadow: 0 0 0 3.5px rgba(4, 74, 120, 0.13);
+  outline: none;
+}
+
+.so-dialog select.so-invalid {
+  border-color: var(--so-danger);
+}
+
+.so-dialog select.so-invalid:focus {
+  border-color: var(--so-danger);
+  box-shadow: 0 0 0 3.5px rgba(225, 29, 72, 0.14);
+}
+
+.so-dialog .so-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.so-dialog .so-btn--primary {
+  background: #044a78;
+  color: #fff;
+}
+
+.so-dialog .so-btn--primary:hover {
+  background: #03365a;
+}
+
+.so-dialog .so-btn--primary:disabled {
+  background: #9fb3c4;
+  cursor: progress;
+}
+
+.so-dialog .so-btn i {
+  font-size: 12px;
+}
+
+/* A link styled as a button (e.g. a page card's Cancel). */
+.so-dialog a.so-btn {
+  text-decoration: none;
+}
+
+.so-dialog .so-btn--ghost {
+  background: #fff;
+  border-color: var(--so-field-border);
+  color: #475569;
+}
+
+.so-dialog .so-btn--ghost:hover {
+  background: var(--so-field-ro-bg);
+}
+
+.so-dialog .so-btn--danger {
+  background: #e11d48;
+  color: #fff;
+}
+
+.so-dialog .so-btn--danger:hover {
+  background: #be123c;
+}
+
+/* Typed values (PO number, remarks, invoice...) -- shown with "…" while the
+   field isn't being edited; the caret scrolls through it as normal. */
+.so-page .so-grid .form-control,
+.so-dialog input {
+  text-overflow: ellipsis;
+}
+
+
+/* ── Location Details cards (New User / Edit User dialogs) ───────────────
+   Record-specific: one repeatable card per location, re-rendered wholesale by
+   public/js/locationRepeater.js. The classes (.location-row, .loc-line,
+   .loc-dispatch, .loc-title, .loc-fields, .loc-dispatch-mode,
+   .loc-self-dispatch, .loc-transport, .loc-transport-contact, .loc-self,
+   .loc-self-badge) are load-bearing -- the script selects by them. */
+.location-row {
+  margin-bottom: 14px;
+  padding: 14px 16px 16px;
+  background: #f8fafc;
+  border: 1px solid var(--so-line-soft);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.location-row:last-child {
+  margin-bottom: 0;
+}
+
+.location-row .loc-line {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.location-row .loc-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--so-brand);
+  margin-bottom: 2px;
+}
+
+.location-row .loc-fields {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.location-row .loc-dispatch-mode {
+  flex: 0 0 150px;
+}
+
+.location-row .loc-transport {
+  display: contents;
+}
+
+.location-row .loc-fields > input,
+.location-row .loc-transport > input,
+.location-row .loc-transport > select {
+  flex: 1 1 150px;
+  min-width: 130px;
+}
+
+.location-row .loc-self .loc-self-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  background: var(--so-brand-soft);
+  color: var(--so-brand);
+  border: 1px dashed var(--so-brand);
+  border-radius: var(--so-radius-sm);
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.location-row input,
+.location-row select {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--so-ink);
+  background: var(--so-surface);
+  border: 1px solid var(--so-field-border);
+  border-radius: var(--so-radius-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.location-row input:hover:not(:focus),
+.location-row select:hover:not(:focus) {
+  border-color: var(--so-field-border-hover);
+}
+
+.location-row input:focus,
+.location-row select:focus {
+  outline: none;
+  border-color: var(--so-brand);
+  box-shadow: 0 0 0 3.5px var(--so-ring);
+}
+
+.location-row input::placeholder {
+  color: var(--so-placeholder);
+}
+
+.location-row select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' stroke='%2364748b' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 11px 7px;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+/* Location counter stepper (+/-), inline in the section heading. */
+.loc-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.loc-counter button {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--so-field-border);
+  background: var(--so-surface);
+  color: var(--so-brand);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.loc-counter button:hover {
+  background: var(--so-brand-soft);
+  border-color: var(--so-brand);
+}
+
+.loc-counter input {
+  width: 40px;
+  height: 26px;
+  text-align: center;
+  border: 1px solid var(--so-field-border);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--so-ink);
+  background: var(--so-surface);
+}
+
+.so-dialog__section--row {
+  display: flex;
+  align-items: center;
+}

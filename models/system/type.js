@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 // Type master -- the list backing the "Type" dropdown on Facestock Master,
 // Adhesive Master, and Release Master (views/inventory/masters/
@@ -16,6 +17,7 @@ const typeSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+    ...verificationFields,
   },
   { timestamps: true },
 );

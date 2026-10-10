@@ -1,0 +1,210 @@
+<%#
+  New Client dialog -- opened by the "+ Client" button on /client/view (and by
+  old /form/client?tab=client links, which redirect to /client/view?new=client).
+  A <form class="so-dialog" data-so-form> inside a .so-dialog-backdrop, driven
+  by public/js/soFormDialog.js (validation + submit + soDialog.open/close).
+  Styles: /css/soDialog.css (link it from the page). Choices.js loads with
+  `defer`, so it is created on DOMContentLoaded.
+
+  Locals: `employees` ({empName}[], Account Head), `previewClientId` (display
+  only -- the server assigns the real one), `csrfToken`.
+%>
+<%
+  const ccfEmployees = (typeof employees !== 'undefined' && Array.isArray(employees)) ? employees : [];
+  const ccfPreviewId = typeof previewClientId !== 'undefined' ? previewClientId : '';
+  const ccfCsrf = typeof csrfToken !== 'undefined' ? csrfToken : '';
+%>
+<style>
+  #create-client-form {
+    height: 760px;
+  }
+</style>
+
+<div id="client-form-dialog" class="so-dialog-backdrop" aria-hidden="true">
+
+  <!-- =========================== NEW CLIENT =========================== -->
+  <form id="create-client-form" class="so-dialog so-dialog--xl" action="/app/form/client" method="post" autocomplete="off" novalidate data-so-form role="dialog" aria-modal="true" aria-labelledby="ccf-title">
+    <input type="hidden" name="_csrf" value="<%= ccfCsrf %>" />
+
+    <div class="so-dialog__head">
+      <span class="so-dialog__icon"><i class="fa-solid fa-building"></i></span>
+      <div>
+        <h3 class="so-dialog__title" id="ccf-title">New Client</h3>
+        <p class="so-dialog__desc">Client Id and status default automatically.</p>
+      </div>
+    </div>
+
+    <div class="so-dialog__body">
+      <div class="so-dialog__section">Client Details</div>
+      <div class="so-dialog__row">
+        <div class="so-dialog__field">
+          <label for="client-id">Client Id</label>
+          <input type="text" value="<%= ccfPreviewId %>" id="client-id" name="clientId" placeholder="Enter Client ID" readonly tabindex="-1" required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="client-name">Client Name <span class="so-req">*</span></label>
+          <input type="text" id="client-name" name="clientName" placeholder="Enter Client Name" required data-so-autofocus />
+        </div>
+        <div class="so-dialog__field">
+          <label for="client-type">Client Type <span class="so-req">*</span></label>
+          <select name="clientType" id="client-type" required>
+            <option value="CLIENT" selected>CLIENT</option>
+            <option value="DEALER">DEALER</option>
+          </select>
+        </div>
+        <div class="so-dialog__field">
+          <label for="client-status">Client Status <span class="so-req">*</span></label>
+          <select name="clientStatus" id="client-status" required>
+            <option value="ACTIVE" selected>ACTIVE</option>
+            <option value="INACTIVE">INACTIVE</option>
+            <option value="FOLLOW UP">FOLLOW UP</option>
+            <option value="BLACKLISTED">BLACKLISTED</option>
+            <option value="ADVANCED">ADVANCED</option>
+            <option value="OTHERS">OTHERS</option>
+          </select>
+        </div>
+        <div class="so-dialog__field">
+          <label for="ho-location">H/O Location <span class="so-req">*</span></label>
+          <input type="text" id="ho-location" name="hoLocation" placeholder="Enter H/O Location" required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="account-head">Account Head <span class="so-req">*</span></label>
+          <select name="accountHead" id="account-head" required>
+            <option value="" selected disabled hidden>Select</option>
+            <% ccfEmployees.forEach((employee) => { %>
+              <option value="<%= employee.empName %>"><%= employee.empName %></option>
+            <% }) %>
+          </select>
+        </div>
+      </div>
+
+      <div class="so-dialog__section">Business Details</div>
+      <div class="so-dialog__row">
+        <div class="so-dialog__field">
+          <label for="client-verticals">Verticals</label>
+          <input type="text" id="client-verticals" name="verticals" placeholder="Enter Verticals" />
+        </div>
+        <div class="so-dialog__field">
+          <label for="client-vendor-code">Vendor Code</label>
+          <input type="text" id="client-vendor-code" name="vendorCode" placeholder="Enter Vendor Code" />
+        </div>
+      </div>
+
+      <div class="so-dialog__section">Compliance</div>
+      <div class="so-dialog__row">
+        <div class="so-dialog__field">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+            <label for="client-gst" style="margin: 0;">GST <span class="so-req">*</span></label>
+            <label for="gst-unregistered-checkbox" style="display: flex; align-items: center; gap: 5px; font-weight: 500; font-size: 11px; color: var(--so-ink-soft); cursor: pointer; margin: 0;">
+              <input type="checkbox" id="gst-unregistered-checkbox" style="width: 13px; height: 13px; accent-color: var(--so-brand);" />
+              Unregistered
+            </label>
+          </div>
+          <input type="text" maxlength="15" id="client-gst" name="clientGst" placeholder="Enter GST" required />
+          <input type="hidden" id="gst-unregistered-flag" name="gstUnregistered" value="false" />
+        </div>
+        <div class="so-dialog__field">
+          <label for="client-msme">MSME <span class="so-req">*</span></label>
+          <input type="text" maxlength="15" id="client-msme" name="clientMsme" placeholder="Enter MSME" required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="client-gumasta">Gumasta <span class="so-req">*</span></label>
+          <input type="text" id="client-gumasta" name="clientGumasta" placeholder="Enter GUMASTA" required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="client-pan">PAN <span class="so-req">*</span></label>
+          <input type="text" maxlength="10" id="client-pan" name="clientPan" placeholder="Enter PAN" required />
+        </div>
+      </div>
+    </div>
+
+    <div class="so-dialog__foot">
+      <label for="client-verified" style="display: flex; align-items: center; gap: 8px; margin: 0 auto 0 0; font-size: 13.5px; font-weight: 600; color: var(--so-ink); cursor: pointer;">
+        <input type="checkbox" id="client-verified" name="verified" value="on" style="width: 16px; height: 16px; accent-color: var(--so-brand);" />
+        Verified &mdash; data checked and approved
+      </label>
+      <button type="button" class="so-btn so-btn--ghost" onclick="soDialog.close('client-form-dialog')">Cancel</button>
+      <button type="submit" class="so-btn so-btn--primary"><i class="fa-solid fa-check"></i> Save Client Details</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  /* ================= CREATE CLIENT: GST "Unregistered" ================= */
+  (function () {
+    const gstInput = document.getElementById("client-gst");
+    const panInput = document.getElementById("client-pan");
+    const checkbox = document.getElementById("gst-unregistered-checkbox");
+    const flag = document.getElementById("gst-unregistered-flag");
+    const clientForm = document.getElementById("create-client-form");
+    if (!gstInput || !panInput || !checkbox) return;
+
+    function applyUnregistered(checked) {
+      if (flag) flag.value = checked ? "true" : "false";
+      [gstInput, panInput].forEach((input) => {
+        input.required = !checked;
+        input.readOnly = checked;
+        if (checked) input.value = "UNREGISTERED";
+        input.setCustomValidity("");
+      });
+    }
+
+    checkbox.addEventListener("change", () => applyUnregistered(checkbox.checked));
+
+    // A native form.reset() (soDialog.open()'s, or this partial's own before
+    // opening) resets the checkbox back to unchecked but has no idea it also
+    // needs to undo the readOnly/required this handler applied -- re-derive
+    // that state from the (now-reset) checkbox once the reset actually lands.
+    clientForm?.addEventListener("reset", () => applyUnregistered(false));
+
+    gstInput.addEventListener("input", function () {
+      const gst = this.value.toUpperCase();
+      this.value = gst;
+
+      if (gst.length >= 12) {
+        const pan = gst.substring(2, 12);
+        panInput.value = pan;
+        panInput.dispatchEvent(new Event("input"));
+      } else {
+        panInput.value = "";
+        panInput.dispatchEvent(new Event("input"));
+      }
+
+      const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+      this.setCustomValidity(gst.length > 0 && !gstRegex.test(gst) ? "Invalid GST format (e.g., 22AAAAA0000A1Z5)" : "");
+    });
+
+    panInput.addEventListener("input", function () {
+      const pan = this.value.toUpperCase();
+      this.value = pan;
+      const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+      this.setCustomValidity(pan.length > 0 && !panRegex.test(pan) ? "Invalid PAN format (e.g., ABCDE1234F)" : "");
+    });
+  })();
+
+  /* ================= ACCOUNT HEAD PICKER + DIALOG ENTRY POINT ===========
+     Runs on DOMContentLoaded: Choices.js is loaded with `defer`. */
+  document.addEventListener("DOMContentLoaded", function () {
+    const accountHeadSelect = document.getElementById("account-head");
+    if (accountHeadSelect) {
+      try {
+        new Choices(accountHeadSelect, { searchEnabled: true, itemSelectText: "", shouldSort: false });
+      } catch (e) {
+        console.error("Account head Choices initialization failed:", e);
+      }
+    }
+
+    window.openClientDialog = function () {
+      soDialog.open("client-form-dialog");
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "client") {
+      window.openClientDialog();
+      params.delete("new");
+      const qs = params.toString();
+      history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : ""));
+    }
+  });
+</script>
+<script src="/js/soFormDialog.js?v=1"></script>

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 const { Schema } = mongoose;
 
 const locationDetailSchema = new mongoose.Schema(
@@ -67,6 +68,7 @@ const userSchema = new mongoose.Schema({
       ref: "LabelStockBinding",
     },
   ],
+  ...verificationFields,
 });
 
 const Username = mongoose.model("Username", userSchema);

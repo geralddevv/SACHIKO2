@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 // Facestock master -- a reusable catalog entry for a facestock spec (as
 // opposed to models/inventory/facestockStock.js, which is a physical reel of
@@ -81,6 +82,7 @@ const facestockMasterSchema = new mongoose.Schema(
       sparse: true,
       trim: true,
     },
+    ...verificationFields,
   },
   { timestamps: true },
 );

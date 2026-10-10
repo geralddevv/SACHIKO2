@@ -1,4 +1,5 @@
 import express from "express";
+import { verificationUpdate } from "../../utils/verification.js";
 import crypto from "crypto";
 import FacestockMaster from "../../models/inventory/facestockMaster.js";
 import FacestockStock from "../../models/inventory/facestockStock.js";
@@ -179,7 +180,7 @@ router.post("/form/facestock", requireAuth, requireFacestockMaster, createLimite
     }
 
     const skuId = await generateId("facestockMasterSkuId", "FCS");
-    await FacestockMaster.create({ ...payload, skuId, facestockSignature });
+    await FacestockMaster.create({ ...payload, skuId, facestockSignature, ...verificationUpdate(req).set });
 
     res.locals.auditDescription = `Created facestock master "${skuId}" (${payload.vendorSkuCode})`;
     req.flash("notification", "Facestock master created successfully!");
@@ -208,7 +209,12 @@ router.put("/api/facestock/:id", requireAuth, requireFacestockMaster, updateLimi
       return res.status(404).json({ success: false, message: "Facestock master not found." });
     }
 
-    const updated = await FacestockMaster.findByIdAndUpdate(req.params.id, { ...payload, facestockSignature }, { new: true, runValidators: true });
+    const vf = verificationUpdate(req, before);
+    const updated = await FacestockMaster.findByIdAndUpdate(
+      req.params.id,
+      { $set: { ...payload, facestockSignature, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) },
+      { new: true, runValidators: true },
+    );
 
     const { match, update } = cascadeStockUpdate(before, payload);
     let stockUpdated = 0;

@@ -1,4 +1,5 @@
 import express from "express";
+import { verificationUpdate } from "../../utils/verification.js";
 import Family from "../../models/system/family.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
@@ -26,7 +27,7 @@ router.post("/form/family", requireAuth, requireFamilyMaster, createLimiter, asy
     const duplicate = await Family.exists({ familyName });
     if (duplicate) return res.status(400).json({ success: false, message: "This family already exists." });
 
-    await Family.create({ familyName });
+    await Family.create({ familyName, ...verificationUpdate(req).set });
 
     res.locals.auditDescription = `Created family "${familyName}"`;
     req.flash("notification", "Family created successfully!");
@@ -46,7 +47,10 @@ router.put("/api/family/:id", requireAuth, requireFamilyMaster, updateLimiter, a
     const duplicate = await Family.exists({ familyName, _id: { $ne: req.params.id } });
     if (duplicate) return res.status(400).json({ success: false, message: "This family already exists." });
 
-    const updated = await Family.findByIdAndUpdate(req.params.id, { familyName }, { new: true, runValidators: true });
+    const existing = await Family.findById(req.params.id).select("verified verifiedBy").lean();
+    const vf = verificationUpdate(req, existing);
+
+    const updated = await Family.findByIdAndUpdate(req.params.id, { $set: { familyName, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) }, { new: true, runValidators: true });
     if (!updated) return res.status(404).json({ success: false, message: "Family not found." });
 
     res.locals.auditDescription = `Updated family "${updated.familyName}"`;

@@ -1,4 +1,5 @@
 import express from "express";
+import { verificationUpdate } from "../../utils/verification.js";
 import crypto from "crypto";
 import ReleaseMaster from "../../models/inventory/releaseMaster.js";
 import ReleaseLinerStock from "../../models/inventory/releaseLinerStock.js";
@@ -271,7 +272,7 @@ router.post("/form/release", requireAuth, requireReleaseMaster, createLimiter, a
     }
 
     const skuId = await generateId("releaseMasterSkuId", "REL");
-    await ReleaseMaster.create({ ...payload, skuId, releaseSignature });
+    await ReleaseMaster.create({ ...payload, skuId, releaseSignature, ...verificationUpdate(req).set });
 
     res.locals.auditDescription = `Created release master "${skuId}" (${payload.vendorName})`;
     req.flash("notification", "Release master created successfully!");
@@ -300,7 +301,12 @@ router.put("/api/release/:id", requireAuth, requireReleaseMaster, updateLimiter,
       return res.status(404).json({ success: false, message: "Release master not found." });
     }
 
-    const updated = await ReleaseMaster.findByIdAndUpdate(req.params.id, { ...payload, releaseSignature }, { new: true, runValidators: true });
+    const vf = verificationUpdate(req, before);
+    const updated = await ReleaseMaster.findByIdAndUpdate(
+      req.params.id,
+      { $set: { ...payload, releaseSignature, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) },
+      { new: true, runValidators: true },
+    );
 
     const { match, update } = cascadeStockUpdate(before, payload);
     let stockUpdated = 0;

@@ -4,18 +4,66 @@
 
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
   <style>
-    #master-table { width: 100%; flex: 1 1 auto; min-height: 0; }
+    .jc-page { display: flex; flex-direction: column; gap: 14px; min-height: 0; flex: 1 1 auto; overflow-y: auto; padding-right: 2px; }
     .tabulator-edit-list { scrollbar-width: none !important; -ms-overflow-style: none !important; }
     .tabulator-edit-list::-webkit-scrollbar { display: none !important; }
-    .header-action-btn {
-      background-color: #f0f0f0; color: #044a78;
-      padding: 2px 14px; font-size: 14px; font-weight: 500;
-      border: none; cursor: pointer; border-radius: 0.5rem;
-      box-shadow: 0 4px 6px -1px rgba(0,0,0,.1);
-      transition: all 0.2s ease-in-out;
-      display: flex; align-items: center; justify-content: center;
+
+    /* ---- toolbar ---- */
+    .jc-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .jc-summary { color: #475569; font-size: 13px; font-weight: 600; }
+    .jc-summary b { color: #044a78; }
+    .jc-bar__spacer { flex: 1 1 auto; }
+    .jc-jump { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: #475569; }
+    .jc-jump input { height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 13px; color: #0f172a; background: #fff; }
+    .jc-jump input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,.13); }
+    .jc-link { background: none; border: none; color: #044a78; font-weight: 700; font-size: 12.5px; cursor: pointer; padding: 6px 4px; }
+    .jc-link:hover { text-decoration: underline; }
+
+    /* ---- one card per day, collapsed until opened ---- */
+    .day-card { background: #fff; border: 1px solid #dbe4ee; border-radius: 14px; box-shadow: 0 1px 2px rgba(15,23,42,.04); overflow: hidden; transition: box-shadow .2s, border-color .2s; }
+    .day-card:hover { border-color: #b9cbe0; }
+    .day-card.is-open { border-color: #044a78; box-shadow: 0 8px 22px -12px rgba(4,74,120,.35); }
+    .day-card.is-flash { animation: dayFlash 1.4s ease-out 1; }
+    @keyframes dayFlash { 0% { box-shadow: 0 0 0 4px rgba(4,74,120,.35); } 100% { box-shadow: 0 1px 2px rgba(15,23,42,.04); } }
+    .day-head { display: flex; align-items: center; gap: 16px; padding: 12px 16px; cursor: pointer; user-select: none; position: relative; }
+    .day-head:focus-visible { outline: 2px solid #044a78; outline-offset: -2px; }
+    .day-card.is-open .day-head { background: linear-gradient(135deg, #044a78 0%, #03365a 100%); color: #fff; }
+    .day-date { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 54px; padding: 4px 8px; border-radius: 10px; background: #eef4fa; color: #044a78; line-height: 1.1; }
+    .day-date b { font-size: 21px; font-weight: 800; }
+    .day-date i { font-style: normal; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    .day-card.is-open .day-date { background: rgba(255,255,255,.16); color: #fff; }
+    .day-name { display: flex; flex-direction: column; gap: 2px; min-width: 120px; font-weight: 700; font-size: 15px; color: #0f172a; }
+    .day-name small { font-size: 11.5px; font-weight: 600; color: #64748b; }
+    .day-card.is-open .day-name, .day-card.is-open .day-name small { color: #fff; }
+    .day-card.is-open .day-name small { opacity: .8; }
+    .day-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    .day-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; background: #f1f5f9; color: #334155; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .day-chip i { font-size: 11px; color: #64748b; }
+    .day-card.is-open .day-chip { background: rgba(255,255,255,.16); color: #fff; }
+    .day-card.is-open .day-chip i { color: rgba(255,255,255,.8); }
+    .day-xl { border: 1px solid #cbd5e1; background: #fff; color: #166534; font-size: 12px; font-weight: 700; border-radius: 8px; padding: 5px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+    .day-xl:hover { background: #f0fdf4; border-color: #86efac; }
+    .day-chev { color: #64748b; font-size: 13px; transition: transform .2s; width: 16px; text-align: center; }
+    .day-card.is-open .day-chev { transform: rotate(180deg); color: #fff; }
+    .day-body { border-top: 1px solid #e2e8f0; padding: 12px; background: #fcfdff; }
+    .day-body[hidden] { display: none; }
+    .day-table { width: 100%; }
+    .day-table .tabulator-header .tabulator-col { background: #f8fafc; }
+
+    /* loading / error states */
+    .day-skel { display: grid; gap: 9px; padding: 6px 2px; }
+    .day-skel span { height: 14px; border-radius: 6px; background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 50%, #eef2f7 75%); background-size: 200% 100%; animation: skel 1.1s linear infinite; }
+    .day-skel span:nth-child(2) { width: 88%; } .day-skel span:nth-child(3) { width: 72%; }
+    @keyframes skel { to { background-position: -200% 0; } }
+    .day-msg { padding: 18px; text-align: center; color: #64748b; font-weight: 600; font-size: 13.5px; }
+    .day-msg button { margin-left: 8px; }
+    .jc-empty { background: #fff; border: 1px dashed #cbd5e1; border-radius: 14px; padding: 36px 20px; text-align: center; color: #64748b; font-weight: 600; }
+    .jc-empty i { display: block; font-size: 28px; color: #94a3b8; margin-bottom: 10px; }
+    @media (prefers-reduced-motion: reduce) { .day-card, .day-chev, .day-skel span, .day-card.is-flash { transition: none; animation: none; } }
+    @media (max-width: 760px) {
+      .day-head { flex-wrap: wrap; gap: 10px; }
+      .day-chips { margin-left: 0; width: 100%; order: 3; }
     }
-    .header-action-btn:hover { background-color: #e4e4e4; }
 
     /* ---- Deckle Detail dialog: variant meta + per-reel table
            (mirrors the view dialog on /sachiko/semifinishedstock) ---- */
@@ -57,21 +105,22 @@
 
   <div class="indi-head">
     <h1>Deckle Logs</h1>
-    <div style="display: flex; gap: 10px; align-items: center">
-      <div class="download-selector" id="downloadSelector">
-        <button class="download-selector__trigger">
-          <span><i class="fa-solid fa-file-arrow-down"></i> Download</span>
-          <i class="fas fa-chevron-down"></i>
-        </button>
-        <div class="download-selector__menu">
-          <div class="download-selector__option" id="download-xlsx"><i class="fas fa-file-excel"></i> Excel</div>
-        </div>
-      </div>
-    </div>
   </div>
 
-  <div class="table-spinner"><div class="spinner-circle"></div></div>
-  <div id="master-table"></div>
+  <div class="jc-page" id="jcPage">
+    <div class="jc-bar">
+      <span class="jc-summary" id="jcSummary">Loading…</span>
+      <span class="jc-bar__spacer"></span>
+      <label class="jc-jump">Jump to date
+        <input type="date" id="jcJump" />
+      </label>
+      <button type="button" class="jc-link" id="jcCollapseAll" hidden>Collapse all</button>
+    </div>
+    <div id="jcDays" aria-live="polite">
+      <div class="day-skel" style="padding:14px;"><span></span><span></span><span></span></div>
+    </div>
+    <button type="button" class="jc-link" id="jcMore" hidden style="align-self:center;"></button>
+  </div>
 
   <!-- Per-deckle breakdown for one Production Record: the Product Code /
        variant each deckle was produced as, and every raw-material reel that
@@ -111,100 +160,42 @@
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
 <script>
-  const downloadSelector = document.getElementById("downloadSelector");
-  const triggerBtn = downloadSelector.querySelector(".download-selector__trigger");
-  triggerBtn.addEventListener("click", (e) => { e.stopPropagation(); downloadSelector.classList.toggle("download-selector--active"); });
-  document.addEventListener("click", () => downloadSelector.classList.remove("download-selector--active"));
-
-  const raw = <%- safeJson(jsonData) %>;
-
-  // Roll(s) actually used in the work: the distinct, non-empty Roll IDs
-  // entered on the Production Log rows (falling back to Job Setting when the log
-  // named none), joined for display.
-  const rollsUsed = (jc) => {
-    const rows = []
-      .concat(Array.isArray(jc.productionLog) ? jc.productionLog : [])
-      .concat(Array.isArray(jc.jobSetting) ? jc.jobSetting : []);
-    const ids = rows
-      .flatMap((r) => [
-        r?.fsRollId, r?.adRollId, r?.rlRollId, r?.rollId,
-        ...(Array.isArray(r?.materialsUsed) ? r.materialsUsed.map((m) => m?.rollId) : []),
-      ])
-      .map((id) => String(id || "").trim())
-      .filter(Boolean);
-    const seen = new Set();
-    const uniq = ids.filter((id) => {
-      const key = id.toUpperCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    return uniq.length ? uniq.join(", ") : "-";
-  };
-
-  // Every Deckle this job card actually produced -- one per Production Log
-  // row that made metres (routes/system/machine.js's produceDecklesFromLog,
-  // system-generated on save), distinct and joined the same way rollsUsed
-  // above reads the raw material side.
-  const deckleIdList = (jc) => {
-    const ids = (Array.isArray(jc.productionLog) ? jc.productionLog : [])
-      .map((r) => String(r?.deckleId || "").trim())
-      .filter(Boolean);
-    const seen = new Set();
-    return ids.filter((id) => {
-      const key = id.toUpperCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  };
-  const decklesProduced = (jc) => {
-    const uniq = deckleIdList(jc);
-    return uniq.length ? uniq.join(", ") : "-";
-  };
-
-  const tableData = raw.map(jc => ({
-    jobCardId:    jc.jobCardId,
-    date:         jc.date ? new Date(jc.date).toLocaleDateString("en-GB") : "-",
-    machineName:  jc.machineName || "-",
-    productCode:  jc.productCode || "-",
-    quantity:     jc.quantity ?? "-",
-    lotNo:        jc.lotNo || "-",
-    deckleSize:   jc.pendingProductionId?.deckleSize ?? "-",
-    deckleQty:    deckleIdList(jc).length || "-",
-    rollIdUsed:   rollsUsed(jc),
-    decklesProduced: decklesProduced(jc),
-    operatorName: jc.operatorName || "-",
-    helperName:   jc.helperName || "-",
-    totalMeter:   jc.totalMeter || "-",
-    sqMtr:        jc.sqMtr || "-",
-  }));
-
-  const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, ...col });
+  /* Deckle Logs: nothing is loaded up front but the list of days. A day's
+     deckles are fetched the first time it is opened (and kept for the rest of
+     the visit), so the page costs one small query until you actually look. */
+  const TZ = new Date().getTimezoneOffset(); // sent so the server cuts days in YOUR timezone
+  const PAGE_SIZE = 30;                       // days shown before "Show older days"
+  const BASE = "/app/machine/jobcard";
 
   const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const rawByJobCardId = new Map(raw.map((jc) => [jc.jobCardId, jc]));
+  const fmtNum = (n) => Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  const plural = (n, one, many) => `${fmtNum(n)} ${Number(n) === 1 ? one : many}`;
+  const keyToDate = (key) => { const [y, m, d] = key.split("-").map(Number); return new Date(y, m - 1, d); };
+  const timeOf = (d) => d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }).toUpperCase();
+  const dayKeyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const relativeDay = (key) => {
+    const diff = Math.round((keyToDate(dayKeyOf(new Date())) - keyToDate(key)) / 86400000);
+    return diff === 0 ? "Today" : diff === 1 ? "Yesterday" : diff > 1 && diff < 31 ? `${diff} days ago` : "";
+  };
 
-  // One card = several deckles. For each: its Deckle ID, the Product Code /
-  // variant it was produced as, and the reels that went into it (grouped by
-  // pool; >1 facestock = a mid-run swap).
   window.closeDeckleDetail = () => {
     const m = document.getElementById("deckleDetailModal");
     m.classList.remove("show"); m.setAttribute("aria-hidden", "true");
   };
-  function openDeckleDetail(jobCardId) {
-    const jc = rawByJobCardId.get(jobCardId);
-    if (!jc) return;
-    const rows = (Array.isArray(jc.productionLog) ? jc.productionLog : []).filter(
-      (r) => r && (r.deckleId || Number(r.meters) > 0)
-    );
-    document.getElementById("deckleDetailTitle").textContent = `Deckles Produced — ${jobCardId}`;
+  // `row` is one table row from /machine/jobcard/day/:key; row.detail carries the
+  // reel breakdown the server resolved for it.
+  function openDeckleDetail(row) {
+    if (!row || !row.detail) return;
+    const rows = [row.detail];
+    document.getElementById("deckleDetailTitle").textContent = row.detail.deckleId
+      ? `Deckle ${row.detail.deckleId} — ${row.jobCardId}`
+      : `Production Log — ${row.jobCardId}`;
     const body = document.getElementById("deckleDetailBody");
     if (!rows.length) { body.innerHTML = `<p style="color:#64748b;font-weight:600;">No deckles recorded for this entry.</p>`; return; }
 
     const POOL_LABEL = { facestock: "Facestock", adhesive: "Adhesive", release: "Release Liner" };
     body.innerHTML = rows.map((r, i) => {
-      const code = (r.productCode || jc.productCode || "—");
+      const code = (r.productCode || "—");
       // Server (routes/system/machine.js) resolves each reel's Spec, Kg Used
       // and swap Remark and hands them over on r.reelDetails, already falling
       // back to the row's single-reel-per-pool fields when materialsUsed is
@@ -273,53 +264,228 @@
     m.classList.add("show"); m.setAttribute("aria-hidden", "false");
   }
 
-  const table = new Tabulator("#master-table", {
-    data: tableData,
-    height: "100%",
-    initialSort: [{ column: "date", dir: "desc" }],
-    placeholder: "No production entries found",
-    columns: [
-      // getPosition(true) is the row's rank among currently sorted/filtered
-      // rows, re-evaluated on every redraw -- stays correct after sorting or
-      // filtering instead of a static index frozen at load time.
-      { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
-        formatter: (cell) => cell.getRow().getPosition(true) },
-      withTextFilter({ title: "Production ID", field: "jobCardId",    width: 160, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${cell.getValue()}</span>` }),
-      withTextFilter({ title: "Date",          field: "date",         width: 110 }),
-      withTextFilter({ title: "Machine",       field: "machineName",  minWidth: 120 }),
-      withTextFilter({ title: "Product Code",  field: "productCode",  minWidth: 140, formatter: (cell) => `<span style="font-weight:600;color:#03365a;">${cell.getValue()}</span>` }),
-      withTextFilter({ title: "Quantity",      field: "quantity",     width: 100 }),
-      withTextFilter({ title: "Lot No",        field: "lotNo",        minWidth: 110 }),
-      withTextFilter({ title: "Deckle Size",   field: "deckleSize",   minWidth: 110 }),
-      withTextFilter({ title: "Deckle Qty",    field: "deckleQty",    width: 100 }),
-      withTextFilter({ title: "Roll ID Used", field: "rollIdUsed",   minWidth: 150 }),
-      withTextFilter({ title: "Deckle(s) Produced", field: "decklesProduced", minWidth: 160,
-        formatter: (cell) => cell.getValue() === "-" ? "-"
-          : `<span style="font-weight:600;color:#15803d;text-decoration:underline;cursor:pointer;" title="Show per-deckle variant &amp; reels">${cell.getValue()}</span>`,
-        cellClick: (e, cell) => { if (cell.getValue() !== "-") openDeckleDetail(cell.getData().jobCardId); } }),
-      withTextFilter({ title: "Operator",      field: "operatorName", minWidth: 120 }),
-      withTextFilter({ title: "Helper",        field: "helperName",   minWidth: 120 }),
-      withTextFilter({ title: "Running Meters", field: "totalMeter",  minWidth: 120 }),
-      withTextFilter({ title: "SQ Mtr",        field: "sqMtr",        minWidth: 100 }),
-    ],
-  });
 
-  // "renderComplete" is a Tabulator EVENT, not a constructor option -- a
-  // `renderComplete:` key inside the options object above is silently
-  // ignored (no error, callback just never runs). Subscribing via .on() is
-  // the only way it actually fires. Reads straight off the rendered DOM
-  // rather than Tabulator's row APIs (getRow().getPosition()/getRows("active")
-  // were both observed to go stale after a sort) -- whatever's actually on
-  // screen, top to bottom, is renumbered 1..n every time the table redraws.
-  table.on("renderComplete", function () {
-    document.querySelectorAll("#master-table .tabulator-row").forEach((rowEl, i) => {
-      const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
-      if (cell) cell.textContent = i + 1;
+  /* ---------- one day: header + lazily built table ---------- */
+  const state = { days: [], shown: 0 };
+  const loaded = new Map();   // day key -> { table, rows } once opened
+
+  const daysEl = document.getElementById("jcDays");
+  const moreBtn = document.getElementById("jcMore");
+  const collapseBtn = document.getElementById("jcCollapseAll");
+
+  function dayCardHtml(day) {
+    const key = day.key || "none";
+    const dated = !!day.key;
+    const dt = dated ? keyToDate(day.key) : null;
+    const rel = dated ? relativeDay(day.key) : "";
+    return `
+      <section class="day-card" data-key="${esc(key)}">
+        <div class="day-head" role="button" tabindex="0" aria-expanded="false">
+          <span class="day-date">${dated
+            ? `<b>${String(dt.getDate()).padStart(2, "0")}</b><i>${dt.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}</i>`
+            : `<b>—</b><i>No date</i>`}</span>
+          <span class="day-name">${dated ? dt.toLocaleDateString("en-GB", { weekday: "long" }) : "Undated entries"}${rel ? `<small>${rel}</small>` : ""}</span>
+          <span class="day-chips">
+            <span class="day-chip"><i class="fa-solid fa-layer-group"></i>${plural(day.deckles, "deckle", "deckles")}</span>
+            <span class="day-chip"><i class="fa-solid fa-clipboard-list"></i>${plural(day.cards, "entry", "entries")}</span>
+            <span class="day-chip"><i class="fa-solid fa-ruler-horizontal"></i>${fmtNum(day.meters)} mtrs</span>
+          </span>
+          <button type="button" class="day-xl" title="Download this day as Excel"><i class="fa-solid fa-file-excel"></i> Excel</button>
+          <i class="fa-solid fa-chevron-down day-chev" aria-hidden="true"></i>
+        </div>
+        <div class="day-body" hidden></div>
+      </section>`;
+  }
+
+  function renderDays() {
+    const slice = state.days.slice(0, state.shown);
+    daysEl.innerHTML = slice.length
+      ? slice.map(dayCardHtml).join("")
+      : `<div class="jc-empty"><i class="fa-regular fa-calendar-xmark"></i>No deckles recorded yet.</div>`;
+    const rest = state.days.length - state.shown;
+    moreBtn.hidden = rest <= 0;
+    if (rest > 0) moreBtn.textContent = `Show older days (${rest} more)`;
+    const totals = state.days.reduce((t, d) => ({ deckles: t.deckles + d.deckles, meters: t.meters + d.meters }), { deckles: 0, meters: 0 });
+    document.getElementById("jcSummary").innerHTML = state.days.length
+      ? `<b>${state.days.length}</b> ${state.days.length === 1 ? "day" : "days"} &middot; <b>${fmtNum(totals.deckles)}</b> deckles &middot; <b>${fmtNum(totals.meters)}</b> mtrs`
+      : "No deckles yet";
+  }
+
+  function rowToTableData(r, key) {
+    const made = r.madeAt ? new Date(r.madeAt) : null;
+    const valid = made && !Number.isNaN(made.getTime());
+    const fallbackDate = key !== "none" ? keyToDate(key).toLocaleDateString("en-GB") : "-";
+    return {
+      ...r,
+      date: valid ? made.toLocaleDateString("en-GB") : fallbackDate,
+      time: valid ? timeOf(made) : (r.endTime || "-"),
+      deckleId: r.deckleId || "-",
+      machineName: r.machineName || "-",
+      productCode: r.productCode || "-",
+      lotNo: r.lotNo || "-",
+      deckleSize: r.deckleSize ?? "-",
+      meters: r.meters != null && r.meters !== "" ? r.meters : "-",
+      startTime: r.startTime || "-",
+      endTime: r.endTime || "-",
+      rollIdUsed: r.rollIdUsed || "-",
+      operatorName: r.operatorName || "-",
+      helperName: r.helperName || "-",
+    };
+  }
+
+  const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, ...col });
+
+  function buildTable(el, data) {
+    return new Tabulator(el, {
+      data,
+      maxHeight: "560px",
+      placeholder: "No deckles for this day",
+      columns: [
+        { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
+          formatter: (cell) => cell.getRow().getPosition(true) },
+        withTextFilter({ title: "Date",          field: "date",         width: 110 }),
+        withTextFilter({ title: "Time",          field: "time",         width: 105 }),
+        withTextFilter({ title: "Deckle ID",     field: "deckleId",     minWidth: 230,
+          formatter: (cell) => cell.getValue() === "-" ? "-"
+            : `<span style="font-weight:700;color:#15803d;text-decoration:underline;cursor:pointer;" title="Show this deckle's variant &amp; reels">${esc(cell.getValue())}</span>`,
+          cellClick: (e, cell) => openDeckleDetail(cell.getData()) }),
+        withTextFilter({ title: "Production ID", field: "jobCardId",    width: 160, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${esc(cell.getValue())}</span>` }),
+        withTextFilter({ title: "Machine",       field: "machineName",  minWidth: 120 }),
+        withTextFilter({ title: "Product Code",  field: "productCode",  minWidth: 140, formatter: (cell) => `<span style="font-weight:600;color:#03365a;">${esc(cell.getValue())}</span>` }),
+        withTextFilter({ title: "Lot No",        field: "lotNo",        minWidth: 110 }),
+        withTextFilter({ title: "Deckle Size",   field: "deckleSize",   minWidth: 110 }),
+        withTextFilter({ title: "Meters",        field: "meters",       width: 100 }),
+        withTextFilter({ title: "Start",         field: "startTime",    width: 100 }),
+        withTextFilter({ title: "End",           field: "endTime",      width: 100 }),
+        withTextFilter({ title: "Roll ID Used",  field: "rollIdUsed",   minWidth: 150 }),
+        withTextFilter({ title: "Operator",      field: "operatorName", minWidth: 120 }),
+        withTextFilter({ title: "Helper",        field: "helperName",   minWidth: 120 }),
+      ],
     });
+  }
+
+  // Draws a day's table into its card from rows already in hand.
+  function mountDay(card, rows) {
+    const key = card.dataset.key;
+    const body = card.querySelector(".day-body");
+    body.innerHTML = `<div class="day-table"></div>`;
+    const table = buildTable(body.querySelector(".day-table"), rows.map((r) => rowToTableData(r, key)));
+    table.on("renderComplete", () => {
+      body.querySelectorAll(".tabulator-row").forEach((rowEl, i) => {
+        const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
+        if (cell) cell.textContent = i + 1;
+      });
+    });
+    return table;
+  }
+
+  // Fetches a day the first time it is opened; after that the rows are kept for
+  // the visit (re-mounted if the list was re-rendered), so re-opening is instant.
+  async function ensureDay(card) {
+    const key = card.dataset.key;
+    const body = card.querySelector(".day-body");
+    const cached = loaded.get(key);
+    if (cached) {
+      if (!body.querySelector(".day-table")) cached.table = mountDay(card, cached.rows);
+      return cached;
+    }
+    body.innerHTML = `<div class="day-skel"><span></span><span></span><span></span></div>`;
+    try {
+      const res = await fetch(`${BASE}/day/${encodeURIComponent(key)}?tz=${TZ}`, { headers: { Accept: "application/json" } });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Could not load this day.");
+      const entry = { rows: data.rows, table: null };
+      entry.table = mountDay(card, data.rows);
+      loaded.set(key, entry);
+      return entry;
+    } catch (err) {
+      body.innerHTML = `<div class="day-msg">${esc(err.message || "Could not load this day.")} <button type="button" class="jc-link" data-retry>Try again</button></div>`;
+      return null;
+    }
+  }
+
+  async function setOpen(card, open) {
+    const head = card.querySelector(".day-head");
+    const body = card.querySelector(".day-body");
+    card.classList.toggle("is-open", open);
+    head.setAttribute("aria-expanded", open ? "true" : "false");
+    body.hidden = !open;
+    if (!open) return;
+    const entry = await ensureDay(card);
+    if (entry) entry.table.redraw(true); // it was built while the panel was sized by its content
+    updateCollapseAll();
+  }
+
+  function updateCollapseAll() { collapseBtn.hidden = !daysEl.querySelector(".day-card.is-open"); }
+
+  daysEl.addEventListener("click", (e) => {
+    const retry = e.target.closest("[data-retry]");
+    const card = e.target.closest(".day-card");
+    if (!card) return;
+    if (retry) { loaded.delete(card.dataset.key); setOpen(card, true); return; }
+    const xl = e.target.closest(".day-xl");
+    if (xl) { e.stopPropagation(); downloadDay(card); return; }
+    if (e.target.closest(".day-head")) setOpen(card, !card.classList.contains("is-open"));
+  });
+  daysEl.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("day-head")) {
+      e.preventDefault();
+      const card = e.target.closest(".day-card");
+      setOpen(card, !card.classList.contains("is-open"));
+    }
   });
 
-  document.getElementById("download-xlsx").addEventListener("click", () =>
-    table.download("xlsx", "sachiko-deckle-logs.xlsx", { sheetName: "Deckle Logs" }));
+  async function downloadDay(card) {
+    const key = card.dataset.key;
+    const entry = loaded.get(key) || await (async () => { await setOpen(card, true); return loaded.get(key); })();
+    if (!entry) return;
+    entry.table.download("xlsx", `sachiko-deckle-logs-${key}.xlsx`, { sheetName: key === "none" ? "Undated" : key });
+  }
+
+  collapseBtn.addEventListener("click", () => {
+    daysEl.querySelectorAll(".day-card.is-open").forEach((c) => setOpen(c, false));
+    collapseBtn.hidden = true;
+  });
+
+  moreBtn.addEventListener("click", () => {
+    state.shown = Math.min(state.days.length, state.shown + PAGE_SIZE);
+    const openKeys = [...daysEl.querySelectorAll(".day-card.is-open")].map((c) => c.dataset.key);
+    renderDays();
+    // Re-attach already-loaded days so their tables aren't thrown away.
+    openKeys.forEach((k) => { const c = daysEl.querySelector(`.day-card[data-key="${CSS.escape(k)}"]`); if (c) setOpen(c, true); });
+  });
+
+  // Jump to a date: opens that day (revealing older pages if needed).
+  document.getElementById("jcJump").addEventListener("change", (e) => {
+    const key = e.target.value;
+    if (!key) return;
+    const idx = state.days.findIndex((d) => d.key === key);
+    if (idx < 0) {
+      if (typeof showToast === "function") showToast("No deckles were recorded on that day.", "error");
+      return;
+    }
+    if (idx >= state.shown) { state.shown = Math.min(state.days.length, Math.ceil((idx + 1) / PAGE_SIZE) * PAGE_SIZE); renderDays(); }
+    const card = daysEl.querySelector(`.day-card[data-key="${CSS.escape(key)}"]`);
+    if (!card) return;
+    setOpen(card, true);
+    card.scrollIntoView({ behavior: "smooth", block: "start" });
+    card.classList.remove("is-flash"); void card.offsetWidth; card.classList.add("is-flash");
+  });
+
+  async function init() {
+    try {
+      const res = await fetch(`${BASE}/days?tz=${TZ}`, { headers: { Accept: "application/json" } });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Could not load the deckle logs.");
+      state.days = data.days;
+      state.shown = Math.min(state.days.length, PAGE_SIZE);
+      renderDays();
+    } catch (err) {
+      daysEl.innerHTML = `<div class="jc-empty"><i class="fa-solid fa-triangle-exclamation"></i>${esc(err.message)} <button type="button" class="jc-link" onclick="location.reload()">Reload</button></div>`;
+      document.getElementById("jcSummary").textContent = "";
+    }
+  }
+  init();
 </script>
 
 <% if (notification && notification.length) { %>

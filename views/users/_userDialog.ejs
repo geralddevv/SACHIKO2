@@ -1,0 +1,263 @@
+<%#
+  New User dialog -- opened by the "+ User" button on /master/view (and by the
+  "Add User" links on the client pages, which redirect to
+  /master/view?new=user&clientName=...). A <form class="so-dialog"
+  data-so-form> inside a .so-dialog-backdrop, driven by public/js/soFormDialog.js.
+  Styles: /css/soDialog.css (link it from the page). Choices.js loads with
+  `defer`, so it is created on DOMContentLoaded.
+
+  Locals: `clients` (string[] of client names), `csrfToken`.
+%>
+<%
+  const ccfClients = (typeof clients !== 'undefined' && Array.isArray(clients)) ? clients : [];
+  const ccfCsrf = typeof csrfToken !== 'undefined' ? csrfToken : '';
+%>
+<style>
+  #create-user-form {
+    height: 760px;
+  }
+</style>
+
+<div id="user-form-dialog" class="so-dialog-backdrop" aria-hidden="true">
+
+  <!-- =========================== NEW USER =========================== -->
+  <form id="create-user-form" class="so-dialog so-dialog--xl" action="/app/form/user" method="post" autocomplete="off" novalidate data-so-form role="dialog" aria-modal="true" aria-labelledby="ccf-title-user">
+    <input type="hidden" name="_csrf" value="<%= ccfCsrf %>" />
+    <input type="hidden" name="objectId" id="object-id" />
+
+    <div class="so-dialog__head">
+      <span class="so-dialog__icon"><i class="fa-solid fa-user"></i></span>
+      <div>
+        <h3 class="so-dialog__title" id="ccf-title-user">New User</h3>
+        <p class="so-dialog__desc">Pick a client first — its details fill in automatically.</p>
+      </div>
+    </div>
+
+    <div class="so-dialog__body">
+      <div class="so-dialog__section">Client Information</div>
+      <div class="so-dialog__row">
+        <div class="so-dialog__field">
+          <label for="userform-client-name">Client Name <span class="so-req">*</span></label>
+          <select name="clientName" id="userform-client-name" required data-so-autofocus>
+            <option value="" disabled selected hidden>Search</option>
+            <% ccfClients.forEach((client) => { %>
+              <option value="<%= client %>"><%= client %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="so-dialog__field">
+          <label for="user-client-id">Client Id</label>
+          <input id="user-client-id" name="clientId" placeholder="Enter Client ID" readonly required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="username-client-type">Client Type</label>
+          <select id="username-client-type" disabled>
+            <option value="" selected disabled hidden>Select</option>
+            <option value="DEALER">DEALER</option>
+            <option value="CLIENT">CLIENT</option>
+          </select>
+          <input type="hidden" name="clientType" id="username-client-type-hidden" />
+        </div>
+        <div class="so-dialog__field">
+          <label for="username-ho-location">H/O Location</label>
+          <input type="text" id="username-ho-location" name="hoLocation" placeholder="Enter H/O Location" readonly required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="username-account-head">Account Head</label>
+          <input type="text" id="username-account-head" name="accountHead" placeholder="Enter Account Head" readonly required />
+        </div>
+      </div>
+
+      <div class="so-dialog__section">Username Information</div>
+      <div class="so-dialog__row">
+        <div class="so-dialog__field">
+          <label for="user-name">Username <span class="so-req">*</span></label>
+          <input type="text" id="user-name" name="userName" placeholder="Enter Username" required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="user-department">Department <span class="so-req">*</span></label>
+          <input type="text" id="user-department" name="userDepartment" placeholder="Enter Department" required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="user-contact-no">Contact No <span class="so-req">*</span></label>
+          <input type="text" id="user-contact-no" name="userContact" placeholder="Enter Contact No" required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="user-email">Email <span class="so-req">*</span></label>
+          <input type="email" id="user-email" name="userEmail" placeholder="Enter Email" required />
+        </div>
+      </div>
+
+      <div class="so-dialog__section so-dialog__section--row">
+        <span>Location Details</span>
+        <div class="loc-counter">
+          <button type="button" id="locations-minus" aria-label="Remove a location">&minus;</button>
+          <input type="text" id="locations-count" name="locationsCount" value="1" readonly />
+          <button type="button" id="locations-plus" aria-label="Add a location">+</button>
+        </div>
+      </div>
+      <div style="font-size: 12px; color: var(--so-faint); margin: -4px 0 10px;">
+        Each location has its own dispatch details. Choose Transport or Self Dispatch per location.
+      </div>
+      <div id="locations-details" class="locations-details">
+        <div class="location-row">
+          <div class="loc-line">
+            <input
+              type="text"
+              name="locationDetails[0][userLocation]"
+              placeholder="Enter Location"
+              aria-label="Location 1"
+              oninput="this.value = this.value.toUpperCase()"
+              required
+            />
+            <input
+              type="text"
+              name="locationDetails[0][dispatchAddress]"
+              placeholder="Enter Address"
+              aria-label="Address 1"
+              oninput="this.value = this.value.toUpperCase()"
+              required
+            />
+          </div>
+          <div class="loc-dispatch">
+            <span class="loc-title">Dispatch Details — Location 1</span>
+            <div class="loc-fields">
+              <select class="loc-dispatch-mode" aria-label="Dispatch Type for location 1">
+                <option value="TRANSPORT" selected>Transport</option>
+                <option value="SELF">Self Dispatch</option>
+              </select>
+              <input type="hidden" class="loc-self-dispatch" name="locationDetails[0][selfDispatch]" value="" />
+              <div class="loc-transport">
+                <input type="text" name="locationDetails[0][transportName]" placeholder="Transport Name" oninput="this.value = this.value.toUpperCase()" />
+                <input type="text" class="loc-transport-contact" name="locationDetails[0][transportContact]" placeholder="Transport Contact" />
+                <input type="text" name="locationDetails[0][dropLocation]" placeholder="Drop Location" oninput="this.value = this.value.toUpperCase()" />
+                <select name="locationDetails[0][deliveryMode]">
+                  <option value="">Delivery Mode</option>
+                  <option value="DOOR">DOOR</option>
+                  <option value="GODOWN">GODOWN</option>
+                </select>
+                <input type="text" name="locationDetails[0][deliveryLocation]" placeholder="Delivery Location" oninput="this.value = this.value.toUpperCase()" />
+                <select name="locationDetails[0][clientPayment]">
+                  <option value="">Payment</option>
+                  <option value="PAY">PAY</option>
+                  <option value="TO PAY">TO PAY</option>
+                </select>
+              </div>
+              <div class="loc-self" style="display:none;">
+                <span class="loc-self-badge">Self Dispatch</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="so-dialog__foot">
+      <label for="user-verified" style="display: flex; align-items: center; gap: 8px; margin: 0 auto 0 0; font-size: 13.5px; font-weight: 600; color: var(--so-ink); cursor: pointer;">
+        <input type="checkbox" id="user-verified" name="verified" value="on" style="width: 16px; height: 16px; accent-color: var(--so-brand);" />
+        Verified &mdash; data checked and approved
+      </label>
+      <button type="button" class="so-btn so-btn--ghost" onclick="soDialog.close('user-form-dialog')">Cancel</button>
+      <button type="submit" class="so-btn so-btn--primary"><i class="fa-solid fa-check"></i> Save User Details</button>
+    </div>
+  </form>
+</div>
+
+<script src="/js/locationRepeater.js?v=1"></script>
+<script>
+  /* ================= NEW USER: client cascade, location repeater =====
+     Runs on DOMContentLoaded: Choices.js is loaded with `defer`. */
+  document.addEventListener("DOMContentLoaded", function () {
+    const $ = (id) => document.getElementById(id);
+    const clientNameSelect = $("userform-client-name");
+    const userContactNo = $("user-contact-no");
+    const locationCountInput = $("locations-count");
+    const locationContainer = $("locations-details");
+    const locationMinusBtn = $("locations-minus");
+    const locationPlusBtn = $("locations-plus");
+
+    let clientNameChoices = null;
+    let isHandlingChange = false;
+
+    if (userContactNo) formatMobileInput(userContactNo);
+
+    if (clientNameSelect) {
+      try {
+        clientNameChoices = new Choices(clientNameSelect, {
+          searchEnabled: true,
+          itemSelectText: "",
+          shouldSort: false,
+          callbackOnInit: function () {
+            this.passedElement.element.addEventListener("change", (e) => {
+              if (isHandlingChange) return;
+              isHandlingChange = true;
+              setTimeout(() => { isHandlingChange = false; }, 100);
+              handleClientChange(e.target.value);
+            });
+          },
+        });
+      } catch (e) {
+        console.error("Choices initialization failed:", e);
+        clientNameSelect.addEventListener("change", (e) => handleClientChange(e.target.value));
+      }
+    }
+
+    function handleClientChange(clientName) {
+      if (!clientName) return;
+      fetch(`/app/form/client/${encodeURIComponent(clientName)}`)
+        .then((response) => response.json())
+        .then((data) => {
+          $("user-client-id").value = data.clientId || "";
+          $("username-client-type").value = data.clientType || "";
+          $("username-client-type-hidden").value = data.clientType || "";
+          $("username-ho-location").value = data.hoLocation || "";
+          $("username-account-head").value = data.accountHead || "";
+          $("object-id").value = data._id || "";
+        })
+        .catch((error) => console.error("Error:", error));
+    }
+
+    /* ===== LOCATION REPEATER (public/js/locationRepeater.js) ===== */
+    const repeater = createLocationRepeater({
+      container: locationContainer,
+      countInput: locationCountInput,
+      minus: locationMinusBtn,
+      plus: locationPlusBtn,
+    });
+
+    // A native form.reset() clears every location-row input's value but
+    // can't know it should also collapse the repeater back to one row, or
+    // that the Client Name Choices widget needs telling separately (Choices
+    // doesn't observe the underlying <select> being reset externally).
+    const userForm = document.getElementById("create-user-form");
+    userForm?.addEventListener("reset", () => {
+      clientNameChoices?.removeActiveItems();
+      repeater.setCount(1);
+    });
+
+    /* ================= DIALOG ENTRY POINT =================
+       Called by the "+ User" button, and by "Add User" links on the client
+       pages (they land here as /master/view?new=user&clientName=...). */
+    window.openUserDialog = function (clientName) {
+      userForm?.reset();
+      soDialog.open("user-form-dialog");
+
+      if (clientName) {
+        if (clientNameChoices) clientNameChoices.setChoiceByValue(clientName);
+        else if (clientNameSelect) clientNameSelect.value = clientName;
+        handleClientChange(clientName);
+        setTimeout(() => $("user-name")?.focus(), 30);
+      }
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "user") {
+      window.openUserDialog(params.get("clientName") || "");
+      params.delete("new");
+      params.delete("clientName");
+      const qs = params.toString();
+      history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : ""));
+    }
+  });
+</script>
+<script src="/js/soFormDialog.js?v=1"></script>

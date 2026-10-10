@@ -1,0 +1,137 @@
+<%#
+  Edit User dialog -- opened by "Edit User" on /client/details/:userId. Same
+  look as the New User dialog (_userDialog.ejs); the Client Reference block is
+  read-only (a user's client can't be changed here), everything else is
+  editable. Posts to POST /form/edit/user/:id, which answers JSON for this
+  dialog (soFormDialog.js sends Accept: application/json) and redirects for the
+  old standalone page.
+  Styles: /css/soDialog.css (link it from the page). Locals: `userData` (the
+  user, plus `initialLocationDetails`: the location rows to edit),
+  `csrfToken`. Choices.js isn't used here.
+%>
+<%
+  const eudUser = userData;
+  const eudRows = (typeof initialLocationDetails !== 'undefined' && Array.isArray(initialLocationDetails)) ? initialLocationDetails : [];
+  const eudCsrf = typeof csrfToken !== 'undefined' ? csrfToken : '';
+%>
+<style>
+  #edit-user-form {
+    height: 760px;
+  }
+</style>
+
+<div id="edit-user-dialog" class="so-dialog-backdrop" aria-hidden="true">
+  <form id="edit-user-form" class="so-dialog so-dialog--xl" action="/app/form/edit/user/<%= eudUser._id %>" method="post" autocomplete="off" novalidate data-so-form role="dialog" aria-modal="true" aria-labelledby="eud-title">
+    <input type="hidden" name="_csrf" value="<%= eudCsrf %>" />
+
+    <div class="so-dialog__head">
+      <span class="so-dialog__icon"><i class="fa-solid fa-user-pen"></i></span>
+      <div>
+        <h3 class="so-dialog__title" id="eud-title">Edit User</h3>
+        <p class="so-dialog__desc">The client details are fixed — change the user and the locations.</p>
+      </div>
+    </div>
+
+    <div class="so-dialog__body">
+      <div class="so-dialog__section">Client Information</div>
+      <div class="so-dialog__row">
+        <div class="so-dialog__field">
+          <label for="eud-client-name">Client Name</label>
+          <input type="text" id="eud-client-name" value="<%= eudUser.clientName %>" readonly tabindex="-1" />
+        </div>
+        <div class="so-dialog__field">
+          <label for="eud-client-id">Client Id</label>
+          <input type="text" id="eud-client-id" value="<%= eudUser.clientId %>" readonly tabindex="-1" />
+        </div>
+        <div class="so-dialog__field">
+          <label for="eud-client-type">Client Type</label>
+          <input type="text" id="eud-client-type" value="<%= eudUser.clientType %>" readonly tabindex="-1" />
+        </div>
+        <div class="so-dialog__field">
+          <label for="eud-ho-location">H/O Location</label>
+          <input type="text" id="eud-ho-location" value="<%= eudUser.hoLocation %>" readonly tabindex="-1" />
+        </div>
+        <div class="so-dialog__field">
+          <label for="eud-account-head">Account Head</label>
+          <input type="text" id="eud-account-head" value="<%= eudUser.accountHead %>" readonly tabindex="-1" />
+        </div>
+      </div>
+
+      <div class="so-dialog__section">Username Information</div>
+      <div class="so-dialog__row">
+        <div class="so-dialog__field">
+          <label for="eud-user-name">Username <span class="so-req">*</span></label>
+          <input type="text" id="eud-user-name" name="userName" value="<%= eudUser.userName %>" placeholder="Enter Username" required data-so-autofocus />
+        </div>
+        <div class="so-dialog__field">
+          <label for="eud-user-department">Department <span class="so-req">*</span></label>
+          <input type="text" id="eud-user-department" name="userDepartment" value="<%= eudUser.userDepartment %>" placeholder="Enter Department" required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="eud-user-contact-no">Contact No <span class="so-req">*</span></label>
+          <input type="text" id="eud-user-contact-no" name="userContact" value="<%= eudUser.userContact %>" placeholder="Enter Contact No" required />
+        </div>
+        <div class="so-dialog__field">
+          <label for="eud-user-email">Email <span class="so-req">*</span></label>
+          <input type="email" id="eud-user-email" name="userEmail" value="<%= eudUser.userEmail %>" placeholder="Enter Email" required />
+        </div>
+      </div>
+
+      <div class="so-dialog__section so-dialog__section--row">
+        <span>Location Details</span>
+        <div class="loc-counter">
+          <button type="button" id="eud-locations-minus" aria-label="Remove a location">&minus;</button>
+          <input type="text" id="eud-locations-count" name="locationsCount" value="1" readonly />
+          <button type="button" id="eud-locations-plus" aria-label="Add a location">+</button>
+        </div>
+      </div>
+      <div style="font-size: 12px; color: var(--so-faint); margin: -4px 0 10px;">
+        Each location has its own dispatch details. Choose Transport or Self Dispatch per location.
+      </div>
+      <div id="eud-locations-details" class="locations-details"></div>
+    </div>
+
+    <div class="so-dialog__foot">
+      <div style="display: flex; flex-direction: column; gap: 2px; margin: 0 auto 0 0;">
+        <label for="eud-verified" style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13.5px; font-weight: 600; color: var(--so-ink); cursor: pointer;">
+          <input type="checkbox" id="eud-verified" name="verified" value="on" style="width: 16px; height: 16px; accent-color: var(--so-brand);" <%= eudUser.verified ? "checked" : "" %> />
+          Verified &mdash; data checked and approved
+        </label>
+        <% if (eudUser.verified) { %>
+          <span style="margin-left: 24px; font-size: 12px; color: var(--so-faint);">
+            Approved by <%= eudUser.verifiedBy || "—" %><%= eudUser.verifiedAt ? " on " + new Date(eudUser.verifiedAt).toLocaleString("en-IN") : "" %>
+          </span>
+        <% } %>
+      </div>
+      <button type="button" class="so-btn so-btn--ghost" onclick="soDialog.close('edit-user-dialog')">Cancel</button>
+      <button type="submit" class="so-btn so-btn--primary"><i class="fa-solid fa-check"></i> Update User Details</button>
+    </div>
+  </form>
+</div>
+
+<script type="application/json" id="eud-rows"><%- safeJson(eudRows) %></script>
+<script src="/js/locationRepeater.js?v=1"></script>
+<script>
+  (function () {
+    const form = document.getElementById("edit-user-form");
+    const rows = JSON.parse(document.getElementById("eud-rows").textContent || "[]");
+    const repeater = createLocationRepeater({
+      container: document.getElementById("eud-locations-details"),
+      countInput: document.getElementById("eud-locations-count"),
+      minus: document.getElementById("eud-locations-minus"),
+      plus: document.getElementById("eud-locations-plus"),
+    });
+    formatMobileInput(document.getElementById("eud-user-contact-no"));
+
+    // Put the saved rows in (and back, after a Cancel/re-open): a native
+    // form.reset() restores the plain inputs but not the rebuilt location cards.
+    function loadRows() { repeater.setRows(rows); }
+    loadRows();
+    form.addEventListener("reset", () => setTimeout(loadRows, 0));
+
+    window.openEditUserDialog = function () {
+      soDialog.open("edit-user-dialog");
+    };
+  })();
+</script>
+<script src="/js/soFormDialog.js?v=1"></script>

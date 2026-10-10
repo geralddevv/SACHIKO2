@@ -1,3 +1,5 @@
+import { editLocationRows } from "../utils/userLocations.js";
+import { verificationUpdate } from "../utils/verification.js";
 import express, { json } from "express";
 import crypto from "crypto";
 import multer from "multer";
@@ -769,32 +771,16 @@ router.post("/form/ratecalculator", requireAuth, createLimiter, async (req, res)
 
 // ----------------------------------Client---------------------------------->
 // route for client form.
-router.get("/form/client", async (req, res) => {
-  const getNextClientIdPreview = async () => {
-    const counterDoc = await Counter.findOne({ key: "clientId" }).select("seq").lean();
-    let nextSeq = Number(counterDoc?.seq || 0) + 1;
-
-    // Skip any legacy collisions so preview stays aligned with generator behavior.
-    while (await Client.exists({ clientId: `FS | CLIENT | ${nextSeq}` })) {
-      nextSeq += 1;
-    }
-    return `FS | CLIENT | ${nextSeq}`;
-  };
-
-  let clients = await Client.distinct("clientName");
-  const employees = await Employee.find({}, "empName").sort({ empName: 1 }).lean();
-  let userCount = await Username.countDocuments();
-  const previewClientId = await getNextClientIdPreview();
-  res.render("users/clientForm.ejs", {
-    JS: "clientForm.js",
-    CSS: "tabOpt.css",
-    title: "Client Form",
-    userCount,
-    previewClientId,
-    clients,
-    employees,
-    notification: req.flash("notification"),
-  });
+// The standalone Create Client / Create User page is now two dialogs: New
+// Client on /client/view (views/users/_clientDialog.ejs) and New User on
+// /master/view (views/users/_userDialog.ejs). Old links and bookmarks land here
+// and are forwarded, opening the right dialog.
+router.get("/form/client", (req, res) => {
+  const params = new URLSearchParams();
+  const isUser = req.query.tab === "user";
+  params.set("new", isUser ? "user" : "client");
+  if (isUser && req.query.clientName) params.set("clientName", String(req.query.clientName));
+  res.redirect(`${isUser ? "/app/master/view" : "/app/client/view"}?${params.toString()}`);
 });
 
 function normalizeClientPart(value) {
@@ -926,26 +912,38 @@ router.post("/form/client", requireAuth, createLimiter, async (req, res) => {
     const clientStatus = String(req.body.clientStatus || "").trim();
     const hoLocation = String(req.body.hoLocation || "").trim();
     const accountHead = String(req.body.accountHead || "").trim();
-    const clientGst = String(req.body.clientGst || "").trim().toUpperCase();
+    // "Unregistered" checkbox: no real GST/PAN to validate or store -- the
+    // sentinel satisfies the model's required fields without pretending to be
+    // a real (format-checked) number.
+    const isGstUnregistered = req.body.gstUnregistered === "true" || req.body.gstUnregistered === true;
+    const clientGst = isGstUnregistered ? "UNREGISTERED" : String(req.body.clientGst || "").trim().toUpperCase();
     const clientMsme = String(req.body.clientMsme || "").trim();
     const clientGumasta = String(req.body.clientGumasta || "").trim();
-    const clientPan = String(req.body.clientPan || "").trim().toUpperCase();
+    const clientPan = isGstUnregistered ? "UNREGISTERED" : String(req.body.clientPan || "").trim().toUpperCase();
+    const vendorCode = String(req.body.vendorCode || "").trim();
+    const verticals = String(req.body.verticals || "").trim();
 
     // GST and PAN Validation
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
     const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
 
-    if (clientGst && !gstRegex.test(clientGst)) {
-      return res.status(400).json({ success: false, message: "Invalid GST number format" });
-    }
-    if (clientPan && !panRegex.test(clientPan)) {
-      return res.status(400).json({ success: false, message: "Invalid PAN number format" });
-    }
-    if (clientGst && clientPan && clientGst.substring(2, 12) !== clientPan) {
-      return res.status(400).json({ success: false, message: "PAN does not match GST number" });
+    if (!isGstUnregistered) {
+      if (clientGst && !gstRegex.test(clientGst)) {
+        return res.status(400).json({ success: false, message: "Invalid GST number format" });
+      }
+      if (clientPan && !panRegex.test(clientPan)) {
+        return res.status(400).json({ success: false, message: "Invalid PAN number format" });
+      }
+      if (clientGst && clientPan && clientGst.substring(2, 12) !== clientPan) {
+        return res.status(400).json({ success: false, message: "PAN does not match GST number" });
+      }
     }
 
-    const clientSignature = hashSignature(buildClientSignature(req.body));
+    // Signed off the sanitized fields (not raw req.body) so an "Unregistered"
+    // submission signs the sentinel actually being stored.
+    const clientSignature = hashSignature(
+      buildClientSignature({ clientName, clientType, clientStatus, hoLocation, accountHead, clientGst, clientMsme, clientGumasta, clientPan }),
+    );
 
     // Prevent duplicates only when the full logical client entity matches.
     // clientId is auto-generated, so it is intentionally excluded from this match.
@@ -986,7 +984,10 @@ router.post("/form/client", requireAuth, createLimiter, async (req, res) => {
       clientMsme,
       clientGumasta,
       clientPan,
+      vendorCode,
+      verticals,
       clientSignature,
+      ...verificationUpdate(req).set,
     };
 
     await Client.create(formData);
@@ -1105,6 +1106,7 @@ router.post("/form/user", requireAuth, createLimiter, async (req, res) => {
       userContact,
       userEmail,
       userSignature,
+      ...verificationUpdate(req).set,
     });
 
     client.users.push(newUser);
@@ -1766,30 +1768,7 @@ router.get("/form/edit/user/:userId", async (req, res) => {
       return res.redirect("/app/users/master");
     }
 
-    // Build the rows for the form. Dispatch details are now per-location; for
-    // legacy users whose stored locationDetails predate that, backfill the
-    // primary (first) location's dispatch from the top-level fields so editing
-    // doesn't wipe the existing dispatch info.
-    const stored = Array.isArray(user.locationDetails) && user.locationDetails.length
-      ? user.locationDetails.map((loc) => (loc?.toObject ? loc.toObject() : loc))
-      : [{ userLocation: user.userLocation || "", dispatchAddress: user.dispatchAddress || "" }];
-
-    const hasPrimaryDispatch = stored[0] && (
-      stored[0].selfDispatch || stored[0].transportName || stored[0].transportContact ||
-      stored[0].dropLocation || stored[0].deliveryMode || stored[0].deliveryLocation || stored[0].clientPayment
-    );
-    if (stored[0] && !hasPrimaryDispatch) {
-      stored[0] = {
-        ...stored[0],
-        selfDispatch: user.SelfDispatch || "",
-        transportName: user.transportName || "",
-        transportContact: user.transportContact || "",
-        dropLocation: user.dropLocation || "",
-        deliveryMode: user.deliveryMode || "",
-        deliveryLocation: user.deliveryLocation || "",
-        clientPayment: user.clientPayment || "",
-      };
-    }
+    const stored = editLocationRows(user);
 
     res.render("users/editUser", {
       CSS: "tabOpt.css",
@@ -1811,8 +1790,10 @@ router.get("/form/edit/user/:userId", async (req, res) => {
 router.post("/form/edit/user/:userId", requireAuth, updateLimiter, async (req, res) => {
   try {
     let { userId } = req.params;
+    const wantsJson = String(req.get("accept") || "").includes("application/json");
     const currentUser = await Username.findById(userId);
     if (!currentUser) {
+      if (wantsJson) return res.status(404).json({ success: false, message: "User not found." });
       req.flash("error", "User not found.");
       return res.redirect("/app/users/master");
     }
@@ -1881,11 +1862,17 @@ router.post("/form/edit/user/:userId", requireAuth, updateLimiter, async (req, r
     }).lean();
 
     if (duplicateUser) {
+      if (wantsJson) return res.status(400).json({ success: false, message: "User already exists (same full details)." });
       req.flash("error", "User already exists (same full details).");
       return res.redirect("back");
     }
 
-    await Username.findByIdAndUpdate(userId, updateData, { new: true, runValidators: true });
+    const vf = verificationUpdate(req, currentUser);
+    await Username.findByIdAndUpdate(
+      userId,
+      { $set: { ...updateData, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) },
+      { new: true, runValidators: true },
+    );
 
     res.locals.auditDescription = `Updated user "${updateData.userName}"`;
     let notification = "User details updated successfully!";
@@ -1909,9 +1896,13 @@ router.post("/form/edit/user/:userId", requireAuth, updateLimiter, async (req, r
       console.error("BINDING IDENTITY SYNC ERROR:", err);
     }
     req.flash("notification", notification);
+    if (wantsJson) return res.json({ success: true, redirect: `/app/client/details/${userId}` });
     res.redirect(`/app/client/details/${userId}`);
   } catch (err) {
     console.error(err);
+    if (String(req.get("accept") || "").includes("application/json")) {
+      return res.status(400).json({ success: false, message: "Error updating user details." });
+    }
     req.flash("error", "Error updating user details.");
     res.redirect("back");
   }
@@ -1944,7 +1935,7 @@ router.post("/form/location", requireAuth, createLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "location already exist" });
     }
 
-    await Location.create({ locationName });
+    await Location.create({ locationName, ...verificationUpdate(req).set });
     res.locals.auditDescription = `Created location "${locationName}"`;
     req.flash("notification", "Location created successfully!");
     res.json({ success: true, redirect: "/app/form/location" });
@@ -1982,9 +1973,12 @@ router.put("/api/locations/:id", requireAuth, updateLimiter, async (req, res) =>
       return res.status(400).json({ success: false, message: "Location already exists." });
     }
 
+    const existing = await Location.findById(req.params.id).select("verified verifiedBy").lean();
+    const vf = verificationUpdate(req, existing);
+
     const updated = await Location.findByIdAndUpdate(
       req.params.id,
-      { locationName },
+      { $set: { locationName, ...vf.set }, ...(Object.keys(vf.unset).length ? { $unset: vf.unset } : {}) },
       { new: true, runValidators: true },
     );
 
@@ -8199,8 +8193,10 @@ router.get("/edit/user/:id", async (req, res) => {
 // ----------------------------------Master display---------------------------------->
 // route for details page.
 router.get("/master/view", async (req, res) => {
+  const clients = await Client.distinct("clientName");
+  clients.sort((a, b) => String(a).localeCompare(String(b)));
   let jsonData = await Username.find()
-    .select("clientName clientType accountHead userName userLocation userDepartment locationDetails label labelStock")
+    .select("clientName clientType accountHead userName userLocation userDepartment locationDetails label labelStock verified verifiedBy verifiedAt")
     .populate({ path: "label", select: "location" })
     .populate({ path: "labelStock", select: "location" })
     .sort({ clientName: 1, userName: 1 })
@@ -8209,6 +8205,7 @@ router.get("/master/view", async (req, res) => {
   // console.log(jsonData);
   res.render("users/masterDisp.ejs", {
     jsonData,
+    clients,
     CSS: "tableDisp.css",
     JS: false,
     title: "Client Details",

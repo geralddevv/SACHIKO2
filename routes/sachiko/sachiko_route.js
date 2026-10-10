@@ -1,3 +1,4 @@
+import { verificationUpdate } from "../../utils/verification.js";
 import express from "express";
 import multer from "multer";
 import path from "path";
@@ -386,7 +387,7 @@ router.post("/label-stock/form", requireAuth, createLimiter, handleWordUploadJso
     }
 
     const materialSignature = buildMaterialSignature(payload);
-    await SachikoLabelStock.create({ labelStockId, skuCode, ...payload, labelStockSignature, materialSignature });
+    await SachikoLabelStock.create({ labelStockId, skuCode, ...payload, labelStockSignature, materialSignature, ...verificationUpdate(req).set });
     req.flash("notification", `Label Stock "${payload.productCode}" created successfully!`);
     res.json({ success: true, redirect: "/app/label-stock/view" });
   } catch (err) {
@@ -505,6 +506,9 @@ router.post("/label-stock/edit/:id", requireAuth, updateLimiter, handleWordUploa
       if (!(key in payload)) unset[key] = "";
     }
 
+    const vf = verificationUpdate(req, existing);
+    Object.assign(payload, vf.set);
+    Object.assign(unset, vf.unset);
     const update = Object.keys(unset).length ? { $set: payload, $unset: unset } : payload;
     await SachikoLabelStock.findByIdAndUpdate(req.params.id, update);
     req.flash("notification", "Label Stock updated successfully!");

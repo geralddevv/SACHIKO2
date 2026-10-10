@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 // Board Paper master -- the list of board paper grades the plant buys
 // (FBB, SBS, kraft-back and so on). A lookup master in the same shape as
@@ -20,6 +21,7 @@ const boardPaperSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+    ...verificationFields,
   },
   { timestamps: true },
 );

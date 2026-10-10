@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 // Family master -- the list backing the "Family" dropdown on Label Stock
 // View (views/sachiko/labelStockView.ejs) and Facestock Master
@@ -15,6 +16,7 @@ const familySchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
+    ...verificationFields,
   },
   { timestamps: true },
 );

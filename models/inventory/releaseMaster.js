@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 // Release Liner master -- a reusable catalog entry for a release liner spec
 // (as opposed to models/inventory/releaseLinerStock.js, which is a physical
@@ -84,6 +85,7 @@ const releaseMasterSchema = new mongoose.Schema(
       sparse: true,
       trim: true,
     },
+    ...verificationFields,
   },
   { timestamps: true },
 );

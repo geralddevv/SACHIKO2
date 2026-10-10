@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { verificationFields } from "../../utils/verification.js";
 
 const sachikoLabelStockSchema = new mongoose.Schema(
   {
@@ -25,6 +26,8 @@ const sachikoLabelStockSchema = new mongoose.Schema(
     // change its shape/field list without also re-running
     // scripts/backfill-labelstock-material-signature.js.
     materialSignature: { type: String, trim: true, index: true },
+    // "Verified" sign-off (who/when) -- shared fields, see VERIFICATION.md.
+    ...verificationFields,
     rollType: { type: String, trim: true, enum: ["NORMAL", "DOUBLE RELEASE", "DOUBLE FACESTOCK"], default: "NORMAL" },
     // Two separate attachment slots -- wordFile takes only .doc/.docx,
     // pdfFile only .pdf (see fileFilter in routes/sachiko/sachiko_route.js).
