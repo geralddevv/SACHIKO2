@@ -2680,6 +2680,7 @@ router.post("/form/vendor-user", requireAuth, createLimiter, async (req, res) =>
 // ----------------------------------Sales Order---------------------------------->
 // Centralized Sales Order Form
 router.get("/sales/order", async (req, res) => {
+  if (req.session?.authUser?.role === "sales") return res.status(403).send("Forbidden");
   const { orderId } = req.query;
   // ?embed=1 -- the same form with no nav and no side nav, for the New Sales
   // Order dialog on /sales/pending (views/layout/embed.ejs). It is a render
@@ -2900,6 +2901,7 @@ async function describeSalesOrder({ itemTypeLabel, userId, quantity, poNumber, i
 
 // Submit Sales Order (Create or Update)
 router.post("/sales/order", async (req, res) => {
+  if (req.session?.authUser?.role === "sales") return res.status(403).json({ success: false, message: "Forbidden" });
   try {
     const { orderId, itemType, userId, itemId, quantity, estimatedDate, remarks, sourceLocation, locationRadio, userLocation, poNumber, poDate, orderRate, submissionToken, paperSize, runningMeters, noOfRolls, labelStockMasterId, itemRate, deckleOption } = req.body;
     const createdByUser = req.user?.username || "SYSTEM";

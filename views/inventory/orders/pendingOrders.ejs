@@ -411,6 +411,7 @@
         <i class="fa-solid fa-clock-rotate-left"></i>
         <span>View Logs</span>
       </a>
+      <% if (!(authUser && authUser.role === "sales")) { %>
       <button
         type="button"
         id="new-order-btn"
@@ -419,6 +420,7 @@
         <i class="fa-solid fa-plus"></i>
         <span>New Order</span>
       </button>
+      <% } %>
       <button
         type="button"
         id="import-orders-btn"
@@ -1379,7 +1381,7 @@
     }
   };
 
-  document.getElementById("new-order-btn").addEventListener("click", openNewOrderDialog);
+  document.getElementById("new-order-btn")?.addEventListener("click", openNewOrderDialog);
   document.getElementById("new-order-close").addEventListener("click", closeNewOrderDialog);
 
   /* Deliberately NOT closed by a click on the backdrop or by Escape, unlike

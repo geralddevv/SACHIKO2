@@ -992,11 +992,13 @@
           </div>
 
           <div class="nav-labels-opt">
+            <% if (!isSales) { %>
             <a href="/app/sales/order" title="Sales Order" class="<%= title === 'Sales Order' ? 'nav-items active' : 'nav-items' %>" style="border-top: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-cart-plus" style="color: #ffffff"></i>
               <p class="nav-items-para">Sales Order</p>
             </a>
-            <a href="/app/sales/pending" title="Pending Orders" class="<%= title === 'Pending Orders' ? 'nav-items active' : 'nav-items' %>" style="border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
+            <% } %>
+            <a href="/app/sales/pending" title="Pending Orders" class="<%= title === 'Pending Orders' ? 'nav-items active' : 'nav-items' %>" style="border-top: <%= isSales ? '2px solid #ffffff9d' : '0' %>; border-bottom: 2px solid #ffffff9d; text-decoration: none; color: inherit; display: flex; align-items: center;">
               <i class="fa-solid fa-clock-rotate-left" style="color: #ffffff"></i>
               <p class="nav-items-para">Pending Orders</p>
             </a>

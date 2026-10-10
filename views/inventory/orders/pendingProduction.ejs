@@ -306,6 +306,7 @@
   <div class="indi-head">
     <h1><%= initialTab === 'wip' ? 'Work In Progress' : 'Pending Production' %></h1>
     <div class="download-btns" style="display: flex; gap: 10px; align-items: center">
+      <% if (!(authUser && authUser.role === "sales")) { %>
       <a
         href="/app/sales/order"
         style="padding: 6px 14px; background: #044a78; color: white; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;"
@@ -313,6 +314,7 @@
       >
         <i class="fa-solid fa-plus"></i><span>New Label Stock Order</span>
       </a>
+      <% } %>
       <div class="download-selector" id="downloadSelector">
         <button class="download-selector__trigger">
           <span><i class="fa-solid fa-file-arrow-down"></i><span class="download-typo">Download</span></span>
