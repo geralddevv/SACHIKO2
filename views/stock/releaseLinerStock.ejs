@@ -1049,6 +1049,7 @@
     </div>
     <div class="dialog-body" style="border-radius: 0 0 14px 14px;">
       <div style="margin-bottom: 14px; padding: 10px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; font-size: 13px; font-weight: 600; color: #991b1b;" id="removeRollSummary"></div>
+      <div id="removeRollAllotWarn" style="display:none; margin: 0 0 12px; padding: 9px 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: #92400e;"></div>
       <p style="font-size: 13px; color: #4b5563; margin: 0 0 4px;">
         This takes the reel out of stock permanently. It can't be undone &mdash; the reel would have to be keyed in again at inward.
       </p>
@@ -1422,13 +1423,13 @@
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "roll-remove-btn";
-      const blockedReason = data.allottedTo
-        ? "Allotted to an order -- un-allot it before removing this reel."
-        : data.usedBy
-          ? "Already in use / drawn on by a job card -- it can't be removed."
-          : "";
+      const blockedReason = data.usedBy
+        ? "Already in use / drawn on by a job card -- it can't be removed."
+        : "";
       removeBtn.disabled = Boolean(blockedReason);
-      removeBtn.title = blockedReason || "Remove this reel from stock";
+      removeBtn.title = blockedReason || (data.allottedTo
+        ? "Remove this reel from stock -- it is allotted to an order and will be released from it"
+        : "Remove this reel from stock");
       removeBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Remove';
       removeBtn.addEventListener("click", () => openRemoveRollDialog(data, findMasterForRoll(data._id)));
       bar.insertBefore(removeBtn, printBtn.nextSibling);
@@ -2666,6 +2667,13 @@
 
   function openRemoveRollDialog(reel, master) {
     removingRollId = reel._id;
+    const allotWarn = document.getElementById("removeRollAllotWarn");
+    if (reel.allottedTo) {
+      allotWarn.textContent = `This reel is allotted to ${reel.allottedTo.lotNo || reel.allottedTo.productCode || "an order"}. Removing it also takes it out of that order's allotment -- the order will need another reel picked in Assign Production.`;
+      allotWarn.style.display = "block";
+    } else {
+      allotWarn.style.display = "none";
+    }
     const specBits = [
       master.family, master.type, master.make, master.vendorName, master.vendorSkuCode,
       master.gsm != null ? `${master.gsm} GSM` : (master.micron != null ? `${master.micron} MIC` : null),
@@ -2696,7 +2704,9 @@
       const data = await res.json();
       if (data.success) {
         closeRemoveRollDialog();
-        await afterStockChange("Reel removed.");
+        await afterStockChange(data.released && data.released.length
+          ? `Reel removed and released from ${data.released.join(", ")}.`
+          : "Reel removed.");
       } else {
         showError("removeRollError", data.message || "Failed to remove this reel.");
       }

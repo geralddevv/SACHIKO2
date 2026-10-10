@@ -13,6 +13,7 @@ import MachineJobCard from "../../models/inventory/machineJobCard.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { createLimiter, updateLimiter, deleteLimiter } from "../../utils/limiters.js";
 import { generateMaterialRollId, previewMaterialRollIds } from "../../utils/materialRollId.js";
+import { unallotReel } from "../../utils/reelAllotment.js";
 import { pickStockIds } from "../../utils/labelStockProduction.js";
 import {
   LABEL_HEIGHT_MM,
@@ -815,31 +816,25 @@ router.delete("/:id", requireAuth, deleteLimiter, async (req, res) => {
       return res.status(404).json({ success: false, message: "Adhesive stock drum not found." });
     }
 
-    // The Remove button already disables itself for a drum that's spoken
-    // for, but that's only the page's view of it -- a drum can be allotted
-    // or started on between the page load and the click. Re-read the same
-    // usage the page was drawn from and refuse here, so removing a drum can
-    // never leave an order's allotment or a job card's recorded usage
-    // pointing at a drum that no longer exists.
+    // A drum that is only ALLOTTED (reserved for an order, not drawn on) may be
+    // removed: it is released from that order's allotment first, so nothing is
+    // left pointing at a drum that no longer exists. One already used on a job
+    // card (or live on a machine) can't go -- its recorded usage would dangle.
+    // The page's Remove button only mirrors this; the check is re-read here
+    // because a drum can be started on between the page load and the click.
     const { allottedByReel, usedByReel } = await loadAdhesiveReelUsage();
     const key = String(existing._id);
-    const allotted = allottedByReel.get(key);
-    if (allotted) {
-      return res.status(409).json({
-        success: false,
-        message: `This drum is allotted to ${allotted.lotNo || allotted.productCode || "an order"}. Un-allot it before removing it.`,
-      });
-    }
     if (usedByReel.has(key)) {
       return res.status(409).json({
         success: false,
         message: "This drum is already in use on a job card, so it can't be removed.",
       });
     }
+    const released = allottedByReel.has(key) ? await unallotReel("adhesive", key) : [];
 
     await existing.deleteOne();
-    res.locals.auditDescription = `Deleted adhesive stock drum "${existing.rollId}"`;
-    res.json({ success: true });
+    res.locals.auditDescription = `Deleted adhesive stock drum "${existing.rollId}"${released.length ? ` (un-allotted from ${released.join(", ")})` : ""}`;
+    res.json({ success: true, released });
   } catch (err) {
     console.error("ADHESIVE STOCK DELETE ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to delete adhesive stock." });
