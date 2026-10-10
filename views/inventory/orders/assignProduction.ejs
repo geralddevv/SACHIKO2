@@ -1742,6 +1742,16 @@
       dlg.showModal();
       load(); // fresh every time: someone else may have moved a series
     });
+    // Whatever happened in the dialog, the page's suggested Lot No ends up on
+    // the series' real next number: re-read it from the server when the dialog
+    // closes (any way it closes), so the page never lags behind a save.
+    dlg.addEventListener("close", function () {
+      getJson(URL_LOT).then(function (r) {
+        if (!r.ok || !Array.isArray(r.j.rows)) return;
+        const mine = r.j.rows.find(function (x) { return x.code === CURRENT; });
+        if (mine) lotSaved(CURRENT, mine);
+      }).catch(function () {});
+    });
     document.getElementById("lnd-close").addEventListener("click", function () { dlg.close(); });
     // A click on the dimmed backdrop (the <dialog> box itself, not its content) closes it.
     dlg.addEventListener("mousedown", function (ev) { if (ev.target === dlg) dlg.close(); });
