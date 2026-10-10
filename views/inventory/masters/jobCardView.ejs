@@ -4,66 +4,58 @@
 
 <div class="contain" style="flex-direction: column; padding: 10px; gap: 10px">
   <style>
-    .jc-page { display: flex; flex-direction: column; gap: 14px; min-height: 0; flex: 1 1 auto; overflow-y: auto; padding-right: 2px; }
-    .tabulator-edit-list { scrollbar-width: none !important; -ms-overflow-style: none !important; }
-    .tabulator-edit-list::-webkit-scrollbar { display: none !important; }
+    .jc-page { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1 1 auto; overflow-y: auto; padding-right: 2px; }
 
-    /* ---- toolbar ---- */
-    .jc-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-    .jc-summary { color: #475569; font-size: 13px; font-weight: 600; }
-    .jc-summary b { color: #044a78; }
-    .jc-bar__spacer { flex: 1 1 auto; }
-    .jc-jump { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: #475569; }
-    .jc-jump input { height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 13px; color: #0f172a; background: #fff; }
-    .jc-jump input:focus { outline: none; border-color: #044a78; box-shadow: 0 0 0 3px rgba(4,74,120,.13); }
-    .jc-link { background: none; border: none; color: #044a78; font-weight: 700; font-size: 12.5px; cursor: pointer; padding: 6px 4px; }
+    /* toolbar: one quiet line */
+    .jc-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; font-size: 13px; color: #475569; padding: 2px 2px 4px; }
+    .jc-bar b { color: #0f172a; }
+    .jc-tools { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .jc-jump { display: inline-flex; align-items: center; gap: 6px; }
+    .jc-jump input { height: 32px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 8px; font-size: 13px; color: #0f172a; background: #fff !important; }
+    .jc-jump input:focus { outline: none; border-color: #044a78; }
+    .jc-link { background: none; border: none; color: #044a78; font-weight: 600; font-size: 13px; cursor: pointer; padding: 4px 6px; }
     .jc-link:hover { text-decoration: underline; }
 
-    /* ---- one card per day, collapsed until opened ---- */
-    .day-card { background: #fff; border: 1px solid #dbe4ee; border-radius: 14px; box-shadow: 0 1px 2px rgba(15,23,42,.04); overflow: hidden; transition: box-shadow .2s, border-color .2s; }
-    .day-card:hover { border-color: #b9cbe0; }
-    .day-card.is-open { border-color: #044a78; box-shadow: 0 8px 22px -12px rgba(4,74,120,.35); }
-    .day-card.is-flash { animation: dayFlash 1.4s ease-out 1; }
-    @keyframes dayFlash { 0% { box-shadow: 0 0 0 4px rgba(4,74,120,.35); } 100% { box-shadow: 0 1px 2px rgba(15,23,42,.04); } }
-    .day-head { display: flex; align-items: center; gap: 16px; padding: 12px 16px; cursor: pointer; user-select: none; position: relative; }
+    /* one flat card per day, folded until opened */
+    .day-card { background: #fff; border: 1px solid #dbe4ee; border-radius: 10px; overflow: hidden; }
+    .day-card.is-open { border-color: #044a78; }
+    .day-head { display: flex; align-items: center; gap: 14px; padding: 11px 14px; cursor: pointer; user-select: none; }
+    .day-head:hover { background: #f8fafc; }
     .day-head:focus-visible { outline: 2px solid #044a78; outline-offset: -2px; }
-    .day-card.is-open .day-head { background: linear-gradient(135deg, #044a78 0%, #03365a 100%); color: #fff; }
-    .day-date { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 54px; padding: 4px 8px; border-radius: 10px; background: #eef4fa; color: #044a78; line-height: 1.1; }
-    .day-date b { font-size: 21px; font-weight: 800; }
-    .day-date i { font-style: normal; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-    .day-card.is-open .day-date { background: rgba(255,255,255,.16); color: #fff; }
-    .day-name { display: flex; flex-direction: column; gap: 2px; min-width: 120px; font-weight: 700; font-size: 15px; color: #0f172a; }
-    .day-name small { font-size: 11.5px; font-weight: 600; color: #64748b; }
-    .day-card.is-open .day-name, .day-card.is-open .day-name small { color: #fff; }
-    .day-card.is-open .day-name small { opacity: .8; }
-    .day-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
-    .day-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; background: #f1f5f9; color: #334155; font-size: 12px; font-weight: 700; white-space: nowrap; }
-    .day-chip i { font-size: 11px; color: #64748b; }
-    .day-card.is-open .day-chip { background: rgba(255,255,255,.16); color: #fff; }
-    .day-card.is-open .day-chip i { color: rgba(255,255,255,.8); }
-    .day-xl { border: 1px solid #cbd5e1; background: #fff; color: #166534; font-size: 12px; font-weight: 700; border-radius: 8px; padding: 5px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-    .day-xl:hover { background: #f0fdf4; border-color: #86efac; }
-    .day-chev { color: #64748b; font-size: 13px; transition: transform .2s; width: 16px; text-align: center; }
-    .day-card.is-open .day-chev { transform: rotate(180deg); color: #fff; }
-    .day-body { border-top: 1px solid #e2e8f0; padding: 12px; background: #fcfdff; }
+    .day-title { font-weight: 700; font-size: 14.5px; color: #0f172a; }
+    .day-rel { font-size: 12px; color: #64748b; }
+    .day-meta { margin-left: auto; font-size: 13px; color: #475569; font-variant-numeric: tabular-nums; }
+    .day-xl { background: none; border: none; color: #166534; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 2px 4px; }
+    .day-xl:hover { text-decoration: underline; }
+    .day-chev { color: #94a3b8; font-size: 12px; width: 14px; text-align: center; transition: transform .15s; }
+    .day-card.is-open .day-chev { transform: rotate(180deg); color: #044a78; }
+    .day-body { border-top: 1px solid #e2e8f0; padding: 10px 12px 12px; }
     .day-body[hidden] { display: none; }
-    .day-table { width: 100%; }
-    .day-table .tabulator-header .tabulator-col { background: #f8fafc; }
+    .day-search { display: block; width: 260px; max-width: 100%; height: 32px; margin: 0 0 8px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; font-size: 13px; background: #fff !important; }
+    .day-search:focus { outline: none; border-color: #044a78; }
+    .day-msg, .jc-empty { padding: 16px; text-align: center; color: #64748b; font-size: 13.5px; }
+    .jc-more { align-self: center; }
+    @media (max-width: 760px) { .day-head { flex-wrap: wrap; gap: 6px 12px; } .day-meta { margin-left: 0; width: 100%; } }
 
-    /* loading / error states */
-    .day-skel { display: grid; gap: 9px; padding: 6px 2px; }
-    .day-skel span { height: 14px; border-radius: 6px; background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 50%, #eef2f7 75%); background-size: 200% 100%; animation: skel 1.1s linear infinite; }
-    .day-skel span:nth-child(2) { width: 88%; } .day-skel span:nth-child(3) { width: 72%; }
-    @keyframes skel { to { background-position: -200% 0; } }
-    .day-msg { padding: 18px; text-align: center; color: #64748b; font-weight: 600; font-size: 13.5px; }
-    .day-msg button { margin-left: 8px; }
-    .jc-empty { background: #fff; border: 1px dashed #cbd5e1; border-radius: 14px; padding: 36px 20px; text-align: center; color: #64748b; font-weight: 600; }
-    .jc-empty i { display: block; font-size: 28px; color: #94a3b8; margin-bottom: 10px; }
-    @media (prefers-reduced-motion: reduce) { .day-card, .day-chev, .day-skel span, .day-card.is-flash { transition: none; animation: none; } }
-    @media (max-width: 760px) {
-      .day-head { flex-wrap: wrap; gap: 10px; }
-      .day-chips { margin-left: 0; width: 100%; order: 3; }
-    }
+    /* day tables: the app's tables are heavy blue with a border round every cell; inside a day keep it plain */
+    .day-table.tabulator { border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+    .day-table .tabulator-header { background: #f8fafc !important; border-bottom: 1px solid #e2e8f0 !important; }
+    .day-table .tabulator-header .tabulator-col,
+    .day-table .tabulator-header .tabulator-col-content { background: #f8fafc !important; color: #64748b !important; font-size: 12px !important; font-weight: 600 !important; padding: 3px 8px !important; }
+    .day-table .tabulator-tableholder, .day-table .tabulator-table { background: #fff !important; }
+    .day-table .tabulator-row { background: #fff; border-bottom: 1px solid #f1f5f9; min-height: 36px; }
+    .day-table .tabulator-row:hover { background: #f5f9fd !important; }
+    .day-table .tabulator-cell { color: #1e293b !important; font-size: 13px !important; font-weight: 400; padding: 6px 8px !important; outline: none !important; border: none !important; }
+    .day-table .tabulator-cell:hover { border: none !important; }
+    .jc-strong { font-weight: 600; }
+
+    /* The app's blue scrollbar: the page, the deckle popup and every day table. */
+    .custom-scrollbar, .day-table .tabulator-tableholder { scrollbar-width: thin; scrollbar-color: #044A78 #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar, .day-table .tabulator-tableholder::-webkit-scrollbar { width: 10px; height: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-track, .day-table .tabulator-tableholder::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb, .day-table .tabulator-tableholder::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover, .day-table .tabulator-tableholder::-webkit-scrollbar-thumb:hover { background: #03365a; }
+    .custom-scrollbar::-webkit-scrollbar-corner, .day-table .tabulator-tableholder::-webkit-scrollbar-corner { background: #f1f5f9; }
 
     /* ---- Deckle Detail dialog: variant meta + per-reel table
            (mirrors the view dialog on /sachiko/semifinishedstock) ---- */
@@ -97,29 +89,27 @@
     .ddx-tag-swap { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
     .ddx-tag-final { background: #dcfce7; border: 1px solid #bbf7d0; color: #166534; }
     .ddx-muted-dash { color: #cbd5e1; }
-    .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #044A78; border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #03365a; }
+    /* The app's blue scrollbar (same as the tables): the page itself, the deckle
+       popup and every day table. Firefox gets the standard properties. */
+    .custom-scrollbar, .day-table .tabulator-tableholder { scrollbar-width: thin; scrollbar-color: #044A78 #f1f5f9; }
   </style>
 
   <div class="indi-head">
     <h1>Deckle Logs</h1>
   </div>
 
-  <div class="jc-page" id="jcPage">
+  <div class="jc-page custom-scrollbar" id="jcPage">
     <div class="jc-bar">
-      <span class="jc-summary" id="jcSummary">Loading…</span>
-      <span class="jc-bar__spacer"></span>
-      <label class="jc-jump">Jump to date
-        <input type="date" id="jcJump" />
-      </label>
-      <button type="button" class="jc-link" id="jcCollapseAll" hidden>Collapse all</button>
+      <span id="jcSummary">Loading…</span>
+      <div class="jc-tools">
+        <label class="jc-jump">Jump to <input type="date" id="jcJump" /></label>
+        <button type="button" class="jc-link" id="jcCollapseAll" hidden>Collapse all</button>
+      </div>
     </div>
     <div id="jcDays" aria-live="polite">
-      <div class="day-skel" style="padding:14px;"><span></span><span></span><span></span></div>
+      <div class="day-msg">Loading…</div>
     </div>
-    <button type="button" class="jc-link" id="jcMore" hidden style="align-self:center;"></button>
+    <button type="button" class="jc-link jc-more" id="jcMore" hidden></button>
   </div>
 
   <!-- Per-deckle breakdown for one Production Record: the Product Code /
@@ -275,22 +265,15 @@
 
   function dayCardHtml(day) {
     const key = day.key || "none";
-    const dated = !!day.key;
-    const dt = dated ? keyToDate(day.key) : null;
-    const rel = dated ? relativeDay(day.key) : "";
+    const dt = day.key ? keyToDate(day.key) : null;
+    const rel = day.key ? relativeDay(day.key) : "";
+    const title = dt ? dt.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "short", year: "numeric" }) : "No date";
     return `
       <section class="day-card" data-key="${esc(key)}">
         <div class="day-head" role="button" tabindex="0" aria-expanded="false">
-          <span class="day-date">${dated
-            ? `<b>${String(dt.getDate()).padStart(2, "0")}</b><i>${dt.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}</i>`
-            : `<b>—</b><i>No date</i>`}</span>
-          <span class="day-name">${dated ? dt.toLocaleDateString("en-GB", { weekday: "long" }) : "Undated entries"}${rel ? `<small>${rel}</small>` : ""}</span>
-          <span class="day-chips">
-            <span class="day-chip"><i class="fa-solid fa-layer-group"></i>${plural(day.deckles, "deckle", "deckles")}</span>
-            <span class="day-chip"><i class="fa-solid fa-clipboard-list"></i>${plural(day.cards, "entry", "entries")}</span>
-            <span class="day-chip"><i class="fa-solid fa-ruler-horizontal"></i>${fmtNum(day.meters)} mtrs</span>
-          </span>
-          <button type="button" class="day-xl" title="Download this day as Excel"><i class="fa-solid fa-file-excel"></i> Excel</button>
+          <span class="day-title">${esc(title)}</span>${rel ? `<span class="day-rel">${rel}</span>` : ""}
+          <span class="day-meta">${plural(day.deckles, "deckle", "deckles")} &middot; ${plural(day.cards, "entry", "entries")} &middot; ${fmtNum(day.meters)} mtrs</span>
+          <button type="button" class="day-xl" title="Download this day as Excel">Excel</button>
           <i class="fa-solid fa-chevron-down day-chev" aria-hidden="true"></i>
         </div>
         <div class="day-body" hidden></div>
@@ -301,13 +284,13 @@
     const slice = state.days.slice(0, state.shown);
     daysEl.innerHTML = slice.length
       ? slice.map(dayCardHtml).join("")
-      : `<div class="jc-empty"><i class="fa-regular fa-calendar-xmark"></i>No deckles recorded yet.</div>`;
+      : `<div class="jc-empty">No deckles recorded yet.</div>`;
     const rest = state.days.length - state.shown;
     moreBtn.hidden = rest <= 0;
     if (rest > 0) moreBtn.textContent = `Show older days (${rest} more)`;
     const totals = state.days.reduce((t, d) => ({ deckles: t.deckles + d.deckles, meters: t.meters + d.meters }), { deckles: 0, meters: 0 });
     document.getElementById("jcSummary").innerHTML = state.days.length
-      ? `<b>${state.days.length}</b> ${state.days.length === 1 ? "day" : "days"} &middot; <b>${fmtNum(totals.deckles)}</b> deckles &middot; <b>${fmtNum(totals.meters)}</b> mtrs`
+      ? `<b>${fmtNum(state.days.length)}</b> ${state.days.length === 1 ? "day" : "days"} &middot; <b>${fmtNum(totals.deckles)}</b> deckles &middot; <b>${fmtNum(totals.meters)}</b> mtrs`
       : "No deckles yet";
   }
 
@@ -333,28 +316,31 @@
     };
   }
 
-  const withTextFilter = (col) => ({ headerFilter: "input", headerFilterPlaceholder: "Search", minWidth: 100, ...col });
+  const withTextFilter = (col) => ({ minWidth: 100, ...col }); // plain columns -- one search box per day instead of a filter under every heading
 
   function buildTable(el, data) {
     return new Tabulator(el, {
       data,
       maxHeight: "560px",
+      columnDefaults: { vertAlign: "middle" },
       placeholder: "No deckles for this day",
       columns: [
         { title: "Sr. No.", field: "_srNo", width: 70, hozAlign: "center", headerHozAlign: "center", headerSort: false, headerFilter: false,
           formatter: (cell) => cell.getRow().getPosition(true) },
         withTextFilter({ title: "Date",          field: "date",         width: 110 }),
-        withTextFilter({ title: "Time",          field: "time",         width: 105 }),
+        withTextFilter({ title: "Time",          field: "time",         width: 105, formatter: (cell) => `<span class="jc-strong">${esc(cell.getValue())}</span>` }),
         withTextFilter({ title: "Deckle ID",     field: "deckleId",     minWidth: 230,
           formatter: (cell) => cell.getValue() === "-" ? "-"
             : `<span style="font-weight:700;color:#15803d;text-decoration:underline;cursor:pointer;" title="Show this deckle's variant &amp; reels">${esc(cell.getValue())}</span>`,
           cellClick: (e, cell) => openDeckleDetail(cell.getData()) }),
-        withTextFilter({ title: "Production ID", field: "jobCardId",    width: 160, formatter: (cell) => `<span style="font-weight:700;color:#044a78;">${esc(cell.getValue())}</span>` }),
-        withTextFilter({ title: "Machine",       field: "machineName",  minWidth: 120 }),
-        withTextFilter({ title: "Product Code",  field: "productCode",  minWidth: 140, formatter: (cell) => `<span style="font-weight:600;color:#03365a;">${esc(cell.getValue())}</span>` }),
+        withTextFilter({ title: "Production ID", field: "jobCardId",    width: 160, formatter: (cell) => esc(cell.getValue()) }),
+        withTextFilter({ title: "Machine",       field: "machineName",  minWidth: 110,
+          formatter: (cell) => esc(cell.getValue()) }),
+        withTextFilter({ title: "Product Code",  field: "productCode",  minWidth: 140, formatter: (cell) => esc(cell.getValue()) }),
         withTextFilter({ title: "Lot No",        field: "lotNo",        minWidth: 110 }),
         withTextFilter({ title: "Deckle Size",   field: "deckleSize",   minWidth: 110 }),
-        withTextFilter({ title: "Meters",        field: "meters",       width: 100 }),
+        withTextFilter({ title: "Meters",        field: "meters",       width: 100, hozAlign: "right", headerHozAlign: "right",
+          formatter: (cell) => { const n = Number(cell.getValue()); return Number.isFinite(n) && cell.getValue() !== "-" ? `<span class="jc-strong">${fmtNum(n)}</span>` : "-"; } }),
         withTextFilter({ title: "Start",         field: "startTime",    width: 100 }),
         withTextFilter({ title: "End",           field: "endTime",      width: 100 }),
         withTextFilter({ title: "Roll ID Used",  field: "rollIdUsed",   minWidth: 150 }),
@@ -365,16 +351,25 @@
   }
 
   // Draws a day's table into its card from rows already in hand.
+  const SEARCH_FIELDS = ["date", "time", "deckleId", "jobCardId", "machineName", "productCode", "lotNo", "deckleSize", "meters", "startTime", "endTime", "rollIdUsed", "operatorName", "helperName"];
+
   function mountDay(card, rows) {
     const key = card.dataset.key;
     const body = card.querySelector(".day-body");
-    body.innerHTML = `<div class="day-table"></div>`;
+    body.innerHTML = `<input type="search" class="day-search" placeholder="Search this day…" aria-label="Search this day" /><div class="day-table"></div>`;
     const table = buildTable(body.querySelector(".day-table"), rows.map((r) => rowToTableData(r, key)));
     table.on("renderComplete", () => {
       body.querySelectorAll(".tabulator-row").forEach((rowEl, i) => {
         const cell = rowEl.querySelector('[tabulator-field="_srNo"]');
         if (cell) cell.textContent = i + 1;
       });
+    });
+    // One box searches every column of this day (instead of a filter under each heading).
+    const input = body.querySelector(".day-search");
+    input.addEventListener("input", () => {
+      const q = input.value.trim().toLowerCase();
+      if (!q) { table.clearFilter(); return; }
+      table.setFilter((d) => SEARCH_FIELDS.some((f) => String(d[f] ?? "").toLowerCase().includes(q)));
     });
     return table;
   }
@@ -389,7 +384,7 @@
       if (!body.querySelector(".day-table")) cached.table = mountDay(card, cached.rows);
       return cached;
     }
-    body.innerHTML = `<div class="day-skel"><span></span><span></span><span></span></div>`;
+    body.innerHTML = `<div class="day-msg">Loading…</div>`;
     try {
       const res = await fetch(`${BASE}/day/${encodeURIComponent(key)}?tz=${TZ}`, { headers: { Accept: "application/json" } });
       const data = await res.json().catch(() => null);
@@ -481,7 +476,7 @@
       state.shown = Math.min(state.days.length, PAGE_SIZE);
       renderDays();
     } catch (err) {
-      daysEl.innerHTML = `<div class="jc-empty"><i class="fa-solid fa-triangle-exclamation"></i>${esc(err.message)} <button type="button" class="jc-link" onclick="location.reload()">Reload</button></div>`;
+      daysEl.innerHTML = `<div class="jc-empty">${esc(err.message)} <button type="button" class="jc-link" onclick="location.reload()">Reload</button></div>`;
       document.getElementById("jcSummary").textContent = "";
     }
   }
